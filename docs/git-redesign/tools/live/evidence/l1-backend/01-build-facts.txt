@@ -1,0 +1,20 @@
+$ api version
+1.30.60
+$ cmp installed helper vs worktree
+IDENTICAL
+total 172
+drwxr-xr-x 3 root root   4096 Oct  4 15:49 .
+drwxr-xr-x 4 root root   4096 Oct  3 14:33 ..
+-rw-r--r-- 1 root root   9258 Oct  4 14:09 clab_manager_files.py
+-rw-r--r-- 1 root root 102314 Oct  4 15:49 host_git.py
+-rw-r--r-- 1 root root  49051 Oct  4 14:09 host_operations.py
+drwxr-xr-x 2 root root   4096 Oct  4 15:49 __pycache__
+$ container app files vs worktree
+cmp: EOF on - which is empty
+cmp: EOF on - which is empty
+cmp: EOF on - which is empty
+clab-backup:1.30.60 sha256:7ba6aba12b40e8475c5b01ac590378c0e9f29bcf21be05e04f7f958b72d8fe09 started 2026-10-04T15:49:03.65910332Z
+a2a3b61
+$ container app files vs worktree (/opt/nos-backup/app)
+compared 45 python files
+static compared

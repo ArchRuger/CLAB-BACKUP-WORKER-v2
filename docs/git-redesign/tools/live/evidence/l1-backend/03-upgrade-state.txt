@@ -1,0 +1,13 @@
+HTTP 200 version 1.30.60
+state keys ['design_jobs', 'discovery', 'git_jobs', 'jobs', 'labs', 'operations', 'platforms', 'restore_jobs', 'version']
+LAB git-redesign 63d53e20db83464392ebfd4712bba5e3 git_status= {'checked': '', 'ready': None, 'problem': '', 'code': '', 'waiting': 0} readiness= {'status': 'ready', 'total': 4, 'ready': 4, 'booting': 0, 'failed': 0}
+  nodes [('clab-git-redesign-ceos1', 'Ready', None), ('clab-git-redesign-ceos2', 'Ready', None), ('clab-git-redesign-cjunos', 'Ready', None), ('clab-git-redesign-xrv9k', 'Ready', None)]
+  binding keys ['binding_id', 'revision', 'repository', 'host_identity', 'node_names', 'review_before_push']
+LAB git-redesign-b cbee72c4fe5741bca264d72dff0d8cab git_status= {'checked': '', 'ready': None, 'problem': '', 'code': '', 'waiting': 0} readiness= {'status': 'ready', 'total': 2, 'ready': 2, 'booting': 0, 'failed': 0}
+  nodes [('clab-git-redesign-b-ceos1', 'Ready', None), ('clab-git-redesign-b-ceos2', 'Ready', None)]
+  binding keys ['binding_id', 'revision', 'repository', 'host_identity', 'node_names', 'review_before_push']
+GITJOB b87b456a git-redesign None synced latest 'first save of the whole lab' None 4010b8f6fc True
+GITJOB 9578b22f git-redesign None synced latest 'moved ceos1 on the map and described Ethernet1' None aaea4186b1 True
+GITJOB a497a8a7 git-redesign-b None synced latest 'first save of the second lab inside the first lab folder' None 260bb4a3c8 True
+GITJOB 4d6bde54 git-redesign None synced latest 'described ceos2 Ethernet2; second lab already saved beside' None 5a9724d29f True
+repos 200 {"protocol": "clab-manager-git-v1", "version": "1.30.60", "repositories": [{"id": "e7d5f64d4c85487ebcff3baeff12694a", "label": "clab-scratch-git-redesign", "owner": "archtop", "path": "/home/archtop/labs/clab-scratch-git-redesign", "remote": "origin", "push_url": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "branch": "main", "prefix": "", "revision": "1b959d21d7c30c483c19c83f1e309b4a1eb872946f003b16bb1f3716e2551724"}, {"id": "723fdfad39da40ea8a4fc49d6e8016f7", "label": "clab-scratch-git-redesign / git-redesign", "owner": "archtop", "path": "/home/archtop/labs/clab-scratch-git-

@@ -269,3 +269,143 @@ devices). On GitHub (`main`): `git-redesign/latest/` (11 files, commit `5a9724d.
 planned only in the manager: `scratch-a`, `git-redesign/notes`, `git-redesign/notes/deep`. Lab `git-redesign`'s
 devices carry two extra interface descriptions (ceos1 Ethernet1, ceos2 Ethernet2); lab b has none.
 No merge, force-push, tag or image publication; no data deleted. Scripts: `evidence/s0-fixed/scripts/`.
+
+## 9. Live backend pass (L1)
+
+Run 2026-10-04 15:49 to 16:19 UTC by the VM operator (one operator on the live labs), against the new backend and the
+new Git helper of `a2a3b61` (branch `slice/l1-live`), by the manager's API, not the browser. Every request, answer
+and device or GitHub read is in [tools/live/evidence/l1-backend/](tools/live/evidence/l1-backend/) (numbered text
+files `00` to `31`, trimmed to the fields that matter: no tokens, no whole configurations, one-time tokens removed).
+Scripts: `tools/live/l1lib.py` (client and device helpers), `l1_s10.sh` and `l1_s10.py` (upload failure with a
+temporary `/etc/hosts` line removed again by a `trap`), `l1_s15.py`, `l1_s17.sh`, `l1_s17_state.py`. Device changes are
+one interface description per platform containing `l1-<step>` (cEOS `Ethernet1/2`, Junos `et-0/0/1`, IOS XR
+`GigabitEthernet0/0/0/0`). No code was changed.
+
+### 9.1 Build
+
+`docker compose --env-file <installed .env> -f <worktree>/clab-backup-ui/compose.yml up -d --build` exit 0, then
+`sudo bash deploy/setup-git.sh --refresh` exit 0 (file `00`). API version 1.30.60; the installed
+`/usr/local/lib/clab-manager/host_git.py` is `cmp`-identical to the worktree's; all 45 `app/*.py` and every
+`app/static/*.js` in the container equal the worktree (file `01`). `deploy/check-install.sh`: exit 2, PASS 70, FAIL 0,
+WARN 1 (`Folder coverage`, the old one), INFO 8 (file `02`). No other helper or the capture stack reported a version
+mismatch. Both labs, their save folders and their earlier saves were still there; all six devices Ready.
+
+### 9.2 Results
+
+| # | Result | One sentence |
+|---|---|---|
+| 1 | PASS | Old state reads (two labs, bindings, four saves with their names); `git_status` is in `/api/state` (`checked: ''` until the first helper contact, then filled); `places` answers for both labs. `places?repository=<id>` carries the tree under `tree` (`files`, `folders`, `head`, `own`, `saved`, `truncated`), and `tree.folders` lists `git-redesign` and `git-redesign/b` twice. |
+| 2 | PASS | An unnamed save: `note` `ceos1 changed`, `note_auto` true, `summary` `{added 1, removed 1, devices [ceos1]}`, job `review_pending`; `compare` rows with `role` and `node`; `head`, `upload_job` = the save, `also_sends` `[]`; upload bound to that head ended `synced`; commit and the changed `description` line on GitHub; topology and map files are in the folder. |
+| 3 | PASS | `status: unchanged`, message "Nothing changed since the last save, which was uploaded.", `commit` reports the existing HEAD, no commit made, also with a typed name. |
+| 4 | PASS | A waiting save of `git-redesign`, then a save of `git-redesign-b` was accepted; the second review names the first in `also_sends` (`other_labs` 1); one upload through the save at HEAD; both jobs `synced`, both commits on GitHub; the first reads "Saved commit is included in the verified remote history." |
+| 5 | PASS | Upload with the old head: 409 `Another save was made in this repository. Look at the changes again.`; GitHub unchanged; a fresh review then uploaded both. |
+| 6 | DIFFERS | See 9.3 (1): an empty `folder` means the repository top level. With `git-redesign/start`, `/broken`, `/final` the states are saved, uploaded and listed (`group: state`, `saved_devices` 4, `loadable_devices` 4); manifests carry `state`. |
+| 7 | PASS | Load Start on four devices: all `verified`, "All 4 node(s) restored and verified"; see 9.4 for the record and timings; devices read back run Start. |
+| 8 | PASS | Load of `pre_backup_job_id` as a `backup` source: four `verified`; every device back on `l1-s6-final`. |
+| 9 | PASS, with a DIFFERS | Paused ceos2: preflight `eligible: false`, `reachable: false`, reason `SSH probe failed: SSHException` (took 38.7 s), no diff; submit with it: 409; the other three loaded, then ceos2 alone after unpause: all four on Broken. See 9.3 (2). |
+| 10 | PASS | github.com blocked: upload job `push_pending`, "The remote branch is unavailable. Check connectivity and the owner's noninteractive HTTPS Git login.", `git_status` `{ready: false, code: 'account', waiting: 1}`; a new save worked on the VM; after the unblock the retry ended `synced` and carried both. `/etc/hosts` restored byte-identical by the trap. |
+| 11 | PASS | The recovery in 9.5. |
+| 12 | PASS | Rename, empty name back to the automatic one, 120-character and one-line limits (400); the commit subject is unchanged. Keep as a checkpoint without a name: `git-redesign/checkpoints/ceos1-changed`, then `-2`; see 9.3 (5). |
+| 13 | PASS | `folders/new`: top level, inside a lab folder, nested; inside a state `adjusted: above-state`; unsafe characters `corrected`; an existing name `existed: true`. A move with a waiting save answers `{question: {kind: 'pending', count, names, bring}}`; with the save uploaded first and `move_files` the move commit (`Move … progress to l1-moved-b/`) went up as a save; with `pending: keep` and no files the save stays in the old folder. The very folder of the other lab: question `lab` with `beside` `git-redesign/git-redesign-b`; see 9.3 (6). |
+| 14 | PASS | From `git-redesign-b` the states of `git-redesign` list with `loadable_devices` 0; the preflight says `topology.differs: true`, `matching_devices: 0`, every row `No running node in this lab matches this saved node.`; no load was submitted. |
+| 15 | PASS | Destroyed with `/api/operations/preview` and `confirm`: preflight rows ineligible ("The node is not currently running or discovery is stale."), load 409 with the same, a save `failed` ("Selected nodes are not currently available. Refresh VM discovery before connecting."); the deploy ended in Ready after about 40 s, same lab record. |
+| 16 | PASS, with a DIFFERS | See 9.3 (7): the question fired once the folder named after the lab held that lab's saves; `Continue there` is a second call with `choice: take`; the next save continued in the old folder (not a first save). |
+| 17 | PASS, with DIFFERS | The scaffold tool works against the new backend; its text and its guards are older than the model. See 9.6. |
+
+### 9.3 Differences from the documents
+
+1. **`POST …/git/state` with an empty `folder`** is the repository top level, not `<lab folder>/<name>`: DESIGN 2.9 step 1
+   says the page sends that default. My first Start went to `latest/` at the repository root (job `68e1b06c…`, now the
+   state `Start · Top level`, still on GitHub), and the next two calls answered `{question: {kind: 'state', label: 'Start',
+   folder: ''}}`. Exactly as designed if the page always sends a folder; a script that omits it writes at the root.
+2. **Two sentences for one cause** on an unreachable device: the preflight row says `SSH probe failed: SSHException`,
+   the submit says `The node is not currently running or discovery is stale.` (409). A preflight started within about
+   8 s of the previous load's end answered 409 `Wait for the active backup, Git save, restore or lab operation to finish.`
+   with nothing visible running; the retry 7 s later was accepted.
+3. **The helper's `status` never asks the remote.** With only the online copy ahead and nothing waiting, `git_status` and
+   `repository_status` stay `ready: true`; a save then works on the VM and only the upload fails (code `diverged`, the
+   helper's sentence `The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.`).
+   `status.js` shows `The online copy has changes this VM does not have.` + **Update** when `diverged` and nothing waits, but
+   in this pass `diverged` always arrived with a waiting save, so that row was not reached. *Update from the repository*
+   itself worked when nothing waited (200 `Updated from remote using fast-forward only.`) and answered 409 `Upload the
+   waiting saves first; the online copy can only be fetched when nothing waits here.` while a save waited.
+   `REMOTE_AHEAD` (`The online copy of this repository has changes this VM does not have.`) is raised only by `register`
+   and is not in the manager's code table (not exercised here).
+4. After the owner's `git pull --no-rebase` and before his push, `git_status` reads `ready: true` and an upload is refused
+   with 409 `The repository on the VM has changes the manager did not make.` (the merge is HEAD).
+5. **Keep as a checkpoint from an older save** also writes `git-redesign/latest/*` from that older capture (rows with an
+   empty `status` in the review: `ceos1`/`ceos2` files and the manifest), so `latest` no longer equals what the devices run.
+6. **`choice: take`** ("Use this folder anyway") was accepted for the very folder another lab saves in and disconnected that
+   lab (lab A lost its binding; I put it back with `take` from A and B back to `git-redesign/b`). `beside` is the safe answer.
+   A move without `move_files` leaves the lab's earlier saves where they are: `l1-moved-b/latest` now lists as a lab state
+   `L1-moved-b` (group `state`), and a save kept waiting keeps its old destination.
+7. **Removing and importing a lab again** gives it a new id; the default is `<lab name>` and asks only when that folder holds
+   a same-named lab's saves. Earlier saves of this lab were under `git-redesign/b` and `l1-moved-b`, so the first default
+   was a plain `free`; the question (`ask: true`, `same_name: true`, `kind: state`, `beside: git-redesign-b-2`) appeared
+   after one save in `git-redesign-b` and a second import. `git status -sb` in the checkout reads `ahead N` after the
+   manager's pushes (the helper pushes by URL and leaves `origin/main` stale until a `git fetch`).
+
+### 9.4 Loads
+
+Both loads and the single-device load went through the drivers (`status: verified`, `persistence: saved`). The job record
+shows per node: `stage` and `timeline` (`queued`, `backing_up`, `backed_up`, `connecting`, `applying`, **`armed`**,
+`verifying`, `confirming`, `replaced`, `settled`, `checking`, `checked`), `confirm_minutes: 5`, `diff_sample` (the changed
+lines), `root_authentication: synthesized` on Junos, `pre_backup_job_id`, `post_backup_job_id`. Timings of load 7 (seconds):
+
+| Node | applying to armed | applying to settled | queued to settled |
+|---|---|---|---|
+| cEOS | 1.2 | 2.1 | 4.8 |
+| cJunosEvolved | 4.3 | 5.1 | 7.8 |
+| XRv9k | 4.3 | 5.6 | 8.3 |
+
+Whole jobs: four devices 15 s (Start), 17 s (undo), three devices 16 s, one device 11 s, each with the safety backup and
+the check backup. The record proves that the recovery was armed (`armed` before `confirming`) but does not carry the
+device-side command output or a token; the kinds' own transaction commands are in
+[../multi-platform-restore/README.md](../multi-platform-restore/README.md).
+
+### 9.5 Recovery when the online copy and a waiting save both changed (step 11)
+
+Facts, in `15` to `22`. One waiting save and one more commit online: the upload ends `push_pending` with the sentence in
+9.3 (3); `git_status.code` is `diverged`; *Update* is refused (409). What worked, as the VM account of the checkout
+(`archtop`, its own login, no credentials typed):
+
+```
+git -C <checkout> pull --no-rebase --no-edit     # merge commit, exit 0
+git -C <checkout> push                           # exit 0 (pushes the merge and every waiting manager save)
+```
+
+then the manager's Upload (retry) on each waiting save answered 200: the save at HEAD went `Saved to Git.`, the others
+`Saved commit is included in the verified remote history.`, all `pushed: true`, `waiting` 0, and a later save and upload
+worked. **Pulling without pushing does not work:** the manager's upload is refused (409 `The repository on the VM has
+changes the manager did not make.`), and a further manager save followed by Upload ends `push_pending` with `The push would
+include commits created outside manager saves. Publish or resolve them as the repository owner first.` (code `diverged`);
+the owner's `git push` then cleared it as above. (A fast-forward-only pull was not tried.)
+
+### 9.6 Scaffold tool (step 17)
+
+`init l1-scaffold` (exit 0, repeatable, exit 0 again), `snapshot l1-scaffold start` answering `n` (exit 0), `snapshot
+l1-scaffold solution --yes` (final line printed; its exit status was lost with my wrapper, exit 0 by reading the code).
+Folder after each command: `l1-scaffold/work`. After `start` answered no: the job is `dismissed` ("First save"), nothing
+on GitHub; after `solution --yes` both commits are on GitHub (`start` went with the upload; both jobs `pushed`). The
+manager routes it used all answered 200: `…/folders`, `…/git/destination`, `…/git/save` (no note, no `head`),
+`…/git/jobs/<id>/retry` (no `head`), `…/dismiss`. `restore/states` lists `Solution` and `Start · reference`
+(`group: state`, 2 devices each). Where text and behaviour no longer match: the tool and NAMING.md still say that a
+pending save refuses the folder change and that the person must finish it under Progress > Recent saves; that no longer
+happens: step 13 moved a lab with a waiting save (`pending: keep`), so `keep_on_vm`/`dismiss` (which the tool
+still calls before rebinding, turning the kept save into a `dismissed` job that the next upload still carries) and the
+"STILL SAVES TO" recovery text are legacy. The tool's upload skips the review the new
+model binds to a `head`; the retry without `head` was accepted.
+
+### 9.7 State left behind (for the browser pass)
+
+Both labs running, Ready 4/4 and 2/2, no device paused, `/etc/hosts` has no extra line (its checksum differs from step 10
+only because containerlab rewrote its own `clab-*` block when `git-redesign-b` was deployed again), no waiting save.
+Lab `git-redesign` (`63d53e20…`) saves in `git-redesign`; lab `git-redesign-b` is a new record `123f0029…` (it was removed
+and imported again twice; the old ids are gone from the manager) and saves in `git-redesign-b`. Repository `main`
+(`1ff020a`): folders with a saved state `git-redesign/latest`, `git-redesign/{start,broken,final}/latest` (lab states),
+`git-redesign/checkpoints/{ceos1-changed,ceos1-changed-2}`, `git-redesign/b/latest` and `l1-moved-b/latest` (old saves of
+lab B), `git-redesign-b/latest`, `l1-scaffold/reference/{start,solution}/latest`, a stray `latest/` at the root (the Start
+of 9.3 (1)); other files `l1-online/online-{1,2,3}.txt`. Devices: ceos1 and ceos2 of `git-redesign` run
+`l1-s11b2-ceos1` / `l1-s11b2-ceos2`, cJunosEvolved and XRv9k run the Broken state (`l1-s6-broken`); `git-redesign-b` ceos1
+`l1-s17-solution`, ceos2 `l1-s16-after-reimport`. The manager's planned folders I made in step 13 were forgotten again;
+the registrations they or the moves created remain. No merge, force-push, tag or image publication; no data deleted.

@@ -1,0 +1,76 @@
+SCENARIO 9: one device unreachable (docker pause of clab-git-redesign-ceos2)
+  [device descriptions before]
+      a-ceos1   Ethernet1                description l1-s6-final
+      a-ceos2   Ethernet2                description l1-s6-final
+      a-cjunos  et-0/0/1                 description l1-s6-final;
+      a-xrv9k   GigabitEthernet0/0/0/0   description l1-s6-final
+(0, 'clab-git-redesign-ceos2')
+[15:57:21] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore/preflight {"source": {"path": "git-redesign/broken/latest", "type": "folder"}} -> HTTP 200
+     source {"capture_id": "6a99c7111d0c4a2d9e28c7239e10e23a", "captured_at": "2026-10-04T15:54:23.151931+00:00", "commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "folder": "git-redesign/broken", "lab_name": "git-redesign", "path": "/git-redesign/broken/latest", "repository": "", "restore_capable_nodes": 4, "saved_nodes": ["clab-git-redesign-ceos1", "clab-git-redesign-ceos2", "clab-git-redesign-cjunos", "clab-git-redesign-xrv9k"], "topology": {"differs": false, "matching_devices": 4, "saved_devices": 4}, "type": "folder"}
+     eligible_count: 3
+     row {"eligible": true, "matches_saved": false, "name": "clab-git-redesign-ceos1", "pending_changes": 2, "platform": "arista_ceos", "reachable": true, "reason": "", "requested": true, "running_platform": "arista_ceos"}
+       diff (changed lines): ['del:    description l1-s6-broken', 'add:    description l1-s6-final'] added 1 removed 1
+     row {"eligible": false, "name": "clab-git-redesign-ceos2", "platform": "arista_ceos", "reachable": false, "reason": "SSH probe failed: SSHException", "requested": true, "running_platform": "arista_ceos"}
+     row {"eligible": true, "matches_saved": false, "name": "clab-git-redesign-cjunos", "pending_changes": 2, "platform": "juniper_cjunosevolved", "reachable": true, "reason": "", "requested": true, "running_platform": "juniper_cjunosevolved"}
+       diff (changed lines): ['add: set system root-authentication [redacted]', 'del: set interfaces et-0/0/1 description l1-s6-broken', 'add: set interfaces et-0/0/1 description l1-s6-final'] added 2 removed 1
+     row {"eligible": true, "matches_saved": false, "name": "clab-git-redesign-xrv9k", "pending_changes": 2, "platform": "cisco_xrv9k", "reachable": true, "reason": "", "requested": true, "running_platform": "cisco_xrv9k"}
+       diff (changed lines): ['del:  description l1-s6-broken', 'add:  description l1-s6-final'] added 1 removed 1
+preflight took 38.7s
+--- submit with ceos2 included anyway (does the manager refuse?)
+[15:57:21] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore {"acknowledge": true, "confirm_minutes": 5, "node_names": ["clab-git-redesign-ceos1", "clab-git-redesign-ceos2", "clab-git-redesign-cjunos", "clab-git-redesign-xrv9k"], "request_id": "6825219c4dbe4b88aae53ad5e6dc6bf0", "source": {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "path": "git-redesign/broken/latest", "type": "folder"}}
+    -> HTTP 409 (0.2s) {"detail": "Some selected nodes cannot be restored: clab-git-redesign-ceos2: The node is not currently running or discovery is stale."}
+--- load Broken on the other three
+[15:57:23] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore {"acknowledge": true, "confirm_minutes": 5, "node_names": ["clab-git-redesign-ceos1", "clab-git-redesign-cjunos", "clab-git-redesign-xrv9k"], "request_id": "e3b0d184f2ff4484adfed5f85fec17a8", "source": {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "path": "git-redesign/broken/latest", "type": "folder"}}
+    -> HTTP 200 (1.5s) {"id": "d748ad93add144449181717abb706e10", "message": "Restore queued.", "status": "queued"}
+[15:57:23]    restore d748ad93 status=backing_up stages={"ceos1": "backing_up", "cjunos": "backing_up", "xrv9k": "backing_up"}
+[15:57:28]    restore d748ad93 status=applying stages={"ceos1": "replaced", "cjunos": "applying", "xrv9k": "applying"}
+[15:57:33]    restore d748ad93 status=verifying stages={"ceos1": "checking", "cjunos": "checking", "xrv9k": "checking"}
+[15:57:38]    restore d748ad93 status=succeeded stages={"ceos1": "replaced", "cjunos": "replaced", "xrv9k": "replaced"}
+    restore job status=succeeded message='All 3 node(s) restored and verified against the saved state.' elapsed=16s
+    job keys: ['confirm_minutes', 'created', 'finished', 'id', 'lab_id', 'lab_name', 'message', 'post_backup_job_id', 'pre_backup_job_id', 'progress', 'rechecking', 'server_time', 'source', 'status', 'targets']
+    pre_backup_job_id: "439dbfdd72bd426c920613b2a3c98cce"
+    confirm_minutes: 5
+    source: {"capture_id": "6a99c7111d0c4a2d9e28c7239e10e23a", "captured_at": "2026-10-04T15:54:23.151931+00:00", "commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "folder": "git-redesign/broken", "lab_name": "git-redesign", "path": "/git-redesign/broken/latest", "repository": "", "restore_capable_nodes": 4, "saved_nodes": ["clab-git-redesign-ceos1", "clab-git-redesign-ceos2", "clab-git-redesign-cjunos",  ...[trimmed]
+    target {"attempts": 1, "diff_sample": ["--- system:/running-config", "+++ session:/clabmgr-6a47fceb-session-config", "interface Ethernet1", "-   description l1-s6-final", "+   description l1-s6-broken"], "extra_statements": 0, "message": "Configuration replaced and verified against the saved desired state.", "missing_statements": 0, "name": "clab-git-redesign-ceos1", "no_op": false, "persistence": "saved", "platform": "arista_ceos", "short_name": "ceos1", "stage": "replaced", "status": "verified", "timeline": {"applying": 1791129445.835357, "armed": 1791129446.944386, "backed_up": 1791129445.7154875, "backing_up": 1791129443.1005108, "checked": 1791129454.1072774, "checking": 1791129451.4947658, "confirming": 1791129447.3107781, "connecting": 1791129445.72591, "queued": 1791129443.0945969, "replaced": 1791129447.8057518, "settled": 1791129447.8057518, "verifying": 1791129446.94651}, "worker": " ...[trimmed]
+    target {"attempts": 1, "diff_sample": ["[edit interfaces et-0/0/1]", "-   description l1-s6-final;", "+   description l1-s6-broken;", "[edit]"], "extra_statements": 0, "message": "Configuration replaced and verified against the saved desired state.", "missing_statements": 0, "name": "clab-git-redesign-cjunos", "no_op": false, "persistence": "saved", "platform": "juniper_cjunosevolved", "root_authentication": "synthesized", "short_name": "cjunos", "stage": "replaced", "status": "verified", "timeline": {"applying": 1791129445.859871, "armed": 1791129449.5470717, "backed_up": 1791129445.7174559, "backing_up": 1791129443.101886, "checked": 1791129454.1093726, "checking": 1791129451.496363, "confirming": 1791129450.010849, "connecting": 1791129445.7222023, "queued": 1791129443.0945978, "replaced": 1791129450.6218352, "settled": 1791129450.6218352, "verifying": 1791129449.5490775}, "worker": "restore ...[trimmed]
+    target {"attempts": 1, "diff_sample": ["Sun Oct  4 15:57:25.120 UTC", "!! Building configuration...", "!! IOS XR Configuration 24.3.1", "#  interface GigabitEthernet0/0/0/0", "#   description l1-s6-final", "#   description l1-s6-broken", "#  !", "end"], "extra_statements": 0, "message": "Configuration replaced and verified against the saved desired state.", "missing_statements": 0, "name": "clab-git-redesign-xrv9k", "no_op": false, "persistence": "saved", "platform": "cisco_xrv9k", "short_name": "xrv9k", "stage": "replaced", "status": "verified", "timeline": {"applying": 1791129445.8317366, "armed": 1791129450.0838976, "backed_up": 1791129445.7190619, "backing_up": 1791129443.1032875, "checked": 1791129454.1112108, "checking": 1791129451.4978347, "confirming": 1791129450.5309033, "connecting": 1791129445.7238784, "queued": 1791129443.094599, "replaced": 1791129451.490655, "settled": 1791129451. ...[trimmed]
+  [device descriptions after the three (ceos2 not read: paused)]
+      a-ceos1   Ethernet1                description l1-s6-broken
+      a-cjunos  et-0/0/1                 description l1-s6-broken;
+      a-xrv9k   GigabitEthernet0/0/0/0   description l1-s6-broken
+(0, 'clab-git-redesign-ceos2')
+containers: ['clab-git-redesign-b-ceos2 Up 45 minutes', 'clab-git-redesign-ceos2 Up 2 hours']
+--- after unpause: wait for the manager to see ceos2 again
+   15:57:46 {'status': 'ready', 'total': 4, 'ready': 4, 'booting': 0, 'failed': 0} [('clab-git-redesign-ceos2', 'Ready')]
+[15:57:46] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore/preflight {"node_names": ["clab-git-redesign-ceos2"], "source": {"path": "git-redesign/broken/latest", "type": "folder"}} -> HTTP 409
+     {"detail": "Wait for the active backup, Git save, restore or lab operation to finish."}
+Traceback (most recent call last):
+  File "<stdin>", line 10, in <module>
+KeyError: 'source'
+active jobs: [] [] [] []
+[15:57:53] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore/preflight {"node_names": ["clab-git-redesign-ceos2"], "source": {"path": "git-redesign/broken/latest", "type": "folder"}} -> HTTP 200
+     source {"capture_id": "6a99c7111d0c4a2d9e28c7239e10e23a", "captured_at": "2026-10-04T15:54:23.151931+00:00", "commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "folder": "git-redesign/broken", "lab_name": "git-redesign", "path": "/git-redesign/broken/latest", "repository": "", "restore_capable_nodes": 4, "saved_nodes": ["clab-git-redesign-ceos1", "clab-git-redesign-ceos2", "clab-git-redesign-cjunos", "clab-git-redesign-xrv9k"], "topology": {"differs": false, "matching_devices": 4, "saved_devices": 4}, "type": "folder"}
+     eligible_count: 1
+     row {"eligible": true, "name": "clab-git-redesign-ceos1", "platform": "arista_ceos", "reason": "", "requested": false, "running_platform": "arista_ceos"}
+     row {"eligible": true, "matches_saved": false, "name": "clab-git-redesign-ceos2", "pending_changes": 2, "platform": "arista_ceos", "reachable": true, "reason": "", "requested": true, "running_platform": "arista_ceos"}
+       diff (changed lines): ['del:    description l1-s6-broken', 'add:    description l1-s6-final'] added 1 removed 1
+     row {"eligible": true, "name": "clab-git-redesign-cjunos", "platform": "juniper_cjunosevolved", "reason": "", "requested": false, "running_platform": "juniper_cjunosevolved"}
+     row {"eligible": true, "name": "clab-git-redesign-xrv9k", "platform": "cisco_xrv9k", "reason": "", "requested": false, "running_platform": "cisco_xrv9k"}
+[15:57:54] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore {"acknowledge": true, "confirm_minutes": 5, "node_names": ["clab-git-redesign-ceos2"], "request_id": "f9406fb249704026a592b9ee5f684130", "source": {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "path": "git-redesign/broken/latest", "type": "folder"}}
+    -> HTTP 200 (0.7s) {"id": "dae83a5f28e8498f9b580c7264bb9097", "message": "Restore queued.", "status": "queued"}
+[15:57:54]    restore dae83a5f status=backing_up stages={"ceos2": "queued"}
+[15:57:59]    restore dae83a5f status=verifying stages={"ceos2": "checking"}
+[15:58:04]    restore dae83a5f status=succeeded stages={"ceos2": "replaced"}
+    restore job status=succeeded message='All 1 node(s) restored and verified against the saved state.' elapsed=11s
+    job keys: ['confirm_minutes', 'created', 'finished', 'id', 'lab_id', 'lab_name', 'message', 'post_backup_job_id', 'pre_backup_job_id', 'progress', 'rechecking', 'server_time', 'source', 'status', 'targets']
+    pre_backup_job_id: "9755868e72914f2782a3aecf96e841e0"
+    confirm_minutes: 5
+    source: {"capture_id": "6a99c7111d0c4a2d9e28c7239e10e23a", "captured_at": "2026-10-04T15:54:23.151931+00:00", "commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "folder": "git-redesign/broken", "lab_name": "git-redesign", "path": "/git-redesign/broken/latest", "repository": "", "restore_capable_nodes": 4, "saved_nodes": ["clab-git-redesign-ceos1", "clab-git-redesign-ceos2", "clab-git-redesign-cjunos",  ...[trimmed]
+    target {"attempts": 1, "diff_sample": ["--- system:/running-config", "+++ session:/clabmgr-7890dffa-session-config", "interface Ethernet2", "-   description l1-s6-final", "+   description l1-s6-broken"], "extra_statements": 0, "message": "Configuration replaced and verified against the saved desired state.", "missing_statements": 0, "name": "clab-git-redesign-ceos2", "no_op": false, "persistence": "saved", "platform": "arista_ceos", "short_name": "ceos2", "stage": "replaced", "status": "verified", "timeline": {"applying": 1791129476.3096962, "armed": 1791129477.4193227, "backed_up": 1791129476.2002203, "backing_up": 1791129474.5906427, "checked": 1791129479.8662832, "checking": 1791129478.2581472, "confirming": 1791129477.7725358, "connecting": 1791129476.2040932, "queued": 1791129474.5827644, "replaced": 1791129478.2542822, "settled": 1791129478.2542822, "verifying": 1791129477.421285}, "worke ...[trimmed]
+  [device descriptions final (expect all four l1-s6-broken)]
+      a-ceos1   Ethernet1                description l1-s6-broken
+      a-ceos2   Ethernet2                description l1-s6-broken
+      a-cjunos  et-0/0/1                 description l1-s6-broken;
+      a-xrv9k   GigabitEthernet0/0/0/0   description l1-s6-broken
+paused containers: (0, '')
+lab ready {'status': 'ready', 'total': 4, 'ready': 4, 'booting': 0, 'failed': 0}

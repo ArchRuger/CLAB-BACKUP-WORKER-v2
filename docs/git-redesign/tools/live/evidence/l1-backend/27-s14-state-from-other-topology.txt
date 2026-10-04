@@ -1,0 +1,26 @@
+SCENARIO 14: from lab git-redesign-b, the states of git-redesign
+HTTP 200 lab_devices 2
+   {"group": "state", "lab": "git-redesign", "loadable_devices": 0, "name": "Broken", "path": "git-redesign/broken/latest", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"group": "state", "lab": "git-redesign", "loadable_devices": 0, "name": "Final", "path": "git-redesign/final/latest", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"group": "state", "lab": "git-redesign-b", "loadable_devices": 2, "name": "L1-moved-b", "path": "l1-moved-b/latest", "saved_devices": 2, "view_only": false, "view_only_reason": ""}
+   {"group": "state", "lab": "git-redesign", "loadable_devices": 0, "name": "Start \u00b7 git-redesign", "path": "git-redesign/start/latest", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"group": "state", "lab": "git-redesign", "loadable_devices": 0, "name": "Start \u00b7 Top level", "path": "latest", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"group": "other-lab", "lab": "git-redesign", "loadable_devices": 0, "name": "ceos1-changed", "path": "git-redesign/checkpoints/ceos1-changed", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"group": "other-lab", "lab": "git-redesign", "loadable_devices": 0, "name": "ceos1-changed-2", "path": "git-redesign/checkpoints/ceos1-changed-2", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"group": "other-lab", "lab": "git-redesign", "loadable_devices": 0, "name": "Git-redesign", "path": "git-redesign/latest", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+[16:08:51] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/restore/preflight {"source": {"path": "git-redesign/start/latest", "type": "folder"}} -> HTTP 200
+     source {"capture_id": "83e7380f93d042b08408c35edf1dffe8", "captured_at": "2026-10-04T15:54:11.290145+00:00", "commit": "687b637e506aa466893c9cf5e1c4bbcd01bf4495", "folder": "git-redesign/start", "lab_name": "git-redesign", "path": "/git-redesign/start/latest", "repository": "", "restore_capable_nodes": 4, "saved_nodes": ["clab-git-redesign-ceos1", "clab-git-redesign-ceos2", "clab-git-redesign-cjunos", "clab-git-redesign-xrv9k"], "topology": {"differs": true, "matching_devices": 0, "saved_devices": 4}, "type": "folder"}
+     eligible_count: 0
+     row {"eligible": false, "name": "clab-git-redesign-ceos1", "platform": "arista_ceos", "reason": "No running node in this lab matches this saved node.", "requested": true, "running_platform": ""}
+     row {"eligible": false, "name": "clab-git-redesign-ceos2", "platform": "arista_ceos", "reason": "No running node in this lab matches this saved node.", "requested": true, "running_platform": ""}
+     row {"eligible": false, "name": "clab-git-redesign-cjunos", "platform": "juniper_cjunosevolved", "reason": "No running node in this lab matches this saved node.", "requested": true, "running_platform": ""}
+     row {"eligible": false, "name": "clab-git-redesign-xrv9k", "platform": "cisco_xrv9k", "reason": "No running node in this lab matches this saved node.", "requested": true, "running_platform": ""}
+eligible_count 0
+--- a load of that state with a B device name (must not be submitted: nothing matches). Only the preflight ran.
+[16:08:51] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/restore/preflight {"node_names": ["clab-git-redesign-b-ceos1"], "source": {"path": "git-redesign/start/latest", "type": "folder"}} -> HTTP 200
+     source {"capture_id": "83e7380f93d042b08408c35edf1dffe8", "captured_at": "2026-10-04T15:54:11.290145+00:00", "commit": "687b637e506aa466893c9cf5e1c4bbcd01bf4495", "folder": "git-redesign/start", "lab_name": "git-redesign", "path": "/git-redesign/start/latest", "repository": "", "restore_capable_nodes": 4, "saved_nodes": ["clab-git-redesign-ceos1", "clab-git-redesign-ceos2", "clab-git-redesign-cjunos", "clab-git-redesign-xrv9k"], "topology": {"differs": true, "matching_devices": 0, "saved_devices": 4}, "type": "folder"}
+     eligible_count: 0
+     row {"eligible": false, "name": "clab-git-redesign-ceos1", "platform": "arista_ceos", "reason": "No running node in this lab matches this saved node.", "requested": false, "running_platform": ""}
+     row {"eligible": false, "name": "clab-git-redesign-ceos2", "platform": "arista_ceos", "reason": "No running node in this lab matches this saved node.", "requested": false, "running_platform": ""}
+     row {"eligible": false, "name": "clab-git-redesign-cjunos", "platform": "juniper_cjunosevolved", "reason": "No running node in this lab matches this saved node.", "requested": false, "running_platform": ""}
+     row {"eligible": false, "name": "clab-git-redesign-xrv9k", "platform": "cisco_xrv9k", "reason": "No running node in this lab matches this saved node.", "requested": false, "running_platform": ""}

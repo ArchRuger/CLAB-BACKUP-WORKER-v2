@@ -1,0 +1,90 @@
+SCENARIO 13b: move git-redesign-b with a waiting save. B saves in: git-redesign/b
+[16:05:39] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/save {"note": "l1 s13 waiting save 1", "push": true, "request_id": "66d282c6037641f48fc7a7d534e1e359", "target": "latest"}
+    -> HTTP 200 (0.0s) {"id": "66d282c6037641f48fc7a7d534e1e359", "message": "Save queued.", "status": "queued"}
+[16:05:39]    job 66d282c6 status=capturing message='Capturing the configured devices.'
+[16:05:41]    job 66d282c6 status=exporting message='Saving captured configurations to the VM repository.'
+[16:05:43]    job 66d282c6 status=review_pending message='Saved in the VM repository; not pushed.'
+    job: {"commit": "8c02b028e91ee7844654d4d92e744ff62966dec2", "pushed": false, "status": "review_pending"}
+--- try 1: ask for a move while the save waits (pending="")
+[16:05:44] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/place {"choice": "", "folder": "l1-moved-b", "move_files": false, "pending": "", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (0.9s) {"question": {"bring": {"files": 7, "from": "git-redesign/b", "offered": true, "reason": ""}, "count": 1, "folder": "l1-moved-b", "kind": "pending", "names": ["l1 s13 waiting save 1"]}}
+--- answer "Upload it, then move": upload, then the same place call with move_files
+[16:05:45] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/compare {"job_id": "66d282c6.."} -> HTTP 200
+     file {"node": "ceos1", "path": "git-redesign/b/latest/ceos1.cfg", "role": "device", "status": "changed"}
+     file {"node": "ceos1", "path": "git-redesign/b/latest/ceos1.eoscfg", "role": "restore", "status": "changed"}
+     file {"node": "", "path": "git-redesign/b/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 1, "devices": ["ceos1"], "first": false, "map": false, "removed": 1, "removed_devices": [], "topology": false}
+     head 8c02b028e91ee7844654d4d92e744ff62966dec2 upload_job 66d282c6037641f48fc7a7d534e1e359
+     also_sends [{"job_id": "9eef73ad16ea426eb3106994d893fc6e", "kind": "save", "lab": "git-redesign", "name": "ceos1 changed", "target": "checkpoint"}] count 1 other_labs 1
+[16:05:45] POST /api/git/jobs/66d282c6037641f48fc7a7d534e1e359/retry {"head": "8c02b028e91ee7844654d4d92e744ff62966dec2", "push": true, "reviewed": true}
+    -> HTTP 200 (0.2s) {"id": "66d282c6037641f48fc7a7d534e1e359", "message": "Upload queued; the saved commit will be reused.", "status": "queued"}
+[16:05:45]    job 66d282c6 status=pushing message='Pushing the saved commit.'
+[16:05:51]    job 66d282c6 status=synced message='Saved to Git.'
+upload: {"pushed": true, "status": "synced"}
+[16:05:54] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/place {"choice": "", "folder": "l1-moved-b", "move_files": true, "pending": "", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (2.8s) {"binding": {"binding_id": "1ba444cc302d4215b2570dbbfb3c5686", "host_identity": "9a2b7085e4a0dee06c55e85a065e00c62b19403fc1c53db6a9d1c0ee7c50de03", "node_names": ["clab-git-redesign-b-ceos1", "clab-git-redesign-b-ceos2"], "repository": {"branch": "main", "id": "1ba444cc302d4215b2570dbbfb3c5686", "label": "clab-scratch-git-redesign / l1-moved-b", "owner": "archtop", "path": "/home/archtop/labs/clab-scratch-git-redesign", "prefix": "l1-moved-b", "push_url": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "remote": "origin", "revision": "d3769683bf4c21af0c7d5355e3484d9747653383354d6a05e69ae82ef6f02c85"}, "review_before_push": true, "revision": "d3769683bf4c21af0c7d5355e3484d9747653383354d6a05e69ae82ef6f02c85"}, "job": {"backup_job_id": "", "capture_kept": false, "capture_whole": false, "captured": false, "checkpoint": "", "created": "2026-10-04T16:05:54.732558+00:00", "destina ...[trimmed]
+B saves in: l1-moved-b
+[16:05:55]    job c3e9673f status=exporting message='Moving the saved folders inside the repository.'
+[16:05:57]    job c3e9673f status=committed message='Saved in the VM repository; not pushed.'
+=== script stopped by me here: the move job ends in status "committed" (move waiting for upload), a state my wait helper did not list; continuing by hand ===
+move job: {"changed_files": ["git-redesign/b/latest/ceos1.cfg", "l1-moved-b/latest/ceos1.cfg", "git-redesign/b/latest/ceos1.eoscfg", "l1-moved-b/latest/ceos1.eoscfg", "git-redesign/b/latest/ceos2.cfg", "l1-moved-b/latest/ceos2.cfg", "git-redesign/b/latest/ceos2.eoscfg", "l1-moved-b/latest/ceos2.eoscfg", "git-redesign/b/latest/git-redesign-b.clab.yml", "l1-moved-b/latest/git-redesign-b.clab.yml", "git-redesign/b/latest/git-redesign-b.clab.yml.annotations.json", "l1-moved-b/latest/git-redesign-b.clab.yml.annotations.json", "git-redesign/b/latest/manifest.json", "l1-moved-b/latest/manifest.json"], "commit": "3de3548868c030ba7e7bf3319c9bb8312d28a122", "message": "Saved in the VM repository; not pushed.", "pushed": false, "status": "committed", "target": "move"}
+[16:07:56] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/compare {"job_id": "c3e9673f.."} -> HTTP 200
+     file {"node": "ceos1", "path": "git-redesign/b/latest/ceos1.cfg", "role": "device", "status": ""}
+     file {"node": "ceos1", "path": "l1-moved-b/latest/ceos1.cfg", "role": "device", "status": ""}
+     file {"node": "ceos1", "path": "git-redesign/b/latest/ceos1.eoscfg", "role": "restore", "status": ""}
+     file {"node": "ceos1", "path": "l1-moved-b/latest/ceos1.eoscfg", "role": "restore", "status": ""}
+     file {"node": "ceos2", "path": "git-redesign/b/latest/ceos2.cfg", "role": "device", "status": ""}
+     file {"node": "ceos2", "path": "l1-moved-b/latest/ceos2.cfg", "role": "device", "status": ""}
+     file {"node": "ceos2", "path": "git-redesign/b/latest/ceos2.eoscfg", "role": "restore", "status": ""}
+     file {"node": "ceos2", "path": "l1-moved-b/latest/ceos2.eoscfg", "role": "restore", "status": ""}
+     file {"node": "", "path": "git-redesign/b/latest/git-redesign-b.clab.yml", "role": "topology", "status": ""}
+     file {"node": "", "path": "l1-moved-b/latest/git-redesign-b.clab.yml", "role": "topology", "status": ""}
+     file {"node": "", "path": "git-redesign/b/latest/git-redesign-b.clab.yml.annotations.json", "role": "map", "status": ""}
+     file {"node": "", "path": "l1-moved-b/latest/git-redesign-b.clab.yml.annotations.json", "role": "map", "status": ""}
+     file {"node": "", "path": "git-redesign/b/latest/manifest.json", "role": "manifest", "status": ""}
+     file {"node": "", "path": "l1-moved-b/latest/manifest.json", "role": "manifest", "status": ""}
+     summary null
+     head 3de3548868c030ba7e7bf3319c9bb8312d28a122 upload_job c3e9673f0359454586aa0250003ed9c7
+     also_sends [] count 0 other_labs 0
+[16:07:56] POST /api/git/jobs/c3e9673f0359454586aa0250003ed9c7/retry {"head": "3de3548868c030ba7e7bf3319c9bb8312d28a122", "push": true, "reviewed": true}
+    -> HTTP 200 (0.2s) {"id": "c3e9673f0359454586aa0250003ed9c7", "message": "Upload queued; the saved commit will be reused.", "status": "queued"}
+[16:07:56]    job c3e9673f status=pushing message='Pushing the saved commit.'
+[16:08:02]    job c3e9673f status=synced message='Saved to Git.'
+move upload: {"message": "Saved to Git.", "pushed": true, "status": "synced"}
+  [GitHub after move 1]
+      3de3548868 Move git-redesign-b progress to l1-moved-b/
+      8c02b028e9 l1 s13 waiting save 1
+      9e300bc9f1 ceos1 changed
+      b21d76a69c ceos1 changed
+GitHub l1-moved-b files: 7 | git-redesign/b files left: 0
+
+--- try 2: a new waiting save in the moved folder, move back to git-redesign/b keeping the save on the VM only (pending=keep), without bringing files
+[16:08:04] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/save {"note": "l1 s13 waiting save 2", "push": true, "request_id": "f6f74e84454348b2943017ff5828668b", "target": "latest"}
+    -> HTTP 200 (0.0s) {"id": "f6f74e84454348b2943017ff5828668b", "message": "Save queued.", "status": "queued"}
+[16:08:04]    job f6f74e84 status=capturing message='Capturing the configured devices.'
+[16:08:08]    job f6f74e84 status=review_pending message='Saved in the VM repository; not pushed.'
+    job: {"commit": "687b637e506aa466893c9cf5e1c4bbcd01bf4495", "destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "l1-moved-b/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "pushed": false, "status": "review_pending"}
+[16:08:09] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/place {"choice": "", "folder": "git-redesign/b", "move_files": false, "pending": "", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (0.8s) {"question": {"bring": {"files": 7, "from": "l1-moved-b", "offered": true, "reason": ""}, "count": 1, "folder": "git-redesign/b", "kind": "pending", "names": ["l1 s13 waiting save 2"]}}
+[16:08:10] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/place {"choice": "", "folder": "git-redesign/b", "move_files": false, "pending": "keep", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (1.1s) {"binding": {"binding_id": "45add97279ec4deb979369009f5c55ff", "host_identity": "9a2b7085e4a0dee06c55e85a065e00c62b19403fc1c53db6a9d1c0ee7c50de03", "node_names": ["clab-git-redesign-b-ceos1", "clab-git-redesign-b-ceos2"], "repository": {"branch": "main", "id": "45add97279ec4deb979369009f5c55ff", "label": "clab-scratch-git-redesign / git-redesign/b", "owner": "archtop", "path": "/home/archtop/labs/clab-scratch-git-redesign", "prefix": "git-redesign/b", "push_url": "https://github.com/ArchRuger/cl ...[trimmed]
+B saves in: git-redesign/b
+waiting save after the move: {"destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "l1-moved-b/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "message": "Saved in the VM repository; not pushed.", "pushed": false, "status": "review_pending"}
+git_status B: {'checked': '2026-10-04T16:08:10.775527+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 1}
+[16:08:12] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/compare {"job_id": "f6f74e84.."} -> HTTP 200
+     file {"node": "ceos2", "path": "l1-moved-b/latest/ceos2.cfg", "role": "device", "status": "changed"}
+     file {"node": "ceos2", "path": "l1-moved-b/latest/ceos2.eoscfg", "role": "restore", "status": "changed"}
+     file {"node": "", "path": "l1-moved-b/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 1, "devices": ["ceos2"], "first": false, "map": false, "removed": 1, "removed_devices": [], "topology": false}
+     head 687b637e506aa466893c9cf5e1c4bbcd01bf4495 upload_job f6f74e84454348b2943017ff5828668b
+     also_sends [] count 0 other_labs 0
+[16:08:12] POST /api/git/jobs/f6f74e84454348b2943017ff5828668b/retry {"head": "687b637e506aa466893c9cf5e1c4bbcd01bf4495", "push": true, "reviewed": true}
+    -> HTTP 200 (0.2s) {"id": "f6f74e84454348b2943017ff5828668b", "message": "Upload queued; the saved commit will be reused.", "status": "queued"}
+[16:08:12]    job f6f74e84 status=pushing message='Pushing the saved commit.'
+[16:08:18]    job f6f74e84 status=synced message='Saved to Git.'
+upload of the kept save: {"destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "l1-moved-b/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "message": "Saved to Git.", "pushed": true, "status": "synced"}
+  [GitHub after kept save upload]
+      687b637e50 l1 s13 waiting save 2
+      3de3548868 Move git-redesign-b progress to l1-moved-b/
+      8c02b028e9 l1 s13 waiting save 1
+      9e300bc9f1 ceos1 changed

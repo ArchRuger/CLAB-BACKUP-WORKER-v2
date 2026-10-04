@@ -1,0 +1,22 @@
+$ docker compose --env-file <installed .env> -f <worktree>/clab-backup-ui/compose.yml up -d --build
+#14 DONE 0.3s
+
+#15 exporting to image
+#15 exporting layers 0.0s done
+#15 writing image sha256:7ba6aba12b40e8475c5b01ac590378c0e9f29bcf21be05e04f7f958b72d8fe09 done
+#15 naming to docker.io/library/clab-backup:1.30.60 done
+#15 DONE 0.0s
+
+#16 resolving provenance for metadata file
+#16 DONE 0.0s
+ Image clab-backup:1.30.60 Built
+ Container containerlab-node-manager-backup-ui-1 Recreate
+ Container containerlab-node-manager-backup-ui-1 Recreated
+ Container containerlab-node-manager-backup-ui-1 Starting
+ Container containerlab-node-manager-backup-ui-1 Started
+exit 0
+$ sudo bash deploy/setup-git.sh --refresh
+/tmp/tmp.ccpZRPQfxV/sudoers: parsed OK
+Git helper refreshed; all registered repositories retained.
+Git login remains with the repository owner. Select the repository under Progress > Save location in the manager.
+exit 0
