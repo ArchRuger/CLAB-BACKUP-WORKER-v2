@@ -884,7 +884,7 @@ function designExportGitNote(value){return String(value??'').replace(/[\r\n\t]+/
 function designExportGitReason(lab,view){
  const newest=designNewestGeneration(view||{});
  if(!newest||newest.status!=='succeeded')return 'Generate a plan first.';
- if(!lab||!lab.git_binding)return 'Bind this lab to a repository under Progress first.';
+ if(!lab||!lab.git_binding)return 'Save this lab once first (Save in the lab’s header): the export goes into the folder the lab saves to.';
  return '';
 }
 // The repository's short name, the same rule git-progress.js's gitRepoName uses (kept local: this

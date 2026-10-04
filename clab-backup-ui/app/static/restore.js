@@ -161,21 +161,6 @@ async function restoreFromVersion(labId, source, label) {
  return restoreReview(labId, source, named);
 }
 
-// Entry point from the folder browser and the Saved versions list: load the exact snapshot folder into the running lab directly,
-// without pointing the lab at that folder first. snapshotPath is the exact repository-relative snapshot folder (never appended with
-// /latest), with or without its wire-form leading slash; '' or '/' is the repository root. Exactly one leading slash is sent on the
-// wire ('/' for the root); nothing is chosen when snapshotPath is null/undefined. The confirmation is headed by the state's name
-// alone (`Load Final?`): the repository and the folder are not part of a name.
-async function restoreFromFolder(labId, snapshotPath, tree) {
- if (snapshotPath == null) { notify('Choose a saved folder to apply.'); return; }
- const bare = String(snapshotPath).replace(/^\/+/, '').replace(/\/+$/, '');
- const wire = '/' + bare;
- const displayFolder = restoreDisplayFolder(wire);
- const friendly = typeof savedVersionName === 'function' ? savedVersionName(displayFolder) || displayFolder : displayFolder;
- const source = { type: 'folder', path: wire };
- await restoreReview(labId, source, restoreSourceName(labId, source, bare ? friendly : 'the repository’s top level'));
-}
-
 // The old review dialog with its acknowledgement tick box is replaced by the Load panel's confirmation (owner decision D4: the red Load
 // is the acknowledgement). The name stays for the scripts and tools that call it: it starts the same confirmation.
 async function restoreReview(labId, source, label, options) {
@@ -305,14 +290,6 @@ function restoreDiffBody(r) {
  return `<p class="form-help">This compares the saved configuration with what the device runs right now. Lines starting with - are saved but missing on the device; lines starting with + are on the device now and will be removed.</p>
   ${r.diff.truncated ? '<p class="form-help">The list is long; only its first part is shown.</p>' : ''}${body}`;
 }
-function restoreDiffDetails(r) {
- if (!r.eligible) return '';
- if (!r.diff || !(r.diff.hunks || []).length) return restoreDiffBody(r);
- if (r.diff.identical) return '';
- return `<details class="restore-diff"><summary>Show differences (saved → running now)</summary>
-  ${restoreDiffBody(r)}</details>`;
-}
-
 // Re-enterable from the lab banner ([View progress] / [Details]) and from the chip panel (What changed, Details, the Last load line).
 // `opener` is the control focus returns to when the window closes (the chip, whose panel is closed by then).
 async function restoreShowJob(id, known, opener) {

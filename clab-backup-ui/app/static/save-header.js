@@ -373,9 +373,6 @@ function saveShowError(origin,message){
 function saveOpenDrawer(kind,options={}){
  const chip=saveEl('save-chip');saveClosePanel(false);
  if(typeof saveDrawerOpen==='function'){saveDrawerOpen(kind,{opener:chip,...options});return;}
- // A page without the drawers keeps today's places for what it can.
- if((kind==='settings'||kind==='chooser')&&typeof gitOpenRepository==='function'){gitOpenRepository();return;}
- if(kind==='versions'&&typeof gitRunAction==='function'){gitRunAction('load');return;}
  throw new Error(SAVE_MISSING);
 }
 // An ordinary save of the lab: an empty note (the manager names it), stopped before any upload.
