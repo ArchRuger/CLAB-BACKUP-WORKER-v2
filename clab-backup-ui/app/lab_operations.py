@@ -47,6 +47,13 @@ def restore_holds_lab(job):
                                                  any(restore_awaits_recheck(t) for t in job.get('targets') or []))
 
 
+def design_rechecking(state, lab_id=None):
+    """A network-design apply whose devices are still being read back after a manager restart (`rechecking`): of this lab,
+    or of any lab when none is named. `operation_busy` holds only the lab it is asked about with it; a caller that acts
+    on one lab but asks `operation_busy` without one asks this as well."""
+    return any(j.get('rechecking') and (not lab_id or j.get('lab_id') == lab_id) for j in state.get('design_jobs', []))
+
+
 def operation_busy(state, lab_id=None, progress_id=None):
     return (any(j['status'] in BUSY and (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
                 for j in state.get('operations', [])) or
@@ -55,8 +62,7 @@ def operation_busy(state, lab_id=None, progress_id=None):
                 for j in state.get('design_jobs', [])) or
             # The read-back after a restart (`rechecking`, up to the device's own timer) holds its own lab only:
             # a check that names no lab (background discovery, Git's idle check) is not held by it (audit L-15).
-            any(lab_id and j.get('rechecking') and j.get('lab_id') == lab_id
-                for j in state.get('design_jobs', [])) or
+            bool(lab_id and design_rechecking(state, lab_id)) or
             any(j['status'] in GIT_BUSY and j.get('id') != progress_id and
                 (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
                 for j in state.get('git_jobs', [])) or
