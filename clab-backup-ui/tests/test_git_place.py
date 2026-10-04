@@ -308,7 +308,7 @@ class PlaceTests(unittest.TestCase):
     def test_the_owners_repository_registered_only_at_its_top_level_takes_every_lab_without_a_question(self):
         first = self.lab('UX-TEST-003')
         answer = self.places(first)
-        self.assertEqual(answer['repositories'], [dict(id=self.repo['id'], name='Archtop-Lab', remote='https://github.com/ben/Archtop-Lab.git', path=self.path, current=False)])
+        self.assertEqual(answer['repositories'], [dict(id=self.repo['id'], name='Archtop-Lab', remote='https://github.com/ben/Archtop-Lab.git', branch='main', path=self.path, current=False)])
         default = answer['default']
         self.assertEqual((default['repository'], default['folder'], default['ask'], default['answer']['kind'], default['answer']['exists']),
                          (self.repo['id'], 'UX-TEST-003', False, 'free', False))
