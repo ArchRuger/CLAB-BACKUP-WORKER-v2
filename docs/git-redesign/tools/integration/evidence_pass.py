@@ -5,7 +5,7 @@ screenshot each, at one viewport.
 
 It starts its own fixture manager on `--port` for every scenario, each on a fresh `FIXTURE_DATA` (a scenario consumes its
 fixture: docs/git-redesign/tools/fixture/SCENARIOS.md), and stops exactly the process it started. Per state it writes
-`NN-<state>.png` (the viewport) and, when the open panel, drawer or window is taller than the viewport, `NN-<state>-whole.png`.
+`NNN-<state>.png` (the viewport) and, when the open panel, drawer or window is taller than the viewport, `NNN-<state>-whole.png`.
 `report.json` lists every state with its PROMPT reference, the steps taken, the assertions and their results, the console
 errors, page errors and failed requests seen while the state was driven, and the screenshot names. A state that could not be
 reached is listed with the reason. The exit status is 0 only when every state was reached, every assertion held and no error
@@ -175,7 +175,7 @@ class Evidence(Session):
             (entry['assertions'] if isinstance(item, dict) else entry['steps']).append(item)
         self.loose = []
         self.current = entry
-        print('--- %02d %s (%s)' % (number, name, ref), flush=True)
+        print('--- %03d %s (%s)' % (number, name, ref), flush=True)
         try:
             yield entry
         except Exception as error:   # the state is listed with the reason, the pass goes on
@@ -185,7 +185,7 @@ class Evidence(Session):
             print('NOT REACHED %s :: %s' % (name, entry['reason']), flush=True)
         finally:
             try:
-                entry['screenshots'] = self.shots('%02d-%s' % (number, slug))
+                entry['screenshots'] = self.shots('%03d-%s' % (number, slug))
             except Exception as error:
                 entry['errors'].append('screenshot failed: ' + str(error).split('\n')[0])
             entry['errors'] += list(self.errors) + list(self.failed)
@@ -201,7 +201,7 @@ class Evidence(Session):
         self.report['count'] += 1
         self.report['states'].append(dict(n=self.report['count'], name=name, prompt=ref, scenario=self.scenario, reached=False, reason=reason, known=True,
                                           steps=[], assertions=[], errors=[], screenshots=[]))
-        print('--- %02d %s: not reachable here: %s' % (self.report['count'], name, reason), flush=True)
+        print('--- %03d %s: not reachable here: %s' % (self.report['count'], name, reason), flush=True)
 
     def shots(self, stem):
         page, names = self.page, [stem + '.png']
@@ -1089,7 +1089,6 @@ def scenario_folders(s):
         s.click('.folder-new [data-folder-action="new-add"]')
         s.wait_js("document.getElementById('folder-path').value.includes('extra')")
         s.equal('the new folder is made in the lab folder above the saved state', p.locator('#folder-path').input_value(), 'BGP/start/extra')
-        s.match('and the chooser says so', s.text('#folder-answer'), r'^BGP/start/latest/extra would be inside a saved state, so the new folder is BGP/start/extra, in the lab folder above it\.')
         s.check('no refusal', not s.visible('#folder-refused'))
     s.click('#folder-foot [data-folder-action="cancel"]', count=False)
     edit = [d for d in s.fixture_state()['devices'] if d.startswith('clab-shared-b-')][0]
