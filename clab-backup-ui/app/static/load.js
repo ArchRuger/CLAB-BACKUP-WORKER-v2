@@ -1,5 +1,5 @@
 'use strict';
-// Load: today's "Apply to running lab" inside the header (docs/git-redesign/design/LOAD.md). The Load panel lists the saved states of
+// Load: the old tab's Apply inside the header (docs/git-redesign/design/LOAD.md). The Load panel lists the saved states of
 // the repository, runs the restore preflight for the state chosen and shows the confirmation; the red Load is the acknowledgement
 // (owner decision D4). loadSubmit() is the only sender of `acknowledge: true` to a restore route. The restore service is not changed by
 // this file: a load replaces the whole running configuration inside each device's own transaction with timed recovery, after a
@@ -268,7 +268,7 @@ function loadConfirmMarkup(r,lab){
  html+='<p class="save-note">Each device checks the new configuration itself and undoes it if it loses contact.</p>';
  html+=`<details><summary>Options</summary><label for="load-minutes">Undo automatically if a device cannot be reached again within (minutes)</label><input id="load-minutes" type="number" min="2" max="60" value="${esc(loadMinutes(r.minutes))}"></details>`;
  html+=`<p class="form-error" role="alert">${esc(r.error||'')}</p>`;
- html+=`<div class="save-row"><button type="button" class="button danger" id="load-run" data-load-action="run"${reason||!eligible||r.sending?' disabled':''}>Load</button><button type="button" class="button ghost small" id="load-cancel" data-load-action="cancel">Cancel</button><button type="button" class="button ghost small" id="load-diff" data-load-action="diff">See what's different</button><span class="caption" id="load-run-reason"${reason?'':' hidden'}>${esc(reason)}</span></div>`;
+ html+=`<div class="save-row"><button type="button" class="button danger" id="load-run" data-load-action="run"${reason||!eligible||r.sending?' disabled':''}>Load</button><button type="button" class="button ghost small" id="load-cancel" data-load-action="cancel">Cancel</button><button type="button" class="button ghost small" id="load-diff" data-load-action="diff">See what’s different</button><span class="caption" id="load-run-reason"${reason?'':' hidden'}>${esc(reason)}</span></div>`;
  return html;
 }
 function loadCheckingMarkup(r){return `<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot busy" aria-hidden="true"></span>Checking ${esc(r.name)} against your devices…</p><div class="save-row"><button type="button" class="button ghost small" id="load-cancel" data-load-action="cancel">Cancel</button></div>`;}

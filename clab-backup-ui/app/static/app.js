@@ -123,7 +123,6 @@ function dismissedSet(){const ids=new Set();if(typeof isDismissed!=='function')r
 function labContext(){return {...state,dismissed:dismissedSet()};}
 function labStateOf(lab){return typeof labState==='function'?labState(lab,labContext()):{key:'',label:lab.deployment?.status||'Not matched to a running lab',pill:'neutral',detail:''};}
 function readyLine(lab,ls){const total=(lab.nodes||[]).length,ready=(lab.nodes||[]).filter(n=>n.ssh_ready).length;if(ls.key==='stopped')return 'Not running';if(['unlinked','unknown'].includes(ls.key))return '';return `${ready} of ${total} devices ready`;}
-function gitProblem(lab){return typeof gitContexts!=='undefined'&&gitContexts&&typeof gitContexts.get==='function'?gitContexts.get(lab.id)?.repository_status?.problem||'':'';}
 function scheduleSummary(lab){if(!lab.interval)return 'Off';const paused=lab.deployment&&!['Running','Unlinked'].includes(lab.deployment.status);return (paused?'Paused (lab not running) · every ':'Every ')+lab.interval+' min';}
 function labsMarkup(){
  if(!state.labs.length)return '<p class="side-hint">Your labs will appear here.</p>';

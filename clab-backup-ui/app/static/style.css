@@ -533,8 +533,6 @@ footer {
 
 .text-button { display: block; border: 0; background: none; color: inherit; padding: 0; font-size: 13px; cursor: pointer; }
 .text-button:hover { text-decoration: underline; }
-.text-button.git-destination { text-align: left; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; color: var(--ink); }
-.text-button.git-inline-action { display: inline; color: var(--accent); font-weight: 600; text-decoration: underline; }
 
 .icon-button {
   display: inline-flex;
@@ -1266,7 +1264,7 @@ dl.kv, .kv {
 .health-grid .mono { font-size: 12px; }
 
 /* disclosure defaults inside cards/dialogs; component rules override via higher specificity */
-:where(dialog, .drawer, .card, .panel, .tool-card, .lab-card, .vm-labs, .device-row, .drawer-section, .job-body, .git-saves, .git-binding-form, .banner) details > summary {
+:where(dialog, .drawer, .card, .panel, .tool-card, .lab-card, .vm-labs, .device-row, .drawer-section, .job-body, .banner) details > summary {
   font-size: 13px;
   font-weight: 600;
   color: var(--accent-strong);
@@ -1304,7 +1302,7 @@ input[type=checkbox], input[type=radio] {
 input[type=color] { padding: 2px; min-height: 34px; }
 input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--muted); }
 
-dialog :where(label:not(.checkbox-label)), .git-binding-form > label:not(.checkbox-label) {
+dialog :where(label:not(.checkbox-label)) {
   display: block;
   font-size: 12px;
   font-weight: 600;
@@ -2061,34 +2059,8 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 #op-layout-editor .dialog-actions { flex-wrap: wrap; }
 
 /* --------------------------------------------------------------------------
-   22. Git progress family (git-*)
+   22. Git save family (git-*): what the header, the drawers and the job window still use
    -------------------------------------------------------------------------- */
-.git-progress-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--accent);
-  border-radius: var(--radius-lg);
-  padding: 16px 18px;
-  margin: 0 0 16px;
-}
-.git-progress-bar > div:first-child { min-width: 0; }
-.git-destination { text-align: left; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; color: var(--ink); }
-.git-progress-bar p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
-
-.git-binding-form {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  background: var(--surface);
-  margin: 16px 0;
-  min-width: 0;
-}
-.git-binding-form > select { width: 100%; }
-.git-binding-form > .actions { padding: 16px 0 0; }
 .git-node-scope {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -2102,9 +2074,6 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 .git-node-scope .checkbox-label { margin: 0; }
 .git-node-scope small { display: block; color: var(--muted); font-size: 12px; }
 .git-node-scope input { flex-shrink: 0; }
-.git-binding-form .checkbox-label { align-items: flex-start; }
-.git-binding-form .checkbox-label input { flex-shrink: 0; margin-top: 2px; }
-.git-binding-form .op-path { font-size: 12px; }
 .git-setup-command {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2117,41 +2086,7 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
   max-width: 700px;
   margin: 16px auto;
 }
-#git-saves-list { display: grid; gap: 8px; }
-.git-saved-job {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 13px;
-  overflow-wrap: anywhere;
-  margin: 0;
-}
 /* details rows: <summary><pill> <sentence> · <relative time></summary> + dl.kv + actions */
-details.git-saved-job > summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-  padding: 12px 14px;
-  list-style: none;
-  cursor: pointer;
-  font-weight: 500;
-  color: var(--ink);
-  border-radius: var(--radius);
-}
-details.git-saved-job > summary::-webkit-details-marker { display: none; }
-details.git-saved-job > summary:hover { background: var(--surface-2); }
-details.git-saved-job[open] > summary { border-bottom: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; }
-details.git-saved-job > :not(summary) { padding: 10px 14px 0; }
-details.git-saved-job > .actions, details.git-saved-job > .dialog-actions { padding: 10px 14px 12px; justify-content: flex-start; margin: 0; }
-details.git-saved-job > :last-child { padding-bottom: 12px; }
-.git-saved-job span, .git-saved-job .when { font-size: 12px; color: var(--muted); }
-.git-saved-job .pill { font-weight: 600; }
-.git-saved-job .kv { font-size: 12px; }
 .git-job-summary .health-grid { margin: 14px 0 20px; }
 .git-job-summary p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .git-job-summary .badge { font-size: 12px; }
@@ -2182,73 +2117,18 @@ details.git-saved-job > :last-child { padding-bottom: 12px; }
 .git-destination-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; margin: 12px 0; }
 .git-destination-line code { background: var(--surface-2); padding: 2px 6px; border-radius: var(--radius); font-size: 12px; }
 .git-destination-line span[aria-hidden] { color: var(--muted); }
-.git-inline-action { display: inline; color: var(--accent); font-weight: 600; text-decoration: underline; }
-.git-blank-actions { justify-content: center; padding: 6px 0 16px; }
 
 /* --------------------------------------------------------------------------
    23. Git places — folder browser (git-places.js)
    -------------------------------------------------------------------------- */
 .git-places { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); margin: 16px 0; overflow: hidden; }
-.git-places-title { padding: 16px 20px 6px; }
-.git-places-title p { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
-.git-places-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-2);
-}
-.git-places-head .actions { padding: 0; }
-.git-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; font-size: 13px; min-width: 0; }
-.git-crumbs button {
-  border: 0;
-  background: transparent;
-  padding: 5px 8px;
-  border-radius: var(--radius);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.git-crumbs button:hover { background: var(--surface); color: var(--ink); }
-.git-crumbs button[aria-current=page] { color: var(--accent-strong); background: var(--accent-soft); }
-.git-crumbs span { color: var(--muted); padding: 0 2px; }
-.git-places-body { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 220px; }
-.git-outline { border-right: 1px solid var(--line); padding: 10px 8px; overflow: auto; max-height: 420px; background: var(--surface-2); }
-.git-outline details { margin: 0; font-size: 13px; }
-.git-outline summary {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 8px;
-  border-radius: var(--radius);
-  font-size: 13px;
-  font-weight: 400;
-  cursor: pointer;
-  color: var(--ink);
-  min-width: 0;
-}
-.git-outline summary::-webkit-details-marker { display: none; }
 /* The twisty is a control of its own: it opens and closes a branch without selecting the folder. */
 .git-twist, .git-twist-space { flex: none; width: 18px; height: 18px; margin: 0 -3px 0 -4px; }
 .git-twist { display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; background: none; cursor: pointer; }
 .git-twist::before { content: ""; width: 0; height: 0; border: 4px solid transparent; border-left: 5px solid var(--muted); margin-left: 4px; transition: transform .12s; }
 .git-twist[aria-expanded="true"]::before { transform: rotate(90deg); margin: 4px 0 0; }
 .git-twist:hover { background: var(--line); }
-.git-outline summary:hover { background: var(--surface); }
-.git-outline-name { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.git-outline summary .git-tag { flex: none; }
-/* selected = the folder being looked at; current = the folder this lab saves to. They are different
-   things and look different: a filled row against an accent bar with the This lab tag. */
-.git-outline summary.selected { background: var(--accent-soft); color: var(--accent-strong); }
-.git-outline summary.current { box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
-.git-outline summary.holds-current { box-shadow: inset 3px 0 0 var(--line-strong); }
 .git-tag.holds { background: none; color: var(--muted); font-weight: 500; padding-left: 0; }
-.git-outline-children { padding-left: 14px; }
 .git-folder-icon { width: 14px; height: 11px; border-radius: 2px; background: var(--line-strong); position: relative; flex: none; margin-top: 2px; }
 .git-folder-icon::before { content: ""; position: absolute; left: 0; top: -3px; width: 6px; height: 3px; border-radius: 2px 2px 0 0; background: inherit; }
 .git-folder-icon.lab { background: var(--accent); }
@@ -2264,16 +2144,6 @@ details.git-saved-job > :last-child { padding-bottom: 12px; }
 .git-listing .name { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
 .git-listing .desc { color: var(--muted); }
 .git-listing .size { font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
-.git-places-foot {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px 16px;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--muted);
-}
 .git-empty-folder { padding: 40px 24px; text-align: center; color: var(--muted); font-size: 13px; margin: 0; }
 
 /* --------------------------------------------------------------------------
@@ -2418,9 +2288,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 [tabindex="0"]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .map-device:focus:not(:focus-visible), .topology-wire:focus:not(:focus-visible) { outline: none; }
 /* inset rings for items drawn inside a menu or a tab strip */
-.lab-switcher > summary:focus-visible, .lab-switcher > .menu-button:focus-visible, .tabs button:focus-visible,
-.menu-list button:focus-visible, .menu-list a:focus-visible,
-.lab-item:focus-visible, .op-tree-file:focus-visible, .git-outline summary:focus-visible { outline-offset: -3px; box-shadow: none; }
+.lab-switcher > summary:focus-visible, .lab-switcher > .menu-button:focus-visible, .tabs button:focus-visible, .menu-list button:focus-visible, .menu-list a:focus-visible, .lab-item:focus-visible, .op-tree-file:focus-visible { outline-offset: -3px; box-shadow: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -2490,8 +2358,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .tabs { overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: thin; }
   .tabs button { white-space: nowrap; padding: 10px; }
   .lab-header-actions { flex-basis: 100%; }
-  .git-places-body { grid-template-columns: 1fr; }
-  .git-outline { border-right: 0; border-bottom: 1px solid var(--line); max-height: 220px; }
   .op-sections { grid-template-columns: 1fr; }
   .operations-dialog { padding: 18px; }
   #operation-review .dialog-actions { bottom: -18px; margin: 20px -18px 0; padding: 12px 18px 14px; }
@@ -2544,8 +2410,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .kv { grid-template-columns: 1fr; gap: 2px 0; }
   .kv dd { margin-bottom: 8px; }
   .empty-state { padding: 32px 16px; }
-  .git-progress-bar { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px; }
-  .git-binding-form { padding: 14px; }
   #git-version-dialog .button { white-space: normal; }
   .git-node-scope .checkbox-label span { overflow-wrap: anywhere; }
   #git-version-dialog .actions { flex-wrap: wrap; }
@@ -2559,35 +2423,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .side-button { margin: 10px 0 0; width: 100%; }
 }
 
-/* --------------------------------------------------------------------------
-   Progress tab (stage 3b): saved versions, recent saves, save location
-   -------------------------------------------------------------------------- */
-.git-versions-head { display: flex; justify-content: flex-end; margin: 0 0 8px; }
-.git-version-group { margin: 12px 0 0; }
-.git-version-group h3, .git-version-group > summary { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
-.git-version-group > summary { cursor: pointer; }
-.git-version-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.git-version-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-.git-version-row .git-version-name { min-width: 0; overflow-wrap: anywhere; }
-.git-version-row .git-version-name small { display: block; margin-top: 2px; }
-.git-version-row .actions { justify-content: flex-end; flex-wrap: wrap; }
-.git-versions-empty { margin: 0; color: var(--muted); }
-.git-saved-job { border: 1px solid var(--line); border-radius: var(--radius); padding: 0 12px; margin: 0 0 8px; background: var(--surface); }
-.git-saved-job > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; cursor: pointer; }
-.git-saved-job dl.kv { margin: 8px 0; }
-.git-saved-job .actions { padding: 0 0 10px; }
-.git-progress-bar .banner { flex-basis: 100%; width: 100%; grid-column: 1 / -1; margin: 12px 0 0; }
-.git-change-folder > summary { font-weight: 600; cursor: pointer; padding: 8px 0; }
-.git-first-folder { display: flex; gap: 8px; align-items: center; }
-.git-first-folder input { flex: 1; min-width: 0; }
-.git-places-caption { margin: 4px 0 8px; }
-.git-location-tech { margin: 8px 0; }
-.git-places-foot details { display: inline-block; margin-left: 8px; }
-.git-places-foot details p { margin: 4px 0 0; }
-@media (max-width: 900px) {
-  .git-version-row { grid-template-columns: 1fr; }
-  .git-version-row .actions { justify-content: flex-start; }
-}
 
 /* ---- stage 3C: All lab operations dialog sections, review confirmations, CLI launcher rows, pages ---- */
 .op-sections { display: grid; gap: 18px; }
@@ -2604,7 +2439,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .op-session-row .caption { flex: 1 1 260px; }
 .workspace-links { margin: 24px 0 0; color: var(--muted); font-size: 13px; }
 .debug-page details summary { cursor: pointer; }
-.git-version-when { color: var(--muted); font-size: 12px; }
 .restore-job-details { margin-top: 6px; }
 
 /* ---- Real line diffs (diff-view.js): the review before an upload, "Compared with…" ---- */

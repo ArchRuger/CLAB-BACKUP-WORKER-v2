@@ -161,7 +161,7 @@ function gitFolderTag(dir,current,long=false){
 }
 // ===========================================================================================================
 // The folder chooser (docs/git-redesign/design/DRAWERS.md section 4). ONE component: the first-save panel's
-// folder field, the Save location card and the folder browser's modes. It is hosted by the drawer
+// folder field, the old save-location card and the folder browser's modes. It is hosted by the drawer
 // (save-drawers.js: kinds `chooser` and `state`) and by the first-save panel; this file owns markup and the
 // mapping from a DOM event to an action. The host owns the requests, the debounce and every piece of state.
 // The page decides nothing about a folder: marks, sentences and questions are printed from the manager's

@@ -188,7 +188,7 @@ test('L-10 follow-up: a restore reading devices back after a restart is shown as
  // Read back, or stored by an older manager without the field: the finished job it was, with Dismiss and Details.
  for(const done of [job({rechecking:false}),job({})]){
   paint({restore_jobs:[done]});
-  assert.equal(get('lab-banner-text').textContent,'Replacing configuration did not finish.');assert.equal(get('banner-dismiss').hidden,false);
+  assert.equal(get('lab-banner-text').textContent,'Loading a saved state did not finish.');assert.equal(get('banner-dismiss').hidden,false);
   assert.equal(get('worker-state').hidden,true);
  }
  paint({restore_jobs:[{id:'r1',lab_id:'lab',status:'applying',message:'Applying.'}]});

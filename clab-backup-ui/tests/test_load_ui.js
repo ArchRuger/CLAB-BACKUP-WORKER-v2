@@ -143,7 +143,7 @@ test('the confirmation: every preflight row kind gives its text, tick box and re
  assert.doesNotMatch(html,/This state covers/);
  assert.match(html,/<details><summary>Options<\/summary><label for="load-minutes">Undo automatically if a device cannot be reached again within \(minutes\)<\/label><input id="load-minutes" type="number" min="2" max="60" value="5"><\/details>/);
  assert.match(html,/<p class="save-note">Each device checks the new configuration itself and undoes it if it loses contact\.<\/p>/);
- assert.match(html,/<div class="save-row"><button type="button" class="button danger" id="load-run" data-load-action="run">Load<\/button><button[^>]*data-load-action="cancel">Cancel<\/button><button[^>]*data-load-action="diff">See what's different<\/button><span class="caption" id="load-run-reason" hidden><\/span><\/div>/);
+ assert.match(html,/<div class="save-row"><button type="button" class="button danger" id="load-run" data-load-action="run">Load<\/button><button[^>]*data-load-action="cancel">Cancel<\/button><button[^>]*data-load-action="diff">See what’s different<\/button><span class="caption" id="load-run-reason" hidden><\/span><\/div>/);
  assert.doesNotMatch(html,/type="checkbox"(?![^>]*name="load-node")/,'no acknowledgement tick box (D4)');
  for(const name of classes(html))assert.ok(ALLOWED.has(name),'class '+name);
  assert.equal(focusCount(html),1);

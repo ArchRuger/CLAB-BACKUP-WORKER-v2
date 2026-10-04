@@ -3,7 +3,7 @@
 // backend's state machines (deployment status, NOS readiness, Git job status, operations) into the
 // small set of words the UI uses everywhere. Lab: Stopped / Starting / Running / Needs attention.
 // Device: Starting / Ready / Unavailable / Needs attention / Needs credentials.
-// Progress: Not saved yet / Saving progress… / Saved to Git / Saved on this VM / Needs attention.
+// Saves: the header chip's words (saveChipState): Not saved yet / Saving… / Saved / n saves to upload / Upload failed / Can't save.
 // Save chip (saveChipState, loadState and the wording helpers at the end of this file): Saved / Saving / N saves to upload / Upload failed /
 // Can’t save / Not saved yet / Loading / Running <name> / Loaded n of m. They are the one place that decides a chip state, a count or a name.
 // Pills are ok | warn | danger | neutral | busy (busy = something is in progress right now).
@@ -78,7 +78,7 @@ function labFailure(lab,ctx={}){
  const dismissed=ctx.dismissed,isDismissed=id=>!!dismissed&&(typeof dismissed.has==='function'?dismissed.has(id):Array.isArray(dismissed)&&dismissed.includes(id));
  const done=[];
  for(const j of ctx.operations||[])if(j.lab_id===lab?.id&&!STATUS_OPERATION_BUSY.includes(j.status))done.push({job:j,failed:STATUS_OPERATION_FAILED.includes(j.status),label:operationLabel(j.action)});
- for(const j of ctx.restore_jobs||[])if(j.lab_id===lab?.id&&!statusRestoreActive(j))done.push({job:j,failed:STATUS_RESTORE_FAILED.includes(j.status)||STATUS_RESTORE_ATTENTION.includes(j.status),label:'Replacing configuration',...(STATUS_RESTORE_ATTENTION.includes(j.status)?{detail:STATUS_RESTORE_ATTENTION_DETAIL[j.status],pill:'warn'}:{})});
+ for(const j of ctx.restore_jobs||[])if(j.lab_id===lab?.id&&!statusRestoreActive(j))done.push({job:j,failed:STATUS_RESTORE_FAILED.includes(j.status)||STATUS_RESTORE_ATTENTION.includes(j.status),label:'Loading a saved state',...(STATUS_RESTORE_ATTENTION.includes(j.status)?{detail:STATUS_RESTORE_ATTENTION_DETAIL[j.status],pill:'warn'}:{})});
  const newest=done.sort((a,b)=>statusJobTime(b.job)-statusJobTime(a.job))[0];
  return newest&&newest.failed&&!isDismissed(newest.job.id)?newest:null;
 }
@@ -130,41 +130,8 @@ function deviceState(node){
 }
 // How many devices of the lab cannot open a CLI until login credentials are added.
 function credentialsNeeded(lab){return (lab?.nodes||[]).filter(statusNeedsCredentials).length;}
-// The Git job that describes where the lab's progress stands: newest first, ignoring dismissed
-// jobs and repository update markers.
+// The lab's Git jobs, newest first, without repository update markers (the save chip reads them: saveChipState below).
 function statusLabGitJobs(lab,gitJobs){return (gitJobs||[]).filter(j=>j.lab_id===lab?.id&&j.target!=='update').sort((a,b)=>String(b.created||'').localeCompare(String(a.created||'')));}
-function latestProgressJob(lab,gitJobs){return statusLabGitJobs(lab,gitJobs).find(j=>j.status!=='dismissed');}
-// Progress state → {key,label,detail,at,pill,job}. `at` is the timestamp the label refers to.
-// `problem` is repository_status.problem: when the save location itself is broken the answer is
-// "Needs attention" whatever the last job says. The upload target is named by its host
-// ("github.com") or, when the push URL is unknown, "the online repository".
-function progressState(lab,gitJobs,now,problem){
- if(!lab?.git_binding)return {key:'unconnected',label:'No save location yet',detail:'Choose where this lab’s progress is saved.',at:'',pill:'neutral',job:null};
- const host=statusHost(lab.git_binding.repository?.push_url)||'the online repository';
- const job=latestProgressJob(lab,gitJobs),at=job?(job.finished||job.created||''):'',when=relativeTime(at,now);
- const phase=job&&{queued:'Waiting to start…',capturing:'Reading device configurations…',exporting:job.target==='move'?'Moving saved files…':'Saving to the repository…',pushing:`Uploading to ${host}…`}[job.status];
- if(phase)return {key:'saving',label:'Saving progress…',detail:phase,at,pill:'busy',job};
- if(problem)return {key:'attention',label:'Needs attention',detail:'Saving to Git is not possible right now.',at,pill:'warn',job:job||null,problem:String(problem)};
- if(!job){
-  const kept=statusLabGitJobs(lab,gitJobs)[0];
-  if(kept)return {key:'kept',label:'Kept on this VM',detail:'Your last save was kept on the VM without uploading.',at:kept.finished||kept.created||'',pill:'neutral',job:kept};
-  return {key:'none',label:'Not saved yet',detail:'Save progress creates a snapshot you can return to later.',at:'',pill:'neutral',job:null};
- }
- const table={
-  synced:{key:'git',label:'Saved to Git',detail:when?`Saved ${when}.`:'',pill:'ok'},
-  unchanged:{key:'git',label:'Saved to Git',detail:'Nothing changed since your last save.',pill:'ok'},
-  committed:{key:'local',label:'Saved on this VM',detail:'Not uploaded yet. Upload it when you are ready.',pill:'warn'},
-  review_pending:{key:'review',label:'Saved on this VM',detail:'Review the changes before uploading.',pill:'warn'},
-  push_pending:{key:'attention',label:'Needs attention',detail:`Saved on this VM, but it could not be uploaded to ${host}.`,pill:'warn'},
-  export_pending:{key:'attention',label:'Needs attention',detail:'Device configurations were read, but they could not be saved to the repository.',pill:'warn'},
-  capture_incomplete:{key:'failed',label:'Save failed',detail:'A device could not be read, so nothing was saved. Check that every included device is Ready, then try again.',pill:'danger'},
-  failed:{key:'failed',label:'Save failed',detail:'The last save did not complete.',pill:'danger'},
-  interrupted:{key:'interrupted',label:'Save interrupted',detail:'The manager restarted during the last save. Retry it.',pill:'warn'},
- }[job.status]||{key:'unknown',label:String(job.status||'Unknown'),detail:job.message||'',pill:'neutral'};
- return {...table,at,job};
-}
-// One line for the lab header: "Saved to Git 12 minutes ago" or "Saving progress…".
-function progressSummary(lab,gitJobs,now,problem){const p=progressState(lab,gitJobs,now,problem);if(['git','local','review','kept'].includes(p.key))return p.label+(p.at?' '+relativeTime(p.at,now):'');return p.label;}
 // Backup / login-check badges in the technical table and job list; unknown values pass through and
 // the caller keeps the raw value in `title`.
 function badgeLabel(status){return STATUS_BADGE_LABELS[status]||String(status??'');}

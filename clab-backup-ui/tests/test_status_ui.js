@@ -70,7 +70,7 @@ test('an operation or restore that did not finish needs attention until it is di
  assert.equal(c.labState(stopped,{operations:[redone,{...failed,id:'op-3',created:'2026-09-16T11:10:00Z',finished:'2026-09-16T11:11:00Z'}]}).label,'Needs attention','the newest outcome wins whatever the array order');
  assert.equal(c.labState(running,{operations:[failed,{id:'op-4',lab_id:'lab',action:'deploy',status:'running',created:'2026-09-16T11:20:00Z'}]}).label,'Starting lab','a running retry outranks the old failure');
  const restore=c.labState(running,{restore_jobs:[{id:'rs-1',lab_id:'lab',status:'preflight_failed',created:'2026-09-16T11:30:00Z'}]});
- assert.equal(restore.label,'Needs attention');assert.equal(restore.detail,'Replacing configuration did not finish.');assert.equal(restore.job.id,'rs-1');
+ assert.equal(restore.label,'Needs attention');assert.equal(restore.detail,'Loading a saved state did not finish.');assert.equal(restore.job.id,'rs-1');
  assert.equal(c.labState(running,{restore_jobs:[{id:'rs-2',lab_id:'lab',status:'failed',created:'2026-09-16T11:30:00Z'}]}).key,'attention');
  assert.equal(c.labState(running,{restore_jobs:[{id:'rs-3',lab_id:'lab',status:'succeeded',created:'2026-09-16T11:30:00Z'}]}).label,'Running');
  assert.equal(c.labState(running,{restore_jobs:[{id:'rs-2',lab_id:'lab',status:'failed',created:'2026-09-16T11:30:00Z'}],operations:[redone]}).label,'Needs attention','the restore failure is newer than the deploy');
@@ -102,57 +102,56 @@ test('a device explains itself in one sentence and says whether the CLI can open
  assert.doesNotMatch(JSON.stringify([ready,booting,failed,down,creds,manual,checking]),/router|stale|Not connected/i);
 });
 
-test('progress reads Not saved yet, Saving, Saved to Git, Saved on this VM or Needs attention',()=>{
- const c=makeContext(),lab={id:'lab',git_binding:{binding_id:'b'}};
- const none=c.progressState({id:'lab'},[]);
- assert.equal(none.label,'No save location yet');assert.equal(none.key,'unconnected');assert.match(none.detail,/Choose where this lab’s progress is saved/);
- assert.equal(c.progressState(lab,[]).label,'Not saved yet');
- const job=(status,extra={})=>({id:status,lab_id:'lab',status,target:'latest',created:'2026-09-16T11:48:00Z',finished:'2026-09-16T11:48:30Z',...extra});
- const synced=c.progressState(lab,[job('synced')],NOW);
- assert.equal(synced.label,'Saved to Git');assert.equal(synced.detail,'Saved 12 minutes ago.');assert.equal(synced.pill,'ok');
- assert.equal(c.progressSummary(lab,[job('synced')],NOW),'Saved to Git 12 minutes ago');
- const pushing=c.progressState(lab,[job('pushing')]);
- assert.equal(pushing.label,'Saving progress…');assert.equal(pushing.detail,'Uploading to the online repository…');assert.equal(pushing.pill,'busy');
- assert.equal(c.progressState(lab,[job('capturing')]).detail,'Reading device configurations…');
- assert.equal(c.progressState(lab,[job('exporting',{target:'move'})]).detail,'Moving saved files…');
- const pending=c.progressState(lab,[job('push_pending')]);assert.equal(pending.label,'Needs attention');assert.match(pending.detail,/could not be uploaded to the online repository/);assert.equal(pending.pill,'warn');
- const local=c.progressState(lab,[job('committed')]);assert.equal(local.label,'Saved on this VM');assert.equal(local.pill,'warn');assert.equal(local.key,'local');
- assert.equal(c.progressState(lab,[job('review_pending')]).detail,'Review the changes before uploading.');
- assert.equal(c.progressState(lab,[job('failed')]).label,'Save failed');assert.equal(c.progressState(lab,[job('capture_incomplete')]).pill,'danger');
- assert.equal(c.progressState(lab,[job('interrupted')]).label,'Save interrupted');
+// progressState and progressSummary went with the Progress tab (D1; PROMPT 5.2: one status function). Their claims are the chip's.
+test('the chip reads Not saved yet, Saving…, Saved, 1 save to upload, Upload failed or Can’t save (the one status function, saveChipState)',()=>{
+ const c=makeContext(),lab={id:'lab',git_binding:{binding_id:'b'}},state=(l,jobs)=>plain(c.saveChipState(l,{git_jobs:jobs},Date.parse('2026-09-16T12:00:30Z')));
+ const none=state({id:'lab'},[]);
+ assert.equal(none.text,'Not saved yet');assert.equal(none.key,'none');assert.equal(none.panel,'first','a lab without a save location opens the first-save view');
+ assert.equal(state(lab,[]).text,'Not saved yet');
+ const job=(status,extra={})=>({id:status,lab_id:'lab',status,target:'latest',commit:['committed','review_pending','push_pending','synced'].includes(status)?'c-'+status:'',pushed:status==='synced',created:'2026-09-16T11:48:00Z',finished:'2026-09-16T11:48:30Z',...extra});
+ const synced=state(lab,[job('synced')]);
+ assert.equal(synced.text,'Saved 12 min ago');assert.equal(synced.dot,'ok');assert.equal(synced.key,'saved');
+ const pushing=state(lab,[job('pushing')]);
+ assert.equal(pushing.text,'Uploading…');assert.equal(pushing.dot,'busy');assert.equal(pushing.saveDisabled,true);
+ assert.equal(state(lab,[job('capturing')]).text,'Saving…');assert.equal(state(lab,[job('exporting',{target:'move'})]).text,'Saving…');
+ const pending=state(lab,[job('push_pending')]);assert.equal(pending.text,'Upload failed');assert.equal(pending.dot,'bad');
+ const local=state(lab,[job('committed')]);assert.equal(local.text,'1 save to upload');assert.equal(local.dot,'warn');assert.equal(local.key,'waiting');
+ assert.equal(state(lab,[job('review_pending')]).panel,'upload','the review is the upload panel: the sentence, Upload, Not now, See changes');
+ assert.equal(state(lab,[job('failed')]).text,'Can’t save');assert.equal(state(lab,[job('capture_incomplete')]).dot,'bad');
+ assert.equal(state(lab,[job('interrupted')]).text,'Can’t save');
  // newest first, ignoring dismissed jobs and repository update markers, and other labs
- const newest=c.progressState(lab,[job('failed',{created:'2026-09-16T10:00:00Z'}),job('synced',{created:'2026-09-16T11:00:00Z'}),job('dismissed',{created:'2026-09-16T11:30:00Z'}),job('push_pending',{created:'2026-09-16T11:40:00Z',target:'update'}),job('failed',{created:'2026-09-16T11:50:00Z',lab_id:'other'})]);
- assert.equal(newest.label,'Saved to Git');
+ const newest=state(lab,[job('failed',{created:'2026-09-16T10:00:00Z',finished:'2026-09-16T10:00:30Z'}),job('synced',{created:'2026-09-16T11:00:00Z',finished:'2026-09-16T11:00:30Z'}),job('dismissed',{created:'2026-09-16T11:30:00Z'}),job('push_pending',{created:'2026-09-16T11:40:00Z',target:'update'}),job('failed',{created:'2026-09-16T11:50:00Z',lab_id:'other'})]);
+ assert.equal(newest.key,'saved');
 });
-
-test('progress names the upload host, knows unchanged and kept-only saves, and flags a broken save location',()=>{
- const c=makeContext(),job=(status,extra={})=>({id:status,lab_id:'lab',status,target:'latest',created:'2026-09-16T11:48:00Z',finished:'2026-09-16T11:48:30Z',...extra});
- const github={id:'lab',git_binding:{binding_id:'b',repository:{push_url:'https://github.com/course/labs.git'}}};
- assert.equal(c.progressState(github,[job('pushing')]).detail,'Uploading to github.com…');
- assert.match(c.progressState(github,[job('push_pending')]).detail,/could not be uploaded to github\.com\./);
- assert.equal(c.progressState({id:'lab',git_binding:{binding_id:'b',repository:{push_url:'git@gitlab.example.edu:course/labs.git'}}},[job('pushing')]).detail,'Uploading to gitlab.example.edu…');
- assert.equal(c.progressState({id:'lab',git_binding:{binding_id:'b',repository:{push_url:'ssh://git@git.school.local:2222/labs.git'}}},[job('pushing')]).detail,'Uploading to git.school.local…');
- assert.equal(c.progressState({id:'lab',git_binding:{binding_id:'b',repository:{push_url:'nonsense'}}},[job('pushing')]).detail,'Uploading to the online repository…');
- const unchanged=c.progressState(github,[job('unchanged')],NOW);
- assert.equal(unchanged.key,'git');assert.equal(unchanged.label,'Saved to Git');assert.equal(unchanged.detail,'Nothing changed since your last save.');assert.equal(unchanged.pill,'ok');
- const incomplete=c.progressState(github,[job('capture_incomplete')]);
- assert.equal(incomplete.label,'Save failed');assert.equal(incomplete.detail,'A device could not be read, so nothing was saved. Check that every included device is Ready, then try again.');
- const kept=c.progressState(github,[job('dismissed')],NOW);
- assert.equal(kept.label,'Kept on this VM');assert.equal(kept.detail,'Your last save was kept on the VM without uploading.');assert.equal(kept.key,'kept');assert.equal(kept.job.id,'dismissed');
- assert.equal(c.progressSummary(github,[job('dismissed')],NOW),'Kept on this VM 12 minutes ago');
- assert.equal(c.progressState(github,[job('dismissed',{target:'update'})]).label,'Not saved yet','a repository update marker is not a save');
- assert.equal(c.progressState(github,[job('dismissed',{created:'2026-09-16T11:50:00Z'}),job('synced',{created:'2026-09-16T11:00:00Z'})]).label,'Saved to Git','an earlier real save still counts');
- const problem=c.progressState(github,[job('synced')],NOW,'The push URL rejected the VM account.');
- assert.equal(problem.key,'attention');assert.equal(problem.label,'Needs attention');assert.equal(problem.detail,'Saving to Git is not possible right now.');assert.equal(problem.pill,'warn');assert.equal(problem.problem,'The push URL rejected the VM account.');assert.equal(problem.job.id,'synced');
- assert.equal(c.progressState(github,[],NOW,'broken').label,'Needs attention','a broken location matters before the first save too');
- assert.equal(c.progressState(github,[job('pushing')],NOW,'broken').label,'Saving progress…','a save already running still reports its phase');
- assert.equal(c.progressState({id:'lab'},[],NOW,'broken').label,'No save location yet');
- assert.equal(c.progressSummary(github,[job('synced')],NOW,'broken'),'Needs attention');
- const all=['synced','unchanged','committed','review_pending','push_pending','export_pending','capture_incomplete','failed','interrupted','dismissed','pushing'].map(s=>c.progressState(github,[job(s)],NOW));
- for(const p of all)assert.ok(PILLS.includes(p.pill),p.label);
- assert.doesNotMatch(JSON.stringify(all.map(p=>[p.label,p.detail])),/GitHub|router|Not connected/);
+test('the chip and its problem name the upload host, know unchanged and kept-only saves, and flag a broken save location',()=>{
+ const c=makeContext(),job=(status,extra={})=>({id:status,lab_id:'lab',status,target:'latest',commit:['committed','review_pending','push_pending','synced','unchanged'].includes(status)?'c-'+status:'',pushed:['synced','unchanged'].includes(status),created:'2026-09-16T11:48:00Z',finished:'2026-09-16T11:48:30Z',...extra});
+ const at=Date.parse('2026-09-16T12:00:30Z'),state=(l,jobs)=>plain(c.saveChipState(l,{git_jobs:jobs},at));
+ const withUrl=push_url=>({id:'lab',git_binding:{binding_id:'b',repository:{push_url}},git_status:{checked:true,ready:false,problem:'x',code:'account',waiting:0}});
+ const sentence=push_url=>c.saveProblem(withUrl(push_url),{}).sentence;
+ assert.equal(sentence('https://github.com/course/labs.git'),'The VM account cannot upload to github.com.');
+ assert.equal(sentence('git@gitlab.example.edu:course/labs.git'),'The VM account cannot upload to gitlab.example.edu.');
+ assert.equal(sentence('ssh://git@git.school.local:2222/labs.git'),'The VM account cannot upload to git.school.local.');
+ assert.equal(sentence('nonsense'),'The VM account cannot upload to the online repository.');
+ const github={id:'lab',git_binding:{binding_id:'b',repository:{push_url:'https://github.com/course/labs.git'}},git_status:{checked:true,ready:true,problem:'',code:'',waiting:0}};
+ const unchanged=state(github,[job('unchanged')]);
+ assert.equal(unchanged.key,'saved');assert.equal(unchanged.text,'Saved 12 min ago');assert.equal(unchanged.dot,'ok');
+ const incomplete=c.saveProblem(github,{git_jobs:[job('capture_incomplete')]});
+ assert.equal(state(github,[job('capture_incomplete')]).text,'Can’t save');assert.equal(incomplete.sentence,'A device could not be read, so nothing was saved.');
+ const kept=state(github,[job('dismissed')]);
+ assert.equal(kept.text,'Kept on this VM');assert.equal(kept.key,'kept');assert.equal(kept.job.id,'dismissed');
+ assert.equal(state(github,[job('dismissed',{target:'update'})]).text,'Not saved yet','a repository update marker is not a save');
+ assert.equal(state(github,[job('dismissed',{created:'2026-09-16T11:50:00Z'}),job('synced',{created:'2026-09-16T11:00:00Z'})]).key,'saved','an earlier real save still counts');
+ const broken={...github,git_status:{checked:true,ready:false,problem:'The push URL rejected the VM account.',code:'account',waiting:0}};
+ const problem=state(broken,[job('synced')]);
+ assert.equal(problem.key,'cant');assert.equal(problem.text,'Can’t save');assert.equal(problem.dot,'bad');assert.equal(problem.detail,'The push URL rejected the VM account.');assert.equal(problem.code,'account');
+ assert.equal(state(broken,[]).text,'Can’t save','a broken location matters before the first save too');
+ assert.equal(state(broken,[job('pushing')]).text,'Uploading…','a save already running still reports its phase');
+ assert.equal(state({id:'lab',git_status:{checked:true,ready:false,problem:'broken',code:'other',waiting:0}},[]).text,'Not saved yet');
+ const all=['synced','unchanged','committed','review_pending','push_pending','export_pending','capture_incomplete','failed','interrupted','dismissed','pushing'].map(s=>state(github,[job(s)]));
+ for(const p of all)assert.ok(['ok','warn','bad','none','busy','info'].includes(p.dot),p.text);
+ assert.doesNotMatch(JSON.stringify(all.map(p=>[p.text,p.detail])),/GitHub|router|Not connected/);
+ assert.equal(typeof c.progressState,'undefined');assert.equal(typeof c.progressSummary,'undefined');
 });
-
 test('relative times stay human and never print NaN',()=>{
  const c=makeContext();
  assert.equal(c.relativeTime('2026-09-16T11:59:40Z',NOW),'just now');
@@ -227,7 +226,7 @@ test('L-10 follow-up: a restore still reading devices back after a manager resta
  assert.doesNotMatch(checking.detail,/did not finish/);
  assert.ok(c.statusRestoreActive(job({rechecking:true})));assert.ok(!c.statusRestoreActive(job({rechecking:false})));
  // Read back (false) or stored by an older manager (no field): the finished "did not finish" job it always was.
- for(const done of [job({rechecking:false}),job({})]){const ls=c.labState(running,{restore_jobs:[done]});assert.equal(ls.key,'attention');assert.equal(ls.detail,'Replacing configuration did not finish.');}
+ for(const done of [job({rechecking:false}),job({})]){const ls=c.labState(running,{restore_jobs:[done]});assert.equal(ls.key,'attention');assert.equal(ls.detail,'Loading a saved state did not finish.');}
  assert.equal(c.labState(running,{restore_jobs:[job({rechecking:'yes'})]}).key,'attention','only a real boolean true holds');
  assert.equal(c.labState(running,{restore_jobs:[job({rechecking:true,lab_id:'other'})]}).label,'Running','another lab\'s read-back does not change this lab');
  assert.equal(c.labState(running,{restore_jobs:[job({rechecking:true})],dismissed:new Set(['rs-r'])}).key,'working','work in progress cannot be dismissed away');
