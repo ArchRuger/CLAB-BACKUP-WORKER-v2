@@ -5,15 +5,18 @@ compare Origin with their own URL. All three build "own origin" from the request
 name the attacker's DNS controls can re-resolve that name to the manager's address: its requests then carry
 a matching Host and Origin (and Sec-Fetch-Site same-origin), so only the Host name itself tells them apart.
 
-Accepted without configuration are names no internet DNS server answers: IP literals, `localhost`, single-label
-names and `.local` names (answered on the browser's own network; see the residual below). Any other name must be
-listed in UI_ALLOWED_HOSTS. X-Forwarded-Host is never read. One pure ASGI layer, added outermost, covers
-HTTP and WebSocket handshakes alike, so no route or socket needs its own copy of the check.
+Accepted without configuration are names no internet DNS server answers as written: IP literals, `localhost`,
+single-label names and `.local` names (answered on the browser's own network; see the residual below). Any other
+name must be listed in UI_ALLOWED_HOSTS. X-Forwarded-Host is never read. One pure ASGI layer, added outermost,
+covers HTTP and WebSocket handshakes alike, so no route or socket needs its own copy of the check.
 
 Residual, kept on purpose: single-label and `.local` names are answered by LLMNR, NBNS and mDNS, so a host on
 the *browser's* own link (which need not be the manager's network: café Wi-Fi with a VPN or SSH tunnel to the
-VM) can answer such a name first with its own page and then with the manager's address. This check does not
-stop that; docs/INSTALL.md "Opening the manager by a name" says so. Narrowing the default to the VM's own name
+VM) can answer such a name first with its own page and then with the manager's address. A single-label name is
+also expanded by the OS resolver with the DNS search suffixes it was given (DHCP, VPN) and asked of the configured
+DNS server as name.<suffix>, so whoever controls a name under that suffix, or the DNS of a hostile network the
+browser is on, can answer it too. This check does not stop that (advice: list a real name in UI_ALLOWED_HOSTS or
+use an authenticated proxy); docs/INSTALL.md "Opening the manager by a name" says so. Narrowing the default to the VM's own name
 would also refuse the `testserver` Host that every Starlette TestClient sends, so it needs the test suites changed
 with it (audit 2026-10-03 core/repair, M-13).
 """
@@ -44,8 +47,8 @@ def host_name(value):
 
 
 def outside_dns_free(name):
-    """True for a name no internet DNS server can answer (a host on the browser's own link still can; see the
-    module docstring)."""
+    """True for a name no internet DNS server can answer as written (a host on the browser's own link, or a DNS
+    server behind a search suffix, still can; see the module docstring)."""
     if name.startswith('['):
         return True
     try:

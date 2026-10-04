@@ -897,8 +897,9 @@ and VM sync. Use the canonical Containerlab kind in new topology YAML:
 Both use the existing Junos SSH driver, as cJunosEvolved does. **Test login now**
 (device panel) and the automatic login check run `show version`; **Test login now** reports
 *Login OK* only when the CLI answered, and *Starting* (with its own message) when the login
-was accepted but the CLI is still silent, until the readiness monitor replaces it with a real
-answer. A configuration backup captures
+was accepted but the CLI is still silent. In a lab linked to a VM deployment the readiness
+monitor replaces it with a real answer; for an inventory import (no VM deployment, not
+monitored) the result stays until the next *Test login*. A configuration backup captures
 `show configuration | display set | no-more`. Internal saved configurations use
 `.set`; Git manifests identify them as `junos-display-set`. Individual backup
 downloads use the device prefix `vQFX_*.cfg` or `vJunos-switch_*.cfg`; the `.cfg`

@@ -198,10 +198,14 @@ outside DNS server could control: otherwise a web page on such a name could
 re-point it at the VM (DNS rebinding) and act through a student's browser. It
 answers without any setting to:
 
-- an IP address, for example `http://192.0.2.10:8081` or `http://[fd00::10]:8081`;
+- an IPv4 address, for example `http://192.0.2.10:8081` (an IPv6 address such as
+  `http://[fd00::10]:8081` passes the name check too, but the manager listens on IPv4
+  only unless `UI_BIND` in the same settings file below is set to an IPv6 address such
+  as `::`, so on a default installation that address is refused at the socket);
 - `localhost`;
 - a single-label name such as `http://clab-vm:8081` (answered on your own
-  network, never by an internet DNS server);
+  network; an internet DNS server cannot answer the bare name, but see the
+  search-suffix residual below);
 - a `.local` name such as `http://clab-vm.local:8081` (mDNS on your own network,
   never an internet DNS server).
 
@@ -225,9 +229,13 @@ the one to list.
 What the default does not cover: single-label and `.local` names are answered
 by LLMNR, NetBIOS or mDNS on the network the *browser* is on, which need not be
 the VM's network (for example café or home Wi-Fi with a VPN or SSH tunnel to the
-VM). Another machine on that network can answer such a name, first with its own
-page and then with the manager's address, and the manager cannot tell that page
-from its own. Where students reach the manager from networks you do not control,
+VM). A single-label name can also be answered by DNS: the operating system's
+resolver appends the DNS search suffixes it was given (by DHCP or a VPN) and asks
+its configured DNS server for `name.<suffix>`, so whoever controls a name under
+such a suffix, or the DNS server of a hostile network the browser is on, can
+answer it. Another machine or server that answers such a name can do so first with
+its own page and then with the manager's address, and the manager cannot tell
+that page from its own. Where students reach the manager from networks you do not control,
 prefer a protected path to it (an authenticated reverse proxy whose name is
 listed above) over exposing the manager's port to them directly.
 
