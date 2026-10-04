@@ -99,6 +99,28 @@ function gitSavedStateAncestor(model,path){
  for(const ancestor of gitAncestors(path).slice().reverse()){const node=model.nodes.get(ancestor);if(node&&node.managed)return ancestor;}
  return null;
 }
+// The other registered lab folder (any registration, with or without a lab, never the asking lab's own)
+// that lies inside what would be `path`'s saved states: path/latest, path/baseline, path/checkpoints (at the
+// top level: latest, baseline, checkpoints), or below one. The VM refuses that choice, so the browser does too.
+const GIT_SAVED_NAMES=['latest','baseline','checkpoints'];
+function gitSavesHoldingLab(model,path,current){
+ for(const dir of model.nodes.values()){
+  if(!dir.registration||dir.registration.id===current||dir.path===path)continue;
+  const rest=path===''?dir.path:dir.path.startsWith(path+'/')?dir.path.slice(path.length+1):null;
+  if(rest!==null&&GIT_SAVED_NAMES.includes(rest.split('/')[0]))return dir.path;
+ }
+ return null;
+}
+// New folder…: a part directly below a registered lab folder (or the folder the asking lab saves to) may not be
+// latest, baseline or checkpoints, because that is where the lab keeps its saves. Returns a sentence, or ''.
+function gitNewFolderRefusal(model,joined,current){
+ const parts=String(joined||'').split('/').filter(Boolean),own=current?gitLabFolder(model,current):null;
+ for(let index=0;index<parts.length;index++){
+  const base=parts.slice(0,index).join('/'),node=model.nodes.get(base);
+  if(GIT_SAVED_NAMES.includes(parts[index])&&((node&&node.registration)||(own&&own.path===base)))return (base||'The top level')+' is a lab folder, and '+parts[index]+' inside it is where it keeps its saves. Choose another folder name.';
+ }
+ return '';
+}
 // Lab folders may sit inside, above or beside each other. What stays refused here: a saved state itself
 // (latest, baseline, a checkpoint, any folder holding manifest.json), a folder below one, and the very
 // folder another connected lab already saves in.
@@ -121,6 +143,8 @@ function gitFolderChoice(model,path,current){
  if(snapshotAncestor)return {allowed:false,reason:snapshotAncestor+' is a saved configuration (it holds manifest.json). Choose the folder above it or a folder beside it.',target:path};
  const savedState=gitSavedStateAncestor(model,path);
  if(savedState!==null)return {allowed:false,reason:'This folder is inside '+savedState+', where Save progress keeps a lab’s saves. Choose a folder outside it.',target:path};
+ const holding=gitSavesHoldingLab(model,path,current);
+ if(holding!==null&&!(dir.registration&&dir.registration.id===current))return {allowed:false,reason:holding+' is a lab folder inside the place where this folder would keep its saves. Choose another folder.',target:path};
  if(dir.registration&&dir.registration.id===current)return {allowed:false,reason:'This lab already saves here.',target:path};
  if(dir.registration&&dir.registration.lab)return {allowed:false,reason:dir.registration.lab.name+' already saves here.',target:path};
  return {allowed:true,reason:'',target:path};

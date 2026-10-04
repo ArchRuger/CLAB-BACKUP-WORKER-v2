@@ -1758,7 +1758,8 @@ The default owner is the ordinary account invoking sudo. A separate owner does
 not need sudo membership: authenticate and prepare its checkout as that account,
 then return to the administrator for registration. Optional `--remote NAME`,
 `--label "Lab name"` and `--prefix labs/bgp` configure an existing remote, label
-and managed subfolder. Prefixes must not overlap. Bare repositories, linked
+and managed subfolder. A prefix inside the `latest`, `baseline` or `checkpoints` folder of another
+registered prefix is refused (nesting is otherwise allowed). Bare repositories, linked
 worktrees, submodules and symbolic-link paths are unsupported.
 
 Routine `start-manager.sh` upgrades refresh an already enabled Git helper and

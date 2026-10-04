@@ -391,3 +391,43 @@ test('recent saves rows explain each save and offer upload or keep-snapshot-only
  assert.match(list.innerHTML,/Course-Labs › bgp/);
  context.gitRenderSaves('lab',{binding:null,jobs:[]});assert.match(list.innerHTML,/Saves appear here once this lab has a save location/);
 });
+test('the reverse direction: a folder is refused when another registered lab folder lies inside its saved states, naming that folder',()=>{
+ const {gitTreeModel,gitFolderChoice,gitSavesHoldingLab}=makeContext();
+ const model=gitTreeModel([{path:'course/readme.md',size:1}],[{id:'w',prefix:'course/latest/working',lab:{id:'x',name:'Other lab'}},{id:'mine',prefix:'mine',lab:{id:'lab',name:'My lab'}}]);
+ const choice=gitFolderChoice(model,'course','mine');
+ assert.equal(choice.allowed,false);assert.equal(choice.reason,'course/latest/working is a lab folder inside the place where this folder would keep its saves. Choose another folder.');
+ assert.equal(gitSavesHoldingLab(model,'course','mine'),'course/latest/working');
+ const unused=gitTreeModel([{path:'course/readme.md',size:1}],[{id:'w',prefix:'course/baseline',lab:null}]);
+ assert.equal(gitFolderChoice(unused,'course','mine').allowed,false,'a registration no lab uses still counts for the VM');
+ const top=gitTreeModel([{path:'a/b.md',size:1}],[{id:'w',prefix:'checkpoints/day',lab:{id:'x',name:'Other'}}]);
+ assert.match(gitFolderChoice(top,'','mine').reason,/^checkpoints\/day is a lab folder inside/,'the top level has latest, baseline and checkpoints too');
+ const own=gitTreeModel([{path:'course/readme.md',size:1}],[{id:'mine',prefix:'course/latest/working',lab:{id:'lab',name:'My lab'}}]);
+ assert.equal(gitFolderChoice(own,'course','mine').allowed,true,'the asking lab\'s own registration is retired by the move, never a collision');
+ const beside=gitTreeModel([{path:'course/readme.md',size:1}],[{id:'w',prefix:'course/latest2',lab:{id:'x',name:'Other'}},{id:'v',prefix:'course/docs',lab:{id:'y',name:'Third'}}]);
+ assert.equal(gitFolderChoice(beside,'course','mine').allowed,true,'a folder merely beside or inside, not in a saved state, is fine');
+});
+test('New folder refusal: a name directly below a lab folder may not be latest, baseline or checkpoints',()=>{
+ const {gitTreeModel,gitNewFolderRefusal}=makeContext(),model=gitTreeModel([{path:'eth/x.md',size:1},{path:'notes/a.md',size:1}],[{id:'e',prefix:'eth',lab:{id:'x',name:'Eth'}},{id:'u',prefix:'unused',lab:null}]);
+ assert.match(gitNewFolderRefusal(model,'eth/latest/notes',''),/^eth is a lab folder, and latest inside it is where it keeps its saves/);
+ assert.equal(gitNewFolderRefusal(model,'eth/docs/baseline',''),'','a reserved name deeper than the part directly below the lab folder is not this rule');
+ assert.match(gitNewFolderRefusal(model,'unused/checkpoints/x',''),/^unused is a lab folder/);
+ assert.equal(gitNewFolderRefusal(model,'notes/latest/x',''),'','a folder without a registration has no saves');
+ assert.equal(gitNewFolderRefusal(model,'eth/week1',''),'');
+ const rooted=gitTreeModel([{path:'a/b.md',size:1}],[{id:'r',prefix:'',lab:{id:'x',name:'Root'}}]);
+ assert.match(gitNewFolderRefusal(rooted,'latest/notes',''),/^The top level is a lab folder, and latest inside it/);
+ const mine=gitTreeModel([{path:'notes/a.md',size:1}],[{id:'me',prefix:'notes',lab:{id:'lab',name:'Me'}}]);
+ assert.match(gitNewFolderRefusal(mine,'notes/baseline/x','me'),/^notes is a lab folder/,'the folder the asking lab saves to counts too');
+});
+test('New folder: a name such as latest/notes inside a lab folder is refused in the dialog before any request',async()=>{
+ const context=makeContext(),calls=[],elements=new Map();
+ const field=(value='')=>({value,checked:false,hidden:false,querySelector:()=>({textContent:''})});
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],field());return {close(){this.closed=true;}};};
+ context.$=id=>elements.get(id)||null;context.opTask=async(dialog,fn)=>fn();context.notify=()=>{};context.gitShowRepository=async()=>{};
+ context.json=async(endpoint,method,payload)=>{calls.push({endpoint,method,payload});return {repository:{id:'x'}};};
+ const tree={repository:{id:'j2',path:'/r'}},model=context.gitTreeModel([{path:'eth/a.md',size:1}],[{id:'e',prefix:'eth',lab:{id:'other',name:'Eth'}}]);
+ context.gitLoadContext=async()=>({binding:null});context.state.labs=[{id:'lab',name:'Lab'}];
+ await context.gitNewFolder('lab','eth',model,tree);
+ elements.get('git-new-folder-name').value='latest/notes';
+ await assert.rejects(elements.get('git-new-folder-confirm').onclick(),/eth is a lab folder, and latest inside it is where it keeps its saves/);
+ assert.equal(calls.length,0);
+});

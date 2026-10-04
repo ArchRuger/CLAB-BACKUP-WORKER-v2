@@ -349,7 +349,9 @@ registration IDs and folder names.
   changes) or loses its answer reads *Moving the saved files did not finish — retry it* and
   is retried from its save window (**Retry the move**); it is only worded as moved once it
   committed.
-- **New folder…** creates a folder beside the existing ones. It accepts a whole nested
+- **New folder…** creates a folder anywhere except inside a saved state (`latest`, `baseline`,
+  `checkpoints` or a checkpoint, a folder holding `manifest.json`, and anything below one), including inside
+  another lab's folder; a name such as `latest` directly below a lab folder is refused. It accepts a whole nested
   path such as `Week-04/BGP/Final-State`, so a deep destination like
   `CCNP-SP/Labs/Week-04/BGP/Final-State` is created in one step; the dialog shows the
   resulting `repository / folder` destination as you type. With *Save … here from now on*

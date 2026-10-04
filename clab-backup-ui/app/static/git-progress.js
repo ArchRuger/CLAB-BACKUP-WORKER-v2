@@ -26,7 +26,7 @@ function gitRegisteredDestination(repo){return [repo.owner,repo.path,[repo.remot
 function gitRepoName(repo){return String(repo?.path||'').split('/').filter(Boolean).pop()||repo?.label||'Repository';}
 function gitDestination(binding){const repo=gitRepository(binding);return [[gitRepoName(repo)||binding?.binding_id,repo.prefix?repo.prefix.replace(/\/$/,''):'','latest/'].filter(Boolean).join(' › '),repo.branch].filter(Boolean).join(' · ');}
 // "Course-Labs › bgp" in words for the status card and the Recent saves rows.
-function gitFolderWords(binding){const repo=gitRepository(binding),name=gitRepoName(repo)||binding?.binding_id||'the repository';return repo.prefix?name+' › '+repo.prefix.replace(/\/$/,''):name+' (whole repository)';}
+function gitFolderWords(binding){const repo=gitRepository(binding),name=gitRepoName(repo)||binding?.binding_id||'the repository';return repo.prefix?name+' › '+repo.prefix.replace(/\/$/,''):name+' (top level)';}
 // The exact repository-relative path of a snapshot name ("latest", "baseline", "checkpoints/<name>")
 // inside a lab folder: the lab folder's prefix joined with it, or the bare name at the repository root.
 // Every exact snapshot path the browser sends carries one leading slash on the wire ('/' = the
@@ -258,7 +258,7 @@ function gitRenderRepository(id,context,catalog,extras={}){
  // that lab across re-renders (gitFolderCollapsed), until they open it again or ask for it by name
  // (Browse the repository…, a repository picked in the list), which also scrolls to it.
  const places=typeof gitPlacesState!=='undefined'?gitPlacesState:null,requested=!!(places&&places.open),openBrowser=!activeBinding||requested||!gitFolderCollapsed.has(id);if(places)places.open=false;
- const optionLabel=value=>{const twins=repositories.filter(r=>gitRepoName(r)===gitRepoName(value)&&(r.prefix||'')===(value.prefix||''));return `${gitRepoName(value)} › ${value.prefix||'(whole repository)'}${twins.length>1?' · '+value.owner:''}`;};
+ const optionLabel=value=>{const twins=repositories.filter(r=>gitRepoName(r)===gitRepoName(value)&&(r.prefix||'')===(value.prefix||''));return `${gitRepoName(value)} › ${value.prefix||'(top level)'}${twins.length>1?' · '+value.owner:''}`;};
  const option=value=>`<option value="${esc(value.id)}" ${value.id===preselect?'selected':''}>${esc(optionLabel(value))}</option>`;
  const tree=extras.tree||null,model=tree&&typeof gitTreeModel==='function'?gitTreeModel(tree.files,tree.folders,tree.planned):null;
  const form=repositories.length?`<form id="git-binding-form" class="git-binding-form">
@@ -327,13 +327,18 @@ function gitVersionGroups(id,context,model,tree,history){
  const epoch=value=>typeof value==='number'?value*1000:'';
  if(model){
   const dir=model.nodes.get(prefix),latest=dir?.dirs.find(d=>d.name==='latest');
-  if(latest&&latest.count)groups.latest.push({name:'Latest',caption:`${repoName} › ${prefix||'(whole repository)'} › latest`,when:epoch(tree?.saved?.latest)||whenFor('latest'),note:noteFor('latest'),count:latest.count,view:{commit:head,path:gitSnapshotPath(binding,'latest')},compare:false,apply:latest.snapshot?{path:gitSnapshotPath(binding,'latest')}:null});
+  if(latest&&latest.count)groups.latest.push({name:'Latest',caption:`${repoName} › ${prefix||'(top level)'} › latest`,when:epoch(tree?.saved?.latest)||whenFor('latest'),note:noteFor('latest'),count:latest.count,view:{commit:head,path:gitSnapshotPath(binding,'latest')},compare:false,apply:latest.snapshot?{path:gitSnapshotPath(binding,'latest')}:null});
   const checkpoints=dir?.dirs.find(d=>d.name==='checkpoints');
   for(const cp of checkpoints?.dirs||[])if(cp.count)groups.checkpoints.push({name:cp.name,caption:'',when:whenFor('checkpoint',cp.name)||0,note:noteFor('checkpoint',cp.name),count:cp.count,view:{commit:head,path:gitSnapshotPath(binding,'checkpoints/'+cp.name)},compare:true,apply:cp.snapshot?{path:gitSnapshotPath(binding,'checkpoints/'+cp.name)}:null});
   const baseline=dir?.dirs.find(d=>d.name==='baseline');
   if(baseline&&baseline.count)groups.baseline.push({name:'Baseline',caption:'',when:epoch(tree?.saved?.baseline)||whenFor('baseline'),count:baseline.count,view:{commit:head,path:gitSnapshotPath(binding,'baseline')},compare:true,apply:baseline.snapshot?{path:gitSnapshotPath(binding,'baseline')}:null});
   const parentPath=prefix.includes('/')?prefix.slice(0,prefix.lastIndexOf('/')):'';
-  const withinOwn=path=>path===prefix||path.startsWith(prefix+'/');
+  // A path is this lab's own only when no deeper folder of another lab owns it (lab A at bgp, lab B at bgp/edge).
+  const withinOwn=path=>{
+   if(!(path===prefix||path.startsWith(prefix+'/')))return false;
+   const owner=gitVersionsOwner(model,path),lab=owner?.registration?.lab;
+   return !(owner&&lab&&lab.id!==id&&owner.path.length>prefix.length);
+  };
   // "At or below the lab folder's parent, any depth" only means something when the lab folder has a
   // parent. A top-level lab folder (prefix with no parent, parentPath '') has no folder to be "below
   // ", so without a cap every snapshot in the repository would count as reference (the reported
@@ -462,9 +467,11 @@ async function gitNewFolder(id,parent,model,tree){
  $('git-new-folder-confirm').onclick=()=>opTask(dialog,async()=>{
   const nested=gitFolderPath($('git-new-folder-name').value),prefix=parent?parent+'/'+nested:nested;
   if(model.nodes.has(prefix))throw new Error('A folder named '+prefix+' already exists. Pick it in the list instead.');
+  const refusal=gitNewFolderRefusal(model,prefix,connected?binding.binding_id:'');
+  if(refusal)throw new Error(refusal);
   if(connected&&$('git-new-folder-use')?.checked){await gitApplyDestination(id,prefix,!!$('git-new-folder-move')?.checked,labName);dialog.close();return;}
-  // Connected and not moving there: the folder is only kept by the manager (a lab folder cannot be
-  // registered inside or beside-overlapping another on the VM). Where this lab saves does not change.
+  // Connected and not moving there: the folder is only kept by the manager (a lab folder may sit inside, above or
+  // beside another on the VM, but never inside a saved state). Where this lab saves does not change.
   // Not connected yet: register it, so it is preselected in the connection form as before.
   const created=await json('/git/repositories/'+encodeURIComponent(tree.repository.id)+'/folders','POST',connected?{prefix,plan:true}:{prefix});
   dialog.close();gitPlacesState.selected=prefix;gitPlacesState.open=true;if(!connected)gitPendingSelection=created.repository.id;await gitShowRepository(true);notify(connected?'Folder '+prefix+' is listed. '+labName+' still saves to '+from+'.':'Folder '+prefix+' is ready.');
@@ -477,7 +484,7 @@ async function gitForgetFolder(id,path,tree){
 async function gitSwitchRepository(id){
  const [context,catalog]=await Promise.all([gitLoadContext(id,true),(await api('/git/repositories')).json()]);
  const binding=context.binding,repositories=(catalog.repositories||[]).filter(value=>value.id!==binding?.binding_id);
- const dialog=opDialog('git-switch-dialog','Use a different repository',`<p>Pick another repository already available on this lab VM, or connect a new one by its GitHub address. Nothing already saved is deleted.</p>${repositories.length?`<label for="git-switch-id">Repositories on this VM</label><select id="git-switch-id">${repositories.map(value=>`<option value="${esc(value.id)}">${esc(gitRepoName(value))} › ${esc(value.prefix||'(whole repository)')}</option>`).join('')}</select><div class="dialog-actions"><button class="button secondary" id="git-switch-choose">Choose this repository</button></div>`:'<p class="form-help">No other repository is set up on this VM yet.</p>'}<h3>Connect a repository by URL</h3><p class="form-help">For a repository that is not on this VM yet. You need its HTTPS URL (GitHub › Code › HTTPS); the VM's existing GitHub login is used.</p><div class="dialog-actions"><button class="button primary" id="git-switch-connect">Connect by URL…</button></div>`);
+ const dialog=opDialog('git-switch-dialog','Use a different repository',`<p>Pick another repository already available on this lab VM, or connect a new one by its GitHub address. Nothing already saved is deleted.</p>${repositories.length?`<label for="git-switch-id">Repositories on this VM</label><select id="git-switch-id">${repositories.map(value=>`<option value="${esc(value.id)}">${esc(gitRepoName(value))} › ${esc(value.prefix||'(top level)')}</option>`).join('')}</select><div class="dialog-actions"><button class="button secondary" id="git-switch-choose">Choose this repository</button></div>`:'<p class="form-help">No other repository is set up on this VM yet.</p>'}<h3>Connect a repository by URL</h3><p class="form-help">For a repository that is not on this VM yet. You need its HTTPS URL (GitHub › Code › HTTPS); the VM's existing GitHub login is used.</p><div class="dialog-actions"><button class="button primary" id="git-switch-connect">Connect by URL…</button></div>`);
  $('git-switch-choose')?.addEventListener('click',()=>opTask(dialog,async()=>{gitPendingSelection=$('git-switch-id').value;gitPlacesState.open=true;dialog.close();await gitShowRepository(true);notify('Choose the folder, then tick the devices under Save settings.');$('git-save-settings')?.scrollIntoView?.({block:'start',behavior:'smooth'});}));
  $('git-switch-connect').onclick=()=>{dialog.close();opTask(null,()=>gitConnectByUrl(id));};
 }

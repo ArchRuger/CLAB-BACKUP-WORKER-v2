@@ -665,3 +665,20 @@ test('the last configuration change skips a restore still read back after a rest
  const alone=makeContext();alone.$=id=>el[id]||null;
  assert.ok(line(alone,[recheck,older]).startsWith('Last configuration change: interrupted'));
 });
+test('a lab folder inside the asking lab\'s folder keeps its saved states out of the asking lab\'s own list: they appear under the inner lab\'s name',()=>{
+ const context=makeContext();
+ const node=(path,extra={})=>({path,name:path.split('/').pop(),dirs:[],count:0,snapshot:false,registration:null,...extra});
+ const latestA=node('bgp/latest',{count:2,snapshot:true}),latestB=node('bgp/edge/latest',{count:3,snapshot:true});
+ const a=node('bgp',{dirs:[latestA],count:2,registration:{id:'a',lab:{id:'lab',name:'BGP'}}}),b=node('bgp/edge',{dirs:[latestB],count:3,registration:{id:'b',lab:{id:'other',name:'Edge'}}});
+ const model={nodes:new Map([a,b,latestA,latestB].map(n=>[n.path,n]))};
+ context.gitRepository=()=>({prefix:'bgp'});context.gitRepoName=()=>'Course';context.gitLabJobs=()=>[];
+ const groups=context.gitVersionGroups('lab',{binding:{}},model,{head:'h'},null);
+ same(groups.latest.map(r=>r.view.path),['/bgp/latest'],'only the lab\'s own latest is its own');
+ same(groups.others.map(r=>r.name+' '+r.caption),['Edge bgp/edge/latest'],'the inner lab\'s save is listed once, under that lab\'s name');
+ assert.equal(groups.reference.length+groups.elsewhere.length,0);
+});
+test('a top-level lab is labelled "top level", not "whole repository", now that other labs may sit below it',()=>{
+ const context=makeContext();
+ context.gitRepository=()=>({prefix:''});context.gitRepoName=()=>'Course';
+ assert.equal(context.gitFolderWords({binding_id:'x'}),'Course (top level)');
+});
