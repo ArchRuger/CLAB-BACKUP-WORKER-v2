@@ -1,0 +1,7 @@
+Cleanup as the repository's owner (plain Git, account archtop), so that lab A's lab states can be named Start, Broken and Final without a suffix: remove the L1 and trial states with the same names.
+waiting saves in the manager: []
+To https://github.com/ArchRuger/clab-scratch-git-redesign.git
+   3a2d012..eb4eb58  main -> main
+eb4eb58 L2: remove earlier trial lab states (Start, Broken, Final of L1 and of the L2 trial, the stray top-level latest) before the L2 states are authored
+3a2d012 Broken
+## main...origin/main

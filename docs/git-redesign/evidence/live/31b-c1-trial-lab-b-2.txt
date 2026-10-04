@@ -1,0 +1,11 @@
+[19:27:14] C1 on git-redesign-b: states ['final']; lab saves in git-redesign-b
+[19:27:21] [final] chosen name 'final'; folder field 'git-redesign-b/final'; sentence ' | clab-scratch-git-redesign | › | git-redesign-b/final |  | Put it somewhere else | Cancel | Save state |  | Reads every included device now. Saved files can contain passwords o'
+[19:27:30] [final] clicks: 4, typed 0 (chip, Save as a lab state…, name, Save state); chip '1 save to upload'; panel title 'Not uploaded yet' sentence 'This is the first save here: 2 devices, the topology and the map.'
+[19:27:30] panel before Upload: 'This is the first save here: 2 devices, the topology and the map.'
+Traceback (most recent call last):
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/live/l2_c1.py", line 33, in <module>
+    s.reset_counts(); s.click('#save-upload'); s.wait_toast(r'^Uploaded to github\.com\.$', timeout=90000); s.wait_chip('^Saved ')
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/integration/common.py", line 175, in wait_toast
+    raise AssertionError('no toast matching /%s/; shown since the last one: %r' % (pattern, self.toasts()))
+AssertionError: no toast matching /^Uploaded to github\.com\.$/; shown since the last one: ['State Final saved in git-redesign-b/final.']

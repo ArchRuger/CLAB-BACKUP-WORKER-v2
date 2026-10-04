@@ -1,0 +1,28 @@
+[19:42:32] C6: devices set to l2-c6-before: {'a-ceos1': 'l2-c6-before', 'a-ceos2': 'l2-c6-before', 'a-cjunos': 'l2-c6-before;', 'a-xrv9k': 'l2-c6-before'}
+[19:42:32] DELETE /api/labs/63d53e20 (manager only) -> 200
+[19:42:33] import-preview 200 import 200 -> new lab eda9e422 (old 63d53e20)
+Traceback (most recent call last):
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/live/l2_c6.py", line 16, in <module>
+    s.open_lab(LAB)
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/live/l2lib.py", line 56, in open_lab
+    super().open_lab(name, view)
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/integration/common.py", line 113, in open_lab
+    self.page.wait_for_selector('#lab-content:not([hidden])')
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/sync_api/_generated.py", line 9061, in wait_for_selector
+    self._sync(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_page.py", line 429, in wait_for_selector
+    return await self._main_frame.wait_for_selector(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_frame.py", line 395, in wait_for_selector
+    await self._channel.send(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 76, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 632, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TimeoutError: Page.wait_for_selector: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("#lab-content:not([hidden])") to be visible

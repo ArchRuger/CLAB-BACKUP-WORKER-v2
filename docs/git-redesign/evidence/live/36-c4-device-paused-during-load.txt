@@ -1,0 +1,82 @@
+[19:39:57] C4: devices before: {'a-ceos1': 'l2-c1-final', 'a-ceos2': 'l2-c1-final', 'a-cjunos': 'l2-c1-final;', 'a-xrv9k': 'l2-c1-final'}
+[19:40:02] confirmation open (the devices were checked first): rows {'ceos1': '2 lines differ', 'ceos2': '2 lines differ', 'cjunos': '2 lines differ', 'xrv9k': '2 lines differ'}
+[19:40:02] docker pause clab-git-redesign-ceos2 -> (0, 'clab-git-redesign-ceos2')
+[19:40:05] 2.5 s after the red Load: chip 'Running the configuration from before Start' ; load panel error None ; panel title None
+[19:40:05] requests: ['POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore/preflight {"source":{"type":"folder","commit":"68fedc7349349082db1d89292d23168ec6170', 'POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore {"request_id":"d286433efd0552f0234c0e86e4cee991","source":{"type":"folder","commit":']
+[19:40:05] failed so far: []
+[19:40:05] +3s chip 'Running the configuration from before Start' job None ()
+[19:40:41] +40s chip 'Loading… 1 of 4' job backing_up (('ceos1', 'backing_up', 'backing_up'), ('ceos2', 'skipped', 'ineligible'), ('cjunos', 'backing_up', 'backing_up'), ('xrv9k', 'backing_up', 'backing_up'))
+[19:40:44] +42s chip 'Loading… 1 of 4' job applying (('ceos1', 'applying', 'applying'), ('ceos2', 'skipped', 'ineligible'), ('cjunos', 'applying', 'applying'), ('xrv9k', 'applying', 'applying'))
+[19:40:45] +43s chip 'Loading… 1 of 4' job applying (('ceos1', 'verifying', 'confirming'), ('ceos2', 'skipped', 'ineligible'), ('cjunos', 'applying', 'applying'), ('xrv9k', 'applying', 'applying'))
+[19:40:46] +44s chip 'Loading… 1 of 4' job applying (('ceos1', 'replaced', 'applied'), ('ceos2', 'skipped', 'ineligible'), ('cjunos', 'applying', 'applying'), ('xrv9k', 'applying', 'applying'))
+[19:40:47] +45s chip 'Loading… 2 of 4' job applying (('ceos1', 'replaced', 'applied'), ('ceos2', 'skipped', 'ineligible'), ('cjunos', 'applying', 'applying'), ('xrv9k', 'applying', 'applying'))
+[19:40:48] +46s chip 'Loading… 2 of 4' job applying (('ceos1', 'replaced', 'applied'), ('ceos2', 'skipped', 'ineligible'), ('cjunos', 'verifying', 'confirming'), ('xrv9k', 'applying', 'applying'))
+[19:40:49] +47s chip 'Loading… 2 of 4' job applying (('ceos1', 'replaced', 'applied'), ('ceos2', 'skipped', 'ineligible'), ('cjunos', 'replaced', 'applied'), ('xrv9k', 'verifying', 'confirming'))
+[19:40:50] +48s chip 'Loading… 2 of 4' job applying (('ceos1', 'replaced', 'applied'), ('ceos2', 'skipped', 'ineligible'), ('cjunos', 'replaced', 'applied'), ('xrv9k', 'confirming', 'confirming'))
+[19:40:51] +49s chip 'Loading… 3 of 4' job verifying (('ceos1', 'checking', 'applied'), ('ceos2', 'skipped', 'ineligible'), ('cjunos', 'checking', 'applied'), ('xrv9k', 'checking', 'applied'))
+[19:40:54] +52s chip 'Loading… 3 of 4' job partial (('ceos1', 'replaced', 'verified'), ('ceos2', 'skipped', 'ineligible'), ('cjunos', 'replaced', 'verified'), ('xrv9k', 'replaced', 'verified'))
+[19:40:54] job ended: partial '3/4 node(s) restored and verified; 1 did not complete.'
+[19:40:54]    target {"short_name": "ceos1", "status": "verified", "stage": "replaced", "message": "Configuration replaced and verified against the saved desired state.", "attempts": 1}
+[19:40:54]    target {"short_name": "ceos2", "status": "ineligible", "stage": "skipped", "message": "Node is not currently running.", "attempts": 0}
+[19:40:54]    target {"short_name": "cjunos", "status": "verified", "stage": "replaced", "message": "Configuration replaced and verified against the saved desired state.", "attempts": 1}
+[19:40:54]    target {"short_name": "xrv9k", "status": "verified", "stage": "replaced", "message": "Configuration replaced and verified against the saved desired state.", "attempts": 1}
+[19:40:55] chip 'Loaded 3 of 4' ; panel title 'Loaded on 3 of 4 devices'
+[19:40:56] PANEL: 'ceos2 was not changed. |  | ceos1 EOS | Loaded | ceos2 EOS | Node is not currently running. | Skipped | cjunos Junos Evolved | Loaded | xrv9k IOS XR | Loaded | Try ceos2 again | Undo this load | Details |  | Saves to: clab-scratch-git-redesign › git-redesign Change… |  | All versions | Save as a lab state… | Save settings' ; devices {'ceos1': 'Loaded', 'ceos2': 'Skipped', 'cjunos': 'Loaded', 'xrv9k': 'Loaded'}
+[19:40:56] buttons: ['load-retry:Try ceos2 again', 'load-undo:Undo this load', 'load-details:Details', 'save-change:Change…', 'save-all:All versions', 'save-as-state:Save as a lab state…', 'save-settings:Save settings']
+[19:40:56] docker unpause clab-git-redesign-ceos2 -> (0, 'clab-git-redesign-ceos2')
+[19:40:56] paused containers now: ''
+[19:41:02] CLI: {'a-ceos1': 'l2-c1-start', 'a-cjunos': 'l2-c1-start;', 'a-xrv9k': 'l2-c1-start'}
+[19:41:02] Try again button: 'Try ceos2 again'
+[19:41:02] retry confirmation: 'Load Start?' ; rows {'ceos2': "Can't load"} ; text "Load Start? |  | None of the devices can be loaded right now. |  | Saved 10 minutes ago. |  | Only the devices that were not loaded are listed. |  | ceos2 EOS | This device is not running, or the lab status is out of date. | Can't load |  | Each device checks the new configuration itself and undoes it if it loses contact. | "
+Traceback (most recent call last):
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/live/l2_c4.py", line 60, in <module>
+    s.click('#load-run')
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/integration/common.py", line 143, in click
+    locator.click(**kwargs)
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/sync_api/_generated.py", line 18032, in click
+    self._sync(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_locator.py", line 165, in click
+    return await self._frame._click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_frame.py", line 594, in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 76, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 632, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("#load-run")
+    - locator resolved to <button disabled type="button" id="load-run" class="button danger" data-load-action="run">Load</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not enabled
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not enabled
+    - retrying click action
+      - waiting 100ms
+    58 × waiting for element to be visible, enabled and stable
+       - element is not enabled
+     - retrying click action
+       - waiting 500ms
+
+[19:41:53] manager readiness of the lab right after the unpause: {'status': 'ready', 'total': 4, 'ready': 4, 'booting': 0, 'failed': 0}
+[19:41:55] attempt 1 at +3 s after the unpause: confirmation rows {'ceos2': '2 lines differ'} ; red Load enabled=True
+[19:42:04] after Try again: chip 'Running Start' ; clicks 2
+[19:42:04] job succeeded 'All 1 node(s) restored and verified against the saved state.'
+[19:42:04]    target {"node": "ceos2", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 1.7, "armed": 2.9, "verifying": 2.9, "confirming": 3.3, "replaced": 3.8, "settled": 3.8, "checked": 5.4}}
+[19:42:06] CLI read-back: {'a-ceos1': 'l2-c1-start', 'a-ceos2': 'l2-c1-start', 'a-cjunos': 'l2-c1-start;', 'a-xrv9k': 'l2-c1-start'}
+PASS C4 all four devices run Start after Try again
+[19:42:06] errors [] ; failed []
+
+=== C4 finish: 1 checks, 0 failed
+PASS C4 all four devices run Start after Try again
+None
+
+1 checks, 0 failed

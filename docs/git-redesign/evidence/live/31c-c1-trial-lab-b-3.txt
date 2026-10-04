@@ -1,0 +1,23 @@
+[19:29:40] C1 on git-redesign-b: states ['broken']; lab saves in git-redesign-b
+[19:29:47] [broken] chosen name 'broken'; folder field 'git-redesign-b/broken'; sentence ' | clab-scratch-git-redesign | › | git-redesign-b/broken |  | Put it somewhere else | Cancel | Save state |  | Reads every included device now. Saved files can contain passwords '
+[19:29:54] [broken] clicks: 4, typed 0 (chip, Save as a lab state…, name, Save state); chip '1 save to upload'; panel title 'Not uploaded yet' sentence 'This is the first save here: 2 devices, the topology and the map.'
+[19:29:54] Upload enabled; the panel said "Checking what this upload sends…" for 0.0 s more; panel before Upload: 'This is the first save here: 2 devices, the topology and the map. |  | To: clab-scratch-git-redesign › git-redesign-b/broken |  | Upload | Not now | See changes | Details |  | Saved files can contain '
+[19:29:58] uploaded with 1 click; chip 'Saved 5 min ago'
+[19:29:59] state job: {"commit": "3a2d012e23ff6edeccc1da01d22fbcc47051311d", "destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign-b/broken/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "kind": "state", "note": "Broken", "pushed": true, "status": "synced"}
+  [GitHub after the states]
+      3a2d012e23 Broken
+      eab22cd96f Final
+      f4073b86c7 Start
+      6f69a9cd88 ceos1 changed
+[19:30:00] state folders on GitHub: ['git-redesign-b/broken/latest']
+[19:30:00]   git-redesign-b/broken/latest manifest state='Broken' node_names=2
+[19:30:01] Load panel headings ['YOUR SAVES', 'LAB STATES']; lab states: ['B', 'Broken · git-redesign', 'Broken · git-redesign-b', 'Final · git-redesign', 'Final · git-redesign-b', 'L1-moved-b', 'L2-move-2', 'Solution']
+[19:30:01] failed requests with bodies: ['422 POST /api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check {"repository":"","folder":"broken","purpose":"state","name":"broken"} -> {"detail":"Check the request fields and upload sizes."}']
+FAIL C1: no console, page or request errors :: http 422 POST http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check; console: Failed to load resource: the server responded with a status of 422 (Unprocessable Entity) @ http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check
+
+=== C1: 1 checks, 1 failed
+FAIL C1: no console, page or request errors :: http 422 POST http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check; console: Failed to load resource: the server responded with a status of 422 (Unprocessable Entity) @ http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check
+None
+
+1 checks, 1 failed
+  FAIL C1: no console, page or request errors :: http 422 POST http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check; console: Failed to load resource: the server responded with a status of 422 (Unprocessable Entity) @ http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check

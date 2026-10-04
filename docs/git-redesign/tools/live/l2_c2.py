@@ -1,0 +1,42 @@
+import sys, re, json
+sys.path.insert(0, 'docs/git-redesign/tools/live')
+from l2lib import *
+LAB = sys.argv[1]; PLAN = [x.split(':') for x in sys.argv[2].split(',')]      # Start:l2-c1-start,Broken:l2-c1-broken
+DEVS = sys.argv[3].split(',')
+s = Live(); p = s.page
+s.open_lab(LAB); s.wait_quiet(LAB)
+for name, tag in PLAN:
+    s.close_panels(); p.wait_for_timeout(1500)
+    s.reset_counts()
+    load_open(s)
+    if name == PLAN[0][0]:
+        s.say('Load panel: groups %s ; foot %s' % (p.locator('#load-panel-body h3.save-heading').all_inner_texts(), p.locator('#load-panel-body .save-foot button').all_inner_texts()))
+    load_choose(s, name)
+    s.say('[%s] confirmation: %r' % (name, s.text('#load-panel-body .save-state')))
+    s.say('[%s] rows: %s' % (name, device_words(s)))
+    s.say('[%s] text: %r' % (name, s.text('#load-panel-body')[:420].replace('\n', ' | ')))
+    s.shot('C2-confirm-%s' % name.lower())
+    t0 = time.time()
+    s.click('#load-run')
+    s.wait_chip(r'^(Loading…|Checking)', timeout=20000)
+    s.say('[%s] chip while loading: %r ; panel title %r ; devices %s' % (name, s.chip(), s.text('#save-panel-title') if s.visible('#save-panel') else None, device_words(s, '#save-panel-body') if s.visible('#save-panel') else None))
+    s.shot('C2-loading-%s' % name.lower())
+    s.wait_chip(r'^(Running .*|Loaded \d of \d)$', timeout=180000)
+    took = time.time() - t0
+    s.say('[%s] CLICKS to load: %d (Load, state, red Load), typed %d; chip %r after %.0f s' % (name, s.clicks, s.typed, s.chip(), took))
+    p.wait_for_timeout(1500)
+    if not s.visible('#save-panel'): s.click('#save-chip', count=False)
+    p.wait_for_timeout(1000)
+    s.say('[%s] panel: title %r ; %r ; devices %s' % (name, s.text('#save-panel-title'), s.panel().replace('\n', ' | ')[:300], device_words(s, '#save-panel-body')))
+    s.shot('C2-result-%s' % name.lower())
+    s.check('C2 %s: chip reads Running %s' % (name, name), s.chip() == 'Running ' + name, s.chip())
+    job = last_restore(s, LAB)
+    s.say('[%s] restore job %s: %s %r' % (name, job['id'][:8], job['status'], job.get('message')))
+    for r in timeline_rows(job): s.say('   target %s' % json.dumps(r))
+    s.check('C2 %s: timed recovery armed before the confirmation on every platform' % name, all(r['order_ok'] for r in job and timeline_rows(job)), timeline_rows(job))
+    got = descriptions(DEVS)
+    s.say('[%s] CLI read-back: %s' % (name, got))
+    s.check('C2 %s: every device runs that state' % name, all(tag in v for v in got.values()), got)
+    s.close_panels()
+s.say('browser errors/failed requests: %s ; %s' % (s.errors, s.failed))
+s.no_errors('C2'); print(report(s, 'C2')); s.finish()

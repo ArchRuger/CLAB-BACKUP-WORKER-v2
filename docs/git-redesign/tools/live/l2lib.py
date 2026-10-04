@@ -39,9 +39,15 @@ class Live(Session):
 
     def __init__(self, base=BASE, viewport=(1440, 900), headed=False):
         super().__init__(base, headed, viewport)
+        self.failed = []
+        self.page.on('response', self._failed)
 
     def lab_id(self, name):
         return lab_id(name)
+
+    def _failed(self, response):
+        if response.status >= 400:
+            self.failed.append('%d %s %s %s -> %s' % (response.status, response.request.method, response.url.replace(self.base, ''), (response.request.post_data or '')[:300], (response.text() or '')[:300]))
 
     def fixture_state(self):
         raise RuntimeError('no fixture on the real manager')
@@ -199,3 +205,49 @@ def new_folder_in(s, parent, name):
     expect(p.locator('[data-folder="%s"]' % want)).to_be_visible(timeout=15000)
     made = p.locator('#folder-path').input_value()
     return enabled, ans, made, chooser_answer(s)
+
+
+# ---- loading (selectors of tools/integration/load_flow.py) ----
+def load_open(s):
+    p = s.page
+    if p.viewport_size['width'] < 700 and s.visible('#save-panel'):
+        p.keyboard.press('Escape')
+        expect(p.locator('#save-panel')).to_be_hidden()
+    s.click('#load-button')
+    expect(p.locator('#load-panel-body .save-list').first).to_be_visible(timeout=20000)
+
+
+def load_row(s, name):
+    p = s.page
+    return p.locator('#load-panel-body .save-list > li').filter(has=p.locator('.save-item > span:first-child', has_text=re.compile('^' + re.escape(name)))).first
+
+
+def load_choose(s, name):
+    s.click(load_row(s, name).locator('button.save-item'))
+    expect(s.page.locator('#load-run')).to_be_visible(timeout=40000)
+
+
+def device_words(s, root='#load-panel-body'):
+    out = {}
+    for item in s.page.locator(root + ' ul.save-devices > li').all():
+        text = item.inner_text().split('\n')
+        out[text[0].split(' ')[0].strip()] = item.locator('.save-end').inner_text()
+    return out
+
+
+def last_restore(s, lab_name):
+    jobs = [j for j in s.state().get('restore_jobs', []) if j.get('lab_id') == lab_id(lab_name)]
+    return sorted(jobs, key=lambda j: j['created'])[-1] if jobs else None
+
+
+def timeline_rows(job):
+    rows = []
+    for t in job.get('targets', []):
+        tl = t.get('timeline', {})
+        keys = ('queued', 'backing_up', 'applying', 'armed', 'verifying', 'confirming', 'replaced', 'settled', 'checked')
+        base = tl.get('queued') or 0
+        rows.append({'node': t.get('short_name') or t.get('name'), 'platform': t.get('platform'), 'status': t.get('status'), 'stage': t.get('stage'),
+                     'persistence': t.get('persistence'), 'attempts': t.get('attempts'),
+                     'order_ok': (tl.get('armed') or 1e18) <= (tl.get('confirming') or 0) + 1e-6 if tl.get('armed') and tl.get('confirming') else None,
+                     't': {k: round(tl[k] - base, 1) for k in keys if k in tl}})
+    return rows
