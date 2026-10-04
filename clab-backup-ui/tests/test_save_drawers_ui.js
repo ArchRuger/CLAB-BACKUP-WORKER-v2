@@ -620,6 +620,32 @@ test('Q1280-05, Q1440-07 a question, a refusal and the sentence about a new fold
  lines['#folder-refused']={textContent:'The VM refused the folder.',scrollIntoView(){scrolled.push('refused');}};scrolled.length=0;
  await g.act('save');await settle();assert.deepEqual(scrolled,['refused','foot']);assert.equal(said(),'The VM refused the folder.');
 });
+test('T1-6 a save keeps its name in All versions when a newer save arrives: its own note, or Unnamed save; never the folder’s name for the newest row only',()=>{
+ const g=harness();
+ const job=(id,note,created)=>({id,lab_id:'lab',target:'latest',status:'synced',pushed:true,commit:id.repeat(40).slice(0,40),note,created,finished:created,changed_files:['Work/latest/r1.cfg'],snapshot_path:'Work/latest'});
+ const list={head:'h',lab_devices:2,states:[{path:'Work/latest',name:'Work',group:'latest',saved_at:'2026-10-01T10:00:00Z',saved_devices:2,loadable_devices:2}]};
+ const names=jobs=>g.context.drwVersionsModel(jobs,list,true).yours.map(row=>row.name);
+ assert.deepEqual(Array.from(names([job('a','','2026-10-01T10:00:00Z')])),['Unnamed save']);
+ assert.deepEqual(Array.from(names([job('b','Second','2026-10-01T11:00:00Z'),job('a','','2026-10-01T10:00:00Z')])),['Second','Unnamed save'],'the older save reads as it did when it was the newest');
+ assert.deepEqual(Array.from(names([job('b','','2026-10-01T11:00:00Z'),job('a','First','2026-10-01T10:00:00Z')])),['Unnamed save','First']);
+});
+test('T1-5 the folder tree’s open branches belong to the person: kept per lab and repository across the poll and across closing and reopening the drawer; a selection opens and closes nothing',async()=>{
+ const g=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>({kind:'free',folder:data.folder,typed:data.folder,exists:true})}});
+ const open=()=>[...g.sd.chooser.expanded].sort();
+ g.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
+ assert.deepEqual(open(),['','restore-square'],'the first time: the path to the lab’s folder');
+ await g.act('toggle',{path:'notes'});await g.act('toggle',{path:'restore-square'});assert.deepEqual(open(),['','notes']);
+ await g.act('select',{path:'BGP/deep/er'});assert.deepEqual(open(),['','notes'],'selecting a folder opens no branch');
+ g.context.saveDrawerRender();g.context.saveDrawerRender();assert.deepEqual(open(),['','notes'],'a poll changes nothing');
+ g.context.saveDrawerClose();await settle();
+ g.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
+ assert.deepEqual(open(),['','notes'],'reopened: as the person left it, not the default again and not derived from where the lab saves');
+ // Save as a lab state… and Browse the repository… show the same repository: the same branches
+ g.context.saveDrawerOpen('state',{});await settle();assert.deepEqual(open(),['','notes']);
+ // another repository has its own
+ await g.act('repository',{value:'other'});await settle();assert.notDeepEqual(open(),['','notes']);
+ await g.act('repository',{value:'b'});await settle();assert.deepEqual(open(),['','notes']);
+});
 test('Q1280-04 a click on Save here or Save state before the answer for the shown folder arrived is held, not lost: the button says Checking the folder…, the request follows the answer; a question is shown instead; a new value drops it',async()=>{
  // The check answers only when the test lets it (a real VM is slower than a click).
  let release=[];const posts=[],asked=[];

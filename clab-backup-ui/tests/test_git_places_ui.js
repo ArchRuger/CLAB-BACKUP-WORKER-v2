@@ -153,7 +153,7 @@ test('an empty folder made through the manager stays in the tree, is told apart 
  // In the chooser a planned folder is marked New, is said to appear with the first save, and offers its removal from the list.
  const tree=chooserTree([ans(''),ans('JunOS-TEST-2',{kind:'own',mark:'This lab saves here'}),ans('JunOS-TEST-2/working',{exists:false}),ans('JunOS-TEST-2/solution')],{files:[{path:'JunOS-TEST-2/latest/r1.cfg',size:10},{path:'JunOS-TEST-2/solution/week-1/a.txt',size:1}]});
  const inside=markup(context,tree,{value:'JunOS-TEST-2/working',selected:'JunOS-TEST-2/working',expanded:new Set(['','JunOS-TEST-2'])});
- assert.match(inside,/data-folder="JunOS-TEST-2\/working"[^>]*><span class="folder-row">.*?<i class="git-folder-icon pending"><\/i><span class="folder-name">working<\/span><b class="git-tag pending">New<\/b>/);
+ assert.match(inside,/data-folder="JunOS-TEST-2\/working"[^>]*><span class="folder-row">.*?<i class="git-folder-icon pending"><\/i><span class="folder-name"[^>]*>working<\/span><b class="git-tag pending">New<\/b>/);
  assert.match(inside,/JunOS-TEST-2\/working is new\. It appears in the repository with the first save\./);assert.deepEqual(buttonsOf(inside),['Cancel','Save here']);
  assert.match(inside,/data-folder-action="forget" data-folder-path="JunOS-TEST-2\/working">Remove from the list</);
  assert.doesNotMatch(markup(context,tree,{value:'JunOS-TEST-2/solution',selected:'JunOS-TEST-2/solution',expanded:new Set(['','JunOS-TEST-2'])}),/data-folder-action="forget"/,'a folder that is in the repository is not removable');
@@ -618,6 +618,15 @@ test('C14 state mode: name field and buttons, the destination in a fold with its
  html=markup(context,tree,{mode:'state',value:'start',name:'start',answer:ans('start',{kind:'state',label:'Start'})});
  assert.equal(liveRegion(html),'“Start” already exists here.');same(buttonsOf(html),['Cancel','Replace it','Use another name']);assert.match(html,/data-folder-choice="take"/);assert.match(html,/data-folder-action="use-another-name"/);assert.doesNotMatch(html,/Use this folder anyway/);
  html=markup(context,tree,{mode:'state',value:'BGP',name:'start',answer:ans('BGP/start',{typed:'BGP',kind:'own'})});assert.equal(liveRegion(html),'restore-square saves in BGP, so the state is saved in BGP/start.');same(buttonsOf(html),['Cancel','Save state']);
+ // T1-4: a closed branch that holds the lab's folder carries a quiet mark; open, or without the lab's folder inside, it does not.
+ // T1-3: every folder name carries its full path as its title (a long name is cut by the layout).
+ {const t=chooserTree([ans('',{mark:''}),ans('BGP'),ans('BGP/mine',{kind:'own',mark:'This lab saves here'}),ans('notes'),ans('notes/old')]),top='BGP';assert.equal(context.folderOwnPath(context.folderChooserModel(t)),'BGP/mine');
+  {
+   const closed=markup(context,t,{mode:'location',value:'notes',expanded:new Set([''])});assert.match(closed,new RegExp('data-folder="'+top+'"[^>]*>.*?<small class="folder-inside">This lab saves inside</small>'));
+   const opened=markup(context,t,{mode:'location',value:'notes',expanded:new Set(['',top])});assert.doesNotMatch(opened.slice(opened.indexOf('data-folder="'+top+'"'),opened.indexOf('role="group"',opened.indexOf('data-folder="'+top+'"'))),/folder-inside/);
+  }
+  assert.doesNotMatch(markup(context,t,{mode:'location',value:'notes',expanded:new Set([''])}).split('data-folder="notes"')[1],/folder-inside/,'only the branch that holds it');
+  const any=markup(context,t,{mode:'location',value:'notes',expanded:new Set([''])});assert.match(any,/<span class="folder-name" title="[^"]+">/);assert.doesNotMatch(any,/<span class="folder-name">/);}
  // Q1280-04: a held click shows on the button, which takes no second click; every other button stays as it is.
  html=markup(context,tree,{mode:'location',value:'week-9',held:{kind:'place',value:'week-9'},checking:true});same(buttonsOf(html),['Cancel','Checking the folder…']);assert.match(html,/data-folder-held="1" disabled>Checking the folder…<\/button>/);
  // What the manager really answers for a lab's folder (git_places.place_answer, purpose state): the folder inside it, `adjusted: inside-lab`,

@@ -192,7 +192,9 @@ function drwVersionsModel(jobs,list,located){
  const yours=own.map((job,i)=>{
   const info=i===0&&latestRow&&drwBare(job.snapshot_path)===drwBare(latestRow.path)?latestRow:null,atHead=!!head&&job.commit===head;
   const base=info?drwStateRow(info,'yours',list):{key:'',name:'',group:'yours',why:'Your save',viewOnly:false,reason:''};
-  return {...base,key:'job:'+job.id,name:job.note||base.name||'Save',when:drwWhen(job.finished||job.created),path:drwBare(job.snapshot_path),commit:job.commit,type:atHead?'folder':'git',job,waiting:drwWaiting(job),newest:i===0};
+  // A save keeps one name for as long as it is listed: its own (typed, or the one the manager wrote), never the folder's name
+  // (which only the newest row could take from the states list, so the name changed when a newer save arrived).
+  return {...base,key:'job:'+job.id,name:job.note||'Unnamed save',when:drwWhen(job.finished||job.created),path:drwBare(job.snapshot_path),commit:job.commit,type:atHead?'folder':'git',job,waiting:drwWaiting(job),newest:i===0};
  });
  if(!yours.length&&latestRow)yours.push({...drwStateRow(latestRow,'yours',list),key:'state:'+latestRow.path,newest:true});
  const startRow=of('baseline')[0];
@@ -493,6 +495,7 @@ function drwChooserView(){
  const content=typeof folderChooserMarkup==='function'?folderChooserMarkup(c.model,c):'<p class="save-note">The folder chooser is not available on this page.</p>';
  return {title,meta,actions:'',content};
 }
+const drwOpenBranches=new Map();   // "<lab id>|<repository id>" → Set of open folder paths (the same Set the chooser toggles)
 async function drwLoadChooser(){
  const c=saveDrawer.chooser,id=saveDrawer.lab,request=saveDrawer.request;c.status='loading';c.error='';drwDrawerRenderSoon();
  try{
@@ -513,8 +516,13 @@ async function drwLoadChooser(){
   c.parent=base;c.defaultFolder=places.default?.folder||base;
   if(c.mode==='state')c.value=drwJoin(base,typeof folderClean==='function'?folderClean(c.name):c.name);
   else if(!c.pathTouched&&!c.value)c.value=base;
-  c.expanded=c.model&&typeof folderDefaultExpanded==='function'?folderDefaultExpanded(c.model):new Set(['']);
-  if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,drwDir(c.value));
+  // The open branches belong to the person (CLAUDE.md: never derive `open` from the selection). They are remembered per lab and
+  // repository for as long as the page lives: across the poll, and across closing and reopening the drawer. The first time a
+  // repository is shown the path to the lab's folder is opened; after that only the person's own actions open or close a branch.
+  const branches=id+'|'+c.repository,kept=drwOpenBranches.get(branches);
+  if(kept)c.expanded=c.model&&typeof gitKeepExpanded==='function'?gitKeepExpanded(kept,c.model):kept;
+  else{c.expanded=c.model&&typeof folderDefaultExpanded==='function'?folderDefaultExpanded(c.model):new Set(['']);if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,drwDir(c.value));}
+  drwOpenBranches.set(branches,c.expanded);
   c.answer=!c.model&&!context?.binding&&c.value===(places.default?.folder||'')?places.default?.answer||null:null;
   c.status='ready';
   if(c.mode!=='browse'&&!c.address&&!(c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(c.value):c.value))&&!c.answer)drwChooserCheck(c.value);
@@ -562,7 +570,6 @@ function drwChooserDebounce(folder){
 }
 function drwChooserSelect(path){
  const c=saveDrawer.chooser;c.selected=path;c.question=null;c.notice='';c.answer=null;c.checkFailed=false;c.held=null;
- if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,path);
  if(c.mode==='state'){c.parent=path;c.pathTouched=false;c.requestId='';c.value=drwJoin(path,typeof folderClean==='function'?folderClean(c.name):c.name);drwChooserDebounce(c.value);}
  else if(c.mode==='browse'){c.value=path;}
  else{c.value=path;c.pathTouched=true;if(!(c.model&&c.model.answers.get(path)))drwChooserCheck(path);}

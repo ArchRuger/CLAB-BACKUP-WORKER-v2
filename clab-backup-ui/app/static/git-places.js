@@ -331,12 +331,14 @@ function folderTreeMarkup(model,view){
  let placed=false;
  const rowHtml=()=>`<li role="none" class="folder-new"><label class="sr-only" for="folder-new">New folder in ${esc(view.newFolder.parent||repo)}</label><input id="folder-new" maxlength="500" autocomplete="off" spellcheck="false" value="${esc(view.newFolder.value||'')}"><button type="button" class="button secondary small" data-folder-action="new-add">Add</button><button type="button" class="button ghost small" data-folder-action="new-cancel">Cancel</button></li>`;
  const newRow=parent=>{if(!view.newFolder||placed||view.newFolder.parent!==parent)return '';placed=true;return rowHtml();};
+ // A closed branch that holds the lab's own folder says so (a quiet mark), so the folder can be found without opening every branch.
+ const own=typeof folderOwnPath==='function'?folderOwnPath(model):'';
  const item=(node,level)=>{
   const {shown,more}=folderChildren(model,node,mode,view.showAll,view.selected),root=node.path==='',open=root||!!node.virtual||!!(view.expanded&&view.expanded.has(node.path)),answer=model.answers.get(node.path);
   const kids=shown.length>0,selected=view.selected===node.path,label=node.name||repo;
   const cls=answer&&(answer.kind==='own'||answer.kind==='lab'||answer.kind==='own-before')?' lab':answer&&answer.kind==='state'?' managed':'',fresh=!root&&(!!node.virtual||(!!answer&&answer.exists===false));
   const twist=kids&&!root?`<span class="git-twist" data-folder-twist="${esc(node.path)}" aria-hidden="true"></span>`:'<span class="git-twist-space" aria-hidden="true"></span>';
-  const row=`<span class="folder-row">${twist}<i class="git-folder-icon${cls}${fresh?' pending':''}"></i><span class="folder-name">${esc(label)}</span>${root?'<small>top level</small>':''}${folderTagFor(answer)}${fresh?'<b class="git-tag pending">New</b>':''}</span>`;
+  const row=`<span class="folder-row">${twist}<i class="git-folder-icon${cls}${fresh?' pending':''}"></i><span class="folder-name" title="${esc(root?repo:node.path)}">${esc(label)}</span>${root?'<small>top level</small>':''}${folderTagFor(answer)}${fresh?'<b class="git-tag pending">New</b>':''}${!root&&!open&&kids&&own&&own.startsWith(node.path+'/')?'<small class="folder-inside">This lab saves inside</small>':''}</span>`;
   let children='';
   if(open&&(kids||view.newFolder)){
    children=`<ul role="group">${shown.map(child=>item(child,level+1)).join('')}${more?`<li role="none" class="folder-more"><button type="button" class="link-button" data-folder-action="show-all" data-folder-path="${esc(node.path)}">Show all ${esc(Number(more).toLocaleString('en-US'))} folders</button></li>`:''}${newRow(node.path)}</ul>`;

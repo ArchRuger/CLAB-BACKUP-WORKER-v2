@@ -2548,6 +2548,10 @@ tr.diff-ctx .diff-marker { color: var(--muted); }
 /* --------------------------------------------------------------------------
    Page fixes after the QA wave of the Git save and load redesign (F1)
    -------------------------------------------------------------------------- */
+/* T1-1: an opened row of All versions keeps the width of the list around it. */
+.save-drawer .save-list > li.open { margin-left: 0; margin-right: 0; }
+/* T1-4: the quiet mark of a closed branch that holds the lab's folder. */
+.folder-row .folder-inside { color: var(--muted); font-size: 12px; white-space: nowrap; }
 /* Q1440-10: the busy indicator of the top bar keeps its distance from the Manager button. */
 .topbar-right .worker-state { margin-right: 12px; }
 /* Q1440-13: a line of the chip panel that ends in an action (Saves to … Change…, Last load … Details) keeps the action on the
