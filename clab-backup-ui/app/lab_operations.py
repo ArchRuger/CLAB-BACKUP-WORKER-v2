@@ -785,7 +785,7 @@ class LabOperations:
                     raise HTTPException(400, 'The manager cannot read this map: ' + str(exc)[:200])
                 # A map a person saved is theirs: discovery never replaces it with the VM's annotations file.
                 drawing['placed'] = True
-                previous = {k: lab.get(k) for k in ('drawing', 'annotations', 'annotations_for')}
+                previous = {k: lab.get(k) for k in ('drawing', 'annotations', 'annotations_for', 'map_written_at')}
                 lab['drawing'] = drawing; keep_document(lab, data.annotations)
                 try: self.store.save()
                 except OSError:

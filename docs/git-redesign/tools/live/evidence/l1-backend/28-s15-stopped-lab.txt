@@ -1,0 +1,59 @@
+SCENARIO 15: a stopped lab (git-redesign-b destroyed with the manager's own lab operation)
+--- first a save of B so nothing waits, and an upload
+[16:09:12] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/save {"note": "l1 s15 before destroy", "push": true, "request_id": "08c8a20ecbbc4fc7a2c1eb577ffeac63", "target": "latest"}
+    -> HTTP 200 (0.0s) {"id": "08c8a20ecbbc4fc7a2c1eb577ffeac63", "message": "Save queued.", "status": "queued"}
+[16:09:12]    job 08c8a20e status=capturing message='Capturing the configured devices.'
+[16:09:16]    job 08c8a20e status=exporting message='Saving captured configurations to the VM repository.'
+[16:09:18]    job 08c8a20e status=review_pending message='Saved in the VM repository; not pushed.'
+[16:09:20] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/compare {"job_id": "08c8a20e.."} -> HTTP 200
+     file {"node": "ceos1", "path": "git-redesign/b/latest/ceos1.cfg", "role": "device", "status": "added"}
+     file {"node": "ceos1", "path": "git-redesign/b/latest/ceos1.eoscfg", "role": "restore", "status": "added"}
+     file {"node": "ceos2", "path": "git-redesign/b/latest/ceos2.cfg", "role": "device", "status": "added"}
+     file {"node": "ceos2", "path": "git-redesign/b/latest/ceos2.eoscfg", "role": "restore", "status": "added"}
+     file {"node": "", "path": "git-redesign/b/latest/git-redesign-b.clab.yml", "role": "topology", "status": "added"}
+     file {"node": "", "path": "git-redesign/b/latest/git-redesign-b.clab.yml.annotations.json", "role": "map", "status": "added"}
+     file {"node": "", "path": "git-redesign/b/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 96, "devices": ["ceos1", "ceos2"], "first": true, "map": true, "removed": 0, "removed_devices": [], "topology": true}
+     head fa451d3755a85bbec3d050f2bd1b4196031c44e8 upload_job 08c8a20ecbbc4fc7a2c1eb577ffeac63
+     also_sends [] count 0 other_labs 0
+[16:09:20] POST /api/git/jobs/08c8a20ecbbc4fc7a2c1eb577ffeac63/retry {"head": "fa451d3755a85bbec3d050f2bd1b4196031c44e8", "push": true, "reviewed": true}
+    -> HTTP 200 (0.2s) {"id": "08c8a20ecbbc4fc7a2c1eb577ffeac63", "message": "Upload queued; the saved commit will be reused.", "status": "queued"}
+[16:09:20]    job 08c8a20e status=pushing message='Pushing the saved commit.'
+[16:09:26]    job 08c8a20e status=synced message='Saved to Git.'
+upload: {"destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign/b/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "pushed": true, "status": "synced"}
+B git_status {'checked': '2026-10-04T16:09:24.885482+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+  [device descriptions before destroy]
+      b-ceos1   Ethernet1                description l1-s15-b1
+      b-ceos2   Ethernet1                description l1-s13-b2
+destroy preview keys: ['action', 'affected', 'argv', 'digest', 'name', 'path', 'source_hash', 'source_name', 'steps', 'token', 'warnings'] HTTP 200
+[16:09:27] POST /api/operations/confirm {"token": "<one-time token removed>"}
+    -> HTTP 200 (0.0s) {"action": "destroy", "created": "2026-10-04T16:09:27.356361+00:00", "exit_code": null, "id": "f430184ce8b2413f85aae440cc8fa043", "lab_id": "cbee72c4fe5741bca264d72dff0d8cab", "message": "Queued", "name": "git-redesign-b", "output": "", "path": "/srv/containerlab-node-manager/projects/git-redesign-b/git-redesign-b.clab.yaml", "status": "queued"}
+destroy job: {"action": "destroy", "message": "Operation completed", "status": "succeeded"}
+lab B readiness now: ({'status': 'idle', 'total': 0, 'ready': 0, 'booting': 0, 'failed': 0}, [('clab-git-redesign-b-ceos1', 'Lab unavailable'), ('clab-git-redesign-b-ceos2', 'Lab unavailable')], {'checked': '2026-10-04T16:09:24.885482+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0})
+containers: ['clab-git-redesign-ceos2 Up 2 hours', 'clab-git-redesign-ceos1 Up 2 hours', 'clab-git-redesign-xrv9k Up 2 hours (healthy)', 'clab-git-redesign-cjunos Up 2 hours']
+--- a load of lab B's own save onto the stopped lab
+[16:09:38] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/restore/preflight {"source": {"path": "git-redesign/b/latest", "type": "folder"}} -> HTTP 200
+     source {"capture_id": "45cc2b5921af487fa2d28a1b293985df", "captured_at": "2026-10-04T16:09:15.328692+00:00", "commit": "fa451d3755a85bbec3d050f2bd1b4196031c44e8", "folder": "git-redesign/b", "lab_name": "git-redesign-b", "path": "/git-redesign/b/latest", "repository": "", "restore_capable_nodes": 2, "saved_nodes": ["clab-git-redesign-b-ceos1", "clab-git-redesign-b-ceos2"], "topology": {"differs": false, "matching_devices": 2, "saved_devices": 2}, "type": "folder"}
+     eligible_count: 0
+     row {"eligible": false, "name": "clab-git-redesign-b-ceos1", "platform": "arista_ceos", "reason": "The node is not currently running or discovery is stale.", "requested": true, "running_platform": "arista_ceos"}
+     row {"eligible": false, "name": "clab-git-redesign-b-ceos2", "platform": "arista_ceos", "reason": "The node is not currently running or discovery is stale.", "requested": true, "running_platform": "arista_ceos"}
+[16:09:39] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/restore {"acknowledge": true, "confirm_minutes": 5, "node_names": ["clab-git-redesign-b-ceos1", "clab-git-redesign-b-ceos2"], "request_id": "48fff88df74c4879b5a1df7f2baea01b", "source": {"path": "git-redesign/b/latest", "type": "folder"}}
+    -> HTTP 409 (0.5s) {"detail": "Some selected nodes cannot be restored: clab-git-redesign-b-ceos1: The node is not currently running or discovery is stale.; clab-git-redesign-b-ceos2: The node is not currently running or discovery is stale."}
+--- states list for a stopped lab:
+HTTP 200 [('B', 2), ('Broken', 0), ('Final', 0), ('L1-moved-b', 2)]
+--- a save of the stopped lab:
+[16:09:40] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/save {"note": "l1 s15 stopped lab", "push": true, "request_id": "17743ebc43ae4316a475970608005ca1", "target": "latest"}
+    -> HTTP 200 (0.0s) {"id": "17743ebc43ae4316a475970608005ca1", "message": "Save queued.", "status": "queued"}
+[16:09:40]    job 17743ebc status=failed message='Selected nodes are not currently available. Refresh VM discovery before connecting.'
+    job: {"message": "Selected nodes are not currently available. Refresh VM discovery before connecting.", "status": "failed"}
+--- deploy lab B again with the manager's own operation
+[16:09:46] POST /api/operations/preview {"action": "deploy", "lab_id": "cbee72c4fe5741bca264d72dff0d8cab"}
+    -> HTTP 200 (0.5s) {"action": "deploy", "steps": [], "warnings": []}
+[16:09:46] POST /api/operations/confirm {"token": "<one-time token removed>"}
+    -> HTTP 200 (0.0s) {"id": "84825ef83ea24702b676885560020ebb", "status": "queued"}
+deploy job: {"action": "deploy", "message": "Operation completed", "status": "succeeded"}
+  16:10:04 {'status': 'booting', 'total': 2, 'ready': 0, 'booting': 2, 'failed': 0}
+  16:10:12 {'status': 'booting', 'total': 2, 'ready': 0, 'booting': 2, 'failed': 0}
+  16:10:20 {'status': 'booting', 'total': 2, 'ready': 0, 'booting': 2, 'failed': 0}
+  16:10:28 {'status': 'ready', 'total': 2, 'ready': 2, 'booting': 0, 'failed': 0}
+containers: ['clab-git-redesign-b-ceos1 Up 41 seconds', 'clab-git-redesign-b-ceos2 Up 41 seconds', 'clab-git-redesign-ceos2 Up 2 hours', 'clab-git-redesign-ceos1 Up 2 hours', 'clab-git-redesign-xrv9k Up 2 hours (healthy)', 'clab-git-redesign-cjunos Up 2 hours']

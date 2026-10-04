@@ -1,0 +1,23 @@
+SCENARIO 13c: lab git-redesign-b chooses the very folder lab git-redesign saves in. B now saves in git-redesign/b
+--- places/check for the folder:
+[16:08:29] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/places/check {"folder": "git-redesign", "purpose": "save", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (0.9s) {"adjusted": "", "beside": "git-redesign/git-redesign-b", "bring": {"files": 0, "from": "git-redesign/b", "offered": false, "reason": "nothing"}, "collision": false, "exists": true, "folder": "git-redesign", "kind": "lab", "lab": {"id": "63d53e20db83464392ebfd4712bba5e3", "name": "git-redesign"}, "label": "", "layout": "", "mark": "git-redesign saves here", "same_name": false, "typed": "git-redesign"}
+[16:08:30] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/place {"choice": "", "folder": "git-redesign", "move_files": false, "pending": "", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (0.9s) {"question": {"adjusted": "", "beside": "git-redesign/git-redesign-b", "bring": {"files": 0, "from": "git-redesign/b", "offered": false, "reason": "nothing"}, "collision": false, "exists": true, "folder": "git-redesign", "kind": "lab", "lab": {"id": "63d53e20db83464392ebfd4712bba5e3", "name": "git-redesign"}, "label": "", "layout": "", "mark": "git-redesign saves here", "same_name": false, "typed": "git-redesign"}}
+--- answer "Save in <folder>/<this lab>" (choice=beside)
+[16:08:32] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/place {"choice": "beside", "folder": "git-redesign", "move_files": false, "pending": "", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (2.7s) {"binding": {"binding_id": "61b9c4c92e6c4393a2ba53bf54c7411b", "host_identity": "9a2b7085e4a0dee06c55e85a065e00c62b19403fc1c53db6a9d1c0ee7c50de03", "node_names": ["clab-git-redesign-b-ceos1", "clab-git-redesign-b-ceos2"], "repository": {"branch": "main", "id": "61b9c4c92e6c4393a2ba53bf54c7411b", "label": "clab-scratch-git-redesign / git-redesign/git-redesign-b", "owner": "archtop", "path": "/home/archtop/labs/clab-scratch-git-redesign", "prefix": "git-redesign/git-redesign-b", "push_url": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "remote": "origin", "revision": "acde0ff9605eb8a29b5fadaffdecf953e4cc8bc5d7478ae8a28f7634946fdb9a"}, "review_before_push": true, "revision": "ac ...[trimmed]
+B saves in: git-redesign/git-redesign-b | A saves in: git-redesign
+--- the other answer, "Use this folder anyway" (choice=take) is only offered when the labs want the identical folder; ask it:
+[16:08:34] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/place {"choice": "take", "folder": "git-redesign", "move_files": false, "pending": "", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (1.1s) {"binding": {"binding_id": "723fdfad39da40ea8a4fc49d6e8016f7", "host_identity": "9a2b7085e4a0dee06c55e85a065e00c62b19403fc1c53db6a9d1c0ee7c50de03", "node_names": ["clab-git-redesign-b-ceos1", "clab-git-redesign-b-ceos2"], "repository": {"branch": "main", "id": "723fdfad39da40ea8a4fc49d6e8016f7", "label": "clab-scratch-git-redesign / git-redesign", "owner": "archtop", "path": "/home/archtop/labs/clab-scratch-git-redesign", "prefix": "git-redesign", "push_url": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "remote": "origin", "revision": "b1d56db2f140638359256874cdde600bbd1c9b1a4698d391477766a0ad95953d"}, "review_before_push": true, "revision": "b1d56db2f140638359256874cdde600b ...[trimmed]
+B saves in: git-redesign | A saves in: None
+=== "Use this folder anyway" disconnected lab A, as designed. Putting both labs back where they were (A: git-redesign, B: git-redesign/b).
+B moves away first:
+[16:08:42] POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/place {"choice": "", "folder": "git-redesign/b", "move_files": false, "pending": "", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (1.0s) {"moved": false, "saved": true}
+A takes git-redesign back:
+[16:08:43] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/place {"acknowledge": true, "choice": "", "folder": "git-redesign", "move_files": false, "pending": "", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (1.1s) {"moved": false, "saved": true}
+A saves in: git-redesign | B saves in: git-redesign/b
+A node selection: ['clab-git-redesign-ceos1', 'clab-git-redesign-ceos2', 'clab-git-redesign-cjunos', 'clab-git-redesign-xrv9k']

@@ -1,0 +1,26 @@
+[19:37:27] C3: devices before: {'a-ceos1': 'l2-c1-final', 'a-ceos2': 'l2-c1-final', 'a-cjunos': 'l2-c1-final;', 'a-xrv9k': 'l2-c1-final'}
+[19:37:48] load of Start ended: chip 'Running Start'
+[19:37:48] Undo this load pressed 0.0 s after the chip read Running
+[19:37:52]    +0.0s panel='' error='' red Load visible=False disabled=None
+[19:37:52]    +3.7s panel='' error='' red Load visible=True disabled=False
+[19:37:52] requests: ['POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore/preflight {"source":{"type":"folder","commit":"68fedc7349349082d', 'POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore {"request_id":"6ef44ee4c2de128aa7f23e865f101668","source":{"type', 'POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore/preflight {"source":{"type":"backup","commit":"","path":"","back']
+[19:37:52] failed requests so far: []
+[19:37:52] confirmation: 'Undo loading Start?' ; rows {'ceos1': '2 lines differ', 'ceos2': '2 lines differ', 'cjunos': '2 lines differ', 'xrv9k': '2 lines differ'}
+[19:37:52] after Undo: chip 'Running Start' ; clicks (chip, Undo, Load) = 2
+[19:37:53] CLI read-back: {'a-ceos1': 'description l2-c1-start', 'a-ceos2': 'description l2-c1-start', 'a-cjunos': 'description l2-c1-start;', 'a-xrv9k': 'description l2-c1-start'}
+FAIL C3 every device is back to what it ran before the load (l2-c1-final) :: {'a-ceos1': 'description l2-c1-start', 'a-ceos2': 'description l2-c1-start', 'a-cjunos': 'description l2-c1-start;', 'a-xrv9k': 'description l2-c1-start'}
+[19:37:53] undo job: succeeded 'All 4 node(s) restored and verified against the saved state.'
+[19:37:53]    target {"node": "ceos1", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 3.4, "armed": 4.5, "verifying": 4.5, "confirming": 4.9, "replaced": 5.5, "settled": 5.5, "checked": 13.5}}
+[19:37:53]    target {"node": "ceos2", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 3.4, "armed": 4.6, "verifying": 4.6, "confirming": 5.0, "replaced": 5.5, "settled": 5.5, "checked": 13.5}}
+[19:37:53]    target {"node": "cjunos", "platform": "juniper_cjunosevolved", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 3.4, "armed": 7.3, "verifying": 7.3, "confirming": 8.8, "replaced": 9.4, "settled": 9.4, "checked": 13.5}}
+[19:37:53]    target {"node": "xrv9k", "platform": "cisco_xrv9k", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 3.5, "armed": 8.6, "verifying": 8.6, "confirming": 9.4, "replaced": 10.9, "settled": 10.9, "checked": 13.5}}
+[19:37:53] errors [] ; failed []
+PASS C3: no console, page or request errors
+
+=== C3: 2 checks, 1 failed
+FAIL C3 every device is back to what it ran before the load (l2-c1-final) :: {'a-ceos1': 'description l2-c1-start', 'a-ceos2': 'description l2-c1-start', 'a-cjunos': 'description l2-c1-start;', 'a-xrv9k': 'description l2-c1-start'}
+PASS C3: no console, page or request errors
+None
+
+2 checks, 1 failed
+  FAIL C3 every device is back to what it ran before the load (l2-c1-final) :: {'a-ceos1': 'description l2-c1-start', 'a-ceos2': 'description l2-c1-start', 'a-cjunos': 'description l2-c1-start;', 'a-xrv9k': 'description l2-c1-start'}

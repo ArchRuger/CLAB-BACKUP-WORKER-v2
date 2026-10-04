@@ -1,0 +1,58 @@
+=== cleanup: forget the planned folders step 13 created (manager-side only), put B back in git-redesign-b
+[16:18:16] DELETE /api/git/repositories/e7d5f64d4c85487ebcff3baeff12694a/folders {"plan": false, "prefix": "l1-top"}
+    -> HTTP 200 (0.3s) {"forgotten": "l1-top"}
+[16:18:16] DELETE /api/git/repositories/e7d5f64d4c85487ebcff3baeff12694a/folders {"plan": false, "prefix": "git-redesign/l1-in-lab"}
+    -> HTTP 200 (0.2s) {"forgotten": "git-redesign/l1-in-lab"}
+[16:18:17] DELETE /api/git/repositories/e7d5f64d4c85487ebcff3baeff12694a/folders {"plan": false, "prefix": "git-redesign/l1-in-lab/l1-nested"}
+    -> HTTP 200 (0.2s) {"forgotten": "git-redesign/l1-in-lab/l1-nested"}
+[16:18:17] DELETE /api/git/repositories/e7d5f64d4c85487ebcff3baeff12694a/folders {"plan": false, "prefix": "git-redesign/l1-in-latest-state"}
+    -> HTTP 200 (0.2s) {"forgotten": "git-redesign/l1-in-latest-state"}
+[16:18:17] DELETE /api/git/repositories/e7d5f64d4c85487ebcff3baeff12694a/folders {"plan": false, "prefix": "git-redesign/start/l1-in-start-state"}
+    -> HTTP 200 (0.2s) {"forgotten": "git-redesign/start/l1-in-start-state"}
+[16:18:17] DELETE /api/git/repositories/e7d5f64d4c85487ebcff3baeff12694a/folders {"plan": false, "prefix": "bad-name/with-chars"}
+    -> HTTP 200 (0.2s) {"forgotten": "bad-name/with-chars"}
+[16:18:17] DELETE /api/git/repositories/e7d5f64d4c85487ebcff3baeff12694a/folders {"plan": false, "prefix": "git-redesign/b/l1-in-b"}
+    -> HTTP 200 (0.2s) {"forgotten": "git-redesign/b/l1-in-b"}
+[16:18:19] POST /api/labs/123f0029993941a38b29f729d3071ba6/git/place {"choice": "", "folder": "git-redesign-b", "move_files": false, "pending": "", "repository": "e7d5f64d4c85487ebcff3baeff12694a"}
+    -> HTTP 200 (1.1s) {"moved": false, "saved": true}
+
+=== FINAL STATE
+lab git-redesign 63d53e20 saves in git-redesign | nos_readiness {'status': 'ready', 'total': 4, 'ready': 4, 'booting': 0, 'failed': 0} | git_status {'checked': '2026-10-04T16:08:44.667484+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+lab git-redesign-b 123f0029 saves in git-redesign-b | nos_readiness {'status': 'ready', 'total': 2, 'ready': 2, 'booting': 0, 'failed': 0} | git_status {'checked': '2026-10-04T16:17:55.297937+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+waiting/unfinished git jobs: []
+paused containers: (0, '')
+containers: ['clab-git-redesign-b-ceos1 Up 8 minutes', 'clab-git-redesign-b-ceos2 Up 8 minutes', 'clab-git-redesign-ceos2 Up 2 hours', 'clab-git-redesign-ceos1 Up 2 hours', 'clab-git-redesign-xrv9k Up 2 hours (healthy)', 'clab-git-redesign-cjunos Up 2 hours']
+/etc/hosts md5: 1d740bcead6ee585f9fea28b6c4d68fa  /etc/hosts
+  [device descriptions devices now]
+      a-ceos1   Ethernet1                description l1-s11b2-ceos1
+      a-ceos2   Ethernet2                description l1-s11b2-ceos2
+      a-cjunos  et-0/0/1                 description l1-s6-broken;
+      a-xrv9k   GigabitEthernet0/0/0/0   description l1-s6-broken
+      b-ceos1   Ethernet1                description l1-s17-solution
+      b-ceos2   Ethernet1                description l1-s16-after-reimport
+  [VM checkout VM checkout]
+      1ff020a First save
+      2d01444 First save
+      ce21d47 ceos2 changed
+      e4cb074 l1 s16 first save of the re-imported lab
+      ## main...origin/main [ahead 10]
+  [GitHub GitHub]
+      1ff020a091 First save
+      2d0144412a First save
+      ce21d47dc6 ceos2 changed
+      e4cb074336 l1 s16 first save of the re-imported lab
+top-level folders on GitHub: ['README.md', 'git-redesign', 'git-redesign-b', 'l1-moved-b', 'l1-online', 'l1-scaffold', 'latest']
+state folders:
+    git-redesign-b/latest
+    git-redesign/b/latest
+    git-redesign/broken/latest
+    git-redesign/checkpoints/ceos1-changed
+    git-redesign/checkpoints/ceos1-changed-2
+    git-redesign/final/latest
+    git-redesign/latest
+    git-redesign/start/latest
+    l1-moved-b/latest
+    l1-scaffold/reference/solution/latest
+    l1-scaffold/reference/start/latest
+    latest
+lab git-redesign restore/states: [('Git-redesign', 'latest', 'git-redesign/latest'), ('ceos1-changed', 'checkpoint', 'git-redesign/checkpoints/ceos1-changed'), ('ceos1-changed-2', 'checkpoint', 'git-redesign/checkpoints/ceos1-changed-2'), ('B', 'state', 'git-redesign/b/latest'), ('Broken', 'state', 'git-redesign/broken/latest'), ('Final', 'state', 'git-redesign/final/latest'), ('L1-moved-b', 'state', 'l1-moved-b/latest'), ('Solution', 'state', 'l1-scaffold/reference/solution/latest'), ('Start · git-redesign', 'state', 'git-redesign/start/latest'), ('Start · reference', 'state', 'l1-scaffold/reference/start/latest'), ('Start · Top level', 'state', 'latest'), ('Git-redesign-b', 'other-lab', 'git-redesign-b/latest')]

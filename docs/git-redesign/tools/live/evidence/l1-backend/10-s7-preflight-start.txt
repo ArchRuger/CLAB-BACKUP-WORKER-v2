@@ -1,0 +1,18 @@
+SCENARIO 7 preflight: load the lab state Start (git-redesign/start/latest) onto the four devices
+  [device descriptions before load]
+      a-ceos1   Ethernet1                description l1-s6-final
+      a-ceos2   Ethernet2                description l1-s6-final
+      a-cjunos  et-0/0/1                 description l1-s6-final;
+      a-xrv9k   GigabitEthernet0/0/0/0   description l1-s6-final
+[15:55:36] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore/preflight {"source": {"path": "git-redesign/start/latest", "type": "folder"}} -> HTTP 200
+     source {"capture_id": "83e7380f93d042b08408c35edf1dffe8", "captured_at": "2026-10-04T15:54:11.290145+00:00", "commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "folder": "git-redesign/start", "lab_name": "git-redesign", "path": "/git-redesign/start/latest", "repository": "", "restore_capable_nodes": 4, "saved_nodes": ["clab-git-redesign-ceos1", "clab-git-redesign-ceos2", "clab-git-redesign-cjunos", "clab-git-redesign-xrv9k"], "topology": {"differs": false, "matching_devices": 4, "saved_devices": 4}, "type": "folder"}
+     eligible_count: 4
+     row {"eligible": true, "matches_saved": false, "name": "clab-git-redesign-ceos1", "pending_changes": 2, "platform": "arista_ceos", "reachable": true, "reason": "", "requested": true, "running_platform": "arista_ceos"}
+       diff (changed lines): ['del:    description l1-s5r-a-ceos1', 'add:    description l1-s6-final'] added 1 removed 1
+     row {"eligible": true, "matches_saved": false, "name": "clab-git-redesign-ceos2", "pending_changes": 2, "platform": "arista_ceos", "reachable": true, "reason": "", "requested": true, "running_platform": "arista_ceos"}
+       diff (changed lines): ['del:    description l1-s4-a-ceos2', 'add:    description l1-s6-final'] added 1 removed 1
+     row {"eligible": true, "matches_saved": false, "name": "clab-git-redesign-cjunos", "pending_changes": 1, "platform": "juniper_cjunosevolved", "reachable": true, "reason": "", "requested": true, "running_platform": "juniper_cjunosevolved"}
+       diff (changed lines): ['add: set interfaces et-0/0/1 description l1-s6-final'] added 1 removed 0
+     row {"eligible": true, "matches_saved": false, "name": "clab-git-redesign-xrv9k", "pending_changes": 1, "platform": "cisco_xrv9k", "reachable": true, "reason": "", "requested": true, "running_platform": "cisco_xrv9k"}
+       diff (changed lines): ['add:  description l1-s6-final'] added 1 removed 0
+pinned commit: 78bac3be0da7b7193e74e9e8de1cb82ee2a6193b

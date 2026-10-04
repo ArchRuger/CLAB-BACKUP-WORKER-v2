@@ -1,0 +1,39 @@
+Recovery B did not work (see 21). Now the owner pushes (recovery A again, with two waiting saves and the merge below the newest):
+$ git -C <checkout> push
+To https://github.com/ArchRuger/clab-scratch-git-redesign.git
+   fa1d071..735b254  main -> main
+git_status before pressing anything: {'checked': '2026-10-04T16:04:21.235353+00:00', 'ready': False, 'problem': 'The push would include commits created outside manager saves. Publish or resolve them as the repository owner first.', 'code': 'diverged', 'waiting': 2}
+[16:04:31] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id": "85bea598.."} -> HTTP 200
+     file {"node": "ceos2", "path": "git-redesign/latest/ceos2.cfg", "role": "device", "status": "changed"}
+     file {"node": "ceos2", "path": "git-redesign/latest/ceos2.eoscfg", "role": "restore", "status": "changed"}
+     file {"node": "", "path": "git-redesign/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 1, "devices": ["ceos2"], "first": false, "map": false, "removed": 1, "removed_devices": [], "topology": false}
+     head 735b2542d9ddf2feb816ed7c439cd86d42a8ac68 upload_job 957985318c424a1bb98cbfda522c62cb
+     also_sends [{"job_id": "957985318c424a1bb98cbfda522c62cb", "kind": "save", "lab": "git-redesign", "name": "l1 s11b2 save after the merge", "target": "latest"}] count 1 other_labs 0
+[16:04:31] POST /api/git/jobs/85bea598b75047f4845a218b02085d1c/retry {"head": "735b2542d9ddf2feb816ed7c439cd86d42a8ac68", "push": true, "reviewed": true}
+    -> HTTP 200 (0.3s) {"id": "957985318c424a1bb98cbfda522c62cb", "message": "Upload queued; the saved commit will be reused.", "status": "queued"}
+  -> waiting save 35ba03c HTTP 200 {"message": "Upload queued; the saved commit will be reused.", "pushed": false, "status": "queued"}
+[16:04:33] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id": "95798531.."} -> HTTP 200
+     file {"node": "ceos1", "path": "git-redesign/latest/ceos1.cfg", "role": "device", "status": "changed"}
+     file {"node": "ceos1", "path": "git-redesign/latest/ceos1.eoscfg", "role": "restore", "status": "changed"}
+     file {"node": "", "path": "git-redesign/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 1, "devices": ["ceos1"], "first": false, "map": false, "removed": 1, "removed_devices": [], "topology": false}
+     head 735b2542d9ddf2feb816ed7c439cd86d42a8ac68 upload_job None
+     also_sends [{"job_id": "85bea598b75047f4845a218b02085d1c", "kind": "save", "lab": "git-redesign", "name": "l1 s11b2 waiting save", "target": "latest"}] count 1 other_labs 0
+[16:04:33] POST /api/git/jobs/957985318c424a1bb98cbfda522c62cb/retry {"head": "735b2542d9ddf2feb816ed7c439cd86d42a8ac68", "push": true, "reviewed": true}
+    -> HTTP 200 (0.0s) {"id": "957985318c424a1bb98cbfda522c62cb", "message": "Saved to Git.", "status": "synced"}
+  -> save after merge 735b254 HTTP 200 {"message": "Saved to Git.", "pushed": true, "status": "synced"}
+  waiting save 35ba03c {"message": "Saved commit is included in the verified remote history.", "pushed": true, "status": "synced"}
+  save after merge 735b254 {"message": "Saved to Git.", "pushed": true, "status": "synced"}
+git_status: {'checked': '2026-10-04T16:04:33.791128+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+  [VM checkout after]
+      735b254 l1 s11b2 save after the merge
+      b0b263a Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      fa1d071 L1 online change 3 (outside the lab folders)
+      35ba03c l1 s11b2 waiting save
+      ## main...origin/main
+  [GitHub after]
+      735b2542d9 l1 s11b2 save after the merge
+      b0b263aa89 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      fa1d0712aa L1 online change 3 (outside the lab folders)
+      35ba03c45c l1 s11b2 waiting save

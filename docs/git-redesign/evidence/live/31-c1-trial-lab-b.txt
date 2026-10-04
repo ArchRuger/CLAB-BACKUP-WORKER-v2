@@ -1,0 +1,22 @@
+[19:26:11] C1 on git-redesign-b: states ['start']; lab saves in git-redesign-b
+[19:26:18] [start] chosen name 'start'; folder field 'git-redesign-b/start'; sentence ' | clab-scratch-git-redesign | › | git-redesign-b/start |  | Put it somewhere else | Cancel | Save state |  | Reads every included device now. Saved files can contain passwords o'
+[19:26:31] [start] clicks: 4, typed 0 (chip, Save as a lab state…, name, Save state); chip '1 save to upload'; panel title 'Not uploaded yet' sentence 'This is the first save here: 2 devices, the topology and the map.'
+[19:26:31] panel before Upload: 'This is the first save here: 2 devices, the topology and the map.'
+[19:26:36] uploaded with 1 click; chip 'Saved 2 min ago'
+[19:26:36] state job: {"commit": "f4073b86c7ed1e339ed303dd7dc5d8148de57db6", "destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign-b/start/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "kind": "state", "note": "Start", "pushed": true, "status": "synced"}
+  [GitHub after the states]
+      f4073b86c7 Start
+      6f69a9cd88 ceos1 changed
+      f2c0a0525c Move git-redesign-b progress to l2-move-2/
+      6b883ce21c ceos1 changed
+[19:26:37] state folders on GitHub: ['git-redesign-b/start/latest']
+[19:26:37]   git-redesign-b/start/latest manifest state='Start' node_names=2
+[19:26:38] Load panel headings ['YOUR SAVES', 'LAB STATES']; lab states: ['B', 'Broken', 'Final', 'L1-moved-b', 'L2-move-2', 'Solution', 'Start · git-redesign', 'Start · git-redesign-b']
+FAIL C1: no console, page or request errors :: http 422 POST http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check; console: Failed to load resource: the server responded with a status of 422 (Unprocessable Entity) @ http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check
+
+=== C1: 1 checks, 1 failed
+FAIL C1: no console, page or request errors :: http 422 POST http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check; console: Failed to load resource: the server responded with a status of 422 (Unprocessable Entity) @ http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check
+None
+
+1 checks, 1 failed
+  FAIL C1: no console, page or request errors :: http 422 POST http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check; console: Failed to load resource: the server responded with a status of 422 (Unprocessable Entity) @ http://127.0.0.1:8081/api/labs/aa4ee92a7c2240bdb5f0cd6eb1668ef7/git/places/check

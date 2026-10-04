@@ -97,7 +97,10 @@ test('"in the part shown" qualifies counts only when they were counted over cut 
  // textdiff.unified() past its line cap: the counts cover only the part compared, and it says so.
  const capped={...restore,added:1,removed:1,counts_partial:true,note:'Only the first 20000 lines of each version were compared; changes after that point are not shown.'};
  const cut=context.diffMarkup(capped);
- assert.match(cut,/1 added · 1 removed in the part shown/);assert.doesNotMatch(cut,/not every line is listed/);
+ assert.match(cut,/1 added · 1 removed in the part shown/);
+ // Q1280-08: a comparison of two sides that both exist names the sides, so the header reads as the lines do (- old side, + new side).
+ const sided=context.diffMarkup({identical:false,added:1,removed:3,hunks:[{old_start:1,old_count:3,new_start:1,new_count:1,lines:[{type:'del',old:1,new:null,text:'a'},{type:'add',old:null,new:1,text:'b'}]}]},{oldLabel:'Saved',newLabel:'Running now',sides:{old:'the saved state',new:'what the device runs now'}});
+ assert.match(sided,/<p class="diff-summary">3 lines only in the saved state \(−\) · 1 only in what the device runs now \(\+\)<\/p>/);assert.doesNotMatch(sided,/added|removed/);assert.doesNotMatch(cut,/not every line is listed/);
  assert.doesNotMatch(context.diffMarkup({...restore,truncated:false}),/in the part shown|not every line is listed/);
 });
 test('style.css shrinks the diff gutters at narrow widths without dropping the wide-layout rule',()=>{

@@ -4,13 +4,12 @@
 // both are read at call time so the harness can load this file with stubs.
 function homeLabState(lab){return typeof labState==='function'?labState(lab,typeof labContext==='function'?labContext():state):{key:'',label:lab.deployment?.status||'Not matched to a running lab',pill:'neutral'};}
 function homeReadyLine(lab,ls){if(typeof readyLine==='function')return readyLine(lab,ls);const total=(lab.nodes||[]).length,ready=(lab.nodes||[]).filter(n=>n.ssh_ready).length;return ls.key==='stopped'?'Not running':['unlinked','unknown'].includes(ls.key)?'':`${ready} of ${total} devices ready`;}
+// The card's saved line is the header chip's own text (saveChipState in status.js, the one status function): `Saved 12 min ago`,
+// `1 save to upload`, `Upload failed`, `Can’t save`, `Running Final`, `Not saved yet`.
 function homeSavedLine(lab){
- const ps=typeof progressState==='function'?progressState(lab,state.git_jobs):null;if(!ps)return '';
- const when=ps.at&&typeof relativeTime==='function'?relativeTime(ps.at):'';
- if(['attention','failed','interrupted','local'].includes(ps.key))return ps.label+(ps.detail?' — '+ps.detail:'');
- if(['git','review','kept'].includes(ps.key))return 'Last saved '+(when||'recently');
- if(ps.key==='unconnected')return 'Not saved anywhere yet';
- return ps.label;
+ if(typeof saveChipState!=='function')return '';
+ const cs=saveChipState(lab,typeof state==='object'&&state?state:{});
+ return cs&&cs.text?String(cs.text):'';
 }
 function homeStartReason(lab,quick){
  if(quick&&quick.reason)return quick.reason;const discovery=state.discovery||{};

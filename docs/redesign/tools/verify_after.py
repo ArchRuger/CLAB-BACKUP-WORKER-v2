@@ -10,6 +10,7 @@ error, page error or failed assertion makes the exit status 1.
 """
 import json
 import os
+import re
 import sys
 import time
 
@@ -19,7 +20,7 @@ BASE = os.environ.get('CLAB_BASE', 'http://127.0.0.1:8090')
 OUT = os.environ.get('CLAB_SHOTS', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'shots', 'after'))
 VIEWPORTS = [(1920, 1080), (1440, 900), (1366, 768)]
 POLL_MS = 4000
-TABS = ['topology', 'devices', 'progress', 'tools', 'advanced']
+TABS = ['topology', 'devices', 'tools', 'advanced']
 SHOWCASE = os.environ.get('CLAB_LAB', 'BGP_TheoryToPractice')
 EMPTY_MAP_LAB = os.environ.get('CLAB_EMPTY_LAB', 'ospf-basics')
 HANDLED = 'Failed to load resource: the server responded with a status of '
@@ -215,129 +216,226 @@ def empty_map(r):
     r.check('banner: Dismiss hides the failed operation', r.js('() => document.getElementById("lab-state").textContent') == 'Stopped')
 
 
-def progress(r):
+def panel_open(r):
+    return r.js('() => !document.getElementById("save-panel").hidden')
+
+
+def open_chip_panel(r, wait='#save-panel-body *'):
+    """The chip's panel, opened the way a student opens it (the chip), unless a save already opened it by itself."""
+    if not panel_open(r):
+        r.page.click('#save-chip')
+    r.page.wait_for_selector('#save-panel:not([hidden]) ' + wait, timeout=15000)
+
+
+def close_chip_panel(r):
+    if panel_open(r):
+        r.page.keyboard.press('Escape')
+        r.page.wait_for_function('() => document.getElementById("save-panel").hidden', timeout=5000)
+
+
+def drawer_close(r):
+    r.page.click('#save-drawer-close')
+    r.page.wait_for_function('() => !document.getElementById("save-drawer").open', timeout=5000)
+
+
+def version_row(r, name):
+    """The row of All versions whose name is exactly `name` (a row opens in place when its name is pressed)."""
     p = r.page
-    p.click('#crumb-home')
-    p.wait_for_selector('#home:not([hidden])')
+    return p.locator('#save-drawer-content .save-list > li').filter(has=p.locator('button.save-item > span:first-child', has_text=re.compile('^' + re.escape(name) + '$'))).first
+
+
+def open_version_row(r, name):
+    row = version_row(r, name)
+    row.locator('button.save-item').click()
+    r.page.wait_for_function('(n) => [...document.querySelectorAll("#save-drawer-content .save-list > li.open")].some(li => li.querySelector("button.save-item > span:first-child")?.textContent.trim() === n)', arg=name, timeout=5000)
+    return row
+
+
+def save_and_load(r):
+    """Save and Load in the lab header. The Progress tab, its Save location card, Saved versions list, restore review and
+    save window are gone (docs/git-redesign); each claim the old `progress` step made is checked in its new home: the chip
+    panel (status, destination, last load), All versions, Save settings, the folder chooser, the Load confirmation."""
+    p = r.page
+    go_home(r)
     r.open_lab(SHOWCASE)
-    r.tab('progress')
-    p.wait_for_selector('#git-save-location', timeout=15000)
-    p.wait_for_function('() => document.querySelectorAll("#git-saved-versions .git-version-row").length > 0', timeout=15000)
-    info = r.js('''() => ({destination: document.getElementById('git-destination').textContent, status: document.getElementById('git-progress-status').textContent,
-      save: {text: document.getElementById('git-save-progress').textContent, disabled: document.getElementById('git-save-progress').disabled},
-      progressSave: {text: document.getElementById('progress-save').textContent, disabled: document.getElementById('progress-save').disabled, reasonHidden: document.getElementById('progress-save-reason').hidden},
-      groups: [...document.querySelectorAll('#git-saved-versions h3, #git-saved-versions summary')].map(h => h.textContent),
-      apply: document.querySelectorAll('#git-saved-versions [data-git-version-action="apply"]').length,
-      compare: document.querySelectorAll('#git-saved-versions [data-git-version-action="compare"]').length,
-      saves: [...document.querySelectorAll('#git-saves-list .git-saved-job > summary')].map(s => s.textContent.trim()),
-      locationHead: document.querySelector('#git-save-location h2')?.textContent, folderOpen: document.getElementById('git-change-folder')?.open,
-      advancedHidden: document.getElementById('git-repository-advanced').hidden, pushUrl: document.getElementById('git-advanced-push-url').textContent,
-      lastChange: document.getElementById('git-last-restore').hidden ? '' : document.getElementById('git-last-restore-text').textContent,
-      problemHidden: document.getElementById('git-problem').hidden, header: document.getElementById('lab-progress').textContent})''')
-    r.notes.append({'progress': info})
-    r.check('progress: destination in words', info['destination'].startswith('Saving to '), info['destination'])
-    r.check('progress: status is the student sentence', info['status'].startswith('Saved to Git'), info['status'])
-    r.check('progress: Save progress enabled on both buttons', info['save']['text'] == 'Save progress' and not info['save']['disabled'] and info['progressSave']['text'] == 'Save progress' and info['progressSave']['reasonHidden'], info)
-    r.check('progress: versions grouped for the student', all(any(g.startswith(k) for g in info['groups']) for k in ('Latest', 'Checkpoints', 'Baseline', 'Instructor and reference versions', 'Other labs in this repository')), info['groups'])
-    r.check('progress: other labs stay collapsed', r.js('() => { const d = [...document.querySelectorAll("#git-saved-versions details.git-version-group")]; return d.length === 1 && !d[0].open; }'))
-    r.check('progress: apply offered only where a restore artifact exists', info['apply'] >= 2, info['apply'])
-    r.check('progress: compare with my latest save on the other rows', info['compare'] >= 2, info['compare'])
-    r.check('progress: recent saves in student words', len(info['saves']) >= 2 and any('Progress saved to Git' in s for s in info['saves']), info['saves'])
-    r.check('progress: save location shows its folder browser for a connected lab', info['locationHead'] == 'Save location' and info['folderOpen'] is True, info)
-    r.check('progress: advanced details filled', (not info['advancedHidden']) and 'Verified push destination' in info['pushUrl'], info['pushUrl'])
-    r.check('progress: last configuration change is one click away', info['lastChange'].startswith('Last configuration change'), info['lastChange'])
-    r.check('progress: header line agrees', info['header'].startswith('Saved to Git'), info['header'])
-    r.shot('30-progress', full=True)
-    # Saved version dialogs: View (Apply available), Compare, and the restore review
-    p.locator('#git-saved-versions [data-git-version-action="view"]').first.click()
-    p.wait_for_selector('#git-version-dialog[open]')
-    r.check('version dialog: Saved version with Apply, Compare and Download', r.js('() => document.querySelector("#git-version-dialog h2").textContent === "Saved version" && !!document.getElementById("git-version-restore") && document.getElementById("git-version-compare").textContent === "Compare with my latest save" && document.getElementById("git-version-download").textContent === "Download (ZIP)"'))
-    r.shot('34-saved-version')
-    p.click('#git-version-dialog [data-op-close]')
-    p.locator('#git-saved-versions [data-git-version-action="compare"]').first.click()
-    p.wait_for_selector('#git-diff-dialog[open]')
-    r.check('compare dialog: named after the latest save, never the running devices', r.js('() => document.querySelector("#git-diff-dialog h2").textContent === "Compared with your latest save" && !/running configuration|compare with current/i.test(document.querySelector("#git-diff-dialog h2").textContent)'))
-    r.shot('35-compare')
-    p.click('#git-diff-dialog [data-op-close]')
-    p.locator('#git-saved-versions .git-version-group:has(h3:text-is("Instructor and reference versions")) [data-git-version-action="apply"]').first.click()
-    p.wait_for_selector('#restore-review-dialog[open]')
-    p.wait_for_function('() => !!document.getElementById("restore-run") || !!document.querySelector("#restore-review-dialog .form-error")?.textContent', timeout=30000)
-    review = r.js(r'''() => ({title: document.querySelector('#restore-review-dialog h2')?.textContent, legend: document.querySelector('#restore-review-dialog legend')?.textContent,
-       rows: [...document.querySelectorAll('#restore-review-dialog .restore-target')].map(l => l.textContent.trim().replace(/\s+/g, ' ').slice(0, 120)),
-       bullets: document.querySelectorAll('#restore-review-dialog .restore-safety li').length, ack: !!document.getElementById('restore-ack'), minutes: !!document.getElementById('restore-confirm-minutes'),
-       run: document.getElementById('restore-run')?.textContent, advanced: document.querySelector('#restore-review-dialog .restore-advanced summary')?.textContent, text: document.getElementById('restore-review-dialog').textContent})''')
-    r.check('restore review: title, Devices legend, three safety bullets, acknowledgement and undo minutes', review['title'] == 'Replace running configuration' and review['legend'] == 'Devices' and review['bullets'] == 3 and review['ack'] and review['minutes'] and review['run'] == 'Replace configurations' and review['advanced'] == 'Advanced options', review)
-    r.check('restore review: skipped devices explain why in student words', any('Skipped — The device did not answer over SSH.' in row for row in review['rows']), review['rows'][:3])
-    r.check('restore review: matching and differing devices are described', any('Already matches' in row for row in review['rows']) and any('differences from the running configuration' in row for row in review['rows']), review['rows'][:3])
-    r.check('restore review: no router wording', 'router' not in review['text'].lower(), '')
-    r.shot('36-restore-review')
-    p.click('#restore-review-dialog [data-op-close]')
-    # Last configuration change → the finished restore job
-    p.click('#git-last-restore-open')
+    r.check('header: the Progress tab and its view are gone, the chip and Load are in the lab header', r.js('() => !document.getElementById("tab-progress") && !document.getElementById("progress-view") && !document.getElementById("progress-save") && !!document.getElementById("save-chip") && !!document.getElementById("load-button")'))
+    p.wait_for_function('() => /^Saved /.test(document.getElementById("save-chip-text").textContent)', timeout=20000)
+    # ---- the chip panel at rest: status, destination, last load -------------------------------------------------------------
+    open_chip_panel(r, '#save-place')
+    info = r.js('''() => ({chip: document.getElementById('save-chip-text').textContent, title: document.getElementById('save-panel-title-text').textContent,
+      place: document.getElementById('save-place').textContent.replace(/\\s+/g, ' ').trim(), uploaded: document.getElementById('save-uploaded')?.textContent.trim(),
+      lastLoad: document.getElementById('save-last-load')?.textContent.replace(/\\s+/g, ' ').trim(), lastLoadButton: !!document.getElementById('save-load-details'),
+      save: {text: document.getElementById('git-save-progress').textContent, disabled: document.getElementById('git-save-progress').disabled, reasonHidden: document.getElementById('save-reason').hidden},
+      foot: [...document.querySelectorAll('#save-panel-body .save-foot button')].map(b => b.textContent.trim()), name: document.getElementById('save-name')?.value,
+      keep: !!document.getElementById('save-keep')})''')
+    r.notes.append({'save_panel': info})
+    r.check('save panel: destination in words', info['place'].startswith('Saves to: ') and 'labs/BGP/work' in info['place'], info['place'])
+    r.check('save panel: status is the student sentence', info['title'].startswith('Saved ') and (info['uploaded'] or '').startswith('Uploaded: yes, to github.com'), info)
+    r.check('save panel: Save is one enabled header button with no reason under it', info['save']['text'] == 'Save' and not info['save']['disabled'] and info['save']['reasonHidden'], info['save'])
+    r.check('save panel: the foot offers All versions, Save as a lab state… and Save settings', info['foot'] == ['All versions', 'Save as a lab state…', 'Save settings'], info['foot'])
+    r.check('save panel: the last load is one click away', (info['lastLoad'] or '').startswith('Last load:') and info['lastLoadButton'], info['lastLoad'])
+    r.check('save panel: the chip and the panel title agree', info['chip'].startswith('Saved ') and re.search(r'\d+', info['chip']) and re.search(r'\d+', info['chip']).group() == (re.search(r'\d+', info['title']) or re.search(r'$', '')).group(), (info['chip'], info['title']))
+    r.shot('30a-save-panel-rest')
+    # The last load, one click from the panel: its finished job (Details)
+    p.click('#save-load-details')
     p.wait_for_selector('#restore-job-dialog[open]')
-    r.check('restore job: result sentence and per-device outcomes', r.js('() => /Configuration replaced on \\d+ device/.test(document.getElementById("restore-job-detail").textContent) && document.querySelectorAll("#restore-job-dialog .restore-target-row").length >= 2'))
+    r.check('last load: result sentence and per-device outcomes', r.js('() => /Configuration replaced on \\d+ device/.test(document.getElementById("restore-job-detail").textContent) && document.querySelectorAll("#restore-job-dialog .restore-target-row").length >= 2'))
     r.shot('37-restore-job')
     p.click('#restore-job-dialog [data-op-close]')
-    # Recent saves row → Open → job window
-    p.locator('#git-saves-list .git-saved-job > summary').first.click()
-    p.locator('#git-saves-list [data-git-job-open]').first.click()
-    p.wait_for_selector('#git-job-dialog[open]')
+    # ---- All versions --------------------------------------------------------------------------------------------------------
+    open_chip_panel(r)
+    p.click('#save-all')
+    p.wait_for_selector('#save-drawer-content .save-list', timeout=20000)
+    p.wait_for_selector('#save-drawer-content .save-foot button', timeout=20000)
+    versions = r.js('''() => ({title: document.getElementById('save-drawer-title').textContent, groups: [...document.querySelectorAll('#save-drawer-content h3.save-heading')].map(h => h.textContent.trim().toLowerCase()),
+      folds: [...document.querySelectorAll('#save-drawer-content > details')].map(d => ({text: d.querySelector('summary').textContent.trim(), open: d.open})),
+      foot: [...document.querySelectorAll('#save-drawer-content .save-foot button')].map(b => b.textContent.trim())})''')
+    r.notes.append({'all_versions': versions})
+    r.check('all versions: versions grouped for the student', versions['title'] == 'All versions' and versions['groups'] == ['your saves', 'checkpoints', 'starting point', 'lab states'], versions)
+    r.check('all versions: other labs stay collapsed', any(f['text'].startswith('Other labs in this repository') and not f['open'] for f in versions['folds']), versions['folds'])
+    r.check('all versions: it ends with Full history… and Browse the repository…', versions['foot'] == ['Full history…', 'Browse the repository…'], versions['foot'])
+    # Every row opens in place with its actions; Load this state… only where a restore artifact exists. The saves and
+    # checkpoints are taken by position in their group (their names change with every run on the same fixture), the lab
+    # states by name.
+    loadable, differ, rows = 0, 0, {}
+    lists = p.locator('#save-drawer-content .save-list')
+    for label, row in (('your latest save', lists.nth(0).locator('> li').first), ('a checkpoint', lists.nth(1).locator('> li').first), ('the starting point', lists.nth(2).locator('> li').first),
+                       ('Solution', version_row(r, 'Solution')), ('Start', version_row(r, 'Start'))):
+        row.locator('button.save-item').click()
+        p.wait_for_function('() => document.querySelectorAll("#save-drawer-content .save-list > li.open").length === 1', timeout=5000)
+        rows[label] = [(b.inner_text(), b.is_disabled()) for b in row.locator('button[data-save-action]').all()]
+        loadable += sum(1 for text, disabled in rows[label] if text == 'Load this state…' and not disabled)
+        differ += sum(1 for text, _ in rows[label] if text == 'See what’s different')
+    r.check('all versions: Load this state… is offered only where a restore artifact exists', loadable >= 2 and ('Load this state…', True) in rows['Start'] and 'View only' in version_row(r, 'Start').inner_text(), rows)
+    r.check('all versions: See what’s different (against my latest save) on the other rows', differ >= 2, differ)
+    p.locator('#save-drawer-content > details:has(> summary:text-matches("^Save activity"))').locator('summary').click()
+    activity = r.js('() => [...document.querySelectorAll("#save-drawer-content > details")].filter(d => /^Save activity/.test(d.querySelector("summary").textContent)).map(d => d.innerText)[0] || ""')
+    r.check('all versions: save activity in student words', any(w in activity for w in ('Repository updated', 'Starting point set', "Checkpoint 'ospf-done' saved")) and 'Progress saved to Git' not in activity, activity)
+    solution = open_version_row(r, 'Solution')
+    r.check('version row: Load this state…, See what’s different, View files and Download ZIP', solution.locator('button[data-save-action]').all_inner_texts() == ['Load this state…', 'See what’s different', 'View files', 'Download ZIP'], solution.inner_text())
+    r.shot('34-all-versions')
+    solution.locator('[data-save-action="files"]').click()
+    p.wait_for_function('() => document.getElementById("save-drawer-title").textContent === "View files" && /Topology file/.test(document.getElementById("save-drawer-content").textContent)', timeout=15000)
+    r.check('view files: the devices, the topology file and the map, with Back', r.js('() => !document.getElementById("save-drawer-back").hidden && /Map/.test(document.getElementById("save-drawer-content").textContent) && /\\.cfg/.test(document.getElementById("save-drawer-content").textContent)'))
+    p.click('#save-drawer-back')
+    p.wait_for_selector('#save-drawer-content .save-list', timeout=20000)
+    solution = open_version_row(r, 'Solution')
+    solution.locator('[data-save-action="different"]').click()
+    p.wait_for_function('() => document.getElementById("save-drawer-title").textContent === "Different from your latest save"', timeout=15000)
+    r.check('see what’s different: named after the latest save, never the running devices', r.js('() => !/running configuration|compare with current/i.test(document.getElementById("save-drawer-title").textContent) && !document.getElementById("save-drawer-back").hidden'))
+    r.shot('35-compare')
+    p.click('#save-drawer-back')
+    p.wait_for_selector('#save-drawer-content .save-list', timeout=20000)
+    # ---- Load: the confirmation with its device list -------------------------------------------------------------------------
+    solution = open_version_row(r, 'Solution')
+    solution.locator('[data-save-action="load"]').click()
+    p.wait_for_selector('#load-run', timeout=30000)
+    review = r.js(r'''() => ({headline: document.querySelector('#load-panel-body .save-state')?.textContent, text: document.getElementById('load-panel-body').innerText,
+       rows: [...document.querySelectorAll('#load-panel-body ul.save-devices > li')].map(li => li.innerText.trim().replace(/\s+/g, ' ')),
+       boxes: [...document.querySelectorAll('#load-panel-body input[type=checkbox]')].map(b => b.name), run: document.getElementById('load-run')?.textContent,
+       buttons: [...document.querySelectorAll('#load-panel-body .save-row:last-child button')].map(b => b.textContent.trim()), options: document.querySelector('#load-panel-body details summary')?.textContent, minutes: !!document.getElementById('load-minutes'),
+       drawerClosed: !document.getElementById('save-drawer').open})''')
+    r.notes.append({'load_confirmation': review})
+    r.check('load confirmation: headline, device tick boxes, no acknowledgement to tick, undo minutes under Options', review['headline'] == 'Load Solution?' and review['drawerClosed'] and review['boxes'] and set(review['boxes']) == {'load-node'} and review['run'] == 'Load' and review['buttons'][:2] == ['Load', 'Cancel'] and review['options'] == 'Options' and review['minutes'], review)
+    r.check('load confirmation: skipped devices explain why in student words', any('The device did not answer over SSH.' in row and 'Not reachable' in row for row in review['rows']), review['rows'][:3])
+    r.check('load confirmation: matching and differing devices are described', any('Already matches' in row for row in review['rows']) and any(re.search(r'\d+ lines? differs?', row) for row in review['rows']), review['rows'][:3])
+    r.check('load confirmation: the running configuration is replaced only after the safety backup, in one sentence', 'The running configuration of the ticked devices is replaced. The current one is backed up first; nothing reboots.' in review['text'], review['text'][:200])
+    r.check('load confirmation: no router wording', 'router' not in review['text'].lower(), '')
+    r.shot('36-load-confirmation')
+    p.click('#load-cancel')
+    close_chip_panel(r)
+    if r.js('() => !document.getElementById("load-panel").hidden'):
+        p.keyboard.press('Escape')
+    # ---- Save settings: the devices of every save, Git details, Change folder… --------------------------------------------------
+    open_chip_panel(r)
+    p.click('#save-settings')
+    p.wait_for_selector('#save-drawer-content .save-settings', timeout=20000)
+    p.wait_for_selector('#save-drawer-content input[name="git-node"]', timeout=20000)
+    p.locator('#save-git-details > summary').click()
+    settings = r.js('''() => ({title: document.getElementById('save-drawer-title').textContent, text: document.getElementById('save-drawer-content').innerText,
+      ticks: document.querySelectorAll('#save-drawer-content input[name="git-node"]').length, push: document.getElementById('git-advanced-push-url')?.textContent || ''})''')
+    r.notes.append({'save_settings': {k: v for k, v in settings.items() if k != 'text'}})
+    r.check('save settings: the save location with Change folder…, Use a different repository…, Connect by URL…, Disconnect this lab…', settings['title'] == 'Save settings' and all(w in settings['text'] for w in ('Change folder…', 'Use a different repository…', 'Connect by URL…', 'Disconnect this lab…')), settings['text'][:200])
+    r.check('save settings: the devices of every save are real tick boxes', settings['ticks'] >= 1, settings['ticks'])
+    r.check('save settings: Git details filled', 'Verified push destination' in settings['push'], settings['push'])
+    r.shot('31a-save-settings')
+    # Change folder… opens the chooser with the way down to the lab's folder open and Save here, Back returns to the settings
+    p.locator('#save-drawer-content [data-save-action="folder"]').click()
+    p.wait_for_selector('#folder-tree', timeout=20000)
+    p.wait_for_selector('#folder-tree [data-folder="labs/BGP/work"]', timeout=20000)
+    chooser = r.js('''() => ({title: document.getElementById('save-drawer-title').textContent, label: document.getElementById('folder-tree').getAttribute('aria-label'), back: !document.getElementById('save-drawer-back').hidden,
+      foot: [...document.querySelectorAll('#folder-foot button')].map(b => b.textContent.trim()), mine: document.querySelector('#folder-tree [data-folder="labs/BGP/work"]')?.textContent.includes('This lab saves here'),
+      newFolder: !!document.querySelector('.folder-chooser [data-folder-action="new"]'), note: document.getElementById('folder-answer')?.textContent.trim()})''')
+    r.check('folder chooser: opens on the lab’s own folder (This lab saves here, Keep saving here) with New folder…, Back returns to the settings', chooser['title'] == 'Where should %s save?' % SHOWCASE and chooser['label'] == 'Folders of Course-Labs' and chooser['back'] and chooser['mine'] and chooser['foot'] == ['Cancel', 'Keep saving here'] and chooser['newFolder'], chooser)
+    r.shot('31-folder-chooser')
+    p.click('#save-drawer-back')
+    p.wait_for_selector('#save-drawer-content .save-settings', timeout=20000)
+    drawer_close(r)
+    # ---- Save: no label to type; the save ends in the waiting panel, whose review comes before any upload ------------------------
+    # (Since the redesign Save names the save itself and the name can be changed afterwards; the review before every upload stays.)
+    r.check('save: there is no "What changed?" label dialog any more', r.js('() => !document.getElementById("git-label-dialog")'))
+    p.click('#git-save-progress')
+    p.wait_for_function('() => document.getElementById("save-chip-text").textContent === "Saving…"', timeout=10000)
+    r.check('save: the chip reads Saving… and Save waits', r.js('() => document.getElementById("git-save-progress").disabled'))
+    r.check('save: no job window for a plain save', r.js('() => !document.getElementById("git-job-dialog")?.open'))
+    p.wait_for_function('() => /^\\d+ saves? to upload$/.test(document.getElementById("save-chip-text").textContent)', timeout=90000)
+    p.wait_for_function('() => !document.getElementById("save-panel").hidden && document.getElementById("save-panel-title-text").textContent === "Not uploaded yet" && !document.getElementById("save-upload").disabled', timeout=30000)
+    waiting = r.js('''() => ({title: document.getElementById('save-panel-title-text').textContent, sentence: document.getElementById('save-changes').textContent, to: document.getElementById('save-to').textContent,
+      buttons: [...document.querySelectorAll('#save-panel-body .save-row button')].map(b => b.textContent.trim()), status: document.getElementById('save-panel-body').innerText})''')
+    r.notes.append({'waiting': {k: v for k, v in waiting.items() if k != 'status'}})
+    r.check('save: the review opens before anything is uploaded, the panel says so and offers Upload, Not now, See changes and Details', waiting['title'] == 'Not uploaded yet' and waiting['buttons'] == ['Upload', 'Not now', 'See changes', 'Details'] and 'Uploaded: yes' not in waiting['status'], waiting)
+    r.check('save: the sentence names the devices changed and where the upload goes', re.search(r'\d+ devices? changed since your last save', waiting['sentence']) and waiting['to'].startswith('To: Course-Labs'), waiting)
+    r.shot('30-save-panel')
+    # Details: the save window with the raw status under Details
+    p.click('#save-details')
+    p.wait_for_selector('#git-job-dialog[open]', timeout=15000)
     try:
-        p.wait_for_function('() => ["Progress saved", "Save needs attention", "Repository update", "Save failed"].includes(document.querySelector("#git-job-dialog h2").textContent) && !!document.querySelector("#git-job-detail details")', timeout=15000)
+        p.wait_for_function('() => ["Saved", "Save needs attention", "Repository update", "Save failed"].includes(document.querySelector("#git-job-dialog h2").textContent) && !!document.querySelector("#git-job-detail details")', timeout=15000)
         r.check('save window: student title and Details with the raw status', True)
     except Exception as exc:
         r.check('save window: student title and Details with the raw status', False, repr(exc))
     p.click('#git-job-dialog [data-op-close]')
-    # Create checkpoint dialog: sanitised name with live preview
-    p.click('#progress-view [data-git-action="checkpoint"]')
-    p.wait_for_selector('#git-save-options[open]')
-    p.fill('#git-checkpoint-name', 'ospf done!')
-    r.check('checkpoint dialog: name sanitised live', r.js('() => document.getElementById("git-checkpoint-name").value === "ospf-done" && document.getElementById("git-checkpoint-preview").textContent === "Saved as: ospf-done"'))
-    r.shot('38-checkpoint')
-    p.click('#git-save-cancel')
-    # Change folder… is unfolded when Save location is entered: the browser is inside the form
-    r.check('save location: Change folder is open on entry', r.js('() => document.getElementById("git-change-folder").open'))
-    p.wait_for_selector('#git-places-panel .git-places-head', timeout=15000)
-    places = r.js('() => ({use: document.querySelector("[data-git-places-action=use]")?.textContent, crumbs: [...document.querySelectorAll(".git-crumbs button")].map(b => b.textContent), select: document.getElementById("git-binding-id")?.value, heading: document.querySelector("#git-change-folder h3")?.textContent})')
-    r.check('save location: folder browser with Save this lab here and the heading', places['use'] == 'Save this lab here' and places['heading'] == 'Folders in this repository', places)
-    r.shot('31-save-location', full=True)
-    # Save progress (quiet): every plain save opens the mandatory "What changed?" label dialog first
-    # (since 1.30.37); fill and confirm it the way docs/ui-ux-cleanup/tools/live_1_30_37_b.py does,
-    # then the header carries the phases.
-    p.click('#git-save-progress')
-    p.wait_for_selector('#git-label-dialog[open]', timeout=10000)
-    r.check('save: the "What changed?" label dialog appears before every plain save', r.js('() => document.querySelector("#git-label-dialog h2")?.textContent') == 'What changed?')
-    p.fill('#git-label-input', 'verify_after regression pass')
-    p.click('#git-label-confirm')
-    p.wait_for_selector('#git-label-dialog[open]', state='detached', timeout=10000)
-    p.wait_for_function('() => document.getElementById("git-save-progress").textContent === "Saving…"', timeout=10000)
-    r.check('save: header button reads Saving…', True)
-    r.check('save: no job window for a plain save', r.js('() => !document.getElementById("git-job-dialog")?.open'))
-    # The review before an upload is mandatory: the save stops on the VM, the review opens by itself and
-    # only its button uploads.
-    p.wait_for_selector('#git-diff-dialog[open] #git-review-push', timeout=60000)
-    r.check('save: the review opens before anything is uploaded', r.js('() => document.querySelector("#git-diff-dialog h2").textContent') == 'Review before uploading' and r.js('() => document.getElementById("git-progress-status").textContent.startsWith("Saved on this VM")'), r.js('() => document.getElementById("git-progress-status").textContent'))
-    r.shot('39-review-before-upload')
-    p.click('#git-review-push')
-    p.wait_for_function('() => document.getElementById("git-progress-status").textContent.startsWith("Saved to Git")', timeout=60000)
-    r.check('save: uploaded after the review and the status card agrees', True)
+    # See changes: the drawer with Upload and Not now at the top; Upload uploads and the panel agrees
+    open_chip_panel(r, '#save-see')
+    p.click('#save-see')
+    p.wait_for_selector('#save-drawer-content .diff-file', timeout=20000)
+    r.check('see changes: What changed, with Upload and Not now at the top', r.js('() => document.getElementById("save-drawer-title").textContent') == 'What changed' and r.js('() => !!document.querySelector("#save-drawer-actions [data-save-action=upload]:not(:disabled)") && !!document.querySelector("#save-drawer-actions [data-save-action=not-now]")'))
+    p.click('#save-drawer-actions [data-save-action="upload"]')
+    p.wait_for_function('() => /^Saved /.test(document.getElementById("save-chip-text").textContent) && !document.getElementById("save-drawer").open', timeout=60000)
+    open_chip_panel(r, '#save-uploaded')
+    r.check('save: uploaded after the review and the panel agrees', r.js('() => document.getElementById("save-uploaded").textContent.trim().startsWith("Uploaded: yes, to github.com")'), r.js('() => document.getElementById("save-panel-body").innerText'))
     if r.js('() => !!document.getElementById("git-job-dialog")?.open'):
         p.keyboard.press('Escape')
-    # An unbound lab: the header button leads to the first-save dialog
-    p.click('#crumb-home')
-    p.wait_for_selector('#home:not([hidden])')
+    # Keep as a checkpoint: the name is sanitised live with a preview (All versions, on the save just made)
+    p.click('#save-all')
+    p.wait_for_selector('#save-drawer-content .save-list', timeout=20000)
+    first = p.locator('#save-drawer-content .save-list').first.locator('> li').first
+    first.locator('button.save-item').click()
+    first.locator('[data-save-action="checkpoint"]').click()
+    p.wait_for_selector('#save-checkpoint-name', timeout=5000)
+    p.fill('#save-checkpoint-name', 'ospf done!')
+    r.check('checkpoint: name sanitised live', r.js('() => document.getElementById("save-checkpoint-name").value === "ospf-done" && /Saved as: ospf-done/.test(document.getElementById("save-drawer-content").textContent)'))
+    r.shot('38-checkpoint')
+    p.locator('#save-drawer-content [data-save-action="checkpoint-cancel"]').click()
+    drawer_close(r)
+    # ---- A lab without a save location: Save opens the first-save view; Choose another place opens the chooser ---------------------
+    go_home(r)
     r.open_lab(EMPTY_MAP_LAB)
-    r.tab('progress')
-    p.wait_for_selector('#git-save-location', timeout=15000)
-    first = r.js('() => ({button: document.getElementById("git-save-progress").textContent, disabled: document.getElementById("git-save-progress").disabled, destination: document.getElementById("git-destination").textContent, head: document.querySelector("#git-save-location h2")?.textContent, folderOpen: document.getElementById("git-change-folder")?.open, versions: document.getElementById("git-saved-versions").textContent, menuHidden: document.getElementById("git-save-menu").hidden})')
-    r.check('unbound lab: Connect a save location… enabled, browser open, empty states', first['button'] == 'Connect a save location…' and not first['disabled'] and first['head'] == 'Choose a save location' and first['folderOpen'] is True and 'Choose a save location first' in first['versions'] and first['menuHidden'], first)
-    r.shot('39-progress-unbound', full=True)
+    p.wait_for_function('() => document.getElementById("save-chip-text").textContent === "Not saved yet"', timeout=20000)
     p.click('#git-save-progress')
-    p.wait_for_selector('#git-first-save-dialog[open]', timeout=15000)
-    r.check('first save: dialog asks where to save with repository, folder, devices and consent', r.js('() => document.querySelector("#git-first-save-dialog h2").textContent.startsWith("Where should") && !!document.getElementById("git-first-repo") && !!document.getElementById("git-first-folder") && !!document.getElementById("git-first-ack") && document.getElementById("git-first-confirm").textContent === "Save progress"'))
-    r.shot('32-first-save')
-    p.click('#git-first-cancel')
-
+    p.wait_for_selector('#save-first', timeout=15000)
+    first = r.js('''() => ({save: document.getElementById('save-first').textContent, saveDisabled: document.getElementById('save-first').disabled, headerDisabled: document.getElementById('git-save-progress').disabled,
+      title: document.getElementById('save-panel-title-text').textContent, place: document.getElementById('save-first-place').textContent, other: document.getElementById('save-first-place-other')?.textContent,
+      url: document.getElementById('save-first-url')?.textContent, text: document.getElementById('save-panel-body').innerText})''')
+    r.notes.append({'first_save': {k: v for k, v in first.items() if k != 'text'}})
+    r.check('unbound lab: Save is enabled and opens the first-save view with the place, Choose another place and Connect by URL…', first['title'] == 'Not saved yet' and not first['headerDisabled'] and not first['saveDisabled'] and first['save'] == 'Save' and first['place'].startswith('Your first save goes to ') and first['other'] == 'Choose another place' and first['url'] == 'Connect by URL…', first)
+    r.check('first save: the sentence names the repository and the folder, and the consent sentence is there', 'in a folder named %s' % EMPTY_MAP_LAB in first['place'] and 'Saved files can contain passwords or keys.' in first['text'], first['text'])
+    r.shot('39-save-first')
+    p.click('#save-first-place-other')
+    p.wait_for_selector('#folder-tree', timeout=20000)
+    r.check('first save: Choose another place opens the chooser with where uploads go, the folder to type or pick and Save here', r.js('() => document.getElementById("save-drawer-title").textContent') == 'Where should %s save?' % EMPTY_MAP_LAB and r.js('() => !!document.getElementById("folder-uploads") && !!document.getElementById("folder-path") && [...document.querySelectorAll("#folder-foot button")].some(b => b.textContent.trim() === "Save here")'))
+    r.shot('32-first-save-chooser')
+    drawer_close(r)
 
 
 def go_home(r):
@@ -505,7 +603,7 @@ def run_viewport(browser, vw, vh):
     ctx = browser.new_context(viewport={'width': vw, 'height': vh}, device_scale_factor=1)
     page = ctx.new_page()
     r = Run(page, f'{vw}x{vh}')
-    for step in (home, topology, empty_map, progress, tools, operations, advanced, polling, pages):
+    for step in (home, topology, empty_map, save_and_load, tools, operations, advanced, polling, pages):
         try:
             step(r)
         except Exception as exc:  # keep going: the report shows every failure

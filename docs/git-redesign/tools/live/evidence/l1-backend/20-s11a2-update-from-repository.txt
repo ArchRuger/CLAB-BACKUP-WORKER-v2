@@ -1,0 +1,58 @@
+job 1d2d1127 (the first waiting save of 11b) now: {"message": "Saved commit is included in the verified remote history.", "pushed": true, "status": "synced"}
+
+SCENARIO 11a (clean case): the online copy has a new commit, NOTHING waits on the VM; then Update from the repository
+git_status {'checked': '2026-10-04T16:03:02.704223+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+  [VM checkout before]
+      2118da3 l1 s11b later save
+      e58ca07 l1 s11b save after the owner merge
+      6342a98 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      923ee6e l1 s11b saved while diverged
+      ## main...origin/main [ahead 1]
+gh api PUT l1-online/online-2.txt -> 0 6e4cacba7813
+--- what does the manager know? (no call yet) {'checked': '2026-10-04T16:03:02.704223+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+GET /git repository_status ready/problem: True ''
+git_status: {'checked': '2026-10-04T16:03:17.446443+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+--- POST /update
+[16:03:19] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/update {}
+    -> HTTP 200 (2.4s) {"head": "6e4cacba7813a830b5407cefcbd7c008d834adf7", "message": "Updated from remote using fast-forward only.", "status": "updated"}
+  [VM checkout after update]
+      6e4cacb L1 online change 2 (outside the lab folders)
+      2118da3 l1 s11b later save
+      e58ca07 l1 s11b save after the owner merge
+      6342a98 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      ## main...origin/main [ahead 2]
+git_status: {'checked': '2026-10-04T16:03:19.883106+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+VM has the online file: (0, 'online-1.txt\nonline-2.txt')
+--- save afterwards (device change)
+[16:03:20] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/save {"note": "", "push": true, "request_id": "e2c87db9b2d24f329dce7274d3f40c9c", "target": "latest"}
+    -> HTTP 200 (0.0s) {"id": "e2c87db9b2d24f329dce7274d3f40c9c", "message": "Save queued.", "status": "queued"}
+[16:03:20]    job e2c87db9 status=capturing message='Capturing the configured devices.'
+[16:03:24]    job e2c87db9 status=exporting message='Saving captured configurations to the VM repository.'
+[16:03:26]    job e2c87db9 status=review_pending message='Saved in the VM repository; not pushed.'
+    job: {"commit": "44ba875480acdb81a74aba3b2e4d8cbdb03a3f4e", "message": "Saved in the VM repository; not pushed.", "note": "ceos1 changed", "note_auto": true, "pushed": false, "status": "review_pending"}
+[16:03:27] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id": "e2c87db9.."} -> HTTP 200
+     file {"node": "ceos1", "path": "git-redesign/latest/ceos1.cfg", "role": "device", "status": "changed"}
+     file {"node": "ceos1", "path": "git-redesign/latest/ceos1.eoscfg", "role": "restore", "status": "changed"}
+     file {"node": "", "path": "git-redesign/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 1, "devices": ["ceos1"], "first": false, "map": false, "removed": 1, "removed_devices": [], "topology": false}
+     head 44ba875480acdb81a74aba3b2e4d8cbdb03a3f4e upload_job e2c87db9b2d24f329dce7274d3f40c9c
+     also_sends [] count 0 other_labs 0
+[16:03:27] POST /api/git/jobs/e2c87db9b2d24f329dce7274d3f40c9c/retry {"head": "44ba875480acdb81a74aba3b2e4d8cbdb03a3f4e", "push": true, "reviewed": true}
+    -> HTTP 200 (0.3s) {"id": "e2c87db9b2d24f329dce7274d3f40c9c", "message": "Upload queued; the saved commit will be reused.", "status": "queued"}
+[16:03:27]    job e2c87db9 status=pushing message='Pushing the saved commit.'
+[16:03:31]    job e2c87db9 status=synced message='Saved to Git.'
+upload: {"message": "Saved to Git.", "pushed": true, "status": "synced"}
+  [GitHub after]
+      44ba875480 ceos1 changed
+      6e4cacba78 L1 online change 2 (outside the lab folders)
+      2118da3aca l1 s11b later save
+      e58ca07caa l1 s11b save after the owner merge
+  [VM checkout after]
+      44ba875 ceos1 changed
+      6e4cacb L1 online change 2 (outside the lab folders)
+      2118da3 l1 s11b later save
+      e58ca07 l1 s11b save after the owner merge
+      ## main...origin/main [ahead 3]
+--- update when already up to date and nothing waits:
+[16:03:33] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/update {}
+    -> HTTP 200 (1.6s) {"head": "44ba875480acdb81a74aba3b2e4d8cbdb03a3f4e", "message": "Updated from remote using fast-forward only.", "status": "updated"}

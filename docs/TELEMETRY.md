@@ -5,7 +5,7 @@ service, the in-memory session store and the Prometheus metrics endpoint `/api/t
 and the Grafana dashboards with the generated lab maps are removed from the manager, as of 1.30.39.
 The Tools › Telemetry card, *Telemetry settings…*, `/static/grafana.html`, and the health check's
 "Network telemetry" and "Grafana telemetry dashboards" rows are gone with it. Browser Wireshark,
-readiness, terminals, backups, *Save progress* and *Apply to running lab* are unaffected.
+readiness, terminals, backups, **Save** and **Load** are unaffected.
 
 Upgrading an installation that had the stack runs `deploy/retire-telemetry.sh --no-recreate`
 before the manager is rebuilt (`start-manager.sh`, and therefore `install.sh`, calls it

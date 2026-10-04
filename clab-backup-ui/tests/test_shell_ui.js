@@ -25,7 +25,7 @@ function dom(){
    focus(){doc.activeElement=this;},click(){this.dispatch('click');},dispatchEvent(e){return this.dispatch(e.type,e);},
    append(...nodes){for(const c of nodes){c.parentElement=this;this.children.push(c);}},
    dispatch(type,init={}){
-    const event={type,target:this,key:init.key,detail:init.detail,stopped:false,prevented:false,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},stopImmediatePropagation(){this.stopped=true;}};
+    const event={type,target:this,key:init.key,detail:init.detail,relatedTarget:init.relatedTarget||null,stopped:false,prevented:false,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},stopImmediatePropagation(){this.stopped=true;}};
     const chain=[];for(let n=this;n;n=n.parentElement)chain.unshift(n);
     const run=(target,capture)=>{for(const l of (target.listeners[type]||[]))if(l.capture===capture&&!event.stopped)l.fn.call(target,event);};
     run(doc,true);for(const n of chain.slice(0,-1)){if(event.stopped)break;run(n,true);}
@@ -49,7 +49,16 @@ function harness({hash='',session={},local={},throwStorage=false,labs=[{id:'a',n
  const labList=el('div',{id:'lab-actions-menu',class:'menu-list'},[item('lab-start',{},'Start lab'),item('menu-destroy',{},'Destroy lab…'),item('lab-actions-advanced-toggle',{'data-menu-group':'lab-actions-advanced','aria-expanded':'false'},'Advanced options'),el('div',{id:'lab-actions-advanced','data-menu-panel':'',role:'group',hidden:true},[item('menu-import-map',{},'Import map…'),item('menu-map-edit',{disabled:true},'Edit map'),item('menu-telemetry-retired',{hidden:true},'Retired telemetry configuration…'),item('menu-operation-history',{},'Operation history…')])]);
  const labButton=el('button',{id:'lab-actions-button',class:'button secondary menu-button','aria-expanded':'false',text:'Lab actions'});
  const labActions=el('span',{class:'menu'},[labButton,labList]);
- const gitSummary=el('summary',{text:'▾'});const gitSave=el('details',{id:'git-save-menu',class:'git-save-menu'},[gitSummary,el('div',{class:'git-save-options'},[item('',{'data-git-action':'checkpoint'},'Create checkpoint…')])]);
+ // The header's save control (index.html): the chip and its panel, Save, the Load button and its panel.
+ const saveTitle=el('h2',{id:'save-panel-title',tabindex:'-1','data-panel-focus':''}),saveInside=el('button',{id:'save-inside',text:'Upload'});
+ const savePanel=el('div',{id:'save-panel',class:'save-panel','data-panel':'',role:'dialog'},[saveTitle,el('div',{id:'save-panel-body'},[saveInside])]);
+ const saveChip=el('button',{id:'save-chip',class:'button secondary panel-button save-chip','aria-expanded':'false','aria-haspopup':'dialog',text:'Not saved yet'});
+ const saveButton=el('button',{id:'git-save-progress',class:'button primary',text:'Save'});
+ const loadPanel=el('div',{id:'load-panel',class:'save-panel wide','data-panel':'',role:'dialog'},[el('div',{id:'load-panel-body'})]);
+ const loadButton=el('button',{id:'load-button',class:'button secondary panel-button','aria-expanded':'false','aria-haspopup':'dialog',text:'Load'});
+ const saveControl=el('div',{id:'save-control',class:'save-control'},[el('span',{class:'save-pair'},[el('span',{class:'menu'},[saveChip,savePanel]),saveButton]),el('span',{class:'menu'},[loadButton,loadPanel])]);
+ const saveDrawer=el('dialog',{id:'save-drawer','data-lab-dialog':''});saveDrawer.close=function(){this.open=false;};
+ const panelEvents=[];for(const panel of [savePanel,loadPanel])for(const name of ['panelopen','panelclose'])panel.addEventListener(name,e=>panelEvents.push(panel.id+':'+e.type));
  const switcherSummary=el('summary',{text:'Switch lab'});const switcher=el('details',{id:'lab-switcher',class:'lab-switcher'},[switcherSummary,el('nav',{id:'labs'})]);
  const dialog=el('dialog',{id:'details-dialog'});dialog.close=function(){this.open=false;this.dispatch('close');};
  const nodeMenu=el('div',{id:'node-context-menu',hidden:true});
@@ -57,7 +66,7 @@ function harness({hash='',session={},local={},throwStorage=false,labs=[{id:'a',n
  const skeleton=el('div',{id:'home-skeleton',hidden:true});
  const navHome=el('a',{id:'nav-home',href:'/'});const crumbHome=el('button',{id:'crumb-home'});
  const outside=el('main',{id:'outside'});
- doc.body.append(navHome,crumbHome,switcher,manager,labActions,gitSave,dialog,nodeMenu,banner,skeleton,outside);
+ doc.body.append(navHome,crumbHome,switcher,manager,saveControl,labActions,dialog,saveDrawer,nodeMenu,banner,skeleton,outside);
  const storage=map=>{const m=new Map(Object.entries(map));return throwStorage?{getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');},removeItem(){throw new Error('blocked');}}:{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),map:m};};
  const history=[],location={hash,pathname:'/',search:''};
  const setUrl=url=>{location.hash=url.includes('#')?url.slice(url.indexOf('#')):'';};
@@ -67,7 +76,7 @@ function harness({hash='',session={},local={},throwStorage=false,labs=[{id:'a',n
   selectLab(id,view='topology'){calls.selectLab.push([id,view]);context.activeId=id;context.tab=view;},showTab(view){calls.showTab.push(view);context.tab=view;},openDetails(name){calls.openDetails.push(name);context.detailName=name;dialog.open=true;},render(){calls.render++;},renderLabBanner(){calls.renderLabBanner++;},notify(m){calls.notify.push(m);}});
  context.window=context;context.timers=[];context.windowListeners={};context.addEventListener=(name,fn)=>{context.windowListeners[name]=fn;};
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/shell.js'),'utf8'),context);
- return {context,doc,el,history,location,calls,managerButton,managerList,labButton,labList,gitSave,gitSummary,switcher,dialog,nodeMenu,outside,skeleton};
+ return {context,doc,el,history,location,calls,managerButton,managerList,labButton,labList,saveChip,savePanel,saveTitle,saveInside,saveButton,loadButton,loadPanel,saveDrawer,panelEvents,switcher,switcherSummary,dialog,nodeMenu,outside,skeleton};
 }
 
 test('route precedence: the hash wins, sessionStorage is consumed once, unknown ids fall back to Home',()=>{
@@ -165,8 +174,11 @@ test('closeMenus returns true only when it closed something and keeps the except
  h.managerButton.dispatch('click');
  assert.equal(h.context.closeMenus(h.managerButton),false,'the menu containing the exception stays open');assert.equal(h.managerList.hidden,false);
  assert.equal(h.context.closeMenus(),true);assert.equal(h.managerList.hidden,true);assert.equal(h.context.closeMenus(),false);
- h.gitSave.open=true;h.switcher.open=true;
- assert.equal(h.context.closeMenus(),true);assert.equal(h.gitSave.open,false);assert.equal(h.switcher.open,false);
+ h.saveChip.dispatch('click');h.switcher.open=true;
+ assert.equal(h.context.closeMenus(),true);assert.equal(h.savePanel.hidden,true,'a header panel is closed like a menu');assert.equal(h.switcher.open,false);
+ h.loadButton.dispatch('click');
+ assert.equal(h.context.closeMenus(h.loadPanel),false,'the panel containing the exception stays open');assert.equal(h.loadPanel.hidden,false);
+ assert.equal(h.context.closeMenus(),true);assert.equal(h.loadPanel.hidden,true);
 });
 
 test('outside pointerdown closes menus; Escape at the document closes them and stops propagation unless the node menu is open',()=>{
@@ -177,8 +189,109 @@ test('outside pointerdown closes menus; Escape at the document closes them and s
  const idle=h.outside.dispatch('keydown',{key:'Escape'});assert.equal(idle.stopped,false,'nothing to close: the map handler may run');
  h.managerButton.dispatch('click');h.nodeMenu.hidden=false;const deferred=h.outside.dispatch('keydown',{key:'Escape'});
  assert.equal(h.managerList.hidden,false);assert.equal(deferred.stopped,false,'the node context menu is handled by topology.js first');
- h.nodeMenu.hidden=true;h.gitSave.open=true;const summary=h.gitSummary.dispatch('keydown',{key:'Escape'});
- assert.equal(h.gitSave.open,false);assert.equal(h.doc.activeElement,h.gitSummary);assert.equal(summary.stopped,true);
+ h.nodeMenu.hidden=true;h.context.closeMenus();h.switcher.open=true;const summary=h.switcherSummary.dispatch('keydown',{key:'Escape'});
+ assert.equal(h.switcher.open,false);assert.equal(h.doc.activeElement,h.switcherSummary,'a <details> menu gives focus back to its summary');assert.equal(summary.stopped,true);
+ // The save control that used to be a <details> split menu is a panel now: Escape inside it closes it and returns focus to its opener.
+ h.saveChip.dispatch('click');const inside=h.saveInside.dispatch('keydown',{key:'Escape'});
+ assert.equal(h.savePanel.hidden,true);assert.equal(h.doc.activeElement,h.saveChip);assert.equal(inside.stopped,true);
+});
+
+// Panels (initPanel): the chip panel and the Load panel of the lab header.
+test('initPanel: the opener toggles its panel, aria-expanded follows, opening moves focus to the [data-panel-focus] element and a panel without one takes the focus itself',()=>{
+ const h=harness();
+ assert.equal(h.savePanel.hidden,true);assert.equal(h.loadPanel.hidden,true);assert.equal(h.saveChip.getAttribute('aria-expanded'),'false');
+ assert.equal(h.savePanel.getAttribute('role'),'dialog','a panel is a dialog, never given the menu role');assert.equal(h.saveChip.getAttribute('aria-haspopup'),'dialog');
+ h.saveChip.dispatch('click');
+ assert.equal(h.savePanel.hidden,false);assert.equal(h.saveChip.getAttribute('aria-expanded'),'true');assert.equal(h.doc.activeElement,h.saveTitle);
+ h.saveChip.dispatch('click');
+ assert.equal(h.savePanel.hidden,true);assert.equal(h.saveChip.getAttribute('aria-expanded'),'false');
+ h.loadButton.dispatch('click');assert.equal(h.doc.activeElement,h.loadPanel,'no marked element: the panel itself');
+ assert.equal(h.context.initPanel(h.saveChip),null,'a second wiring of the same opener is refused');
+ assert.equal(h.context.initPanel(h.saveButton),null,'a button without a [data-panel] beside it is not an opener');
+});
+
+test('initPanel: Escape inside the panel closes it and returns focus to the opener; Escape with focus elsewhere closes it and leaves focus alone',()=>{
+ const h=harness();
+ h.saveChip.dispatch('click');h.saveInside.focus();
+ const inside=h.saveInside.dispatch('keydown',{key:'Escape'});
+ assert.equal(h.savePanel.hidden,true);assert.equal(h.doc.activeElement,h.saveChip);assert.equal(inside.prevented,true);assert.equal(inside.stopped,true,'the map handler never sees it');
+ // Opened by the page (focus: false): focus stays where the person was.
+ h.outside.focus();assert.equal(h.saveChip._menuOpen({focus:false}),true);
+ assert.equal(h.savePanel.hidden,false);assert.equal(h.doc.activeElement,h.outside);
+ const outside=h.outside.dispatch('keydown',{key:'Escape'});
+ assert.equal(h.savePanel.hidden,true);assert.equal(h.doc.activeElement,h.outside,'focus does not jump to the chip');assert.equal(outside.stopped,true);
+});
+
+test('initPanel: a pointer down inside the wrapper keeps the panel open, one outside closes it',()=>{
+ const h=harness();
+ h.saveChip.dispatch('click');
+ h.saveInside.dispatch('pointerdown');assert.equal(h.savePanel.hidden,false,'a click in the panel never closes it');
+ h.saveInside.dispatch('click');assert.equal(h.savePanel.hidden,false,'nor does activating a control in it (a panel is not a menu)');
+ h.saveChip.dispatch('pointerdown');assert.equal(h.savePanel.hidden,false);
+ h.saveButton.dispatch('pointerdown');assert.equal(h.savePanel.hidden,true,'Save is outside the chip\'s wrapper');
+ h.saveChip.dispatch('click');h.outside.dispatch('pointerdown');assert.equal(h.savePanel.hidden,true);
+ assert.equal(h.doc.activeElement,h.saveTitle,'an outside click does not pull focus to the opener: it follows the click');
+});
+
+test('initPanel: focus leaving for an outside control closes the panel; a focusout to nothing (a rebuilt body) does not',()=>{
+ const h=harness();
+ h.saveChip.dispatch('click');
+ h.saveInside.dispatch('focusout',{relatedTarget:null});assert.equal(h.savePanel.hidden,false,'the focused control was replaced by a re-render');
+ h.saveTitle.dispatch('focusout',{relatedTarget:h.saveInside});assert.equal(h.savePanel.hidden,false,'focus moved inside the panel');
+ h.saveInside.dispatch('focusout',{relatedTarget:h.saveChip});assert.equal(h.savePanel.hidden,false,'the opener is part of the wrapper');
+ h.saveInside.dispatch('focusout',{relatedTarget:h.saveButton});assert.equal(h.savePanel.hidden,true,'Tab past the last control closes it');
+ assert.notEqual(h.doc.activeElement,h.saveChip,'and focus is not pulled back');
+});
+
+test('one at a time: opening a panel closes an open menu or the other panel, and opening a menu closes an open panel',()=>{
+ const h=harness();
+ h.managerButton.dispatch('click');h.saveChip.dispatch('click');
+ assert.equal(h.managerList.hidden,true);assert.equal(h.managerButton.getAttribute('aria-expanded'),'false');assert.equal(h.savePanel.hidden,false);
+ h.loadButton.dispatch('click');
+ assert.equal(h.savePanel.hidden,true);assert.equal(h.saveChip.getAttribute('aria-expanded'),'false');assert.equal(h.loadPanel.hidden,false);
+ h.labButton.dispatch('click');
+ assert.equal(h.loadPanel.hidden,true);assert.equal(h.labList.hidden,false);
+ h.switcher.open=true;h.saveChip.dispatch('click');assert.equal(h.switcher.open,false,'the lab switcher closes too');
+});
+
+test('panelopen and panelclose fire once per change on the panel element, panelopen before focus moves; a call that changes nothing fires nothing',()=>{
+ const h=harness();let focusAtOpen='unset';
+ h.savePanel.addEventListener('panelopen',()=>{focusAtOpen=h.doc.activeElement;});
+ h.outside.focus();h.saveChip.dispatch('click');
+ assert.deepEqual(h.panelEvents,['save-panel:panelopen']);assert.equal(focusAtOpen,h.outside,'a listener can render the focus target before focus is set');
+ assert.equal(h.saveChip._menuOpen(),true);assert.equal(h.context.openPanel('save-chip'),true);
+ assert.deepEqual(h.panelEvents,['save-panel:panelopen'],'opening an open panel is not a second open');
+ h.saveInside.focus();h.saveChip._menuOpen();assert.equal(h.doc.activeElement,h.saveInside,'and it does not move focus');
+ h.saveChip._menuOpen({focus:true});assert.equal(h.doc.activeElement,h.saveTitle,'unless the caller asks for it');
+ h.loadButton.dispatch('click');
+ assert.deepEqual(h.panelEvents,['save-panel:panelopen','save-panel:panelclose','load-panel:panelopen']);
+ assert.equal(h.context.closeMenus(),true);assert.equal(h.context.closeMenus(),false);assert.equal(h.saveChip._menuClose(false),false);
+ assert.deepEqual(h.panelEvents,['save-panel:panelopen','save-panel:panelclose','load-panel:panelopen','load-panel:panelclose']);
+});
+
+test('openPanel opens a panel by its opener\'s id or its own, with the options of initPanel, and refuses anything that is not a panel',()=>{
+ const h=harness();
+ assert.equal(h.context.openPanel('load-panel'),true);assert.equal(h.loadPanel.hidden,false);assert.equal(h.loadButton.getAttribute('aria-expanded'),'true');
+ h.outside.focus();assert.equal(h.context.openPanel('save-chip',{focus:false}),true);
+ assert.equal(h.savePanel.hidden,false);assert.equal(h.loadPanel.hidden,true,'still one at a time');assert.equal(h.doc.activeElement,h.outside);
+ h.context.closeMenus();
+ assert.equal(h.context.openPanel('manager-button'),false,'a menu is not a panel');assert.equal(h.managerList.hidden,true);
+ assert.equal(h.context.openPanel('git-save-progress'),false);assert.equal(h.context.openPanel('outside'),false);assert.equal(h.context.openPanel('missing'),false);
+});
+
+test('a drawer or dialog that opens closes the panels first (it calls closeMenus), and a lab change or Home closes them',()=>{
+ const h=harness();
+ h.saveChip.dispatch('click');
+ // What saveDrawerOpen does (DRAWERS.md 0.2): closeMenus(), then showModal().
+ h.context.closeMenus();h.saveDrawer.open=true;
+ assert.equal(h.savePanel.hidden,true);assert.equal(h.saveChip.getAttribute('aria-expanded'),'false');assert.deepEqual(h.panelEvents,['save-panel:panelopen','save-panel:panelclose']);
+ assert.equal(h.context.panelCanOpen(h.saveChip),false,'the page never opens a panel over a modal dialog');
+ h.context.closeLabDialogs();assert.equal(h.saveDrawer.open,false,'the save drawer speaks for one lab and closes with it');
+ assert.equal(h.context.panelCanOpen(h.saveChip),true);
+ h.loadButton.dispatch('click');assert.equal(h.context.panelCanOpen(h.saveChip),false,'nor while another panel is open');assert.equal(h.context.panelCanOpen(h.loadButton),true,'its own panel does not count');
+ h.context.closeMenus();h.managerButton.dispatch('click');assert.equal(h.context.panelCanOpen(h.saveChip),false,'nor while a menu is open');
+ h.context.closeMenus();h.switcher.open=true;assert.equal(h.context.panelCanOpen(h.saveChip),false);h.switcher.open=false;
+ h.saveChip.dispatch('click');h.context.goHome();assert.equal(h.savePanel.hidden,true,'Home closes the panel');
 });
 
 test('storage helpers remember when a lab was opened and dismissed jobs, and never throw when storage is blocked',()=>{
@@ -485,4 +598,126 @@ test('L-31: without a stored request a destroy retries with the default options;
  }
  setLabState(h.context,noticeLab(),{operations:[make('stop')]});
  h.context.renderLabBanner();assert.equal(h.$('banner-try-again').textContent,'Try again','an action without options retries as it was');
+});
+
+// The page skeleton of the save and load redesign (docs/git-redesign): header markup, the one drawer, the hooks in app.js.
+test('index.html: the lab header holds chip, Save, Load, then Lab actions; the chip and Load are panel openers; the split menu and #lab-progress are gone',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ const header=html.slice(html.indexOf('<header class="lab-header">'),html.indexOf('</header>',html.indexOf('<header class="lab-header">')));
+ const at=id=>header.indexOf('id="'+id+'"');
+ for(const id of ['save-control','save-chip','save-chip-dot','save-chip-text','save-panel','save-panel-title','save-panel-dot','save-panel-title-text','save-panel-body','git-save-progress','load-button','load-panel','load-panel-body','lab-actions-button','save-reason','save-live'])assert.equal(header.split('id="'+id+'"').length,2,id+' is in the header exactly once');
+ assert.ok(at('save-chip')<at('git-save-progress')&&at('git-save-progress')<at('load-button')&&at('load-button')<at('lab-actions-button'),'DOM order is the visual order');
+ assert.match(header,/<button type="button" class="button secondary panel-button save-chip" id="save-chip" aria-haspopup="dialog" aria-expanded="false" aria-controls="save-panel">/);
+ assert.match(header,/<button type="button" class="button secondary panel-button" id="load-button" aria-haspopup="dialog" aria-expanded="false" aria-controls="load-panel">Load<\/button>/);
+ assert.match(header,/<button type="button" class="button primary" id="git-save-progress" aria-describedby="save-reason">Save<\/button>/,'the load-bearing id stays on Save');
+ assert.match(header,/<div class="save-panel" id="save-panel" data-panel role="dialog" aria-labelledby="save-panel-title" hidden>\s*<h2 class="save-state" id="save-panel-title" tabindex="-1" data-panel-focus>/);
+ assert.match(header,/<div class="save-panel wide" id="load-panel" data-panel role="dialog" aria-label="Load a saved state" hidden><div id="load-panel-body"><\/div><\/div>/);
+ // Each opener and its panel are the two children of one span.menu, the element an outside click is measured against.
+ for(const [button,panel] of [['save-chip','save-panel'],['load-button','load-panel']]){const open=header.lastIndexOf('<span class="menu">',at(button));assert.ok(open>=0&&!header.slice(open,at(button)).includes('</span>'),button+' sits directly in a span.menu');assert.ok(at(panel)>at(button));}
+ assert.match(header,/<small class="caption" id="save-reason" hidden><\/small>\s*<p class="sr-only" id="save-live" role="status" aria-live="polite"><\/p>/,'the reason is visible text; the live region holds a sentence, never a button');
+ assert.doesNotMatch(html,/id="lab-progress"|git-save-menu|git-save-help|git-save-control|banner-retry-save|banner-save-details/);
+ assert.doesNotMatch(header,/data-git-action/);assert.doesNotMatch(header,/ style=/);
+ // The Progress tab is gone (owner decision D1): no tab button, no panel, none of the ids its renderers wrote into.
+ for(const id of ['tab-progress','progress-view','git-progress-bar','progress-save','git-saved-versions','git-saves-list','git-repository-content','git-repository-advanced','git-problem','git-last-restore'])assert.doesNotMatch(html,new RegExp('id="'+id+'"'),id+' is gone');
+ assert.doesNotMatch(html,/data-tab="progress"|data-git-action=|data-git-repo-action=/);
+});
+
+test('index.html: the one save drawer is a page-level lab dialog with a static head, and the three new scripts load in the agreed order with the release marker',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ const start=html.indexOf('<dialog id="save-drawer"'),drawer=html.slice(start,html.indexOf('</dialog>',start));
+ assert.match(drawer,/^<dialog id="save-drawer" class="drawer save-drawer" data-lab-dialog aria-labelledby="save-drawer-title">/);
+ assert.ok(start>html.indexOf('</main>'),'never inside a tab panel: a modal in a hidden panel shows nothing');
+ for(const id of ['save-drawer-back','save-drawer-title','save-drawer-close','save-drawer-meta','save-drawer-actions','save-drawer-content','save-drawer-status'])assert.equal(html.split('id="'+id+'"').length,2,id);
+ assert.match(drawer,/<button type="button" class="button ghost small" id="save-drawer-back" hidden>Back<\/button>/);
+ assert.match(drawer,/<button type="button" class="icon-button close" id="save-drawer-close" aria-label="Close">/);
+ assert.match(drawer,/<p class="sr-only" role="status" aria-live="polite" id="save-drawer-status"><\/p>/);
+ const scripts=[...html.matchAll(/<script src="\/static\/([\w-]+\.js)\?v=([\d.]+)" defer><\/script>/g)].map(m=>m[1]),versions=new Set([...html.matchAll(/<script src="\/static\/[\w-]+\.js\?v=([\d.]+)"/g)].map(m=>m[1]));
+ const at=scripts.indexOf('diff-view.js');
+ assert.deepEqual(scripts.slice(at,at+7),['diff-view.js','git-progress.js','save-header.js','git-places.js','save-drawers.js','load.js','restore.js']);
+ assert.equal(versions.size,1,'every script carries the same release marker');
+ assert.ok(scripts.indexOf('shell.js')<scripts.indexOf('app.js')&&scripts.indexOf('app.js')<at);
+});
+
+test('style.css: the header group is one wrapping row with chip and Save kept together; the retired split menu rules are gone; dots survive forced colours',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8');
+ assert.match(css,/\.save-control \{ display: contents; \}/);assert.match(css,/\.save-pair \{ display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; \}/);
+ assert.match(css,/\.save-chip \{[^}]*min-width: 0; max-width: 16rem; \}/);assert.match(css,/#save-chip-text \{[^}]*text-overflow: ellipsis/);
+ assert.match(css,/@media \(min-width: 1280px\) \{ #lab-content \{ --lab-action-col: 36rem; \} \}/);
+ assert.ok(css.indexOf('--lab-action-col: 36rem')>css.indexOf('--lab-action-col: 26rem'),'the wider column follows the 901px rule it overrides');
+ assert.match(css,/\.save-panel \{[^}]*position: absolute;[^}]*width: min\(380px, calc\(100vw - 32px\)\);[^}]*max-height: calc\(100dvh - 140px\);[^}]*overflow-y: auto;/);
+ assert.match(css,/\.save-panel\.wide \{ width: min\(440px, calc\(100vw - 32px\)\); \}/);
+ assert.match(css,/\.save-panel\.menu-clamped \{ right: auto; left: 0; \}/);
+ assert.match(css,/\.lab-header-actions \{ position: relative; \}\s*\.menu\.panel-anchored \{ position: static; \}\s*\.menu\.panel-anchored > \.save-panel \{ right: auto; left: 0; \}/,'a panel that fits neither way hangs from the action row\'s left edge');
+ assert.match(css,/\.save-dot\.none \{ background: transparent; border: 2px solid var\(--muted\); \}/);
+ assert.match(css,/\.save-dot \{ forced-color-adjust: none; box-shadow: none; \}\s*\.save-dot:not\(\.none\) \{ background: CanvasText; \}\s*\.save-dot\.none \{ background: Canvas; border: 1px solid CanvasText; \}/,'filled and hollow stay apart in forced colours');
+ assert.match(css,/\.lab-header:has\(\.pill\.busy\) \.save-dot\.busy \{ animation: none; \}/);
+ assert.match(css,/dialog\.drawer\.save-drawer \{ width: min\(760px, 100vw\); \}/);
+ assert.ok(css.indexOf('dialog.drawer.save-drawer {')<css.indexOf('dialog.drawer, dialog.node-details {'),'it precedes the device drawer\'s width, so it must be the more specific selector');
+ assert.match(css,/\.checkbox-label\.save-keep \{/,'likewise against .checkbox-label');
+ for(const name of ['save-state','save-sub','save-row','save-note','save-kv','save-foot','save-name','save-keep','save-heading','save-list','save-item','save-when','save-why','save-devices','save-end','save-settings','save-settings-foot','folder-tree','folder-row','folder-name','folder-answer','folder-names','folder-state','panel-button'])assert.ok(css.includes('.'+name),'.'+name+' has a rule');
+ for(const cls of ['ok','bad','now','warn'])assert.ok(css.includes('.save-end.'+cls+' {'),'save-end.'+cls);
+ assert.doesNotMatch(css,/\.git-save-(control|menu|options|list|help)/);
+ const rules=[...css.replace(/\/\*[\s\S]*?\*\//g,'').matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(m=>/[.#](save|folder)-|\.panel-button/.test(m[1])&&!m[1].includes('.pill'));   // the shared high-contrast pill rule keeps its white
+ assert.ok(rules.length>60);for(const [,selector,body] of rules)assert.doesNotMatch(body,/#[0-9a-fA-F]{3,8}\b|rgba?\(/,'no new colour, tokens only: '+selector.trim());
+});
+
+test('render() hands every poll and every lab switch to the header, the drawer and Load, and loads without them',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../app/static/app.js'),'utf8'),body=source.slice(source.indexOf('function render(){'),source.indexOf('function syncProxies'));
+ const order=['renderSaveHeader','saveDrawerRender','loadRender','renderNetworkDesign'].map(name=>body.indexOf(`if(typeof ${name}==='function')${name}();`));
+ assert.ok(order.every(i=>i>=0),'each is called behind its typeof guard');assert.deepEqual([...order].sort((a,b)=>a-b),order);
+ assert.ok(order[2]<body.indexOf('if(!lab){'),'also on Home, so the drawer and the panels can drop a lab that is no longer open');
+ assert.doesNotMatch(source,/lab-progress|banner-retry-save|banner-save-details|gitPushPending/);
+});
+
+test('the lab banner no longer reports a save: a save location problem and a failed upload are the chip\'s; what a load or an operation reports stays',()=>{
+ const h=bannerHarness(),lab={id:'lab',name:'L',nodes:[],profiles:[],defaults:{},deployment:{status:'Running'},nos_readiness:{status:'idle'},git_binding:{repository:{push_url:'https://github.com/x/y.git'}}};
+ const paint=extra=>vm.runInContext(`state=${JSON.stringify({labs:[lab],jobs:[],operations:[],restore_jobs:[],git_jobs:[],platforms:{},loaded:true,...extra})};activeId='lab';var gitContexts=new Map([['lab',{repository_status:{problem:'The push URL rejected the VM account.'}}]]);renderLabBanner();`,h.context);
+ paint({git_jobs:[{id:'g1',lab_id:'lab',status:'push_pending',message:'Upload failed.',created:'2026-10-04T10:00:00Z'}]});
+ assert.equal(h.$('lab-banner').hidden,true,'neither the problem nor the failed upload makes a banner');
+ paint({restore_jobs:[{id:'r1',lab_id:'lab',status:'applying',message:'Applying.'}]});
+ assert.equal(h.$('lab-banner').hidden,false);assert.equal(h.$('banner-restore').hidden,false,'a running load keeps View progress');
+ paint({operations:[{id:'o1',lab_id:'lab',action:'deploy',status:'running',message:'Executing'}]});
+ assert.equal(h.$('lab-banner').hidden,false);assert.equal(h.$('banner-output').hidden,false);
+});
+
+test('busyReason() names what holds the manager for each thing the server\'s operation_busy and save guard count, and busy() is its flag',()=>{
+ const h=bannerHarness(),labs=[{id:'lab',name:'Mine',nodes:[]},{id:'other',name:'OSPF-lab',nodes:[]}];
+ const ask=(extra,labsNow=labs)=>{vm.runInContext(`activeId='lab';state=${JSON.stringify({labs:labsNow,jobs:[],operations:[],restore_jobs:[],git_jobs:[],design_jobs:[],platforms:{},loaded:true,...extra})};`,h.context);return [h.context.busyReason(),vm.runInContext('busy()',h.context)];};
+ assert.deepEqual(ask({}),['',false],'idle');
+ assert.deepEqual(ask({operations:[{id:'o',lab_id:'other',action:'deploy',status:'running'}]}),[h.context.operationLabel('deploy')+' is running.',true]);
+ assert.deepEqual(ask({operations:[{id:'o',action:'mystery',status:'queued'}]}),['Lab operation is running.',true]);
+ assert.deepEqual(ask({operations:[{id:'o',lab_id:'other',action:'deploy',status:'succeeded'}]}),['',false]);
+ for(const status of ['queued','capturing','exporting','pushing'])assert.deepEqual(ask({git_jobs:[{id:'g',lab_id:'other',status}]}),['A save is running on OSPF-lab.',true],status);
+ for(const status of ['committed','review_pending','push_pending','synced','unchanged','failed'])assert.deepEqual(ask({git_jobs:[{id:'g',lab_id:'other',status}]}),['',false],'a waiting or finished save holds nothing: '+status);
+ for(const status of ['queued','preflight','backing_up','applying','confirming','verifying'])assert.deepEqual(ask({restore_jobs:[{id:'r',lab_id:'other',status}]}),['A load is running on OSPF-lab.',true],status);
+ assert.deepEqual(ask({restore_jobs:[{id:'r',lab_id:'other',status:'interrupted',rechecking:true}]}),['The manager is checking devices after a restart.',true],'a load read back after a restart holds every lab');
+ assert.deepEqual(ask({restore_jobs:[{id:'r',lab_id:'other',status:'interrupted'},{id:'r2',lab_id:'other',status:'verified'}]}),['',false]);
+ for(const status of ['queued','preflight','backing_up','applying','confirming','verifying'])assert.deepEqual(ask({design_jobs:[{id:'d',lab_id:'other',status}]}),['A network design is being applied on OSPF-lab.',true],status);
+ assert.deepEqual(ask({design_jobs:[{id:'d',lab_id:'lab',status:'interrupted',rechecking:['r1']}]}),['The manager is checking devices after a restart.',true],'a design read-back holds its own lab');
+ assert.deepEqual(ask({design_jobs:[{id:'d',lab_id:'other',status:'interrupted',rechecking:['r1']}]}),['',false],'and only its own lab');
+ vm.runInContext(`state.design_jobs=[{id:'d',lab_id:'other',status:'interrupted',rechecking:['r1']}];`,h.context);assert.equal(h.context.busyReason('other'),'The manager is checking devices after a restart.','asked for that lab');
+ assert.deepEqual(ask({},[labs[0],{...labs[1],telemetry_retired:{nodes:[],total:0,removing:'2026-10-04T10:00:00Z'}}]),['Retired telemetry configuration is being removed on OSPF-lab.',true]);
+ assert.deepEqual(ask({},[labs[0],{...labs[1],telemetry_retired:{nodes:[],total:0}}]),['',false]);
+ assert.deepEqual(ask({jobs:[{id:'j',lab_id:'other',operation:'backup',status:'running'}]}),['A backup is running.',true]);
+ assert.deepEqual(ask({jobs:[{id:'j',lab_id:'other',operation:'test',status:'queued'}]}),['Device logins are being checked.',true]);
+ assert.deepEqual(ask({jobs:[{id:'j',lab_id:'other',operation:'backup',status:'succeeded'}]}),['',false]);
+ assert.deepEqual(ask({git_jobs:[{id:'g',lab_id:'gone',status:'capturing'}]}),['A save is running.',true],'a lab the page does not know is not named');
+ // Server order: a lab operation is named before a save that also runs.
+ assert.match(ask({operations:[{id:'o',lab_id:'lab',action:'destroy',status:'running'}],git_jobs:[{id:'g',lab_id:'other',status:'capturing'}]})[0],/ is running\.$/);
+ assert.doesNotMatch(ask({operations:[{id:'o',lab_id:'lab',action:'destroy',status:'running'}],git_jobs:[{id:'g',lab_id:'other',status:'capturing'}]})[0],/save/);
+});
+
+test('a panel that would open past the left edge anchors to its opener; one that then leaves the right edge hangs from the action row; measured each time it opens',()=>{
+ const h=harness();const set=()=>{const c=new Set();return {add:x=>c.add(x),remove:x=>c.delete(x),contains:x=>c.has(x)};};
+ const panel=h.loadPanel,wrapper=h.loadButton.parentElement;panel.classList=set();wrapper.classList=set();h.context.innerWidth=390;
+ let box={left:120,right:560};panel.getBoundingClientRect=()=>box;
+ h.loadButton.dispatch('click');assert.equal(panel.classList.contains('menu-clamped'),false,'room on the left: right-aligned to the opener');assert.equal(wrapper.classList.contains('panel-anchored'),false);
+ h.loadButton.dispatch('click');
+ panel.getBoundingClientRect=()=>panel.classList.contains('menu-clamped')?{left:16,right:374}:{left:-90,right:268};
+ h.loadButton.dispatch('click');assert.equal(panel.classList.contains('menu-clamped'),true,'off the left edge: anchored to the opener\'s left');assert.equal(wrapper.classList.contains('panel-anchored'),false,'and it fits there');
+ h.loadButton.dispatch('click');
+ panel.getBoundingClientRect=()=>panel.classList.contains('menu-clamped')?{left:268,right:626}:{left:-22,right:336};
+ h.loadButton.dispatch('click');assert.equal(wrapper.classList.contains('panel-anchored'),true,'the opener is mid-row on a phone: the panel hangs from the row instead');
+ h.loadButton.dispatch('click');box={left:120,right:560};panel.getBoundingClientRect=()=>box;
+ h.loadButton.dispatch('click');assert.equal(panel.classList.contains('menu-clamped'),false);assert.equal(wrapper.classList.contains('panel-anchored'),false,'both are measured again on the next open');
 });

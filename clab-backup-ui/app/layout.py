@@ -19,6 +19,10 @@ MAX_DOCUMENT = 1024 * 1024
 def keep_document(lab, raw):
     """Remember the annotations text a drawing was just derived from. Call after lab['drawing'] is set."""
     text = raw.decode('utf-8-sig') if isinstance(raw, (bytes, bytearray)) else str(raw or '')
+    # Which VM sync was current when this document was written. A sync stamps the new `vm_source.synced_at` right
+    # after this call, so a document a sync wrote ends up different from it; a document a person wrote (Edit map,
+    # an uploaded map) is still equal to it. runner.topology_capture reads the pair to tell the two apart.
+    lab['map_written_at'] = (lab.get('vm_source') or {}).get('synced_at') or ''
     if not text.strip() or len(text.encode()) > MAX_DOCUMENT or not lab.get('drawing'):
         lab.pop('annotations', None); lab.pop('annotations_for', None); return
     lab['annotations'] = text; lab['annotations_for'] = revision(lab['drawing'])

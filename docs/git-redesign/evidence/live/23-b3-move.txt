@@ -1,0 +1,44 @@
+[19:17:26] B3 on git-redesign-b: saves in git-redesign-b-2; lab A saves in git-redesign
+[19:17:28] typed git-redesign/inner -> answer 'git-redesign/inner is new. It appears in the repository with the first save.'; bring-along line: 'Bring this lab’s saved files along' ticked=True; foot ['Cancel', 'Save here']
+[19:17:32] moved: lab saves in git-redesign/inner; chip '1 save to upload'; clicks (chip, Change…, [type], Save here) = 3, typed 1
+[19:17:32] move panel: title 'Not uploaded yet' sentence 'git-redesign-b’s saved files moved to git-redesign/inner.'
+[19:17:32] What changed: 'This moves the saved files of git-redesign-b from git-redesign-b-2 to git-redesign/inner. No device file changes. |  | To: clab-scratch-git-redesign › git-redesign/inner |  | Saved files can contain passwords or keys. |  | THIS SAVE | git-redesign-b-2/latest/ceos1.cfg ceos1'
+  [GitHub after the move upload]
+      38e25fbce3 Move git-redesign-b progress to git-redesign/inner/
+      1e0a48b7de First save
+      49a1529805 Map changed
+      496ec2edc0 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+[19:17:37] GitHub:  ; old folder files left: 0 ; new folder files: 7
+[19:17:37] registrations/lab A unaffected: lab A saves in git-redesign
+[19:17:52] TRY 1: question 3 text '1 save of git-redesign-b is waiting for upload.'; note '1 device changed since your last save: ceos1. 1 line added, 1 removed. That save stays on the VM and stays part of the next upload.'; buttons ['Cancel', 'Upload it, then move', 'Move and keep that save on the VM only']
+[19:18:01] answered 'Upload it, then move': lab saves in l2-move-1 (was git-redesign/inner); chip '1 save to upload'; waiting saves [('committed', 'move', False, 'l2-move-1')]; clicks 4
+PASS B3 upload then move: nothing waits for the old save
+  [GitHub after try 1]
+      df3b989e16 Move git-redesign-b progress to l2-move-1/
+      a28158614f ceos1 changed
+      38e25fbce3 Move git-redesign-b progress to git-redesign/inner/
+      1e0a48b7de First save
+[19:18:06] after try 1: GitHub folders: ['l2-move-1/latest']
+[19:18:22] TRY 2: question 3 text '1 save of git-redesign-b is waiting for upload.'; note '1 device changed since your last save: ceos1. 1 line added, 1 removed. That save stays on the VM and stays part of the next upload.'; buttons ['Cancel', 'Upload it, then move', 'Move and keep that save on the VM only']
+[19:18:29] answered 'Move and keep that save on the VM only': lab saves in l2-move-2 (was l2-move-1); chip '2 saves to upload'; waiting saves [('review_pending', 'latest', False, 'l2-move-1/latest'), ('committed', 'move', False, 'l2-move-2')]; clicks 4
+PASS B3 keep: the save keeps waiting
+  [GitHub GitHub before uploading the kept save]
+      df3b989e16 Move git-redesign-b progress to l2-move-1/
+      a28158614f ceos1 changed
+      38e25fbce3 Move git-redesign-b progress to git-redesign/inner/
+      1e0a48b7de First save
+  [GitHub after try 2]
+      f2c0a0525c Move git-redesign-b progress to l2-move-2/
+      6b883ce21c ceos1 changed
+      df3b989e16 Move git-redesign-b progress to l2-move-1/
+      a28158614f ceos1 changed
+[19:18:34] after try 2: GitHub folders: ['l2-move-2/latest']
+PASS B3: no console, page or request errors
+
+=== B3: 3 checks, 0 failed
+PASS B3 upload then move: nothing waits for the old save
+PASS B3 keep: the save keeps waiting
+PASS B3: no console, page or request errors
+None
+
+3 checks, 0 failed

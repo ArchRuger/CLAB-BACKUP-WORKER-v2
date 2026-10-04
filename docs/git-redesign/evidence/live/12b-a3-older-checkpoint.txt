@@ -1,0 +1,37 @@
+[19:06:08] A3 part 2 (older save as a checkpoint) on git-redesign-b
+[19:06:08] latest/ ceos1.cfg blob before 3d3508c7d1
+[19:06:10] All versions groups: ['YOUR SAVES', 'CHECKPOINTS', 'STARTING POINT', 'LAB STATES']
+[19:06:10] rows: ['l2 named save | 1 minute ago', 'ceos1 changed | 1 minute ago', 'ceos2 changed, map changed | 2 minutes ago', 'Map changed | 3 minutes ago', 'ceos1 changed, map changed | 5 minutes ago', 'l2-named-save | 1 minute ago', 'B | 3 hours ago', 'Broken | 3 hours ago']
+[19:06:10] opening the older row #2: ceos2 changed, map changed | 2 minutes ago
+[19:06:10] checkpoint name placeholder 'ceos2-changed-map-changed'; "Saved as" 'Saved as: ceos2-changed-map-changed'
+[19:06:13] after Keep: chip 1 save to upload; drawer open False
+[19:06:13] checkpoint job: {"changed_files": ["git-redesign-b/checkpoints/l2-older-checkpoint/ceos1.cfg", "git-redesign-b/checkpoints/l2-older-checkpoint/ceos1.eoscfg", "git-redesign-b/checkpoints/l2-older-checkpoint/ceos2.cfg", "git-redesign-b/checkpoints/l2-older-checkpoint/ceos2.eoscfg", "git-redesign-b/checkpoints/l2-older-checkpoint/git-redesign-b.clab.yml", "git-redesign-b/checkpoints/l2-older-checkpoint/git-redesign-b.clab.yml.annotations.json", "git-redesign-b/checkpoints/l2-older-checkpoint/manifest.json"], "checkpoint": "l2-older-checkpoint", "commit": "5a3bad93544e0182a1771b1765dd2690de158c75", "note": "ceos1 changed", "status": "review_pending", "summary": {"added": 96, "devices": ["ceos1", "ceos2"], "first": false, "map": true, "removed": 0, "removed_devices": [], "topology": true}, "target": "checkpoint"}
+  [GitHub after the older save was kept as a checkpoint]
+      5a3bad9354 ceos1 changed
+      29b222f2a0 l2 named save
+      5408305045 ceos1 changed
+      55c0cbab3a ceos1 changed
+PASS A3 DEFECT L1: latest/ did not change when an OLDER save was kept (device blob)
+PASS A3 latest/ files unchanged
+PASS A3 the checkpoint folder holds the older state
+[19:06:21] checkpoint l2-older-checkpoint description lines: ['description l2-a2']
+[19:06:21] latest ceos1.cfg description lines: ['description l2-a3-named']
+commit of the checkpoint upload:
+      FILE git-redesign-b/checkpoints/l2-older-checkpoint/ceos1.cfg +48 -0
+      FILE git-redesign-b/checkpoints/l2-older-checkpoint/ceos1.eoscfg +48 -0
+      FILE git-redesign-b/checkpoints/l2-older-checkpoint/ceos2.cfg +48 -0
+      FILE git-redesign-b/checkpoints/l2-older-checkpoint/ceos2.eoscfg +48 -0
+      FILE git-redesign-b/checkpoints/l2-older-checkpoint/git-redesign-b.clab.yml +20 -0
+      FILE git-redesign-b/checkpoints/l2-older-checkpoint/git-redesign-b.clab.yml.annotations.json +35 -0
+      FILE git-redesign-b/checkpoints/l2-older-checkpoint/manifest.json +61 -0
+[19:06:22] clicks for the older-save checkpoint (chip, All versions, row, Keep as a checkpoint, [name], Keep, [chip, Upload]) = 7, typed 1
+PASS A3: no console, page or request errors
+
+=== A3: 4 checks, 0 failed
+PASS A3 DEFECT L1: latest/ did not change when an OLDER save was kept (device blob)
+PASS A3 latest/ files unchanged
+PASS A3 the checkpoint folder holds the older state
+PASS A3: no console, page or request errors
+None
+
+4 checks, 0 failed

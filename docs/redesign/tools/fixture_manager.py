@@ -16,6 +16,12 @@ Labs after seeding:
   vlan-lab              linked, Partially running (one container exited).
   switching-basics      not linked (imported from an Ansible inventory), one device without login.
 The VM also reports a lab that is not in My labs (extra-lab) and one hidden earlier (old-lab).
+
+The Git save and load redesign adds (docs/git-redesign/tools/fixture/SCENARIOS.md describes every one): the scripted VM Git
+helper `FakeGit` answers like the redesigned helper over six repositories, six more labs (restore-square, square-fresh,
+edge-lab, shared-a, shared-b, solo-lab) with a four-device lab that is running and Ready, scripted devices the real restore
+service loads, and a small control (GET /fixture/state, POST /fixture/switch, POST /fixture/action) to put the fixture into
+a state while it runs. `--classic` seeds only the labs and the Course-Labs repository the first fixture had.
 """
 import argparse
 import copy
@@ -30,6 +36,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 APP_ROOT = HERE.parents[2] / 'clab-backup-ui'
 sys.path.insert(0, str(APP_ROOT))
+sys.path.insert(0, str(HERE.parents[1] / 'git-redesign' / 'tools' / 'fixture'))
 os.environ.setdefault('CAPTURE_PROVIDER', 'disabled')
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -39,9 +46,16 @@ from app import git_progress as gp  # noqa: E402
 from app.discovery import reconcile, stamp  # noqa: E402
 from app.downloads import FORMATS, component, short_name  # noqa: E402
 from app.git_progress import PROTOCOL, digest, host_identity  # noqa: E402
+from app.host_git import colliding, collision_message  # noqa: E402
 from app.inventory import PLATFORMS  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.runner import filename, now  # noqa: E402
+
+import fixture_backups  # noqa: E402
+import fixture_control  # noqa: E402
+import fixture_devices  # noqa: E402
+import fixture_scenarios  # noqa: E402
+from fake_git import FakeGit  # noqa: E402,F401  (the scripted VM Git helper; other tools import the name from here)
 
 import base64  # noqa: E402
 import hashlib  # noqa: E402
@@ -66,158 +80,6 @@ def config_text(node, tag):
     label = component(short_name(node, ''))
     return (CONFIG_TEXT.get(node['platform'], 'hostname {name}\n').format(name=label) + f'! saved as {tag}\n').encode()
 
-
-class FakeGit:
-    """The VM Git helper, answered from memory: one checkout with this lab's saves, an instructor's
-    solution folder, a starting-state folder without restore artifacts and a free lab folder."""
-
-    def __init__(self, lab):
-        self.lab = lab
-        self.head = hashlib.sha1(b'fixture-head-0').hexdigest()
-        self.commits = []
-        checkout = '/home/clabllm/labs/Course-Labs'
-        base = dict(owner='clabllm', path=checkout, remote='origin', push_url='https://github.com/example/Course-Labs.git', branch='main')
-        self.registrations = [dict(base, id='reg-work', label='Course-Labs / labs/BGP/work', prefix='labs/BGP/work', revision='rev-work'),
-                              dict(base, id='reg-vlan', label='Course-Labs / labs/VLAN', prefix='labs/VLAN', revision='rev-vlan')]
-        self.files = {'README.md': b'# Course labs\n'}
-        stamp_now = int(time.time())
-        self.saved = {'latest': stamp_now - 1200, 'baseline': stamp_now - 86400, 'checkpoints': stamp_now - 7200}
-        nodes = [n for n in lab['nodes'] if n.get('platform') in PLATFORMS]
-        junos = [n for n in nodes if str(n['platform']).startswith('juniper')]
-        self.write_snapshot('labs/BGP/work/latest', nodes, 'latest')
-        self.write_snapshot('labs/BGP/work/checkpoints/ospf-done', nodes, 'ospf-done')
-        self.write_snapshot('labs/BGP/work/baseline', nodes, 'baseline')
-        self.write_snapshot('labs/BGP/solution/latest', junos, 'solution')
-        self.write_snapshot('labs/BGP/start/latest', nodes, 'start', restore=False)
-        for message in ('Set baseline', "Checkpoint 'ospf-done'", 'Save BGP_TheoryToPractice progress'):
-            self.commit(message)
-
-    def write_snapshot(self, folder, nodes, tag, restore=True, lab=None):
-        lab = lab or self.lab
-        entries = []
-        for n in sorted(nodes, key=lambda n: n['name']):
-            label, platform = component(short_name(n, lab['name'])), n['platform']
-            name = f"{label}.{PLATFORMS[platform]['suffix']}"
-            raw = config_text(n, tag)
-            self.files[folder + '/' + name] = raw
-            entry = dict(path=name, size=len(raw), sha256=hashlib.sha256(raw).hexdigest(), node=n['name'], short_name=n.get('short_name', ''),
-                         platform=platform, format=FORMATS[platform])
-            if restore and 'restore_suffix' in PLATFORMS[platform]:
-                rname, rraw = f"{label}.{PLATFORMS[platform]['restore_suffix']}", JCFG_TEXT.format(name=label).encode()
-                self.files[folder + '/' + rname] = rraw
-                entry.update(restore_artifact=rname, restore_size=len(rraw), restore_sha256=hashlib.sha256(rraw).hexdigest(),
-                             restore_format=PLATFORMS[platform]['restore_format'], restore_capable=True)
-            entries.append(entry)
-        manifest = dict(schema=2, lab_id=lab['id'], lab_name=lab['name'], backup_job_id='fixture', captured_at=ago(1200),
-                        node_names=sorted(n['name'] for n in nodes), excluded_nodes=[], restore_capable_nodes=sum(1 for e in entries if e.get('restore_artifact')), files=entries)
-        self.files[folder + '/manifest.json'] = json.dumps(manifest, indent=1).encode()
-
-    def commit(self, message):
-        self.head = hashlib.sha1((self.head + message + str(len(self.commits))).encode()).hexdigest()
-        self.commits.insert(0, dict(commit=self.head, time=int(time.time()) - 600 * len(self.commits), message=message))
-        return self.head
-
-    def registration(self, request):
-        return next((r for r in self.registrations if r['id'] == request.get('binding_id')), self.registrations[0])
-
-    def snapshot(self, folder):
-        join = lambda name: folder + '/' + name if folder else name
-        raw = self.files.get(join('manifest.json'))
-        if not raw:
-            raise ValueError('This folder holds no saved configuration (manifest.json) at the selected commit.')
-        manifest, files = json.loads(raw), {}
-        for entry in manifest['files']:
-            for key in ('path', 'restore_artifact'):
-                if entry.get(key):
-                    files[entry[key]] = base64.b64encode(self.files[join(entry[key])]).decode('ascii')
-        return {'snapshot': {'manifest': manifest, 'files': files}}
-
-    def versions(self, reg):
-        prefix, out = reg['prefix'], []
-        for path in sorted(self.files):
-            if path != 'manifest.json' and not path.endswith('/manifest.json'):
-                continue
-            folder = path.rsplit('/', 1)[0] if '/' in path else ''
-            checkpoints = prefix + '/checkpoints/'
-            connected = folder in (prefix + '/latest', prefix + '/baseline') or (folder.startswith(checkpoints) and '/' not in folder[len(checkpoints):])
-            out.append(dict(name=folder, path=folder, commit=self.head, connected=connected))
-        out.sort(key=lambda v: (not v['connected'], v['path']))
-        return out
-
-    def __call__(self, host, request, stopping=None):
-        mode, reg = request.get('mode'), self.registration(request)
-        if mode == 'list':
-            return {'protocol': PROTOCOL, 'version': __version__, 'repositories': [dict(r) for r in self.registrations]}
-        if mode == 'status':
-            latest = self.files.get(reg['prefix'] + '/latest/manifest.json')
-            return {'repository': dict(reg), 'head': self.head, 'ready': True, 'problem': '',
-                    'baseline_revision': 'base-1' if (reg['prefix'] + '/baseline/manifest.json') in self.files else '',
-                    'latest_manifest': json.loads(latest) if latest else None}
-        if mode == 'browse':
-            return {'repository': dict(reg), 'head': self.head, 'files': [dict(path=p, size=len(b)) for p, b in sorted(self.files.items())],
-                    'truncated': False, 'saved': dict(self.saved), 'folders': [dict(id=r['id'], label=r['label'], prefix=r['prefix']) for r in self.registrations]}
-        if mode == 'history':
-            return {'commits': list(self.commits), 'versions': self.versions(reg)}
-        if mode == 'read-version':
-            return self.snapshot(str(request.get('path', '')).strip('/'))  # '' or '/' = the repository root
-        if mode == 'compare':
-            return {'files': []}
-        if mode == 'publish':
-            snap, target = request.get('snapshot') or {}, request.get('target', 'latest')
-            folder = reg['prefix'] + '/' + ('checkpoints/' + request['checkpoint'] if target == 'checkpoint' and request.get('checkpoint') else target)
-            changed = []
-            for name, b64 in (snap.get('files') or {}).items():
-                self.files[folder + '/' + name] = base64.b64decode(b64)
-                changed.append(folder + '/' + name)
-            self.files[folder + '/manifest.json'] = json.dumps(snap.get('manifest', {}), indent=1).encode()
-            changed.append(folder + '/manifest.json')
-            self.saved[target if target in ('latest', 'baseline') else 'checkpoints'] = int(time.time())
-            commit = self.commit(request.get('message') or 'Save progress')
-            return {'status': 'committed', 'commit': commit, 'pushed': False, 'changed_files': changed, 'snapshot_path': folder}
-        if mode == 'push':
-            return {'status': 'synced', 'commit': self.head, 'pushed': True, 'synced_operations': [request.get('operation_id', '')], 'message': 'Saved to Git.'}
-        if mode == 'register-prefix':
-            prefix = request.get('prefix', '')
-            # Like app/host_git.py base_prefix: latest, baseline and checkpoints/<name> are the snapshot
-            # folders Save progress writes inside a lab folder, never a lab folder themselves.
-            parts = prefix.split('/') if prefix else []
-            if parts and (parts[-1] in ('latest', 'baseline', 'checkpoints') or (len(parts) >= 2 and parts[-2] == 'checkpoints')):
-                raise ValueError('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. Choose the folder above them.')
-            existing = next((r for r in self.registrations if r['prefix'] == prefix and r['path'] == reg['path']), None)
-            # Like app/host_git.py: lab folders of one checkout cannot overlap unless the source registration
-            # is being retired, and a retire removes it (an empty folder the lab leaves is then known to nobody
-            # but the manager's planned-folder list).
-            retire = request.get('retire') is True
-            if not existing:
-                for other in self.registrations:
-                    if other['path'] != reg['path'] or (other is reg and retire):
-                        continue
-                    if not prefix or not other['prefix'] or prefix.startswith(other['prefix'] + '/') or other['prefix'].startswith(prefix + '/'):
-                        raise ValueError('Lab folders in one repository cannot overlap: ' + (other['prefix'] or 'the repository root') + ' is already a lab folder. Choose a folder beside it.')
-            if retire and (not existing or existing is not reg):
-                self.registrations.remove(reg)
-            if existing:
-                return dict(existing)
-            new = dict(reg, id='reg-' + hashlib.sha1(prefix.encode()).hexdigest()[:8], label=f"Course-Labs / {prefix or 'top level'}", prefix=prefix,
-                       revision='rev-' + hashlib.sha1(prefix.encode()).hexdigest()[:6])
-            self.registrations.append(new)
-            return dict(new)  # the helper answers with the registration itself (host_git.register_prefix)
-        if mode == 'connect':
-            url, prefix = str(request.get('url', '')), request.get('prefix', '')
-            parts = prefix.split('/') if prefix else []
-            if parts and (parts[-1] in ('latest', 'baseline', 'checkpoints') or (len(parts) >= 2 and parts[-2] == 'checkpoints')):
-                raise ValueError('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. Choose the folder above them.')
-            name = url.rstrip('/').split('/')[-1].removesuffix('.git') or 'repo'
-            new = dict(id='reg-' + hashlib.sha1((url + prefix).encode()).hexdigest()[:8], label=f"{name} / {prefix or 'top level'}", owner='clabllm',
-                       path=f'/home/clabllm/labs/{name}', remote='origin', push_url=url, branch='main', prefix=prefix, revision='rev-' + hashlib.sha1(url.encode()).hexdigest()[:6])
-            self.registrations.append(new)
-            return dict(new)
-        if mode == 'move':
-            return {'status': 'committed', 'commit': self.commit('Move saved folders'), 'pushed': False, 'changed_files': [],
-                    'snapshot_path': (request.get('prefix') or reg['prefix']) + '/latest'}
-        if mode == 'update':
-            return {'status': 'updated', 'head': self.head, 'message': 'Updated from remote using fast-forward only.'}
-        raise ValueError('Fixture Git helper: unsupported mode ' + str(mode))
 
 FIXTURES = APP_ROOT / 'tests' / 'fixtures' / 'map'
 OSPF_YAML = b"""name: ospf-basics
@@ -265,7 +127,7 @@ INVENTORY_YAML = b"""all:
 """
 
 
-def build(data_dir, port):
+def build(data_dir, port, classic=False):
     app = create_app(str(data_dir))
     store, monitor, discovery, runner, services = (app.state.store, app.state.readiness, app.state.discovery,
                                                    app.state.runner, app.state.node_services)
@@ -364,25 +226,22 @@ def build(data_dir, port):
                 else:
                     services.checks[key] = dict(status='reachable', message='show version answered.', at=now(), source='automatic')
 
-    # Git: the VM helper answered from memory; the lab is bound to labs/BGP/work with two saves.
-    fake_git = FakeGit(bgp_lab)
+    # The scripted VM Git helper, the scripted devices the real restore service loads, and the capture that reads them
+    # (docs/git-redesign/tools/fixture/): one control for all three.
+    control = fixture_control.Control()
+    devices = fixture_devices.Devices(control)
+    fake_git = FakeGit(control)
     gp.remote_git = fake_git
+    run_sync = fixture_backups.install(app, data_dir, devices, control)
+    fixture_devices.install(app, devices)
+    seeder = fixture_scenarios.seed(app, client, store, data_dir, register, profile, devices, fake_git, control, run_sync, services, extra=not classic)
+
+    # The restore job the first fixture seeded (one Junos node applied, one waiting for its rollback).
     with store.lock:
-        binding = dict(binding_id='reg-work', revision='rev-work', repository=dict(fake_git.registrations[0]),
-                       host_identity=host_identity(store.state['host']), node_names=[n['name'] for n in bgp_lab['nodes'] if n.get('platform') in PLATFORMS],
-                       review_before_push=False)
-        bgp_lab['git_binding'] = binding
         jobs = store.state.setdefault('git_jobs', [])
-        common = dict(lab_id=bgp_id, lab_name=bgp_lab['name'], backup_job_id='', pushed=True, review_before_push=False, binding_digest=digest(binding),
-                      node_names=list(binding['node_names']), request={}, capture_context={})
-        jobs.append(dict(common, id=uuid.uuid4().hex, created=ago(7200), finished=ago(7150), status='synced', message='Saved to Git.',
-                         commit=fake_git.commits[1]['commit'], target='checkpoint', checkpoint='ospf-done', note='OSPF adjacencies up on every device',
-                         changed_files=['labs/BGP/work/checkpoints/ospf-done/manifest.json'], snapshot_path='labs/BGP/work/checkpoints/ospf-done'))
-        jobs.append(dict(common, id=uuid.uuid4().hex, created=ago(1200), finished=ago(1150), status='synced', message='Saved to Git.',
-                         commit=fake_git.head, target='latest', checkpoint='', note='', changed_files=['labs/BGP/work/latest/manifest.json'], snapshot_path='labs/BGP/work/latest'))
         jobs.append(dict(id=uuid.uuid4().hex, lab_id=bgp_id, status='dismissed', created=ago(600), finished=ago(590), message='Repository updated from remote.', target='update'))
         junos = [n for n in bgp_lab['nodes'] if str(n.get('platform', '')).startswith('juniper')]
-        backup_id = next(j['id'] for j in store.state['jobs'] if j['operation'] == 'backup')
+        backup_id = next(j['id'] for j in store.state['jobs'] if j['operation'] == 'backup' and j['lab_id'] == bgp_id and j.get('source') == 'manual')
         store.state.setdefault('restore_jobs', []).append(dict(
             id=uuid.uuid4().hex, lab_id=bgp_id, lab_name=bgp_lab['name'], created=ago(3000), finished=ago(2900), status='partial',
             message='Configuration applied on 1 of 2 nodes.', source={'type': 'folder', 'path': 'labs/BGP/solution/latest', 'captured_at': ago(9000)},
@@ -390,33 +249,7 @@ def build(data_dir, port):
             targets=[dict(name=junos[0]['name'], short_name=junos[0].get('short_name'), platform=junos[0]['platform'], status='verified', message='Applied and verified.'),
                      dict(name=junos[1]['name'], short_name=junos[1].get('short_name'), platform=junos[1]['platform'], status='rollback_expected',
                           message='Commit was armed but not confirmed; the node rolls back automatically.')]))
-        vlan_lab = labs['vlan-lab']
-        fake_git.write_snapshot('labs/VLAN/latest', [n for n in vlan_lab['nodes'] if n.get('platform') in PLATFORMS], 'vlan', lab=vlan_lab)
-        vlan_binding = dict(binding_id='reg-vlan', revision='rev-vlan', repository=dict(fake_git.registrations[1]), host_identity=host_identity(store.state['host']),
-                            node_names=[n['name'] for n in vlan_lab['nodes'] if n.get('platform') in PLATFORMS], review_before_push=False)
-        vlan_lab['git_binding'] = vlan_binding
-        jobs.append(dict(id=uuid.uuid4().hex, lab_id=vlan_lab['id'], lab_name=vlan_lab['name'], created=ago(4000), finished=ago(3950), status='synced', message='Saved to Git.',
-                         backup_job_id='', commit=fake_git.head, pushed=True, target='latest', checkpoint='', note='', changed_files=['labs/VLAN/latest/manifest.json'],
-                         snapshot_path='labs/VLAN/latest', review_before_push=False, binding_digest=digest(vlan_binding), node_names=list(vlan_binding['node_names']), request={}, capture_context={}))
         store.save()
-
-    # Restore preflight: the live probe answers from the fixture instead of SSH. The first Junos device
-    # already matches the saved state, the second differs by one line, the third does not answer.
-    junos_names = [n['name'] for n in bgp_lab['nodes'] if str(n.get('platform', '')).startswith('juniper')]
-
-    def fake_capture(node, creds):
-        index = junos_names.index(node['name']) if node['name'] in junos_names else 0
-        if index >= 2:
-            raise ConnectionError('fixture: no device here')
-        text = config_text(node, 'solution').decode()
-        return text + ('set system services ssh\n' if index == 1 else '')
-    app.state.restore._capture = fake_capture
-
-    def fake_probe(node, creds, capture=False):
-        # The service looks at a node over one connection (_probe): nothing pending, no blocker, and
-        # the active configuration when asked for. The third Junos device raises like a dead SSH.
-        return '', (fake_capture(node, creds) if capture else None)
-    app.state.restore._probe = fake_probe
 
     # Discovery: keep the seeded snapshot fresh instead of inspecting a VM.
     def fresh_refresh(wait=False):
@@ -428,47 +261,7 @@ def build(data_dir, port):
         return discovery.public()
     discovery.refresh = fresh_refresh
 
-    # Jobs: a backup or login check runs for a few seconds and succeeds, without Ansible.
-    real_submit = runner.submit
-
-    def fake_submit(lab_id, operation='backup', source='manual', node_names=None, progress_id=None, progress_context=None):
-        with store.lock:
-            lab = store.lab(lab_id)
-            if not lab:
-                raise ValueError('Lab not found')
-            if any(j['status'] in ('queued', 'running') for j in store.state['jobs']):
-                raise ValueError('A job is already running. Wait for it to finish.')
-            nodes = [n for n in lab['nodes'] if (n['name'] in node_names if node_names is not None else n['enabled'])]
-            job = dict(id=uuid.uuid4().hex, lab_id=lab_id, lab_name=lab['name'], operation=operation, source=source,
-                       created=now(), started=now(), status='running', message='Connecting to the devices…',
-                       nodes=[dict(name=n['name'], short_name=n.get('short_name') or n.get('definition_node'), platform=n.get('platform'), status='running') for n in nodes])
-            store.state['jobs'].insert(0, job)
-            store.save()
-
-        def finish():
-            with store.lock:
-                current = next((j for j in store.state['jobs'] if j['id'] == job['id']), None)
-                if not current:
-                    return
-                current.update(status='succeeded', finished=now(), message='Finished (fixture: no device was contacted).')
-                folder = data_dir / 'backups' / lab_id / 'history' / job['id']
-                folder.mkdir(parents=True, exist_ok=True)
-                for n in current['nodes']:
-                    n.update(status='succeeded', message='Fixture result', captured_at=now())
-                    if operation != 'backup' or n.get('platform') not in PLATFORMS:
-                        continue
-                    name = filename(n)
-                    (folder / name).write_bytes(config_text(n, 'backup ' + job['id'][:6]))
-                    n['file'] = name
-                    if 'restore_suffix' in PLATFORMS[n['platform']]:
-                        rname = name.rsplit('.', 1)[0] + '.' + PLATFORMS[n['platform']]['restore_suffix']
-                        (folder / rname).write_bytes(JCFG_TEXT.format(name=component(short_name(n, ''))).encode())
-                        n['restore_file'] = rname
-                store.save()
-        threading.Timer(6, finish).start()
-        return copy.deepcopy(job)
-    runner.submit = fake_submit
-    runner._real_submit = real_submit
+    # Jobs: a backup or login check runs for a few seconds and succeeds without Ansible: fixture_backups.install above.
 
     # Lab operations: the VM helper is answered in-process (capabilities, browse, read, preview, run) so the
     # review dialogs, the banner-first confirm flow, the output window and the topology browser can be
@@ -482,7 +275,7 @@ def build(data_dir, port):
                 vm_files[f"/etc/containerlab/{lab['name']}/{lab['name']}.clab.yaml"] = lab['definition_yaml']
         vm_files['/etc/containerlab/examples/srl-ceos.clab.yaml'] = EXAMPLE_YAML
         for lab in store.state['labs']:
-            if lab['name'] in ('BGP_TheoryToPractice', 'vlan-lab'):
+            if lab['name'] in ('BGP_TheoryToPractice', 'vlan-lab') + fixture_scenarios.NEW_LABS:
                 lab['vm_project_path'] = f"/etc/containerlab/{lab['name']}/{lab['name']}.clab.yaml"
         store.save()
     roots = ['/etc/containerlab', '/srv/containerlab-node-manager/projects']
@@ -648,6 +441,83 @@ def build(data_dir, port):
         raise ValueError('Unsupported helper mode: ' + str(mode))
     lo.remote = fake_remote
 
+    # The control: switches and one-time actions, mounted by the fixture only (see fixture_control.py).
+    def lab_state(lab, state):
+        if state not in ('running', 'stopped'):
+            raise ValueError('state is running or stopped')
+        with store.lock:
+            found = next((l for l in store.state['labs'] if l['name'] == lab), None)
+            if not found:
+                raise ValueError('No such lab: ' + str(lab))
+            rows = store.state['discovery'].setdefault('labs', {})
+            key = found.get('deployment_name') or found['name']
+            if state == 'stopped':
+                rows.pop(key, None)
+            else:
+                rows[key] = [dict(name=n['name'], address=f'172.20.40.{10 + i}', state='running', kind=n.get('kind', '')) for i, n in enumerate(found['nodes'])]
+            reconcile(store.state)
+            store.save()
+        return {'lab': lab, 'state': state}
+
+    def hand_commit(repository, message='Edited by hand'):
+        checkout = fake_git.checkouts.get(repository)
+        if not checkout:
+            raise ValueError('No such repository: ' + str(repository))
+        with fake_git.lock:
+            return {'commit': checkout.add_commit(message, {'by-hand.txt': ('edited on the VM at %s\n' % time.time()).encode()})}
+
+    def reset():
+        control.reset()
+        devices.reset()
+        return {'switches': {}, 'devices': 'reset'}
+
+    def helper(request, repository=''):
+        """A raw request to the scripted VM Git helper, as the manager would send it: `repository` is a registration id
+        (binding id and revision are filled in). Returns the helper's answer, or {'error': sentence} where the helper refuses."""
+        request = dict(request)
+        if repository:
+            reg = next((r for r in fake_git.registrations() if r['id'] == repository), None)
+            if not reg:
+                raise ValueError('No such registration: ' + repository)
+            request.update(binding_id=reg['id'], revision=reg['revision'])
+        try:
+            return fake_git(None, request)
+        except ValueError as exc:
+            return {'error': str(exc)}
+
+    def remote_readme(url):
+        """Someone adds a README on GitHub: an empty repository reachable by address now has its branch."""
+        return fake_git.add_readme(url)
+
+    def prefer_repository(repository, lab='square-fresh'):
+        """Make `repository` (a checkout name, `Archtop-Lab`) the one the manager offers `lab` first. The manager chooses the default of a
+        first save as: the repository the lab used last, else the one any save used most recently, else the first by name. A save by another
+        lab therefore moves the default; this puts it back (a finished `update` of the lab in that checkout, which the chip ignores)."""
+        checkout = fake_git.checkouts.get(repository)
+        if not checkout:
+            raise ValueError('No such repository: ' + str(repository))
+        with store.lock:
+            found = next((l for l in store.state['labs'] if l['name'] == lab), None)
+            if not found:
+                raise ValueError('No such lab: ' + str(lab))
+            stamp = now()
+            store.state.setdefault('git_jobs', []).append(dict(
+                id=uuid.uuid4().hex, lab_id=found['id'], status='dismissed', created=stamp, finished=stamp, target='update',
+                message='Repository updated from remote.', destination=dict(checkout=checkout.path, repository=repository)))
+            store.save()
+        return {'lab': lab, 'repository': repository}
+
+    actions = {'helper': helper, 'edit_device': devices.edit, 'device_config': devices.set_tag, 'lab_state': lab_state, 'hand_commit': hand_commit, 'reset': reset,
+               'remote_readme': remote_readme, 'prefer_repository': prefer_repository}
+
+    def describe():
+        with store.lock:
+            labs = {l['name']: l['id'] for l in store.state['labs']}
+        return {'labs': labs, 'repositories': fake_git.describe()['repositories'], 'remote_only': fake_git.describe()['remote_only'],
+                'devices': {n: dict(label=d.label, platform=d.platform, outcome=devices.outcome(d), lines=len(d.config.splitlines()), armed=bool(d.armed))
+                            for n, d in sorted(devices.nodes.items())}}
+    fixture_control.install(app, control, actions, describe)
+
     print(f'fixture manager ready on http://127.0.0.1:{port}/  data={data_dir}', flush=True)
     for lab in store.state['labs']:
         print(f"  {lab['name']}: {lab['id']}", flush=True)
@@ -659,12 +529,13 @@ def main(argv=None):
     parser.add_argument('--port', type=int, default=int(os.environ.get('FIXTURE_PORT', '8090')))
     parser.add_argument('--data', default=os.environ.get('FIXTURE_DATA', ''))
     parser.add_argument('--keep', action='store_true', help='reuse the data directory instead of starting fresh')
+    parser.add_argument('--classic', action='store_true', help='seed only the labs and the Course-Labs repository the first fixture had')
     args = parser.parse_args(argv)
     data_dir = Path(args.data) if args.data else Path(os.environ.get('TMPDIR', '/tmp')) / 'clab-fixture-manager'
     if not args.keep and data_dir.exists():
         shutil.rmtree(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
-    app = build(data_dir, args.port)
+    app = build(data_dir, args.port, classic=args.classic)
     import uvicorn
     uvicorn.run(app, host='127.0.0.1', port=args.port, log_level='warning')
 

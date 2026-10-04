@@ -1,0 +1,160 @@
+SCENARIO 6: lab states Start / Broken / Final on git-redesign (all four devices)
+  [device descriptions before Start]
+      a-ceos1   Ethernet1                description l1-s5r-a-ceos1
+      a-ceos2   Ethernet2                description l1-s4-a-ceos2
+      a-cjunos  et-0/0/1
+      a-xrv9k   GigabitEthernet0/0/0/0
+[15:53:17] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/state {"choice": "", "folder": "", "name": "Start", "repository": "", "request_id": "68e1b06cd05846e19fca0ffe8756c9cc"}
+    -> HTTP 200 (0.8s) {"id": "68e1b06cd05846e19fca0ffe8756c9cc", "message": "Save queued.", "status": "queued"}
+[15:53:17]    job 68e1b06c status=capturing message='Capturing the configured devices.'
+[15:53:21]    job 68e1b06c status=exporting message='Saving captured configurations to the VM repository.'
+[15:53:23]    job 68e1b06c status=review_pending message='Saved in the VM repository; not pushed.'
+    job: {"changed_files": ["latest/ceos1.cfg", "latest/ceos1.eoscfg", "latest/ceos2.cfg", "latest/ceos2.eoscfg", "latest/cjunos.cfg", "latest/cjunos.jcfg", "latest/xrv9k.cfg", "latest/xrv9k.xrcfg", "latest/git-redesign.clab.yml", "latest/git-redesign.clab.yml.annotations.json", "latest/manifest.json"], "commit": "809a675aaf84b7ff733e7ce21cf9f01d9e391e69", "destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "kind": "state", "message": "Saved in the VM repository; not pushed.", "note": "Start", "pushed": false, "status": "review_pending", "summary": {"added": 160, "devices": ["ceos1", "ceos2", "cjunos", "xrv9k"], "first": true, "map": true, "removed": 0, "removed_devices": [], "topology": true}}
+  [VM checkout after Start]
+      809a675 Start
+      6369394 l1 s5 rerun lands later
+      f61a8b5 l1 s5 rerun first
+      16056ef l1 s5 lands later
+      ## main...origin/main [ahead 12]
+a-ceos1 change errors: []
+a-ceos2 change errors: []
+a-cjunos change errors: []
+a-xrv9k change errors: []
+  [device descriptions after Broken changes]
+      a-ceos1   Ethernet1                description l1-s6-broken
+      a-ceos2   Ethernet2                description l1-s6-broken
+      a-cjunos  et-0/0/1                 description l1-s6-broken;
+      a-xrv9k   GigabitEthernet0/0/0/0   description l1-s6-broken
+[15:53:28] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/state {"choice": "", "folder": "", "name": "Broken", "repository": "", "request_id": "2f75c7feb95d4d1d88dc7e14a00ab910"}
+    -> HTTP 200 (0.7s) {"question": {"adjusted": "", "beside": "", "collision": false, "exists": true, "folder": "", "kind": "state", "lab": null, "label": "Start", "layout": "latest", "mark": "Lab state: Start", "same_name": false, "typed": ""}}
+    job: {}
+a-ceos1 change errors: []
+a-ceos2 change errors: []
+a-cjunos change errors: []
+a-xrv9k change errors: []
+  [device descriptions after Final changes]
+      a-ceos1   Ethernet1                description l1-s6-final
+      a-ceos2   Ethernet2                description l1-s6-final
+      a-cjunos  et-0/0/1                 description l1-s6-final;
+      a-xrv9k   GigabitEthernet0/0/0/0   description l1-s6-final
+[15:53:33] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/state {"choice": "", "folder": "", "name": "Final", "repository": "", "request_id": "4435f1f38b16474bbdc00dde87ccb620"}
+    -> HTTP 200 (0.7s) {"question": {"adjusted": "", "beside": "", "collision": false, "exists": true, "folder": "", "kind": "state", "lab": null, "label": "Start", "layout": "latest", "mark": "Lab state: Start", "same_name": false, "typed": ""}}
+    job: {}
+Traceback (most recent call last):
+  File "<stdin>", line 21, in <module>
+KeyError: 'id'
+
+=== FINDING: folder "" means the repository top level. The Start above was written to /latest at the repository ROOT
+=== (the page is the one that sends <lab folder>/<name> by default, DESIGN.md 2.9 step 1). Both later calls got the question "Start already exists here".
+=== Continue with the explicit default the page would send: git-redesign/<name>. First put the four devices back to the Start configuration by CLI.
+  [device descriptions reverted to the Start configuration]
+      a-ceos1   Ethernet1                description l1-s5r-a-ceos1
+      a-ceos2   Ethernet2                description l1-s4-a-ceos2
+      a-cjunos  et-0/0/1
+      a-xrv9k   GigabitEthernet0/0/0/0
+=== SCENARIO 6 (second attempt, with the default folder the page sends)
+[15:54:08] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/state {"choice": "", "folder": "git-redesign/start", "name": "Start", "repository": "", "request_id": "4ce4edfd5ea64c4e8b6a2837f8772211"}
+    -> HTTP 200 (2.8s) {"id": "4ce4edfd5ea64c4e8b6a2837f8772211", "message": "Save queued.", "status": "queued"}
+[15:54:08]    job 4ce4edfd status=capturing message='Capturing the configured devices.'
+[15:54:12]    job 4ce4edfd status=exporting message='Saving captured configurations to the VM repository.'
+[15:54:14]    job 4ce4edfd status=review_pending message='Saved in the VM repository; not pushed.'
+    job: {"changed_files": ["git-redesign/start/latest/ceos1.cfg", "git-redesign/start/latest/ceos1.eoscfg", "git-redesign/start/latest/ceos2.cfg", "git-redesign/start/latest/ceos2.eoscfg", "git-redesign/start/latest/cjunos.cfg", "git-redesign/start/latest/cjunos.jcfg", "git-redesign/start/latest/xrv9k.cfg", "git-redesign/start/latest/xrv9k.xrcfg", "git-redesign/start/latest/git-redesign.clab.yml", "git-redesign/start/latest/git-redesign.clab.yml.annotations.json", "git-redesign/start/latest/manifest.json"], "commit": "d9318db3efa813169f6803b9a7aaf0c19b9eddb2", "destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign/start/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "kind": "state", "message": "Saved in the VM repository; not pushed.", "note": "Start", "pushed": false, "status": "review_pending", "summary": {"added": 160, "devices": ["ceos1", "ceos2", "cjunos", "xrv9k"], "first": true, "map": true, "removed": 0, "removed_devices": [], "topology": true}}
+a-ceos1 change errors: []
+a-ceos2 change errors: []
+a-cjunos change errors: []
+a-xrv9k change errors: []
+  [device descriptions after Broken changes]
+      a-ceos1   Ethernet1                description l1-s6-broken
+      a-ceos2   Ethernet2                description l1-s6-broken
+      a-cjunos  et-0/0/1                 description l1-s6-broken;
+      a-xrv9k   GigabitEthernet0/0/0/0   description l1-s6-broken
+[15:54:20] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/state {"choice": "", "folder": "git-redesign/broken", "name": "Broken", "repository": "", "request_id": "b4912c15fe964982a7219a74adc9a51d"}
+    -> HTTP 200 (2.6s) {"id": "b4912c15fe964982a7219a74adc9a51d", "message": "Save queued.", "status": "queued"}
+[15:54:20]    job b4912c15 status=capturing message='Capturing the configured devices.'
+[15:54:24]    job b4912c15 status=review_pending message='Saved in the VM repository; not pushed.'
+    job: {"changed_files": ["git-redesign/broken/latest/ceos1.cfg", "git-redesign/broken/latest/ceos1.eoscfg", "git-redesign/broken/latest/ceos2.cfg", "git-redesign/broken/latest/ceos2.eoscfg", "git-redesign/broken/latest/cjunos.cfg", "git-redesign/broken/latest/cjunos.jcfg", "git-redesign/broken/latest/xrv9k.cfg", "git-redesign/broken/latest/xrv9k.xrcfg", "git-redesign/broken/latest/git-redesign.clab.yml", "git-redesign/broken/latest/git-redesign.clab.yml.annotations.json", "git-redesign/broken/latest/manifest.json"], "commit": "6381934bfd616dda0bde0f10174cd86c74565c29", "destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign/broken/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "kind": "state", "message": "Saved in the VM repository; not pushed.", "note": "Broken", "pushed": false, "status": "review_pending", "summary": {"added": 162, "devices": ["ceos1", "ceos2", "cjunos", "xrv9k"], "first": true, "map": true, "removed": 0, "removed_devices": [], "topology": true}}
+a-ceos1 change errors: []
+a-ceos2 change errors: []
+a-cjunos change errors: []
+a-xrv9k change errors: []
+  [device descriptions after Final changes]
+      a-ceos1   Ethernet1                description l1-s6-final
+      a-ceos2   Ethernet2                description l1-s6-final
+      a-cjunos  et-0/0/1                 description l1-s6-final;
+      a-xrv9k   GigabitEthernet0/0/0/0   description l1-s6-final
+[15:54:31] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/state {"choice": "", "folder": "git-redesign/final", "name": "Final", "repository": "", "request_id": "b4d6a83dbc0d4ff1994d88b4e21a835a"}
+    -> HTTP 200 (2.8s) {"id": "b4d6a83dbc0d4ff1994d88b4e21a835a", "message": "Save queued.", "status": "queued"}
+[15:54:31]    job b4d6a83d status=capturing message='Capturing the configured devices.'
+[15:54:35]    job b4d6a83d status=review_pending message='Saved in the VM repository; not pushed.'
+    job: {"changed_files": ["git-redesign/final/latest/ceos1.cfg", "git-redesign/final/latest/ceos1.eoscfg", "git-redesign/final/latest/ceos2.cfg", "git-redesign/final/latest/ceos2.eoscfg", "git-redesign/final/latest/cjunos.cfg", "git-redesign/final/latest/cjunos.jcfg", "git-redesign/final/latest/xrv9k.cfg", "git-redesign/final/latest/xrv9k.xrcfg", "git-redesign/final/latest/git-redesign.clab.yml", "git-redesign/final/latest/git-redesign.clab.yml.annotations.json", "git-redesign/final/latest/manifest.json"], "commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign/final/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "kind": "state", "message": "Saved in the VM repository; not pushed.", "note": "Final", "pushed": false, "status": "review_pending", "summary": {"added": 162, "devices": ["ceos1", "ceos2", "cjunos", "xrv9k"], "first": true, "map": true, "removed": 0, "removed_devices": [], "topology": true}}
+  [VM checkout after three states]
+      78bac3b Final
+      6381934 Broken
+      d9318db Start
+      809a675 Start
+      ## main...origin/main [ahead 15]
+[15:54:36] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id": "b4d6a83d.."} -> HTTP 200
+     file {"node": "ceos1", "path": "git-redesign/final/latest/ceos1.cfg", "role": "device", "status": "added"}
+     file {"node": "ceos1", "path": "git-redesign/final/latest/ceos1.eoscfg", "role": "restore", "status": "added"}
+     file {"node": "ceos2", "path": "git-redesign/final/latest/ceos2.cfg", "role": "device", "status": "added"}
+     file {"node": "ceos2", "path": "git-redesign/final/latest/ceos2.eoscfg", "role": "restore", "status": "added"}
+     file {"node": "cjunos", "path": "git-redesign/final/latest/cjunos.cfg", "role": "device", "status": "added"}
+     file {"node": "cjunos", "path": "git-redesign/final/latest/cjunos.jcfg", "role": "restore", "status": "added"}
+     file {"node": "", "path": "git-redesign/final/latest/git-redesign.clab.yml", "role": "topology", "status": "added"}
+     file {"node": "", "path": "git-redesign/final/latest/git-redesign.clab.yml.annotations.json", "role": "map", "status": "added"}
+     file {"node": "xrv9k", "path": "git-redesign/final/latest/xrv9k.cfg", "role": "device", "status": "added"}
+     file {"node": "xrv9k", "path": "git-redesign/final/latest/xrv9k.xrcfg", "role": "restore", "status": "added"}
+     file {"node": "", "path": "git-redesign/final/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 162, "devices": ["ceos1", "ceos2", "cjunos", "xrv9k"], "first": true, "map": true, "removed": 0, "removed_devices": [], "topology": true}
+     head 78bac3be0da7b7193e74e9e8de1cb82ee2a6193b upload_job b4d6a83dbc0d4ff1994d88b4e21a835a
+     also_sends [{"job_id": "68e1b06cd05846e19fca0ffe8756c9cc", "kind": "state", "lab": "git-redesign", "name": "Start", "target": "latest"}, {"job_id": "4ce4edfd5ea64c4e8b6a2837f8772211", "kind": "state", "lab": "git-redesign", "name": "Start", "target": "latest"}, {"job_id": "b4912c15fe964982a7219a74adc9a51d", "kind": "state", "lab": "git-redesign", "name": "Broken", "target": "latest"}] count 3 other_labs 0
+[15:54:36] POST /api/git/jobs/b4d6a83dbc0d4ff1994d88b4e21a835a/retry {"head": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "push": true, "reviewed": true}
+    -> HTTP 200 (0.2s) {"id": "b4d6a83dbc0d4ff1994d88b4e21a835a", "message": "Upload queued; the saved commit will be reused.", "status": "queued"}
+[15:54:36]    job b4d6a83d status=pushing message='Pushing the saved commit.'
+[15:54:40]    job b4d6a83d status=synced message='Saved to Git.'
+upload: {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "message": "Saved to Git.", "pushed": true, "status": "synced"}
+  {"commit": "d9318db3efa813169f6803b9a7aaf0c19b9eddb2", "kind": "state", "note": "Start", "pushed": true, "status": "synced"}
+  {"commit": "6381934bfd616dda0bde0f10174cd86c74565c29", "kind": "state", "note": "Broken", "pushed": true, "status": "synced"}
+  {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "kind": "state", "note": "Final", "pushed": true, "status": "synced"}
+  [GitHub after upload]
+      78bac3be0d Final
+      6381934bfd Broken
+      d9318db3ef Start
+      809a675aaf Start
+  [VM checkout after upload]
+      78bac3b Final
+      6381934 Broken
+      d9318db Start
+      809a675 Start
+      ## main...origin/main [ahead 15]
+git_status {'checked': '2026-10-04T15:54:39.747953+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+--- GET restore/states (lab git-redesign)
+HTTP 200 keys ['head', 'lab_devices', 'states', 'truncated'] head 78bac3be0d lab_devices 4 truncated False
+   {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "group": "latest", "kind": "capture", "lab": "git-redesign", "layout": "latest", "loadable_devices": 4, "name": "Git-redesign", "path": "git-redesign/latest", "saved_at": "2026-10-04T15:52:46.739570+00:00", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "group": "state", "kind": "capture", "lab": "git-redesign", "layout": "latest", "loadable_devices": 4, "name": "Broken", "path": "git-redesign/broken/latest", "saved_at": "2026-10-04T15:54:23.151931+00:00", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "group": "state", "kind": "capture", "lab": "git-redesign", "layout": "latest", "loadable_devices": 4, "name": "Final", "path": "git-redesign/final/latest", "saved_at": "2026-10-04T15:54:33.703935+00:00", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "group": "state", "kind": "capture", "lab": "git-redesign", "layout": "latest", "loadable_devices": 4, "name": "Start \u00b7 git-redesign", "path": "git-redesign/start/latest", "saved_at": "2026-10-04T15:54:11.290145+00:00", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "group": "state", "kind": "capture", "lab": "git-redesign", "layout": "latest", "loadable_devices": 4, "name": "Start \u00b7 Top level", "path": "latest", "saved_at": "2026-10-04T15:53:20.452651+00:00", "saved_devices": 4, "view_only": false, "view_only_reason": ""}
+   {"commit": "78bac3be0da7b7193e74e9e8de1cb82ee2a6193b", "group": "other-lab", "kind": "capture", "lab": "git-redesign-b", "layout": "latest", "loadable_devices": 0, "name": "B", "path": "git-redesign/b/latest", "saved_at": "2026-10-04T15:52:53.384389+00:00", "saved_devices": 2, "view_only": false, "view_only_reason": ""}
+--- layout on GitHub
+    README.md
+    git-redesign/b/latest/manifest.json
+    git-redesign/broken/latest/manifest.json
+    git-redesign/final/latest/manifest.json
+    git-redesign/latest/manifest.json
+    git-redesign/start/latest/manifest.json
+    latest/ceos1.cfg
+    latest/ceos1.eoscfg
+    latest/ceos2.cfg
+    latest/ceos2.eoscfg
+    latest/cjunos.cfg
+    latest/cjunos.jcfg
+    latest/git-redesign.clab.yml
+    latest/git-redesign.clab.yml.annotations.json
+    latest/manifest.json
+    latest/xrv9k.cfg
+    latest/xrv9k.xrcfg
+git-redesign/start/latest/manifest.json -> state= Start lab_name= git-redesign node_names= 4 keys ['backup_job_id', 'captured_at', 'excluded_nodes', 'lab_id', 'lab_name', 'restore_capable_nodes', 'schema', 'state', 'topology_digest', 'topology_provenance']
+git-redesign/broken/latest/manifest.json -> state= Broken lab_name= git-redesign node_names= 4 keys ['backup_job_id', 'captured_at', 'excluded_nodes', 'lab_id', 'lab_name', 'restore_capable_nodes', 'schema', 'state', 'topology_digest', 'topology_provenance']
+git-redesign/final/latest/manifest.json -> state= Final lab_name= git-redesign node_names= 4 keys ['backup_job_id', 'captured_at', 'excluded_nodes', 'lab_id', 'lab_name', 'restore_capable_nodes', 'schema', 'state', 'topology_digest', 'topology_provenance']
+latest/manifest.json -> state= Start lab_name= git-redesign node_names= 4 keys ['backup_job_id', 'captured_at', 'excluded_nodes', 'lab_id', 'lab_name', 'restore_capable_nodes', 'schema', 'state', 'topology_digest', 'topology_provenance']

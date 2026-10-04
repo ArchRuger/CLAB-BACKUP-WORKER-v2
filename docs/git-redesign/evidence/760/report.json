@@ -1,0 +1,4190 @@
+{
+ "kind": "fixture evidence (scripted VM helper, devices and capture; no real NOS, VM or GitHub)",
+ "viewport": [
+  760,
+  1024
+ ],
+ "port": 8181,
+ "commit": "32495479b88f2390b84b9b09feba515c53cf3103",
+ "started": "2026-10-04T20:30:59+0000",
+ "count": 118,
+ "states": [
+  {
+   "n": 1,
+   "name": "chip Saved, the header at rest",
+   "prompt": "5.1, 5.2 Saved",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "open the lab restore-square (topology)"
+   ],
+   "assertions": [
+    {
+     "name": "the chip text",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the ok dot",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "chip, Save, Load and Lab actions are visible inside the screen",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no Progress tab",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no inline style on /",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "001-chip-saved-the-header-at-rest.png"
+   ]
+  },
+  {
+   "n": 2,
+   "name": "the chip panel at rest",
+   "prompt": "5.6",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved 21 min ago”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the save name in its field",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "shows “Running: your latest save”",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "shows “Uploaded: yes, to github.com”",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "shows “All versions”",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "shows “Save as a lab state…”",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "shows “Save settings”",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Keep as a checkpoint",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "002-the-chip-panel-at-rest.png"
+   ]
+  },
+  {
+   "n": 3,
+   "name": "chip Saving, Save disabled",
+   "prompt": "5.2 Saving, 5.3 step 1",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"capture_seconds\": 12}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the panel opens by itself",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Save is disabled",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot pulses (busy)",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "003-chip-saving-save-disabled.png"
+   ]
+  },
+  {
+   "n": 4,
+   "name": "nothing changed since the last save",
+   "prompt": "5.3 step 2",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [],
+   "assertions": [
+    {
+     "name": "the toast",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "004-nothing-changed-since-the-last-save.png"
+   ]
+  },
+  {
+   "n": 5,
+   "name": "chip Waiting, the upload panel opens by itself",
+   "prompt": "5.2 Waiting, 5.3 step 3",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"capture_seconds\": 1}",
+    "fixture action edit_device {\"add\": [\"   ip route 0.0.0.0/0 10.0.0.1\", \"   ip route 10.1.1.0/24 10.0.0.1\"], \"device\": \"ceos\", \"remove\": [\"   no switchport\"]}",
+    "fixture action edit_device {\"add\": [\" router static\", \"  address-family ipv4 unicast\", \"   0.0.0.0/0 10.0.0.1\"], \"device\": \"xrv9k\"}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Upload, Not now, See changes",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the exposure sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the warn dot",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "005-chip-waiting-the-upload-panel-opens-by-itself.png"
+   ]
+  },
+  {
+   "n": 6,
+   "name": "What changed drawer",
+   "prompt": "5.3 step 4",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-see “See changes”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "one entry per device, the restore artifact is not a second one",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the real line diff",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Upload and Not now at the top",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "006-what-changed-drawer.png",
+    "006-what-changed-drawer-whole.png"
+   ]
+  },
+  {
+   "n": 7,
+   "name": "Not now: the save stays on the VM",
+   "prompt": "5.3 step 6",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-drawer-actions [data-save-action=\"not-now\"] “Not now”"
+   ],
+   "assertions": [
+    {
+     "name": "the chip stays Waiting",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no toast",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "007-not-now-the-save-stays-on-the-vm.png"
+   ]
+  },
+  {
+   "n": 8,
+   "name": "the save window (Details) with Keep snapshot only",
+   "prompt": "5.3 step 5 Details, 5.11",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “1 save to upload”",
+    "click #save-details “Details”"
+   ],
+   "assertions": [
+    {
+     "name": "Keep snapshot only",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no word of the removed tab",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "008-the-save-window-details-with-keep-snapshot-only.png"
+   ]
+  },
+  {
+   "n": 9,
+   "name": "chip Failed: Upload failed",
+   "prompt": "5.2 Failed, 5.3 step 5",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"push_fail_once\": true}",
+    "click #save-chip “1 save to upload”",
+    "click #save-upload “Upload”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Try again and Details",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the bad dot",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "009-chip-failed-upload-failed.png"
+   ]
+  },
+  {
+   "n": 10,
+   "name": "uploaded: chip Saved and the toast names the host",
+   "prompt": "5.3 step 5",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-retry “Try again”"
+   ],
+   "assertions": [
+    {
+     "name": "toast Uploaded to github.com.",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "010-uploaded-chip-saved-and-the-toast-names-the-host.png"
+   ]
+  },
+  {
+   "n": 11,
+   "name": "the name field and Keep as a checkpoint",
+   "prompt": "5.3 step 7",
+   "scenario": "saving",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved just now”",
+    "type “Routes added” into #save-name, Enter",
+    "click #save-keep"
+   ],
+   "assertions": [
+    {
+     "name": "the automatic name",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Enter renames and the panel stays open",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the checkpoint sentence",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "011-the-name-field-and-keep-as-a-checkpoint.png",
+    "011-the-name-field-and-keep-as-a-checkpoint-after.png"
+   ]
+  },
+  {
+   "n": 12,
+   "name": "Can’t save: the VM cannot be reached",
+   "prompt": "5.2 Needs attention, 6.5",
+   "scenario": "cant-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"capture_seconds\": 1}",
+    "open the lab restore-square (topology)",
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "fixture action edit_device {\"add\": [\"interface Loopback60\"], \"device\": \"ceos\", \"remove\": []}",
+    "fixture switch {\"vm_unreachable\": true}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the actions",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the bad dot",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the reason is text, not colour alone",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "012-can-t-save-the-vm-cannot-be-reached.png"
+   ]
+  },
+  {
+   "n": 13,
+   "name": "Can’t save: someone is working in the repository",
+   "prompt": "5.2 Needs attention, 6.5",
+   "scenario": "cant-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "click #git-save-progress “Save”",
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "fixture action edit_device {\"add\": [\"interface Loopback61\"], \"device\": \"ceos\", \"remove\": []}",
+    "fixture switch {\"status_problem\": \"staged\"}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the actions",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the bad dot",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the reason is text, not colour alone",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "013-can-t-save-someone-is-working-in-the-repository.png"
+   ]
+  },
+  {
+   "n": 14,
+   "name": "Can’t save: the VM account cannot upload",
+   "prompt": "5.2 Needs attention, 6.5",
+   "scenario": "cant-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "click #git-save-progress “Save”",
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "fixture action edit_device {\"add\": [\"interface Loopback62\"], \"device\": \"ceos\", \"remove\": []}",
+    "fixture switch {\"status_problem\": \"Git commit identity is missing or invalid. As the registered Linux owner, run guided Git setup or set user.name and user.email inside this checkout, then retry the original save.\"}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the actions",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the bad dot",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the reason is text, not colour alone",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "014-can-t-save-the-vm-account-cannot-upload.png"
+   ]
+  },
+  {
+   "n": 15,
+   "name": "Can’t save: the online copy is ahead, nothing waits",
+   "prompt": "5.2 Needs attention, 6.5",
+   "scenario": "cant-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "click #git-save-progress “Save”",
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "fixture action edit_device {\"add\": [\"interface Loopback63\"], \"device\": \"ceos\", \"remove\": []}",
+    "fixture switch {\"status_problem\": \"diverged\"}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the actions",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the bad dot",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the reason is text, not colour alone",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "015-can-t-save-the-online-copy-is-ahead-nothing-waits.png"
+   ]
+  },
+  {
+   "n": 16,
+   "name": "Can’t save: files the manager did not save",
+   "prompt": "5.2 Needs attention, 6.5",
+   "scenario": "cant-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "click #git-save-progress “Save”",
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "fixture action edit_device {\"add\": [\"interface Loopback64\"], \"device\": \"ceos\", \"remove\": []}",
+    "fixture switch {\"status_problem\": \"files\"}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the actions",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the bad dot",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the reason is text, not colour alone",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "016-can-t-save-files-the-manager-did-not-save.png"
+   ]
+  },
+  {
+   "n": 17,
+   "name": "Can’t save: the save location has to be set up again",
+   "prompt": "5.2 Needs attention, 6.5",
+   "scenario": "cant-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "click #git-save-progress “Save”",
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "fixture action edit_device {\"add\": [\"interface Loopback65\"], \"device\": \"ceos\", \"remove\": []}",
+    "fixture switch {\"status_problem\": \"settings\"}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the actions",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the bad dot",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the reason is text, not colour alone",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "017-can-t-save-the-save-location-has-to-be-set-up-again.png"
+   ]
+  },
+  {
+   "n": 18,
+   "name": "Can’t save: a device cannot be read",
+   "prompt": "5.2 Needs attention, 6.5",
+   "scenario": "cant-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "click #git-save-progress “Save”",
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "fixture action edit_device {\"add\": [\"interface Loopback66\"], \"device\": \"ceos\", \"remove\": []}",
+    "fixture switch {\"device_unreadable\": [\"xrv9k\"]}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the actions",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the bad dot",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the reason is text, not colour alone",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "018-can-t-save-a-device-cannot-be-read.png"
+   ]
+  },
+  {
+   "n": 19,
+   "name": "Can’t save: something unlisted",
+   "prompt": "5.2 Needs attention, 6.5",
+   "scenario": "cant-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "click #git-save-progress “Save”",
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "fixture action edit_device {\"add\": [\"interface Loopback67\"], \"device\": \"ceos\", \"remove\": []}",
+    "fixture switch {\"status_problem\": \"The disk of the VM is full.\"}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the actions",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the bad dot",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the reason is text, not colour alone",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "019-can-t-save-something-unlisted.png"
+   ]
+  },
+  {
+   "n": 20,
+   "name": "Can’t save: both sides have changes (a save waits, the online copy is ahead)",
+   "prompt": "5.2 Needs attention, 6.5",
+   "scenario": "cant-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1}",
+    "click #git-save-progress “Save”",
+    "fixture action edit_device {\"add\": [\"interface Loopback77\"], \"device\": \"ceos\", \"remove\": []}",
+    "click #git-save-progress “Save”",
+    "fixture switch {\"remote_ahead\": true}",
+    "click #save-upload “Upload”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the actions: Update from the repository is not offered while a save waits",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the commands the repository’s owner runs on the VM",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "nothing was forced: the save still waits",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "020-can-t-save-both-sides-have-changes-a-save-waits-the-online-copy-is-ahe.png"
+   ]
+  },
+  {
+   "n": 21,
+   "name": "chip Not saved yet",
+   "prompt": "5.2 Not saved",
+   "scenario": "first-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"capture_seconds\": 1}",
+    "open the lab square-fresh (topology)"
+   ],
+   "assertions": [
+    {
+     "name": "the chip text",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the hollow dot",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "021-chip-not-saved-yet.png"
+   ]
+  },
+  {
+   "n": 22,
+   "name": "first save: where the first save goes",
+   "prompt": "5.9",
+   "scenario": "first-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the sentence (a standard install: the repository is registered at its top level)",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Save and Choose another place",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Connect by URL…",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "where uploads go",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the exposure sentence",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "022-first-save-where-the-first-save-goes.png"
+   ]
+  },
+  {
+   "n": 23,
+   "name": "first save: Choose another place opens the folder chooser",
+   "prompt": "5.9, 6.3",
+   "scenario": "first-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-first-place-other “Choose another place”",
+    "click #folder-foot [data-folder-action=\"cancel\"] “Cancel”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "ends in one button, Save here",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "023-first-save-choose-another-place-opens-the-folder-chooser.png",
+    "023-first-save-choose-another-place-opens-the-folder-chooser-after.png"
+   ]
+  },
+  {
+   "n": 24,
+   "name": "first save: Connect by URL… opens the chooser’s address field",
+   "prompt": "5.9, 5.8",
+   "scenario": "first-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #git-save-progress “Save”",
+    "click #save-first-url “Connect by URL…”",
+    "click #folder-foot [data-folder-action=\"cancel\"] “Cancel”"
+   ],
+   "assertions": [
+    {
+     "name": "one field for the address, the passwords sentence beside it",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the one button, Save here, is off until an address is typed",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "nothing is said about the folder before an address is there",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "024-first-save-connect-by-url-opens-the-chooser-s-address-field.png",
+    "024-first-save-connect-by-url-opens-the-chooser-s-address-field-after.png"
+   ]
+  },
+  {
+   "n": 25,
+   "name": "first save: saved, waiting for upload",
+   "prompt": "5.9, 5.3",
+   "scenario": "first-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #git-save-progress “Save”",
+    "click #save-first “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the destination",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the lab saves in the folder named after it, no question asked",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "025-first-save-saved-waiting-for-upload.png"
+   ]
+  },
+  {
+   "n": 26,
+   "name": "first save with no repository on the VM: the address field",
+   "prompt": "5.9",
+   "scenario": "first-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-upload “Upload”",
+    "fixture switch {\"no_repositories\": true}",
+    "open the lab ospf-basics (topology)",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "one field for the HTTPS address",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the administrator’s setup is folded under it, with Check again",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the exposure sentence",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "026-first-save-with-no-repository-on-the-vm-the-address-field.png"
+   ]
+  },
+  {
+   "n": 27,
+   "name": "first save: an address the VM account cannot use is refused in words",
+   "prompt": "5.9, 6.5",
+   "scenario": "first-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "type “https://github.com/ArchRuger/forbidden-x.git” into #save-url",
+    "click #save-first “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "a sentence says why, the field stays",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "027-first-save-an-address-the-vm-account-cannot-use-is-refused-in-words.png"
+   ]
+  },
+  {
+   "n": 28,
+   "name": "first save: an empty repository asks to start it",
+   "prompt": "5.9, 6.2",
+   "scenario": "first-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "type “https://github.com/ArchRuger/New-Empty.git” into #save-url",
+    "click #save-first “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "one button",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "028-first-save-an-empty-repository-asks-to-start-it.png"
+   ]
+  },
+  {
+   "n": 29,
+   "name": "first save: the repository is started and the lab is placed",
+   "prompt": "5.9, 6.2",
+   "scenario": "first-save",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-first-start “Start the repository”"
+   ],
+   "assertions": [
+    {
+     "name": "the lab saves in its folder inside the new repository",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "029-first-save-the-repository-is-started-and-the-lab-is-placed.png"
+   ]
+  },
+  {
+   "n": 30,
+   "name": "the Load panel",
+   "prompt": "5.4 step 1, 2",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"capture_seconds\": 1, \"restore_capture_seconds\": 1}",
+    "open the lab restore-square (topology)",
+    "click #load-button “Load”"
+   ],
+   "assertions": [
+    {
+     "name": "two groups",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Start, Broken and Final by name, none by its path",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "a state that covers fewer devices says so",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "a state without restore data stays listed, disabled, View only with the reason",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "All versions and Browse the repository…",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "030-the-load-panel.png"
+   ]
+  },
+  {
+   "n": 31,
+   "name": "the Load confirmation",
+   "prompt": "5.4 step 3",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click “Final · BGP 4 devices”"
+   ],
+   "assertions": [
+    {
+     "name": "headline",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "one row per device: lines differ or Already matches",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Load, Cancel, See what’s different",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the red Load is the danger button",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "031-the-load-confirmation.png"
+   ]
+  },
+  {
+   "n": 32,
+   "name": "See what’s different",
+   "prompt": "5.4 step 3",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #load-diff “See what’s different”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the differences of the ticked devices",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "one Load button, naming the count",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "032-see-what-s-different.png",
+    "032-see-what-s-different-whole.png"
+   ]
+  },
+  {
+   "n": 33,
+   "name": "a state that covers fewer devices: Not in this state",
+   "prompt": "5.4 step 2, 3",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #load-diff-back “Back”",
+    "click #load-cancel “Cancel”",
+    "click “Junos-only 2 of 4 devices”"
+   ],
+   "assertions": [
+    {
+     "name": "the devices the state does not hold read Not in this state",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "033-a-state-that-covers-fewer-devices-not-in-this-state.png"
+   ]
+  },
+  {
+   "n": 34,
+   "name": "a state saved on a different topology",
+   "prompt": "5.4 step 3, D10",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #load-cancel “Cancel”",
+    "click “Other-topology 3 of 4 devices”"
+   ],
+   "assertions": [
+    {
+     "name": "the line",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "View its topology",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "034-a-state-saved-on-a-different-topology.png"
+   ]
+  },
+  {
+   "n": 35,
+   "name": "View its topology",
+   "prompt": "5.4 step 3, D10",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #load-topology “View its topology”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the topology file of the state is open",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "035-view-its-topology.png",
+    "035-view-its-topology-whole.png"
+   ]
+  },
+  {
+   "n": 36,
+   "name": "the confirmation with a device that is unreachable",
+   "prompt": "5.4 step 3",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-drawer-close",
+    "fixture switch {\"load_preset\": \"one-unreachable\"}",
+    "click #load-button “Load”",
+    "click “Final · BGP 4 devices”",
+    "the row reads: Not reachable"
+   ],
+   "assertions": [
+    {
+     "name": "xrv9k shows a reason and cannot be ticked",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the other devices can still be loaded",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "036-the-confirmation-with-a-device-that-is-unreachable.png"
+   ]
+  },
+  {
+   "n": 37,
+   "name": "the confirmation with a device that is blocked",
+   "prompt": "5.4 step 3",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"load_preset\": null}",
+    "click #load-cancel “Cancel”",
+    "fixture switch {\"load_preset\": \"one-blocked\"}",
+    "click #load-button “Load”",
+    "click “Final · BGP 4 devices”",
+    "the row reads: Blocked"
+   ],
+   "assertions": [
+    {
+     "name": "xrv9k shows a reason and cannot be ticked",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the other devices can still be loaded",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "037-the-confirmation-with-a-device-that-is-blocked.png"
+   ]
+  },
+  {
+   "n": 38,
+   "name": "the confirmation with a device that is being edited",
+   "prompt": "5.4 step 3",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"load_preset\": null}",
+    "click #load-cancel “Cancel”",
+    "fixture switch {\"load_preset\": \"one-editing\"}",
+    "click #load-button “Load”",
+    "click “Final · BGP 4 devices”",
+    "the row reads: Blocked"
+   ],
+   "assertions": [
+    {
+     "name": "xrv9k shows a reason and cannot be ticked",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the other devices can still be loaded",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "038-the-confirmation-with-a-device-that-is-being-edited.png"
+   ]
+  },
+  {
+   "n": 39,
+   "name": "the confirmation with a device that is login refused",
+   "prompt": "5.4 step 3",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"load_preset\": null}",
+    "click #load-cancel “Cancel”",
+    "fixture switch {\"load_preset\": \"one-bad-login\"}",
+    "click #load-button “Load”",
+    "click “Final · BGP 4 devices”",
+    "the row reads: Blocked"
+   ],
+   "assertions": [
+    {
+     "name": "xrv9k shows a reason and cannot be ticked",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the other devices can still be loaded",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "039-the-confirmation-with-a-device-that-is-login-refused.png"
+   ]
+  },
+  {
+   "n": 40,
+   "name": "chip Loading, each device Waiting, Loading… or Loaded",
+   "prompt": "5.2 Loading, 5.4 step 4",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"load_preset\": null}",
+    "click #load-cancel “Cancel”",
+    "fixture switch {\"load_preset\": \"slow\", \"load_seconds\": 3}",
+    "click #load-button “Load”",
+    "click “Final · BGP 4 devices”",
+    "click #load-run “Load”"
+   ],
+   "assertions": [
+    {
+     "name": "the chip panel shows the loading view",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "each device reads Waiting, Backing up…, Loading… or its outcome",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Save and Load are disabled",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot pulses (busy)",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "040-chip-loading-each-device-waiting-loading-or-loaded.png"
+   ]
+  },
+  {
+   "n": 41,
+   "name": "chip Running, the panel after a load",
+   "prompt": "5.2 Running, 5.4 step 5",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"load_preset\": null, \"load_seconds\": null}"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "loaded when and on how many",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Your latest save and Before loading",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Undo this load and What changed",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "041-chip-running-the-panel-after-a-load.png"
+   ]
+  },
+  {
+   "n": 42,
+   "name": "What changed after a load: the restore job window",
+   "prompt": "5.4 step 5, parity gate",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #load-details “What changed”"
+   ],
+   "assertions": [
+    {
+     "name": "it lists the devices",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no word of the removed tab",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "042-what-changed-after-a-load-the-restore-job-window.png"
+   ]
+  },
+  {
+   "n": 43,
+   "name": "Undo this load: an ordinary confirmation",
+   "prompt": "5.4 step 5",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Running Final · BGP”",
+    "click #load-undo “Undo this load”"
+   ],
+   "assertions": [
+    {
+     "name": "headline",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "043-undo-this-load-an-ordinary-confirmation.png"
+   ]
+  },
+  {
+   "n": 44,
+   "name": "after the undo the chip names what runs",
+   "prompt": "5.4 step 5",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #load-run “Load”"
+   ],
+   "assertions": [
+    {
+     "name": "the toast",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "044-after-the-undo-the-chip-names-what-runs.png"
+   ]
+  },
+  {
+   "n": 45,
+   "name": "chip Partial: one device Not loaded",
+   "prompt": "5.2 Partial, 5.4 step 6",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"load_preset\": \"one-failed\"}",
+    "click #load-button “Load”",
+    "click “Final · BGP 4 devices”",
+    "click #load-run “Load”"
+   ],
+   "assertions": [
+    {
+     "name": "the chip text",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the dot is the warn dot",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the device reads Not loaded",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Try xrv9k again, Undo this load, Details",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no toast for a load that did not succeed",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "045-chip-partial-one-device-not-loaded.png"
+   ]
+  },
+  {
+   "n": 46,
+   "name": "Try xrv9k again: only that device",
+   "prompt": "5.4 step 6",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"load_preset\": null}",
+    "click #load-retry “Try xrv9k again”"
+   ],
+   "assertions": [
+    {
+     "name": "only that device is listed",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the line says so",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "046-try-xrv9k-again-only-that-device.png"
+   ]
+  },
+  {
+   "n": 47,
+   "name": "chip Partial: Kept previous (read back as rolled back)",
+   "prompt": "5.2 Partial, 5.4 step 6",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #load-run “Load”",
+    "fixture switch {\"load_preset\": \"one-rolled-back\"}",
+    "click #load-button “Load”",
+    "click “Broken 4 devices”",
+    "click #load-run “Load”"
+   ],
+   "assertions": [
+    {
+     "name": "the device reads Kept previous",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Details is offered",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "047-chip-partial-kept-previous-read-back-as-rolled-back.png"
+   ]
+  },
+  {
+   "n": 48,
+   "name": "chip Partial: Not confirmed (sent to Details)",
+   "prompt": "5.2 Partial, 5.4 step 6",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"load_preset\": null}",
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1, \"restore_capture_seconds\": 1}",
+    "fixture switch {\"load_preset\": \"one-uncertain\"}",
+    "click #load-button “Load”",
+    "click “Broken 4 devices”",
+    "click #load-run “Load”"
+   ],
+   "assertions": [
+    {
+     "name": "the device reads Not confirmed",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Details is offered",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "048-chip-partial-not-confirmed-sent-to-details.png"
+   ]
+  },
+  {
+   "n": 49,
+   "name": "the chip leaves Running when the next save completes",
+   "prompt": "5.4 step 9",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"load_preset\": null}",
+    "fixture action reset {}",
+    "fixture switch {\"capture_seconds\": 1, \"restore_capture_seconds\": 1}",
+    "fixture action edit_device {\"add\": [\"interface Loopback55\"], \"device\": \"ceos\", \"remove\": []}",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the chip names the save again",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "049-the-chip-leaves-running-when-the-next-save-completes.png"
+   ]
+  },
+  {
+   "n": 50,
+   "name": "the lab is not running: Start the lab to load a state",
+   "prompt": "5.4 step 7",
+   "scenario": "load",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture action lab_state {\"lab\": \"restore-square\", \"state\": \"stopped\"}",
+    "open the lab restore-square (topology)",
+    "click #load-button “Load”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence and Start lab",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "050-the-lab-is-not-running-start-the-lab-to-load-a-state.png"
+   ]
+  },
+  {
+   "n": 51,
+   "name": "a lab with no saves of its own still offers the lab states",
+   "prompt": "5.4 step 8",
+   "scenario": "load-fresh",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"capture_seconds\": 1, \"restore_capture_seconds\": 1}",
+    "open the lab square-fresh (topology)",
+    "click #load-button “Load”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence and the Lab states group",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no Your saves group",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Start is View only; Broken and Final can be loaded",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "051-a-lab-with-no-saves-of-its-own-still-offers-the-lab-states.png"
+   ]
+  },
+  {
+   "n": 52,
+   "name": "a lab state is loaded before the lab ever saved",
+   "prompt": "5.4 step 8",
+   "scenario": "load-fresh",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click “Final 4 devices”",
+    "click #load-run “Load”"
+   ],
+   "assertions": [
+    {
+     "name": "headline",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "chip Running Final, toast Final loaded on 4 devices.",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "052-a-lab-state-is-loaded-before-the-lab-ever-saved.png"
+   ]
+  },
+  {
+   "n": 53,
+   "name": "Browse the repository…: every folder, with its files",
+   "prompt": "5.4 parity gate, 5.7",
+   "scenario": "load-fresh",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #load-button “Load”",
+    "click #load-browse “Browse the repository…”",
+    "click [data-folder=\"Course\"] > .folder-row [data-folder-twist]",
+    "click [data-folder=\"Course/broken\"] > .folder-row “broken Lab state: Broken”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "it says that looking changes nothing",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled here too",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "a folder that holds a saved state offers Load this state… and View files, though no lab is connected to it",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "053-browse-the-repository-every-folder-with-its-files.png"
+   ]
+  },
+  {
+   "n": 54,
+   "name": "a browsed folder ends in the Load confirmation",
+   "prompt": "5.4 parity gate",
+   "scenario": "load-fresh",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click “Load this state…”"
+   ],
+   "assertions": [
+    {
+     "name": "headline: the state’s name alone",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the lab keeps no save location",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "054-a-browsed-folder-ends-in-the-load-confirmation.png"
+   ]
+  },
+  {
+   "n": 55,
+   "name": "Save as a lab state…: a name and a folder beside the lab’s own",
+   "prompt": "5.5",
+   "scenario": "lab-state",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"capture_seconds\": 1, \"restore_capture_seconds\": 1}",
+    "open the lab restore-square (topology)",
+    "click #save-chip “Saved 21 min ago”",
+    "click #save-as-state “Save as a lab state…”",
+    "type “mine” into #state-name"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the one-click names",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "without a name: no claim where the state goes, Save state off with the reason",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the result line",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "055-save-as-a-lab-state-a-name-and-a-folder-beside-the-lab-s-own.png",
+    "055-save-as-a-lab-state-a-name-and-a-folder-beside-the-lab-s-own-whole.png"
+   ]
+  },
+  {
+   "n": 56,
+   "name": "a lab state is saved and waits for upload like any save",
+   "prompt": "5.5",
+   "scenario": "lab-state",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"save\"] “Save state”"
+   ],
+   "assertions": [
+    {
+     "name": "the same upload sentence as any save",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "its destination",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the lab’s own save location did not change",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "056-a-lab-state-is-saved-and-waits-for-upload-like-any-save.png"
+   ]
+  },
+  {
+   "n": 57,
+   "name": "the new state is listed under Lab states by its name",
+   "prompt": "5.5, 5.4 step 1",
+   "scenario": "lab-state",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-upload “Upload”",
+    "click #load-button “Load”"
+   ],
+   "assertions": [
+    {
+     "name": "Mine is a lab state",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "057-the-new-state-is-listed-under-lab-states-by-its-name.png"
+   ]
+  },
+  {
+   "n": 58,
+   "name": "a name that exists: one question, Replace it or Use another name",
+   "prompt": "5.5",
+   "scenario": "lab-state",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved 21 min ago”",
+    "click #save-as-state “Save as a lab state…”",
+    "click .folder-names [data-state-name=\"start\"] “start”"
+   ],
+   "assertions": [
+    {
+     "name": "the question",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "its answers",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "058-a-name-that-exists-one-question-replace-it-or-use-another-name.png",
+    "058-a-name-that-exists-one-question-replace-it-or-use-another-name-whole.png"
+   ]
+  },
+  {
+   "n": 59,
+   "name": "Replace it: the state is written again, complete",
+   "prompt": "5.5",
+   "scenario": "lab-state",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-choice=\"take\"] “Replace it”"
+   ],
+   "assertions": [
+    {
+     "name": "saved",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "059-replace-it-the-state-is-written-again-complete.png"
+   ]
+  },
+  {
+   "n": 60,
+   "name": "the lab’s own folder: the state goes into a folder inside it, and the drawer says so",
+   "prompt": "5.5",
+   "scenario": "lab-state",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-upload “Upload”",
+    "click #save-chip “Saved 21 min ago”",
+    "click #save-as-state “Save as a lab state…”",
+    "type “Inside” into #state-name",
+    "type “BGP” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "offered beside the lab’s own saves",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the lab’s own folder itself is never the state’s folder: the result line",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the drawer says so",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "060-the-lab-s-own-folder-the-state-goes-into-a-folder-inside-it-and-the-dr.png",
+    "060-the-lab-s-own-folder-the-state-goes-into-a-folder-inside-it-and-the-dr-whole.png"
+   ]
+  },
+  {
+   "n": 61,
+   "name": "All versions offers Save as a lab state… too",
+   "prompt": "5.5, 5.7",
+   "scenario": "lab-state",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"cancel\"] “Cancel”",
+    "click #save-chip “Saved 21 min ago”",
+    "click #save-all “All versions”",
+    "click #save-drawer-content [data-save-action=\"state\"] “Save as a lab state…”"
+   ],
+   "assertions": [
+    {
+     "name": "with Back to All versions",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "061-all-versions-offers-save-as-a-lab-state-too.png",
+    "061-all-versions-offers-save-as-a-lab-state-too-whole.png"
+   ]
+  },
+  {
+   "n": 62,
+   "name": "a lab without a save location: the chooser asks which repository",
+   "prompt": "5.5",
+   "scenario": "lab-state",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "open the lab square-fresh (topology)",
+    "click #save-chip “Not saved yet”",
+    "click #save-as-state “Save as a lab state…”",
+    "type “mine” into #state-name"
+   ],
+   "assertions": [
+    {
+     "name": "the repositories of the VM are offered",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the result line names the repository and a folder",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the lab still has no save location",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "062-a-lab-without-a-save-location-the-chooser-asks-which-repository.png"
+   ]
+  },
+  {
+   "n": 63,
+   "name": "All versions",
+   "prompt": "5.7",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"capture_seconds\": 1, \"restore_capture_seconds\": 1}",
+    "open the lab restore-square (topology)",
+    "click #save-chip “Saved 21 min ago”",
+    "click #save-all “All versions”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the groups",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "other labs and everything else are folded",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "it ends with Full history… and Browse the repository…",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "063-all-versions.png",
+    "063-all-versions-whole.png"
+   ]
+  },
+  {
+   "n": 64,
+   "name": "All versions: a lab state opens in place",
+   "prompt": "5.7",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [],
+   "assertions": [
+    {
+     "name": "its actions",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "064-all-versions-a-lab-state-opens-in-place.png",
+    "064-all-versions-a-lab-state-opens-in-place-whole.png"
+   ]
+  },
+  {
+   "n": 65,
+   "name": "All versions: your own save also offers Keep as a checkpoint and Use as starting point…",
+   "prompt": "5.7",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [],
+   "assertions": [
+    {
+     "name": "the actions (the newest save has nothing to be different from)",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "065-all-versions-your-own-save-also-offers-keep-as-a-checkpoint-and-use-as.png",
+    "065-all-versions-your-own-save-also-offers-keep-as-a-checkpoint-and-use-as-whole.png"
+   ]
+  },
+  {
+   "n": 66,
+   "name": "All versions: Use as starting point… with its replace review",
+   "prompt": "5.7",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click “Use as starting point…”"
+   ],
+   "assertions": [
+    {
+     "name": "it asks before the starting point is replaced",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "066-all-versions-use-as-starting-point-with-its-replace-review.png",
+    "066-all-versions-use-as-starting-point-with-its-replace-review-whole.png"
+   ]
+  },
+  {
+   "n": 67,
+   "name": "All versions: a design export is view and download only",
+   "prompt": "5.7",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [],
+   "assertions": [
+    {
+     "name": "Load this state… is disabled with the reason",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "067-all-versions-a-design-export-is-view-and-download-only.png",
+    "067-all-versions-a-design-export-is-view-and-download-only-whole.png"
+   ]
+  },
+  {
+   "n": 68,
+   "name": "All versions: View files (topology and map included)",
+   "prompt": "5.7",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click “View files”"
+   ],
+   "assertions": [
+    {
+     "name": "title, with Back",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "devices, the topology file and the map",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "068-all-versions-view-files-topology-and-map-included.png",
+    "068-all-versions-view-files-topology-and-map-included-whole.png"
+   ]
+  },
+  {
+   "n": 69,
+   "name": "All versions: See what’s different (saved against saved)",
+   "prompt": "5.7",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-drawer-back “Back”",
+    "click “See what’s different”"
+   ],
+   "assertions": [
+    {
+     "name": "with Back",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "069-all-versions-see-what-s-different-saved-against-saved.png",
+    "069-all-versions-see-what-s-different-saved-against-saved-whole.png"
+   ]
+  },
+  {
+   "n": 70,
+   "name": "All versions: Download ZIP",
+   "prompt": "5.7",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-drawer-back “Back”",
+    "click Download ZIP"
+   ],
+   "assertions": [
+    {
+     "name": "a ZIP file is downloaded",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "070-all-versions-download-zip.png",
+    "070-all-versions-download-zip-whole.png"
+   ]
+  },
+  {
+   "n": 71,
+   "name": "All versions: Full history…",
+   "prompt": "5.7",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click “Full history…”"
+   ],
+   "assertions": [
+    {
+     "name": "the full history opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "it lists commits",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "071-all-versions-full-history.png",
+    "071-all-versions-full-history-whole.png"
+   ]
+  },
+  {
+   "n": 72,
+   "name": "All versions: Browse the repository…",
+   "prompt": "5.7",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved 21 min ago”",
+    "click #save-all “All versions”",
+    "click “Browse the repository…”"
+   ],
+   "assertions": [
+    {
+     "name": "the repository as a tree, with Back",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "072-all-versions-browse-the-repository.png",
+    "072-all-versions-browse-the-repository-whole.png"
+   ]
+  },
+  {
+   "n": 73,
+   "name": "All versions: Load this state… ends in the Load confirmation",
+   "prompt": "5.7, 5.4 parity gate",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-drawer-back “Back”",
+    "click “Load this state…”"
+   ],
+   "assertions": [
+    {
+     "name": "the drawer closed and the confirmation shows",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "073-all-versions-load-this-state-ends-in-the-load-confirmation.png"
+   ]
+  },
+  {
+   "n": 74,
+   "name": "Save settings",
+   "prompt": "5.8",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved 21 min ago”",
+    "click #save-settings “Save settings”"
+   ],
+   "assertions": [
+    {
+     "name": "title",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "has Save location",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "has Change folder…",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "has Use a different repository…",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "has Connect by URL…",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "has Disconnect this lab…",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "has Save settings",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the devices included in every save, as tick boxes",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "where the lab saves: repository and folder",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "074-save-settings.png"
+   ]
+  },
+  {
+   "n": 75,
+   "name": "Save settings: the folded Git details",
+   "prompt": "5.8",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-git-details > summary “Git details”"
+   ],
+   "assertions": [
+    {
+     "name": "Refresh status and Update from the repository",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the online repository is named",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "075-save-settings-the-folded-git-details.png"
+   ]
+  },
+  {
+   "n": 76,
+   "name": "Save settings: Update from the repository",
+   "prompt": "5.8, 6.5",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-git-details [data-git-repo-action=\"update\"] “Update from the repository”"
+   ],
+   "assertions": [
+    {
+     "name": "it asks first",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "076-save-settings-update-from-the-repository.png"
+   ]
+  },
+  {
+   "n": 77,
+   "name": "Save settings: Change folder… opens the folder chooser",
+   "prompt": "5.8, 6.3",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved 21 min ago”",
+    "click #save-settings “Save settings”",
+    "click #save-drawer-content [data-save-action=\"folder\"] “Change folder…”"
+   ],
+   "assertions": [
+    {
+     "name": "inside the drawer, with Back",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "folders that hold saves say whose they are",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "077-save-settings-change-folder-opens-the-folder-chooser.png",
+    "077-save-settings-change-folder-opens-the-folder-chooser-whole.png"
+   ]
+  },
+  {
+   "n": 78,
+   "name": "Save settings: Use a different repository…",
+   "prompt": "5.8",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-drawer-back “Back”",
+    "click #save-drawer-content [data-git-repo-action=\"switch\"] “Use a different repository…”"
+   ],
+   "assertions": [
+    {
+     "name": "the other repositories of the VM are offered, the lab’s own is not",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no word of the removed tab",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "078-save-settings-use-a-different-repository.png"
+   ]
+  },
+  {
+   "n": 79,
+   "name": "Save settings: a different repository leads to the folder chooser for it",
+   "prompt": "5.8, 6.3",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #git-switch-choose “Choose this repository”"
+   ],
+   "assertions": [
+    {
+     "name": "the chooser shows that repository",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "nothing was changed yet",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "079-save-settings-a-different-repository-leads-to-the-folder-chooser-for-i.png"
+   ]
+  },
+  {
+   "n": 80,
+   "name": "Save settings: Connect by URL…",
+   "prompt": "5.8",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"cancel\"] “Cancel”",
+    "click #save-chip “Saved 21 min ago”",
+    "click #save-settings “Save settings”",
+    "click #save-drawer-content [data-git-repo-action=\"connect\"] “Connect by URL…”"
+   ],
+   "assertions": [
+    {
+     "name": "the one button, Save here, is off until an address is typed",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "nothing is said about the folder before an address is there",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Back to the settings",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "080-save-settings-connect-by-url.png"
+   ]
+  },
+  {
+   "n": 81,
+   "name": "Save settings: a device left out",
+   "prompt": "5.8",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved 21 min ago”",
+    "click #save-settings “Save settings”",
+    "untick the fourth device",
+    "click #save-drawer-content [data-save-action=\"save-settings\"] “Save settings”"
+   ],
+   "assertions": [
+    {
+     "name": "the sentence about the device left out",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the selection is saved",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "081-save-settings-a-device-left-out.png"
+   ]
+  },
+  {
+   "n": 82,
+   "name": "Save settings: Disconnect this lab…",
+   "prompt": "5.8",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "open the lab edge-lab (topology)",
+    "click #save-chip “Saved 20 h ago”",
+    "click #save-settings “Save settings”",
+    "click #save-drawer-content [data-git-repo-action=\"unlink\"] “Disconnect this lab…”"
+   ],
+   "assertions": [
+    {
+     "name": "it asks first, in words without the removed tab",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "082-save-settings-disconnect-this-lab.png"
+   ]
+  },
+  {
+   "n": 83,
+   "name": "Save settings: disconnected; Save asks where to save again",
+   "prompt": "5.8, 5.9",
+   "scenario": "drawers",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #git-unlink-confirm “Disconnect”",
+    "click #git-save-progress “Save”"
+   ],
+   "assertions": [
+    {
+     "name": "the lab has no save location",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the chip still names the lab’s last save (its saves stay in the repository)",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Save shows the first-save view",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "it says the lab has no save location now, not that this is a first save",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "083-save-settings-disconnected-save-asks-where-to-save-again.png"
+   ]
+  },
+  {
+   "n": 84,
+   "name": "row 1: a folder that does not exist",
+   "prompt": "6.2 row 1",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"capture_seconds\": 1}",
+    "open the lab shared-b (topology)",
+    "click #git-save-progress “Save”",
+    "click “Choose another place”",
+    "type the folder brand-new/deeper",
+    "type “brand-new/deeper” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "listed as New in the tree",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "one button, Save here",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "084-row-1-a-folder-that-does-not-exist.png"
+   ]
+  },
+  {
+   "n": 85,
+   "name": "row 1: it is created and used",
+   "prompt": "6.2 row 1",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”"
+   ],
+   "assertions": [
+    {
+     "name": "a folder that does not exist: the lab saves in Nested-Labs:brand-new/deeper",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the first save follows the choice by itself",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "085-row-1-it-is-created-and-used.png",
+    "085-row-1-it-is-created-and-used-after.png"
+   ]
+  },
+  {
+   "n": 86,
+   "name": "row 2: an existing folder with ordinary files and no saved state",
+   "prompt": "6.2 row 2",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-upload “Upload”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder notes",
+    "type “notes” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no question, no refusal",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "one button, Save here",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the line that brings the saved files along is offered",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "086-row-2-an-existing-folder-with-ordinary-files-and-no-saved-state.png"
+   ]
+  },
+  {
+   "n": 87,
+   "name": "row 3: the repository’s top level",
+   "prompt": "6.2 row 3",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "click #folder-tree > [data-folder=\"\"] > .folder-row “Nested-Labs top level”"
+   ],
+   "assertions": [
+    {
+     "name": "ordinary files: the lab saves in Nested-Labs:notes",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the sentence",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "one button, Save here",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "087-row-3-the-repository-s-top-level.png"
+   ]
+  },
+  {
+   "n": 88,
+   "name": "row 4: a folder inside another lab’s folder (BGP/edge/inner)",
+   "prompt": "6.2 row 4",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder BGP/edge/inner",
+    "type “BGP/edge/inner” into #folder-path",
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”"
+   ],
+   "assertions": [
+    {
+     "name": "the top level: the lab saves in Nested-Labs:",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no refusal",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "one button, Save here: nesting is allowed",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "BGP/edge/inner: the lab saves in Nested-Labs:BGP/edge/inner",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "088-row-4-a-folder-inside-another-lab-s-folder-bgp-edge-inner.png",
+    "088-row-4-a-folder-inside-another-lab-s-folder-bgp-edge-inner-whole.png",
+    "088-row-4-a-folder-inside-another-lab-s-folder-bgp-edge-inner-after.png"
+   ]
+  },
+  {
+   "n": 89,
+   "name": "row 4: a folder beside another lab’s folder (BGP-beside)",
+   "prompt": "6.2 row 4",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder BGP-beside",
+    "type “BGP-beside” into #folder-path",
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no refusal",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "one button, Save here: nesting is allowed",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "BGP-beside: the lab saves in Nested-Labs:BGP-beside",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "089-row-4-a-folder-beside-another-lab-s-folder-bgp-beside.png",
+    "089-row-4-a-folder-beside-another-lab-s-folder-bgp-beside-whole.png",
+    "089-row-4-a-folder-beside-another-lab-s-folder-bgp-beside-after.png"
+   ]
+  },
+  {
+   "n": 90,
+   "name": "row 4: a folder inside a lab folder, ordinary files another lab’s folder (BGP/exercises)",
+   "prompt": "6.2 row 4",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder BGP/exercises",
+    "type “BGP/exercises” into #folder-path",
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no refusal",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "one button, Save here: nesting is allowed",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "BGP/exercises: the lab saves in Nested-Labs:BGP/exercises",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "090-row-4-a-folder-inside-a-lab-folder-ordinary-files-another-lab-s-folder.png",
+    "090-row-4-a-folder-inside-a-lab-folder-ordinary-files-another-lab-s-folder-whole.png",
+    "090-row-4-a-folder-inside-a-lab-folder-ordinary-files-another-lab-s-folder-after.png"
+   ]
+  },
+  {
+   "n": 91,
+   "name": "row 5 (question 1): the very folder another lab saves to",
+   "prompt": "6.2 row 5",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder shared",
+    "type “shared” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the question",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "its two answers",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the note says what Use this folder anyway does",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the tree marks whose folder it is",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled while the question is asked",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "091-row-5-question-1-the-very-folder-another-lab-saves-to.png",
+    "091-row-5-question-1-the-very-folder-another-lab-saves-to-whole.png"
+   ]
+  },
+  {
+   "n": 92,
+   "name": "row 5: Save in shared/shared-b (suggested)",
+   "prompt": "6.2 row 5",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-choice=\"beside\"] “Save in shared/shared-b”"
+   ],
+   "assertions": [
+    {
+     "name": "question 1, beside: the lab saves in Nested-Labs:shared/shared-b",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the other lab keeps its folder",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "092-row-5-save-in-shared-shared-b-suggested.png",
+    "092-row-5-save-in-shared-shared-b-suggested-whole.png",
+    "092-row-5-save-in-shared-shared-b-suggested-after.png"
+   ]
+  },
+  {
+   "n": 93,
+   "name": "row 6 (question 2): a folder that holds a lab state",
+   "prompt": "6.2 row 6",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder BGP/start",
+    "type “BGP/start” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the question",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "its two answers",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the tree marks the state",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled while the question is asked",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "093-row-6-question-2-a-folder-that-holds-a-lab-state.png",
+    "093-row-6-question-2-a-folder-that-holds-a-lab-state-whole.png"
+   ]
+  },
+  {
+   "n": 94,
+   "name": "row 6: Save beside it (suggested)",
+   "prompt": "6.2 row 6",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-choice=\"beside\"] “Save beside it in BGP/start/shared-b”"
+   ],
+   "assertions": [
+    {
+     "name": "question 2, beside: the lab saves in Nested-Labs:BGP/start/shared-b",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "094-row-6-save-beside-it-suggested.png",
+    "094-row-6-save-beside-it-suggested-whole.png",
+    "094-row-6-save-beside-it-suggested-after.png"
+   ]
+  },
+  {
+   "n": 95,
+   "name": "row 6: Replace it",
+   "prompt": "6.2 row 6",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder BGP/broken",
+    "type “BGP/broken” into #folder-path",
+    "click #folder-foot [data-folder-choice=\"take\"] “Replace it”"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the question",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "question 2, Replace it: the lab saves in Nested-Labs:BGP/broken",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "095-row-6-replace-it.png",
+    "095-row-6-replace-it-whole.png",
+    "095-row-6-replace-it-after.png"
+   ]
+  },
+  {
+   "n": 96,
+   "name": "row 7: a folder that is part of a saved state",
+   "prompt": "6.2 row 7",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder shared/shared-b/checkpoints/x",
+    "type “shared/shared-b/checkpoints/x” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the chooser says the lab folder above is used",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the result line shows the folder that is used",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "096-row-7-a-folder-that-is-part-of-a-saved-state.png",
+    "096-row-7-a-folder-that-is-part-of-a-saved-state-whole.png"
+   ]
+  },
+  {
+   "n": 97,
+   "name": "row 7: part of another lab’s saved state: said, then question 1",
+   "prompt": "6.2 row 7",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-primary] “Save here”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder BGP/latest",
+    "type “BGP/latest” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "part of a saved state: the lab saves in Nested-Labs:shared/shared-b",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "said, then the question for the folder above",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "buttons, not a refusal",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "097-row-7-part-of-another-lab-s-saved-state-said-then-question-1.png",
+    "097-row-7-part-of-another-lab-s-saved-state-said-then-question-1-whole.png"
+   ]
+  },
+  {
+   "n": 98,
+   "name": "row 8: a name with characters that are not safe in a path",
+   "prompt": "6.2 row 8",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"cancel\"] “Cancel”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type “My Lab: A/B” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "corrected as typed",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the result is shown",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no refusal",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "098-row-8-a-name-with-characters-that-are-not-safe-in-a-path.png",
+    "098-row-8-a-name-with-characters-that-are-not-safe-in-a-path-whole.png"
+   ]
+  },
+  {
+   "n": 99,
+   "name": "row 10: a folder registered on the VM that no lab uses",
+   "prompt": "6.2 row 10",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder old-lab-folder",
+    "type “old-lab-folder” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "unsafe characters: the lab saves in Nested-Labs:My-Lab-A/B",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "it is not in the tree",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the words registration, prefix and overlap are nowhere in the chooser",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "free like any new folder",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "099-row-10-a-folder-registered-on-the-vm-that-no-lab-uses.png",
+    "099-row-10-a-folder-registered-on-the-vm-that-no-lab-uses-whole.png"
+   ]
+  },
+  {
+   "n": 100,
+   "name": "New folder… at the top level",
+   "prompt": "6.2 New folder",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "click #folder-tree > [data-folder=\"\"] > .folder-row “Nested-Labs top level”",
+    "click .folder-chooser [data-folder-action=\"new\"] “New folder…”",
+    "type “top-new” into #folder-new",
+    "click .folder-new [data-folder-action=\"new-add\"] “Add”"
+   ],
+   "assertions": [
+    {
+     "name": "a registered folder no lab uses: the lab saves in Nested-Labs:old-lab-folder",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the folder is made where the person is, and selected",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "said as planned, never as in the repository",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no refusal",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "100-new-folder-at-the-top-level.png",
+    "100-new-folder-at-the-top-level-whole.png"
+   ]
+  },
+  {
+   "n": 101,
+   "name": "New folder… inside a lab folder",
+   "prompt": "6.2 New folder",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"cancel\"] “Cancel”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "click [data-folder=\"BGP\"] > .folder-row “BGP restore-square saves here”",
+    "click .folder-chooser [data-folder-action=\"new\"] “New folder…”",
+    "type “in-lab” into #folder-new",
+    "click .folder-new [data-folder-action=\"new-add\"] “Add”"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the folder is made where the person is, and selected",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "said as planned, never as in the repository",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no refusal",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "101-new-folder-inside-a-lab-folder.png",
+    "101-new-folder-inside-a-lab-folder-whole.png"
+   ]
+  },
+  {
+   "n": 102,
+   "name": "New folder… inside a nested lab folder",
+   "prompt": "6.2 New folder",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"cancel\"] “Cancel”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "click [data-folder=\"BGP/edge\"] > .folder-row “edge edge-lab saves here”",
+    "click .folder-chooser [data-folder-action=\"new\"] “New folder…”",
+    "type “in-nested” into #folder-new",
+    "click .folder-new [data-folder-action=\"new-add\"] “Add”"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the folder is made where the person is, and selected",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "said as planned, never as in the repository",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no refusal",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "102-new-folder-inside-a-nested-lab-folder.png",
+    "102-new-folder-inside-a-nested-lab-folder-whole.png"
+   ]
+  },
+  {
+   "n": 103,
+   "name": "New folder… inside a saved state: made in the lab folder above, and said so",
+   "prompt": "6.2 New folder",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"cancel\"] “Cancel”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder BGP/start/latest",
+    "type “BGP/start/latest” into #folder-path",
+    "click .folder-chooser [data-folder-action=\"new\"] “New folder…”",
+    "type “extra” into #folder-new",
+    "click .folder-new [data-folder-action=\"new-add\"] “Add”"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "typing a part of a saved state: the chooser says the lab folder above is used",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the new folder is made in the lab folder above the saved state",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "no refusal",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "103-new-folder-inside-a-saved-state-made-in-the-lab-folder-above-and-said-.png",
+    "103-new-folder-inside-a-saved-state-made-in-the-lab-folder-above-and-said--whole.png"
+   ]
+  },
+  {
+   "n": 104,
+   "name": "row 9 (question 3): a folder change while a save waits for upload",
+   "prompt": "6.2 row 9",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"cancel\"] “Cancel”",
+    "fixture action edit_device {\"add\": [\"interface Loopback41\"], \"device\": \"clab-shared-b-r1\", \"remove\": []}",
+    "click #git-save-progress “Save”",
+    "click #save-not-now “Not now”",
+    "click #save-chip “1 save to upload”",
+    "click “Change…”",
+    "type the folder moved-1",
+    "type “moved-1” into #folder-path",
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the question",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "its two answers",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled while the question is asked",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "never a refusal",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "104-row-9-question-3-a-folder-change-while-a-save-waits-for-upload.png",
+    "104-row-9-question-3-a-folder-change-while-a-save-waits-for-upload-whole.png"
+   ]
+  },
+  {
+   "n": 105,
+   "name": "row 9: Move and keep that save on the VM only",
+   "prompt": "6.2 row 9",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-pending=\"keep\"] “Move and keep that save on the VM only”"
+   ],
+   "assertions": [
+    {
+     "name": "question 3, keep: the lab saves in Nested-Labs:moved-1",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the save keeps waiting and the move waits with it",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "105-row-9-move-and-keep-that-save-on-the-vm-only.png",
+    "105-row-9-move-and-keep-that-save-on-the-vm-only-whole.png",
+    "105-row-9-move-and-keep-that-save-on-the-vm-only-after.png"
+   ]
+  },
+  {
+   "n": 106,
+   "name": "row 9: Upload it, then move",
+   "prompt": "6.2 row 9",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-upload “Upload”",
+    "fixture action edit_device {\"add\": [\"interface Loopback42\"], \"device\": \"clab-shared-b-r1\", \"remove\": []}",
+    "click #git-save-progress “Save”",
+    "click #save-not-now “Not now”",
+    "click #save-chip “1 save to upload”",
+    "click “Change…”",
+    "type the folder moved-2",
+    "type “moved-2” into #folder-path",
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”",
+    "click #folder-foot [data-folder-pending=\"upload\"] “Upload it, then move”"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the note carries the upload sentence before the click",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "question 3, upload: the lab saves in Nested-Labs:moved-2",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the waiting save was uploaded before the move",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "106-row-9-upload-it-then-move.png",
+    "106-row-9-upload-it-then-move-whole.png",
+    "106-row-9-upload-it-then-move-after.png"
+   ]
+  },
+  {
+   "n": 107,
+   "name": "row 5: Use this folder anyway disconnects the other lab from the folder",
+   "prompt": "6.2 row 5",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder shared",
+    "type “shared” into #folder-path",
+    "click #folder-foot [data-folder-choice=\"take\"] “Use this folder anyway”"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "question 1, take: the lab saves in Nested-Labs:shared",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the other lab is disconnected from it",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "107-row-5-use-this-folder-anyway-disconnects-the-other-lab-from-the-folder.png",
+    "107-row-5-use-this-folder-anyway-disconnects-the-other-lab-from-the-folder-whole.png",
+    "107-row-5-use-this-folder-anyway-disconnects-the-other-lab-from-the-folder-after.png"
+   ]
+  },
+  {
+   "n": 108,
+   "name": "a placement only the VM can refuse: said like the chip, with the action that clears it",
+   "prompt": "6.5",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder refused-then-fine",
+    "type “refused-then-fine” into #folder-path",
+    "fixture switch {\"remote_ahead\": true}",
+    "click #folder-foot [data-folder-action=\"save\"] “Save here”"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the cause in the chip’s words",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "Update from the repository, Try again and Details; New folder… still enabled",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "it is not a folder rule: no word about registrations",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "108-a-placement-only-the-vm-can-refuse-said-like-the-chip-with-the-action-.png",
+    "108-a-placement-only-the-vm-can-refuse-said-like-the-chip-with-the-action--whole.png"
+   ]
+  },
+  {
+   "n": 109,
+   "name": "a large repository: every folder is offered, any typed path can be used",
+   "prompt": "6.2, 6.3",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "fixture switch {\"remote_ahead\": null}",
+    "click [data-folder-action=\"again\"] “Try again”",
+    "click #save-chip “Saved just now”",
+    "click “Change…”",
+    "type the folder zz-states/start",
+    "type “zz-states/start” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "Try again after the cause is gone: the lab saves in Nested-Labs:refused-then-fine",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "a folder beyond the 4000th file is in the tree",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "a state beyond the listing is known",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "109-a-large-repository-every-folder-is-offered-any-typed-path-can-be-used.png"
+   ]
+  },
+  {
+   "n": 110,
+   "name": "the folder chooser on a standard install (the repository registered at its top level)",
+   "prompt": "6.1, 6.3",
+   "scenario": "folders",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "click #folder-foot [data-folder-action=\"cancel\"] “Cancel”",
+    "open the lab square-fresh (topology)",
+    "click #git-save-progress “Save”",
+    "click “Choose another place”",
+    "type the folder Course/latest",
+    "type “Course/latest” into #folder-path"
+   ],
+   "assertions": [
+    {
+     "name": "D New folder… is enabled when the chooser opens",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "part of a saved state or a free folder, never a refusal",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "New folder… is enabled",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "lab states are marked by name in the tree",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "110-the-folder-chooser-on-a-standard-install-the-repository-registered-at-.png"
+   ]
+  },
+  {
+   "n": 111,
+   "name": "old address view=progress: the default tab with the save panel",
+   "prompt": "5.11",
+   "scenario": "old-addresses",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "follow the address #lab=<restore-square>&view=progress"
+   ],
+   "assertions": [
+    {
+     "name": "the default tab",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the save panel is open",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the address is the tab it resolves to",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "there is no Progress tab",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "111-old-address-view-progress-the-default-tab-with-the-save-panel.png"
+   ]
+  },
+  {
+   "n": 112,
+   "name": "old address view=progress: a poll does not open the panel again",
+   "prompt": "5.11",
+   "scenario": "old-addresses",
+   "reached": true,
+   "reason": "",
+   "steps": [],
+   "assertions": [
+    {
+     "name": "the panel stays closed",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "112-old-address-view-progress-a-poll-does-not-open-the-panel-again.png"
+   ]
+  },
+  {
+   "n": 113,
+   "name": "old address view=git: the default tab with the save panel",
+   "prompt": "5.11",
+   "scenario": "old-addresses",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "follow the address #lab=<restore-square>&view=git"
+   ],
+   "assertions": [
+    {
+     "name": "the default tab",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the save panel is open",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the address is the tab it resolves to",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "there is no Progress tab",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "113-old-address-view-git-the-default-tab-with-the-save-panel.png"
+   ]
+  },
+  {
+   "n": 114,
+   "name": "old address view=git: a poll does not open the panel again",
+   "prompt": "5.11",
+   "scenario": "old-addresses",
+   "reached": true,
+   "reason": "",
+   "steps": [],
+   "assertions": [
+    {
+     "name": "the panel stays closed",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "114-old-address-view-git-a-poll-does-not-open-the-panel-again.png"
+   ]
+  },
+  {
+   "n": 115,
+   "name": "old address of a lab without a save location: the first-save view",
+   "prompt": "5.11, 5.9",
+   "scenario": "old-addresses",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "follow the address #lab=<square-fresh>&view=progress"
+   ],
+   "assertions": [
+    {
+     "name": "the default tab",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the first-save view",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "115-old-address-of-a-lab-without-a-save-location-the-first-save-view.png"
+   ]
+  },
+  {
+   "n": 116,
+   "name": "old address view=save-location opens Save settings",
+   "prompt": "5.11",
+   "scenario": "old-addresses",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "follow the address #lab=<restore-square>&view=save-location"
+   ],
+   "assertions": [
+    {
+     "name": "the drawer and the default tab",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "116-old-address-view-save-location-opens-save-settings.png"
+   ]
+  },
+  {
+   "n": 117,
+   "name": "old address view=saved-versions opens All versions",
+   "prompt": "5.11",
+   "scenario": "old-addresses",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "follow the address #lab=<restore-square>&view=saved-versions"
+   ],
+   "assertions": [
+    {
+     "name": "the drawer and the default tab",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "117-old-address-view-saved-versions-opens-all-versions.png",
+    "117-old-address-view-saved-versions-opens-all-versions-whole.png"
+   ]
+  },
+  {
+   "n": 118,
+   "name": "the old controls’ homes: every lab tab keeps the header",
+   "prompt": "5.1, 5.11",
+   "scenario": "old-addresses",
+   "reached": true,
+   "reason": "",
+   "steps": [
+    "follow the address #lab=<restore-square>&view=devices",
+    "click #tab-topology “Topology”",
+    "click #tab-devices “Devices”",
+    "click #tab-tools “Tools”",
+    "click #tab-advanced “Advanced”"
+   ],
+   "assertions": [
+    {
+     "name": "chip, Save, Load and Lab actions on every tab",
+     "ok": true,
+     "note": ""
+    },
+    {
+     "name": "the tabs",
+     "ok": true,
+     "note": ""
+    }
+   ],
+   "errors": [],
+   "screenshots": [
+    "118-the-old-controls-homes-every-lab-tab-keeps-the-header.png"
+   ]
+  }
+ ],
+ "scenarios": [
+  {
+   "name": "saving",
+   "about": "PROMPT 5.1 to 5.3 and 5.6: the header, the chip at rest, saving step by step.",
+   "completed": true,
+   "reason": "",
+   "after_last_state": {
+    "steps": [
+     "click #save-upload “Upload”"
+    ],
+    "assertions": [],
+    "errors": []
+   }
+  },
+  {
+   "name": "cant-save",
+   "about": "PROMPT 5.2 Needs attention and 6.5: one state per cause, each with the action that clears it.",
+   "completed": true,
+   "reason": ""
+  },
+  {
+   "name": "first-save",
+   "about": "PROMPT 5.2 Not saved and 5.9: the first save and its variants.",
+   "completed": true,
+   "reason": ""
+  },
+  {
+   "name": "load",
+   "about": "PROMPT 5.4: the Load panel, the confirmation and its variants, loading, each result.",
+   "completed": true,
+   "reason": "",
+   "after_last_state": {
+    "steps": [
+     "fixture action lab_state {\"lab\": \"restore-square\", \"state\": \"running\"}"
+    ],
+    "assertions": [],
+    "errors": []
+   }
+  },
+  {
+   "name": "load-fresh",
+   "about": "PROMPT 5.4 step 8 and the parity gate: a lab with no saves of its own; any folder of any repository.",
+   "completed": true,
+   "reason": ""
+  },
+  {
+   "name": "lab-state",
+   "about": "PROMPT 5.5: Save as a lab state….",
+   "completed": true,
+   "reason": ""
+  },
+  {
+   "name": "drawers",
+   "about": "PROMPT 5.7 and 5.8: All versions and Save settings.",
+   "completed": true,
+   "reason": ""
+  },
+  {
+   "name": "folders",
+   "about": "PROMPT 6.2 row by row, the three questions, New folder… at each level, 6.3 and the one refusal that is the VM's (6.5).",
+   "completed": true,
+   "reason": ""
+  },
+  {
+   "name": "old-addresses",
+   "about": "PROMPT 5.11: the removed Progress tab's addresses.",
+   "completed": true,
+   "reason": ""
+  }
+ ],
+ "finished": "2026-10-04T20:36:14+0000",
+ "summary": {
+  "states": 118,
+  "reached": 118,
+  "assertions": 352,
+  "failed_assertions": 0,
+  "errors": 0,
+  "not_reached": [],
+  "scenarios_stopped": [],
+  "screenshots": 171
+ }
+}

@@ -1,0 +1,13 @@
+$ docker compose --env-file <installed .env> -f <worktree>/clab-backup-ui/compose.yml up -d --build
+#16 DONE 0.0s
+ Image clab-backup:1.30.60 Built
+ Container containerlab-node-manager-backup-ui-1 Recreate
+ Container containerlab-node-manager-backup-ui-1 Recreated
+ Container containerlab-node-manager-backup-ui-1 Starting
+ Container containerlab-node-manager-backup-ui-1 Started
+exit 0
+$ sudo bash deploy/setup-git.sh --refresh
+/tmp/tmp.WBaGnhMKpS/sudoers: parsed OK
+Git helper refreshed; all registered repositories retained.
+Git login remains with the repository owner. Open your lab in the manager and press Save in the lab header; the first save goes to this repository.
+exit 0

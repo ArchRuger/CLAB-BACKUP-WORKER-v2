@@ -24,7 +24,7 @@ from . import topology
 from .discovery import Discovery, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path, stored_file, topology_names
 from .lab_operations import LabOperations, design_rechecking, last_deployed, operation_busy, restarting_nodes
-from .git_progress import GitProgress, public_job as public_git_job
+from .git_progress import GitProgress
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
 from .diagnostics import Diagnostics
@@ -83,6 +83,7 @@ def create_app(data_dir=None):
     operations.install(app)
     app.state.git_progress=git_progress
     git_progress.install(app)
+    from . import git_place; git_place.install(app,git_progress)   # placing a lab in any folder (docs/git-redesign/DESIGN.md 2.4-2.8)
     app.state.restore=restore
     restore.install(app)
     app.state.node_services=services
@@ -176,12 +177,21 @@ def create_app(data_dir=None):
         result['last_deployed']=last_deployed(store.state,lab)
         # Edit map opens the full map editor when the manager has the lab's topology text and a map; otherwise the simple dialog.
         result['map_editor']=bool(lab.get('definition_yaml') and lab.get('drawing'))
+        # Whether a save of this lab carries its topology file (Runner.topology_capture): the file beside the deployed topology as
+        # the last discovery pass read it, else the manager's own copy. False for a lab imported from an inventory alone; Save
+        # settings then says that its saves hold device configurations only. A boolean, never the text.
+        source=discovery.sources.get(lab.get('deployment_name') or '')
+        files=source.get('files') if isinstance(source,dict) else None
+        result['topology_in_manager']=bool(lab.get('definition_yaml') or (isinstance(files,dict) and files.get('definition')))
         result['nos_readiness']=summarize([row['nos_login'] for row in result['nodes']])
         retired=public_retired_telemetry(lab)
         if retired: result['telemetry_retired']=retired
         # Network design: presence, revision and the newest plan only; the intent and the plans have their own routes.
         design=public_design(lab)
         if design: result['design']=design
+        # The save location as the manager last saw it, and how many saves wait for upload in the lab's repository:
+        # kept in memory from the last time the VM was asked for this lab, never fetched by this poll.
+        result['git_status']=git_progress.git_status(lab['id'])
         return result
     discovery.install(app,public_lab)
     class ResetManager(BaseModel):
@@ -221,7 +231,7 @@ def create_app(data_dir=None):
             return {'labs':[public_lab(l) for l in store.state['labs']],
                     'jobs':[decorate_job(copy.deepcopy(j)) for j in store.state['jobs']],
                     'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(),
-                    'git_jobs':[public_git_job(j) for j in store.state.get('git_jobs', [])],
+                    'git_jobs':[git_progress.public(j) for j in store.state.get('git_jobs', [])],
                     'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])],
                     'design_jobs':[public_design_job(j) for j in store.state.get('design_jobs', [])],
                     'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])]}

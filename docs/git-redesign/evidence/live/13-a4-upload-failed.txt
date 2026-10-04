@@ -1,0 +1,125 @@
+hosts md5 before: 1d740bcead6ee585f9fea28b6c4d68fa
+[19:06:37] A4 on git-redesign-b; chip Saved 1 min ago
+[19:06:44] github.com blocked: 127.0.0.1       github.com www.github.com api.github.com
+[19:06:49] chip 'Upload failed'; panel title 'Upload failed'; sentence 'Your save is safe on the lab VM, but github.com could not be reached.'
+[19:06:49] panel text: 'Your save is safe on the lab VM, but github.com could not be reached. |  | To: clab-scratch-git-redesign › git-redesign-b |  | Try again | See changes | Details |  | Saves to: clab-scratch-git-redesign › git-redesign-b Change… |  | All versions | Save as a lab state… | Save settings'
+[19:06:49] buttons: ['Try again', 'See changes', 'Details', 'Change…', 'All versions', 'Save as a lab state…', 'Save settings']; chip dot class: save-dot bad
+[19:06:49] git_status in /api/state: {'checked': '2026-10-04T19:06:45.976239+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 1}
+[19:06:57] Try again while still blocked: chip 'Can’t save'; panel 'Upload failed'
+[19:06:57] Details dialog (first 300 chars): "Save needs attention | × | Saved on this VM — upload needs attention |  | Saving to | clab-scratch-git-redesign | › | main | › | git-redesign-b/latest | saved on this VM |  | The remote branch is unavailable. Check connectivity and the owner's noninteractive HTTPS Git login. |  | Destination | clab-scratch-git-redesign · main · "
+[19:06:57] network back: 140.82.113.3    github.com
+[19:06:57] no Try again visible; panel 'The VM account cannot upload to github.com.\n\nTry again\nDetails\n\nSaves to: clab-scratch-git-redesign › git-redesign-b Change…\n\nAlso: the last upload failed. Show\n\nAll versions\nSave as a lab state…\nSave'
+Traceback (most recent call last):
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/live/l2_a4.py", line 34, in <module>
+    expect(p.locator('#save-retry')).to_be_enabled(timeout=15000)
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/sync_api/_generated.py", line 23378, in to_be_enabled
+    self._sync(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_assertions.py", line 807, in to_be_enabled
+    await self._expect_impl(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_assertions.py", line 128, in _expect_impl
+    _record_soft_or_raise(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_assertions.py", line 60, in _record_soft_or_raise
+    raise error
+AssertionError: Locator expected to be enabled
+Actual value: None
+Error: element(s) not found
+Call log:
+  - Expect "to_be_enabled" locator("#save-retry") with timeout 15000ms
+  - waiting for locator("#save-retry")
+
+Aria snapshot:
+- banner:
+  - link "Containerlab Node Manager":
+    - /url: /
+  - navigation "Breadcrumb":
+    - button "My labs"
+    - strong: git-redesign-b
+    - group
+  - button "Manager"
+- main:
+  - heading "git-redesign-b" [level=1]
+  - paragraph: Running 2 of 2 devices ready
+  - button "Can’t save" [expanded]
+  - dialog "Can’t save":
+    - heading "Can’t save" [level=2]
+    - paragraph: The VM account cannot upload to github.com.
+    - button "Try again"
+    - button "Details"
+    - paragraph:
+      - text: "Saves to: clab-scratch-git-redesign › git-redesign-b"
+      - button "Change…"
+    - paragraph:
+      - text: "Also: the last upload failed."
+      - button "Show"
+    - button "All versions"
+    - button "Save as a lab state…"
+    - button "Save settings"
+  - button "Save"
+  - button "Load"
+  - button "Lab actions"
+  - status: Can’t save. The VM account cannot upload to github.com.
+  - tablist "Lab views":
+    - tab "Topology" [selected]
+    - tab "Devices"
+    - tab "Tools"
+    - tab "Advanced"
+  - tabpanel "Topology":
+    - group "Lab map":
+      - button "Capture ceos1:eth1 to ceos2:eth1": eth1 eth1
+      - button "ceos1"
+      - button "ceos2"
+    - toolbar "Map tools":
+      - button "Fit"
+      - button "Zoom in": +
+      - button "Zoom out": −
+      - button "Expand"
+      - button "Edit map"
+      - button "More"
+    - status: 2 devices · 1 link
+    - paragraph: Click a device to open it. Click a link to capture its traffic. Right-click for more actions.
+    - complementary "Devices Test logins":
+      - heading "Devices Test logins" [level=2]:
+        - text: Devices
+        - button "Test logins"
+      - text: Tests the SSH login of every device again. A successful test makes Open CLI available.
+      - list "Devices":
+        - listitem:
+          - button "ceos1"
+          - text: EOS Ready
+          - button "Open CLI"
+        - listitem:
+          - button "ceos2"
+          - text: EOS Ready
+          - button "Open CLI"
+hosts restored: identical-to-before
+[19:07:21] A4 finish: chip 'Can’t save', hosts has block line: False
+[19:07:21] panel: 'Can’t save' / The VM account cannot upload to github.com. |  | Try again | Details |  | Saves to: clab-scratch-git-redesign › git-redesign-b Change… |  | Also: the last uploa
+[19:07:21] Try again button id: save-cant-again
+Traceback (most recent call last):
+  File "/tmp/a4_finish.py", line 11, in <module>
+    s.wait_toast(r'^Uploaded to github\.com\.$', timeout=60000); s.wait_chip('^Saved ')
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/integration/common.py", line 175, in wait_toast
+    raise AssertionError('no toast matching /%s/; shown since the last one: %r' % (pattern, self.toasts()))
+AssertionError: no toast matching /^Uploaded to github\.com\.$/; shown since the last one: []
+[19:08:36] chip 'Upload failed' panel 'Your save is safe on the lab VM, but github.com could not be reached. |  | To: clab-scratch-git-redesign › git-redesign-b |  | Checking what this upload sends… |  | Try again | See changes | Details |  | Saves to: clab-scratch-git-redesign › git-redesign-b Cha'
+[19:08:36] button id save-retry
+[19:08:41] after Try again (network back): chip 'Saved just now'; clicks 1; git_status {'checked': '2026-10-04T19:08:40.745197+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+[19:08:42] jobs: [('synced', 'ceos1 changed', True, 'Saved to Git.'), ('synced', 'ceos1 changed', True, 'Saved to Git.'), ('synced', '', True, 'Saved commit is included in the verified remote history.')]
+  [GitHub after A4 retry]
+      e2f4dc44c2 ceos1 changed
+      5a3bad9354 ceos1 changed
+      29b222f2a0 l2 named save
+      5408305045 ceos1 changed
+  [VM checkout VM]
+      e2f4dc4 ceos1 changed
+      5a3bad9 ceos1 changed
+      29b222f l2 named save
+      5408305 ceos1 changed
+      ## main...origin/main [ahead 18]
+PASS A4 finish: no console, page or request errors
+
+1 checks, 0 failed

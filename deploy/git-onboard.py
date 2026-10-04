@@ -296,10 +296,27 @@ def read_registrations(env):
         raise ValueError('The registration list is invalid. Repair it with your VM administrator; setup will not replace existing settings.') from None
 
 
+MAX_LABEL = 100   # deploy/setup-git.sh refuses a longer label
+
+
+def folder_label(name, prefix):
+    """The label of a lab folder, `<checkout> / <folder>`, cut to the label limit instead of refused: the same rule
+    as `folder_label` of the VM Git helper (clab-backup-ui/app/host_git.py), copied because guided setup cannot import
+    it. It keeps the end of the folder, which tells folders apart, behind `…`."""
+    name = ''.join(c for c in name if ord(c) >= 32 and ord(c) != 127)
+    label = name + (' / ' + prefix if prefix else '')
+    if len(label) <= MAX_LABEL:
+        return label
+    if not prefix:
+        return name[:MAX_LABEL - 1] + '…'
+    head = name[:40] + ' / …'
+    return head + prefix[-(MAX_LABEL - len(head)):]
+
+
 def new_binding(path, prefix=''):
     # The label distinguishes each subfolder of a shared repository in the manager's
     # repository list, so several labs in one repository do not look identical.
-    label = path.name + (' / ' + prefix if prefix else '')
+    label = folder_label(path.name, prefix)
     return {'remote': 'origin', 'prefix': prefix, 'label': label, 'branch': '', 'push_url': ''}
 
 
@@ -321,10 +338,10 @@ def validate_subfolder(value):
         raise ValueError('Use letters, numbers, dashes and underscores, with / to nest (for example courses/bgp). '
                           'No leading slash, no ".." and no .git parts.')
     # Rule 1 (docs/save-location-fix/PICKUP.md): latest, baseline and checkpoints/<name> are
-    # the folders Save progress writes inside a lab folder, never the lab folder itself.
+    # the folders a save writes inside a lab folder, never the lab folder itself.
     is_checkpoint = len(parts) >= 2 and parts[-2] == 'checkpoints'
     if parts[-1] in ('latest', 'baseline', 'checkpoints') or is_checkpoint:
-        raise ValueError('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. '
+        raise ValueError('latest, baseline and checkpoints are the folders a save writes inside a lab folder. '
                           'Choose the folder above them.')
     return value
 
@@ -338,7 +355,7 @@ def ask_subfolder():
     """
     print('One repository can hold many labs, each in its own subfolder.')
     print('Enter this lab\'s subfolder, for example bgp, eth or ip. Leave blank to use the')
-    print('repository root when this repository holds only a single lab.')
+    print('top level of the repository (other labs\' folders may still sit below it).')
     while True:
         value = ask('Repository subfolder for this lab', '')
         try:
@@ -356,9 +373,9 @@ def selected_registration(account, path, registrations, subfolder=''):
     if not (path / '.git').is_dir():
         raise ValueError('This path has an existing registration but its checkout is missing. Restore the original checkout including .git, or select a new directory.')
     # An already-registered repository can gain another lab: reuse a saved destination
-    # to repair it, or register a new subfolder alongside the existing ones. Unlike a
-    # brand-new registration, the repository root is not a safe default here: it would
-    # overlap every existing prefix and only fail later, at the helper's own check.
+    # to repair it, or register a new subfolder for it. Unlike a brand-new registration,
+    # the new lab is asked for its own folder (blank means the top level): the top
+    # level may already be a lab's folder, and each lab keeps its saves in a folder of its own.
     options = [(str(i), entry['label'] + ' — ' + (entry['prefix'] or 'repository root')) for i, entry in enumerate(matches, 1)]
     options.append(('new', 'Register a new subfolder in this repository for another lab'))
     prompt = 'This repository is already registered. Reuse a saved destination, or add a new subfolder:'
@@ -366,7 +383,7 @@ def selected_registration(account, path, registrations, subfolder=''):
     if choice == 'new':
         if subfolder:
             return new_binding(path, subfolder)
-        print('This repository already holds at least one registered lab folder; the repository root would overlap it.')
+        print('This repository already holds at least one registered lab folder; choose a folder for the new lab, or leave it blank for the top level.')
         return new_binding(path, ask_subfolder())
     binding = matches[int(choice) - 1]
     print('Keeping existing registration: ' + binding['label'])
@@ -553,10 +570,10 @@ def main(argv=None):
         return 2
     success_banner(['SUCCESS', 'Lab-config checkout registered with the manager.',
                     'Destination: ' + (binding['prefix'] or 'repository root')])
-    print('\nReady. In the manager: open your lab > Progress > Save location.')
-    print('Select this checkout and devices, review the destination, then Save progress.')
-    print('Save progress commits, then shows what changed: choose Upload these changes to push. No separate Commit button is needed.')
-    print('If a push fails, reopen that save and Retry; do not create a new capture or manually commit its staged files.')
+    print('\nReady. In the manager: open your lab and press Save in the lab header.')
+    print('The first save goes to this repository, in a folder named after the lab (Choose another place changes that).')
+    print('A save is kept on the VM first, then says what changed: choose Upload to send it to the online repository. No separate Commit button is needed.')
+    print('If an upload fails, open the chip in the lab header and try Upload again; do not create a new save or manually commit its staged files.')
     return 0
 
 

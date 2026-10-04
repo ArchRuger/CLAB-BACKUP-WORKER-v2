@@ -1,0 +1,10 @@
+--- review: destination and changed files
+ceos1.cfg changed
+ | ceos1.eoscfg changed
+ | git-redesign.clab.yml.annotations.json changed
+
+['ceos1.cfg changed\n\n1 added · 0 removed', 'ceos1.eoscfg changed\n\n1 added · 0 removed', 'git-redesign.clab.yml.annotations.json changed\n\n2 added · 2 removed']
+--- API log
+POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/save {"request_id":"9578b22f003a389a131841653cf83758","target":"latest","checkpoint":"","push":true,"note":"moved ceos1 on the map and described Ethernet1","backup_job_id":"","replace_baseline":false,"expected_baseline":"","allow_removed":false} -> 200 {"id":"9578b22f003a389a131841653cf83758","lab_id":"63d53e20db83464392ebfd4712bba5e3","lab_name":"git-redesign","created":"2026-10-04T15:09:13.307177+00:00","status":"queued","message":"Save progress queued.","backup_job_id":"","pushed":false,"target":"latest","checkpoint":"","note":"moved ceos1 on the map and described Ethernet1","review_before_pus ...[trimmed]
+POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id":"9578b22f003a389a131841653cf83758"} -> 200 {"files":[{"name":"ceos1.cfg","status":"changed","before":"<omitted>","after":"<omitted>","diff":{"hunks":[{"old_start":29,"old_count":6,"new_start":29,"new_count":7,"lines":[{"type":"context","old":29,"new":29,"text":"   transport ssh default"},{"type":"context","old":30,"new":30,"text":"!"},{"type":"context","old":31,"new":31,"text":"interface Et ...[trimmed]
+POST /api/git/jobs/9578b22f003a389a131841653cf83758/retry {"push":true,"reviewed":true} -> 200 {"id":"9578b22f003a389a131841653cf83758","lab_id":"63d53e20db83464392ebfd4712bba5e3","lab_name":"git-redesign","created":"2026-10-04T15:09:13.307177+00:00","finished":"2026-10-04T15:09:18.419107+00:00","status":"queued","message":"Retry queued; the saved capture will be reused.","backup_job_id":"e20bb4296042403b9b02ed9e2c57620d","commit":"aaea4186b ...[trimmed]

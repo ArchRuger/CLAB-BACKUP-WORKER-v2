@@ -3,10 +3,16 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Navigation state. activeId is chosen by shell.js's applyRoute() after the first /state (hash →
 // sessionStorage → Home); render() shows Home whenever it is empty. tab holds one of PANELS; legacy
-// names (inventory, git, backups, credentials, logs) are normalised by setTab() so old callers still work.
+// names (inventory, git, progress, backups, credentials, logs) are normalised by setTab() so old callers and old links
+// still work. The Progress tab is gone (owner decision D1): its names open the lab's default tab with the header's save
+// chip panel, Save settings or All versions (SAVE_ROUTES), once, after the lab has been rendered.
 let state={labs:[],jobs:[],platforms:{}}, activeId='', tab='topology', toastTimer, subview='', devicesTechnical=false, devicesPainted=null, scrollTarget='', routeApplied=false;
-const PANELS=['topology','devices','progress','tools','advanced'];
-const TAB_ALIAS={inventory:'devices',git:'progress',backups:'tools',credentials:'advanced',logs:'advanced',design:'advanced'};
+const PANELS=['topology','devices','tools','advanced'];
+const TAB_ALIAS={inventory:'devices',git:'topology',progress:'topology',backups:'tools',credentials:'advanced',logs:'advanced',design:'advanced'};
+// What an old address of the Progress tab opens: the chip panel (a lab without a save location gets its first-save view there),
+// Save settings for a link to the save location, All versions for a link to the saved versions.
+const SAVE_ROUTES={progress:'status',git:'status','save-location':'settings','save-settings':'settings','saved-versions':'versions',versions:'versions'};
+let saveRoutePending=null;
 const SUBVIEW={inventory:'technical',backups:'backups-view',credentials:'credentials-view',logs:'logs-view',design:'experimental-design'};
 const APP_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
 // A restore runs (APP_RESTORE_BUSY), or after a manager restart its job reads 'interrupted' while the devices it was changing are
@@ -15,9 +21,33 @@ function restoreRunning(j){return typeof statusRestoreActive==='function'?status
 function restoreRechecking(j){return !APP_RESTORE_BUSY.includes(j?.status)&&restoreRunning(j);}
 function designRechecking(j){return typeof statusDesignRechecking==='function'?statusDesignRechecking(j):j?.status==='interrupted'&&Array.isArray(j.rechecking)&&j.rechecking.length>0;}
 const RECHECK_BANNER='Checking the devices after a manager restart…';
-const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-retry-save','banner-save-details','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-dismiss'],'home-banner':['home-banner-output']};
+const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-dismiss'],'home-banner':['home-banner-output']};
 const current=()=>state.labs.find(l=>l.id===activeId);
-const busy=()=>state.jobs.some(j=>['queued','running'].includes(j.status))||(state.operations||[]).some(j=>['queued','running'].includes(j.status))||(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status));
+// What holds the manager right now, as one sentence, or '' when nothing does. It mirrors the server's guard for a save
+// (GitProgress.idle: lab_operations.operation_busy for every lab, plus backup and login jobs, plus a design read-back of
+// the lab asked about), in the server's order, so a control is disabled before the click would be refused with a 409.
+// labId is the lab the caller acts on (default: the open lab); only the design read-back depends on it.
+const APP_GIT_BUSY=['queued','capturing','exporting','pushing'],APP_DESIGN_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
+const APP_RECHECK_REASON='The manager is checking devices after a restart.';
+function busyReason(labId=activeId){
+ const active=j=>['queued','running'].includes(j.status),on=j=>{const lab=j&&j.lab_id?(state.labs||[]).find(l=>l.id===j.lab_id):null;return lab&&lab.name?' on '+lab.name:'';};
+ const op=(state.operations||[]).find(active);
+ if(op)return (typeof operationLabel==='function'?operationLabel(op.action,op):'A lab operation')+' is running.';
+ const design=(state.design_jobs||[]).find(j=>APP_DESIGN_BUSY.includes(j.status));
+ if(design)return 'A network design is being applied'+on(design)+'.';
+ if(labId&&(state.design_jobs||[]).some(j=>j.lab_id===labId&&designRechecking(j)))return APP_RECHECK_REASON;
+ const save=(state.git_jobs||[]).find(j=>APP_GIT_BUSY.includes(j.status));
+ if(save)return 'A save is running'+on(save)+'.';
+ const load=(state.restore_jobs||[]).find(restoreRunning);
+ if(load)return restoreRechecking(load)?APP_RECHECK_REASON:'A load is running'+on(load)+'.';
+ const retiring=(state.labs||[]).find(l=>l.telemetry_retired&&l.telemetry_retired.removing);
+ if(retiring)return 'Retired telemetry configuration is being removed on '+retiring.name+'.';
+ const job=(state.jobs||[]).find(active);
+ if(job)return job.operation==='backup'?'A backup is running.':'Device logins are being checked.';
+ return '';
+}
+// The same answer as a flag, for the callers that only ask whether (several pass it on as an argument).
+const busy=()=>!!busyReason();
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
 async function api(path,options={}){
  const headers={...(options.headers||{})};
@@ -59,7 +89,15 @@ function logsVisible(){if(tab!=='advanced')return false;const view=$('logs-view'
 // Responses are applied in request order: a slow older poll must not overwrite the state a newer refresh() already applied (it would drop a just-added lab and send the student Home).
 let refreshRequest=0, refreshApplied=0;
 async function refresh(){const request=++refreshRequest;const response=await api('/state');const data=await response.json();if(request<refreshApplied)return;refreshApplied=request;state=data;state.loaded=true;if(activeId&&!current())activeId='';if(!routeApplied){routeApplied=true;if(typeof applyRoute==='function')applyRoute();}render();if(logsVisible())await refreshLogs();}
-function setTab(value){const legacy=TAB_ALIAS[value];if(legacy){if(value==='inventory')devicesTechnical=true;else scrollTarget=SUBVIEW[value]||'';subview=value;value=legacy;}else subview='';tab=PANELS.includes(value)?value:'topology';}
+function setTab(value){if(SAVE_ROUTES[value]){saveRoutePending={lab:activeId,open:SAVE_ROUTES[value]};value=TAB_ALIAS[value]||'topology';}const legacy=TAB_ALIAS[value];if(legacy){if(value==='inventory')devicesTechnical=true;else scrollTarget=SUBVIEW[value]||'';subview=value;value=legacy;}else subview='';tab=PANELS.includes(value)?value:'topology';}
+// An old address of the Progress tab, once the lab it names is rendered and the header's scripts are loaded: the chip panel, Save
+// settings or All versions opens once (never again on a poll). The address itself was already rewritten to the lab's default tab.
+function openSaveRoute(){
+ const want=saveRoutePending;if(!want||!current()||want.lab!==activeId)return false;
+ if(want.open==='status'){if(typeof saveOpenPanel!=='function')return false;saveRoutePending=null;saveOpenPanel('status',{focus:true});return true;}
+ if(typeof saveDrawerOpen!=='function')return false;
+ saveRoutePending=null;saveDrawerOpen(want.open,{opener:$('save-chip')});return true;
+}
 function syncRoute(push=false){if(!routeApplied||typeof writeRoute!=='function'||typeof currentRoute!=='function')return;writeRoute(currentRoute(),{push});}
 function selectLab(id,view='topology'){if(typeof closeLabDialogs==='function')closeLabDialogs();else if($('details-dialog').open)$('details-dialog').close();activeId=id;setTab(view);try{sessionStorage.setItem('activeLab',id);}catch{/* blocked site data: the route and the page state still carry the open lab */}$('search').value='';$('log-job').value='';if(typeof rememberOpened==='function')rememberOpened(id);if(typeof closeMenus==='function')closeMenus();if(typeof writeRoute==='function')writeRoute({lab:id,view:tab},{push:true});render();}
 function platformLabel(kind){return state.platforms[kind]?.label||(kind==='ssh'?'Generic SSH / Linux':'Unmapped');}
@@ -85,7 +123,6 @@ function dismissedSet(){const ids=new Set();if(typeof isDismissed!=='function')r
 function labContext(){return {...state,dismissed:dismissedSet()};}
 function labStateOf(lab){return typeof labState==='function'?labState(lab,labContext()):{key:'',label:lab.deployment?.status||'Not matched to a running lab',pill:'neutral',detail:''};}
 function readyLine(lab,ls){const total=(lab.nodes||[]).length,ready=(lab.nodes||[]).filter(n=>n.ssh_ready).length;if(ls.key==='stopped')return 'Not running';if(['unlinked','unknown'].includes(ls.key))return '';return `${ready} of ${total} devices ready`;}
-function gitProblem(lab){return typeof gitContexts!=='undefined'&&gitContexts&&typeof gitContexts.get==='function'?gitContexts.get(lab.id)?.repository_status?.problem||'':'';}
 function scheduleSummary(lab){if(!lab.interval)return 'Off';const paused=lab.deployment&&!['Running','Unlinked'].includes(lab.deployment.status);return (paused?'Paused (lab not running) · every ':'Every ')+lab.interval+' min';}
 function labsMarkup(){
  if(!state.labs.length)return '<p class="side-hint">Your labs will appear here.</p>';
@@ -93,20 +130,19 @@ function labsMarkup(){
 }
 function renderWorkerState(){
  const el=$('worker-state');if(!el)return;const running=state.jobs.filter(j=>['queued','running'].includes(j.status));
- const text=(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status))?'Saving progress…':(state.restore_jobs||[]).some(j=>APP_RESTORE_BUSY.includes(j.status))?'Replacing configuration…':(state.restore_jobs||[]).some(restoreRechecking)||(state.design_jobs||[]).some(designRechecking)?'Checking devices after a restart…':running.some(j=>j.operation==='backup')?'Backing up…':running.length?'Checking device logins…':(state.operations||[]).some(j=>['queued','running'].includes(j.status))?'Lab operation running…':'';
+ const text=(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status))?'Saving…':(state.restore_jobs||[]).some(j=>APP_RESTORE_BUSY.includes(j.status))?'Loading…':(state.restore_jobs||[]).some(restoreRechecking)||(state.design_jobs||[]).some(designRechecking)?'Checking devices after a restart…':running.some(j=>j.operation==='backup')?'Backing up…':running.length?'Checking device logins…':(state.operations||[]).some(j=>['queued','running'].includes(j.status))?'Lab operation running…':'';
  el.textContent=text;el.hidden=!text;
 }
 function renderLabHeader(lab){
  const ls=labStateOf(lab),pill=$('lab-state');
  if(pill){pill.textContent=ls.label;pill.className='pill '+(ls.pill||'neutral');}
  if($('lab-ready'))$('lab-ready').textContent=readyLine(lab,ls);
- if($('lab-progress'))$('lab-progress').textContent=typeof progressSummary==='function'?progressSummary(lab,state.git_jobs,undefined,gitProblem(lab)):'';
 }
 function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=value||'—';};set('tech-lab-id',lab.id);set('tech-source',lab.source);set('tech-path',lab.vm_project_path||lab.vm_source?.files?.definition?.path);set('tech-prefix',lab.container_prefix??'clab');set('tech-deployment',lab.deployment_name);set('tech-binding',lab.git_binding?[lab.git_binding.binding_id,lab.git_binding.revision].filter(Boolean).join(' · '):'');}
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.30.60';$('app-version').textContent='v'+version;
+ const version=state.version||'1.31.0';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;
@@ -119,7 +155,12 @@ function render(){
  $('updated').textContent=lab?new Date(lab.updated).toLocaleString():'';
  if(typeof renderManagement==='function')renderManagement();
  if(typeof renderLabOperations==='function')renderLabOperations();
- if(typeof renderGitProgress==='function')renderGitProgress();
+ // The header's chip, Save and Load (save-header.js) and the one drawer (save-drawers.js) follow every poll and every lab
+ // switch from here: a lab change reaches them as a render with another current().
+ if(typeof renderSaveHeader==='function')renderSaveHeader();
+ if(typeof saveDrawerRender==='function')saveDrawerRender();
+ // Load (load.js): drops a review of a lab no longer on screen, toasts a load that succeeded, and holds the red Load while a save runs.
+ if(typeof loadRender==='function')loadRender();
  if(typeof renderNetworkDesign==='function')renderNetworkDesign();
  if(typeof renderHome==='function')renderHome();
  if(!lab){renderLabBanner();syncProxies();syncRoute();return;}
@@ -138,7 +179,7 @@ function render(){
  $('test').disabled=$('backup').disabled=busy()||!enabled.length||ready.length!==enabled.length;
  $('test').title=$('backup').title=ready.length!==enabled.length?'Add credentials for every device included in backups first':'';
  $('inventory-caption').textContent='Source: '+lab.source+' · '+enabled.length+' of '+lab.nodes.length+' included in backups';
- renderNodes();renderDeviceList();if(typeof renderMapState==='function')renderMapState();renderProfiles();renderJobs();showTab(tab);refreshHealth();renderLabBanner();syncProxies();syncRoute();
+ renderNodes();renderDeviceList();if(typeof renderMapState==='function')renderMapState();renderProfiles();renderJobs();showTab(tab);refreshHealth();renderLabBanner();syncProxies();syncRoute();openSaveRoute();
  if(document.activeElement!==$('interval'))$('interval').value=lab.interval;
 }
 // One control per id: a mirror (button[data-proxy="<id>"]) copies the owner's disabled/title/hidden state
@@ -164,6 +205,8 @@ function noticeDigest(text){let hash=0;const s=String(text||'');for(let i=0;i<s.
 // spec.identity names which failure a notice is about (a job id, an action-error counter): two different failures
 // share one generic headline, and closing the first must not hide the second.
 function noticeKey(id,spec){return (id==='home-banner'?'home':(typeof activeId==='string'?activeId:''))+'.'+id+'.'+noticeDigest(spec.text)+(spec.identity?'.'+noticeDigest(spec.identity):'');}
+// What a save reports (a save location problem, a failed or waiting upload) is the header chip's (save-header.js),
+// not a banner: the lab banner keeps what an operation, a load, a design apply or the lab's own state reports.
 // The situational banner: static children only (text, hidden, className), never innerHTML, so an open
 // menu or a focused button survives the 4 s poll. One case at a time, in priority order.
 function setBanner(id,spec={}){
@@ -211,7 +254,6 @@ function renderLabBanner(){
  const ops=(state.operations||[]).filter(j=>j.lab_id===lab.id),restores=(state.restore_jobs||[]).filter(j=>j.lab_id===lab.id);
  const runningOp=ops.find(j=>['queued','running'].includes(j.status)),runningRestore=restores.find(j=>APP_RESTORE_BUSY.includes(j.status))||restores.find(restoreRunning);
  const recheckDesign=(state.design_jobs||[]).find(j=>j.lab_id===lab.id&&designRechecking(j));
- const ps=typeof progressState==='function'?progressState(lab,state.git_jobs,undefined,gitProblem(lab)):null;
  const credentials=typeof credentialsNeeded==='function'?credentialsNeeded(lab):0;
  // The menu item carries its label in a <span> and its disabled reason in a <small>; the banner button takes the label only.
  const startLabel=()=>{const b=$('lab-start');const span=b&&typeof b.querySelector==='function'?b.querySelector('span'):null;return (span?span.textContent:b?.textContent)?.trim()||'Start lab';};
@@ -219,7 +261,7 @@ function renderLabBanner(){
  let spec={};
  if(err&&err.lab===lab.id)spec={tone:'danger',icon:'alert',text:err.sentence,detail:err.message,identity:'error.'+(err.seq||err.at),onClose:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();},actions:{'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();}}}};
  else if(runningOp)spec={tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(runningOp.action,runningOp):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};
- else if(runningRestore)spec={tone:'info',icon:'clock',running:true,text:restoreRechecking(runningRestore)?RECHECK_BANNER:'Replacing configuration…',detail:runningRestore.message||'',actions:{'banner-restore':{label:'View progress',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(runningRestore.id);}}}};
+ else if(runningRestore)spec={tone:'info',icon:'clock',running:true,text:restoreRechecking(runningRestore)?RECHECK_BANNER:'Loading a saved state…',detail:runningRestore.message||'',actions:{'banner-restore':{label:'View progress',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(runningRestore.id);}}}};
  else if(recheckDesign)spec={tone:'info',icon:'clock',running:true,text:RECHECK_BANNER,detail:recheckDesign.message||'',actions:{'banner-output':{label:'View progress',run:()=>{if(typeof designApplyShowJob==='function')designApplyShowJob(recheckDesign.id);}}}};
  else if(ls.key==='attention'&&ls.job){
   const job=ls.job,isRestore=restores.includes(job),actions={'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissJob==='function')dismissJob(job.id);render();}}};
@@ -233,13 +275,6 @@ function renderLabBanner(){
    else if(typeof openLabOperations==='function')actions['banner-try-again']={label:'Open lab operations',run:()=>{if(typeof opTask==='function')opTask(null,()=>openLabOperations(lab.id));else openLabOperations(lab.id);}};
   }
   spec={tone:ls.pill==='warn'?'warn':'danger',icon:'alert',text:ls.detail,detail:job.message||'',identity:'job.'+job.id,actions};
- }
- else if(ps&&ps.problem)spec={tone:'warn',icon:'alert',text:'Saving to Git is not possible right now.',detail:ps.problem,identity:'git-problem.'+ps.problem,actions:{'banner-save-details':{label:'Save location settings',run:()=>{if(typeof gitOpenRepository==='function')gitOpenRepository();}}}};
- else if(ps&&['attention','failed','interrupted'].includes(ps.key)){
-  const actions={};
-  if(ps.key==='attention')actions['banner-retry-save']={label:'Retry',run:()=>{if(typeof gitPushPending==='function'&&typeof opTask==='function')opTask(null,()=>gitPushPending(lab.id));}};
-  if(ps.job)actions['banner-save-details']={label:'Details',run:()=>{if(typeof gitShowJob==='function'&&typeof opTask==='function')opTask(null,()=>gitShowJob(ps.job.id));}};
-  spec={tone:ps.key==='attention'?'warn':'danger',icon:'alert',text:ps.detail,detail:ps.job?.message||'',identity:ps.job?'save.'+ps.job.id:'',actions};
  }
  else if(ls.key==='attention')spec={tone:'danger',icon:'alert',text:ls.detail,actions:lab.deployment?.status==='Partially running'?start():{'banner-credentials':{label:'Check credentials',run:()=>showTab('credentials')}}};
  else if(credentials)spec={tone:'warn',icon:'alert',text:`${credentials} ${credentials===1?'device needs':'devices need'} login credentials before you can open ${credentials===1?'its':'their'} CLI.`,actions:{'banner-credentials':{label:'Add credentials',run:()=>openProfile()}}};
@@ -321,11 +356,11 @@ function showTab(value){
  if($('devices-technical'))$('devices-technical').textContent=devicesTechnical?'Standard view':'Technical view';   // the swapping label is the toggle's state and the way back; no aria-pressed on top of it
  document.querySelectorAll('[data-tab]').forEach(b=>{const active=b.dataset.tab===tab;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;if(active&&typeof b.scrollIntoView==='function'&&($('lab-tabs')?.scrollWidth||0)>($('lab-tabs')?.clientWidth||0))b.scrollIntoView({block:'nearest',inline:'nearest'});});
  if(tab==='topology'&&typeof refreshMap==='function')refreshMap();
- if(tab==='progress'&&typeof gitShowRepository==='function')gitShowRepository();
  // Old #view=design links land on Advanced with Network design (Experimental) opened; nothing restores a Design tab.
  if(scrollTarget==='experimental-design'&&$(scrollTarget)&&!$(scrollTarget).open)$(scrollTarget).open=true;
  if(typeof renderNetworkDesign==='function')renderNetworkDesign();
  if(scrollTarget){const target=$(scrollTarget);if(target&&typeof target.scrollIntoView==='function')target.scrollIntoView({block:'start'});scrollTarget='';}
+ openSaveRoute();
 }
 function tabKeydown(e){
  const step={ArrowLeft:-1,ArrowRight:1,Home:0,End:0}[e.key];if(step===undefined)return;
@@ -350,8 +385,6 @@ $('search').oninput=()=>{renderNodes();renderDeviceList();};
 $('devices-technical').onclick=()=>{devicesTechnical=!devicesTechnical;showTab('devices');};
 $('lab-content').addEventListener('click',e=>{const mirror=e.target.closest('[data-proxy]');if(mirror&&!mirror.disabled)activateProxy(mirror);});
 for(const id of ['menu-lab-files','advanced-lab-files'])$(id).onclick=()=>{if(typeof opBrowse==='function'&&typeof opTask==='function')opTask(null,()=>opBrowse('',activeId));};
-// Progress-tab git buttons: onclick properties so git-progress.js can take them over by assigning its own.
-for(const b of document.querySelectorAll('#progress-view [data-git-action], #git-repository-advanced [data-git-repo-action]'))b.onclick=()=>{if(typeof closeMenus==='function')closeMenus();if(typeof gitRunAction==='function')gitRunAction(b.dataset.gitAction||b.dataset.gitRepoAction);};
 async function handleNodeAction(e){const b=e.target.closest('button');if(!b||b.disabled)return;
  if(b.dataset.capture)openCapture(b.dataset.capture);
  if(b.dataset.edit){$('details-dialog').close();openNode(b.dataset.edit);}

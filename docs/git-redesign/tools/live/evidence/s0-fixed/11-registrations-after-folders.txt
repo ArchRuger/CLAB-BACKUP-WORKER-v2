@@ -1,0 +1,20 @@
+$ setup-git.sh --list
+{"result": {"protocol": "clab-manager-git-v1", "version": "1.30.60", "repositories": [{"id": "e7d5f64d4c85487ebcff3baeff12694a", "label": "clab-scratch-git-redesign", "owner": "archtop", "path": "/home/archtop/labs/clab-scratch-git-redesign", "remote": "origin", "push_url": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "branch": "main", "prefix": "", "revision": "1b959d21d7c30c483c19c83f1e309b4a1eb872946f003b16bb1f3716e2551724"}, {"id": "723fdfad39da40ea8a4fc49d6e8016f7", "label": "clab-scratch-git-redesign / git-redesign", "owner": "archtop", "path": "/home/archtop/labs/clab-scratch-git-redesign", "remote": "origin", "push_url": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "branch": "main", "prefix": "git-redesign", "revision": "b1d56db2f140638359256874cdde600bbd1c9b1a4698d391477766a0ad95953d"}]}}
+$ GET /api/git/repositories (labs/paths only)
+{
+ "repositories": [
+  {
+   "id": "e7d5f64d4c85487ebcff3baeff12694a",
+   "prefix": "",
+   "label": "clab-scratch-git-redesign"
+  },
+  {
+   "id": "723fdfad39da40ea8a4fc49d6e8016f7",
+   "prefix": "git-redesign",
+   "label": "clab-scratch-git-redesign / git-redesign"
+  }
+ ]
+}
+['protocol', 'repositories', 'version']
+['files', 'folders', 'head', 'planned', 'repository', 'saved', 'truncated']
+['git-redesign', 'scratch-a', 'git-redesign/notes', 'git-redesign/notes/deep'] None

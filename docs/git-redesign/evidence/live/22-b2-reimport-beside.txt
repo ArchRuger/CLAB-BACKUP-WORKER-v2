@@ -1,0 +1,30 @@
+[19:16:45] B2 (beside): remove lab git-redesign-b and import it again
+[19:16:45] DELETE /api/labs/68072673 (manager only) -> 200
+[19:16:46] import-preview 200, import 200 -> new lab 2f22b8de
+[19:16:49] new lab: chip 'Not saved yet'; binding None
+[19:16:50] first-save panel: title 'Not saved yet'
+[19:16:50] panel text: 'This repository already holds saves of a lab named git-redesign-b. |  | Save in git-redesign-b-2 | Continue there | Connect by URL… |  | Uploads go to github.com/ArchRuger/clab-scratch-git-redesign, branch main. |  | Saved files can contain passwords or keys. |  | Save as a lab state…'
+[19:16:50] buttons: ['save-first:Save in git-redesign-b-2', 'save-first-continue:Continue there', 'save-first-url:Connect by URL…', 'save-as-state:Save as a lab state…']
+[19:16:50] same-name question asked: True
+[19:17:00] chip after the first save: '1 save to upload'; panel 'This is the first save here: 2 devices, the topology and the map.'
+[19:17:00] CLICKS of the first save so far: 2 (typed 0)
+[19:17:04] with Upload: 3 clicks; lab saves in git-redesign-b-2; chip 'Saved just now'
+[19:17:04] job: {"destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign-b-2/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "note": "First save", "pushed": true, "status": "synced", "summary": {"added": 96, "devices": ["ceos1", "ceos2"], "first": true, "map": true, "removed": 0, "removed_devices": [], "topology": true}}
+  [GitHub after B2]
+      1e0a48b7de First save
+      49a1529805 Map changed
+      496ec2edc0 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      06feb522c0 L2 A5 online change 2 (outside the lab folders)
+  [VM checkout VM]
+      1e0a48b First save
+      49a1529 Map changed
+      496ec2e Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      06feb52 L2 A5 online change 2 (outside the lab folders)
+      ## main...origin/main [ahead 2]
+PASS B2: no console, page or request errors
+
+=== B2: 1 checks, 0 failed
+PASS B2: no console, page or request errors
+None
+
+1 checks, 0 failed

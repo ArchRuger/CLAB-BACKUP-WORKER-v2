@@ -1,0 +1,26 @@
+[19:15:41] B1 on git-redesign-b; saves in git-redesign-b
+[19:15:43] chooser title 'Where should git-redesign-b save?'; New folder… enabled at open: True; foot: ['Cancel', 'Keep saving here']
+[19:15:43] tree rows: [' [Lab state: Start]', 'git-redesign [git-redesign saves here]', 'git-redesign-b [This lab saves here]', 'l1-moved-b [Lab state: L1-moved-b]', 'l1-online', 'l1-scaffold', 'l2-online', 'scratch-a [New]']
+PASS B1 New folder… is enabled with the top level selected
+[19:15:43] top level: parent '' selected -> answer 'This folder holds the state “Start”.'; New folder… enabled True; created 'l2-top'; sentence after: 'l2-top is new. It appears in the repository with the first save.'; refusal shown: False
+PASS B1 top level: created, planned, no refusal
+PASS B1 New folder… is enabled with git-redesign selected
+[19:15:43] inside a lab folder: parent 'git-redesign' selected -> answer 'git-redesign saves here too.'; New folder… enabled True; created 'git-redesign/l2-in-lab'; sentence after: 'git-redesign/l2-in-lab is new. It appears in the repository with the first save.'; refusal shown: False
+PASS B1 inside a lab folder: created, planned, no refusal
+PASS B1 New folder… is enabled with git-redesign/l2-in-lab selected
+[19:15:44] nested: parent 'git-redesign/l2-in-lab' selected -> answer 'git-redesign/l2-in-lab is new. It appears in the repository with the first save.'; New folder… enabled True; created 'git-redesign/l2-in-lab/l2-nested'; sentence after: 'git-redesign/l2-in-lab/l2-nested is new. It appears in the repository with the first save.'; refusal shown: False
+PASS B1 nested: created, planned, no refusal
+[19:15:44] cancelled; the lab still saves in git-redesign-b
+PASS B1: no console, page or request errors
+
+=== B1: 7 checks, 0 failed
+PASS B1 New folder… is enabled with the top level selected
+PASS B1 top level: created, planned, no refusal
+PASS B1 New folder… is enabled with git-redesign selected
+PASS B1 inside a lab folder: created, planned, no refusal
+PASS B1 New folder… is enabled with git-redesign/l2-in-lab selected
+PASS B1 nested: created, planned, no refusal
+PASS B1: no console, page or request errors
+None
+
+7 checks, 0 failed

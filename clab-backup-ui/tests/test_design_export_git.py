@@ -136,6 +136,7 @@ class DesignExportGitTestCase(unittest.TestCase):
         self.addCleanup(self.app.state.design_apply.close)
         self.store = self.app.state.store
         self.progress = self.app.state.git_progress
+        self.progress.connection_wait = 0   # a busy connection answers at once in these tests
         self.designs = self.app.state.network_design
         set_host(self.app)
         self.lab_id = add_lab(self.app)
@@ -149,14 +150,15 @@ class DesignExportGitTestCase(unittest.TestCase):
     def remote(self, host, request, stopping=None):
         self.sent.append(copy.deepcopy(request))
         mode = request['mode']
-        if mode == 'status': return dict(ready=True, head='a' * 40)
+        if mode == 'status': return dict(ready=True, head=getattr(self, 'vm_head', 'a' * 40))   # the checkout's HEAD moves with a save
         if mode == 'publish':
-            self.snapshots[request['operation_id']] = copy.deepcopy(request['snapshot'])
+            self.snapshots[request['operation_id']] = copy.deepcopy(request['snapshot']); self.vm_head = 'b' * 40
             return dict(status='synced' if request['push'] else 'committed', commit='b' * 40,
                        pushed=request['push'], changed_files=list(request['snapshot']['files']),
                        snapshot_path=request['target'])
         if mode == 'push':
             return dict(status='synced', commit='b' * 40, pushed=True, changed_files=[], snapshot_path='checkpoints/day-1')
+        if mode == 'update': return dict(status='updated', head=request['expected_head'])   # nothing new online
         raise AssertionError(mode)
 
     def export_url(self, generation_id):
@@ -456,6 +458,9 @@ class ExecuteTests(DesignExportGitTestCase):
         self.assertEqual(request['target'], 'checkpoint')
         self.assertEqual(request['checkpoint'], 'day-1')
         self.assertEqual(request['expected_head'], 'a' * 40)
+        self.assertNotIn('checkpoint_only', request, 'a design export is no checkpoint from a save')
+        # Before its first publication the export asks for the VM copy to be brought up to date, like a save.
+        self.assertEqual([r['mode'] for r in self.sent], ['status', 'update', 'publish'])
 
         lab = self.store.lab(self.lab_id); generation = self.generation(gen_id)
         expected = self.designs.design_snapshot(lab, generation)
@@ -487,7 +492,7 @@ class ExecuteTests(DesignExportGitTestCase):
         pending = self.client.get('/api/git/jobs/' + job_id).json()
         self.assertEqual(pending['status'], 'review_pending')
 
-        retry = self.client.post('/api/git/jobs/' + job_id + '/retry', json={'push': True, 'reviewed': True})
+        retry = self.client.post('/api/git/jobs/' + job_id + '/retry', json={'push': True, 'reviewed': True, 'head': self.vm_head})   # the HEAD the review showed
         self.assertEqual(retry.status_code, 200, retry.text)
         self.progress.execute(job_id)
 

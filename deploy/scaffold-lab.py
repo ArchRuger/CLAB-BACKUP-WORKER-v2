@@ -11,12 +11,15 @@ configuration into a named reference folder:
 `init` registers ``<slug>/reference/{start,solution,broken-01}`` and ``<slug>/work`` and
 points the lab's saves at ``<slug>/work``. `snapshot <slug> <state>` captures whatever the
 node is running now, saves it (and its restore-grade candidate) into
-``<slug>/reference/<state>``, shows what changed and asks before it uploads (the manager
-uploads a save only after a review; ``--yes`` states that review for scripted use), and
-rebinds the lab to ``<slug>/work``. Answering no keeps the state on the lab VM only.
+``<slug>/reference/<state>``, asks the manager what an upload would send (the files of this
+state and every other save that waits in the repository on the VM, which the upload carries
+too), shows it and asks before it uploads (the manager uploads only what a review showed;
+``--yes`` states that review for scripted use), and rebinds the lab to ``<slug>/work``.
+Answering no leaves the state waiting on the lab VM: it shows as a save to upload in the lab
+header and goes up with the next upload of the repository.
 
 Prerequisites: the lab is deployed and reachable, and it is already connected to the target
-repository in the manager (Progress -> Save location -> Connect by URL). See docs/NAMING.md
+repository in the manager (press Save in the lab header and paste its HTTPS address, or open Save settings from the chip). See docs/NAMING.md
 and deploy/lab-template/README.md.
 """
 import argparse
@@ -35,6 +38,7 @@ NAME = re.compile(r'[a-z0-9][a-z0-9-]{0,62}')          # lab slug and state name
 DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 GIT_ACTIVE = {'queued', 'capturing', 'exporting', 'pushing'}
 GIT_REVIEWABLE = {'review_pending', 'committed', 'unchanged'}   # saved on the VM, upload not done yet
+CHANGED_MEANWHILE = 'Another save was made in this repository'    # the manager's answer when the reviewed HEAD moved
 
 
 class ManagerLost(SystemExit):
@@ -92,7 +96,7 @@ def binding_id(manager, lab_id):
     status, git = api(manager, '/labs/%s/git' % lab_id)
     binding = (git or {}).get('binding')
     if not binding:
-        die('the lab is not connected to a Git repository yet. Connect one under Progress -> Save location.')
+        die('the lab is not connected to a Git repository yet. Press Save in the lab header and connect one, or open Save settings from the chip.')
     return binding['binding_id']
 
 
@@ -117,10 +121,10 @@ def register_folder(manager, binding, prefix):
 
 
 def bind_to(manager, lab_id, prefix):
+    """Point the lab's saves at `prefix`. A save that waits for upload does not stop this: it keeps its own
+    destination and stays uploadable."""
     status, result = api(manager, '/labs/%s/git/destination' % lab_id, 'POST', {'prefix': prefix, 'move_files': False})
     if status != 200:
-        if 'already saves to that folder' in (result.get('detail') or '').lower():
-            return  # the lab is already bound here; nothing to do
         die('could not point the lab at %s: %s' % (prefix, result.get('detail')))
     job = result.get('job')
     if job:
@@ -135,22 +139,35 @@ def save_progress(manager, lab_id):
     return poll_git(manager, job['id'])
 
 
-def upload_reviewed(manager, job_id):
-    """Upload a save whose changes the person running this tool has just been shown."""
-    status, job = api(manager, '/git/jobs/%s/retry' % job_id, 'POST', {'push': True, 'reviewed': True})
+def review_of(manager, lab_id, job_id):
+    """What an upload of this save sends, as the manager's review says it: the HEAD of the repository on the VM, the
+    save the upload goes through and every other save it carries."""
+    status, review = api(manager, '/labs/%s/git/compare' % lab_id, 'POST', {'job_id': job_id})
     if status != 200:
-        return {'status': 'refused', 'message': job.get('detail') or 'HTTP %s' % status}
-    return poll_git(manager, job_id)
+        die('could not read what an upload would send: %s' % (review.get('detail') or 'HTTP %s' % status))
+    return review
 
 
-def keep_on_vm(manager, job_id):
-    """Stop tracking a save that stays on the lab VM, so it no longer blocks a folder change."""
-    status, job = api(manager, '/git/jobs/%s/dismiss' % job_id, 'POST', {'acknowledge': True})
+def upload_reviewed(manager, job_id, review):
+    """Upload what the person running this tool has just been shown: through the save the review names, with the
+    HEAD the review showed. Returns (job, changed): `changed` when another save was made meanwhile, so the review
+    shown is no longer what an upload would send and nothing was uploaded."""
+    target = review.get('upload_job') or job_id
+    status, job = api(manager, '/git/jobs/%s/retry' % target, 'POST', {'push': True, 'reviewed': True, 'head': review.get('head') or ''})
     if status != 200:
-        die('could not set the save aside: %s' % (job.get('detail') or 'HTTP %s' % status))
+        detail = job.get('detail') or 'HTTP %s' % status
+        return {'status': 'refused', 'message': detail}, status == 409 and CHANGED_MEANWHILE in detail
+    carrier = poll_git(manager, job.get('id') or target)
+    if (job.get('id') or target) == job_id:
+        return carrier, False
+    # The upload went through a newer save of the repository; this one was carried by it.
+    status, own = api(manager, '/git/jobs/%s' % job_id)
+    if carrier.get('status') != 'synced':
+        return dict(own, status=carrier.get('status'), message=carrier.get('message', '')), False
+    return own, False
 
 
-def confirmed(job, reference, assume_yes):
+def confirmed(job, review, reference, assume_yes):
     files = job.get('changed_files') or []
     print('Saved into %s on the lab VM (%s).' % (reference, (job.get('commit') or '')[:12] or 'no new commit'))
     for name in files[:40]:
@@ -159,10 +176,33 @@ def confirmed(job, reference, assume_yes):
         print('  ... and %d more' % (len(files) - 40))
     if not files:
         print('  nothing changed since the previous save of this folder')
+    for row in review.get('also_sends') or []:
+        name = str(row.get('name') or '') or ('a save without a name' if row.get('job_id') else str(row.get('commit') or '')[:12])
+        print('This upload also sends: ' + (str(row['lab']) + ': ' if row.get('lab') else '') + name)
     print('Configuration files may contain passwords or keys.')
     if assume_yes:
         return True
-    return input('Upload this state to the online repository now? [y/N] ').strip().lower() in ('y', 'yes')
+    return input('Upload this to the online repository now? [y/N] ').strip().lower() in ('y', 'yes')
+
+
+def review_and_upload(manager, lab_id, job, reference, assume_yes):
+    """Show the review, ask, upload. When another save was made between the review and the upload the manager uploads
+    nothing: the review is shown and asked again (with --yes one more time, then the state stays on the lab VM).
+    Returns (final job, where)."""
+    again = 0
+    while True:
+        review = review_of(manager, lab_id, job['id'])
+        if not confirmed(job, review, reference, assume_yes):
+            return job, 'kept on the lab VM only (it waits there as a save to upload and goes up with the next upload of this repository)'
+        final, changed = upload_reviewed(manager, job['id'], review)
+        if not changed:
+            # A refused upload leaves the save as it was: on the lab VM, waiting.
+            return (dict(job, **final) if final.get('status') == 'refused' else final), ''
+        again += 1
+        if assume_yes and again > 1:
+            return job, ('kept on the lab VM only: other saves kept being made in this repository, so nothing was uploaded '
+                         '(it waits there as a save to upload)')
+        print('Another save was made in this repository meanwhile. This is what an upload sends now:')
 
 
 def cmd_init(args):
@@ -186,22 +226,20 @@ def say_where_it_saves(args, reference, reason, unsure):
     """Stop with `reason` and the way out when the lab is not known to be back on the work folder. `unsure` is for
     a folder change that was under way or whose answer was lost: it may or may not have happened."""
     if unsure:
-        sys.exit('%s The lab MAY STILL SAVE TO %s. Check where it saves under Progress > Save location (finish or '
-                 'set aside any pending save under Progress > Recent saves first), then run: '
-                 'scaffold-lab.py init %s' % (reason, reference, args.slug))
-    sys.exit('%s The lab STILL SAVES TO %s. Finish or set aside that save under Progress > Recent saves, '
-             'then run: scaffold-lab.py init %s' % (reason, reference, args.slug))
+        sys.exit('%s The lab MAY STILL SAVE TO %s. Check where it saves under Save settings in the lab header, '
+                 'then run: scaffold-lab.py init %s' % (reason, reference, args.slug))
+    sys.exit('%s The lab STILL SAVES TO %s. Run: scaffold-lab.py init %s' % (reason, reference, args.slug))
 
 
 def rebind_or_say(args, lab, reference, work, reason, unsure=False):
-    """A snapshot stopped after the lab was bound to `reference`: try to rebind it to `work`, then stop with
-    `reason` and the truth about where the lab saves now (a save still pending refuses the folder change).
+    """A snapshot stopped after the lab was bound to `reference`: rebind it to `work` (a save that waits for upload
+    does not stop that), then stop with `reason` and the truth about where the lab saves now.
     `unsure` is for a stop while the move to `reference` was itself under way: it may not have happened.
     A rebind whose answer was lost is unsure too: the lab may already be back on `work`."""
     try:
         bind_to(args.manager, lab['id'], work)
     except SystemExit as stop:
-        say_where_it_saves(args, reference, reason, unsure or isinstance(stop, ManagerLost))
+        say_where_it_saves(args, reference, '%s %s' % (reason, stop.code), unsure or isinstance(stop, ManagerLost))
     sys.exit('%s The lab is rebound to %s.' % (reason, work))
 
 
@@ -226,33 +264,32 @@ def cmd_snapshot(args):
     try:
         final = save_progress(args.manager, lab['id'])   # capture the running config into it
         status, where = final.get('status'), ''
-        # The manager never uploads a save by itself: it waits for a review, and a waiting save blocks the
-        # folder change back to work. So the upload (or setting the save aside) comes before the rebind.
+        # The manager never uploads a save by itself: it uploads what a review showed, bound to the HEAD of the
+        # repository on the VM at that review. So the review comes first, then the question, then the upload.
         if status in GIT_REVIEWABLE and not final.get('pushed'):
-            if confirmed(final, reference, assume_yes):
-                final = upload_reviewed(args.manager, final['id'])
-                status = final.get('status')
-            else:
-                keep_on_vm(args.manager, final['id'])
-                status, where = 'kept', 'kept on the lab VM only (it goes up with the next upload of this repository)'
+            final, where = review_and_upload(args.manager, lab['id'], final, reference, assume_yes)
+            status = final.get('status')
     except SystemExit as stop:
-        # The save failed to start, timed out or could not be set aside after the lab was pointed at the
+        # The save failed to start or timed out, or its review could not be read, after the lab was pointed at the
         # reference folder: put it back where it was, or say plainly that it is still there.
         rebind_or_say(args, lab, reference, work, stop.code)
     except (KeyboardInterrupt, EOFError):
         # Ctrl+C, or the end of input at the upload question, after the lab was pointed at the reference folder.
+        # A save that was made waits on the lab VM; nothing was uploaded.
         rebind_or_say(args, lab, reference, work, 'scaffold-lab: stopped.')
     if status == 'synced' or (status == 'unchanged' and final.get('pushed')):
         where = 'uploaded'
-    if not where and status not in ('failed', 'capture_incomplete'):
-        die('the snapshot into %s is not finished: %s (%s). The lab STILL SAVES TO %s. Finish or set aside that '
-            'save under Progress > Recent saves, then run: scaffold-lab.py init %s'
-            % (reference, status, final.get('message', ''), reference, args.slug))
+    waits = bool(final.get('commit')) and not final.get('pushed')
     try:
         bind_to(args.manager, lab['id'], work)           # rebind so the student keeps saving in work
     except SystemExit as stop:
-        say_where_it_saves(args, reference, '%s The snapshot into %s itself is finished (%s).'
-                           % (stop.code, reference, where or status), isinstance(stop, ManagerLost))
+        say_where_it_saves(args, reference, '%s The snapshot into %s itself is %s.'
+                           % (stop.code, reference, where or ('saved on the lab VM, not uploaded' if waits else 'not finished (%s)' % status)),
+                           isinstance(stop, ManagerLost))
+    if not where and waits:
+        die('the snapshot into %s is saved on the lab VM but was not uploaded: %s (%s). It waits there as a save to upload: '
+            'upload it from the save status in the lab header. The lab is rebound to %s.'
+            % (reference, status, final.get('message', ''), work))
     if not where:
         die('the snapshot into %s did not finish cleanly: %s (%s). The lab is rebound to %s.'
             % (reference, status, final.get('message', ''), work))

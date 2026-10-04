@@ -1,0 +1,82 @@
+top-level registration of the scratch repository: e7d5f64d
+forget planned folder l2-top -> 200
+forget planned folder git-redesign/l2-in-lab -> 200
+forget planned folder git-redesign/l2-in-lab/l2-nested -> 200
+forget planned folder l2-d2-top -> 200
+--- labs
+git-redesign-b aa4ee92a readiness {'status': 'ready', 'total': 2, 'ready': 2, 'booting': 0, 'failed': 0} saves in clab-scratch-git-redesign:git-redesign-b git_status {'checked': '2026-10-04T19:29:59.832464+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+git-redesign c352ba81 readiness {'status': 'ready', 'total': 4, 'ready': 4, 'booting': 0, 'failed': 0} saves in clab-scratch-git-redesign:git-redesign git_status {'checked': '2026-10-04T19:49:03.668181+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+waiting saves: []
+active jobs: [] []
+paused containers: ''
+containers: ['clab-git-redesign-b-ceos2 Up 26 minutes', 'clab-git-redesign-b-ceos1 Up 26 minutes', 'clab-git-redesign-ceos2 Up 6 hours', 'clab-git-redesign-ceos1 Up 6 hours', 'clab-git-redesign-xrv9k Up 27 minutes (unhealthy)', 'clab-git-redesign-cjunos Up 6 hours']
+/etc/hosts: l2 lines = 0 ; github lines = 0
+  [device descriptions devices]
+      a-ceos1   Ethernet1                description l2-c1-final
+      a-ceos2   Ethernet2                description l2-c1-final
+      a-cjunos  et-0/0/1                 description l2-a2;
+      a-xrv9k   GigabitEthernet0/0/0/0   description l2-c1-final
+      b-ceos1   Ethernet1                description l2-d1
+      b-ceos2   Ethernet1                description l2-a5
+--- GitHub main
+  [GitHub scratch]
+      03aff0b42e 4 devices changed, map changed
+      68184adaf3 4 devices changed, map changed
+      af91328e52 C6probe
+      68fedc7349 Final
+  [VM checkout VM checkout]
+      03aff0b 4 devices changed, map changed
+      68184ad 4 devices changed, map changed
+      af91328 C6probe
+      68fedc7 Final
+      ## main...origin/main [ahead 7]
+state folders:
+   git-redesign-b/checkpoints/l2-named-save
+   git-redesign-b/checkpoints/l2-older-checkpoint
+   git-redesign-b/latest
+   git-redesign/b/latest
+   git-redesign/broken/latest
+   git-redesign/c6probe/latest
+   git-redesign/checkpoints/ceos1-changed
+   git-redesign/checkpoints/ceos1-changed-2
+   git-redesign/final/latest
+   git-redesign/latest
+   git-redesign/start/latest
+   l1-moved-b/latest
+   l1-scaffold/reference/solution/latest
+   l2-move-2/latest
+other files: ['README.md', 'l1-online/online-1.txt', 'l1-online/online-2.txt', 'l1-online/online-3.txt', 'l2-online/a5-online-1.txt', 'l2-online/a5-online-2.txt']
+empty repository main:
+README.md
+lab-b-empty/latest/ceos1.cfg
+lab-b-empty/latest/ceos1.eoscfg
+lab-b-empty/latest/ceos2.cfg
+lab-b-empty/latest/ceos2.eoscfg
+lab-b-empty/latest/git-redesign-b.clab.yml
+lab-b-empty/latest/git-redesign-b.clab.yml.annotations.json
+lab-b-empty/latest/manifest.json
+--- registrations on the VM
+   clab-scratch-git-redesign ''
+   clab-scratch-git-redesign 'git-redesign'
+   clab-scratch-git-redesign 'git-redesign/b'
+   clab-scratch-git-redesign 'git-redesign/start'
+   clab-scratch-git-redesign 'git-redesign/broken'
+   clab-scratch-git-redesign 'git-redesign/final'
+   clab-scratch-git-redesign 'l1-moved-b'
+   clab-scratch-git-redesign 'git-redesign/git-redesign-b'
+   clab-scratch-git-redesign 'git-redesign-b'
+   clab-scratch-git-redesign 'l1-scaffold/reference/start'
+   clab-scratch-git-redesign 'l1-scaffold/reference/solution'
+   clab-scratch-git-redesign 'l1-scaffold/reference/broken-01'
+   clab-scratch-git-redesign 'l1-scaffold/work'
+   clab-scratch-git-redesign 'git-redesign-b-2'
+   clab-scratch-git-redesign 'git-redesign/inner'
+   clab-scratch-git-redesign 'l2-move-1'
+   clab-scratch-git-redesign 'l2-move-2'
+   clab-scratch-git-redesign-empty ''
+   clab-scratch-git-redesign-empty 'lab-b-empty'
+   clab-scratch-git-redesign 'git-redesign-b/start'
+   clab-scratch-git-redesign 'git-redesign-b/final'
+   clab-scratch-git-redesign 'git-redesign-b/broken'
+   clab-scratch-git-redesign 'git-redesign/c6probe'
+restore/states of lab A: [('Git-redesign', 'latest'), ('ceos1-changed', 'checkpoint'), ('ceos1-changed-2', 'checkpoint'), ('B', 'state'), ('Broken', 'state'), ('C6probe', 'state'), ('Final', 'state'), ('L1-moved-b', 'state'), ('L2-move-2', 'state'), ('Solution', 'state'), ('Start', 'state'), ('Git-redesign-b', 'other-lab'), ('l2-named-save', 'other-lab'), ('l2-older-checkpoint', 'other-lab')]

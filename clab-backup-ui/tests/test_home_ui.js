@@ -26,9 +26,9 @@ test('cards read the lab state, the ready count, the last save and the deploymen
  assert.equal(h.element('lab-cards').hidden,false);assert.equal(h.element('home-labs').hidden,false);assert.equal(h.created('home-continue'),false,'no separate Continue block outranks the two starting choices');
  assert.ok(cards.indexOf('OSPF area 0')<cards.indexOf('BGP core'),'favourites come first under All labs');
  assert.match(cards,/class="pill ok">Running<\/span><span>2 of 2 devices ready/);
- assert.match(cards,/Last saved 12 minutes ago/);assert.match(cards,/<p class="caption lab-card-times">Deployed 2 hours ago · Last opened 3 hours ago<\/p>/);
+ assert.match(cards,/Saved 12 min ago/,'the card reads the header chip’s own text (saveChipState, PROMPT 5.2: one status function)');assert.match(cards,/<p class="caption lab-card-times">Deployed 2 hours ago · Last opened 3 hours ago<\/p>/);
  assert.match(cards,/<p class="caption lab-card-times">No deployment recorded by this manager<\/p>/,'a lab without a recorded deployment says so and shows no time');
- assert.match(cards,/class="pill neutral">Stopped<\/span><span>Not running/);assert.match(cards,/Not saved anywhere yet/);
+ assert.match(cards,/class="pill neutral">Stopped<\/span><span>Not running/);assert.match(cards,/Not saved yet/);
  assert.match(cards,/data-lab="run">Open lab/);assert.match(cards,/data-lab="stop">Open lab/);
  assert.match(cards,/data-lab-favorite="stop" aria-pressed="true" aria-label="Remove from favourites"/);
  assert.match(cards,/data-lab-favorite="run" aria-pressed="false" aria-label="Add to favourites"/);
@@ -39,8 +39,13 @@ test('cards read the lab state, the ready count, the last save and the deploymen
  assert.match(cards,/<button type="button" class="icon-button" data-lab-favorite="run" aria-pressed="false"[^>]*><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-star"><\/use><\/svg><\/button>/);
  assert.match(cards,/data-lab-more="run" aria-label="More actions for BGP core"/);
  assert.doesNotMatch(cards,/container|discover|NOS|worker|Unlinked/i);assert.doesNotMatch(cards,/Continue where you left off/);
- const attention=harness({labs:[{...running,id:'att',name:'Att'}],git_jobs:[{id:'g2',lab_id:'att',status:'push_pending',target:'latest',created:'2026-09-16T11:50:00Z'}]});
- attention.context.renderHome();assert.match(attention.element('lab-cards').innerHTML,/Needs attention — Saved on this VM, but it could not be uploaded to github\.com/);
+ const attention=harness({labs:[{...running,id:'att',name:'Att'}],git_jobs:[{id:'g2',lab_id:'att',status:'push_pending',target:'latest',captured:true,commit:'c2',pushed:false,created:'2026-09-16T11:50:00Z'}]});
+ attention.context.renderHome();assert.match(attention.element('lab-cards').innerHTML,/Upload failed/,'a failed upload reads as the chip reads it');
+ // A save waiting for upload and a loaded state read as the chip reads them (parity C-080).
+ const waiting=harness({labs:[{...running,id:'w',name:'W'}],git_jobs:[{id:'g3',lab_id:'w',status:'review_pending',target:'latest',captured:true,commit:'c3',pushed:false,created:'2026-09-16T11:50:00Z'}]});
+ waiting.context.renderHome();assert.match(waiting.element('lab-cards').innerHTML,/1 save to upload/);
+ const loaded=harness({labs:[{...running,id:'l',name:'L'}],git_jobs:[],restore_jobs:[{id:'r1',lab_id:'l',status:'succeeded',created:'2026-09-16T11:40:00Z',finished:'2026-09-16T11:41:00Z',source:{type:'folder',path:'course/final/latest'},targets:[{name:'a',status:'verified'}]}]});
+ loaded.context.renderHome();assert.match(loaded.element('lab-cards').innerHTML,/Running Final/);
 });
 
 test('Recent labs orders by the most recent deployment, newest first; opening, saving and favourites do not reorder it; labs without a deployment come last by name',()=>{

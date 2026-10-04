@@ -1,0 +1,36 @@
+SCENARIO 11b (hard case): one waiting save on the VM (476b9d4 "ceos1 changed") AND one more commit online (be4bbbe, added in 11a)
+git_status: {'checked': '2026-10-04T16:01:42.390960+00:00', 'ready': False, 'problem': 'The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.', 'code': 'diverged', 'waiting': 1}
+job: {"commit": "476b9d4a22da6b8cbfdd6dfdb189b08f7ae8bd8b", "message": "The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.", "note": "ceos1 changed", "pushed": false, "reviewed": "2026-10-04T16:01:40.862123+00:00", "status": "push_pending"}
+GET /git repository_status ready/problem: True ''
+--- Update from the repository while a save waits:
+[16:01:52] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/update {}
+    -> HTTP 409 (0.0s) {"detail": "Upload the waiting saves first; the online copy can only be fetched when nothing waits here."}
+--- a further save while diverged (does it work on the VM?)
+[16:01:52] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/save {"note": "l1 s11b saved while diverged", "push": true, "request_id": "bb7391812b8c483aab84b59ec56b5dfe", "target": "latest"}
+    -> HTTP 200 (0.0s) {"id": "bb7391812b8c483aab84b59ec56b5dfe", "message": "Save queued.", "status": "queued"}
+[16:01:52]    job bb739181 status=capturing message='Capturing the configured devices.'
+[16:01:56]    job bb739181 status=exporting message='Saving captured configurations to the VM repository.'
+[16:01:58]    job bb739181 status=review_pending message='Saved in the VM repository; not pushed.'
+    job: {"commit": "923ee6ec35e335a34368760ca04528beb475541c", "message": "Saved in the VM repository; not pushed.", "pushed": false, "status": "review_pending"}
+git_status: {'checked': '2026-10-04T16:01:55.403255+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 2}
+--- upload attempt again with the manager (no change in conditions)
+[16:01:59] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id": "bb739181.."} -> HTTP 200
+     file {"node": "ceos2", "path": "git-redesign/latest/ceos2.cfg", "role": "device", "status": "changed"}
+     file {"node": "ceos2", "path": "git-redesign/latest/ceos2.eoscfg", "role": "restore", "status": "changed"}
+     file {"node": "", "path": "git-redesign/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 1, "devices": ["ceos2"], "first": false, "map": false, "removed": 1, "removed_devices": [], "topology": false}
+     head 923ee6ec35e335a34368760ca04528beb475541c upload_job bb7391812b8c483aab84b59ec56b5dfe
+     also_sends [{"job_id": "1d2d11275b2e4d25b81a7c70d87d0dfb", "kind": "save", "lab": "git-redesign", "name": "ceos1 changed", "target": "latest"}] count 1 other_labs 0
+[16:02:00] POST /api/git/jobs/bb7391812b8c483aab84b59ec56b5dfe/retry {"head": "923ee6ec35e335a34368760ca04528beb475541c", "push": true, "reviewed": true}
+    -> HTTP 200 (0.2s) {"id": "bb7391812b8c483aab84b59ec56b5dfe", "message": "Upload queued; the saved commit will be reused.", "status": "queued"}
+[16:02:00]    job bb739181 status=pushing message='Pushing the saved commit.'
+[16:02:04]    job bb739181 status=push_pending message='The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.'
+upload: {"message": "The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.", "pushed": false, "status": "push_pending"}
+  [VM checkout VM checkout]
+      923ee6e l1 s11b saved while diverged
+      476b9d4 ceos1 changed
+      5263c18 l1 s10 second while blocked
+      1b991a4 l1 s10 upload failure
+      ## main...origin/main [ahead 19]
+From https://github.com/ArchRuger/clab-scratch-git-redesign
+   b7cac63..be4bbbe  main       -> origin/main

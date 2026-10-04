@@ -1,89 +1,86 @@
 # Save lab progress to Git
 
-Choose where a lab's progress is saved once (the first **Save progress** asks; the
-**Progress** tab's *Save location* card holds the setting afterwards), then use
-**Save progress** to capture its selected devices, save the complete capture in that
-repository, commit changed configurations and, after you have reviewed the changes, push. Ben keeps his existing Git login and
-commit identity. The manager never asks for his Git token.
+Every lab has a **Save** button and a **Load** button in its header, on every tab. **Save** puts the
+whole lab, as it is now, into one folder of a Git repository: the topology file, the map and the
+configuration of every included device. **Load** puts a saved state back onto the running devices.
+Between them sits the chip, a short line that always says where the lab stands (`Saved 21 min ago`,
+`1 save to upload`, `Can’t save`, `Running Start`, …).
 
-The Git helper is installed on the VM by the guided installer and refreshed by every
-upgrade; see [the installation guide](INSTALL.md) and [VM connection](VM-CONNECTION.md).
+Nothing reaches GitHub until you press **Upload**. The manager never asks for a Git token: the lab VM
+uses its own GitHub login, set up once by the administrator. You keep your existing Git login and
+commit identity.
 
-## What each save means
+The Git helper is installed on the VM by the guided installer and refreshed by every upgrade; see
+[the installation guide](INSTALL.md) and [VM connection](VM-CONNECTION.md). Course authors who make
+Start, Broken and Final states for their students: [Lab states for a course](COURSE-STATES.md).
 
-Capture, local commit and remote push have separate outcomes. **Saved on VM**
-means a configuration snapshot or Git commit exists locally; **Pushed** means
-the push was verified. A failed push does not turn a successful device capture
-into a failed backup.
+**Old links and bookmarks.** There is no Progress tab any more. A link or bookmark that ends in
+`view=progress` or `view=git` opens the lab's first tab (Topology) with the chip panel open, once, and the
+address is rewritten to that tab. `view=save-location` and `view=save-settings` open **Save settings**;
+`view=saved-versions` and `view=versions` open **All versions**. A lab without a save location gets the
+first-save view in the chip panel.
 
-```mermaid
-flowchart TD
-    A[Save progress] --> B[Capture selected devices]
-    B --> C{Complete capture?}
-    C -- No --> D[Keep successful local files; latest unchanged]
-    C -- Yes --> E[Keep immutable backup snapshot]
-    E --> F[Export exact files and manifest]
-    F --> G{Configuration changes?}
-    G -- Yes --> H[Commit to selected branch]
-    G -- No --> I[Keep existing commit]
-    H --> R{Review before uploading}
-    R -- Upload these changes --> J[Push]
-    R -- Not now --> M[Saved on the VM; waiting for your review]
-    I --> R
-    J -- Verified --> K[Saved to Git]
-    J -- Unavailable or rejected --> L[Saved locally; retry push]
-```
+## What a save is
 
-The configurations, their manifest, and the topology and map the capture embedded
-(`<lab>.clab.yml` and `<lab>.clab.yml.annotations.json`, the files as they were beside the
-deployed topology on the VM at capture time, or the manager's copy; see
-[NODE-FEATURES.md](../clab-backup-ui/NODE-FEATURES.md#the-topology-travels-with-every-backup))
-enter the Git commit, inside the snapshot folder. The lab folder's own topology YAML, README
-files and unrelated edits stay outside the export. A topology file can carry what the student
-wrote into it (an environment variable with a password, a startup configuration path): like the
-device configurations beside it, it reaches the repository, and the review before every upload
-shows it. The manifest records the lab, selected and
-excluded nodes, capture identity, topology provenance (`embedded` when the files travel with the
-save), configuration formats and file checksums. Git export uses one completed
-backup job, not the rolling `latest` backup directory that can contain files from
-different capture attempts.
+A save is **the whole lab in one folder of the repository, as one commit**. The files are:
 
-A progress save supports up to 500 devices, with nonempty UTF-8 configurations
-up to 2 MiB each and 16 MiB in total. Oversized or incomplete captures do not
-replace the repository snapshot.
+- the topology file (`<lab>.clab.yml`) and the map (`<lab>.clab.yml.annotations.json`);
+- one configuration per included device (`<node>.cfg`), and beside it, on a platform that can be
+  loaded, the file Load uses (`<node>.jcfg`, `<node>.eoscfg` or `<node>.xrcfg`);
+- `manifest.json`, which records the lab, the included devices, when the save was made and a checksum
+  of every file.
+
+The commit is made on the lab VM, in the repository's checkout (**Save settings › Git details** shows
+its path). It is on GitHub only after you press **Upload**. A save on the VM is already a complete,
+loadable save; the upload is the copy that survives the VM.
+
+Which topology and which map a save takes:
+
+- **The topology** is the file the lab runs: the deployed topology beside the lab on the VM. A save is
+  what the lab is, not what it was meant to be. A lab imported from an inventory has no topology file
+  in the manager; it saves its device configurations only, and **Save settings** says so, with
+  **Update topology file…**.
+- **The map** is the one you changed in the manager since the VM's map file was last read into it;
+  otherwise it is the VM's file. A map edited on the Topology tab is therefore saved, and a map file
+  changed on the VM afterwards wins over an older copy in the manager.
+- If the topology or the map cannot be written into the save, the save stops with `The topology could
+  not be saved with this capture. Try again.` and nothing is committed.
+
+A topology file can carry what you wrote into it (an environment variable with a password, a startup
+configuration path). Like the device configurations beside it, it reaches the repository, and the
+**See changes** view shows it before an upload. Every panel that saves says it: `Saved files can
+contain passwords or keys.`
+
+A save holds up to 500 devices, nonempty UTF-8 configurations up to 2 MiB each and 16 MiB in total.
+An incomplete or oversized capture does not replace what the repository already holds.
 
 ## One-time setup
 
-Start with [GIT-SETUP.md](GIT-SETUP.md). On the Ubuntu VM, run this as the existing
-ordinary account, without sudo, from any directory:
+Start with [GIT-SETUP.md](GIT-SETUP.md). On the Ubuntu VM, run this as the existing ordinary account,
+without sudo, from any directory:
 
 ```bash
 bash "$HOME/projects/clab-manager/deploy/setup-git.sh"
 ```
 
-The guided flow prepares the checkout, owner-scoped HTTPS login and commit
-identity, then registers the current branch after noninteractive validation.
-No additional Linux account is needed on a standalone VM. Linux and GitHub
-usernames do not need to match. Existing working installations should upgrade
-with `start-manager.sh` or `setup-git.sh --refresh` and retain their current owner.
+The guided flow prepares the checkout, the owner-scoped HTTPS login and the commit identity, then
+registers the current branch after noninteractive validation. No additional Linux account is needed
+on a standalone VM. Linux and GitHub usernames do not need to match. Existing working installations
+upgrade with `start-manager.sh` or `setup-git.sh --refresh` and keep their current owner.
 
-In the lab, open the **Progress** tab. The first **Save progress** asks where the
-lab's progress should be saved — the registered repository, a folder in it and the
-devices to include — and the *Save location* card keeps the same settings for later
-changes. **Save progress** then captures and commits automatically and shows the changes
-for review before anything is uploaded (see *Everyday buttons*); the review cannot be
-switched off. A separate Commit button is not needed.
+In the lab, the first **Save** offers a place to save (see [The first save](#the-first-save));
+after that, **Save settings** holds the same choices.
 
-The following sections are manual authentication and recovery reference. The
-quickstart guide covers advanced registration, other HTTPS providers and separate
-owners. Git authentication remains separate from the `clab-discovery` VM password.
+The following sections are manual authentication and recovery reference. The quickstart guide covers
+advanced registration, other HTTPS providers and separate owners. Git authentication remains separate
+from the `clab-discovery` VM password.
 
 ## GitHub HTTPS login on the VM
 
-GitHub does not accept the account's website password for HTTPS Git operations.
-Use GitHub CLI to configure the repository owner's Git authentication.
-The GitHub account must have write access to the intended repository.
-See [GitHub authentication](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-to-github).
+GitHub does not accept the account's website password for HTTPS Git operations. Use GitHub CLI to
+configure the repository owner's Git authentication. The GitHub account must have write access to the
+intended repository. See
+[GitHub authentication](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-to-github).
 
 On Ubuntu 24.04, the VM administrator can install the
 [GitHub CLI package](https://packages.ubuntu.com/noble/gh):
@@ -93,9 +90,8 @@ sudo apt update
 sudo apt install gh
 ```
 
-Then run the following **as the registered repository owner**, without sudo.
-For the standalone installation, this can be the existing VM account; creating a
-separate engineer account is optional.
+Then run the following **as the registered repository owner**, without sudo. For the standalone
+installation, this can be the existing VM account; creating a separate engineer account is optional.
 
 ```bash
 gh auth login --hostname github.com --git-protocol https --web
@@ -103,11 +99,10 @@ gh auth setup-git --hostname github.com
 gh auth status --hostname github.com
 ```
 
-Complete the browser authorization using the URL and one-time code shown by the
-command. On a VM without a desktop, use your workstation browser. The login and
-Git credential helper must belong to the same Linux account selected by
-`--owner`. See [CLI login](https://cli.github.com/manual/gh_auth_login) and
-[Git credential setup](https://cli.github.com/manual/gh_auth_setup-git).
+Complete the browser authorization using the URL and one-time code shown by the command. On a VM
+without a desktop, use your workstation browser. The login and Git credential helper must belong to
+the same Linux account selected by `--owner`. See [CLI login](https://cli.github.com/manual/gh_auth_login)
+and [Git credential setup](https://cli.github.com/manual/gh_auth_setup-git).
 
 Git commit identity is configured separately. Inside the checkout, verify it:
 
@@ -116,277 +111,747 @@ git var GIT_AUTHOR_IDENT
 git var GIT_COMMITTER_IDENT
 ```
 
-If identity is missing, set repository-local `user.name` and `user.email` to your
-intended author name and email before the first manager save. Authentication
-alone does not supply these settings.
+If identity is missing, set repository-local `user.name` and `user.email` to your intended author name
+and email before the first manager save. Authentication alone does not supply these settings.
+
+## Saving
+
+Press **Save** in the lab header. The manager reads the included devices, writes the whole lab into the
+lab's folder as one commit on the VM, and then says in one sentence what changed. You keep working
+while it runs: the chip reads `Saving…` and the panel says `Reading the configuration of 4 devices.
+You can keep working.` The sentence follows the save: `Saving to the lab VM’s repository.`, then, for an
+upload, `Uploading to github.com.`; an update from the repository says `Updating from the repository.` and a
+folder move `Moving the saved files.` The line in the page header that names background work reads
+`Saving…` while any save, upload or update runs and `Loading…` while a load runs.
+
+```mermaid
+flowchart TD
+    A[Save] --> B[Read the included devices]
+    B --> C{Every device read?}
+    C -- No --> D[Can't save: nothing is written, the last save stays as it was]
+    C -- Yes --> E[Write topology, map, configurations and manifest into the lab's folder]
+    E --> F{Anything changed?}
+    F -- No --> G[Nothing changed since your last save]
+    F -- Yes --> H[One commit on the lab VM, named automatically]
+    H --> I[One sentence: what changed, with Upload, Not now, See changes]
+    I -- Upload --> J[Push to GitHub]
+    I -- Not now --> K[Stays on the VM: 1 save to upload]
+    J -- Verified --> L[Saved]
+    J -- Unavailable or rejected --> M[Upload failed: Try again]
+```
+
+### The chip
+
+The chip is the only place that decides what state the lab is in. Open it to see what it means and
+what you can do. These are its states, in the order the manager checks them (the first that holds is
+shown; `Can’t save` comes before a load only when the failed attempt is newer than the load, otherwise
+after it):
+
+| Chip | What it means | What you can do |
+|---|---|---|
+| `Loading… 2 of 4` | A load is running; each device that has an answer is counted. `Checking devices…` appears while the manager reads devices back after a restart. | Wait; **Save** and **Load** are off until it ends. |
+| `Saving…`, `Uploading…`, `Updating…` | A save, an upload or an update from the repository is running. | Keep working; **Save** is off until it ends. |
+| `Can’t save` | The last attempt to save failed, or the repository cannot take a save now. The panel says why (see [When saving is not possible](#when-saving-is-not-possible)). | The action the panel offers. |
+| `Loaded 3 of 4` | The newest load changed the devices, but not every device ended `Loaded`. | **Details**, **Try … again**, **Undo this load**. |
+| `Running Start` | The newest load succeeded and you have not saved since. The name is the state that was loaded. | **What changed**, **Undo this load**, or **Save** to keep what runs now. |
+| `Upload failed` | A save is on the VM but the upload did not work. | **Try again**. |
+| `1 save to upload`, `3 saves to upload` | Saves are on the VM and not on GitHub. | **Upload**. |
+| `Saved 21 min ago` | The newest save that changed something is uploaded, or the lab has only unchanged saves. | Nothing needed. |
+| `Kept on this VM` | Every save of the lab was put aside with **Keep snapshot only**. | **Save**. |
+| `Not saved yet` | The lab has never been saved. | **Save**. |
+
+After a load the chip says what the devices run now, because **Save** then saves what the devices run
+now. A state the chip hides (a waiting upload, a failed attempt, a load) stays one click away as a line
+`Also: 1 save to upload.` with **Show**.
+
+The panel of `Saved <time>` shows the name of the newest save in a field and **Keep as a checkpoint** (see
+below), `Uploaded: yes, to github.com`, and, while no deploy, redeploy, destroy, design apply or load has
+happened since, `Running: your latest save`. The panels of a lab that has a save location end with
+`Saves to: Course-Labs › BGP` and **Change…**, and with **All versions**, **Save as a lab state…** and
+**Save settings**; a lab without one offers only **Save as a lab state…**.
+
+**Save** is off, with the reason written beside it, while a load or a save runs, while the place to
+save is being set, and while a backup or a lab operation is running (`A backup or lab operation is
+running. Save is available when it finishes.`).
+
+### After a save: Upload, Not now, See changes, Details
+
+When the save has made a commit, the chip panel (title `Not uploaded yet`) opens by itself and says in
+one sentence what changed, for example `2 devices changed since your last save: ceos and xrv9k. 14
+lines added, 3 removed.` It also says where the save goes (`To: Course-Labs › BGP`) and offers:
+
+- **Upload** sends the save to GitHub. This is the only button that uploads.
+- **Not now** closes the panel. The save stays on the VM and the chip reads `1 save to upload`.
+- **See changes** opens the **What changed** drawer: a line-by-line view of every file the save
+  changed, device by device, with the topology and the map as their own entries. A device's loadable
+  file is shown under the device, not as a second change.
+- **Details** opens the save's window with its job record, its commit and **Keep snapshot only**, which
+  stops the manager waiting for the upload of this save. Nothing is deleted: the commit stays on the VM
+  and goes along with the next upload from that checkout, and the upload sentence names it then.
+
+**Upload is enabled once the manager has read what the upload sends** (`Checking what this upload
+sends…`). If that cannot be read, the panel says `What this upload sends could not be read from the lab
+VM.`; if somebody else is working in the repository on the VM it says `Someone is working in this
+repository on the VM.` In both cases **Try again** takes the place of **Upload**. The sentence names every save the upload
+carries. Git pushes a branch, not a single save, so
+an upload sends every save of that repository that is not on GitHub yet, whichever lab made it:
+`This upload also sends 2 other saves: Start (BGP), ceos changed (Static routes).` The **What changed**
+drawer lists each of them under **Also in this upload**, with its files. No upload carries a save you
+were not shown.
+
+Another lab's waiting save does **not** stop your save: you can save while any save waits. Only the
+upload carries them together.
+
+If someone saved in the repository after the sentence was shown, **Upload** answers `Another save was
+made in this repository. Look at the changes again.` and shows the changed sentence before anything is
+sent.
+
+### An unchanged save
+
+When nothing changed since the last save, the page says `Nothing changed since your last save.` and no
+new commit is made. If the last save is not uploaded yet, the sentence says `Nothing changed since your
+last save, which is not uploaded yet.` and **Upload** still sends it.
+
+### A failed upload
+
+`Upload failed` means `Your save is safe on the lab VM, but it could not be uploaded to github.com.`
+or, when the online copy cannot be reached, `…but github.com could not be reached.` When other saves
+wait in the same repository the sentence goes on: `This upload sends 2 saves: Start (BGP), ceos changed
+(Static routes).` **Try again** repeats the upload; no device is read again. If the cause is the VM
+account's login, see [Git authentication expired](#failure-and-recovery).
+
+### The name of a save and renaming it
+
+A save is named automatically from what changed: `ceos changed`, `ceos and xrv9k changed`, `ceos,
+cjunos and xrv9k changed`, `4 devices changed`, `Topology changed`, `Map changed`, `Topology and map
+changed`, a device name with a file (`ceos changed, topology changed`) or `First save`. Devices are matched
+by name, not by file name.
+
+When the chip reads `Saved <time>`, its panel shows the name of the newest save in a field, for a save
+you named and for one the manager named: type a new
+name (up to 120 characters, one line) and press Enter or leave the field. The field has no visible label;
+screen readers call it `Name of this save`. The name changes what the manager shows (a short `Renamed.` is
+announced); the Git commit is not touched. An empty name returns to the automatic one. A renamed save keeps
+its name in **All versions** and in the sentences of later uploads. The panel of a lab whose saves were all
+put aside (`Kept on this VM`) shows the last name read-only.
+
+### Keep as a checkpoint
+
+Tick **Keep as a checkpoint**, under the name in the same panel, to keep this save in the lab's
+`checkpoints/` folder. The folder is named from the save's name in lower case with dashes
+(`ceos-and-xrv9k-changed`), or `…-2`, `…-3` when that name is taken (the comparison ignores capitals). To
+choose the folder name yourself, rename the save first, or use **Keep as a checkpoint** on its row in
+**All versions**, which asks for a `Checkpoint name`. No device is read: the checkpoint is made from the
+capture of that save, and `latest` is not touched, so keeping an older save as a checkpoint never turns
+`latest` back to what the devices ran then. The checkpoint is one more waiting save: the sentence reads
+`Checkpoint <name> kept. It is not uploaded yet.` with **Upload**. The box is off, with the reason, when the
+capture is no longer kept (`The capture of this save is no longer kept. Save again to make a checkpoint.`)
+or does not include the topology (`This capture does not include the topology. Save again first.`). A
+save that is already a checkpoint reads `Kept as checkpoint <name>.`
+
+### The starting point
+
+A lab can have one **starting point**: the save a student returns to. Open **All versions**, open one
+of **Your saves** and choose **Use as starting point…**. The manager asks `Make this save the starting
+point of <lab>? No device is read or changed.` and, when one exists, says `It replaces the current
+starting point, saved <when>. The previous one stays in the history.` The button is **Use as starting
+point**, or **Replace the starting point**. **Choose a backup as starting point…** (under *Starting
+point*) opens a dialog with the lab's complete configuration backups instead of a save; replacing an
+existing starting point needs a tick. The starting point is the lab's `baseline/` folder. Like a
+checkpoint it is made from an existing capture and never changes `latest`.
+
+## The first save
+
+A lab that has never been saved shows the chip `Not saved yet`. Its panel looks for a place
+(`Looking for a place to save…`) and offers one:
+
+- **The default place.** The repository the lab used last, else the one saved to most recently, else
+  the first on the VM by name; and a folder named after the lab (`Your first save goes to Course-Labs, in
+  a folder named BGP.`). If that name is taken, the folder is the lab's name with `-2`, `-3`, … so that
+  one click on **Save** always works. If the folder already holds the saves of a lab with the same
+  name but another identity (the lab was removed and imported again, or it is somebody else's lab of
+  that name), the panel asks once: `This repository already holds saves of a lab named BGP.` with
+  **Save in BGP-2** (suggested), **Continue there** and **Connect by URL…**. It never continues there
+  silently. When the folder holds this lab's own earlier saves the sentence reads `Your saves continue
+  in Course-Labs, in the folder BGP.` Under the sentence the panel says where uploads go: `Uploads go to
+  github.com/you/Course-Labs, branch main.`
+- **Choose another place** opens the folder chooser (see [Folders](#folders)). **Connect by URL…** opens
+  the same chooser with an address field, for a repository the VM does not have yet.
+- **A repository by its address.** With no repository on the VM, the panel asks for the HTTPS address
+  itself: `Your saves go to a repository on GitHub. Paste its address; ask your instructor if you do not
+  have one.` Paste it into **Repository address (HTTPS)** and press **Save** (or Enter). The VM's own
+  GitHub login is used: `You are never asked for a password or a token here.` Connecting can take a minute
+  (`This can take a minute.`). The lab saves into a folder named after it.
+- **An empty repository.** A brand-new repository has no commit yet. The panel says `<name> is empty.
+  The manager adds a README.md file to start it.` and offers **Start the repository**. That button
+  uploads one fixed `README.md` that holds nothing of a lab, then continues with your save. The
+  manager does it only when you press the button.
+- **A lab already connected but never saved** (for example after **Save settings**) says `Your first save
+  goes to Course-Labs, in the folder BGP.` with **Save** and **Change…**. A lab without a device whose
+  configuration can be saved says so and offers no **Save**.
+
+The place is set and the lab is saved in one click. **Save as a lab state…** is also offered here
+(see [Lab states](#lab-states)).
+
+## Folders
+
+<a id="where-this-lab-lives"></a>
+<a id="save-location"></a>
+
+A lab saves into one folder of a repository, its **lab folder**. It can be **any folder**: at the top
+level, inside, above or beside another lab's folder, or one you create. Inside the lab folder the
+manager writes exactly three things, the lab's **saved-state folders**:
+
+- `latest/`, the newest save, updated in place by every save (changed files get a new commit and
+  Git history keeps the earlier contents);
+- `baseline/`, the starting point;
+- `checkpoints/<name>/`, one folder per checkpoint.
+
+**Part of a saved state** means one of these folders or anything inside one, or any folder that holds a
+`manifest.json`. Those names are reserved, so a folder cannot be created inside a saved state, and a
+lab cannot save *into* one: choose `working/latest` in the chooser and the lab saves in `working`, the
+lab folder above it (`working/latest is part of a saved state, so BGP saves in working, the lab folder
+above it.`). A folder named `latest` higher up (`course/latest/working`) is an ordinary name.
+
+### Choosing a folder
+
+**Choose another place** (first save), **Change…** beside `Saves to:` in the chip panel, and **Change
+folder…** in **Save settings** all open the same chooser, titled `Where should <lab> save?`. When the VM
+has two or more repositories it starts with a **Repository** list; under it the chooser says where uploads
+go (`Uploads go to github.com/you/Course-Labs, branch main.`) and offers **Connect by URL…**, which
+replaces the list with a **Repository address (HTTPS)** field. Typing an address skips the folder tree (its
+folders are listed once the repository is connected) and the button becomes **Connect and save here**;
+**Use a repository on this VM** goes back. Then:
+
+- **Folder** is a field you can type a whole path into, such as `Week-04/BGP/Final-State`. The line
+  under it, `Saves go to Course-Labs › Week-04/BGP/Final-State`, shows the result as you type. Unsafe
+  characters are replaced by `-` and the corrected path is shown, never refused. A path that runs
+  through a file of the repository is corrected too: `README.md/x` reads `README.md-2/x`, and the sentence
+  says so (`README.md is a file in the repository, so BGP saves in README.md-2/x.`). A folder you type
+  that already holds a folder named `latest` that the manager did not save is not written over: `X holds a
+  folder named latest that the manager did not save, so BGP saves in X/BGP.`
+- The **folder tree** shows the repository as it is on the VM (what GitHub shows once the last save was
+  uploaded). The manager reads the checkout through the Git helper; it never reads GitHub. Each folder
+  with subfolders has an arrow that opens and closes it without selecting it; the tree keeps the
+  branches you opened. Looking at a folder never changes where the lab saves.
+- Marks beside a folder: `This lab saves here`, `<lab> saves here`, `Lab state: <name>`, and `New` for a
+  folder that exists only in the manager's list until its first save. A folder that holds nothing yet
+  reads `<folder> is new. It appears in the repository with the first save.` (Git keeps no empty
+  folders.) The top level reads `BGP will save at the top level of Course-Labs.`
+- **New folder…** is always available. It adds a folder below the one you are looking at, nested paths
+  allowed, even inside another lab's folder; inside a saved state it adds the folder in the lab folder
+  above and says so. A name that already exists selects that folder. **Remove from the list** takes a
+  folder you added but never saved into off the manager's list again. Neither changes anything in the
+  repository.
+- **Save here** sets the folder. Nothing is lost by choosing again: earlier saves stay as versions.
+- A very large repository lists only what fits; type the path of a folder that is not shown.
+
+### The three questions
+
+The manager asks a question, as buttons, only in three cases. None of them is an error.
+
+1. **Another lab saves in the very same folder.** `BGP saves here too.` with **Save in <folder>/<this
+   lab>** (suggested) and **Use this folder anyway**. The second button disconnects the other lab from
+   the folder and connects this one; the other lab's saves stay as versions, and a save of it that is
+   still waiting stays part of the next upload. When the folder only collides with the other lab's
+   saved-state folders (it lies inside one, or one lies inside it) there is one button, **Save in
+   <folder>/<this lab>**, and the note `<this lab> gets a folder of its own inside it.`
+2. **The folder already holds a saved state of another lab or a course.** `This folder holds the state
+   “Start”.` with **Save beside it in <folder>/<this lab>** (suggested) and **Replace it**. **Replace
+   it** lets the lab's next save replace the files there; the older contents stay in the Git history.
+   A state whose files are stored directly in the folder cannot be replaced, so the second button
+   reads **Use this folder anyway** and the note says `the state “Start” stays listed: its files are
+   stored directly in the folder and are not replaced.`
+3. **A save of this lab still waits for upload** and you change the folder. `1 save of BGP is waiting
+   for upload.` with **Upload it, then move** and **Move and keep that save on the VM only**. Both go
+   ahead: the first uploads the waiting saves and then moves the lab; the second moves it and leaves
+   the save waiting, still part of the next upload.
+
+Choosing the folder the lab already uses reads `<lab> already saves here.` with **Keep saving here**; a
+folder that holds the lab's own earlier saves reads `<lab> saved here before and continues there.`
+
+### Bringing the saved files along
+
+When the lab has saved files in the folder it leaves and the new folder holds none, the chooser adds
+the line **Bring this lab’s saved files along**. Ticked, the lab's `latest/`, `baseline/` and
+`checkpoints/` files move to the new folder in one commit. That commit is one more waiting save: it
+waits for **Upload** like any save and never uploads by itself. The line is not offered while a save of
+the lab has not finished (`A save of this lab has not finished. Its files stay in <folder>.`), because
+that save would otherwise be written to the folder the lab left. A destination that already holds saved
+files is never a move target.
+
+A moved lab keeps working with its old saves: **All versions** and **Full history…** read the commits
+of the new folder, and the commit that moved the files lists every file as moved.
+
+### Layout in the repository
+
+One repository can hold several labs and several course states. This is a worked example for a course
+repository, `Course-Labs`, with two labs saving into it and a course author's states:
+
+```text
+Course-Labs/
+├── README.md
+├── BGP/                            lab "BGP" saves here
+│   ├── latest/
+│   │   ├── BGP.clab.yml            the topology
+│   │   ├── BGP.clab.yml.annotations.json   the map
+│   │   ├── PE1.cfg   PE1.eoscfg
+│   │   ├── PE2.cfg   PE2.eoscfg
+│   │   └── manifest.json
+│   ├── baseline/                   the starting point
+│   ├── checkpoints/
+│   │   └── peering-working/
+│   ├── start/                      "Save as a lab state…" named start
+│   │   └── latest/                 (shows in Load as "Start")
+│   └── final/
+│       └── latest/                 (shows as "Final")
+├── OSPF/                           lab "OSPF" saves beside it
+│   └── latest/
+└── Week-04/
+    └── Broken/                     a folder the author made; a state named Broken saved here shows as "Broken"
+        └── latest/
+```
+
+The names are illustrative: the manager chooses the file names from the node and the configuration
+format (`<node>.cfg` for Junos display-set text, EOS and IOS XR alike, plus the file Load uses beside
+it: Junos `<node>.jcfg`, EOS `<node>.eoscfg`, IOS XR `<node>.xrcfg`). A folder saved before Junos moved
+to `.cfg` may still hold `<node>.set`; it keeps listing, comparing (paired with a later save of the same
+node whatever its extension) and loading exactly like a `.cfg` save, because every reader works from the
+version's `manifest.json`, never from a filename guess.
+
+`BGP/start` and `BGP/final` sit inside the `BGP` lab folder but outside its saved-state folders, so
+they do not collide with `BGP/latest`. Both labs share one branch on the VM; that is why an upload can
+carry saves of both, and why the sentence names them.
+
+Guided setup for several labs in one repository: [GIT-SETUP.md](GIT-SETUP.md#where-labs-save-in-a-repository).
+
+### A lab set up by an older release
+
+A lab that an older release connected to a `…/latest` folder keeps working exactly as it is: its saves
+go to `…/latest/latest`, and nothing is rewritten. To end the nesting, choose the folder above it with
+**Save here** *without* bringing the files along: the next save updates the original `…/latest` again,
+and the nested copy stays in the repository as its own saved state (visible in **All versions** and the
+browser, loadable, and removable with Git on the VM whenever you want).
+
+### Git on the VM
+
+Git commands are constructed by the helper from fixed operations. The page sends repository and
+folder names and reviewed choices, not command lines. Commits include the exact exported paths. A dirty
+checkout, unexpected staged work, a changed branch or remote, hooks or filters that alter exported
+files, or conflicting history can require attention (see
+[When saving is not possible](#when-saving-is-not-possible)). There is no force push, automatic stash,
+destructive reset or broad `git add .`.
+
+Ordinary backup schedules still create manager backups. They do not publish anything to GitHub: saving
+is an explicit action, and the downloads under **Tools › Configuration backups** remain available.
 
 ### Design exports
 
-*Export plan to Git…* on a lab's Design tab saves a generated network-design plan through this same pipeline as a
-save of kind `design`: the design file, the plan, the netlab topology, the endpoint mapping and every generated
-device file, with a manifest of kind `network-design`. Such a save goes to its own checkpoint folder
-(`…/checkpoints/<name>`) and never to `latest` or `baseline`; a checkpoint folder holds either configurations or a
-design, never both. It carries no device rows and no restore artifact, so the history lists it as view and download
-only and *Apply to running lab* never offers it. Everything else is a save's: the repository binding, the review
-before any upload, one save at a time, the pending-save guard on folder moves and reconnects.
+*Export plan to Git…* on a lab's Design tab saves a generated network-design plan through the same
+pipeline as a save of kind `design`: the design file, the plan, the netlab topology, the endpoint
+mapping and every generated device file, with a manifest of kind `network-design`. Such a save goes to
+its own checkpoint folder (`…/checkpoints/<name>`) and never to `latest` or `baseline`; a checkpoint
+folder holds either configurations or a design, never both. It carries no device rows and no loadable
+file, so **All versions** lists it as `Design plan: view and download only` and **Load** never offers
+it. Everything else is a save's: it waits for **Upload**, and **See changes** shows `What this design
+export changed`. A design export is not a save of the lab and does not change the chip's `Saved`
+state.
 
-## Recovery after manually committing a failed manager export
+## Loading
 
-If you already committed the exported files from the CLI, finish publishing that
-manual commit as the repository owner. For a checkout on `main` with `origin`:
+<a id="apply-a-saved-configuration-to-a-running-node"></a>
+
+**Load** puts a saved state onto the running devices. It is for returning to a known state: your own
+last save or a checkpoint, or a course's Start, Broken or Final. The lab must be running. If it is not,
+the panel says `Start the lab to load a state` with **Start lab**. A load never changes the topology:
+it does not deploy, redeploy or edit the topology file.
+
+### Choosing what to load
+
+Press **Load**. The panel opens on the list, in two groups:
+
+- **Your saves**: the lab's latest save (named by that save) and its three newest checkpoints, each
+  with when it was saved.
+- **Lab states**: the saved states of the repository that no connected lab owns: a course's `Start`,
+  `Broken`, `Final`, or an earlier folder of this lab. Each shows how many of your devices it covers (`4
+  devices`, `2 of 4 devices`). Up to eight are listed; `3 more in All versions` says when there are
+  more. A lab that has never been saved lists the states of the VM's default repository and says
+  `From Course-Labs.` A lab with no saves of its own says `This lab has no saves of its own yet. You
+  can start from one of these.`
+
+A state that cannot be loaded (see [A state that is view only](#a-state-that-is-view-only)) is greyed,
+reads `View only` and offers **View**. Under the list: **All versions** and **Browse the
+repository…**. Other labs' saves are not in this list; they are folded away in **All versions**. An
+empty repository says `Nothing is saved in this repository yet. Save this lab, or ask your instructor
+for the course's lab states.` With no repository at all: `There is nothing to load yet` with **Save…**.
+
+### The confirmation
+
+Choose a row. The manager checks that state against the running devices (`Checking Start against your
+devices…`), without changing any, and shows the confirmation `Load Start?`:
+
+> The running configuration of the ticked devices is replaced. The current one is backed up first;
+> nothing reboots.
+
+with `Saved 3 days ago.` and one row per device, each with a tick and what differs:
+
+| Row says | Meaning |
+|---|---|
+| `Ready to load` | The device can be loaded; the manager has no line count. |
+| `1 line differs`, `12 lines differ` | The device can be loaded and this is how far it is from the state. |
+| `Already matches` | The device already runs the saved configuration. |
+| `Not in this state` | The lab has this device but the state does not; it is left as it is. |
+| `Not in this lab` | The state holds a device that no running node of this lab matches. |
+| `Not reachable`, `Blocked`, `Can't load` | The device cannot be loaded now, with the reason under its name and, where one exists, a button to fix it. |
+
+Devices are matched to saved devices by their full node name. A state fits the lab it was saved from
+and a lab deployed from the same topology under the same name (a student's copy of a course lab). It
+does not match a lab with a different name.
+
+Other lines you may see: `This state covers 2 of your 4 devices. The others are left as they are.`
+and, when the state was saved on another topology, `Saved on a different topology: 3 of 4 devices
+match.` with **View its topology**. The topologies are compared by their nodes and links, not byte by
+byte; no line is shown when one side cannot be read. The line is a warning, not a refusal.
+
+`Each device checks the new configuration itself and undoes it if it loses contact.` **Options** holds
+the automatic undo time (`Undo automatically if a device cannot be reached again within (minutes)`,
+5 by default, 2 to 60).
+
+The buttons:
+
+- the red **Load** is the confirmation. It loads the ticked devices. It is off, with the reason beside
+  it, while `A save is running.` or when `Tick at least one device.`;
+- **See what’s different** opens the drawer `What's different`: for each ticked device, the saved
+  configuration against what the device runs now, with its own button `Load on 3 devices` and **Back**;
+- **Cancel** goes back to the list.
+
+While a save, a backup or a lab operation runs, nothing is asked of the devices: the panel says `Start can be
+loaded in a moment.` with what is running, and **Try again** is available when it has finished. **Back**
+returns to the list.
+
+### What a load does on a device
+
+For every ticked device the manager:
+
+1. makes an **automatic backup** of the current configuration. If it fails, that device is not changed;
+2. replaces the device's **whole configuration** (never a merge) inside the device's own transaction,
+   with the device's own timed recovery armed;
+3. reaches the device again with a fresh connection to prove it is still manageable, and only then
+   **confirms**. If it cannot reach the device in time, the device undoes the change on its own and the
+   manager reads the device back and reports what it found;
+4. reads the device again and compares it to the saved state.
+
+Nothing reboots, the lab is not redeployed, and the topology is not touched. Several devices are changed
+at the same time, each with its own timer and its own result; there is no all-or-nothing across devices,
+and a mixed result is shown per device. The technical record of each platform's transaction is in
+[Replace running configuration: platforms, semantics and acceptance record](multi-platform-restore/README.md).
+
+**Which platforms can be loaded.** Junos (`juniper_cjunosevolved`, `juniper_vjunosswitch`), Arista EOS
+(`arista_ceos`) and Cisco IOS XR (`cisco_xrv9k`). A device on another platform is listed with the
+reason and is not touched. For IOS XR, a saved configuration that defines a `banner` is refused before
+the device is touched; remove the banner from the saved state, or load a version saved before it was
+added.
+
+### The result, device by device
+
+While it runs, each device reads `Waiting`, `Backing up…`, `Loading…` or, while the manager reads it
+back after a restart, `Checking…`, and the chip counts them (`Loading… 2 of 4`). You can keep working.
+Then each device reads one of:
+
+| Word | Meaning |
+|---|---|
+| `Loaded` | The device was changed, confirmed, and now matches the saved state. |
+| `Already matched` | The device already matched; nothing needed to change. |
+| `Loaded, not verified` | The device was changed and confirmed, but the check afterwards did not run. |
+| `Loaded, differences remain` | The device was changed and confirmed, but it still differs from the saved state in places. **Details** shows how. |
+| `Not loaded` | The device was not changed: it refused the configuration, could not be reached, or the load stopped before it. The reason is under its name. |
+| `Kept previous` | The change was not confirmed, the device undid it, and the manager read the previous configuration back. |
+| `Not confirmed` | The manager could not confirm what the device runs. Open **Details** before relying on it. |
+| `Skipped` | The device was not eligible (for example not in this lab or not on a loadable platform). |
+| `Interrupted` | The manager restarted during the load. Open **Details**; the manager reads the device back. |
+
+When every device ended well, the chip reads `Running <name>` and a toast says `Start loaded on 4
+devices.` (`on 2 devices` for a subset). The panel says `Loaded 3 min ago on all 4 devices.`, `Your latest
+save: <its name>, <when>` and `Before loading: backed up automatically`. When not every device ended
+`Loaded`, the chip reads `Loaded 3 of 4` (the panel title reads `Loaded on 3 of 4 devices`) and the panel
+opens with a sentence per worst outcome (`ceos undid the change and runs its previous
+configuration again.`, `The manager could not confirm what xrv9k runs. Open Details before relying on
+it.`). A load that changed nothing is not a chip state: the Load panel says `<Name> was not loaded` and
+`No device was changed.`
+
+### Undo this load, Try again
+
+- **Undo this load** loads the automatic backup that was made before the load, through the same
+  confirmation (`Undo loading Start?`, `This undoes the load on the 3 devices it changed. The others
+  are left as they are.`). It is off, with `The automatic backup of this load is no longer kept.`, when
+  that backup has been removed. Undoing an undo loads the earlier state again.
+- **Try 2 devices again** (or **Try ceos again**) asks again about only the devices the load did not
+  change, from the same saved state, through a new check and a confirmation that lists them alone
+  (`Only the devices that were not loaded are listed.`). A device that ended `Loaded, not verified`,
+  `Loaded, differences remain` or `Not confirmed` is not offered: look at **Details** first.
+- **Load this backup…** in the load's job window loads that backup while it is kept.
+- `Last load: Start, 3 min ago` with **Details** sits in the chip panel at rest.
+
+### A state that is view only
+
+A saved state can be viewed and downloaded but not loaded when it was saved without the files Load
+needs: `Saved without the files needed to load it`. This is the case for a state saved before a
+device's platform could be loaded, for a device whose loadable file is damaged or missing, and for a
+design plan (`Design plan: view and download only`). **View** shows its files. A state whose save
+details cannot be read says `Its save details cannot be read`. Such a save's configuration text is never
+relabelled as something Load can use.
+
+### A saved configuration carries its management address
+
+A saved configuration is the node's whole configuration, including the address of its management
+interface. When containerlab assigns management addresses dynamically, a redeploy can hand a node a
+different address; loading a state saved before that redeploy then moves the node off its address, the
+manager cannot reach it again, and the device undoes the change on its own: the manager reads it back
+and reports `Kept previous`. **Pin `mgmt-ipv4` on the nodes** of any topology whose saved states will
+be loaded after a redeploy.
+
+### Technical details of a load
+
+- **Complete replacement, not a merge.** Junos `show configuration | display set` output can only be
+  *added*, so every Junos save also captures a hierarchical candidate (`show configuration`, the `.jcfg`
+  file) and the load uses `load override terminal`: a stale statement is removed, a changed one reset
+  and a deleted one put back. EOS and IOS XR saves keep the running configuration as the candidate
+  (`.eoscfg`, `.xrcfg`); because an EOS configuration session starts as a copy of the running
+  configuration, the load first empties it (`rollback clean-config`), while IOS XR's `commit replace
+  confirmed` replaces the whole configuration in the same command that arms the timer.
+- **Timed, confirmed activation.** Junos `commit confirmed <minutes>`, EOS `commit timer HH:MM:SS`, IOS
+  XR `commit replace confirmed minutes <N>`. The manager confirms (Junos `commit`; EOS `configure
+  session <name> commit` followed by `write memory`, since EOS does not save a confirmed change by
+  itself) only after a fresh connection proved management. On IOS XR only the session that armed the
+  change can confirm it, so the manager keeps that session open and confirms on it. If it cannot
+  confirm in time it never assumes the device rolled back: it reads the node back and reports undone
+  or uncertain, the same check a manager restart during a load runs.
+- **Root authentication.** The `juniper_cjunosevolved` lab image boots without `root-authentication` and
+  rejects any commit that still lacks it. When the saved configuration has none, the load adds one from
+  the saved configuration's own superuser password; this is the only statement it adds.
+- **The review is what gets loaded.** The confirmation names the repository commit the state was read
+  from, and the load applies exactly that commit's files, so an **Update from the repository** between
+  the confirmation and the click cannot swap in different bytes.
+- **Older saves.** A save made before a node's platform could be loaded (before 1.28.0 for Junos,
+  before 1.30.27 for EOS, before 1.30.29 for IOS XR) has no file Load can use for that node: it is listed as view only for it, and
+  the rest of the save is unaffected.
+
+Captures keep their real format: Junos display-set output and IOS XR and EOS running-configuration text
+are not interchangeable startup files, and each platform's capture stays its own canonical readable
+and comparison form.
+
+## Lab states
+
+A **lab state** is a saved state in a folder of its own that no connected lab saves into: a course's
+`Start`, `Broken` or `Final`, or an earlier folder of a lab. Anyone with access to the repository can
+load one (see [Loading](#loading)).
+
+To make one, open the chip and choose **Save as a lab state…** (also in **All versions**, and in the
+first-save panel for a lab without a save location). The drawer is `Save as a lab state`:
+
+- **Name**, with the buttons `start`, `broken` and `final` for common names. The folder follows the
+  name: by default it is `<the lab's folder>/<name>`, so a lab that saves to `BGP` makes `BGP/start`,
+  where the state is saved as `BGP/start/latest/…`. **Put it somewhere else** unfolds the folder tree and
+  the **New folder…** button for any other folder; the line `The state is saved in Course-Labs ›
+  BGP/start` shows the result. A folder that is a lab's own save folder is never a state itself: the state
+  goes into a folder inside it and the sentence says so (`BGP is a lab’s save folder, so the state is saved
+  in BGP/start.`).
+- **Save state** reads every included device now, writes the lab (topology, map and configurations) as
+  a normal save, and ends waiting for **Upload** with the same sentence as any save. The page says
+  `Reads every included device now. Saved files can contain passwords or keys. Where <lab> normally
+  saves does not change.`
+
+Making a lab state does not change where the lab normally saves, and it does not count as `Saved <time>`
+for the lab: it is a save to upload, and never "your latest save". When it is done a message says `State
+Start saved in BGP/start.` and, like any save, the chip panel opens on its sentence. A name that already
+holds a state asks `“Start” already exists here.` with **Replace it** and **Use another name**; the older
+contents stay in the Git history.
+
+A state made with **Save as a lab state…** is listed under the name you typed, with the first letter made a
+capital when the name is all lower case (`start` → `Start`); the manager writes that name into the state's
+`manifest.json`. Any other saved folder (an earlier folder of a lab, or one made by the scaffold tool) is named
+from its folder: the last folder name, with a trailing `latest` dropped and the same capital rule. A
+checkpoint is named by its folder as it is. Two states with the same name each add their parent folder
+(`Start · BGP`). For the course author's workflow, with a worked example, see
+[Lab states for a course](COURSE-STATES.md).
+
+## All versions and Save settings
+
+Both are drawers opened from the chip panel (the foot reads **All versions**, **Save as a lab
+state…**, **Save settings**). The chip panel also shows `Saves to: Course-Labs › BGP` with **Change…**
+and, after a load, `Last load: …` with **Details**.
+
+### All versions
+
+`Everything saved for <lab>. Choose one to load it.` Groups:
+
+- **Your saves**: the lab's saves, newest first (five, then **Show older saves**). A save awaiting
+  upload reads `Not uploaded yet` and has **Upload…** and **Details**. A waiting checkpoint, a starting
+  point or a folder move is under **Save activity** instead.
+- **Checkpoints** and **Starting point**, with **Choose a backup as starting point…**.
+- **Lab states**, with **Save as a lab state…**.
+- Folded: **Other labs in this repository** and **Save activity**.
+- **Full history…**, every commit of the lab's folder with its versions, and **Browse the
+  repository…**, the folder browser (every folder of the repository, with **Load this state…** and
+  **View files** on any folder that is a saved state).
+
+Open a row to see where it is (`Course-Labs › BGP/latest · commit a1b2c3d`) and its actions:
+
+| Action | What it does |
+|---|---|
+| **Load this state…** | Starts a load of that state (the confirmation above). Off for a view-only state. |
+| **See what’s different** | A line-by-line comparison of that version against the lab's latest save, in the drawer `Different from your latest save`. Not offered on the newest save itself, and only when the lab has a save of its own. It never compares with the running devices: to see what would change on the devices, use **Load this state…**; the devices are compared before anything is loaded. |
+| **View files** | Its files, device by device, with the topology and map under `Topology and map`, the files Load uses folded, and `Save details` (the manifest). |
+| **Download ZIP** | The version's files as a ZIP. Downloading changes no branch, topology or device. |
+| **Keep as a checkpoint** | Only on rows of *Your saves*. Makes a checkpoint of that save without reading devices; asks `Checkpoint name` (`Saved as: …`, letters, numbers, `-` and `_`; empty takes the name shown) and **Keep**. |
+| **Use as starting point…** | Only on rows of *Your saves*. See [The starting point](#the-starting-point). |
+
+A lab with no save location lists the saved states of the default repository only; **All versions**
+then says `This lab has not been saved yet.` with **Save**.
+
+### Save settings
+
+`Where <lab> saves, and which devices each save includes.`
+
+- **Save location**: `Course-Labs › BGP › latest/` with **Change folder…**, **Use a different
+  repository…** (another repository already on this VM, or one connected by its GitHub address) and
+  **Connect by URL…**. Nothing already saved is deleted by changing either.
+- **Devices included in every save**: tick the devices. If an included device cannot be read, the save
+  stops and nothing is written; an older configuration is never saved in its place. A device that
+  cannot be included yet (`can’t be included yet — configuration saves aren’t supported for its
+  platform`) is named. A device that left the lab is dropped at the next save; the sentence then says
+  its file was removed (`ceos is no longer saved; its file was removed.`) and older versions keep it.
+  Unticking every device is refused (`Choose at least one device to include.`); a stored selection that is
+  empty, or names only devices that left the lab, shows as `No device of this lab is selected for saving.`
+  in the chip panel. A lab without a topology file in the manager says so
+  (`This lab has no topology file in the manager, so saves hold device configurations only.`) with
+  **Update topology file…**. Changing the devices while a
+  save waits is allowed; the waiting save was made with the earlier choice and stays part of the next
+  upload. **Save settings** writes the choice (`Save settings updated.`).
+- **Git details** (folded): `Uploads go to` (the verified push destination), `Branch`, `VM account`,
+  `Checkout path` on the VM, `Status`, **Refresh status**, and **Update from the repository**.
+- **Update from the repository** downloads the newest files from the online repository, for example
+  states your instructor added, by a fast-forward only; there is no merge and no conflict resolution,
+  and your running devices are not changed. It is offered only when nothing waits here (`Saves are
+  waiting for upload in this repository. Upload them before updating from the repository.`, with
+  **Upload…**). Folders that arrive this way are in **Lab states** at once.
+- **Disconnect this lab…** asks `Disconnect this lab from <repository>?` and says `Nothing is deleted. Your
+  saves stay in <repository> and the configuration backups stay on this VM. The next Save asks where to
+  save again.` A save that is waiting stays waiting and stays part of the next upload from that
+  repository (the dialog says so).
+- A lab without a save location shows `This lab has no save location yet.` with **Choose a place…** and
+  **Connect by URL…**; with no repository on the VM at all it offers **Connect a repository by URL** and an
+  *Administrator setup (terminal)* fold.
+
+## When saving is not possible
+
+What can still stop a save is outside the manager. The chip reads `Can’t save`; the panel says which
+cause it is and offers the action that clears it. None of them asks you to type Git commands except
+one, and for that one the panel shows the two commands.
+
+| What the panel says | What it means | Action |
+|---|---|---|
+| `The lab VM could not be reached.` | The manager cannot reach the lab VM. | **Try again**, **Check the VM connection…** |
+| `The VM account cannot upload to github.com.` | The VM account's own GitHub login is expired or has no write access, or GitHub cannot be reached from the VM. | **Try again**, **Details**; the administrator repairs the login (see [Failure and recovery](#failure-and-recovery)). |
+| `Someone is working in this repository on the VM.` | An unfinished Git operation, staged or unsaved edits in the folder the save writes, or commits somebody made there by hand and did not upload. | **Try again**, **Details**; finish, put away or upload that work on the VM. |
+| `The online copy has changes this VM does not have.` | The online repository has newer commits and nothing waits here. | **Update from the repository** |
+| `The online copy and this VM both have changes the other does not have. They have to be combined on the VM.` | Saves wait here **and** the online copy moved on. | The repository's owner runs the two commands the panel shows, then **Try again**; see below. |
+| `ceos could not be read, so nothing was saved.` | A device could not be read; nothing was written and the last save stays as it was. | **Try again**, **Save settings** (leave it out), **Details** |
+| `The topology could not be saved with this capture. Try again.` | The lab's topology file or map could not be written with the capture; nothing was saved. | **Try again**, **Details** |
+| `BGP holds files that were not saved by the manager.` | Someone else's files sit inside `latest`, `baseline` or a checkpoint folder of the lab (the sentence names the lab's folder, or `The top level`). | **Choose another place**, **Details** |
+| `This lab’s save location has to be set up again.` | The repository on the VM is gone or was changed: the checkout was removed, its branch or its upload address changed, or the VM was replaced. | **Save settings** (choose the repository again), **Details** (the exact cause) |
+| `No device of this lab is selected for saving.` | The device selection is empty or names devices that left the lab. | **Save settings** |
+| `The save did not work.` | A cause the manager has no sentence for. | **Try again**, **Details** |
+
+**The online copy is brought in by itself when that is safe.** Before a save commits, and only while no
+save waits for upload in that repository (and none was put aside with **Keep snapshot only** that may
+hold a commit), the manager fast-forwards the VM's copy to the online repository (the same step as
+**Update from the repository**). A file somebody added on GitHub, or a save made from another VM,
+therefore does not stand in the way of the next save. If that step is not possible (GitHub cannot be
+reached, or the copies differ), it is silent: the save goes on exactly as before, a failed attempt is not
+repeated for ten minutes, and the upload says what is wrong.
+
+The same causes appear in the folder chooser when it cannot set the place: the sentence of the table above,
+**Try again** and, under **Details**, the manager's own sentence; for an online copy that is ahead with
+nothing waiting, **Update from the repository** is offered there too.
+
+**The one case that needs Git commands** is the fifth row: saves wait on the VM **and** the online copy
+moved on in the meantime, so neither side can simply be brought to the other. The manager never merges,
+rebases, stashes or force-pushes, and it will not guess which side is right. The repository's owner
+runs, on the VM and as the account that owns the checkout (its own GitHub login is used; the panel shows
+`The repository’s owner runs these on the lab VM, then Try again uploads the waiting saves:` and the two
+commands with the checkout path filled in; the path is also under **Save settings › Git details**):
+
+```bash
+git -C <checkout> pull --no-rebase
+git -C <checkout> push
+```
+
+Then **Try again** in the chip panel (a save whose sentence you have not seen yet is shown first with its
+**Upload**; one that was reviewed is uploaded with a fresh look at what it sends): every waiting save is
+found in the online history and reads `Saved`. Both commands are needed: after the pull alone the manager still refuses to upload, because the
+checkout then holds a commit it did not make (`The repository on the VM has changes the manager did not
+make.`), and the owner's `push` is what clears it. The saves the manager made are ordinary commits in
+that checkout; do not discard them, and never force-push to clear the status. (`git status -sb` in the
+checkout may read `ahead` after the manager's own uploads until a `git fetch`: the manager uploads to
+the repository's address and does not move the remote-tracking name.)
+
+## Failure and recovery
+
+```mermaid
+flowchart TD
+    A[Save needs attention] --> B{Last durable outcome}
+    B -- Partial capture --> C[Fix device access; Try again]
+    B -- Local commit --> E[Fix login or network; Upload or Try again]
+    B -- Interrupted response --> F[Reconcile the recorded job with the host journal]
+    C --> G[The last save stays as it was]
+    E --> I[Reuse the recorded commit]
+    F --> I
+```
+
+| Message or condition | Next step |
+|---|---|
+| A device failed | `<device> could not be read, so nothing was saved.` Check that every included device is Ready, then **Try again**. Nothing was written. |
+| The commit exists, the upload failed | `Upload failed`: press **Try again**. No new device read is needed. |
+| Remote advanced / push rejected | Inspect the repository as the owner; resolve divergence outside the app (see the previous section). |
+| Unexpected branch, URL, owner or repository identity | Restore the registered destination or deliberately reconnect the intended checkout with **Save settings › Use a different repository…**. |
+| The wrong repository is connected | **Save settings › Use a different repository…**: another repository on this VM, or connect the right one by its address. Nothing is deleted from either. |
+| The lab saves to the wrong folder | **Change…** beside `Saves to:`, choose the folder, **Save here**, optionally bringing the saved files along. |
+| Helper unavailable or older than the manager | Run `sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --refresh` from the source that matches the running manager and refresh the status. |
+| Manager restarted during a save | The save is `interrupted`. If a commit exists it is a waiting save and **Upload** sends it; if it never reached a commit the chip reads `Can’t save` and **Try again** reuses the recorded capture. The manager reconciles the recorded operation with the VM's journal; it does not silently read the devices again. |
+| Git authentication expired | Repair the owner's Git login on the VM, then **Try again**. Changing the VM SSH password does not repair Git credentials. |
+
+Active jobs prevent conflicting lab operations: a save, a load, a backup and a lab operation do not
+run at the same time for a lab. While the manager reads back the devices after a restart in the middle
+of a network-design apply, that lab's **Save** waits and says so; other labs keep saving. A waiting save
+no longer blocks a folder change, a device change, a reconnect or a disconnect: it keeps waiting and
+stays part of the next upload. *Remove lab* and *Start fresh* are the exceptions: they wait while a save of the
+lab has not finished or is waiting for upload (`A save is still waiting to be uploaded. Upload it, or open its Details and choose Keep
+snapshot only, then try again.`) and then forget the manager's record of the saves; the commits stay in
+the checkout.
+
+To stop pursuing a save, open its **Details** and choose **Keep snapshot only**. This retains the
+captured backup and any Git commit, and the manager stops waiting for it. It does not unpublish a remote
+commit or undo files already saved to the checkout; a kept commit that was not uploaded goes along with
+the next upload from that checkout, and the sentence of that upload names it. A later **Start fresh**
+still deletes manager backup files after its normal confirmation; the checkout and the Git remote
+remain outside the manager's storage.
+
+### Recovery after manually committing a failed manager export
+
+If you already committed the exported files from the CLI, finish publishing that manual commit as the
+repository owner. For a checkout on `main` with `origin`:
 
 ```bash
 git push origin main
 git status -sb
 ```
 
-After the push succeeds, use **Keep snapshot only** on the superseded failed
-manager saves, then start a new **Save progress**. Dismissal preserves backup
-files and Git commits. A CLI commit changes the original export's expected
-history; the old operation cannot always resume it, and the manager will not
-automatically push unrelated unpublished commits. Normal manager saves commit
-automatically; after an ordinary failure, retry the original job first.
-
-## Repository layout
-
-```text
-BENS-BGP-LAB/
-├── BENS-BGP-LAB.clab.yaml          existing file; not rewritten by saves
-├── latest/
-│   ├── PE1.cfg
-│   ├── PE2.cfg
-│   ├── BENS-BGP-LAB.clab.yml                    the topology at capture time
-│   ├── BENS-BGP-LAB.clab.yml.annotations.json   and its map
-│   └── manifest.json
-├── baseline/
-│   ├── PE1.cfg
-│   └── manifest.json
-└── checkpoints/
-    └── bgp-peering-working/
-        ├── PE1.cfg
-        └── manifest.json
-```
-
-Names above illustrate the layout; the exporter chooses stable filenames from
-node identity and configuration format: `<node>.cfg` for Junos (display-set text), EOS and
-IOS XR alike, plus the machine restore artifact beside it on a restore-capable platform
-(Junos `<node>.jcfg`, EOS `<node>.eoscfg`, IOS XR `<node>.xrcfg`) — never the extension the
-manager keeps for that same capture in its own internal storage. A folder saved before
-Junos moved to `.cfg` may still hold `<node>.set`; it keeps listing, comparing (paired with
-a later save of the same node whatever its extension) and restoring exactly like a `.cfg`
-save, since every reader works from the version's `manifest.json`, never from a filename
-guess. The folder a lab saves to (its **lab
-folder**, `BENS-BGP-LAB/` above, or a subfolder of a shared repository) is where Save
-progress writes `latest/`, `baseline/` and `checkpoints/`; those three are the
-**snapshot folders** inside it. Repeated saves update the same `latest/` in place:
-changed files get a new commit and an ordinary push, and Git history preserves the
-earlier contents. Saving never creates `latest/latest`, a timestamped copy or a
-checkpoint of its own; a separately named state is only ever made by **Create
-checkpoint…**. Capture timestamps alone do not create an extra commit when the
-configurations and meaningful metadata are unchanged.
-
-Because `latest`, `baseline` and `checkpoints` are the names of the snapshot folders, they
-cannot be a lab folder themselves: choosing `working/latest` in the folder browser resolves
-to `working`, whose saves go to `working/latest`, and a typed folder name or an API request
-naming such a folder is refused with that explanation. A folder named `latest` higher up
-(`course/latest/working`) is an ordinary folder name and stays allowed.
-
-**Set baseline…** changes `baseline/` explicitly. Replacing an existing baseline
-requires review. **Create checkpoint…** creates a named milestone; choose a new name
-for another milestone (the dialog shows the folder name it becomes as you type). The helpers reject unsafe paths, overlapping registered
-destinations and unsupported repository layouts rather than guessing a location.
-
-When one repository holds several labs, each lab registers a **subfolder** and the
-whole `latest/`, `baseline/` and `checkpoints/` layout nests under it, for example
-`bgp/latest/` and `eth/latest/`. Guided setup prompts for the subfolder; see
-[GIT-SETUP.md](GIT-SETUP.md#one-repository-one-subfolder-per-lab). Each lab in the
-manager connects to its own subfolder registration, so saving one lab never rewrites
-another lab's folder.
-
-The labs of one repository still share one branch on the VM, and an upload sends every commit
-below it. So the review before every upload holds across them:
-
-- While another lab of the repository has a save waiting on the VM without a review (or a save
-  whose answer was lost, which may hold a commit), this lab's **Save progress**, design exports,
-  a retry that commits and a folder move with its files are refused. The message names that lab
-  and its save: open it under *Progress*, review and upload it, then try again. Saves of the
-  waiting lab itself are not held up. A save that never reached the VM (its capture was
-  interrupted by a manager restart, or its export stopped before anything was sent to the VM)
-  holds no commit there and holds nothing back.
-- **Keep snapshot only** on that save also lets this lab go ahead, but it is not the same as a
-  review: its commit stays in the checkout on the VM and goes along with the next upload from the
-  repository. The refusal says so.
-- An upload waits the same way. Saves that an older release already stacked on top of each other
-  stay recoverable: a refused upload keeps your review, so after each lab's waiting save was
-  reviewed once, either upload goes through and settles both (the other lab's save then reads
-  *Saved to Git* as well). A retry of a save that has no commit yet only saves on the VM, so it
-  waits only for another lab's save that has a commit: two labs whose saves both lack one (an
-  older release could leave that) do not hold each other back; the first retry reaches its review
-  and the uploads then follow the rule above.
-- **Review before uploading** counts every other save of the repository that the upload may carry
-  along, this lab's and other labs', and says how many belong to other labs. A save kept with
-  **Keep snapshot only** that may have a commit on the VM (one with a commit, or one whose answer
-  was lost or refused after it was sent) is counted and named there too, as *not seen uploaded
-  yet*: also when its lab was disconnected since or changed its device selection, because the save
-  remembers the checkout and VM it was made in, and also when the save under review changed
-  nothing (*No differences*) and only reuses that kept save's commit, which its upload then sends.
-  A kept save that itself changed nothing and only reuses the commit of the save under review is
-  not counted: it holds nothing that review does not show. It stops being counted once an upload is verified to
-  have carried it, or once an upload from the same checkout, remote and branch is verified to have
-  put the checkout's newest commit on the remote: everything on that branch is then on the remote,
-  so nothing of the kept save is left to go along (a save whose publication the VM refused never
-  made a commit, and the VM names only commits it verified, so this is how such a save stops
-  counting). The save itself stays kept; it is not shown as uploaded. The count can be too high (a
-  kept save that never reached a commit, while no such upload happened yet, or one an earlier upload
-  carried before the manager tracked that). It is never too low for a save that remembers its
-  checkout and its VM, as long as the manager still reaches that VM through the same connection
-  (address, port, account and host key). A save that remembers its checkout but not its VM is taken
-  to be on its lab's current VM. A save made before 1.30.37 remembers neither, so only its lab's
-  current connection says where it belongs: while that lab is disconnected the save is not counted
-  anywhere, and if the lab is connected to another repository since, it is counted there instead.
-  Removing a lab from the manager forgets its saves, kept ones included.
-- A folder move whose upload meets another lab's unreviewed save is kept on the VM and uploaded
-  later from *Recent saves*. One whose upload would send a save kept with **Keep snapshot only**
-  along (this lab's or another lab's, counted as above) is kept on the VM as well, with a message
-  that names those saves: its **Review and upload…** under *Recent saves* names them again before
-  anything is uploaded (a move changes no configuration, so the review shows no file differences),
-  and an upload without that review is refused. Once that upload is verified, the kept saves stop
-  being counted as above, so the next move uploads at once again.
-
-## Everyday buttons
-
-The lab header carries **Save progress** with a small menu (Create checkpoint…, Save on
-this VM only, Saved versions & history, Save location settings…) that explains the option
-under the pointer or the keyboard focus: what it does and where its result goes; the **Progress** tab
-repeats them on its status card, whose **More ▾** adds the rest.
-
-Every save asks a short question first — **What changed?** — before it reads a single device.
-That label (up to 120 characters, one line, required) becomes the Git commit message and is how
-the save is named everywhere afterwards: the pending list ("waiting to be uploaded"), *Recent
-saves*, the save window and the commit history. A cancelled or interrupted save keeps its typed
-label ready to offer again the next time you save; it is only forgotten once the save is actually
-created. A save made before this label was required (or the checkpoint/baseline dialogs, which ask
-for the same label under **What changed?**) falls back to its plain status sentence and date.
-
-When the answer to a save is lost on the way back (a network interruption), saving again with
-the same label and options within ten minutes returns that same save instead of reading the
-devices twice. Once the page shows that save as finished, or after ten minutes, a new save
-always reads the devices afresh: an old save is never reported as *Saved to Git just now*.
-
-The review shows a real line-by-line diff of each changed file. A file longer than 20 000
-lines is compared over its first 20 000 lines only, and a line longer than 4 000 characters is
-shown shortened; the review then says so in the file, and never calls a file that was cut
-short *Identical*. Check such a file with **Open the full saved version** before uploading.
-
-| Action | Result |
-|---|---|
-| **Save progress** | Ask for the save's label, then capture the configured device selection, export `latest`, commit changes on the VM, then open **Review before uploading**: what the save changed, with **Upload these changes** and **Not now — keep it on the VM**. Nothing is pushed without that choice (the manager refuses an upload that does not state the review, whatever an older save location setting said), and declining leaves the save on the VM as *Waiting for your review*. The save window opens on its own when something else needs you. A save that finds nothing new since a save that was already uploaded ends as *Saved to Git* with *Nothing changed since your last save*: there is nothing to review or upload, and it does not hold up a folder change. While the last save is still waiting for its review, a save with nothing new waits with it. |
-| **Save on this VM only** | Capture and commit without pushing. |
-| **Create checkpoint…** | Capture a named milestone in `checkpoints/<name>`. |
-| **Set baseline…** | Select a complete recorded capture for `baseline`; replacing one is reviewed explicitly. |
-| **Saved versions** (View / Compare with my latest save / Apply to running lab…) | The card lists *Latest*, *Checkpoints*, *Baseline*, the *Instructor and reference versions* kept in other folders of the repository and, folded, the other labs saving to it and everything else in the repository. *View* shows a version's files and offers the ZIP download; *Compare with my latest save* shows a real line-by-line diff of every changed file against the lab's `latest/` (never against the running devices), a device whose saved file changed extension between releases still reads as one changed file; *Apply to running lab…* replaces the running configuration of the selected devices (Junos, EOS or IOS XR) with that version (no reboot; backed up first) without changing where the lab saves. |
-| **Full history…** | Every commit of the lab's folder with its versions. |
-| **Upload saved progress** / **Review and upload…** | Publish a saved commit without recapturing devices, through the same review (a save reviewed before, whose upload failed, reads **Upload now**). |
-| **Update from the repository** | Update an eligible clean checkout using a fast-forward; no merge/rebase conflict resolution. |
-| **Recent saves** (Open / Review and upload… / Keep snapshot only) | One row per save with what happened; *Open* shows the save window with the details and retries. |
-| **Save location settings…** / the *Save location* card | The repository and folder the lab saves to, the devices included in every save; **Change folder…** (unfolded when the card opens) holds the folder browser, *Git repo details* shows the push destination, branch, VM account and checkout path, **Browse the repository…** under *Saved versions* opens the same browser. |
-| **Save this lab here** | Move this lab to the selected folder of its repository, optionally with the files already saved. |
-| **New folder…** | Create a folder in the repository for this lab (or for a later lab). |
-| **Use a different repository…** / **Connect by URL…** | Switch to another registered checkout, or connect a repository by its HTTPS URL. |
-
-Every save window, the review before an upload and the pending-saves list show where a save is
-going as `<repository> · <branch> · <path>` (for example `Course-Labs · main ·
-Gtel-100G-G8032/Working/latest`), frozen at the moment the save is captured — moving the lab to a
-different folder afterwards never rewrites an earlier save's own destination line. Beside it is one
-of four plain states: *saved on this VM*, *waiting for your review*, *uploaded to `<remote>`* or
-*verified on remote* (a save whose commit was carried along by a later upload of the same
-folder, or of another lab of the same repository). The Details under a save keep the exact checkout path on the VM and the commit.
-
-<a id="where-this-lab-lives"></a>
-
-## Save location
-
-The **Progress** tab's *Save location* card names the repository and folder the lab
-saves to. **Change folder…** (or **Browse the repository…** under *Saved versions*)
-shows the connected repository as a file browser would: the folder path at the top, a
-folder outline on the left and the contents of the selected folder on the right. The listing is the repository's current commit as it is on the VM,
-so it matches what GitHub shows once the last save was pushed. The manager reads the
-checkout through the Git helper; it never reads GitHub, and the browser sends only
-registration IDs and folder names.
-
-- Each folder with subfolders has an arrow that opens and closes it without selecting it; the
-  tree keeps the branches you opened, your selection and the keyboard focus across refreshes.
-  Looking at a folder never changes where the lab saves.
-- The folder this lab saves to is tagged **This lab**; a folder another lab saves to is
-  tagged with that lab's name. `latest/`, `baseline/` and `checkpoints/` are described in
-  plain words. A folder that holds nothing yet reads *not in the repository until the first
-  save*: Git keeps no empty folders, so the manager remembers the folders made or chosen here
-  and keeps listing them, also after the lab moved to another folder (the VM registers only
-  the folder a lab saves to now). **New folder…** without *Save … here from now on* only adds
-  the folder to the list; **Remove empty folder** takes an unused one off it again. Neither
-  changes anything in the repository or where the lab saves.
-- **Save this lab here** moves the lab to the selected folder. The folder becomes the
-  lab's registered destination, the device selection stays as it
-  was, and the lab's previous folder registration is retired. When files were already
-  saved under the old folder, the confirmation offers to move them along: every
-  `latest/`, `baseline/` and `checkpoints/` file of the old folder is moved in one commit
-  and pushed, and the move is recorded as a *Folder move* job with the same retry and push
-  handling as a save. A folder move changes no configuration, so it is uploaded on that
-  confirmation (the dialog says so) and has no separate *Review before uploading* step, unless
-  its upload would also send another lab's unreviewed save or a save kept with **Keep snapshot
-  only**: then it stays on the VM and is uploaded later as described under
-  [Repository layout](#repository-layout). Earlier versions stay in Git history either way; a pending
-  save has to finish or be dismissed first. Everything that can refuse the change (a pending
-  save, a running job, a device selection that no longer matches the lab, another lab using
-  that folder) is checked before the VM retires the old registration, so a refused change
-  leaves the lab saving where it did; once the VM made the change the lab follows it, also
-  when the answer was lost (if the check after it was lost too, choosing the same folder again
-  completes the change; the VM connection must still be the one the lab was connected through).
-  While a lab's repository connection is being changed (this folder change, *Save settings* or a
-  connection by URL), that lab's **Save progress** and design exports wait, and so does every other
-  connection change (*Disconnect* included): they answer *Try again in a moment*. Other labs keep
-  saving. A move that stops before its commit (for example on staged
-  changes) or loses its answer reads *Moving the saved files did not finish — retry it* and
-  is retried from its save window (**Retry the move**); it is only worded as moved once it
-  committed.
-- **New folder…** creates a folder beside the existing ones. It accepts a whole nested
-  path such as `Week-04/BGP/Final-State`, so a deep destination like
-  `CCNP-SP/Labs/Week-04/BGP/Final-State` is created in one step; the dialog shows the
-  resulting `repository / folder` destination as you type. With *Save … here from now on*
-  ticked, the lab moves into it immediately; otherwise, for a lab that already saves to
-  this repository, the folder is only added to the manager's list (see above) and nothing
-  is registered on the VM. For a lab that is not connected yet, the new folder is
-  registered and preselected for **Connect**.
-- Folders of one repository never overlap: a folder cannot be created inside another
-  lab's folder or inside a saved configuration, `baseline/` and `checkpoints/` cannot be
-  chosen as destinations, choosing a `latest/` folder means the folder above it (the
-  browser says *Saves go to …/latest*), a folder that itself holds a `manifest.json` is a
-  saved configuration and not a destination, and a repository that a lab saves to at its
-  root cannot also hold lab folders unless that lab moves first. The manager and the VM
-  helper enforce the same rules again, so a folder named `latest`, `baseline` or
-  `checkpoints/<name>` is never registered as a lab folder.
-- A lab that an older release registered at a `…/latest` folder keeps working exactly as
-  it is (its saves go to `…/latest/latest`, and nothing is rewritten). To end the nesting,
-  choose the folder above it with **Save this lab here** *without* moving the files: the
-  next save updates the original `…/latest` snapshot again, and the nested copy stays in the
-  repository as its own saved configuration (visible in the browser, appliable, and removable
-  with Git on the VM whenever you want).
-
-A moved lab keeps working with its old saves: *Saved versions* and *Full history…*
-read the commits of the new folder, and the commit that moved the files lists
-every file as moved. A dismissed save whose commit was never pushed stays outside the
-new folder's history; publish it as the repository owner if it is still wanted.
-
-Git commands are constructed by the helper from fixed operations. The UI accepts
-repository IDs and reviewed choices, not arbitrary command lines. Commits include
-the exact exported paths. A dirty checkout, unexpected staged work, changed branch
-or remote, hooks/filters that alter exported files, or conflicting history can
-require attention.
-There is no force push, automatic stash, destructive reset or broad `git add .`.
-
-Ordinary backup schedules still create manager backups. They do not automatically
-publish configurations to Ben's remote repository. Saving progress is an explicit
-action, and the downloads under **Tools › Configuration backups** remain available.
+After the push succeeds, choose **Keep snapshot only** under **Details** of the superseded failed
+saves, then press **Save** again. Dismissal preserves backup files and Git commits. A CLI commit
+changes the original export's expected history; the old operation cannot always resume it, and the
+manager will not automatically push unrelated unpublished commits. Normal manager saves commit
+automatically; after an ordinary failure, retry the original save first.
 
 ## Running account and persistence
 
@@ -396,222 +861,59 @@ flowchart TD
     B --> C[Encrypted manager state and immutable backup files]
     B -->|VM password over pinned SSH| D[clab-discovery forced gateway]
     D --> E[Restricted Git helper]
-    E -->|Registered execution owner| F[Ben's working repository]
-    F -->|Ben's external Git authentication| G[HTTPS Git remote]
+    E -->|Registered execution owner| F[The owner's working repository]
+    F -->|The owner's external Git authentication| G[HTTPS Git remote]
 ```
 
-The privileged entry point validates the registered owner/repository and drops
-privileges before running Git. Git uses Ben's HOME, author configuration and
-credential helper. The manager container neither mounts Ben's checkout nor needs
-his token. The existing restricted VM SSH gateway stays in place.
+The privileged entry point validates the registered owner and repository and drops privileges before
+running Git. Git uses the owner's HOME, author configuration and credential helper. The manager
+container neither mounts the owner's checkout nor needs the token. The existing restricted VM SSH
+gateway stays in place.
 
-The browser has no account login in this release. **Ben is the VM execution owner**,
-not a signed-in web user. People with access to this manager share its authority
-over the registered repositories. Use one trusted operator per VM, or a group
-deliberately sharing that authority. Separate Ben/Alice browser permissions are
-not implemented by registering two Linux owners.
+The browser has no account login in this release. **The registered owner is the VM execution owner**,
+not a signed-in web user. People with access to this manager share its authority over the registered
+repositories. Use one trusted operator per VM, or a group deliberately sharing that authority. Separate
+browser permissions are not implemented by registering two Linux owners.
 
 | Data | Location / recovery requirement |
 |---|---|
-| Lab repository selection, scope and progress jobs | Encrypted manager state under `/srv/containerlab-node-manager/data`; keep `state.key` with `state.enc`. |
+| Lab repository selection, scope and save jobs | Encrypted manager state under `/srv/containerlab-node-manager/data`; keep `state.key` with `state.enc`. |
 | Immutable captured configurations | Manager `backups/<lab-id>/history/<backup-job-id>`; included in a complete data archive. |
-| Exported configurations and local Git commits | Ben's registered checkout; back it up independently until all intended commits are pushed. |
-| Git credentials | Ben's external credential configuration; provision it again when rebuilding a VM. |
-| Host registration | `/etc/clab-manager/git.json`, written by guided setup and by the manager's folder and connect actions through the helper, each under the lock `git.json.lock` beside it and merged into the file as it is then, so writers running at the same time keep each other's registrations; retain the root-owned registration when backing up the VM. |
+| Exported configurations and local Git commits | The registered checkout; back it up independently until all intended commits are uploaded. |
+| Git credentials | The owner's external credential configuration; provision it again when rebuilding a VM. |
+| Host registration | `/etc/clab-manager/git.json`, written by guided setup and by the manager's folder and connect actions through the helper, each under the lock `git.json.lock` beside it and merged into the file as it is then, so writers running at the same time keep each other's entries; retain the root-owned file when backing up the VM. A folder change never removes an entry, because the saves that wait in the checkout depend on it. |
 | Host journal and transfer snapshots | `<checkout>/.git/clab-manager/`; retain these with the complete checkout for interrupted-save recovery. |
 
-Back up the whole manager data directory, the registered checkout and its helper
-registration/journal. A manager data archive alone does not include Ben's working
-repository or external Git authentication. A remote Git repository alone does not
-include unpublished snapshots, manager device credentials or diagram edits.
-
-## Failure and recovery
-
-```mermaid
-flowchart TD
-    A[Save needs attention] --> B{Last durable outcome}
-    B -- Partial capture --> C[Fix device access; start a fresh capture]
-    B -- Complete snapshot --> D[Fix checkout; Retry save, then review]
-    B -- Local commit --> E[Fix login/network/remote; Review and upload, or Upload now]
-    B -- Interrupted response --> F[Reconcile recorded job with host journal]
-    C --> G[Keep previous latest until capture completes]
-    D --> H[Reuse recorded capture]
-    E --> I[Reuse recorded commit]
-    F --> H
-```
-
-| Message or condition | Next step |
-|---|---|
-| A selected device failed | Inspect the save under **Recent saves** (or the backup under Tools › Configuration backups), repair access and start a new save. Successful files remain local; the repository's complete latest is retained. |
-| Complete snapshot; repository needs attention | Resolve the reported checkout problem as Ben, then open that save under **Recent saves** and choose **Retry save, then review** (or **Retry save on this VM only**). |
-| Commit exists; its review is still open or the push failed | **Review and upload…** on its row opens the review and uploads on your choice; after a reviewed upload failed the row reads **Upload now** (or use the banner's *Retry*). No new capture is needed. |
-| Remote advanced / push rejected | Inspect the repository as Ben. Resolve divergence outside the app; never force push merely to clear the status. |
-| Unexpected branch, URL, owner or repository identity | Restore the registered destination or deliberately register/reconnect the intended checkout after resolving pending work. |
-| The wrong repository is connected | Choose **Use a different repository…** on the *Save location* card: pick another registered checkout, or connect the right one by its HTTPS URL. Nothing is deleted from either repository; files already saved stay where they are. |
-| The lab saves to the wrong folder | **Change folder…** on the *Save location* card, select the intended folder and choose **Save this lab here**, optionally moving the files already saved. |
-| Helper unavailable or older than the manager | Run `sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --refresh` from the source that matches the running manager and refresh repository status. |
-| Manager restarted during a save | Open the recorded job and retry. The coordinator reconciles the recorded operation with the VM journal rather than silently recapturing. |
-| Git authentication expired | Repair Ben's Git login on the VM, then retry the existing push. Changing the VM SSH password does not repair Git credentials. |
-
-Active progress jobs prevent conflicting lab operations. While the manager reads back the
-devices of a lab after a restart in the middle of a network-design apply, that lab's **Save
-progress**, design exports, retries and folder moves with their files wait, and say so; other
-labs keep saving. Pending saves also block
-actions that would forget or redirect their context, including removing the lab,
-starting fresh, replacing the repository connection and changing the VM identity.
-Password rotation for the same VM/account is allowed so that access can be repaired.
-
-To stop pursuing a pending export, choose **Keep snapshot only** and confirm the
-explicit dismissal. It retains the captured backup and any existing Git commit,
-then permits disconnect/removal. This does not unpublish a remote commit or undo
-files already saved to the checkout; a kept commit that was not uploaded goes along
-with the next upload from that checkout, and the review before it names the save. A later **Start fresh** still deletes manager
-backup files after its normal confirmation; Ben's checkout and Git remote remain
-outside manager storage.
-
-## Loading an earlier lab version
-
-**View** on a saved version (or a commit in **Full history…**) retrieves its files:
-review the manifest and download the configuration ZIP. Downloading does not
-switch the repository branch, rewrite the original lab YAML or redeploy the lab.
-
-Older backup jobs can have unknown topology provenance; the UI does not represent
-the current topology as the topology used for that historical capture.
-
-## Apply a saved configuration to a running node
-
-A saved configuration (Junos, EOS or IOS XR today) can be applied to the running lab in two ways,
-both of which converge the running node to exactly the saved configuration without a
-reboot or a containerlab redeploy:
-
-- **From the saved versions (simplest).** A saved configuration is any repository folder
-  that holds a `manifest.json` written by a manager save, whatever the folder is called and
-  however deep it sits: `Final`, `Broken`, `working/latest`, `course/lab/reference/solution`,
-  even the repository root. On the **Progress** tab every such folder offers **Apply to
-  running lab…** — the lab's own *Latest*, *Checkpoints* and *Baseline*, the *Instructor and
-  reference versions* kept beside the lab folder and, folded, the other labs' saves and
-  everything else in the repository, each row naming its exact folder. **Browse the
-  repository…** (or *Save location › Change folder…*) reaches any folder with the same
-  button: a folder with its own `manifest.json` applies that folder, and a folder whose only
-  saved state is its `latest/` child applies `…/latest` (the caption says which). When both
-  exist they are two different saved configurations and nothing is substituted. Folders that
-  arrived with **Update from the repository** count as soon as they are there. The lab does
-  **not** have to save to that folder — you can keep saving wherever you save and still apply
-  Base, working, Final or Broken straight from their folders, and the next **Save progress**
-  goes back to your own `latest/`. The folder's name only decides that it is listed; the
-  manifest and its files decide what can be applied: a device saved before its platform could
-  be restored, a damaged or missing file, a platform the manager cannot restore or a node that
-  is not in the running lab is listed in the review with that reason and is not touched, and a
-  manifest that cannot be read stops the review before any device is contacted.
-- **The review is what gets applied.** The review names the repository commit the saved
-  configuration was read from; replacing the configurations applies exactly that commit's
-  files, so an **Update from the repository** between the review and the confirmation cannot
-  swap in different bytes (a commit that is no longer in the branch history is refused, and
-  the review is simply run again).
-- **From a specific commit.** Open a version in **Full history…** and choose
-  **Apply to running lab…** to apply that commit's snapshot.
-
-```mermaid
-flowchart TD
-    A[Apply to running lab] --> B[Preflight: node running, reachable, platform, mapping]
-    B --> C[Back up the current configuration first]
-    C -->|backup failed| D[Do not change this node]
-    C -->|backup ok| E[Load the candidate as a complete replacement, inside the device's own transaction]
-    E --> F[Activate with a timed recovery: Junos commit confirmed, EOS commit timer, IOS XR commit replace confirmed]
-    F --> G[Reconnect to prove management works, retried for the whole undo window]
-    G -->|confirmed| H[Cancel the timer; EOS also saves it to startup; IOS XR confirms on the session that armed it]
-    G -->|cannot confirm in time| I[Read the device back: applied, undone or uncertain]
-    H --> J[Capture again and compare to the saved state]
-```
-
-- **Complete replacement, not a merge.** Junos `show configuration | display set` output
-  can only be *added* with `load set`, so it cannot remove a statement a student added
-  that is not in the saved version. Every Junos backup therefore also captures a
-  hierarchical restore-grade candidate (`show configuration`) and records it in the
-  snapshot manifest; the restore loads it with `load override terminal`, so a stale
-  statement is removed, a changed statement is reset and a deleted desired statement is
-  put back. EOS and IOS XR backups likewise capture the running-configuration as the
-  restore candidate (`.eoscfg`, `.xrcfg`); because an EOS configuration session starts as a
-  copy of the running configuration, the restore first empties it (`rollback clean-config`)
-  before loading the candidate, while IOS XR's own `commit replace confirmed` replaces the
-  whole configuration natively, in the same command that arms the timed recovery.
-- **Backed up first.** The manager captures a fresh backup of every target node before it
-  changes anything and references that backup's job id in the restore result. If the
-  pre-restore backup fails for a node, that node is not modified.
-- **Timed, confirmed activation.** The candidate is activated inside the device's own
-  transaction with its own timed recovery (Junos `commit confirmed <minutes>`; EOS
-  `commit timer HH:MM:SS`; IOS XR `commit replace confirmed minutes <N>`, which replaces the
-  whole configuration and arms the timer in one native command). The manager then reconnects
-  over SSH — retried for the whole undo window, not just once — to prove the node is still
-  reachable, and only then confirms the change (Junos `commit`; EOS `configure session
-  <name> commit`, followed by `write memory` since EOS does not save a confirmed change to
-  its startup configuration by itself). On IOS XR only the CLI session that armed the change
-  can confirm it, so the manager keeps that session open instead of closing it, proves with
-  the fresh reconnect that management survived, and only then sends the confirming `commit`
-  on the kept session; IOS XR persists a confirmed commit immediately, with no EOS-style
-  separate save step. If the manager cannot confirm in time it never assumes the device
-  rolled back: it reads the node back and reports whether the previous configuration is
-  active (undone) or that it could not tell (uncertain) — the same check a manager restart
-  during a restore also runs. The undo window defaults to five minutes and is adjustable
-  under *Advanced options* of the review.
-- **Root-authentication.** The `juniper_cjunosevolved` lab image boots without a
-  `root-authentication` statement and rejects any later commit that still lacks it. When
-  the saved configuration has no root-authentication, the restore synthesises one from the
-  saved configuration's own superuser login password so the node stays reachable and can
-  commit; this is the only statement the restore may add beyond the saved state.
-- **Verified.** After confirming, the manager captures the node again, normalises it the
-  same way a backup is normalised and compares it to the saved desired state, so the
-  result shows that the stale statements are gone and the desired statements are present.
-- **Supported platforms.** Live restore covers Junos (`juniper_cjunosevolved`,
-  `juniper_vjunosswitch`), Arista EOS (`arista_ceos`) and Cisco IOS XR (`cisco_xrv9k`). A
-  device on any other platform, or one this manager does not recognise, has its saved nodes
-  listed in the review with the reason, not silently left out.
-- **IOS XR banner limit.** A saved configuration that defines a `banner` is refused before
-  the device is touched: pasting a banner's delimited body back in safely is not supported
-  yet. Remove the banner from the desired saved state, or restore a version saved before it
-  was added.
-- **Management addresses travel with the saved state.** The candidate is the node's whole
-  configuration, including its management interface address. When containerlab assigns
-  management addresses dynamically, a redeploy can hand a node a different address; applying a
-  state saved before that redeploy then moves the node off its address, the manager cannot
-  reconnect, and the device undoes the change on its own — the manager then reads it back
-  and reports that the previous configuration is active. Pin `mgmt-ipv4` on the nodes of
-  any topology whose saved states will be applied after a redeploy.
-- **Legacy snapshots.** A saved version made before a node's platform could be restored
-  (before 1.28.0 for Junos, before 1.30.27 for EOS) has no restore artifact for that node:
-  it is listed in the review as not applicable, with that reason, and its saved
-  configuration text is never relabelled as a restore candidate. The rest of the saved
-  version — the download, and any node whose platform was already restore-capable — is
-  unaffected.
-
-Captures retain their real format: Junos display-set output and IOS-XR/EOS running
-configuration text are not universally interchangeable startup files, and each platform's
-capture stays its own canonical human-readable and comparison form.
+Back up the whole manager data directory, the registered checkout and its helper registration and
+journal. A manager data archive alone does not include the owner's working repository or external Git
+authentication. A remote Git repository alone does not include unuploaded saves, manager device
+credentials or diagram edits.
 
 ## Upgrade and validation
 
-Upgrade the manager with the installer, retaining its persistent data; the
-launcher refreshes the Git helper when a registry already exists. To refresh only
-that helper, use `sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh"
---refresh` from the same source. This preserves registration IDs and revisions. Existing VM
-passwords, labs, device profiles and backup files are retained. No remote repository is created,
-and no user repository is pushed merely by installing the helper.
+Upgrade the manager with the installer, retaining its persistent data; the launcher refreshes the Git
+helper when a registry already exists. To refresh only that helper, use
+`sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --refresh` from the same source. This
+preserves registration IDs and revisions. Existing VM passwords, labs, device profiles and backup files
+are retained. No remote repository is created, and no user repository is pushed merely by installing the
+helper.
 
-Registering unchanged settings preserves the ID, revision and original anchor
-even when ordinary saves advanced HEAD. Changed settings create a new revision.
-Use `--refresh` for routine code upgrades. Before changing
-a registration, resolve pending saves and reconnect the lab afterward so it uses
-the new revision. A registration binds the selected branch and push destination;
-changing either outside the app requires deliberate registration and reconnection.
+Registering unchanged settings preserves the ID, revision and original anchor even when ordinary saves
+advanced HEAD. Changed settings create a new revision. Use `--refresh` for routine code upgrades. A
+registration binds the selected branch and push destination; changing either outside the app requires
+deliberate registration and reconnection. A save carries the connection it was made with, so a save
+that waits keeps working after the lab's folder, repository or devices change; saves made by older
+releases are still compared with the lab's connection and stay recoverable. Stored connections are
+never rewritten.
 
-Before adopting the workflow on a real lab, verify a first save and unchanged save
-against a disposable repository, then a locally saved commit and manual push retry.
-Check baseline replacement, a named checkpoint and ZIP retrieval. Review the
-release's [validation record](../clab-backup-ui/VALIDATION.md) for the exact automated
-and platform-specific coverage. Linux owner switching, the external credential
-helper, the selected Git service and real network devices need validation in the
-deployment environment; a local source delivery does not establish those results.
+Before adopting the workflow on a real lab, verify a first save and an unchanged save against a
+disposable repository, then a save left waiting with **Not now**, an **Upload**, a failed upload and its
+**Try again**. Check a checkpoint, the starting point, a lab state, **Download ZIP** and a **Load** with
+**Undo this load**. Review the release's [validation record](../clab-backup-ui/VALIDATION.md) for the
+exact automated and platform-specific coverage. Linux owner switching, the external credential helper,
+the selected Git service and real network devices need validation in the deployment environment; a
+local source delivery does not establish those results.
 
 The earlier [architecture proposal](archive/GIT-LAB-PROGRESS-PROPOSAL.md) records the broader
-save-and-resume design. This guide describes the delivered save/export workflow;
-the proposal's future restore and optional convenience stages remain separate work.
+save-and-resume design. This guide describes the delivered save, load and lab-state workflow; the
+proposal's optional convenience stages remain separate work.

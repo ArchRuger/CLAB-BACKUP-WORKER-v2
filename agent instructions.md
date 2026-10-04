@@ -1,3 +1,35 @@
+# Git save and load redesign — 1.31.0
+
+Saving and loading moved from the Progress tab into the lab header; a save is the whole lab; any folder of a
+repository can be chosen; a course's lab states are saved and loaded like any save. The design binds:
+`docs/git-redesign/DESIGN.md` (sections 2 to 4 and 7), with `REVIEW.md` (five reviews and their answers),
+`inventory/` (where every capability of the removed tab lives; the outcome of every old refusal) and amendment K
+of `docs/redesign/DESIGN-SPEC-ADDENDUM.md`. Preserve:
+
+1. **Uploads.** Nothing uploads without a person's Upload. `gitReviewJob` is the only sender of
+   `{push: true, reviewed: true, head}`; the retry route refuses an upload without the reviewed `head`; an upload
+   is of every waiting save of the checkout and names each; `saveSeenReview` decides whether a Try again may
+   upload directly. A folder move never uploads by itself.
+2. **Folders.** `colliding()` (helper and `git_places.py`, equal) is the only collision rule. `place_answer` is the
+   one answer per folder; questions are `{question}` with HTTP 200; a folder change registers beside and retires
+   nothing; the helper retires only what nothing uses and refuses while a save made there waits (H7).
+   `clean_folder` corrects, never refuses.
+3. **The helper** gained one option per need, each reviewed: `initialize` (connect), `checkpoint_only` (publish).
+   No new mode. A generated label is cut; a given one is checked. `register()` is what `setup-git.sh` calls.
+4. **Saves.** A job keeps its own frozen `binding`; the label is optional (`note_auto`); a save is the whole lab
+   (`topology_missing` stops it); `catch_up` fast-forwards the VM copy only when nothing waits there, best effort,
+   and a save that then replaces a newer online save of the lab says so (`replaces_online`).
+5. **Status.** `saveChipState` / `loadState` / `saveProblem` in `status.js` are the only deciders; the codes come
+   from one table (`PROBLEM_CODES`), and the table test compares it with the helper's sentences both ways.
+6. **Load.** `loadSubmit` is the only sender of `acknowledge: true`; the restore service is unchanged; undo is a
+   load of the `restore-pre` backup; matching stays by full node name (open for the owner: DESIGN.md section 6).
+7. **The page.** No Progress tab, `TAB_ALIAS`/`SAVE_ROUTES` for old addresses, no old folder route from the page
+   (`deploy/scaffold-lab.py` still uses them), every script loads in one context (`test_page_load_ui.js`), the
+   chooser's open branches are the student's.
+
+Open points and what was not validated: `docs/git-redesign/evidence/FINDINGS.md` ("Open") and VALIDATION.md.
+The live labs, the scratch repositories and how to rebuild from a branch: `docs/git-redesign/LIVE-ENV.md`.
+
 # Whole-codebase audit fixes (AUDIT-2026-10-03) — 1.30.60
 
 Read `docs/technical-audit/WHOLE-CODEBASE-AUDIT-2026-10-03.md` (findings, then "Disposition" at its end) and the

@@ -58,7 +58,7 @@ function opRetryRequest(job,labId){
 function opHideHelp(lab){
  if(lab&&lab.hidden)return 'This lab is hidden from Home. Show on Home puts its card back; nothing else changed while it was hidden.';
  const running=lab?.deployment?.status==='Running';
- return 'Hide from Home takes the card off Home only'+(running?' (the lab keeps running on the VM)':'')+': its devices, backups, saved progress and settings are kept and nothing on the VM changes. Add it again from Choose a file on the lab VM…, or show it under Manager ▾ › Labs found on the VM….';
+ return 'Hide from Home takes the card off Home only'+(running?' (the lab keeps running on the VM)':'')+': its devices, backups, saves and settings are kept and nothing on the VM changes. Add it again from Choose a file on the lab VM…, or show it under Manager ▾ › Labs found on the VM….';
 }
 function opHideNotice(lab){
  if(lab&&lab.hidden)return lab.name+' is back on Home.';
@@ -72,7 +72,7 @@ async function openLabOperations(id=activeId){
  const path=opPath(lab);
  const cleanup=['deploy','redeploy'].filter(a=>opCaps?.actions[a]?.cleanup).map(a=>opCommand(a,(a==='deploy'?'Deploy lab':'Redeploy lab')+' and clear the lab folder…',{cleanup:true})).join('');
  opDialog(dialog.id,lab.name,`<p class="op-path">${path?'Topology file on the VM: '+esc(path):"This lab has no topology file on the VM yet. Import the lab's files (Advanced › Deployment details) to enable these actions."}</p>${problem?`<p class="op-notice">Couldn't check the VM's commands, so every action is shown; some may fail. Details: ${esc(problem)}</p>`:''}
- <div class="op-sections"><section><h3>Deployment</h3><div class="op-grid">${opCommand('deploy','Deploy lab')}${['redeploy','start','stop','restart','apply','inspect','save'].map(a=>opCommand(a)).join('')}</div><p class="form-help">Deploy creates and starts the devices; Start, Stop and Restart act on the running devices. "Save device configurations" uses containerlab's own save (supported device types only); your Save progress snapshots are separate.</p></section>
+ <div class="op-sections"><section><h3>Deployment</h3><div class="op-grid">${opCommand('deploy','Deploy lab')}${['redeploy','start','stop','restart','apply','inspect','save'].map(a=>opCommand(a)).join('')}</div><p class="form-help">Deploy creates and starts the devices; Start, Stop and Restart act on the running devices. "Save device configurations" uses containerlab's own save (supported device types only); your saves (Save in the lab’s header) are separate.</p></section>
  <section><h3>Lab tools</h3><div class="op-grid"><button class="button secondary" data-local="ssh"><span>Open all CLIs <span aria-hidden="true">↗</span></span></button><button class="button secondary" data-local="interactive">Edit map</button><button class="button secondary" data-local="history">Operation history…</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove from favourites':'Add to favourites'}</button><button class="button secondary" data-local="hide">${lab.hidden?'Show on Home':'Hide from Home'}</button></div><p class="form-help">${opHideHelp(lab)}</p></section>
  <section class="op-danger"><h3>Danger</h3><div class="op-grid">${opCommand('destroy','Destroy lab…',opDestroyOptions())}${cleanup}${opCommand('delete','Delete the topology file from the VM…')}</div><p class="form-help">Destroy removes the running devices and, when the installed containerlab supports cleanup, the lab's generated folder on the VM. Redeploy keeps that folder unless you choose the "clear the lab folder" variant.</p></section></div>`);
  dialog.querySelectorAll('[data-op-action]').forEach(b=>b.onclick=()=>{
@@ -142,27 +142,28 @@ const opReviewCopy={
  // Restart device (one node): containerlab's own node-scoped restart, the operation the VS Code extension
  // runs. The text names the device and the lab, what is interrupted, and what is not done for the student.
  'restart-node':{title:(n,v)=>`Restart ${v?.node_label||'this device'}?`,body:v=>`Only ${v.node_label||'this device'} in ${v.name} restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.`,confirm:'Restart device',danger:true},
- redeploy:{title:n=>`Redeploy ${n}?`,body:'Devices are destroyed and started again from the topology; unsaved device changes are lost. Save progress first if you need them.',confirm:'Redeploy lab',danger:true,cleanup:" The lab's generated folder on the VM is cleared as well."},
- destroy:{title:n=>`Destroy ${n}?`,body:v=>`The running devices are removed from the VM${v.options?.cleanup?" and the lab's generated folder is deleted":''}. Configuration changes you have not saved are lost. Your saved progress, checkpoints and backups remain.`,confirm:'Destroy lab',danger:true},
+ redeploy:{title:n=>`Redeploy ${n}?`,body:'Devices are destroyed and started again from the topology; unsaved device changes are lost. Save first if you need them.',confirm:'Redeploy lab',danger:true,cleanup:" The lab's generated folder on the VM is cleared as well."},
+ destroy:{title:n=>`Destroy ${n}?`,body:v=>`The running devices are removed from the VM${v.options?.cleanup?" and the lab's generated folder is deleted":''}. Configuration changes you have not saved are lost. Your saves, lab states and backups remain.`,confirm:'Destroy lab',danger:true},
  apply:{title:n=>`Apply topology changes to ${n}?`,body:'The running lab is updated to match the topology file. Devices removed from the file are destroyed; connectivity may be interrupted.',confirm:'Apply changes',danger:true},
- save:{title:()=>'Save device configurations on the VM?',body:'Each supported device writes its running configuration to its startup configuration on the VM (containerlab save). This is separate from Save progress.',confirm:'Save configurations'},
+ save:{title:()=>'Save device configurations on the VM?',body:'Each supported device writes its running configuration to its startup configuration on the VM (containerlab save). This is separate from Save in the lab’s header.',confirm:'Save configurations'},
  inspect:{title:n=>`Refresh the device list for ${n}`,body:"Reads the current state of this lab's devices from the VM. Nothing is changed.",confirm:'Show devices',readonly:true},
  'inspect-all':{title:()=>'Refresh the list of running labs on the VM',body:'Reads which labs are running on the VM. Nothing is changed.',confirm:'Show running labs',readonly:true,hideName:true},
- delete:{title:n=>`Delete ${n}'s topology file from the VM?`,body:v=>`${v.path||'The topology file'} is deleted after a recovery copy is kept. The lab stays in My labs and your saved progress is untouched. Only possible while the lab is not running.`,confirm:'Delete file',danger:true},
+ delete:{title:n=>`Delete ${n}'s topology file from the VM?`,body:v=>`${v.path||'The topology file'} is deleted after a recovery copy is kept. The lab stays in My labs and your saves are untouched. Only possible while the lab is not running.`,confirm:'Delete file',danger:true},
  create:{title:()=>'Create this topology file on the VM?',body:v=>`Writes ${v.path||'the file'} on the VM. No devices are started until you deploy it.`,confirm:'Create file'},
  publish:{title:n=>`Save ${n} to the VM?`,body:v=>`Creates the lab folder ${v.folder||''} on the VM with the topology file and the map layout. Nothing on the VM is overwritten and no devices are started until you deploy it.`,confirm:'Save lab',quiet:true},
  revise:{title:n=>`Save the changes to ${n}?`,body:()=>'Replaces the topology file and the map layout on the VM. A copy of the previous version is kept in the lab folder. Only possible while the lab is not deployed.',confirm:'Save changes',quiet:true},
  clone:{title:(n,v)=>`Download ${v?.options?.project||'this lab'}?`,body:v=>`Downloads ${v.options?.url||'the repository'} into the VM's lab folder as ${v.options?.project||'a new folder'}. Existing folders are never overwritten.`,confirm:'Download',hideName:true},
 };
-// The last-save line of a disruptive confirmation: when the student last saved progress, in red when
-// never or when a lab operation ran after the last save.
+// The last-save line of a disruptive confirmation: when the lab was last saved (the newest save that read the devices), in red when
+// never, when a lab operation or a load ran after it, and what still waits for upload. From the header chip's status functions.
 function opSaveLine(lab,value){
- if(!lab||!opDisruptive.includes(value.action)||typeof progressState!=='function')return '';
- const ps=progressState(lab,state.git_jobs||[]);
- const never=!lab.git_binding||!ps.at;
+ if(!lab||!opDisruptive.includes(value.action)||typeof saveChipState!=='function'||typeof statusCaptureSaves!=='function')return '';
+ const cs=saveChipState(lab,state),save=statusCaptureSaves(lab,state)[0]||null,at=save?save.created||save.finished||'':'';
+ const never=!save||!at;
  const lastOp=(state.operations||[]).filter(j=>j.lab_id===lab.id&&j.finished).sort((a,b)=>String(b.finished).localeCompare(String(a.finished)))[0];
- const stale=!never&&lastOp&&new Date(ps.at)<new Date(lastOp.finished);
- const text=never?(lab.git_binding?'Never saved.':'Never saved — this lab has no save location yet.'):`Last saved ${opWhen(ps.at)} to Git.`;
+ const stale=!never&&((lastOp&&new Date(at)<new Date(lastOp.finished))||!!cs.load);
+ const waiting=cs.count?` ${cs.count===1?'1 save is':cs.count+' saves are'} not uploaded yet.`:'';
+ const text=never?(lab.git_binding?'Never saved.':'Never saved — this lab has no save location yet.'):`Last saved ${opWhen(at)}.${cs.load?' A saved state was loaded since.':''}${waiting}`;
  return `<p class="op-save-line${never||stale?' danger':''}">${esc(text)}</p>`;
 }
 // One sentence per image of a reviewed topology, from the manager's answer (POST /api/operations/image-check):
@@ -235,7 +236,7 @@ async function opReview(request,opener){
  ${copy.quiet&&typeof request.options?.text==='string'?`<details ${value.diff?'':'open'}><summary>Topology that will be saved (YAML)</summary><pre class="op-output" id="op-review-yaml">${esc(request.options.text)}</pre></details>`:''}
  ${value.diff?`<details open><summary>Topology file changes</summary><pre class="op-output">${esc(value.diff)}</pre></details>`:''}
  ${plain?'':'<p class="form-help">Runs on the lab VM. If the lab changes before you confirm, this check is repeated.</p>'}
- <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button>${lab&&lab.git_binding&&disruptive&&typeof gitSaveProgress==='function'?'<button class="button secondary" id="op-save-first">Save progress first</button>':''}<button class="button ${copy.danger?'danger':'primary'}" id="op-confirm">${esc(copy.confirm||label)}</button></div>`,opener);
+ <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button>${lab&&lab.git_binding&&disruptive&&typeof gitSaveProgress==='function'?'<button class="button secondary" id="op-save-first">Save first</button>':''}<button class="button ${copy.danger?'danger':'primary'}" id="op-confirm">${esc(copy.confirm||label)}</button></div>`,opener);
  $('op-cancel').onclick=()=>dialog.close();
  opReviewImages(dialog,images);
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};

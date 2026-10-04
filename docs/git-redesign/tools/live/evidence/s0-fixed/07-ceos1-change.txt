@@ -1,0 +1,14 @@
+$ ceos1: configure / interface Ethernet1 / description s0-fixed-run-link-to-cjunos
+Last login: Sun Oct  4 15:07:44 2026 from 172.20.20.1
+
+ceos1>terminal length 0
+Pagination disabled.
+ceos1>enable
+ceos1#configure
+ceos1(config)#interface Ethernet1
+ceos1(config-if-Et1)#description s0-fixed-run-link-to-cjunos
+ceos1(config-if-Et1)#end
+ceos1#show running-config interfaces Ethernet1
+interface Ethernet1
+   description s0-fixed-run-link-to-cjunos
+ceos1#

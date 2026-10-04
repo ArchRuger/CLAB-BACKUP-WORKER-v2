@@ -1,0 +1,89 @@
+SCENARIO 11b recovery A: the owner pushes his merge with plain Git (3 manager saves wait: 476b9d4, 923ee6e and e58ca07 on top of the merge 6342a98)
+$ git -C <checkout> push
+To https://github.com/ArchRuger/clab-scratch-git-redesign.git
+   be4bbbe..e58ca07  main -> main
+exit 0
+## main...origin/main
+  [GitHub after the owner push]
+      e58ca07caa l1 s11b save after the owner merge
+      6342a983f0 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      923ee6ec35 l1 s11b saved while diverged
+      476b9d4a22 ceos1 changed
+--- the manager BEFORE anybody presses anything:
+git_status: {'checked': '2026-10-04T16:02:28.797584+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 3}
+ job 476b9d4 (waiting since the divergence) {"message": "The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.", "pushed": false, "status": "push_pending"}
+ job 923ee6e {"message": "The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.", "pushed": false, "status": "push_pending"}
+ job e58ca07 (made after the merge) {"message": "Saved in the VM repository; not pushed.", "pushed": false, "status": "review_pending"}
+GET /git: True ''
+git_status after GET /git: {'checked': '2026-10-04T16:02:44.240564+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 3}
+--- the manager's retry (Upload) on each waiting save, as the page would press it:
+[16:02:45] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id": "1d2d1127.."} -> HTTP 200
+     file {"node": "ceos1", "path": "git-redesign/latest/ceos1.cfg", "role": "device", "status": "changed"}
+     file {"node": "ceos1", "path": "git-redesign/latest/ceos1.eoscfg", "role": "restore", "status": "changed"}
+     file {"node": "", "path": "git-redesign/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 1, "devices": ["ceos1"], "first": false, "map": false, "removed": 1, "removed_devices": [], "topology": false}
+     head e58ca07caad5fee6aa0b237f813c996b1a55fb87 upload_job 4c44d1b920f14dd08b9860522408316b
+     also_sends [{"job_id": "bb7391812b8c483aab84b59ec56b5dfe", "kind": "save", "lab": "git-redesign", "name": "l1 s11b saved while diverged", "target": "latest"}, {"job_id": "4c44d1b920f14dd08b9860522408316b", "kind": "save", "lab": "git-redesign", "name": "l1 s11b save after the owner merge", "target": "latest"}] count 2 other_labs 0
+[16:02:45] POST /api/git/jobs/1d2d11275b2e4d25b81a7c70d87d0dfb/retry {"head": "e58ca07caad5fee6aa0b237f813c996b1a55fb87", "push": true, "reviewed": true}
+    -> HTTP 200 (0.2s) {"id": "4c44d1b920f14dd08b9860522408316b", "message": "Upload queued; the saved commit will be reused.", "status": "queued"}
+  -> 476b9d4 (waiting since the divergence) HTTP 200 {"message": "Upload queued; the saved commit will be reused.", "pushed": false, "status": "queued"}
+[16:02:45]    job 1d2d1127 status=push_pending message='The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.'
+  job now {"message": "The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.", "pushed": false, "status": "push_pending"}
+[16:02:48] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id": "bb739181.."} -> HTTP 200
+     file {"node": "ceos2", "path": "git-redesign/latest/ceos2.cfg", "role": "device", "status": "changed"}
+     file {"node": "ceos2", "path": "git-redesign/latest/ceos2.eoscfg", "role": "restore", "status": "changed"}
+     file {"node": "", "path": "git-redesign/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 1, "devices": ["ceos2"], "first": false, "map": false, "removed": 1, "removed_devices": [], "topology": false}
+     head e58ca07caad5fee6aa0b237f813c996b1a55fb87 upload_job None
+     also_sends [{"job_id": "1d2d11275b2e4d25b81a7c70d87d0dfb", "kind": "save", "lab": "git-redesign", "name": "ceos1 changed", "target": "latest"}, {"job_id": "4c44d1b920f14dd08b9860522408316b", "kind": "save", "lab": "git-redesign", "name": "l1 s11b save after the owner merge", "target": "latest"}] count 2 other_labs 0
+[16:02:48] POST /api/git/jobs/bb7391812b8c483aab84b59ec56b5dfe/retry {"head": "e58ca07caad5fee6aa0b237f813c996b1a55fb87", "push": true, "reviewed": true}
+    -> HTTP 200 (0.0s) {"id": "bb7391812b8c483aab84b59ec56b5dfe", "message": "Saved commit is included in the verified remote history.", "status": "synced"}
+  -> 923ee6e HTTP 200 {"message": "Saved commit is included in the verified remote history.", "pushed": true, "status": "synced"}
+  job now {"message": "Saved commit is included in the verified remote history.", "pushed": true, "status": "synced"}
+[16:02:49] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id": "4c44d1b9.."} -> HTTP 200
+     file {"node": "ceos1", "path": "git-redesign/latest/ceos1.cfg", "role": "device", "status": "changed"}
+     file {"node": "ceos1", "path": "git-redesign/latest/ceos1.eoscfg", "role": "restore", "status": "changed"}
+     file {"node": "", "path": "git-redesign/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 1, "devices": ["ceos1"], "first": false, "map": false, "removed": 1, "removed_devices": [], "topology": false}
+     head e58ca07caad5fee6aa0b237f813c996b1a55fb87 upload_job None
+     also_sends [] count 0 other_labs 0
+[16:02:49] POST /api/git/jobs/4c44d1b920f14dd08b9860522408316b/retry {"head": "e58ca07caad5fee6aa0b237f813c996b1a55fb87", "push": true, "reviewed": true}
+    -> HTTP 200 (0.0s) {"id": "4c44d1b920f14dd08b9860522408316b", "message": "Saved to Git.", "status": "synced"}
+  -> e58ca07 (made after the merge) HTTP 200 {"message": "Saved to Git.", "pushed": true, "status": "synced"}
+  job now {"message": "Saved to Git.", "pushed": true, "status": "synced"}
+git_status: {'checked': '2026-10-04T16:02:49.805909+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+  [VM checkout after]
+      e58ca07 l1 s11b save after the owner merge
+      6342a98 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      923ee6e l1 s11b saved while diverged
+      476b9d4 ceos1 changed
+      ## main...origin/main
+  [GitHub after]
+      e58ca07caa l1 s11b save after the owner merge
+      6342a983f0 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      923ee6ec35 l1 s11b saved while diverged
+      476b9d4a22 ceos1 changed
+--- a later save works?
+[16:02:50] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/save {"note": "l1 s11b later save", "push": true, "request_id": "ef2d4981cd924557896c37537522bccc", "target": "latest"}
+    -> HTTP 200 (0.0s) {"id": "ef2d4981cd924557896c37537522bccc", "message": "Save queued.", "status": "queued"}
+[16:02:50]    job ef2d4981 status=capturing message='Capturing the configured devices.'
+[16:02:54]    job ef2d4981 status=exporting message='Saving captured configurations to the VM repository.'
+[16:02:56]    job ef2d4981 status=review_pending message='Saved in the VM repository; not pushed.'
+    job: {"commit": "2118da3aca6803240ba9a4a039939bf4aea4adb8", "message": "Saved in the VM repository; not pushed.", "pushed": false, "status": "review_pending"}
+[16:02:58] POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id": "ef2d4981.."} -> HTTP 200
+     file {"node": "ceos2", "path": "git-redesign/latest/ceos2.cfg", "role": "device", "status": "changed"}
+     file {"node": "ceos2", "path": "git-redesign/latest/ceos2.eoscfg", "role": "restore", "status": "changed"}
+     file {"node": "", "path": "git-redesign/latest/manifest.json", "role": "manifest", "status": ""}
+     summary {"added": 1, "devices": ["ceos2"], "first": false, "map": false, "removed": 1, "removed_devices": [], "topology": false}
+     head 2118da3aca6803240ba9a4a039939bf4aea4adb8 upload_job ef2d4981cd924557896c37537522bccc
+     also_sends [] count 0 other_labs 0
+[16:02:58] POST /api/git/jobs/ef2d4981cd924557896c37537522bccc/retry {"head": "2118da3aca6803240ba9a4a039939bf4aea4adb8", "push": true, "reviewed": true}
+    -> HTTP 200 (0.2s) {"id": "ef2d4981cd924557896c37537522bccc", "message": "Upload queued; the saved commit will be reused.", "status": "queued"}
+[16:02:58]    job ef2d4981 status=pushing message='Pushing the saved commit.'
+[16:03:04]    job ef2d4981 status=synced message='Saved to Git.'
+upload: {"message": "Saved to Git.", "pushed": true, "status": "synced"}
+  [GitHub after later save]
+      2118da3aca l1 s11b later save
+      e58ca07caa l1 s11b save after the owner merge
+      6342a983f0 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      923ee6ec35 l1 s11b saved while diverged

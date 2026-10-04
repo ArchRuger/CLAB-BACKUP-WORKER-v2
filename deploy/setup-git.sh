@@ -75,7 +75,8 @@ printf '%s\n' 'clab-discovery ALL=(root) NOPASSWD: /usr/local/sbin/clab-manager-
 visudo -cf "$temp_dir/sudoers"
 install -o root -g root -m 0755 "$temp_dir/helper" /usr/local/sbin/clab-manager-git
 install -o root -g root -m 0440 "$temp_dir/sudoers" /etc/sudoers.d/clab-manager-git
-if ! /usr/bin/python3 -I - "$refresh" "$owner" "$repo" "$remote" "$prefix" "$label" <<'PY'
+status=0
+/usr/bin/python3 -I - "$refresh" "$owner" "$repo" "$remote" "$prefix" "$label" <<'PY' || status=$?
 import importlib.util, json, os, pathlib, pwd, re, sys, uuid
 spec=importlib.util.spec_from_file_location('host_git','/usr/local/lib/clab-manager/host_git.py')
 h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
@@ -94,16 +95,18 @@ try:
     if not path.is_absolute() or '..' in path.parts or str(path)=='/': raise ValueError('Supply the absolute checkout root.')
     prefix=h.relpath(prefix,empty=True)
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}',remote): raise ValueError('Use a literal remote name.')
-    label=label or path.name
-    if len(label)>100 or any(ord(c)<32 for c in label): raise ValueError('Use a short repository label.')
     old=next((b for b in registry['repositories'] if b['path']==str(path) and b['prefix']==prefix),None)
+    label=h.default_label(label,old,path)  # re-running without --label keeps the folder's label and revision
+    if len(label)>100 or any(ord(c)<32 for c in label): raise ValueError('Use a short repository label.')
     if not old: h.base_prefix(prefix)  # a new lab folder must not be a snapshot folder name; an existing registration stays repairable
     for b in registry['repositories']:
         if b is old or b['path']!=str(path): continue
-        p=b['prefix']
-        if not prefix or not p or prefix.startswith(p+'/') or p.startswith(prefix+'/'): raise ValueError('Managed prefixes in the same repository must not overlap.')
+        if h.colliding(prefix,b['prefix']): raise ValueError(h.collision_message(prefix,b['prefix']))  # the helper's rule (check_collision), same sentence
     binding={'id':old['id'] if old else uuid.uuid4().hex,'label':label,'owner':owner,'uid':account.pw_uid,'gid':account.pw_gid,
              'home':account.pw_dir,'path':str(path),'remote':remote,'prefix':prefix,'branch':'','push_url':'','revision':''}
+    # H2: the registrations of this checkout and owner, this folder's own (re-registration) included; the child keeps
+    # those on the branch and push URL it reads, and with one the checkout may sit on saves that wait for upload.
+    binding['_registered']=h.registered_revisions(registry,binding)
     # Root reads only the registry/account database. The child opens the repository
     # and invokes every Git/config/credential/hook command after a permanent drop.
     read_fd,write_fd=os.pipe();pid=os.fork()
@@ -111,19 +114,10 @@ try:
         os.close(read_fd)
         try:
             h.drop_owner(binding)
-            worker=h.GitRepository(binding)
-            if worker.root.stat().st_uid!=account.pw_uid or worker.control.stat().st_uid!=account.pw_uid: raise ValueError('The checkout and .git must be owned by the registered account.')
-            binding['branch']=worker.run('symbolic-ref','--quiet','--short','HEAD')
-            worker.run('check-ref-format','--branch',binding['branch'])
-            urls=worker.run('remote','get-url','--push','--all',remote).splitlines()
-            if len(urls)!=1: raise ValueError('Configure exactly one HTTPS push URL.')
-            binding['push_url']=h.checked_url(urls[0])
-            binding['anchor']=worker.validate();worker.clean();worker.commit_identity()
-            if worker.remote_head()!=binding['anchor']: raise ValueError('Before linking, synchronize the current branch with its existing remote branch using your ordinary Git login.')
-            worker.check_push_access()
-            # A repeated setup for unchanged settings must not invalidate pending
-            # jobs just because HEAD advanced through ordinary manager saves.
-            binding=worker.registration(old)
+            # The helper's own register(): owner, branch, push URL, clean checkout, identity, the sync test (H2) and the
+            # push check, so the two stay equivalent by construction. A repeated setup for unchanged settings keeps the
+            # revision (pending jobs compare it); changed settings replace it only while no save made through it waits.
+            binding=h.GitRepository(binding).register(old)
             result={'binding':binding}
         except ValueError as error: result={'error':str(error)}
         except Exception: result={'error':'Could not register the repository. Check checkout permissions and the owner\'s HTTPS Git authentication.'}
@@ -140,12 +134,15 @@ try:
     h.save_registration(binding)
     print('Registered '+binding['label']+' on '+binding['branch']+'. Binding ID: '+binding['id'])
 except (ValueError, KeyError) as error:
-    sys.exit(str(error))
+    print(str(error),file=sys.stderr)
+    sys.exit(3 if h.owner_login_problem(str(error)) else 1)  # 3: the hints about identity and login below apply
 PY
-then
+if [[ $status -ne 0 ]]; then
   if ! $refresh; then
     printf '\nRegistration failed. The checkout was not registered by this attempt.\n' >&2
-    if [[ "$remote" == origin && -z "$prefix" && -z "$label" ]]; then
+    if [[ $status -ne 3 ]]; then
+      echo 'Resolve the problem reported above, then retry the original registration command.' >&2
+    elif [[ "$remote" == origin && -z "$prefix" && -z "$label" ]]; then
       printf 'As Linux account %q, run this from any directory (without sudo):\n' "$owner" >&2
       printf '  bash %q --guided --repo %q\n' "$script_dir/setup-git.sh" "$repo" >&2
       echo 'This reuses the checkout, prompts for missing/invalid commit identity, and checks login before registration.' >&2
@@ -155,4 +152,4 @@ then
   fi
   exit 1
 fi
-echo 'Git login remains with the repository owner. Select the repository under Progress > Save location in the manager.'
+echo 'Git login remains with the repository owner. Open your lab in the manager and press Save in the lab header; the first save goes to this repository.'

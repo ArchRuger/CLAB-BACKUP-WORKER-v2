@@ -1,0 +1,38 @@
+-rwxr-xr-x 1 root root  503 Oct  4 15:06 /usr/local/sbin/clab-manager-gateway
+-rwxr-xr-x 1 root root  160 Oct  4 15:06 /usr/local/sbin/clab-manager-git
+-rwxr-xr-x 1 root root  259 Oct  4 14:09 /usr/local/sbin/clab-manager-inspect
+-rwxr-xr-x 1 root root  214 Oct  4 14:09 /usr/local/sbin/clab-manager-operate
+
+/usr/local/lib/clab-manager:
+total 144
+-rw-r--r-- 1 root root  9258 Oct  4 14:09 clab_manager_files.py
+-rw-r--r-- 1 root root 79765 Oct  4 15:06 host_git.py
+-rw-r--r-- 1 root root 49051 Oct  4 14:09 host_operations.py
+/usr/local/lib/clab-manager/host_git.py
+1
+  The registered owner can read the standard checkout and its initial commit.
+[PASS] Git repository 1: commit identity
+  Author and committer identity are configured.
+[PASS] Git repository 1: branch and destination
+  The current branch and single HTTPS push destination match the registration.
+[PASS] Git repository 1: pending changes
+  0 staged file(s); 0 changed entry/entries in managed folders. No staged or managed-folder changes found.
+[INFO] Git repository 1: remote read
+  Not tested. Run with --git-remote to check remote branch access without fetching or pushing.
+[INFO] Git repository 1: push permission
+  Not exercised. Remote read access does not prove write permission or acceptance by branch rules. Complete a deliberate Save progress and push to verify publishing.
+[PASS] Browser Wireshark capture
+  Edgeshark discovery through the manager listed 8 capture target(s); the browser session service and pinned image are ready. No capture was started.
+[PASS] Retired telemetry stack
+  No retired telemetry containers, volumes, .env keys or leftover folders were found.
+
+MANUAL VERIFICATION STILL REQUIRED
+  - From the workstation: open the manager using the VM LAN address and configured port. A DNS name (other than a single-label or .local name) is refused until it is listed in UI_ALLOWED_HOSTS in clab-backup-ui/.env (deploy/image.env for a prepared release image).
+  - WinSCP: authenticate as the normal VM user, upload and download a small file; for administrative SFTP test the intended destination.
+  - Devices: verify a real login and configuration capture on the intended NOS nodes.
+  - Git: use Save progress and confirm Pushed plus the expected files on the remote. Remote-read checks cannot prove push permission or branch-rule acceptance.
+  - Wireshark: start a browser capture, confirm live packets, save in /pcaps, download the archive and end the session.
+
+NEEDS ATTENTION (exit 2)
+This report did not install packages, change configuration, start labs or push Git commits.
+exit 2

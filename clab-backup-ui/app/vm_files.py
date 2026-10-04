@@ -127,6 +127,9 @@ def prepare_lab(bundle, deployed_name, previous=None):
     if files.get('annotations') or not lab.get('drawing'):
         from .layout import keep_document
         lab['drawing'] = drawing; keep_document(lab, files.get('annotations') or b'')
+        # The VM wrote this map, not a person: the capture's "changed in the manager" mark (runner.map_changed_in_manager)
+        # goes, so two syncs within one clock tick cannot be taken for an edit.
+        lab.pop('map_written_at', None)
     lab.update(nodes=parsed['nodes'], deployment_name=deployed_name, container_prefix=parsed['prefix'],
                definition_yaml=files['definition'].decode('utf-8-sig'), updated=stamp(),
                source=PurePosixPath(bundle['manifest']['definition']['path']).name)

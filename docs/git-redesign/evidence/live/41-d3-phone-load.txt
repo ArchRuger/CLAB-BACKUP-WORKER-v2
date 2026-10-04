@@ -1,0 +1,17 @@
+[19:47:52] Load panel box {'x': 16, 'y': 220, 'width': 358, 'height': 556} ; page scroll x True
+[19:47:52] rows (name, height px): [['4 devices changed, map changed', 38], ['ceos1-changed', 38], ['ceos1-changed-2', 38], ['B', 38], ['Broken', 38], ['C6probe', 38], ['Final', 38], ['L1-moved-b', 38], ['L2-move-2', 38], ['Solution', 38]]
+[19:47:56] confirmation: 'Load Final?'
+[19:47:56] red Load box {'x': 35, 'y': 587, 'width': 84, 'height': 40} ; foot buttons [['Load', 84, 40], ['Cancel', 71, 30], ['See what’s different', 171, 30]]
+[19:47:59] while loading: chip 'Loading… 0 of 4' ; panel visible True ; covers Save/Load buttons: False
+[19:48:15] result: chip 'Running Final' ; panel 'Loaded just now on all 4 devices. |  | Your latest save: 4 devices changed, map changed, just now |  | Before loading: backed up automatically |  | Undo this load | What changed |  | Saves to: clab-scratch-git-redesign › git-redesign Change… |  | All' ; clicks 3
+[19:48:16] CLI read-back: {'a-ceos1': 'l2-c1-final', 'a-ceos2': 'l2-c1-final', 'a-cjunos': 'l2-c1-final;', 'a-xrv9k': 'l2-c1-final'}
+PASS D3 every device runs Final
+[19:48:16] errors [] ; failed []
+PASS D3: no console, page or request errors
+
+=== D3: 2 checks, 0 failed
+PASS D3 every device runs Final
+PASS D3: no console, page or request errors
+None
+
+2 checks, 0 failed

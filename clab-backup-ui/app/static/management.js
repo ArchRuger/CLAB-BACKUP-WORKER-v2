@@ -26,7 +26,7 @@ document.body.insertAdjacentHTML('beforeend', `
  <p id="remove-lab-name"></p>
  <input type="hidden" id="remove-lab-id"><input type="hidden" id="remove-lab-confirm-name">
  <p>This removes the lab from My labs: its device list, map, saved device logins, backup schedule and backup history entries. Backup files stay on this VM's disk.</p>
- <p>Nothing on the lab VM changes: the running devices and the topology files stay. Progress you saved to Git stays in the repository.</p>
+ <p>Nothing on the lab VM changes: the running devices and the topology files stay. What you saved stays in its repository.</p>
  <label class="checkbox-label"><input id="remove-lab-exclude" type="checkbox" checked> Don't offer this lab for import again</label>
  <p class="form-help">Untick it if you want the lab to be offered again under Manager ▾ › Labs found on the VM…. Either way, adding it back needs your confirmation.</p>
  <p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Cancel</button><button type="submit" class="button danger">Remove lab</button></div>
@@ -101,7 +101,7 @@ function renderManagement(){
  mgmtMarkup($('excluded-labs'),(discovery.ignored_labs||[]).length?'<p class="side-hint">Removed from this manager earlier</p>'+(discovery.ignored_labs||[]).map(name=>`<div class="empty-lab"><button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again · or stop hiding it so it appears automatically</small></button><button type="button" class="button secondary small" data-clear-exclusion="${esc(name)}">Stop hiding</button></div>`).join(''):'');
  // Labs hidden from Home are still in My labs with everything they have; Show on Home only puts the card back.
  const hiddenLabs=(state.labs||[]).filter(l=>!!l.hidden);
- mgmtMarkup($('hidden-labs'),hiddenLabs.length?'<p class="side-hint">Hidden from Home</p>'+hiddenLabs.map(l=>`<div class="empty-lab"><button class="side-button" data-open-hidden="${esc(l.id)}">${esc(l.name)}<small>Still in My labs with its devices, backups and saved progress · open it, or put its card back</small></button><button type="button" class="button secondary small" data-show-lab="${esc(l.id)}">Show on Home</button></div>`).join(''):'');
+ mgmtMarkup($('hidden-labs'),hiddenLabs.length?'<p class="side-hint">Hidden from Home</p>'+hiddenLabs.map(l=>`<div class="empty-lab"><button class="side-button" data-open-hidden="${esc(l.id)}">${esc(l.name)}<small>Still in My labs with its devices, backups and saves · open it, or put its card back</small></button><button type="button" class="button secondary small" data-show-lab="${esc(l.id)}">Show on Home</button></div>`).join(''):'');
  const found=typeof homeVmLabs==='function'?homeVmLabs(discovery,state.labs):{waiting:0,hidden:0,note:''};
  if($('manager-vm-labs-note')){$('manager-vm-labs-note').textContent=found.note;$('manager-vm-labs-note').hidden=!found.note;}
  if($('vm-labs-empty')){$('vm-labs-empty').hidden=!!(found.waiting||found.hidden);$('vm-labs-empty').textContent=!discovery.configured?'Connect the VM first (Manager ▾ › VM connection…).':discovery.connected?'Every lab the VM reports is already in My labs.':'The VM does not answer, so its labs cannot be listed right now.';}
@@ -222,7 +222,7 @@ $('sync-vm').onclick=async()=>{
  const lab=current();if(!lab||vmSyncBusy)return;
  vmSyncBusy=true;
  const button=$('sync-vm'),label=(button.dataset&&button.dataset.label)||button.textContent;button.disabled=true;button.textContent='Syncing…';
- try{await json('/labs/'+lab.id+'/sync','POST',{});await refresh();notify('Topology updated from the VM. Device logins, saved progress and backups are kept.');}
+ try{await json('/labs/'+lab.id+'/sync','POST',{});await refresh();notify('Topology updated from the VM. Device logins, saves and backups are kept.');}
  catch(error){notify(error.message);}
  finally{vmSyncBusy=false;button.textContent=label;renderManagement();}
 };

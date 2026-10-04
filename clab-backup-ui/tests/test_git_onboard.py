@@ -196,10 +196,32 @@ class GitOnboardTests(unittest.TestCase):
             self.assertIn('bgp', binding['label'])
             self.assertEqual(binding['push_url'], '')
 
+    def test_a_deep_subfolder_gets_a_label_within_the_limit_that_keeps_the_folders_end(self):
+        # setup-git.sh refuses a label over 100 characters; the helper cuts the label it generates (host_git.folder_label,
+        # H9), and guided setup follows the same rule, so a deep folder the helper accepts does not fail here.
+        deep = '/'.join(['course-2026-autumn', 'module-07-routing', 'bgp-route-reflection-and-confederations', 'group-b', 'student-solutions', 'final-state'])
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'labs' / 'af-learning-labs'
+            binding = onboard.new_binding(path, deep)
+        self.assertGreater(len('af-learning-labs / ' + deep), 100)
+        self.assertLessEqual(len(binding['label']), 100)
+        self.assertTrue(binding['label'].startswith('af-learning-labs / …'), binding['label'])
+        self.assertTrue(binding['label'].endswith('student-solutions/final-state'), binding['label'])
+        self.assertEqual(binding['prefix'], deep, 'only the label is cut')
+        self.assertEqual(onboard.new_binding(Path('/x/labs/short'), 'bgp')['label'], 'short / bgp')
+        self.assertEqual(onboard.new_binding(Path('/x/labs/short'))['label'], 'short')
+        self.assertEqual(len(onboard.folder_label('n' * 150, '')), 100)
+        # The same rule as the helper's own, for the same inputs.
+        helper = (Path(__file__).resolve().parents[1] / 'app' / 'host_git.py').read_text(encoding='utf-8')
+        start = helper.index('def folder_label(name, prefix):'); scope = {'MAX_LABEL': 100}
+        exec(helper[start:helper.index('\n\n\n', start)], scope)
+        for name, prefix in (('af-learning-labs', deep), ('n' * 150, ''), ('n' * 150, deep), ('short', 'bgp'), ('tab\there', 'x' * 120)):
+            self.assertEqual(onboard.folder_label(name, prefix), scope['folder_label'](name, prefix), (name, prefix))
+
     def test_ask_subfolder_refuses_reserved_snapshot_shapes_and_reprompts(self):
         # ask_subfolder() itself (the advanced, --subfolder-adjacent prompt) keeps its
         # validation and its tests. Rule 1 (docs/save-location-fix/PICKUP.md): latest,
-        # baseline and checkpoints/<name> are the folders Save progress writes inside a
+        # baseline and checkpoints/<name> are the folders a save writes inside a
         # lab folder, never the lab folder itself.
         for bad in ('latest', 'baseline', 'checkpoints', 'course/latest', 'course/baseline',
                     'course/checkpoints', 'working/checkpoints/one'):
@@ -238,10 +260,10 @@ class GitOnboardTests(unittest.TestCase):
             self.assertEqual(binding['push_url'], '')
 
     def test_registered_repository_new_choice_without_subfolder_option_still_prompts(self):
-        # Unlike a brand-new registration, the repository root is not a safe default
-        # for an additional lab folder in an already-registered repository (it would
-        # overlap every existing prefix and fail later, at the helper's own check), so
-        # this choice still falls back to ask_subfolder() when --subfolder is not given.
+        # Unlike a brand-new registration, an additional lab in an already-registered
+        # repository gets a subfolder of its own rather than the repository root (the
+        # root may already be a lab's folder), so this choice still falls back to
+        # ask_subfolder() when --subfolder is not given.
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)
             (path / '.git').mkdir()
@@ -258,6 +280,7 @@ class GitOnboardTests(unittest.TestCase):
             self.assertEqual(binding['prefix'], 'eth')
             messages = [call.args[0] for call in output.call_args_list if call.args]
             self.assertTrue(any('already holds at least one registered lab folder' in message for message in messages))
+            self.assertFalse(any('overlap' in message for message in messages), 'lab folders may nest; the wizard no longer says the root would overlap them')
 
     def test_resume_command_points_to_existing_checkout_after_cancellation(self):
         with tempfile.TemporaryDirectory(prefix='lab with spaces ') as folder:

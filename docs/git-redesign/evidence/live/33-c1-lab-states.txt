@@ -1,0 +1,42 @@
+[19:34:31] C1 on git-redesign: states ['broken', 'final']; lab saves in git-redesign
+[19:34:34] changed every device (['a-ceos1', 'a-ceos2', 'a-cjunos', 'a-xrv9k']) to l2-c1-broken
+[19:34:44] [broken] chosen name 'broken'; folder field 'git-redesign/broken'; sentence ' | clab-scratch-git-redesign | › | git-redesign/broken |  | Put it somewhere else |  | “Broken” already exists here. |  | The older contents stay in the Git history. |  | Cancel | Repl'
+[19:34:44] [broken] the page asks: ' |  | “Broken” already exists here. |  | The older contents stay in the Git history. |  | Cancel | Replace it | Use another name |  | Reads every included device now. Saved files can contain passwords or keys. Where git-' buttons ['Back', '', 'start', 'broken', 'final', '', 'Cancel', 'Replace it', 'Use another name']
+[19:34:51] [broken] clicks: 4, typed 0 (chip, Save as a lab state…, name, Save state); chip '3 saves to upload'; panel title 'Not uploaded yet' sentence '4 devices changed since your last save: ceos1, ceos2, cjunos and xrv9k. 3 lines added, 3 removed. This upload also sends 2 other saves: Start (git-redesign) and Broken (git-redesign).'
+[19:34:54] changed every device (['a-ceos1', 'a-ceos2', 'a-cjunos', 'a-xrv9k']) to l2-c1-final
+[19:35:02] [final] chosen name 'final'; folder field 'git-redesign/final'; sentence ' | clab-scratch-git-redesign | › | git-redesign/final |  | Put it somewhere else | Cancel | Save state |  | Reads every included device now. Saved files can contain passwords or '
+[19:35:10] [final] clicks: 4, typed 0 (chip, Save as a lab state…, name, Save state); chip '4 saves to upload'; panel title 'Not uploaded yet' sentence 'This is the first save here: 4 devices, the topology and the map. This upload also sends 3 other saves: Start (git-redesign), Broken (git-redesign) and Broken (git-redesign).'
+[19:35:10] Upload enabled; the panel said "Checking what this upload sends…" for 0.0 s more; panel before Upload: 'This is the first save here: 4 devices, the topology and the map. This upload also sends 3 other saves: Start (git-redesign), Broken (git-redesign) and Broken (git-redesign). |  | To: clab-scratch-git'
+[19:35:15] uploaded with 1 click; chip 'Saved 3 h ago'
+[19:35:15] state job: {"commit": "4e6ca03ac88bbc8bc77f07c28731ed43b28191d8", "destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign/broken/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "kind": "state", "note": "Broken", "pushed": true, "status": "synced"}
+[19:35:15] state job: {"commit": "68fedc7349349082db1d89292d23168ec6170322", "destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign/final/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "kind": "state", "note": "Final", "pushed": true, "status": "synced"}
+  [GitHub after the states]
+      68fedc7349 Final
+      4e6ca03ac8 Broken
+      c83b2e557b Broken
+      494f30e433 Start
+[19:35:16] state folders on GitHub: ['git-redesign/broken/latest', 'git-redesign/final/latest']
+[19:35:16]   git-redesign/broken/latest manifest state='Broken' node_names=4
+[19:35:17]   git-redesign/final/latest manifest state='Final' node_names=4
+[19:35:18] Load panel headings ['YOUR SAVES', 'LAB STATES']; lab states: ['B', 'Broken', 'Final', 'L1-moved-b', 'L2-move-2', 'Solution', 'Start']
+[19:35:18] failed requests with bodies: []
+PASS C1: no console, page or request errors
+
+=== C1: 1 checks, 0 failed
+PASS C1: no console, page or request errors
+None
+
+1 checks, 0 failed
+--- description lines per state file on GitHub (after the upload)
+git-redesign/start/latest/ceos1.cfg: l2-c1-start
+git-redesign/start/latest/ceos2.cfg: l2-c1-start
+git-redesign/start/latest/cjunos.cfg: l2-c1-start
+git-redesign/start/latest/xrv9k.cfg: l2-c1-start
+git-redesign/broken/latest/ceos1.cfg: l2-c1-broken
+git-redesign/broken/latest/ceos2.cfg: l2-c1-broken
+git-redesign/broken/latest/cjunos.cfg: l2-c1-broken
+git-redesign/broken/latest/xrv9k.cfg: l2-c1-broken
+git-redesign/final/latest/ceos1.cfg: l2-c1-final
+git-redesign/final/latest/ceos2.cfg: l2-c1-final
+git-redesign/final/latest/cjunos.cfg: l2-c1-final
+git-redesign/final/latest/xrv9k.cfg: l2-c1-final

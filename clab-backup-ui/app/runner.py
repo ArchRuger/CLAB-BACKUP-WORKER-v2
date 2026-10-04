@@ -179,6 +179,8 @@ def trim_jobs_per_lab(jobs, cap, protected):
         if seen[lab_id]<=cap or protected(job): result.append(job)
     return result
 
+CHANGED_TARGETS=('verified','applied','applied_unverified','verify_mismatch','uncertain')
+
 def protected_job_ids(state):
     """Job ids that 'jobs' must keep findable even past its cap, because something outside
     'jobs' still looks one up by id: a Git save job_pending() calls pending (its capture is
@@ -197,6 +199,14 @@ def protected_job_ids(state):
     for j in state.get('restore_jobs',[]):
         if j.get('status') in RESTORE_BUSY or j.get('status')=='interrupted':
             ids.update(j[k] for k in ('pre_backup_job_id','post_backup_job_id') if j.get(k))
+    # The newest load (restore job) of each lab that changed at least one device: its safety backup is what the
+    # student undoes the load with, so it outlives the per-lab job window (LOAD.md B5). Newest-first: first seen wins.
+    seen=set()
+    for j in reversed(state.get('restore_jobs',[])):   # stored oldest first (appended)
+        lab_id=j.get('lab_id')
+        if lab_id in seen or not any(t.get('status') in CHANGED_TARGETS for t in j.get('targets') or []): continue
+        seen.add(lab_id)
+        if j.get('pre_backup_job_id'): ids.add(j['pre_backup_job_id'])
     return ids
 
 class Runner:
@@ -208,10 +218,30 @@ class Runner:
         # lab -> the VM's file bundle of the deployed topology as of the last discovery pass (vm_files.decode_bundle),
         # or None; set by main.py once discovery exists. The runner never reaches the VM itself.
         self.topology_source=None
+    @staticmethod
+    def map_changed_in_manager(lab):
+        """True when a person changed the lab's map in the manager since the VM's annotations file was last synced
+        into it. Read without clocks from what the manager records: a drawing a person moved (PUT .../layout)
+        no longer matches the stored document (or has none) and is `placed`; a document a person wrote (Edit map,
+        an uploaded map) carries `map_written_at` equal to the sync stamp still in effect, while a sync overwrites
+        the stamp right after it wrote the document (layout.keep_document). A lab without the marker (stored
+        before it existed, or placed from the VM by discovery) counts as unchanged: the VM file wins, as before."""
+        from .layout import revision
+        from .topology import unplaced
+        drawing=lab.get('drawing')
+        if not isinstance(drawing,dict) or unplaced(drawing): return False
+        if not lab.get('annotations') or lab.get('annotations_for')!=revision(drawing): return True
+        marker=lab.get('map_written_at')
+        return marker is not None and marker==((lab.get('vm_source') or {}).get('synced_at') or '')
     def topology_capture(self, lab):
-        """The topology and map the lab runs, as the manager can best know them now: the files beside the deployed
-        topology on the VM as of the last discovery pass (within the discovery interval), else the manager's own
-        copies (the last sync). None when the manager holds no topology text for this lab."""
+        """The topology and map the lab runs, as the manager can best know them now.
+        Topology: the file beside the deployed topology on the VM as of the last discovery pass (within the
+        discovery interval), else the manager's own copy (the last sync). None when the manager holds no topology
+        text for this lab.
+        Map (`annotations_source`): the manager's map when a person changed it in the manager since the VM's file
+        was last synced (map_changed_in_manager), the VM's file otherwise (also when the VM file changed since
+        that sync), the manager's map when the VM has none. When both changed the person's map wins, because it
+        is the map they see; the VM's newer file stays on the VM and a Sync from VM still offers it."""
         from .layout import map_document
         def manager_map():
             # A drawing the map writer cannot read costs the map only, never the topology or the backup.
@@ -227,10 +257,12 @@ class Runner:
         files=bundle.get('files') if isinstance(bundle,dict) else None
         if isinstance(files,dict) and files.get('definition'):
             paths=bundle.get('manifest') or {}
-            # The map beside the deployed topology; when the VM has none, the manager's own (the one the student sees).
-            annotations=bytes(files['annotations']) if files.get('annotations') else None; annotations_source='vm'
+            annotations=None; annotations_source=''
+            if files.get('annotations') and not self.map_changed_in_manager(lab):
+                annotations=bytes(files['annotations']); annotations_source='vm'
             if not annotations:
                 annotations=manager_map(); annotations_source='manager' if annotations else ''
+                if not annotations and files.get('annotations'): annotations=bytes(files['annotations']); annotations_source='vm'
             return dict(source='vm',path=(paths.get('definition') or {}).get('path',''),read_at=read_at,
                         definition=bytes(files['definition']),annotations=annotations,annotations_source=annotations_source)
         text=lab.get('definition_yaml')
@@ -239,10 +271,15 @@ class Runner:
         return dict(source='manager',path=lab.get('vm_source',{}).get('files',{}).get('definition',{}).get('path','') or lab.get('vm_project_path',''),
                     read_at=lab.get('vm_source',{}).get('synced_at') or lab.get('updated') or now(),
                     definition=text.encode(),annotations=annotations,annotations_source='manager' if annotations else '')
-    def embed_topology(self, lab, root, job_id, log, safe_error=lambda message: str(message)):
+    def embed_topology(self, lab, root, job_id, log, safe_error=lambda message: str(message), outcome=None):
         """Write the topology (and map) beside the job's configurations, in history/<job> and latest/, and return
         the record the job carries (names, sizes, digests, where the text came from and when). None when there is
-        nothing to embed or it could not be written: the backup itself is not failed by that."""
+        nothing to embed or it could not be written: the backup itself is not failed by that.
+        `outcome`, when given, receives `missing` for the save pipeline: 'no-text' (the manager holds no topology
+        text), 'error' (the topology could not be written), 'map-error' (the topology was written but the map the
+        lab has was not). Absent when the capture is whole. A controlled enum, never an error message."""
+        if outcome is None: outcome={}
+        outcome.pop('missing',None)
         history=root/'history'/job_id; latest=root/'latest'
         # latest/ mirrors this backup: a topology or map that is not written now must not linger there from an
         # earlier backup, or the local Git history would pair new configurations with an old topology.
@@ -255,6 +292,7 @@ class Runner:
             capture=self.topology_capture(lab)
             if not capture:
                 clear(TOPOLOGY_FILE,ANNOTATIONS_FILE)
+                outcome['missing']='no-text'
                 log('topology.skip','No topology text in the manager for this lab, so none travels with this backup','warning'); return None
             history.mkdir(parents=True,exist_ok=True,mode=0o700); latest.mkdir(parents=True,exist_ok=True,mode=0o700)
             definition=capture['definition']
@@ -267,12 +305,18 @@ class Runner:
                 self.store.atomic(history/ANNOTATIONS_FILE,annotations); self.store.atomic(latest/ANNOTATIONS_FILE,annotations)
                 record.update(annotations_file=ANNOTATIONS_FILE,annotations_size=len(annotations),annotations_sha256=hashlib.sha256(annotations).hexdigest(),
                               annotations_source=capture.get('annotations_source') or record['source'])
-            else: clear(ANNOTATIONS_FILE)
+            else:
+                clear(ANNOTATIONS_FILE)
+                # The lab has a drawing, so it has a map; a capture without one is not whole.
+                if lab.get('drawing'):
+                    outcome['missing']='map-error'
+                    log('topology.skip','The map could not be embedded with this backup; the topology is saved','warning')
             log('topology.embed',f"Embedded the topology{' and map' if record.get('annotations_file') else ''} with this backup ({'the VM file ' if record['source']=='vm' else 'the manager copy of '}{record['path'] or 'the topology'}, read {record['read_at']})")
             return record
         except Exception as exc:
             # Never the backup's failure: the configurations are saved, the topology just did not travel this time.
             clear(TOPOLOGY_FILE,ANNOTATIONS_FILE)
+            outcome['missing']='error'
             # Controlled text only: the exception's type, never its message (it could carry file contents).
             log('topology.skip','The topology could not be embedded with this backup ('+type(exc).__name__+'); the configurations are saved','warning'); return None
     def start(self):
@@ -505,7 +549,8 @@ class Runner:
                         outcome['message']=safe_error(result.get('message','SSH command failed'))
                     outcomes.append(outcome)
                     log('node.'+outcome['status'],outcome['message'],'info' if outcome['status']=='succeeded' else 'error',node['name'])
-                topology=self.embed_topology(lab,root,job_id,log,safe_error) if operation=='backup' and success else None
+                topology_outcome={}
+                topology=self.embed_topology(lab,root,job_id,log,safe_error,topology_outcome) if operation=='backup' and success else None
                 git_error=None
                 if operation=='backup' and success:
                     try:
@@ -539,7 +584,7 @@ class Runner:
                         log('git.failed',git_error,'error')
                 status='succeeded' if success==len(nodes) and not git_error and proc.returncode==0 else ('partial' if success else 'failed')
                 log('job.finish',f'{status}: {success}/{len(nodes)} NOS sessions succeeded','info' if status=='succeeded' else 'error')
-                self.update(job_id,status=status,finished=now(),nodes=outcomes,**({'topology':topology} if topology else {}),
+                self.update(job_id,status=status,finished=now(),nodes=outcomes,**({'topology':topology} if topology else {}),**({'topology_missing':topology_outcome['missing']} if topology_outcome.get('missing') else {}),
                             message=git_error or (f'Ansible exited with code {proc.returncode}; {success}/{len(nodes)} sessions succeeded' if proc.returncode else f'{success}/{len(nodes)} NOS sessions completed successfully'))
         except Exception as exc:
             # Detailed exception strings may contain secrets; expose controlled errors only.

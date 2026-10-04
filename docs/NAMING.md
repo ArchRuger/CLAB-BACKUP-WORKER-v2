@@ -3,15 +3,15 @@
 This manager is a single-tenant tool: one student, one VM, one manager, one Git repository
 that the student pushes to as themselves. This guide standardises the few names the system
 depends on and recommends conventions for the rest, so an instructor can build a library of
-lab states once and every student's box applies them cleanly.
+lab states once and every student's box loads them cleanly.
 
-Related: [GIT-PROGRESS.md](GIT-PROGRESS.md) (save locations and *Apply to running lab*),
+Related: [GIT-PROGRESS.md](GIT-PROGRESS.md) (saving, uploading and **Load**),
 [LAB-OPERATIONS.md](LAB-OPERATIONS.md). The scaffold tool that creates the structure below is
 `deploy/scaffold-lab.py`; a template topology is in `deploy/lab-template/`.
 
 ## What the manager keys on — freeze these
 
-*Apply to running lab* maps a saved state to a running node by **exact node name and platform**,
+**Load** maps a saved state to a running node by **exact node name and platform**,
 and the node name the manager stores is the full container name, `clab-<labname>-<node>`. So the
 identity of every saved state is `clab-<labname>-<node>` per node. (That is containerlab's default
 `prefix`; a topology that sets `prefix: __lab-name` has containers named `<labname>-<node>` and
@@ -21,7 +21,7 @@ containerlab gives.) Two rules follow:
 1. **Ship the exact topology.** Build your saved states on the same topology file the student
    deploys — same containerlab `name:` and same node names. If your build box uses
    `name: bgp-core` and a student deploys the lab as `my-lab`, none of your saved states map,
-   and the restore preflight refuses rather than guessing.
+   and the load preflight refuses rather than guessing.
 2. **Decide names once, never rename.** Renaming a lab or a node orphans every saved state that
    referenced the old name. Choose the names below before you record any state.
 
@@ -32,8 +32,8 @@ containerlab gives.) Two rules follow:
 | node `kind:` / image | the platform lives here, not in the node name; pin the image |
 | login | one standard per platform (the kind default, or one credential profile) |
 
-Live restore covers Junos (`juniper_cjunosevolved`, `juniper_vjunosswitch`), Arista EOS (`arista_ceos`) and Cisco IOS XR
-(`cisco_xrv9k`); see [GIT-PROGRESS.md](GIT-PROGRESS.md#apply-a-saved-configuration-to-a-running-node).
+Live load covers Junos (`juniper_cjunosevolved`, `juniper_vjunosswitch`), Arista EOS (`arista_ceos`) and Cisco IOS XR
+(`cisco_xrv9k`); see [GIT-PROGRESS.md](GIT-PROGRESS.md).
 
 ## Node names
 
@@ -51,65 +51,101 @@ Lowercase and hyphenated. No spaces or capitals (a space becomes an underscore a
 
 ## Git repository structure
 
-The manager binds a lab to **one** folder for saving, and applies states from **any** folder.
-So separate the states you give the student from the folder they save into:
+A lab saves into **one** folder of the repository (its *lab folder*) and can **Load** a saved
+state from **any** folder. The lab folder is the folder named after the lab by default;
+the student can pick another place on the first save, and labs may sit inside, above or
+beside each other, or at the top level. So keep the states you give the student apart from
+the folder they save into, and give them the same few names in every lab:
 
 ```
 <repo>/
-  <lab-slug>/
-    reference/            # instructor states — read-only by convention, applied with "Apply to running lab…"
-      start/              #   the starting configuration (apply to begin)
-      solution/           #   the target / final configuration (apply to check)
-      broken-01/          #   a fault to diagnose (add broken-02, … as needed)
-    work/                 # the lab binds here; the student's Save progress + checkpoints live here
+  <lab-slug>/             # the lab saves here: latest/, baseline/, checkpoints/<name>/
+    start/                # lab states you author with "Save as a lab state…"
+    broken/               #   (Start, Broken and Final in the Load list)
+    final/
 ```
 
-- **Bind the lab to `<lab-slug>/work`.** The student's *Save progress* writes `work/latest`, and
-  their own milestones go to `work/checkpoints/<name>` via *Create checkpoint…*.
-- **The student applies `reference/*`** from the **Progress** tab: *Saved versions* lists them
-  under *Instructor and reference versions* with an *Apply to running lab…* button, the folder
-  browser under *Save location › Change folder…* shows the same button on each folder, and
-  *Full history…* labels every version by its folder (`reference/broken-01 · latest`) instead
-  of a bare "latest".
-- **Never save into `reference/*`.** They are the given states; leave the lab bound to `work`.
-- Keep the state vocabulary small and identical across every lab: `start`, `solution`,
-  `broken-NN`, plus the student's own checkpoints. A predictable set makes the UI predictable
-  from lab to lab.
+- **The student's own saves** go to `<lab-slug>/latest` (**Save**), and their own milestones to
+  `<lab-slug>/checkpoints/<name>` (**Keep as a checkpoint**). Their starting point is
+  `<lab-slug>/baseline`.
+- **You author a lab state** on your build box: bring the running lab to that state, open
+  the chip's panel, press **Save as a lab state…**, accept the suggested folder
+  (`<lab-slug>/start`) and name, and **Upload**. The lab keeps saving to its own folder; only the
+  new folder is written. A state is a normal saved folder (topology, map and every device
+  configuration), so a folder that already holds one asks before it is replaced.
+- **The student loads them** with **Load** in the lab header: the list shows the lab's own
+  saves and checkpoints, then the lab states found in the repository as `Start`, `Broken`
+  and `Final`. Load lists the devices with what differs, and the red **Load** confirms; **Undo this load**
+  loads the automatic backup that was taken first.
+- **Never save the student's lab into a lab-state folder.** They are the given states; the
+  lab keeps saving in its own folder.
+- Keep the state vocabulary small and identical across every lab: `start`, `broken`,
+  `final` (and `broken-02`, … when you need more faults), plus the student's own
+  checkpoints. A predictable set makes the UI predictable from lab to lab.
+- A folder inside another lab's `latest`, `baseline` or `checkpoints` cannot be a lab
+  folder or a state folder, so a state such as `bgp/latest/start` is not possible: the manager does not
+  refuse it, it saves the state in `bgp/start` (when `bgp` is the lab folder) and says so.
 
 ## Repositories
 
 - **One master repository you own** is the source of truth for all labs.
 - **Each student uses their own copy** — a fork of the master (or a repository created from it as
-  a template). In the manager, the student uses *Use a different repository…* or *Connect by URL…* (the *Save location* card) with
-  their fork's HTTPS URL and their own GitHub login, so their *Save progress* uploads to their repo (after the review every upload gets).
+  a template). In the manager, the student pastes their fork's HTTPS address in the first-save panel (or
+  uses **Use a different repository…** or **Connect by URL…** under **Save settings**) with
+  their own GitHub login, so their **Save** and **Upload** go to their repo.
 - **Updates:** *Update from the repository* only fast-forwards the student's own remote. If you revise
   labs after students fork, they sync their fork from your master on GitHub, or you hand out a
   fresh template per cohort. The manager does not track a second "upstream" remote.
 
 ## Building a lab's state library (instructor)
 
-On your build box, once per lab:
+On your build box, once per lab, the manager's own way:
 
 1. Deploy the standardised topology and let the NOS finish booting.
-2. `python3 deploy/scaffold-lab.py init <lab-slug>` — registers `reference/{start,solution,broken-01}`
-   and `work`, and binds the lab to `work`.
-3. Configure the running node to the **start** state, then
-   `python3 deploy/scaffold-lab.py snapshot <lab-slug> start` — captures the running config and
-   saves it (and its restore-grade candidate) into `reference/start`, then rebinds to `work`.
-4. Repeat for `solution` and `broken-01` (configure, then `snapshot <lab-slug> <state>`).
-5. Each `snapshot` lists the files it saved and asks before it uploads, because the manager uploads a
-   save only after a review; `--yes` states that review for scripted use. Answering no keeps the state
-   on the lab VM only (it goes up with the next upload of the repository). Either way the lab is
-   pointed back at `work`. If the save cannot start, times out, cannot be set aside or the upload fails,
-   the tool tries to point the lab back at `work` and says what happened: either "rebound to
-   `<lab-slug>/work`", or that the lab still saves to `reference/<state>` (a save that is still pending
-   refuses the folder change). In that case finish that save under Progress › Recent saves, then run
-   `scaffold-lab.py init <lab-slug>` again before the student saves. If the manager stops answering
-   (a restart mid-request, a reset or a timeout), the tool exits with "Cannot reach the manager" and the
-   same account of where the lab saves; when the lost answer belonged to a folder change it says the lab
-   **may** still save to `reference/<state>`, because the change may have happened. The tool talks to the
-   manager directly and ignores `http_proxy`.
+2. Press **Save** once so the lab is connected to the repository, then bring the devices to
+   the **start** state.
+3. Open the chip's panel, press **Save as a lab state…**, accept `<lab-slug>/start` (or
+   change the folder) and the name `start`, and press **Upload** when it offers it.
+4. Repeat for `broken` and `final` (configure, then **Save as a lab state…**).
 
-The student then applies `reference/start` to begin, works in `work`, applies `reference/solution`
-to check, and applies `reference/broken-01` to practise recovery — all without a reboot and
-without changing where they save.
+The student then loads **Start** to begin, works and saves in the lab's own folder, loads
+**Final** to check and **Broken** to practise recovery, all without a reboot and without
+changing where they save.
+
+### The scaffold tool (scripted alternative)
+
+`deploy/scaffold-lab.py` does the same with a script and creates the older layout, in which
+the states sit in a `reference/` folder and the student's saves in `work/`. The lab must already be
+connected to the repository (press **Save** in the lab header once, or open **Save settings** from the
+chip); the tool talks to the manager on this VM and uses the same actions as the buttons:
+
+1. `python3 deploy/scaffold-lab.py init <lab-slug>` creates the folders
+   `reference/{start,solution,broken-01}` and `work` inside `<lab-slug>/` and points the lab's
+   saves at `work`; `--states start,broken,final` names the states differently.
+2. Configure the running node to the **start** state, then
+   `python3 deploy/scaffold-lab.py snapshot <lab-slug> start` captures the running config and
+   saves it (with the lab's topology and map, and each device's restore-grade candidate) into
+   `reference/start`, then points the lab back at `work`.
+3. Repeat for the other states (configure, then `snapshot <lab-slug> <state>`).
+4. Each `snapshot` lists the files it saved, asks the manager what an upload would send and
+   prints one line for every other save that waits in the repository on the VM
+   (`This upload also sends: <lab>: <name>`), because an upload always carries every waiting
+   save. Then it asks before it uploads; `--yes` states that you reviewed it for scripted use.
+   The upload names the state of the repository that was shown: when another save was made in
+   between, nothing is uploaded and the tool shows what an upload sends now and asks again
+   (with `--yes` it tries once more, then leaves the state on the lab VM). Answering no leaves
+   the state waiting on the lab VM: it shows as a save to upload in the lab header and goes up
+   with the next upload of the repository. In every case the lab is pointed back at `work`; a
+   save that waits for upload does not stop that. If the save cannot start, times out or the
+   upload fails, the tool says what happened and that the lab is "rebound to
+   `<lab-slug>/work`"; a state that was saved but not uploaded waits on the lab VM and can be
+   uploaded from the save chip in the lab header. Only when the manager refuses the folder
+   change itself (other work is running) does the tool say that the lab still saves to
+   `reference/<state>`; run `scaffold-lab.py init <lab-slug>` again before the student saves.
+   If the manager stops answering (a restart mid-request, a reset or a timeout), the tool
+   exits with "Cannot reach the manager" and the same account of where the lab saves; when
+   the lost answer belonged to a folder change it says the lab **may** still save to
+   `reference/<state>`, because the change may have happened. The tool talks to the manager directly and ignores `http_proxy`.
+
+The states it writes are ordinary saved folders: **Load** lists them with the other lab
+states in the repository, named from their folder (`Start`, `Solution`, `Broken-01`).

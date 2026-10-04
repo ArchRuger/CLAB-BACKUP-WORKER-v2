@@ -1,0 +1,29 @@
+/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/live/l2_b5.py:33: SyntaxWarning: invalid escape sequence '\('
+  c, out = sh('gh', 'api', 'repos/%s/commits' % EMPTY, '--jq', '.[] | "\(.sha[0:10]) \(.commit.message | split("\\n")[0])"')
+[19:20:46] B5 on git-redesign-b: binding None
+[19:20:52] STALE ANSWER with the address typed: 'This folder holds the state “Git-redesign-b”.' buttons ['Cancel', 'Save beside it in git-redesign-b/git-redesign-b', 'Replace it']
+[19:20:56] buttons now: ['Cancel', 'Connect and save here']
+[19:21:02] after Connect and save here: chip 'Not saved yet'; drawer True; panel 'This repository already holds saves of a lab named git-redesign-b.Save in git-redesign-b-2Continue thereConnect by URL…Uploads go to github.com/ArchRuger/clab-scratch-git-redesign, branch main.Saved files can contain passwords or keys.Save as a lab state…'
+[19:21:02] drawer text: 'Where should git-redesign-b save? |  | Pick a folder, type a path, or make a new folder. |  | Repository address (HTTPS) |  | The lab VM’s own GitHub login is used. You are never asked for a password or a token here. |  | Use a repository on this VM | Folder |  | Saves go to | clab-scratch-git-redesign-empty | › | lab-b-empty |  | The folders of this repository are listed once it is connected. |  | clab-scratch-git-redesign-empty is empty. The manager adds a README.md file to start it. |  | Cancel | Start the repository |  | Saved files can'
+[19:21:02] empty-repository sentence: 'clab-scratch-git-redesign-empty is empty. The manager adds a README.md file to start it.' ; button 'Start the repository'
+[19:21:15] after Start the repository: chip '1 save to upload'; sentence 'This is the first save here: 2 devices, the topology and the map.'; clicks so far 4 (typed 3)
+[19:21:20] uploaded: chip 'Saved just now'; clicks 5; lab saves in lab-b-empty of /home/archtop/labs/clab-scratch-git-redesign-empty
+[19:21:21] GitHub commits of the new repository:
+f683544eb6 First save
+51e126ac3a Start the repository for lab saves
+[19:21:21] files on GitHub: README.md, lab-b-empty/latest/ceos1.cfg, lab-b-empty/latest/ceos1.eoscfg, lab-b-empty/latest/ceos2.cfg, lab-b-empty/latest/ceos2.eoscfg, lab-b-empty/latest/git-redesign-b.clab.yml, lab-b-empty/latest/git-redesign-b.clab.yml.annotations.json, lab-b-empty/latest/manifest.json
+PASS B5: no console, page or request errors
+
+=== B5: 1 checks, 0 failed
+PASS B5: no console, page or request errors
+None
+
+1 checks, 0 failed
+[19:21:36] B5 afterwards: lab saves in lab-b-empty of /home/archtop/labs/clab-scratch-git-redesign-empty
+[19:21:38] repositories offered: ['clab-scratch-git-redesign', 'clab-scratch-git-redesign-empty']
+[19:21:40] answer for git-redesign-b: 'This folder holds the state “Git-redesign-b”.' ; buttons ['Cancel', 'Save beside it in git-redesign-b/git-redesign-b', 'Replace it']
+[19:21:40] pressing 'Replace it'
+[19:21:45] lab B saves in git-redesign-b of /home/archtop/labs/clab-scratch-git-redesign; chip 'Saved just now'; clicks 2
+PASS B5 back: no console, page or request errors
+
+1 checks, 0 failed

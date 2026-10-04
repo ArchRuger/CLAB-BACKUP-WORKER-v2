@@ -1,0 +1,32 @@
+[19:16:14] B2 (continue): remove lab git-redesign-b and import it again
+[19:16:14] DELETE /api/labs/8049f469 (manager only) -> 200
+[19:16:15] import-preview 200, import 200 -> new lab 68072673
+[19:16:19] new lab: chip 'Not saved yet'; binding None
+[19:16:20] first-save panel: title 'Not saved yet'
+[19:16:20] panel text: 'This repository already holds saves of a lab named git-redesign-b. |  | Save in git-redesign-b-2 | Continue there | Connect by URL… |  | Uploads go to github.com/ArchRuger/clab-scratch-git-redesign, branch main. |  | Device logins are being checked. Save is available when it finishes. |  | Saved files can contain passwords or keys. |  | Save as a lab state…'
+[19:16:20] buttons: ['save-first:Save in git-redesign-b-2', 'save-first-continue:Continue there', 'save-first-url:Connect by URL…', 'save-as-state:Save as a lab state…']
+[19:16:20] same-name question asked: True
+PASS B2 the same-name question is asked
+[19:16:31] chip after the first save: '1 save to upload'; panel 'The map changed since your last save.'
+[19:16:31] CLICKS of the first save so far: 2 (typed 0)
+[19:16:36] with Upload: 3 clicks; lab saves in git-redesign-b; chip 'Saved just now'
+[19:16:36] job: {"destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign-b/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "note": "Map changed", "pushed": true, "status": "synced", "summary": {"added": 0, "devices": [], "first": false, "map": true, "removed": 0, "removed_devices": [], "topology": false}}
+  [GitHub after B2]
+      49a1529805 Map changed
+      496ec2edc0 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      06feb522c0 L2 A5 online change 2 (outside the lab folders)
+      852bbcd782 ceos1 changed
+  [VM checkout VM]
+      49a1529 Map changed
+      496ec2e Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      06feb52 L2 A5 online change 2 (outside the lab folders)
+      852bbcd ceos1 changed
+      ## main...origin/main [ahead 1]
+PASS B2: no console, page or request errors
+
+=== B2: 2 checks, 0 failed
+PASS B2 the same-name question is asked
+PASS B2: no console, page or request errors
+None
+
+2 checks, 0 failed

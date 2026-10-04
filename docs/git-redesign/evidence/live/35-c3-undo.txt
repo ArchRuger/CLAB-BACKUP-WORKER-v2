@@ -1,0 +1,30 @@
+[19:38:36] C3: devices before: {'a-ceos1': 'l2-c1-final', 'a-ceos2': 'l2-c1-final', 'a-cjunos': 'l2-c1-final;', 'a-xrv9k': 'l2-c1-final'}
+[19:39:00] load of Start ended: chip 'Running Start'
+[19:39:00] Undo this load pressed 0.0 s after the chip read Running
+[19:39:00]    live region: 'DetailsView output×'
+[19:39:04]    +0.1s panel='' error='' red Load visible=False disabled=None
+[19:39:04]    +4.1s panel='' error='' red Load visible=True disabled=False
+[19:39:04] requests: ['POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore/preflight {"source":{"type":"folder","commit":"68fedc7349349082d', 'POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore {"request_id":"05fec8a23aea793e8a9ad574eb19a7a5","source":{"type', 'POST /api/labs/63d53e20db83464392ebfd4712bba5e3/restore/preflight {"source":{"type":"backup","commit":"","path":"","back']
+[19:39:04] failed requests so far: []
+[19:39:04] confirmation: 'Undo loading Start?' ; rows {'ceos1': '2 lines differ', 'ceos2': '2 lines differ', 'cjunos': '2 lines differ', 'xrv9k': '2 lines differ'}
+[19:39:07] undo job created 2.8 s after the red Load click
+[19:39:07] chip while the undo runs: 'Loading… 0 of 4' ; panel 'Loading the configuration from before Start…'
+[19:39:21] after Undo: chip 'Running the configuration from before Start' ; clicks (chip, Undo, Load) = 2
+[19:39:23] CLI read-back: {'a-ceos1': 'description l2-c1-final', 'a-ceos2': 'description l2-c1-final', 'a-cjunos': 'description l2-c1-final;', 'a-xrv9k': 'description l2-c1-final'}
+PASS C3 every device is back to what it ran before the load (l2-c1-final)
+PASS C3 the job just ended is the undo (source backup)
+[19:39:23] undo job: succeeded 'All 4 node(s) restored and verified against the saved state.'
+[19:39:23]    target {"node": "ceos1", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.8, "armed": 4.0, "verifying": 4.0, "confirming": 4.3, "replaced": 4.9, "settled": 4.9, "checked": 12.9}}
+[19:39:23]    target {"node": "ceos2", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.8, "armed": 4.0, "verifying": 4.0, "confirming": 4.3, "replaced": 4.9, "settled": 4.9, "checked": 12.9}}
+[19:39:23]    target {"node": "cjunos", "platform": "juniper_cjunosevolved", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.8, "armed": 6.7, "verifying": 6.7, "confirming": 7.2, "replaced": 7.8, "settled": 7.8, "checked": 12.9}}
+[19:39:23]    target {"node": "xrv9k", "platform": "cisco_xrv9k", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.8, "armed": 8.1, "verifying": 8.1, "confirming": 8.9, "replaced": 10.3, "settled": 10.3, "checked": 13.0}}
+[19:39:23] errors [] ; failed []
+PASS C3: no console, page or request errors
+
+=== C3: 3 checks, 0 failed
+PASS C3 every device is back to what it ran before the load (l2-c1-final)
+PASS C3 the job just ended is the undo (source backup)
+PASS C3: no console, page or request errors
+None
+
+3 checks, 0 failed

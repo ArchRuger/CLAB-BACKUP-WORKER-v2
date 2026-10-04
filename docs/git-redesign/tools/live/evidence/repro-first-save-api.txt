@@ -1,0 +1,4 @@
+HTTP 409
+{
+  "detail": "Lab folders in one repository cannot overlap: the repository root is already a lab folder. Choose a folder beside it."
+}

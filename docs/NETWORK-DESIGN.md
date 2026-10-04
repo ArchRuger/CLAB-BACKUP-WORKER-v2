@@ -19,8 +19,8 @@ a workstation or on the lab VM). The flow is
 generated configuration and each device's compatibility → explicitly apply to selected devices →
 verify → keep and export the design and its evidence.*
 
-The manager stays what it is. Deploying, destroying, terminals, capture, backups, *Save progress*
-and *Apply to running lab* keep their behaviour; netlab is used as a compiler only, never as a lab
+The manager stays what it is. Deploying, destroying, terminals, capture, backups, **Save**
+and **Load** keep their behaviour; netlab is used as a compiler only, never as a lab
 lifecycle tool (`netlab up`, `netlab down`, `netlab connect` are never run). The feature is opt-in:
 a lab without a design behaves exactly as before, nothing is migrated, renumbered or configured on
 its own, and a saved design is never replayed by a deploy or redeploy.
@@ -219,7 +219,7 @@ preview and download only.
 
 ## The Design tab
 
-Every lab has a **Design** tab (beside Topology, Devices and Progress). Top to bottom:
+Every lab has a **Network design** section (under **Advanced**, in the *Experimental* panel). Top to bottom:
 
 - **State and actions.** One line says where the design stands: *No design yet*, *Design saved, no plan yet*,
   *Unsaved changes* (in red when the browser could not keep the draft in its storage: save now), *Advanced JSON
@@ -265,7 +265,7 @@ page that is behind the saved design is refused when it saves. The tab reads the
 ## Applying a plan to devices
 
 *Apply to devices…* puts a generated plan onto the running devices the student selects, through the same
-direct node SSH the backups and *Apply to running lab* use, inside each NOS's own transaction with its own
+direct node SSH the backups and **Load** use, inside each NOS's own transaction with its own
 timed recovery, and never as a whole-configuration replacement. The contract with every rule and its reason
 is `docs/netlab-integration/PROVISIONING.md`; the live proofs on the four-node acceptance lab are
 `docs/netlab-integration/evidence/live-apply-{ceos,junos,iosxr}.md`. In the page:
@@ -317,14 +317,14 @@ the design itself leaves the devices as they are: a later plan of the same lab s
 
 ## Exporting a plan to Git
 
-*Export plan to Git…* on the plan card saves a plan into the lab's Git repository through the same *Save
-progress* pipeline as a configuration save, as its own checkpoint folder (`…/checkpoints/<name>`, default
+*Export plan to Git…* on the plan card saves a plan into the lab's Git repository through the same save
+pipeline as a configuration save (**Save**), as its own checkpoint folder (`…/checkpoints/<name>`, default
 `design-<plan id>`): the design file (`network-intent.yml`), `plan.json`, the netlab `topology.yml`, the endpoint
 `mapping.json` and every generated device file (`<device>--<nn>-<module>.cfg`), with a manifest that names them
 generated artifacts (`kind: network-design`). The rules of a save apply unchanged: the lab must be bound to a
-repository, the job saves on the VM first and stops for the mandatory review, the upload is the reviewed retry, one
+repository, the job saves on the VM first and waits for **Upload** (the review is mandatory), the upload is the reviewed retry, one
 save at a time. A design export is never a backup and never a restore source: its manifest carries no device rows and
-no restore artifact, so it yields no restore candidate and *Apply to running lab* never offers it.
+no restore artifact, so it yields no restore candidate: it is listed as view and download only and **Load** never offers it.
 
 The manifest's `lab_name` is the lab's name when the save was started; it labels the version and names its download.
 Exports made by earlier managers say `mapping.json` there (a naming fault), and that frozen record is never

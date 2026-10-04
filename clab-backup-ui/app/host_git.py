@@ -17,11 +17,12 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.30.60'
+VERSION = '1.31.0'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -37,6 +38,30 @@ ENGINEER = Path('/etc/clab-manager/engineer.json')
 MAX_TREE = 4000
 MAX_MOVE = 1500
 REGISTRY_WAIT = 30
+MAX_DIRS = 20000
+SUMMARY_FILE = 256 * 1024         # a manifest larger than this is never read for a summary
+SUMMARY_TOTAL = 4 * 1024 * 1024   # all manifests one history answer reads
+SUMMARY_TEXT = 200
+SUMMARY_DEVICES = 500
+SHOW_BATCH = 1000                 # blob ids per `git show` (41 bytes each): one call unless the list is long
+MAX_OUTGOING = 200
+OUTGOING_BYTES = 2 * 1024 * 1024  # the outgoing rows of one compare answer
+DIRS_BYTES = 2 * 1024 * 1024      # the dirs of one browse answer
+SUMMARY_BYTES = 4 * 1024 * 1024   # the summaries of one history answer, as JSON
+OUTGOING_FILES = 500
+# Fixed refusals the manager recognises by their text.
+NOT_SYNCHRONIZED = 'Before linking, synchronize the current branch with its existing remote branch using your ordinary Git login.'
+REMOTE_AHEAD = 'The online copy of this repository has changes this VM does not have.'
+NOT_MANAGER_SAVES = 'This checkout has commits that were not made by manager saves.'
+EMPTY_REPOSITORY = 'This repository has no commits yet. Add a README on GitHub first, then connect it.'
+START_FAILED = 'The manager could not start the repository; connecting again retries it.'
+START_PUSHED = 'README.md was pushed to start the repository, but other branches or tags appeared at the same time; connecting again finishes it.'
+SAVE_WAITS = 'A save made in that folder still waits for upload.'
+SAVE_UNKNOWN = 'The online copy could not be asked whether a save made in that folder still waits for upload.'
+START_README = (b'# Lab saves\n\n'
+                b'This repository keeps lab saves of the Containerlab Node Manager.\n'
+                b'Each lab folder holds latest/, baseline/ and checkpoints/ with the saved device configurations.\n')
+START_MESSAGE = 'Start the repository for lab saves'
 
 
 def digest(value):
@@ -129,8 +154,41 @@ def descriptor(binding):
     return {k: binding[k] for k in ('id', 'label', 'owner', 'path', 'remote', 'push_url', 'branch', 'prefix', 'revision')}
 
 
-def overlapping(prefix, other):
-    return not prefix or not other or prefix.startswith(other + '/') or other.startswith(prefix + '/')
+def saves_holding(prefix, other):
+    """The saved-state folder of the lab folder `other` (`<other>/latest`, `<other>/baseline` or
+    `<other>/checkpoints`) that `prefix` is, or lies inside; '' when there is none."""
+    return next((f for f in ((other + '/' if other else '') + n for n in RESERVED) if prefix == f or prefix.startswith(f + '/')), '')
+
+
+def colliding(prefix, other):
+    """Two lab folders write the same files only when one lies inside a folder the other writes its saves
+    into (latest, baseline, checkpoints). Otherwise they may sit inside, above or beside each other.
+    The same folder is not a collision here: callers test equality themselves."""
+    return prefix != other and bool(saves_holding(prefix, other) or saves_holding(other, prefix))
+
+
+def collision_message(prefix, other):
+    """One sentence for a colliding pair: `prefix` is the folder asked for, `other` a registered lab folder."""
+    def place(folder, inner):   # a folder that is the saved-state folder itself "is" it, never "is inside" it
+        state = saves_holding(folder, inner)
+        return ' is where ' if folder == state else ' is inside ' + state + ', where '
+    if saves_holding(prefix, other):
+        return ('The folder ' + prefix + place(prefix, other) +
+                ('the lab folder ' + other if other else 'the lab folder at the repository top level') + ' keeps its saves; choose a folder above that saved state.')
+    return ('The lab folder ' + other + place(other, prefix) +
+            (prefix if prefix else 'a lab folder at the repository top level') + ' would keep its saves; choose another folder for this lab.')
+
+
+def not_empty(folder, branch):
+    return 'The repository has branches or tags but no branch ' + branch + ', which the VM folder ' + str(folder) + ' was cloned for; nothing was changed.'
+
+
+def folder_not_empty(folder):
+    return 'The VM folder ' + str(folder) + ' holds files that are not in the repository; nothing was changed.'
+
+
+def finish_failed(folder):
+    return 'The VM folder ' + str(folder) + ' could not take the repository\'s first commits; connecting again retries it.'
 
 
 def no_links(path, require=True):
@@ -179,6 +237,58 @@ def snapshot(value):
 
 def content_digest(manifest):
     return digest({k: v for k, v in manifest.items() if k not in ('backup_job_id', 'captured_at')})
+
+
+def control(c): return unicodedata.category(c) == 'Cc'
+
+
+def display_text(value, limit=SUMMARY_TEXT):
+    """A text for display: every control (Cc), format (Cf: bidi, zero-width and tag characters), lone surrogate (Cs,
+    which JSON can carry but UTF-8 cannot encode) and line or paragraph separator (Zl, Zp) dropped, then cut at `limit`."""
+    return ''.join(c for c in value if unicodedata.category(c) not in ('Cc', 'Cf', 'Cs', 'Zl', 'Zp'))[:limit]
+
+
+def default_label(label, old, path):
+    """deploy/setup-git.sh: without --label a registered folder keeps its label (and so its revision)."""
+    return label or (old['label'] if old else Path(path).name)
+
+
+def owner_login_problem(message):
+    """deploy/setup-git.sh prints its identity and login hints only for a refusal about them."""
+    return any(word in message for word in ('identity', 'login', 'Authenticate', 'authenticat', 'signed in'))
+
+
+def manifest_summary(raw):
+    """H3: the few manifest fields a saved state is chosen by, or None on any deviation. Strings only where a
+    string is expected, cut at 200 characters, no control character (bidi controls are dropped); at most 500 file
+    entries. Nothing of the configuration and no path is returned: the manager decides what to believe (a copied
+    lab_id stays as it is)."""
+    def text(value, key):
+        if key not in value or value[key] is None: return None
+        item = value[key]
+        if not isinstance(item, str) or any(control(c) for c in item): raise ValueError
+        return display_text(item)
+    try:
+        value = json.loads(raw.decode('utf8'))
+        if not isinstance(value, dict) or not isinstance(value.get('files'), list) or len(value['files']) > SUMMARY_DEVICES: return None
+        # `state` names a lab state ("Save as a lab state"): absent is '', present must be a non-empty string.
+        state = ''
+        if 'state' in value:
+            state = text(value, 'state')
+            if not state: return None
+        devices = []
+        for entry in value['files']:
+            if not isinstance(entry, dict): return None
+            kind = text(entry, 'kind')
+            artifact = entry.get('restore_artifact')
+            if artifact is not None and not isinstance(artifact, str): return None
+            if kind: continue   # an entry of a kind (the topology, the map, a design file) is owned but is no device
+            devices.append({'node': text(entry, 'node'), 'short_name': text(entry, 'short_name'),
+                            'platform': text(entry, 'platform'), 'restore': bool(artifact)})
+        return {'lab_id': text(value, 'lab_id'), 'lab_name': text(value, 'lab_name'), 'kind': text(value, 'kind'), 'state': state,
+                'captured_at': text(value, 'captured_at'), 'topology_digest': text(value, 'topology_digest'), 'devices': devices}
+    except (ValueError, RecursionError):
+        return None
 
 
 def atomic_json(path, value):
@@ -271,6 +381,7 @@ class GitRepository:
         if binding.get('_pending') and not self.control.exists(): return
         if not self.control.exists(): raise ValueError('This directory is not a Git checkout: .git is missing. Run guided Git setup to clone a repository; mkdir alone is insufficient.')
         if not self.control.is_dir(): raise ValueError('Linked worktrees and bare repositories are not supported.')
+        self.check_owner()   # before anything is created inside the checkout
         self.state = self.control / 'clab-manager'; no_links(self.state, False)
         self.state.mkdir(mode=0o700, exist_ok=True)
         if os.name == 'posix':
@@ -309,8 +420,8 @@ class GitRepository:
     def descriptor(self):
         return {k: self.binding[k] for k in ('id', 'label', 'owner', 'path', 'remote', 'push_url', 'branch', 'prefix', 'revision')}
 
-    def lock(self):
-        return exclusive(no_links(self.state / 'lock', False), 'Another Git operation is already running for this repository.')
+    def lock(self, wait=0):
+        return exclusive(no_links(self.state / 'lock', False), 'Another Git operation is already running for this repository.', wait)
 
     def validate(self):
         no_links(self.root); no_links(self.control)
@@ -325,15 +436,18 @@ class GitRepository:
             raise ValueError('Submodules are unsupported.')
         if self.run('symbolic-ref', '--quiet', '--short', 'HEAD') != self.binding['branch']:
             raise ValueError('The repository branch changed. Restore the registered branch or register it again.')
-        # Reject URL rewrites instead of displaying one URL and pushing to another.
-        code, _ = self.run('config', '--get-regexp', r'^url\..*\.(insteadof|pushinsteadof)$', check=False)
-        if code == 0: raise ValueError('Git URL rewrites are unsupported for registered repositories.')
-        urls = self.run('remote', 'get-url', '--push', '--all', self.binding['remote']).splitlines()
+        self.check_rewrites()
+        urls =self.run('remote', 'get-url', '--push', '--all', self.binding['remote']).splitlines()
         if len(urls) != 1 or checked_url(urls[0], self.allow_local) != self.binding['push_url']:
             raise ValueError('The Git push destination changed. Register the repository again.')
         head = self.run('rev-parse', '--verify', 'HEAD')
         if not HEX.fullmatch(head): raise ValueError('Initialize the repository with its first commit.')
         return head
+
+    def check_rewrites(self):
+        # Reject URL rewrites instead of displaying one URL and pushing to another.
+        code, _ = self.run('config', '--get-regexp', r'^url\..*\.(insteadof|pushinsteadof)$', check=False)
+        if code == 0: raise ValueError('Git URL rewrites are unsupported for registered repositories.')
 
     def clean(self, entire=False):
         if any((self.control / marker).exists() for marker in ('MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-apply', 'rebase-merge', 'BISECT_START', 'index.lock')):
@@ -400,23 +514,130 @@ class GitRepository:
     def save_journal(self, journal): atomic_json(self.journal_path(journal['operation_id']), journal)
 
     def known_commits(self):
-        result = set()
-        directory = no_links(self.state / 'journals', False)
-        if not directory.exists(): return result
-        for path in directory.glob('*.json'):
-            no_links(path)
-            if path.stat().st_size > MAX_JSON: continue
-            value = json.loads(path.read_text(encoding='utf8'))
-            if value.get('commit') and value.get('verified') and value.get('binding_revision') in self.binding.get('_approved_revisions', [self.binding['revision']]):
-                result.add(value['commit'])
-        return result
+        """The commits a push accepts: those of verified journals under an approved revision. An unreadable journal
+        approves nothing (its commit then refuses the push as made outside manager saves)."""
+        approved = self.binding.get('_approved_revisions', [self.binding['revision']])
+        return {value['commit'] for value in self.journals()
+                if value.get('commit') and value.get('verified') and value.get('binding_revision') in approved}
 
-    def remote_head(self):
-        code, raw = self.run('ls-remote', '--exit-code', self.binding['push_url'], 'refs/heads/' + self.binding['branch'], check=False, limit=4096, timeout=45)
+    def remote_head(self, timeout=45):
+        code, raw = self.run('ls-remote', '--exit-code', self.binding['push_url'], 'refs/heads/' + self.binding['branch'], check=False, limit=4096, timeout=timeout)
         if code: raise ValueError('The remote branch is unavailable. Check connectivity and the owner\'s noninteractive HTTPS Git login.')
         lines = raw.decode('utf8').splitlines()
         if len(lines) != 1 or not HEX.fullmatch(lines[0].split('\t')[0]): raise ValueError('The remote branch response was invalid.')
         return lines[0].split('\t')[0]
+
+    def fetch_remote(self, check=True, timeout=60):
+        """Fetch the remote branch's objects only; never the index, the checkout, a ref or FETCH_HEAD."""
+        return self.run('fetch', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', self.binding['push_url'],
+                        'refs/heads/' + self.binding['branch'], check=check, timeout=timeout)
+
+    def has_commit(self, commit):
+        return self.run('cat-file', '-e', commit + '^{commit}', check=False)[0] == 0
+
+    def journals(self):
+        """Every readable journal of this checkout, whatever registration wrote it; an unreadable one is skipped."""
+        directory = no_links(self.state / 'journals', False)
+        if not directory.exists(): return
+        for path in sorted(directory.glob('*.json')):
+            no_links(path)
+            if path.stat().st_size > MAX_JSON: continue
+            try: value = json.loads(path.read_text(encoding='utf8'))
+            except (ValueError, RecursionError): continue
+            if isinstance(value, dict): yield value
+
+    def further(self):
+        """H2: root's registrations of this checkout and owner (`_registered`, built from git.json alone, never
+        from the request) that carry the branch and push URL this child read itself. Their revisions approve the
+        commits a further lab folder may sit on, exactly as main() approves them for a push. True when one exists."""
+        approved = [r['revision'] for r in self.binding.get('_registered', [])
+                    if r.get('branch') == self.binding['branch'] and r.get('push_url') == self.binding['push_url'] and r.get('revision')]
+        self.binding['_approved_revisions'] = approved
+        return bool(approved)
+
+    def check_synchronized(self, head, further):
+        """H2, called by register() and by the child in deploy/setup-git.sh. The first lab folder of a checkout needs
+        the branch to equal the remote branch. A further one may sit on saves that wait for upload: the remote branch
+        must be HEAD or an ancestor of it, and every commit in between a verified manager save of this checkout (the
+        test a push applies). Any other answer of the ancestry test refuses, a remote commit missing here included."""
+        remote = self.remote_head()
+        if remote == head: return remote
+        if not further: raise ValueError(NOT_SYNCHRONIZED)
+        self.fetch_remote(check=False)   # a failed fetch leaves a missing remote commit, which the test below refuses
+        code, _ = self.run('merge-base', '--is-ancestor', remote, head, check=False)
+        if code: raise ValueError(REMOTE_AHEAD)
+        between = set(self.run('rev-list', remote + '..' + head).splitlines())
+        if not between or not between.issubset(self.known_commits()): raise ValueError(NOT_MANAGER_SAVES)
+        return remote   # the remote head, now a commit of this checkout
+
+    def check_retire(self):
+        """H7: refuse while a save made through this registration waits for upload (check_waiting), under the lock."""
+        with self.lock(): self.check_waiting()
+
+    def check_waiting(self, uploaded=None):
+        """H7, the caller holds the checkout's lock. A save waits when a journal of this registration's revision holds
+        a commit that the registration's own branch (`refs/heads/<branch>`, never the current HEAD, which a branch
+        switch would move) contains and the remote branch does not. Skipped: journals marked pushed, and an unchanged
+        save that is not verified (its commit is someone's own HEAD, not a manager save). A commit that branch no
+        longer reaches (reset away, pruned, the branch deleted) cannot be uploaded and does not wait, nor does one
+        `uploaded` contains (the remote head of the registration that replaces this one); with nothing waiting no
+        remote is asked; a remote that cannot be asked refuses."""
+        commits = sorted({j['commit'] for j in self.journals() if isinstance(j.get('commit'), str) and HEX.fullmatch(j['commit'])
+                          and j.get('binding_revision') == self.binding['revision'] and j.get('pushed') is not True
+                          and not (j.get('unchanged') and not j.get('verified'))})
+        if not commits: return None
+        code, raw = self.run('rev-parse', '--verify', '--quiet', 'refs/heads/' + self.binding['branch'] + '^{commit}', check=False, limit=4096)
+        tip = raw.decode('utf8', errors='replace').strip() if not code else ''
+        if not HEX.fullmatch(tip): return None
+
+        def contained(commit, ref): return self.run('merge-base', '--is-ancestor', commit, ref, check=False)[0] == 0
+        # The candidates are few (uploaded saves are skipped): one ancestry test each, never a walk of all history.
+        commits = [c for c in commits if contained(c, tip)]
+        if uploaded and HEX.fullmatch(uploaded) and self.has_commit(uploaded): commits = [c for c in commits if not contained(c, uploaded)]
+        if not commits: return None
+        try:
+            remote = self.remote_head()
+            if not self.has_commit(remote): self.fetch_remote()
+        except ValueError: raise ValueError(SAVE_UNKNOWN) from None
+        if not self.has_commit(remote): raise ValueError(SAVE_UNKNOWN)   # the remote branch moved between the two questions
+        if any(not contained(c, remote) for c in commits): raise ValueError(SAVE_WAITS)
+        return None
+
+    def outgoing(self):
+        """H6: the commits an upload of this checkout would carry (`<remote>..HEAD`, oldest first, the newest 200
+        within about 2 MiB), each with the operation of the journal that made it, whether a push would accept it
+        (`approved`, the rule of known_commits()), its subject and the paths it changed; None when the remote cannot
+        be asked."""
+        try:
+            # A review must not hold the checkout's lock for long when the remote is down, and needs no fetch
+            # when the remote branch is a commit this checkout already has (the usual case: the VM is ahead).
+            remote = self.remote_head(timeout=15)
+            if not self.has_commit(remote): self.fetch_remote(timeout=20)
+            head = self.run('rev-parse', '--verify', 'HEAD')
+            code, raw = self.run('rev-list', '--max-count=' + str(MAX_OUTGOING + 1), '--format=%H%x00%s', remote + '..' + head, check=False)
+            if code: return None, False
+            rows = [line.split('\0', 1) for line in raw.decode('utf8', errors='replace').split('\n') if '\0' in line]
+            truncated = len(rows) > MAX_OUTGOING
+            made = {}
+            for journal in self.journals():
+                if isinstance(journal.get('commit'), str) and not journal.get('unchanged') and isinstance(journal.get('operation_id'), str):
+                    made.setdefault(journal['commit'], journal['operation_id'])
+            approved = self.known_commits(); result = []; size = 0
+            for commit, subject in rows[:MAX_OUTGOING]:   # newest first, so the budget keeps the newest
+                if not HEX.fullmatch(commit): return None, False
+                files = self.run('diff-tree', '--no-commit-id', '--name-only', '-r', '--root', '-z', commit).split('\0')
+                row = {'commit': commit, 'operation_id': made.get(commit), 'approved': commit in approved,
+                       'subject': display_text(subject), 'files': [f for f in files if f][:OUTGOING_FILES]}
+                cost = len(json.dumps(row, ensure_ascii=False).encode())
+                if not result:   # the newest commit is always named: when it alone exceeds the budget its files are cut
+                    while cost > OUTGOING_BYTES and row['files']:
+                        row['files'] = row['files'][:len(row['files']) // 2]; truncated = True
+                        cost = len(json.dumps(row, ensure_ascii=False).encode())
+                elif size + cost > OUTGOING_BYTES: truncated = True; break
+                size += cost; result.append(row)
+            return result[::-1], truncated
+        except ValueError:
+            return None, False
 
     def verify_tree(self, commit, expected, paths, parent):
         if not HEX.fullmatch(commit): raise ValueError('Invalid Git commit identity.')
@@ -432,12 +653,12 @@ class GitRepository:
         return {key: journal.get(key) for key in ('status', 'commit', 'changed_files', 'message', 'pushed', 'snapshot_path', 'synced_operations')}
 
     def mark_synced(self, journal, remote):
-        synced = []; directory = no_links(self.state / 'journals', False)
-        for path in directory.glob('*.json'):
-            no_links(path)
-            if path.stat().st_size > MAX_JSON: continue
-            other = json.loads(path.read_text(encoding='utf8'))
-            if not other.get('verified') or not other.get('commit') or other.get('binding_revision') not in self.binding.get('_approved_revisions', [self.binding['revision']]): continue
+        # Through journals(): a corrupt or non-object journal is skipped, never a failure after the upload succeeded.
+        synced = []
+        for other in self.journals():
+            if not isinstance(other.get('operation_id'), str) or not ID.fullmatch(other['operation_id']): continue
+            if not isinstance(other.get('commit'), str) or not HEX.fullmatch(other['commit']): continue
+            if not other.get('verified') or other.get('binding_revision') not in self.binding.get('_approved_revisions', [self.binding['revision']]): continue
             code, _ = self.run('merge-base', '--is-ancestor', other['commit'], remote, check=False)
             if not code:
                 other.update(status='synced', pushed=True, message='Saved to Git.'); self.save_journal(other); synced.append(other['operation_id'])
@@ -583,14 +804,18 @@ class GitRepository:
             if not retry_before_write and req.get('expected_head') != head: raise ValueError('The repository changed since it was selected. Refresh status and retry the preserved snapshot.')
             target = req.get('target')
             if target not in ('latest', 'baseline', 'checkpoint'): raise ValueError('Choose latest, baseline or checkpoint.')
-            for key in ('replace_baseline', 'allow_removed', 'push'):
+            for key in ('replace_baseline', 'allow_removed', 'push', 'checkpoint_only'):
                 if key in req and type(req[key]) is not bool: raise ValueError('Invalid save option.')
             # A design export (a plan's generated files, `kind: network-design`) is never a configuration
             # snapshot: it goes to its own checkpoint folder only and never touches `latest` or `baseline`.
             design = manifest.get('kind') == 'network-design'
             if 'kind' in manifest and not design: raise ValueError('Unsupported snapshot kind.')   # a capture manifest carries no kind
             if design and target != 'checkpoint': raise ValueError('A design export goes to its own checkpoint folder.')
-            folders = [] if target == 'baseline' or design else [self.scope('latest')]
+            # H8: an existing (older) save kept as a checkpoint writes only that checkpoint; `latest` keeps the newest
+            # save. Without the option a checkpoint is a fresh capture and also becomes `latest`, as before.
+            only = req.get('checkpoint_only') is True
+            if only and (target != 'checkpoint' or design): raise ValueError('Invalid save option.')
+            folders = [] if target == 'baseline' or design or only else [self.scope('latest')]
             if target == 'baseline':
                 old = self.read_manifest(self.scope('baseline'))
                 if old and (not req.get('replace_baseline') or req.get('expected_baseline') != digest(old)):
@@ -663,28 +888,68 @@ class GitRepository:
 
     def history(self):
         self.validate()
-        raw = self.run('log', '-50', '--format=%H%x00%ct%x00%s', '--', self.scope('latest'), self.scope('baseline'), self.scope('checkpoints'), limit=128 * 1024)
+        # A subject is cut by Git to 500 columns (`trunc` pads, so the padding is dropped) and decoded leniently: one
+        # subject that is not UTF-8 or is very long must not fail the history of every lab of the checkout.
+        code, raw = self.run('log', '-50', '--format=%H%x00%ct%x00%<(500,trunc)%s', '--', self.scope('latest'), self.scope('baseline'),
+                             self.scope('checkpoints'), check=False, limit=256 * 1024)
+        if code: raise ValueError('Git could not complete this operation. Check the repository as its registered owner.')
         commits = []
-        for line in raw.splitlines():
+        for line in raw.decode('utf8', errors='replace').split('\n'):   # not splitlines(): a subject may hold U+2028
             parts = line.split('\0', 2)
-            if len(parts) == 3: commits.append({'commit': parts[0], 'time': int(parts[1]), 'message': parts[2][:500]})
-        head = self.run('rev-parse', 'HEAD'); versions = []
+            if len(parts) == 3 and HEX.fullmatch(parts[0]) and parts[1].isdigit():
+                commits.append({'commit': parts[0], 'time': int(parts[1]), 'message': display_text(parts[2].rstrip(' '), 500)})
+        head = self.run('rev-parse', 'HEAD'); versions = []; blobs = {}; others = 0
         # Every snapshot folder committed anywhere in this checkout (a folder holding manifest.json,
         # whatever its name or depth: Final, Broken/latest, course/lab/reference/solution, the root),
         # each identified by its exact repository path; `connected` marks this lab's own three kinds.
         connected = {self.scope('latest'), self.scope('baseline')}
         checkpoints = self.scope('checkpoints') + '/'
-        for path in self.run('ls-tree', '-r', '--name-only', head, limit=MAX_TOTAL).splitlines():
+        # One listing with sizes (`-l`): the manifests' blob ids and sizes come from it, never one process per folder.
+        for entry in self.run('ls-tree', '-r', '-l', '-z', head, limit=MAX_JSON).split('\0'):
+            meta, tab, path = entry.partition('\t'); fields = meta.split()
+            if not tab or len(fields) != 4 or fields[1] != 'blob': continue
             if path != 'manifest.json' and not path.endswith('/manifest.json'): continue
             folder = path.rsplit('/', 1)[0] if '/' in path else ''
             try: snapshot_folder(folder)
             except ValueError: continue
             here = folder in connected or (folder.startswith(checkpoints) and '/' not in folder[len(checkpoints):])
             # The cap bounds the other folders; this lab's own snapshots are always listed.
-            if not here and sum(1 for v in versions if not v['connected']) >= 500: continue
-            versions.append({'name': folder, 'path': folder, 'commit': head, 'connected': here})
+            if not here and others >= 500: continue
+            others += not here
+            versions.append({'name': folder, 'path': folder, 'commit': head, 'connected': here, 'summary': None})
+            blobs[folder] = (fields[0], fields[2], int(fields[3]) if fields[3].isdigit() else None)
         versions.sort(key=lambda version: (not version['connected'], version['path']))
-        return {'commits': commits, 'versions': versions}
+        truncated = self.summarize(versions, blobs)
+        return {'head': head, 'commits': commits, 'versions': versions, 'summaries_truncated': truncated}
+
+    def summarize(self, versions, blobs):
+        """H3: a bounded summary per listed saved state. The budgets go to the lab's own states first, `latest`, then
+        `baseline`, then its checkpoints, so its latest state never loses its summary to them. A manifest over 256 KiB is never read; the others, up to 4 MiB in all,
+        are read by blob id in one `git show` (a second only when the id list is long) and split by their known
+        sizes. A batch whose output is not exactly those sizes yields no summaries. The summaries themselves stop at
+        about 4 MiB of JSON. True when a budget, not the manifest, left a row without its summary."""
+        own = {self.scope('latest'): 0, self.scope('baseline'): 1}
+        order = sorted(versions, key=lambda v: (not v['connected'], own.get(v['path'], 2) if v['connected'] else 0, v['path']))
+        budget = SUMMARY_TOTAL; wanted = []; truncated = False
+        for version in order:
+            mode, blob, size = blobs[version['path']]
+            if mode not in ('100644', '100755') or not HEX.fullmatch(blob) or size is None or size > SUMMARY_FILE: continue
+            if size > budget: truncated = True; continue
+            budget -= size; wanted.append((version, blob, size))
+        for start in range(0, len(wanted), SHOW_BATCH):
+            batch = wanted[start:start + SHOW_BATCH]; expected = sum(size for _, _, size in batch)
+            try: code, raw = self.run('show', *[blob for _, blob, _ in batch], check=False, limit=expected)
+            except ValueError: continue
+            if code or len(raw) != expected: continue
+            offset = 0
+            for version, _, size in batch:
+                version['summary'] = manifest_summary(raw[offset:offset + size]); offset += size
+        output = 0
+        for version in order:
+            if version['summary'] is None: continue
+            output += len(json.dumps(version['summary'], ensure_ascii=False).encode())
+            if output > SUMMARY_BYTES: version['summary'] = None; truncated = True
+        return truncated
 
     def allowed_repo_version(self, folder):
         """A snapshot folder anywhere in this checkout: any safe repository folder ('' or '/' is the
@@ -730,8 +995,9 @@ class GitRepository:
         journal = self.load_journal(req.get('operation_id'))
         if not journal or not journal.get('commit') or journal.get('binding_revision') != self.binding['revision']:
             raise ValueError('Select saved progress with a recorded commit.')
+        outgoing, truncated = self.outgoing()
         if journal.get('unchanged') or not journal.get('changed_files'):
-            return {'files': []}
+            return {'files': [], 'outgoing': outgoing, 'outgoing_truncated': truncated}
         commit, folder = journal['commit'], journal['snapshot_path']
         after = self.read_version({'commit': commit, 'path': folder})['snapshot']['files']
         parent = self.run('rev-parse', commit + '^')
@@ -746,7 +1012,7 @@ class GitRepository:
             if size > 8 * 1024 * 1024: raise ValueError('This comparison is too large to view inline. Download its saved versions instead.')
             result.append({'name': name, 'status': 'added' if name not in before else 'removed' if name not in after else 'changed',
                            'before': old.decode('utf8', errors='replace'), 'after': new.decode('utf8', errors='replace')})
-        return {'files': result}
+        return {'files': result, 'outgoing': outgoing, 'outgoing_truncated': truncated}
 
     def update(self, req):
         head = self.validate(); self.clean(entire=True)
@@ -766,6 +1032,7 @@ class GitRepository:
     def prepare_state(self):
         self.control = no_links(self.root / '.git', False)
         if not self.control.is_dir(): raise ValueError('Linked worktrees and bare repositories are not supported.')
+        self.check_owner()   # before anything is created inside the checkout
         self.state = self.control / 'clab-manager'; no_links(self.state, False)
         self.state.mkdir(mode=0o700, exist_ok=True)
         if os.name == 'posix':
@@ -790,7 +1057,16 @@ class GitRepository:
             value = raw.decode('utf8', errors='replace').strip()
             saved[name] = int(value) if not code and value.isdigit() else None
         folders = [{'id': b['id'], 'label': b['label'], 'prefix': b['prefix']} for b in self.binding.get('_siblings', [descriptor(self.binding)])]
-        return {'repository': self.descriptor(), 'head': head, 'files': files, 'truncated': truncated, 'saved': saved, 'folders': folders}
+        # H5: every directory of the committed tree, so a folder stays choosable when the file list stops at 4000.
+        code, raw = self.tool([self.git, '-c', 'color.ui=false', 'ls-tree', '-r', '-d', '--name-only', '-z', head], timeout=60, limit=MAX_JSON)
+        if code: raise ValueError('Git could not list the repository contents. Check the repository as its registered owner.')
+        dirs = []; size = 0; dirs_truncated = False
+        for path in filter(None, raw.decode('utf8', errors='replace').split('\0')):
+            size += len(path.encode()) + 3
+            if len(dirs) >= MAX_DIRS or size > DIRS_BYTES: dirs_truncated = True; break
+            dirs.append(path)
+        return {'repository': self.descriptor(), 'head': head, 'files': files, 'truncated': truncated, 'saved': saved, 'folders': folders,
+                'dirs': dirs, 'dirs_truncated': dirs_truncated}
 
     def ensure_identity(self, url):
         if not any(self.run('var', role, check=False)[0] for role in ('GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT')): return
@@ -823,25 +1099,99 @@ class GitRepository:
         if code or raw.strip() != b'true':
             raise ValueError('The GitHub account signed in on the VM cannot push to ' + slug + '. Check the repository name, or grant that account write access on GitHub.')
 
+    def check_owner(self):
+        if os.name == 'posix' and (self.root.stat().st_uid != os.geteuid() or self.control.stat().st_uid != os.geteuid()):
+            raise ValueError('The checkout and .git must be owned by the registered account.')
+
     def register(self, previous=None):
-        """Validate this checkout exactly as the terminal wizard does before it is registered.
+        """Validate this checkout exactly as the terminal wizard does before it is registered: deploy/setup-git.sh's
+        child calls this method too, with the folder's existing registration as `previous`.
 
         Runs as the owner. Fills branch, push URL, anchor and revision into the binding it returns."""
         binding = self.binding
-        if os.name == 'posix' and (self.root.stat().st_uid != os.geteuid() or self.control.stat().st_uid != os.geteuid()):
-            raise ValueError('The checkout and .git must be owned by the registered account.')
+        self.check_owner()
         binding['branch'] = self.run('symbolic-ref', '--quiet', '--short', 'HEAD')
         self.run('check-ref-format', '--branch', binding['branch'])
         urls = self.run('remote', 'get-url', '--push', '--all', binding['remote']).splitlines()
         if len(urls) != 1: raise ValueError('Configure exactly one HTTPS push URL.')
         binding['push_url'] = checked_url(urls[0], self.allow_local)
         binding['anchor'] = self.validate(); self.clean(); self.commit_identity()
-        if self.remote_head() != binding['anchor']:
-            raise ValueError('Before linking, synchronize the current branch with its existing remote branch using your ordinary Git login.')
+        result = self.registration(previous)
+        remote = self.check_synchronized(binding['anchor'], self.further())
         self.check_push_access()
-        return self.registration(previous)
+        if not previous or result['revision'] == previous['revision']: return result
+        # Re-registering a folder with other settings replaces its revision, which then approves no push: refused while
+        # a save made through the old one waits for upload. The check runs last and the checkout's lock is held until
+        # this returns, so no manager save can commit under the old revision after it; still uncovered is only the
+        # time from here to root's write of git.json (this child's exit and save_registration). A save the NEW remote
+        # branch already holds (`remote`, read above) has been uploaded; only the rest is asked of the old remote.
+        old = type(self)(dict(previous), git=self.git, allow_local=self.allow_local, env=self.env, gh=self.gh)
+        with old.lock(wait=10):
+            old.check_waiting(uploaded=remote)
+            return result
 
-    def connect(self, url):
+    def unborn(self, url, initialize, identity):
+        """A clone whose branch has no commit yet (an empty repository when it was cloned). When the remote now has
+        the branch the clone's HEAD names (`main` when that name is unusable), the clone is finished: that branch is
+        fetched without FETCH_HEAD and the unborn branch fast-forwarded to it; nothing is pushed. When the remote has
+        no ref at all, H4 starts it, only on the request's `initialize: true`. Anything else refuses, the clone as it was."""
+        self.check_rewrites()
+        code, raw = self.run('symbolic-ref', '--quiet', 'HEAD', check=False, limit=4096)
+        named = raw.decode('utf8', errors='replace').strip() if not code else ''
+        branch = named[len('refs/heads/'):] if named.startswith('refs/heads/') else ''
+        if not branch or branch.startswith('-') or self.run('check-ref-format', 'refs/heads/' + branch, check=False)[0]: branch = 'main'
+        target = 'refs/heads/' + branch
+        code, raw = self.run('ls-remote', '--heads', '--tags', url, check=False, limit=64 * 1024, timeout=45)
+        if code: raise ValueError('The remote branch is unavailable. Check connectivity and the owner\'s noninteractive HTTPS Git login.')
+        refs = {name: sha for sha, name in (line.split('\t', 1) for line in raw.decode('utf8', errors='replace').splitlines() if '\t' in line)}
+        if target not in refs and refs: raise ValueError(not_empty(self.root, branch))
+        if not refs and initialize is not True: raise ValueError(EMPTY_REPOSITORY)
+        if any(p.name != '.git' for p in self.root.iterdir()): raise ValueError(folder_not_empty(self.root))
+        if target in refs:
+            commit = refs[target]
+            if not HEX.fullmatch(commit): raise ValueError(finish_failed(self.root))
+            if not self.has_commit(commit):
+                self.run('fetch', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', url, target, check=False, timeout=300)
+            failed = finish_failed(self.root)
+            if not self.has_commit(commit): raise ValueError(failed)
+        else:
+            self.ensure_identity(identity); commit = self.start(url, branch); failed = START_FAILED
+        if named != target: self.run('symbolic-ref', 'HEAD', target)
+        code, _ = self.run('merge', '--ff-only', commit, check=False, timeout=90)
+        if code or self.run('rev-parse', '--verify', 'HEAD') != commit: raise ValueError(failed)
+
+    def start(self, url, branch):
+        """H4: one commit holding the fixed README.md, built without the working tree or the index (the blob and the
+        tree are written with `hash-object -w` from files inside .git/clab-manager; stdin stays closed), pushed to
+        `branch`, and returned only when the remote then holds exactly that one ref. A failure leaves the clone as it
+        was; once the README is on the remote, connecting again finishes the clone (unborn())."""
+        files = []
+        try:
+            def written(kind, content):
+                path = no_links(self.state / ('start-' + uuid.uuid4().hex), False); files.append(path)
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, 'wb') as stream: stream.write(content); stream.flush()
+                value = self.run('hash-object', '-t', kind, '-w', '--no-filters', '--', str(path))
+                if not HEX.fullmatch(value): raise ValueError(START_FAILED)
+                return value
+            blob = written('blob', START_README)
+            tree = written('tree', b'100644 README.md\0' + bytes.fromhex(blob))
+            if self.run('ls-tree', '-z', tree) != '100644 blob ' + blob + '\tREADME.md\0': raise ValueError(START_FAILED)
+        finally:
+            for path in files: path.unlink(missing_ok=True)
+        commit = self.run('commit-tree', tree, '-m', START_MESSAGE)
+        header = self.run('cat-file', 'commit', commit).split('\n\n', 1)[0].splitlines() if HEX.fullmatch(commit) else []
+        if [line for line in header if line.startswith('tree ')] != ['tree ' + tree] or any(line.startswith('parent ') for line in header):
+            raise ValueError(START_FAILED)
+        code, _ = self.run('push', '--porcelain', '--no-follow-tags', url, commit + ':refs/heads/' + branch, check=False, timeout=90)
+        if code: raise ValueError(START_FAILED)
+        code, raw = self.run('ls-remote', '--heads', '--tags', url, check=False, limit=64 * 1024, timeout=45)
+        refs = raw.decode('utf8', errors='replace').splitlines() if not code else []
+        if refs == [commit + '\trefs/heads/' + branch]: return commit
+        if commit + '\trefs/heads/' + branch in refs: raise ValueError(START_PUSHED)
+        raise ValueError(START_FAILED)
+
+    def connect(self, url, initialize=False):
         """Clone (or adopt) the checkout for a pasted URL as the owner, then validate it for registration."""
         path = self.root
         if not (path / '.git').is_dir():
@@ -858,8 +1208,9 @@ class GitRepository:
         actual = checked_url(self.run('remote', 'get-url', '--push', self.binding['remote']), self.allow_local)
         if not same_repository(actual, url):
             raise ValueError('The VM folder ' + str(path) + ' already holds a different repository (' + actual + '). Choose another repository name.')
+        self.check_owner()
         code, _ = self.run('rev-parse', '--verify', 'HEAD', check=False)
-        if code: raise ValueError('This repository has no commits yet. Add a README on GitHub first, then connect it.')
+        if code: self.unborn(actual, initialize, url)
         self.ensure_identity(url)
         return self.register(None)
 
@@ -974,27 +1325,43 @@ def account_lookup(owner):
     return pwd.getpwnam(owner)
 
 
+MAX_LABEL = 100
+
+
+def folder_label(name, prefix):
+    """The label the helper GENERATES for a lab folder: `<checkout> / <folder>`, cut to the label limit instead of
+    refused. It keeps the end of the folder, which tells folders apart, behind `…`; the same input gives the same
+    label. A label is display text only: registrations are told apart by id, path and prefix, never by label (two
+    deep folders that differ only near their start may get the same label and still are two registrations)."""
+    name = ''.join(c for c in name if ord(c) >= 32 and ord(c) != 127)
+    label = name + (' / ' + prefix if prefix else '')
+    if len(label) <= MAX_LABEL: return label
+    if not prefix: return name[:MAX_LABEL - 1] + '…'
+    head = name[:40] + ' / …'
+    return head + prefix[-(MAX_LABEL - len(head)):]
+
+
 def account_binding(owner, path, remote, prefix, label, lookup=None):
     account = (lookup or account_lookup)(owner)
     if account.pw_uid == 0 or owner == 'clab-discovery': raise ValueError('Choose the ordinary VM account that owns and authenticates this Git checkout.')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}', remote): raise ValueError('Use a literal remote name.')
-    if not isinstance(label, str) or not label or len(label) > 100 or any(ord(c) < 32 for c in label): raise ValueError('Use a short repository label.')
+    if not isinstance(label, str) or not label or len(label) > MAX_LABEL or any(ord(c) < 32 for c in label): raise ValueError('Use a short repository label.')
     return {'id': uuid.uuid4().hex, 'label': label, 'owner': owner, 'uid': account.pw_uid, 'gid': account.pw_gid, 'home': account.pw_dir,
             'path': str(path), 'remote': remote, 'prefix': prefix, 'branch': '', 'push_url': '', 'revision': ''}
 
 
-def check_overlap(config, path, prefix, ignore=None):
+def check_collision(config, path, prefix, ignore=None):
     for b in config['repositories']:
         if b is ignore or b['path'] != str(path): continue
-        if overlapping(prefix, b['prefix']):
-            raise ValueError('Lab folders in one repository cannot overlap: ' + (b['prefix'] or 'the repository root') + ' is already a lab folder. Choose a folder beside it.')
+        if colliding(prefix, b['prefix']): raise ValueError(collision_message(prefix, b['prefix']))
 
 
 def plan_prefix(config, req, lookup=None):
     """Root: describe a sibling registration of an existing checkout; nothing has run as the owner yet.
 
-    With retire, the source registration is about to be replaced by the new folder, so it does not
-    count as an overlap: a lab registered at the repository root can move into a subfolder."""
+    Lab folders may sit inside, above or beside each other; only a folder inside another's saved state
+    (or one whose saved state would hold another) collides. With retire, the source registration is about
+    to be replaced by the new folder, so it is not compared."""
     source = next((b for b in config['repositories'] if b['id'] == req.get('binding_id')), None)
     if not source or source['revision'] != req.get('revision'): raise ValueError('The repository binding changed. Select it again.')
     prefix = relpath(req.get('prefix'), empty=True)
@@ -1004,8 +1371,8 @@ def plan_prefix(config, req, lookup=None):
     # A registration that already exists (a legacy `x/latest` one included) stays selectable and
     # repairable; only a new lab folder must not be a snapshot folder name.
     base_prefix(prefix)
-    check_overlap(config, source['path'], prefix, ignore=source if req.get('retire') is True else None)
-    label = req.get('label') or (Path(source['path']).name + (' / ' + prefix if prefix else ''))
+    check_collision(config, source['path'], prefix, ignore=source if req.get('retire') is True else None)
+    label = req.get('label') or folder_label(Path(source['path']).name, prefix)   # a given label keeps its check
     binding = account_binding(source['owner'], source['path'], source['remote'], prefix, label, lookup)
     return None, binding
 
@@ -1025,8 +1392,8 @@ def plan_connect(config, req, lookup=None):
         path = str(Path((lookup or account_lookup)(owner).pw_dir) / 'labs' / repository_name(url)); remote = 'origin'
         if any(b['path'] == path for b in config['repositories']):
             raise ValueError('The VM folder for this repository name already holds another registered repository. Choose a repository with a different name.')
-    check_overlap(config, path, prefix)
-    label = repository_name(url) + (' / ' + prefix if prefix else '')
+    check_collision(config, path, prefix)
+    label = folder_label(repository_name(url), prefix)
     binding = account_binding(owner, path, remote, prefix, label, lookup)
     binding['_pending'] = True
     return None, binding, url
@@ -1078,7 +1445,7 @@ def save_registration(binding, retire=None, add=True):
             # The lab moved away: its previous folder registration is retired so it cannot block or confuse later choices.
             repositories = [b for b in repositories if b['id'] != retire[0]]
         if add:
-            if any(b['id'] != binding['id'] and b['path'] == binding['path'] and (b['prefix'] == binding['prefix'] or overlapping(binding['prefix'], b['prefix']))
+            if any(b['id'] != binding['id'] and b['path'] == binding['path'] and (b['prefix'] == binding['prefix'] or colliding(binding['prefix'], b['prefix']))
                    for b in repositories):
                 raise ValueError('Another Git registration for this checkout folder was saved meanwhile. Nothing was registered; choose the folder again.')
             repositories = [b for b in repositories if b['id'] != binding['id']] + [binding]
@@ -1093,18 +1460,34 @@ def save_registration(binding, retire=None, add=True):
     return descriptor(binding)
 
 
+def registered_revisions(config, binding, retiring=None):
+    """Root (H2): the registrations git.json holds for this checkout and owner, the planned one's own entry included
+    when it exists. The owner's child keeps those whose branch and push URL equal what it read (GitRepository.further);
+    nothing of the request enters this list. A registration about to be retired approves nothing."""
+    return [{'revision': b['revision'], 'branch': b['branch'], 'push_url': b['push_url']} for b in config['repositories']
+            if b['path'] == binding['path'] and b['uid'] == binding['uid'] and b['id'] != retiring]
+
+
 def register_prefix(config, req, run=run_as_owner, lookup=None):
     existing, binding = plan_prefix(config, req, lookup)
     retire = (req.get('binding_id'), req.get('revision')) if req.get('retire') is True else None
     if existing and not retire: return descriptor(existing)
-    if not existing: binding = run(binding, lambda: GitRepository(binding).register(None))
+    if retire and retire[0] != (existing or binding)['id']:
+        # H7: a registration whose saves still wait for upload is never retired (both shapes: a new folder or add=False).
+        source = next(b for b in config['repositories'] if b['id'] == retire[0])
+        run(source, lambda: GitRepository(source).check_retire())
+    if not existing:
+        binding['_registered'] = registered_revisions(config, binding, retire[0] if retire else None)
+        binding = run(binding, lambda: GitRepository(binding).register(None))
     return save_registration(existing or binding, retire, add=not existing)
 
 
 def connect(config, req, run=run_as_owner, lookup=None):
+    if 'initialize' in req and type(req['initialize']) is not bool: raise ValueError('Invalid connect option.')
     existing, binding, url = plan_connect(config, req, lookup)
     if existing: return descriptor(existing)
-    return save_registration(run(binding, lambda: GitRepository(binding).connect(url)))
+    binding['_registered'] = registered_revisions(config, binding)
+    return save_registration(run(binding, lambda: GitRepository(binding).connect(url, req.get('initialize') is True)))
 
 
 def root_file(path):

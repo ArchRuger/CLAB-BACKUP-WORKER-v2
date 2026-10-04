@@ -72,7 +72,7 @@ date -u
 | `Next step` | `1` if your GitHub repository already exists, otherwise `2` and skip step 5 |
 
 The browser Wireshark phase runs without questions. Wait for
-`Manager 1.30.60: running; HTTP and version checks passed.` The image build and the
+`Manager 1.31.0: running; HTTP and version checks passed.` The image build and the
 capture stack take several minutes. If a step fails, read the error, fix it in a second
 terminal, then type `1` to retry. A `not valid yet` APT error is the clock:
 redo step 2 in the second terminal, then retry.
@@ -86,12 +86,14 @@ Create the GitHub repository first, with **Add a README** selected. Then:
 | `Where are your lab configurations going?` | `1` |
 | `HTTPS clone URL (Code > HTTPS on GitHub)` | `GITHUB_URL` |
 | `Checkout directory [/home/archtop/labs/...]` | Enter |
-| `Repository subfolder for this lab` | Enter for a one-lab repository, or a folder name such as `bgp` |
-| `Install GitHub CLI with sudo apt-get? (y/N)` | `y` |
 | One-time code, then `Press Enter to open ...` | Copy the code, press Enter. On **Windows** open https://github.com/login/device, paste the code, authorize |
 | `Commit author name` | Your name |
 | `Commit author email (GitHub noreply email is also valid)` | Your email |
-| `Register this checkout with the manager? (y/N)` | `y` |
+
+The wizard installs GitHub CLI by itself when it is missing (it says so) and registers the checkout by itself once every
+check has passed; neither is a question. It does not ask for a folder on a fresh install: the repository is registered at its top level and the
+first **Save** in the lab header offers the folder (a folder named after the lab). Only when you add another lab
+to a repository that is already registered does it ask `Repository subfolder for this lab`.
 
 Wait for `Registered ...` and `Ready.` To reopen the wizard later:
 
@@ -201,9 +203,9 @@ Deployed from the VM terminal instead (`sudo containerlab deploy -t
 
 ## 12. Save to Git
 
-1. **Save progress** in the lab header → choose the registered checkout, a folder and
-   the devices → **Save progress**.
-2. In **Review before uploading** click **Upload these changes** → wait for **Saved to Git** → check the files on GitHub.
+1. **Save** in the lab header. The first time, the panel names the repository and the folder
+   the lab saves into (a folder named after the lab) → **Save**.
+2. When the panel says what changed, click **Upload** → wait for the chip to read `Saved just now` → check the files on GitHub.
 
 ## 13. Check everything
 

@@ -97,28 +97,42 @@ Characters Windows cannot store are replaced, and two names that differ only by
 case get a number. The files kept on the VM use different, stable internal names. The manager
 keeps only the newest 300 backup and login-test job records per lab (a busy one, or one a
 pending Git save or restore still needs, survives longer); once a record is dropped it can no
-longer be downloaded, chosen as a Git save's capture or a restore source, used as a Save-progress
-baseline, or shown as a node's last backup. Its configuration files are not deleted: they stay
+longer be downloaded, chosen as a Git save's capture or a restore source, used as a lab's
+starting point, or shown as a node's last backup. Its configuration files are not deleted: they stay
 under the manager's own data directory (`backups/<lab>/latest` and `backups/<lab>/history/<job>`).
 
 ## The topology travels with every backup
 
 Every backup that saved at least one configuration (on demand, scheduled, or the capture behind a
-Save progress) also stores the lab's topology and map beside the configurations, so a configuration
+**Save**) also stores the lab's topology and map beside the configurations, so a configuration
 is never divorced from the topology it was taken under: the containerlab file and its
 `.annotations.json` as they were on the VM beside the deployed topology at the last discovery pass
 (within the thirty-second discovery interval), or, when the VM's copy is not known, the manager's own
-copy from the last sync; when the VM has no map file, the manager's own map (the one the Topology tab
-shows) travels instead, and the record says so. The backup record says which (*the files beside the
+copy from the last sync. The map follows its own rule (`topology_capture` and `map_changed_in_manager`
+in `app/runner.py`): a map that a person changed in the manager since the VM's map file was last synced
+into it (moving a device on the Topology tab, *Edit map*, an uploaded map) is the map that travels,
+because it is the map the person sees; otherwise the VM's map file travels, also when that file has
+changed on the VM since the last sync; and when the VM has no map file, the manager's own map travels,
+and the record says so. When both the person and the VM changed the map, the person's map wins; the
+VM's newer file stays on the VM and *Sync topology from VM* still offers it. The backup record says which (*the files beside the
 deployed topology on the VM* or *the manager's copy*), the file's path and when it was read, with the
 digests of both files. A backup after which the manager holds no topology text clears the two files
 from the lab's `latest/` folder, so its local Git history never pairs new configurations with an old
 topology; every earlier backup keeps its own copy.
+A backup whose topology or map could not be stored with it carries a `topology_missing` mark, a
+controlled value and never an error text, and the backup itself is not failed by it: `no-text` means
+the manager holds no topology text for the lab (for example a lab imported from an inventory), so its saves hold
+device configurations only; `error` means the topology file could not be written and `map-error`
+that the topology was written but the map the lab has was not. A **Save** whose capture carries
+`error` or `map-error` stops and commits nothing (*The topology could not be saved with this
+capture. Try again.*), so a save never reaches the repository without a file the lab has and never
+deletes one from `latest`. Such a capture is not offered for **Keep as a checkpoint** or **Use as
+starting point…** either (*This capture does not include the topology. Save again first.*).
 They are kept under stable internal names in the backup folder and in its local Git history, download
-in the ZIP under the lab's own names, and travel into every Git save (latest, checkpoint, baseline) as
+in the ZIP under the lab's own names, and travel into every Git save (your latest save, a checkpoint, the starting point, a lab state) as
 `<lab>.clab.yml` and `<lab>.clab.yml.annotations.json` next to the device files, listed in the save's
-manifest as files of their kind rather than as devices: *Apply to running lab…* ignores them, *Compare
-with my latest save* shows their changes, and a save without them never counts as a removed device.
+manifest as files of their kind rather than as devices: **Load** ignores them (loading never changes the topology), **See changes** and **See what’s different**
+show their changes, and a save without them never counts as a removed device.
 Backups and saves made before this feature carry none and keep working as before. The manager cannot
 see a topology file edited on the VM after the lab was deployed without a redeploy; what travels is
 the file as it was at capture time.

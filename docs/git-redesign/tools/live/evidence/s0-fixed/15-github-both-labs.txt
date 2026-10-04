@@ -1,0 +1,20 @@
+$ tree of main (paths)
+README.md  abe02633
+git-redesign/b/latest/ceos1.cfg  0d361336
+git-redesign/b/latest/ceos1.eoscfg  0d361336
+git-redesign/b/latest/ceos2.cfg  870c6902
+git-redesign/b/latest/ceos2.eoscfg  870c6902
+git-redesign/b/latest/git-redesign-b.clab.yml  65658f3a
+git-redesign/b/latest/git-redesign-b.clab.yml.annotations.json  4ff84ab9
+git-redesign/b/latest/manifest.json  bd5ef8e4
+git-redesign/latest/ceos1.cfg  15d730e4
+git-redesign/latest/ceos1.eoscfg  15d730e4
+git-redesign/latest/ceos2.cfg  d36f5ed9
+git-redesign/latest/ceos2.eoscfg  d36f5ed9
+git-redesign/latest/cjunos.cfg  c20df78e
+git-redesign/latest/cjunos.jcfg  ae0711ab
+git-redesign/latest/git-redesign.clab.yml  3d22b059
+git-redesign/latest/git-redesign.clab.yml.annotations.json  0641581e
+git-redesign/latest/manifest.json  f707707a
+git-redesign/latest/xrv9k.cfg  3895a8e9
+git-redesign/latest/xrv9k.xrcfg  3895a8e9

@@ -22,7 +22,8 @@ You can also select **5. Check running installation** in the installer menu.
 
 Before this final check, complete **Manager ▾ › VM connection… → Save and test
 connection**, verify its saved host fingerprint, and connect the intended registered
-checkout under the lab's **Progress › Save location**. You can run the report earlier for diagnostics;
+checkout by pressing **Save** in the lab header (the first save offers a place to save; **Save settings** in
+the chip panel changes it later). You can run the report earlier for diagnostics;
 missing setup will be reported instead of assumed successful. The full install
 still performs its shorter container/version/HTTP check before browser setup.
 
@@ -240,8 +241,8 @@ Even when automated checks pass, verify these actions yourself:
    running Docker container or `/dev/kvm` device does not prove NOS readiness.
 4. Start a capture (**Capture traffic…**) on a deployed lab and confirm packets
    arrive in Wireshark.
-5. Use **Save progress** deliberately, confirm the review (**Upload these changes**), wait for **Saved to Git**, and inspect the
-   expected remote files. A public remote can be readable anonymously;
+5. Press **Save** in the lab header deliberately, press **Upload** when it offers it, wait for the chip to
+   report the save as uploaded, and inspect the expected remote files. A public remote can be readable anonymously;
    `ls-remote` does not prove GitHub write permission or branch-rule acceptance.
 
 Continue with [the fresh-VM walkthrough](FRESH-VM-GUIDE-V2.md),

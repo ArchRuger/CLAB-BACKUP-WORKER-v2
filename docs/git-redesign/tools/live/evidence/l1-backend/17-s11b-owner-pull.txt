@@ -1,0 +1,20 @@
+SCENARIO 11b recovery: the repository owner works on the VM with plain Git (account archtop, the checkout's own login)
+$ git -C <checkout> pull --no-rebase --no-edit
+From https://github.com/ArchRuger/clab-scratch-git-redesign
+   b7cac63..be4bbbe  main       -> origin/main
+Merge made by the 'ort' strategy.
+ l1-online/online-1.txt | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 l1-online/online-1.txt
+exit 0
+$ git -C <checkout> log --oneline --graph -6
+*   6342a98 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+|\
+| * be4bbbe L1 online change 1 (outside the lab folders)
+* | 923ee6e l1 s11b saved while diverged
+* | 476b9d4 ceos1 changed
+|/
+* 5263c18 l1 s10 second while blocked
+* 1b991a4 l1 s10 upload failure
+$ git -C <checkout> status -sb
+## main...origin/main [ahead 3]

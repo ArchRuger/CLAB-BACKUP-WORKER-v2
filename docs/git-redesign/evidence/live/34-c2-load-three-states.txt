@@ -1,0 +1,63 @@
+[19:35:48] Load panel: groups ['YOUR SAVES', 'LAB STATES'] ; foot ['All versions', 'Browse the repository…']
+[19:35:52] [Start] confirmation: 'Load Start?'
+[19:35:52] [Start] rows: {'ceos1': '2 lines differ', 'ceos2': '2 lines differ', 'cjunos': '2 lines differ', 'xrv9k': '2 lines differ'}
+[19:35:52] [Start] text: 'Load Start? |  | The running configuration of the ticked devices is replaced. The current one is backed up first; nothing reboots. |  | Saved 4 minutes ago. |  | ceos1 EOS | 2 lines differ | ceos2 EOS | 2 lines differ | cjunos Junos Evolved | 2 lines differ | xrv9k IOS XR | 2 lines differ |  | Each device checks the new configuration itself and undoes it if it loses contact. |  | Options | Load | Cancel | See what’s different'
+[19:35:54] [Start] chip while loading: 'Loading… 0 of 4' ; panel title 'Loading Start…' ; devices {'ceos1': 'Waiting', 'ceos2': 'Waiting', 'cjunos': 'Waiting', 'xrv9k': 'Waiting'}
+[19:36:08] [Start] CLICKS to load: 3 (Load, state, red Load), typed 0; chip 'Running Start' after 16 s
+[19:36:11] [Start] panel: title 'Running Start' ; 'Loaded just now on all 4 devices. |  | Your latest save: l1 s11b2 save after the merge, 3 hours ago |  | Before loading: backed up automatically |  | Undo this load | What changed |  | Saves to: clab-scratch-git-redesign › git-redesign Change… |  | All versions | Save as a lab state… | Save settings' ; devices {}
+PASS C2 Start: chip reads Running Start
+[19:36:11] [Start] restore job 66e1379e: succeeded 'All 4 node(s) restored and verified against the saved state.'
+[19:36:11]    target {"node": "ceos1", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.8, "armed": 3.9, "verifying": 3.9, "confirming": 4.3, "replaced": 4.8, "settled": 4.8, "checked": 13.2}}
+[19:36:11]    target {"node": "ceos2", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.8, "armed": 3.9, "verifying": 3.9, "confirming": 4.3, "replaced": 4.8, "settled": 4.8, "checked": 13.2}}
+[19:36:11]    target {"node": "cjunos", "platform": "juniper_cjunosevolved", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.8, "armed": 6.6, "verifying": 6.6, "confirming": 7.2, "replaced": 7.8, "settled": 7.8, "checked": 13.2}}
+[19:36:11]    target {"node": "xrv9k", "platform": "cisco_xrv9k", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 3.2, "armed": 8.2, "verifying": 8.2, "confirming": 9.1, "replaced": 10.6, "settled": 10.6, "checked": 13.2}}
+PASS C2 Start: timed recovery armed before the confirmation on every platform
+[19:36:12] [Start] CLI read-back: {'a-ceos1': 'description l2-c1-start', 'a-ceos2': 'description l2-c1-start', 'a-cjunos': 'description l2-c1-start;', 'a-xrv9k': 'description l2-c1-start'}
+PASS C2 Start: every device runs that state
+[19:36:18] [Broken] confirmation: 'Load Broken?'
+[19:36:18] [Broken] rows: {'ceos1': '2 lines differ', 'ceos2': '2 lines differ', 'cjunos': '2 lines differ', 'xrv9k': '2 lines differ'}
+[19:36:18] [Broken] text: 'Load Broken? |  | The running configuration of the ticked devices is replaced. The current one is backed up first; nothing reboots. |  | Saved 2 minutes ago. |  | ceos1 EOS | 2 lines differ | ceos2 EOS | 2 lines differ | cjunos Junos Evolved | 2 lines differ | xrv9k IOS XR | 2 lines differ |  | Each device checks the new configuration itself and undoes it if it loses contact. |  | Options | Load | Cancel | See what’s different'
+[19:36:21] [Broken] chip while loading: 'Loading… 0 of 4' ; panel title 'Loading Broken…' ; devices {'ceos1': 'Waiting', 'ceos2': 'Waiting', 'cjunos': 'Waiting', 'xrv9k': 'Waiting'}
+[19:36:36] [Broken] CLICKS to load: 3 (Load, state, red Load), typed 0; chip 'Running Broken' after 18 s
+[19:36:38] [Broken] panel: title 'Running Broken' ; 'Loaded just now on all 4 devices. |  | Your latest save: l1 s11b2 save after the merge, 3 hours ago |  | Before loading: backed up automatically |  | Undo this load | What changed |  | Saves to: clab-scratch-git-redesign › git-redesign Change… |  | All versions | Save as a lab state… | Save settings' ; devices {}
+PASS C2 Broken: chip reads Running Broken
+[19:36:38] [Broken] restore job 2238ed0d: succeeded 'All 4 node(s) restored and verified against the saved state.'
+[19:36:38]    target {"node": "ceos1", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 3.4, "armed": 4.6, "verifying": 4.6, "confirming": 5.0, "replaced": 5.5, "settled": 5.5, "checked": 14.6}}
+[19:36:38]    target {"node": "ceos2", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 3.4, "armed": 4.6, "verifying": 4.6, "confirming": 5.0, "replaced": 5.5, "settled": 5.5, "checked": 14.6}}
+[19:36:38]    target {"node": "cjunos", "platform": "juniper_cjunosevolved", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 3.4, "armed": 7.3, "verifying": 7.3, "confirming": 8.5, "replaced": 9.2, "settled": 9.2, "checked": 14.6}}
+[19:36:38]    target {"node": "xrv9k", "platform": "cisco_xrv9k", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 3.4, "armed": 8.6, "verifying": 8.6, "confirming": 9.6, "replaced": 11.4, "settled": 11.4, "checked": 14.6}}
+PASS C2 Broken: timed recovery armed before the confirmation on every platform
+[19:36:40] [Broken] CLI read-back: {'a-ceos1': 'description l2-c1-broken', 'a-ceos2': 'description l2-c1-broken', 'a-cjunos': 'description l2-c1-broken;', 'a-xrv9k': 'description l2-c1-broken'}
+PASS C2 Broken: every device runs that state
+[19:36:45] [Final] confirmation: 'Load Final?'
+[19:36:45] [Final] rows: {'ceos1': '2 lines differ', 'ceos2': '2 lines differ', 'cjunos': '2 lines differ', 'xrv9k': '2 lines differ'}
+[19:36:45] [Final] text: 'Load Final? |  | The running configuration of the ticked devices is replaced. The current one is backed up first; nothing reboots. |  | Saved 2 minutes ago. |  | ceos1 EOS | 2 lines differ | ceos2 EOS | 2 lines differ | cjunos Junos Evolved | 2 lines differ | xrv9k IOS XR | 2 lines differ |  | Each device checks the new configuration itself and undoes it if it loses contact. |  | Options | Load | Cancel | See what’s different'
+[19:36:48] [Final] chip while loading: 'Loading… 0 of 4' ; panel title 'Loading Final…' ; devices {'ceos1': 'Waiting', 'ceos2': 'Waiting', 'cjunos': 'Waiting', 'xrv9k': 'Waiting'}
+[19:37:01] [Final] CLICKS to load: 3 (Load, state, red Load), typed 0; chip 'Running Final' after 16 s
+[19:37:04] [Final] panel: title 'Running Final' ; 'Loaded just now on all 4 devices. |  | Your latest save: l1 s11b2 save after the merge, 3 hours ago |  | Before loading: backed up automatically |  | Undo this load | What changed |  | Saves to: clab-scratch-git-redesign › git-redesign Change… |  | All versions | Save as a lab state… | Save settings' ; devices {}
+PASS C2 Final: chip reads Running Final
+[19:37:04] [Final] restore job 96db637d: succeeded 'All 4 node(s) restored and verified against the saved state.'
+[19:37:04]    target {"node": "ceos1", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.7, "armed": 4.0, "verifying": 4.0, "confirming": 4.3, "replaced": 5.0, "settled": 5.0, "checked": 13.7}}
+[19:37:04]    target {"node": "ceos2", "platform": "arista_ceos", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.8, "armed": 3.9, "verifying": 4.0, "confirming": 4.3, "replaced": 5.0, "settled": 5.0, "checked": 13.7}}
+[19:37:04]    target {"node": "cjunos", "platform": "juniper_cjunosevolved", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.8, "armed": 6.7, "verifying": 6.7, "confirming": 8.1, "replaced": 8.7, "settled": 8.7, "checked": 13.7}}
+[19:37:04]    target {"node": "xrv9k", "platform": "cisco_xrv9k", "status": "verified", "stage": "replaced", "persistence": "saved", "attempts": 1, "order_ok": true, "t": {"queued": 0.0, "backing_up": 0.0, "applying": 2.8, "armed": 8.2, "verifying": 8.2, "confirming": 9.1, "replaced": 10.5, "settled": 10.5, "checked": 13.7}}
+PASS C2 Final: timed recovery armed before the confirmation on every platform
+[19:37:06] [Final] CLI read-back: {'a-ceos1': 'description l2-c1-final', 'a-ceos2': 'description l2-c1-final', 'a-cjunos': 'description l2-c1-final;', 'a-xrv9k': 'description l2-c1-final'}
+PASS C2 Final: every device runs that state
+[19:37:06] browser errors/failed requests: [] ; []
+PASS C2: no console, page or request errors
+
+=== C2: 10 checks, 0 failed
+PASS C2 Start: chip reads Running Start
+PASS C2 Start: timed recovery armed before the confirmation on every platform
+PASS C2 Start: every device runs that state
+PASS C2 Broken: chip reads Running Broken
+PASS C2 Broken: timed recovery armed before the confirmation on every platform
+PASS C2 Broken: every device runs that state
+PASS C2 Final: chip reads Running Final
+PASS C2 Final: timed recovery armed before the confirmation on every platform
+PASS C2 Final: every device runs that state
+PASS C2: no console, page or request errors
+None
+
+10 checks, 0 failed

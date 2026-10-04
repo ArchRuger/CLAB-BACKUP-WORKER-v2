@@ -1,0 +1,19 @@
+[19:24:15] D header at 390: {'chip': (16, 134, 188), 'Save': (212, 134, 68), 'Load': (288, 134, 68), 'Lab actions': (16, 178, 144)}; horizontal page scroll: True
+PASS D header: the four controls are inside the screen
+[19:24:15] D1 map move by the page at 390 ...
+[19:24:32] map editor at 390 FAILED: Page.wait_for_function: Timeout 10000ms exceeded.
+[19:24:39] waiting panel box {'x': 16, 'y': 176, 'width': 358, 'height': 386}; page scroll x True; sentence '1 device changed since your last save: ceos1. 1 line added, 1 removed.'
+[19:24:39] Upload button box {'x': 35, 'y': 300, 'width': 101, 'height': 40} (min target 44px high: False)
+[19:24:43] D1: Save -> Upload = 2 clicks, typed 0; chip 'Saved just now'
+[19:24:45] chooser box {'x': 0, 'y': 0, 'width': 390, 'height': 844}; page scroll x True
+[19:24:45] D2 New folder… at the top level: enabled True, created 'l2-d2-top', 'l2-d2-top is new. It appears in the repository with the first save.'
+[19:24:45] New folder… button box {'x': 16, 'y': 814, 'width': 115, 'height': 30}
+[19:24:45] foot buttons (text,w,h): [['Cancel', 71, 30], ['Save here', 109, 36]]
+PASS D1 D2 at 390: no console, page or request errors
+
+=== D1 D2: 2 checks, 0 failed
+PASS D header: the four controls are inside the screen
+PASS D1 D2 at 390: no console, page or request errors
+None
+
+2 checks, 0 failed

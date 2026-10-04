@@ -31,13 +31,14 @@ from concurrent.futures import FIRST_COMPLETED, CancelledError, ThreadPoolExecut
 from functools import partial
 
 import paramiko
-from fastapi import HTTPException
+import yaml
+from fastapi import HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import restore_drivers as drivers
 from . import restore_junos as junos  # noqa: F401  (tests and older callers patch the Junos driver through this name)
 from .discovery import discovery_fresh, node_available
-from .git_progress import captured_snapshot, decoded_snapshot, host_identity, resolve_version_path
+from .git_progress import MAX_FILE, captured_snapshot, decoded_snapshot, host_identity, resolve_version_path
 from .lab_operations import RESTORE_BUSY, operation_busy, restore_awaits_recheck, restore_holds_lab, scrub
 from .node_services import connect
 from .restore_compare import compare_junos, set_lines  # noqa: F401  (set_lines is part of this module's API)
@@ -48,6 +49,9 @@ PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'created', 'finished', 'status', 'mess
               'confirm_minutes', 'pre_backup_job_id', 'post_backup_job_id', 'targets', 'progress')
 
 NO_ARTIFACT = 'This saved configuration has no restore data for this node.'
+NO_NODE = 'No running node in this lab matches this saved node.'
+NO_DRIVER = 'Live restore is not supported for this platform yet.'
+OTHER_PLATFORM = 'The saved platform does not match the running node.'
 UNUSABLE = 'The saved restore data for this node is not usable: '
 FOREIGN_PENDING = 'Another change is waiting for confirmation on this node.'
 BAD_LOGIN = 'The node rejected the login credentials.'
@@ -242,6 +246,144 @@ def _enter_stage(job, target, stage, stamp):
         timeline['settled'] = stamp
         progress = job.setdefault('progress', {'settled': 0, 'total': len(job.get('targets', []))})
         progress['settled'] = progress.get('settled', 0) + 1
+
+
+def saved_device_reason(lab, name, platform, unusable=''):
+    """Why a saved device cannot be loaded onto `lab`, decided without contacting any device: '' when a lab node of the
+    same full name and platform has a restore driver and the saved device carries restore data (`unusable` is the
+    resolver's reason when it does not). The preflight (`map_targets`) and the saved-states list both decide with this
+    function, in this order, so the list's count and the confirmation's rows cannot disagree."""
+    node = next((n for n in lab.get('nodes', []) if n.get('name') == name), None)
+    if node is None:
+        return NO_NODE
+    if drivers.for_platform(node.get('platform')) is None:
+        return NO_DRIVER
+    if node.get('platform') != platform:
+        return OTHER_PLATFORM
+    return unusable or ''
+
+
+# Bounds of the topology comparison, beyond the per-file limit of the text itself (MAX_FILE): what is above them is
+# taken as unreadable, and no line is shown.
+TOPOLOGY_MAX_NODES = 2000
+TOPOLOGY_MAX_LINKS = 10000
+
+
+def _endpoint(end):
+    if isinstance(end, str):
+        return end.strip()
+    if isinstance(end, dict):
+        node = end.get('node', end.get('node-short-name', ''))
+        interface = end.get('interface', end.get('interface-name', ''))
+        if isinstance(node, str) and isinstance(interface, str) and node:
+            return node + ':' + interface
+    raise ValueError('unreadable endpoint')
+
+
+def topology_shape(text):
+    """(nodes, links) of a containerlab topology text: the set of (node name, kind) and the set of links, each an
+    unordered pair of endpoint strings. None when the text is missing, empty, over the per-file limit or unreadable.
+    Never raises: a YAML error, a recursion bomb or an unexpected shape all end as None."""
+    if not isinstance(text, str) or not text.strip() or len(text.encode('utf-8', 'replace')) > MAX_FILE:
+        return None
+    try:
+        data = yaml.safe_load(text)
+        body = data.get('topology') if isinstance(data, dict) else None
+        nodes = body.get('nodes') if isinstance(body, dict) else None
+        if not isinstance(nodes, dict) or not nodes or len(nodes) > TOPOLOGY_MAX_NODES:
+            return None
+        defaults = body.get('defaults') if isinstance(body.get('defaults'), dict) else {}
+        groups = body.get('groups') if isinstance(body.get('groups'), dict) else {}
+        kinds = set()
+        for name, node in nodes.items():
+            node = node if isinstance(node, dict) else {}
+            group = groups.get(node['group']) if isinstance(node.get('group'), str) else None
+            kind = node.get('kind') or (group.get('kind') if isinstance(group, dict) else None) or defaults.get('kind') or ''
+            kinds.add((str(name), str(kind)))
+        links = body.get('links') or []
+        if not isinstance(links, list) or len(links) > TOPOLOGY_MAX_LINKS:
+            return None
+        pairs = set()
+        for link in links:
+            if not isinstance(link, dict):
+                return None
+            ends = link.get('endpoints')
+            if isinstance(ends, dict):
+                ends = [ends[k] for k in ('a', 'z') if k in ends]
+            if ends is None and 'endpoint' in link:
+                ends = [link['endpoint']]   # a host, mgmt-net or macvlan link: one device endpoint
+                if isinstance(link.get('host-interface'), str):
+                    ends.append(str(link.get('type') or 'host') + ':' + link['host-interface'])
+            if not isinstance(ends, list) or not 1 <= len(ends) <= 2:
+                return None
+            pairs.add(tuple(sorted(_endpoint(end) for end in ends)))
+        return frozenset(kinds), frozenset(pairs)
+    except Exception:
+        return None
+
+
+def topology_summary(lab, manifest, text, candidates):
+    """`source.topology`: counts and a boolean only, never topology text or a node list.
+
+    `differs` compares the state's embedded topology file (its manifest entry of kind `topology`) with the lab's
+    topology by structure: node names with their kinds, and the links as unordered endpoint pairs. It is None when
+    either side is missing, empty or unreadable (a backup source, an older state without the file, a lab without
+    topology text, a YAML error). `matching_devices`: saved devices with a lab node of the same full name and
+    platform."""
+    nodes = {n.get('name'): n for n in lab.get('nodes', [])}
+    matching = sum(1 for name, cand in candidates.items()
+                   if name in nodes and nodes[name].get('platform') == cand.get('platform'))
+    differs = None
+    entry = next((e for e in (manifest or {}).get('files', []) if isinstance(e, dict) and e.get('kind') == 'topology'), None)
+    if entry is not None:
+        saved = topology_shape(text.get(entry.get('path')))
+        running = topology_shape(lab.get('definition_yaml')) if saved is not None else None
+        if saved is not None and running is not None:
+            differs = saved != running
+    return {'differs': differs, 'saved_devices': len(candidates), 'matching_devices': matching}
+
+
+STATE_GROUPS = ('latest', 'checkpoint', 'baseline', 'state', 'other-lab')
+
+
+def _text(value, limit=200):
+    return value[:limit] if isinstance(value, str) else ''
+
+
+def public_state(row, lab, head=''):
+    """One saved state of the states list, from a row of `GitProgress.states`: only the keys below, with the device
+    coverage worked out against `lab` by `saved_device_reason` (no device is contacted). The summary itself (lab id,
+    topology digest, the device list) never leaves the service.
+
+    `view_only` with `view_only_reason`: `design` for a design export; `no_restore_data` when no saved device carries
+    restore data; `unknown` when the helper sent no summary (an unreadable or oversized manifest): such a state is
+    not view only, it still loads through the preflight, which then decides per device, and its counts are None."""
+    row = row if isinstance(row, dict) else {}
+    summary = row.get('summary')
+    devices = summary.get('devices') if isinstance(summary, dict) else None
+    if not isinstance(devices, list) or not all(isinstance(d, dict) for d in devices):
+        devices = None
+    saved = loadable = None
+    if devices is not None:
+        saved = len(devices)
+        loadable = sum(1 for d in devices if not saved_device_reason(
+            lab, d.get('node'), d.get('platform'), '' if d.get('restore') is True else NO_ARTIFACT))
+    kind = 'design' if row.get('kind') == 'design' else 'capture'
+    if kind == 'design':
+        view_only, reason = True, 'design'
+    elif devices is None:
+        view_only, reason = False, 'unknown'
+    elif not any(d.get('restore') is True for d in devices):
+        view_only, reason = True, 'no_restore_data'
+    else:
+        view_only, reason = False, ''
+    return {'path': _text(row.get('path'), 1000), 'commit': _text(head, 64), 'name': _text(row.get('name')),
+            'group': row.get('group') if row.get('group') in STATE_GROUPS else 'state', 'lab': _text(row.get('lab')),
+            'kind': kind, 'layout': _text(row.get('layout')), 'saved_at': _text(row.get('saved_at'), 64),
+            'saved_devices': saved, 'loadable_devices': loadable, 'view_only': view_only, 'view_only_reason': reason,
+            # A lab state that named itself (its manifest carries `state`), as against a folder that is listed only because
+            # it holds someone's saves: the Load panel shows the named ones first and never hides one behind its cut.
+            'named': isinstance(summary, dict) and bool(str(summary.get('state') or '').strip())}
 
 
 class RestoreService:
@@ -439,9 +581,9 @@ class RestoreService:
         """Return (description, candidates) where candidates maps a saved node name to
         {candidate, desired_set, platform, restore_format}. Raises HTTPException."""
         stype = source.get('type')
+        repository = str(source.get('repository') or '')
         if stype == 'git':
-            with self.store.lock:
-                binding = self.git.binding(lab_id)
+            binding, _own = self._reader(lab_id, repository)
             try:
                 result = self.git.invoke(
                     {'mode': 'read-version', 'commit': source['commit'], 'path': resolve_version_path(binding, source['path'])},
@@ -449,7 +591,7 @@ class RestoreService:
                 manifest, files = decoded_snapshot(result)
             except ValueError as exc:
                 raise HTTPException(409, str(exc))
-            desc = {'type': 'git', 'commit': source['commit'], 'path': source['path'],
+            desc = {'type': 'git', 'commit': source['commit'], 'path': source['path'], 'repository': repository,
                     'captured_at': manifest.get('captured_at', ''), 'lab_name': manifest.get('lab_name', '')}
             text = {name: raw.decode('utf-8') for name, raw in files.items()}
         elif stype == 'backup':
@@ -459,7 +601,10 @@ class RestoreService:
             if not backup:
                 raise HTTPException(404, 'Saved capture not found in this lab.')
             try:
-                snap = captured_snapshot(self.store, backup, embedded_files=False)
+                # The automatic backup a load took first may lack a device whose backup failed: that load never changed
+                # it, so loading the backup back leaves it out (LOAD.md B4). Every other capture stays all-or-nothing.
+                snap = captured_snapshot(self.store, backup, embedded_files=False,
+                                         complete=backup.get('source') != 'restore-pre')
             except ValueError as exc:
                 raise HTTPException(400, str(exc))
             manifest = snap['manifest']
@@ -473,8 +618,7 @@ class RestoreService:
             # and returns it as `source.commit`; a submit that carries `commit` reads that exact
             # commit, so the bytes the student reviewed are the bytes applied (the helper refuses a
             # commit outside the branch history, surfaced here as 409).
-            with self.store.lock:
-                binding = self.git.binding(lab_id)
+            binding, own = self._reader(lab_id, repository)
             raw_path = source.get('path')
             if not raw_path:
                 raise HTTPException(400, 'Choose a saved folder to apply.')
@@ -485,6 +629,12 @@ class RestoreService:
             try:
                 if given_commit:
                     commit = given_commit
+                elif not own:
+                    # Another registration of this VM (a lab without a save location, or a repository it is not saved
+                    # to): its `status` also checks that registration's own folders, so HEAD comes from `history`.
+                    commit = self.git.invoke({'mode': 'history'}, binding).get('head') or ''
+                    if not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40,64}', commit):
+                        raise ValueError('The repository did not name its newest commit. Refresh the list and try again.')
                 else:
                     status = self.git.invoke({'mode': 'status'}, binding)
                     if not status.get('ready'):
@@ -500,7 +650,7 @@ class RestoreService:
             # root) whatever shape the request came in as (a bare compatibility name, an exact
             # path, a leading slash already); desc['folder'] stays the display folder, without a
             # leading slash and without a trailing '/latest'.
-            desc = {'type': 'folder', 'path': '/' + path, 'folder': folder, 'commit': commit,
+            desc = {'type': 'folder', 'path': '/' + path, 'folder': folder, 'commit': commit, 'repository': repository,
                     'captured_at': manifest.get('captured_at', ''), 'lab_name': manifest.get('lab_name', '')}
         else:
             raise HTTPException(400, 'Choose a saved Git version, a saved folder or a saved capture as the restore source.')
@@ -522,7 +672,23 @@ class RestoreService:
                 'short_name': entry.get('short_name', '')}
         desc['restore_capable_nodes'] = sum(1 for c in candidates.values() if not c.get('unusable'))
         desc['saved_nodes'] = manifest.get('node_names', [])
+        # Which capture this state is, so the page can name a loaded state after the save that made it (the commit a
+        # folder source pins is the checkout's HEAD, which is another lab's save as soon as one lands). An id, nothing else.
+        capture = manifest.get('backup_job_id')
+        desc['capture_id'] = capture if isinstance(capture, str) and re.fullmatch(r'[0-9a-f]{8,64}', capture) else ''
+        with self.store.lock:
+            lab = copy.deepcopy(self.store.lab(lab_id) or {})
+        desc['topology'] = topology_summary(lab, manifest if stype != 'backup' else None, text, candidates)
         return desc, candidates
+
+    def _reader(self, lab_id, repository):
+        """(binding, own): the binding to read a saved state with (GitProgress.reader: the lab's own, or the
+        registration `repository` of this VM once the helper's list names it) and whether it is the lab's own. Called
+        without the store lock: checking a registration asks the VM."""
+        binding = self.git.reader(lab_id, repository)
+        with self.store.lock:
+            own = ((self.store.lab(lab_id) or {}).get('git_binding') or {}).get('binding_id')
+        return binding, bool(own) and binding.get('binding_id') == own
 
     # --- eligibility (no device access) ----------------------------------------
 
@@ -533,29 +699,28 @@ class RestoreService:
             cand = candidates[name]
             node = next((n for n in lab['nodes'] if n['name'] == name), None)
             driver = drivers.for_platform(node.get('platform')) if node else None
-            reason = ''
-            eligible = False
-            if node is None:
-                reason = 'No running node in this lab matches this saved node.'
-            elif driver is None:
-                reason = 'Live restore is not supported for this platform yet.'
-            elif node.get('platform') != cand['platform']:
-                reason = 'The saved platform does not match the running node.'
-            elif cand.get('unusable'):
-                reason = cand['unusable']
-            elif self._unusable(driver, cand):
-                reason = UNUSABLE + self._unusable(driver, cand)
-            elif not node_available(self.store.state, lab, node):
-                reason = 'The node is not currently running or discovery is stale.'
-            elif not effective_credentials(lab, node).get('username'):
-                reason = 'Assign NOS credentials to this node first.'
-            else:
-                eligible = True
+            # The no-device half (saved_device_reason), shared with the saved-states list; then the candidate, then
+            # what the lab's state and credentials allow.
+            reason = (saved_device_reason(lab, name, cand['platform'], cand.get('unusable', ''))
+                      or self._node_reason(lab, node, driver, cand))
+            eligible = not reason
             rows.append({'name': name, 'short_name': cand.get('short_name') or (node.get('short_name', '') if node else ''),
                          'platform': cand['platform'], 'running_platform': node.get('platform', '') if node else '',
                          'eligible': eligible, 'reason': reason,
                          'requested': (requested is None) or (name in requested)})
         return rows
+
+    def _node_reason(self, lab, node, driver, cand):
+        """The rest of map_targets' checks, for a device saved_device_reason accepted: the candidate itself, then what
+        the lab's state and credentials allow. '' when nothing stands in the way."""
+        unusable = self._unusable(driver, cand)
+        if unusable:
+            return UNUSABLE + unusable
+        if not node_available(self.store.state, lab, node):
+            return 'The node is not currently running or discovery is stale.'
+        if not effective_credentials(lab, node).get('username'):
+            return 'Assign NOS credentials to this node first.'
+        return ''
 
     @staticmethod
     def _unusable(driver, cand):
@@ -1265,6 +1430,9 @@ class RestoreService:
             commit: str = Field(default='', max_length=64)
             path: str = Field(default='', max_length=250)
             backup_job_id: str = Field(default='', max_length=64)
+            # A registration of this VM to read a `git` or `folder` source through (DESIGN.md 3.7 Q3); empty: the lab's
+            # own save location. An opaque id: the page names a repository by it, never by path or URL.
+            repository: str = Field(default='', max_length=64, pattern=r'^[A-Za-z0-9_-]*$')
 
         class Preflight(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -1298,6 +1466,28 @@ class RestoreService:
                                     'finished': job.get('finished'), 'nodes': capable})
             return {'backups': backups, 'supported_nodes': supported, 'unsupported_nodes': unsupported,
                     'restore_supported_platforms': list(drivers.supported_kinds())}
+
+        @app.get('/api/labs/{lab_id}/restore/states')
+        def states(lab_id: str, repository: str = Query(default='', max_length=64, pattern=r'^[A-Za-z0-9_-]*$')):
+            # The saved states of a repository with each one's device coverage for this lab. Reads manifests through
+            # the VM's Git helper only; no device is contacted, and nothing here holds the lab.
+            with self.store.lock:
+                lab = self.store.lab(lab_id)
+                if not lab:
+                    raise HTTPException(404, 'Lab not found.')
+                if not repository and not lab.get('git_binding'):
+                    raise HTTPException(409, 'Connect this lab to a Git repository first.')
+                lab = copy.deepcopy(lab)
+            try:
+                result = self.git.states(lab_id, repository)
+            except ValueError as exc:
+                raise HTTPException(409, self._scrubbed(exc)[:600])
+            result = result if isinstance(result, dict) else {}
+            head = result.get('head') if isinstance(result.get('head'), str) else ''
+            rows = result.get('states') if isinstance(result.get('states'), list) else []
+            return {'head': head[:64], 'truncated': bool(result.get('truncated')),
+                    'lab_devices': sum(1 for n in lab['nodes'] if drivers.for_platform(n.get('platform'))),
+                    'states': [public_state(row, lab, head) for row in rows]}
 
         @app.post('/api/labs/{lab_id}/restore/preflight')
         def preflight(lab_id: str, data: Preflight):

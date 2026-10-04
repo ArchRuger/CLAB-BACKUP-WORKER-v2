@@ -1,0 +1,102 @@
+--- Progress tab: save location card
+Choose a save location
+
+Your progress is saved as versions in a Git repository on the lab VM. Pick the repository and folder for this lab, then choose the devices to include.
+
+Choose a folder for this lab
+Save location
+Choose a save location
+clab-scratch-git-redesign › (whole repository)
+
+Not the repository you want? Connect a repository by URL
+
+Folders in this repository
+
+Pick the folder where this lab’s progress will be saved, or create a new one. Then choose the devices to include and Connect.
+
+Pick a repository above to see its folders.
+
+Connect a save location
+Devices included in every save
+ceos1
+EOS
+ceos2
+EOS
+cjunos
+Junos
+xrv9k
+IOS-XR
+
+If an included device can’t be reached, the save stops and nothing is written — an older configuration is never saved in its place.
+
+Nothing is uploaded without you: after a save you see what changed and choose whether to upload it.
+
+I understand that complete device configurations — including any passwords or keys they contain — will be saved to this repository and uploaded to its online copy.
+Registration details
+Connect save location
+--- repository select options: ['Choose a save location', 'clab-scratch-git-redesign › (whole repository)']
+--- folder browser panel (top level)
+clab-scratch-git-redesign
+New folder…
+Choose this folder
+
+Folders cannot be created inside another lab’s folder.
+
+clab-scratch-git-redesign
+Lab folder
+Name	What it is	Size
+
+README.md
+	File	117 B
+Details
+This lab folder is free — no lab saves here yet.
+--- New folder button: disabled = True | title = Folders cannot be created inside another lab’s folder
+--- Choose-this-folder button: disabled = False | title = This lab folder is free — no lab saves here yet.
+--- first save from the header button
+Where should git-redesign’s progress be saved?
+×
+
+Your device configurations are saved as a version in a Git repository on the lab VM and uploaded to its online copy.
+
+Repository
+clab-scratch-git-redesign
+Folder
+Browse…
+
+One repository can hold several labs, each in its own folder.
+
+Devices (4 included)
+What changed?
+
+Shown in the history and used as the Git commit message.
+
+I understand that complete device configurations — including any passwords or keys they contain — will be saved to this repository and uploaded to its online copy.
+Cancel
+Save progress
+--- after Save: dialog text
+Where should git-redesign’s progress be saved?
+×
+
+Your device configurations are saved as a version in a Git repository on the lab VM and uploaded to its online copy.
+
+Repository
+clab-scratch-git-redesign
+Folder
+Browse…
+
+One repository can hold several labs, each in its own folder.
+
+Devices (4 included)
+What changed?
+
+Shown in the history and used as the Git commit message.
+
+I understand that complete device configurations — including any passwords or keys they contain — will be saved to this repository and uploaded to its online copy.
+
+Lab folders in one repository cannot overlap: the repository root is already a lab folder. Choose a folder beside it.
+
+Cancel
+Save progress
+[[role=alert]] Lab folders in one repository cannot overlap: the repository root is already a lab folder. Choose a folder beside it.
+[.form-error] Lab folders in one repository cannot overlap: the repository root is already a lab folder. Choose a folder beside it.
+--- page errors: []

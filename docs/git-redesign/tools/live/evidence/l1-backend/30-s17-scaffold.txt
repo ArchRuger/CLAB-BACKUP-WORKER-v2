@@ -1,0 +1,100 @@
+  [state before] GET /api/labs/123f0029../git -> binding prefix: git-redesign-b
+     git_status: {'checked': '2026-10-04T16:11:36.633478+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+     git jobs (newest 4): [('synced', 'ceos2 changed', 'latest', 'git-redesign-b/latest')]
+  [GitHub before]
+      ce21d47dc6 ceos2 changed
+      e4cb074336 l1 s16 first save of the re-imported lab
+      fa451d3755 l1 s15 before destroy
+      687b637e50 l1 s13 waiting save 2
+     slug folders on GitHub: []
+     restore/states with l1-scaffold: []
+
+### init l1-scaffold
+$ python3 deploy/scaffold-lab.py --lab git-redesign-b init l1-scaffold
+Created l1-scaffold/reference/{start,solution,broken-01} and l1-scaffold/work.
+Lab "git-redesign-b" now saves to l1-scaffold/work.
+Next: configure the device to a state, then:
+  python3 deploy/scaffold-lab.py snapshot l1-scaffold start
+exit status 0
+  [state after init] GET /api/labs/123f0029../git -> binding prefix: l1-scaffold/work
+     git_status: {'checked': '2026-10-04T16:12:02.318782+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+     git jobs (newest 4): [('synced', 'ceos2 changed', 'latest', 'git-redesign-b/latest')]
+  [GitHub after init]
+      ce21d47dc6 ceos2 changed
+      e4cb074336 l1 s16 first save of the re-imported lab
+      fa451d3755 l1 s15 before destroy
+      687b637e50 l1 s13 waiting save 2
+     slug folders on GitHub: []
+     restore/states with l1-scaffold: []
+
+### device change, then snapshot start answering no
+[]
+$ python3 deploy/scaffold-lab.py --lab git-redesign-b snapshot l1-scaffold start
+n
+Saved into l1-scaffold/reference/start on the lab VM (2d0144412ab4).
+  l1-scaffold/reference/start/latest/ceos1.cfg
+  l1-scaffold/reference/start/latest/ceos1.eoscfg
+  l1-scaffold/reference/start/latest/ceos2.cfg
+  l1-scaffold/reference/start/latest/ceos2.eoscfg
+  l1-scaffold/reference/start/latest/git-redesign-b.clab.yml
+  l1-scaffold/reference/start/latest/git-redesign-b.clab.yml.annotations.json
+  l1-scaffold/reference/start/latest/manifest.json
+Configuration files may contain passwords or keys.
+Upload this state to the online repository now? [y/N] Captured the running configuration into l1-scaffold/reference/start and kept on the lab VM only (it goes up with the next upload of this repository). Lab rebound to l1-scaffold/work.
+exit status 0
+  [state after snapshot start (answered no)] GET /api/labs/123f0029../git -> binding prefix: l1-scaffold/work
+     git_status: {'checked': '2026-10-04T16:12:16.258643+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+     git jobs (newest 4): [('dismissed', 'First save', 'latest', 'l1-scaffold/reference/start/latest'), ('synced', 'ceos2 changed', 'latest', 'git-redesign-b/latest')]
+  [GitHub after snapshot start (answered no)]
+      ce21d47dc6 ceos2 changed
+      e4cb074336 l1 s16 first save of the re-imported lab
+      fa451d3755 l1 s15 before destroy
+      687b637e50 l1 s13 waiting save 2
+     slug folders on GitHub: []
+     restore/states with l1-scaffold: [('Start · reference', 'state', 'l1-scaffold/reference/start/latest', 'git-redesign-b', 2)]
+
+### device change, then snapshot solution --yes
+[]
+$ python3 deploy/scaffold-lab.py --lab git-redesign-b snapshot l1-scaffold solution --yes
+Saved into l1-scaffold/reference/solution on the lab VM (1ff020a09159).
+  l1-scaffold/reference/solution/latest/ceos1.cfg
+  l1-scaffold/reference/solution/latest/ceos1.eoscfg
+  l1-scaffold/reference/solution/latest/ceos2.cfg
+  l1-scaffold/reference/solution/latest/ceos2.eoscfg
+  l1-scaffold/reference/solution/latest/git-redesign-b.clab.yml
+  l1-scaffold/reference/solution/latest/git-redesign-b.clab.yml.annotations.json
+  l1-scaffold/reference/solution/latest/manifest.json
+Configuration files may contain passwords or keys.
+Captured the running configuration into l1-scaffold/reference/solution and uploaded. Lab rebound to l1-scaffold/work.
+
+=== my wrapper script was terminated by a stray pkill of mine right after the solution snapshot printed its last line, so its exit status and the state check were not recorded in the run above. The tool prints its final line and returns normally on that path (exit 0 by reading it, not observed). State recorded afterwards by hand: ===
+  [state after snapshot solution --yes] GET /api/labs/123f0029../git -> binding prefix: l1-scaffold/work
+     git_status: {'checked': '2026-10-04T16:12:30.851081+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+     git jobs (newest 4): [('synced', 'First save', 'latest', 'l1-scaffold/reference/solution/latest'), ('dismissed', 'First save', 'latest', 'l1-scaffold/reference/start/latest'), ('synced', 'ceos2 changed', 'latest', 'git-redesign-b/latest')]
+  [GitHub after snapshot solution --yes]
+      1ff020a091 First save
+      2d0144412a First save
+      ce21d47dc6 ceos2 changed
+      e4cb074336 l1 s16 first save of the re-imported lab
+     slug folders on GitHub: ['l1-scaffold/reference/solution', 'l1-scaffold/reference/start']
+     restore/states with l1-scaffold: [('Solution', 'state', 'l1-scaffold/reference/solution/latest', 'git-redesign-b', 2), ('Start · reference', 'state', 'l1-scaffold/reference/start/latest', 'git-redesign-b', 2)]
+--- vm checkout
+1ff020a First save
+2d01444 First save
+ce21d47 ceos2 changed
+e4cb074 l1 s16 first save of the re-imported lab
+fa451d3 l1 s15 before destroy
+--- jobs
+  job synced 'ceos1 changed' None checkpoint pushed True git-redesign/checkpoints/ceos1-changed-2 9e300bc9
+  job synced 'ceos2 changed' None latest pushed True git-redesign-b/latest ce21d47d
+  job dismissed 'First save' None latest pushed True l1-scaffold/reference/start/latest 2d014441
+  job synced 'First save' None latest pushed True l1-scaffold/reference/solution/latest 1ff020a0
+GitHub commits touching l1-scaffold: 1ff020a0 First save
+2d014441 First save
+GitHub l1-scaffold files: ['l1-scaffold/reference/solution/latest/manifest.json', 'l1-scaffold/reference/start/latest/manifest.json']
+init again (idempotent?)
+Created l1-scaffold/reference/{start,solution,broken-01} and l1-scaffold/work.
+Lab "git-redesign-b" now saves to l1-scaffold/work.
+Next: configure the device to a state, then:
+  python3 deploy/scaffold-lab.py snapshot l1-scaffold start
+exit status 0

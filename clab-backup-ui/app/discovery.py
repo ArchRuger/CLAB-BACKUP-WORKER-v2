@@ -592,6 +592,7 @@ class Discovery:
                     for key in ('annotations', 'annotations_for'):
                         if candidate.get(key): lab[key] = candidate[key]
                         else: lab.pop(key, None)
+                    lab.pop('map_written_at', None)   # placed from the VM's file, not by a person (runner.map_changed_in_manager)
                     self.store.event('topology.positions', 'Placed the map nodes from the annotations file beside the deployed topology', lab_id=lab['id'])
 
     def public(self):

@@ -1,0 +1,13 @@
+$ docker compose up -d --build
+ Image clab-backup:1.30.60 Built
+ Container containerlab-node-manager-backup-ui-1 Recreate
+ Container containerlab-node-manager-backup-ui-1 Recreated
+ Container containerlab-node-manager-backup-ui-1 Starting
+ Container containerlab-node-manager-backup-ui-1 Started
+exit 0
+1.30.60
+$ sudo bash deploy/setup-git.sh --refresh
+/tmp/tmp.Wdtv9y9joi/sudoers: parsed OK
+Git helper refreshed; all registered repositories retained.
+Git login remains with the repository owner. Select the repository under Progress > Save location in the manager.
+exit 0

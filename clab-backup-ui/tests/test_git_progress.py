@@ -16,7 +16,7 @@ from app.git_progress import (GitProgress, base_folder, captured_snapshot, decod
                               PROTOCOL, snapshot_conflict, snapshot_diff, version_label, resolve_version_path,
                               annotated_compare, file_label, job_destination, pair_renamed_files,
                               repository_display_name, strip_credentials, job_pending, GIT_JOB_CAP,
-                              _append_git_job, kept_on_vm, digest as git_digest)
+                              _append_git_job, kept_on_vm, digest as git_digest, NOT_WHOLE, REVIEW_FIRST, STILL_WAITING)
 from app.store import Store
 import test_discovery as discovery_tests
 
@@ -299,6 +299,9 @@ class GitJobCapTests(unittest.TestCase):
         self.assertTrue(kept_on_vm(state['git_jobs'][0])); self.assertFalse(kept_on_vm(dict(status='dismissed', target='update', commit='f'*40)))
 
 
+TOPOLOGY = 'name: training\ntopology:\n  nodes:\n    r1: {kind: cisco_xrv9k}\n'   # a capture of a lab that has a topology carries it
+
+
 class GitProgressTests(unittest.TestCase):
     setUp_base = discovery_tests.DiscoveryTests.setUp
     register = discovery_tests.DiscoveryTests.register
@@ -307,6 +310,7 @@ class GitProgressTests(unittest.TestCase):
     def setUp(self):
         self.setUp_base()
         self.progress = self.app.state.git_progress
+        self.progress.connection_wait = 0   # a connection change that meets another one answers at once here (the wait has its own test)
         self.host(); self.store.state['host']['fingerprint'] = 'SHA256:fixture'
         self.lab = self.register(); self.url = '/api/labs/' + self.lab['id'] + '/git'
         self.repo = dict(id='bens-lab', label='Bens lab', owner='ben', path='/home/ben/labs/bgp',
@@ -329,14 +333,18 @@ class GitProgressTests(unittest.TestCase):
         self.sent.append(copy.deepcopy(request))
         mode = request['mode']
         if mode == 'list': return dict(protocol=PROTOCOL, version=__version__, repositories=[self.repo])
-        if mode == 'status': return dict(repository=self.repo, ready=True, head='a'*40, baseline_revision='', latest_manifest=None)
+        # The checkout's HEAD: the first commit until a save lands, then that save's commit (`vm_head`); an upload is
+        # only ever of the save at HEAD, so the fixture keeps it like the VM does.
+        if mode == 'status': return dict(repository=self.repo, ready=True, head=getattr(self, 'vm_head', 'a'*40), baseline_revision='', latest_manifest=getattr(self, 'latest_manifest', None))
         if mode == 'publish':
             if self.publish_error: raise ValueError(self.publish_error)
             self.snapshots[request['operation_id']] = copy.deepcopy(request['snapshot'])
+            self.vm_head = 'b'*40
+            folder = 'checkpoints/' + request['checkpoint'] if request['target'] == 'checkpoint' else request['target']
             if self.nothing_new:
-                return dict(status='unchanged', commit='b'*40, pushed=None, changed_files=[], message='No configuration changes.', snapshot_path=request['target'])
-            return dict(status='synced' if request['push'] else 'committed', commit='b'*40,
-                        pushed=request['push'], changed_files=list(request['snapshot']['files']), snapshot_path=request['target'])
+                return dict(status='unchanged', commit='b'*40, pushed=None, changed_files=[], message='No configuration changes.', snapshot_path=folder)
+            return dict(status='synced' if request['push'] else 'committed', commit='b'*40, pushed=request['push'],
+                        changed_files=[folder + '/' + name for name in list(request['snapshot']['files']) + ['manifest.json']], snapshot_path=folder)
         if mode == 'push':
             if self.push_error: raise ValueError(self.push_error)
             return dict(status='synced', commit='b'*40, pushed=True, changed_files=[], snapshot_path='latest')
@@ -386,8 +394,11 @@ class GitProgressTests(unittest.TestCase):
         return self.client.get('/api/git/jobs/'+job['id']).json(), submit
 
     def review_and_upload(self, job, expect=200):
-        """The student's explicit decision after the review: the only way a save is uploaded."""
-        response = self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True, 'reviewed': True})
+        """The student's explicit decision after the review: the only way a save is uploaded. The review comes first,
+        and the upload carries the HEAD it showed (an upload without it is refused)."""
+        review = self.client.post('/api/labs/'+job['lab_id']+'/git/compare', json={'job_id': job['id']})
+        self.assertEqual(review.status_code, 200, review.text)
+        response = self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True, 'reviewed': True, 'head': review.json()['head']})
         self.assertEqual(response.status_code, expect, response.text)
         return self.run_save(job)
 
@@ -482,14 +493,21 @@ class GitProgressTests(unittest.TestCase):
         data['push'] = False
         self.assertEqual(self.client.post(self.url+'/save', json=data).status_code, 409)
 
-    def test_a_save_without_a_short_label_is_refused(self):
+    def test_a_save_without_a_name_is_accepted_and_named_by_the_manager(self):
+        # Owner decision D2 (DESIGN.md 3.2): the name is optional. Was: 400 "Give this save a short label."
         for note in ('', '   '):
             response = self.client.post(self.url+'/save', json=dict(request_id=uuid.uuid4().hex, target='latest', note=note))
-            self.assertEqual(response.status_code, 400, note)
-            self.assertIn('Give this save a short label.', response.json()['detail'])
-        self.assertEqual(len(self.store.state['git_jobs']), 0)
+            self.assertEqual(response.status_code, 200, note)
+            self.assertEqual(response.json()['note'], '')
+            outcome, _ = self.run_save(response.json())
+            self.assertEqual((outcome['note'], outcome['note_auto']), ('First save', True))
+            self.progress.update(response.json()['id'], status='dismissed')
+        self.assertEqual({r['message'] for r in self.sent if r['mode'] == 'publish'}, {'First save'}, 'the commit carries the name the manager wrote')
+        # The validation of a typed name is unchanged: one line.
+        bad = self.client.post(self.url+'/save', json=dict(request_id=uuid.uuid4().hex, target='latest', note='two\nlines'))
+        self.assertEqual(bad.status_code, 400); self.assertIn('single-line', bad.json()['detail'])
         ok = self.client.post(self.url+'/save', json=dict(request_id=uuid.uuid4().hex, target='latest', note='OSPF adjacencies up'))
-        self.assertEqual(ok.status_code, 200, ok.text)
+        self.assertEqual(ok.status_code, 200, ok.text); self.assertFalse(ok.json()['note_auto'])
 
     def test_a_save_freezes_its_destination_and_the_commit_message_is_the_label(self):
         job, _ = self.save(note='OSPF adjacencies up on every router')
@@ -526,12 +544,16 @@ class GitProgressTests(unittest.TestCase):
         job, _ = self.save(); self.run_save(job)
         diff = self.client.post(self.url+'/compare', json={'job_id': job['id']})
         self.assertEqual(diff.status_code, 200, diff.text)
-        files = diff.json()['files']
+        # One row for every path the save changed (DESIGN.md 3.8 N4); the helper's comparison gives the diffed ones.
+        files = [f for f in diff.json()['files'] if 'diff' in f]
         self.assertEqual(len(files), 1, files)
         self.assertEqual(files[0]['status'], 'changed')
         self.assertEqual(files[0]['renamed_from'], 'r1.set')
         self.assertEqual(files[0]['label'], 'r1')
         self.assertGreaterEqual(files[0]['diff']['added'], 1)
+        self.assertEqual((files[0]['role'], files[0]['node'], files[0]['path']), ('device', 'r1', 'latest/r1.cfg'))
+        others = {f['path']: f['role'] for f in diff.json()['files'] if 'diff' not in f}
+        self.assertEqual(others, {'latest/r2.cfg': 'device', 'latest/manifest.json': 'manifest'})
 
     def test_partial_capture_keeps_git_untouched(self):
         backup = self.capture(); self.store.state['jobs'][0]['status'] = 'partial'
@@ -603,6 +625,10 @@ class GitProgressTests(unittest.TestCase):
         self.assertEqual(len(result['files']), 2)
         self.assertEqual(result['manifest']['topology_provenance'], 'unknown')
         self.assertIsNone(result['manifest']['topology_digest'])
+        # The lab has a topology, so a capture without it is not saved again (DESIGN.md 3.9); a whole one is.
+        refused = self.client.post(self.url+'/save', json=dict(request_id=uuid.uuid4().hex, target='latest', note='x', backup_job_id=backup['id']))
+        self.assertEqual((refused.status_code, refused.json()['detail']), (400, NOT_WHOLE))
+        backup = self.capture(topology=TOPOLOGY); self.store.state['jobs'][0]['status'] = 'partial'; self.store.save()
         job, _ = self.save(backup_job_id=backup['id'])
         outcome, submit = self.run_save(job)
         self.assertEqual(outcome['status'], 'review_pending'); submit.assert_not_called()
@@ -627,7 +653,7 @@ class GitProgressTests(unittest.TestCase):
         self.assertEqual(outcome['status'], 'push_pending'); submit.assert_not_called()
         self.push_error = ''
         # The review is recorded with the first upload attempt: repeating a failed upload needs no second one.
-        self.assertEqual(self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True}).status_code, 200)
+        self.assertEqual(self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True, 'head': self.vm_head}).status_code, 200)
         outcome, submit = self.run_save(job)
         self.assertEqual(outcome['status'], 'synced'); submit.assert_not_called()
         self.assertEqual(sum(r['mode'] == 'publish' for r in self.sent), 1)
@@ -736,15 +762,18 @@ class GitProgressTests(unittest.TestCase):
         finally:
             restarted.close()
 
-    def test_verified_push_reconciles_only_named_ancestors_of_same_binding(self):
+    def test_verified_push_reconciles_only_named_ancestors_of_the_same_checkout(self):
+        # DESIGN.md 3.1: a save a push carried is matched by the checkout it was made in, not by a binding digest
+        # (was: only saves of the same binding). One the helper names from another checkout is left alone.
         ancestor, _ = self.save(push=False)
         self.run_save(ancestor)
         reference = self.progress.get_job(ancestor['id'])
-        foreign = {**copy.deepcopy(reference), 'id': uuid.uuid4().hex,
-                   'binding_digest': 'different-binding', 'status': 'committed'}
+        foreign = {**copy.deepcopy(reference), 'id': uuid.uuid4().hex, 'status': 'committed',
+                   'destination': dict(reference['destination'], checkout='/home/ben/labs/elsewhere')}
+        moved_on = {**copy.deepcopy(reference), 'id': uuid.uuid4().hex, 'binding_digest': 'an-earlier-binding', 'status': 'committed'}
         dismissed = {**copy.deepcopy(reference), 'id': uuid.uuid4().hex, 'status': 'dismissed'}
         unverified = {**copy.deepcopy(reference), 'id': uuid.uuid4().hex, 'status': 'committed'}
-        self.store.state['git_jobs'].extend([foreign, dismissed, unverified])
+        self.store.state['git_jobs'].extend([foreign, moved_on, dismissed, unverified])
         self.store.save()
         newest, _ = self.save(push=True)
         original_remote = self.remote
@@ -752,7 +781,7 @@ class GitProgressTests(unittest.TestCase):
         def verify_ancestor_ids(host, request, stopping=None):
             result = original_remote(host, request, stopping)
             if request['mode'] == 'push':
-                result['synced_operations'] = [ancestor['id'], foreign['id'], dismissed['id'], newest['id']]
+                result['synced_operations'] = [ancestor['id'], foreign['id'], moved_on['id'], dismissed['id'], newest['id']]
             return result
 
         with patch('app.git_progress.remote_git', side_effect=verify_ancestor_ids):
@@ -763,6 +792,8 @@ class GitProgressTests(unittest.TestCase):
         self.assertTrue(reference['pushed'])
         self.assertEqual(foreign['status'], 'committed')
         self.assertFalse(foreign['pushed'])
+        self.assertEqual((moved_on['status'], moved_on['pushed']), ('synced', True), 'made in this checkout under an earlier binding')
+        self.assertTrue(reference['reviewed'] and moved_on['reviewed'], 'a carried save is reviewed with the upload that named it')
         self.assertEqual(dismissed['status'], 'dismissed')
         self.assertEqual(unverified['status'], 'committed')
         self.assertFalse(unverified['pushed'])
@@ -806,13 +837,20 @@ class GitProgressTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/git/jobs/'+again['id']+'/retry', json={'push': True}).status_code, 409)
 
     def test_a_commit_uploaded_through_another_binding_does_not_make_a_save_unchanged(self):
+        # "Another binding" is one that uploads elsewhere: another push URL, another branch or another checkout. A save of
+        # another lab of the same checkout, push URL and branch is the same upload (DESIGN.md 3.1, 3.4: labs share one
+        # checkout and a save is matched by the checkout it was made in), and tests/test_git_save_model.py pins that case.
         first, _ = self.save(); self.run_save(first); self.review_and_upload(first)
-        with self.store.lock:
-            next(j for j in self.store.state['git_jobs'] if j['id'] == first['id'])['binding_digest'] = 'another-binding'
-            self.store.save()
+        stored = next(j for j in self.store.state['git_jobs'] if j['id'] == first['id'])
         self.nothing_new = True
-        again, _ = self.save(); outcome, _ = self.run_save(again)
-        self.assertEqual(outcome['status'], 'review_pending'); self.assertFalse(outcome['pushed'])
+        for change in (dict(remote='https://github.com/someone/else.git'), dict(branch='other-branch'), dict(checkout='/home/ben/another-checkout')):
+            with self.store.lock:
+                kept = copy.deepcopy(stored['destination']); stored['binding_digest'] = 'another-binding'; stored['destination'].update(change)
+                self.store.save()
+            again, _ = self.save(); outcome, _ = self.run_save(again)
+            self.assertEqual(outcome['status'], 'review_pending', change); self.assertFalse(outcome['pushed'])
+            with self.store.lock:
+                stored['destination'] = kept; self.store.state['git_jobs'] = [j for j in self.store.state['git_jobs'] if j['id'] != again['id']]; self.store.save()
 
     def test_the_review_is_mandatory_even_for_a_saved_opt_out_and_an_old_page(self):
         # A binding saved before the review became mandatory says False; a page loaded before the
@@ -845,7 +883,7 @@ class GitProgressTests(unittest.TestCase):
     def test_baseline_requires_complete_selected_capture_and_conditions(self):
         response = self.client.post(self.url+'/save', json=dict(request_id=uuid.uuid4().hex, target='baseline'))
         self.assertEqual(response.status_code, 400)
-        backup = self.capture()
+        backup = self.capture(topology=TOPOLOGY)
         job, _ = self.save(target='baseline', backup_job_id=backup['id'], replace_baseline=True, expected_baseline='c'*64)
         outcome, submit = self.run_save(job); submit.assert_not_called()
         self.assertEqual(outcome['status'], 'review_pending')
@@ -857,14 +895,18 @@ class GitProgressTests(unittest.TestCase):
     def test_pending_guards_and_explicit_dismissal(self):
         job, _ = self.save(push=False); self.run_save(job)
         self.assertTrue(pending_progress(self.store.state))
-        self.assertEqual(self.client.post('/api/manager/reset', json={'confirmation': 'RESET'}).status_code, 409)
-        self.assertEqual(self.client.post(self.url+'/unlink', json={}).status_code, 409)
+        # Start fresh and Remove lab drop the manager's record of the save: they still wait for it.
+        reset = self.client.post('/api/manager/reset', json={'confirmation': 'RESET'})
+        self.assertEqual((reset.status_code, reset.json()['detail']), (409, STILL_WAITING))
         self.assertEqual(self.client.request('DELETE', '/api/labs/'+self.lab['id'], json={'name': self.lab['name']}).status_code, 409)
+        # Disconnect no longer waits (DESIGN.md 3.1, was 409): the save carries its own binding and keeps waiting.
+        self.assertEqual(self.client.post(self.url+'/unlink', json={}).status_code, 200)
+        self.assertNotIn('git_binding', self.store.lab(self.lab['id']))
+        self.assertTrue(pending_progress(self.store.state)); self.assertEqual(self.progress.get_job(job['id'])['status'], 'committed')
         self.assertEqual(self.client.post('/api/git/jobs/'+job['id']+'/dismiss', json={'acknowledge': False}).status_code, 400)
         self.assertEqual(self.client.post('/api/git/jobs/'+job['id']+'/dismiss', json={'acknowledge': True}).status_code, 200)
         self.assertFalse(pending_progress(self.store.state))
         self.assertTrue((self.store.root/'backups'/self.lab['id']/'history').exists())
-        self.assertEqual(self.client.post(self.url+'/unlink', json={}).status_code, 200)
 
     def test_pending_host_password_rotation_allowed_identity_change_blocked(self):
         job, _ = self.save(push=False); self.run_save(job)
@@ -1070,7 +1112,7 @@ class GitProgressTests(unittest.TestCase):
         self.dispatch.assert_not_called()
 
     def test_persistent_worker_write_failure_can_be_retried_after_storage_recovers(self):
-        backup = self.capture()
+        backup = self.capture(topology=TOPOLOGY)
         job, _ = self.save(backup_job_id=backup['id'])
         with patch.object(self.store, 'save', side_effect=OSError('disk unavailable')):
             self.progress.execute(job['id'])
@@ -1114,7 +1156,7 @@ class GitPlacesTests(GitProgressTests):
         if mode == 'browse':
             self.sent.append(copy.deepcopy(request))
             repo = next(r for r in self.registry if r['id'] == request['binding_id'])
-            return dict(repository=repo, head='a'*40, files=[dict(path='README.md', size=12), dict(path='bgp/latest/r1.cfg', size=30), dict(path='bgp/latest/manifest.json', size=200)] + self.extra_files,
+            return dict(repository=repo, head='a'*40, files=[dict(path='README.md', size=12), dict(path='latest/r1.cfg', size=30), dict(path='latest/manifest.json', size=200), dict(path='kept/latest/r1.cfg', size=30)] + self.extra_files,
                         truncated=False, saved={'latest': 1789128000, 'baseline': None, 'checkpoints': None},
                         folders=[dict(id=r['id'], label=r['label'], prefix=r['prefix']) for r in self.registry if r['path'] == repo['path']])
         if mode in ('register-prefix', 'connect'):
@@ -1123,14 +1165,15 @@ class GitPlacesTests(GitProgressTests):
             prefix = request['prefix']
             existing = next((r for r in self.registry if r['prefix'] == prefix and (mode == 'register-prefix' or r.get('push_url') == request['url'])), None)
             if mode == 'register-prefix' and getattr(self, 'faithful', False):
-                # What the real helper does (host_git.plan_prefix / register_prefix): lab folders of one
-                # checkout cannot overlap unless the source is being retired, and retiring removes it.
+                # What the real helper does (host_git.plan_prefix / register_prefix, with its own rule): lab folders
+                # of one checkout may nest; only a folder inside another's saved state collides, unless that other is
+                # the source being retired, and retiring removes it.
+                from app.host_git import colliding, collision_message
                 source = next(r for r in self.registry if r['id'] == request['binding_id'])
                 if not existing:
                     for other in self.registry:
                         if other is source and request.get('retire'): continue
-                        if not prefix or not other['prefix'] or prefix.startswith(other['prefix'] + '/') or other['prefix'].startswith(prefix + '/'):
-                            raise ValueError('Lab folders in one repository cannot overlap: ' + (other['prefix'] or 'the repository root') + ' is already a lab folder. Choose a folder beside it.')
+                        if colliding(prefix, other['prefix']): raise ValueError(collision_message(prefix, other['prefix']))
                 if request.get('retire'): self.registry.remove(source)
             if existing: return dict(existing)
             created = dict(self.repo, id=mode + '-' + (prefix or 'root'), prefix=prefix, revision='rev-' + (prefix or 'root'), label='Bens lab / ' + (prefix or 'root'))
@@ -1140,12 +1183,13 @@ class GitPlacesTests(GitProgressTests):
         if mode == 'move':
             self.sent.append(copy.deepcopy(request))
             if self.publish_error: raise ValueError(self.publish_error)
+            self.vm_head = 'c'*40
             return dict(status='committed', commit='c'*40, pushed=False, changed_files=['latest/r1.cfg', 'bgp/latest/r1.cfg'], snapshot_path='bgp/latest', message='Saved in the VM repository; not pushed.')
         if mode == 'status':
             self.sent.append(copy.deepcopy(request))
             repo = next((r for r in self.registry if r['id'] == request.get('binding_id')), self.repo)
             problem = getattr(self, 'not_ready', '')
-            return dict(repository=repo, ready=not problem, problem=problem, head='a'*40, baseline_revision='', latest_manifest=None)
+            return dict(repository=repo, ready=not problem, problem=problem, head=getattr(self, 'vm_head', 'a'*40), baseline_revision='', latest_manifest=None)
         return super().remote(host, request, stopping)
 
     def sibling_lab(self):
@@ -1174,49 +1218,45 @@ class GitPlacesTests(GitProgressTests):
                        want_push=False, node_names=list(lab['git_binding']['node_names']), capture_context={}, commit=commit, changed_files=['latest/r1.cfg'])
             job.update(fields)
             self.store.state['git_jobs'].append(job); self.store.save()
+        if job.get('commit'): self.vm_head = job['commit']   # the newest commit in the checkout is its HEAD
         return job
 
-    def test_a_save_or_move_waits_while_another_lab_of_the_checkout_has_an_unreviewed_save(self):
+    def test_another_labs_waiting_save_stops_neither_a_save_nor_a_move_and_the_review_names_it(self):
+        # DESIGN.md section 1 and 3.4 (was: 409, "a save or a move waits while another lab of the checkout has an
+        # unreviewed save"). The rule survives in its real form: no upload carries a save the review did not name.
         other = self.sibling_lab()
         theirs = self.save_in(other['id'], note='OSPF done').json()
         outcome, _ = self.run_save(theirs); self.assertEqual(outcome['status'], 'review_pending')
-        # Saving this lab now would commit on top of that save, and this lab's upload would then carry it unreviewed.
-        refused = self.save_in(self.lab['id'], expect=409, note='Mine')
-        self.assertIn('other-lab', refused.text); self.assertIn("'OSPF done'", refused.text)
-        self.assertIn('review and upload that save', refused.text)
-        self.assertIn('Keep snapshot only', refused.text); self.assertIn('goes along with the next upload from this repository', refused.text)
-        self.assertEqual([j['lab_id'] for j in self.store.state['git_jobs']], [other['id']], 'nothing was queued')
-        # The folder move's automatic upload is held at its source too: nothing changes on the VM.
-        sent = len(self.sent)
-        moved = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
-        self.assertEqual(moved.status_code, 409, moved.text); self.assertIn('other-lab', moved.text)
-        self.assertFalse([r for r in self.sent[sent:] if r['mode'] == 'register-prefix'])
-        self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['binding_id'], 'bens-lab')
-        # A retry that would commit (a save whose export never finished) is held the same way.
-        stalled = self.stored_save(self.lab['id'], '', status='export_pending')
+        mine = self.save_in(self.lab['id'], note='Mine').json()
+        outcome, _ = self.run_save(mine); self.assertEqual(outcome['status'], 'review_pending')
+        answer = self.client.post(self.url + '/compare', json={'job_id': mine['id']}).json()
+        self.assertNotIn('upload_blocked', answer)
+        self.assertEqual(answer['also_sends'], [dict(job_id=theirs['id'], lab='other-lab', name='OSPF done', kind='save', target='latest')])
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_other_labs']), (1, 1))
+        # A retry that would commit (a save whose export never finished) goes ahead too.
+        stalled = self.stored_save(self.lab['id'], '', status='export_pending', backup_job_id=self.capture()['id'])
         again = self.client.post('/api/git/jobs/' + stalled['id'] + '/retry', json={'push': True})
-        self.assertEqual(again.status_code, 409, again.text); self.assertIn('other-lab', again.text)
-        self.assertEqual(self.progress.get_job(stalled['id'])['status'], 'export_pending')
+        self.assertEqual(again.status_code, 200, again.text)
         self.progress.update(stalled['id'], status='dismissed')
-        # Once the other lab's save is reviewed and uploaded, this lab saves again.
-        outcome, _ = self.review_and_upload(theirs); self.assertEqual(outcome['status'], 'synced')
-        self.save_in(self.lab['id'], note='Mine')
+        # So does a folder move with the files: it commits on the VM and waits for Upload like a save.
+        moved = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+        self.assertEqual(moved.status_code, 200, moved.text)
+        self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['binding_id'], 'register-prefix-bgp')
+        self.assertFalse([r for r in self.sent if r['mode'] == 'push'], 'nothing was uploaded by any of it')
 
-    def test_saves_stacked_by_an_older_release_upload_only_after_each_was_reviewed(self):
+    def test_saves_stacked_in_one_checkout_upload_together_through_the_save_at_head(self):
+        # DESIGN.md 3.4 (was: "saves stacked by an older release upload only after each was reviewed", 409 with
+        # upload_blocked). Git pushes the branch: the upload goes through the newest save and carries the older one,
+        # which the review names; a successful push marks both reviewed and uploaded.
         other = self.sibling_lab()
         theirs = self.stored_save(other['id'], 'd'*40)
-        mine = self.stored_save(self.lab['id'], 'c'*40)     # committed on top of theirs before the upgrade
-        refused = self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json={'push': True, 'reviewed': True})
-        self.assertEqual(refused.status_code, 409, refused.text)
-        self.assertIn('other-lab', refused.text); self.assertIn('Your review of this save is kept', refused.text)
-        self.assertFalse([r for r in self.sent if r['mode'] == 'push'], 'nothing unreviewed was uploaded')
-        kept = self.progress.get_job(mine['id'])
-        self.assertTrue(kept['reviewed']); self.assertEqual(kept['status'], 'review_pending')
+        mine = self.stored_save(self.lab['id'], 'c'*40)     # committed on top of theirs: the checkout's HEAD
         diff = self.client.post(self.url + '/compare', json={'job_id': mine['id']})
         self.assertEqual(diff.status_code, 200, diff.text)
-        self.assertEqual((diff.json()['also_sends'], diff.json()['also_sends_other_labs']), (1, 1), 'the dialog count includes the other lab')
-        self.assertIn('other-lab', diff.json()['upload_blocked'])
-        # The other lab's upload may now carry this lab's reviewed save, and the verified result settles both.
+        self.assertEqual((diff.json()['also_sends_count'], diff.json()['also_sends_other_labs']), (1, 1), 'the count includes the other lab')
+        self.assertEqual([row['job_id'] for row in diff.json()['also_sends']], [theirs['id']])
+        self.assertEqual((diff.json()['head'], diff.json()['upload_job']), ('c'*40, mine['id']))
+        self.assertNotIn('upload_blocked', diff.json())
         original = self.remote
 
         def push_settles_both(host, request, stopping=None):
@@ -1225,29 +1265,38 @@ class GitPlacesTests(GitProgressTests):
             return result
 
         self.helper.side_effect = push_settles_both
-        outcome, _ = self.review_and_upload(theirs)
+        # Upload pressed in the other lab's panel: the older save cannot be pushed by itself, so the save at HEAD is.
+        uploaded = self.client.post('/api/git/jobs/' + theirs['id'] + '/retry', json={'push': True, 'reviewed': True, 'head': 'c'*40})
+        self.assertEqual(uploaded.status_code, 200, uploaded.text); self.assertEqual(uploaded.json()['id'], mine['id'])
+        self.assertEqual(self.progress.get_job(theirs['id'])['status'], 'review_pending', 'only the save at HEAD is queued')
+        outcome, _ = self.run_save(mine)
         self.assertEqual(outcome['status'], 'synced')
-        self.assertEqual(self.progress.get_job(mine['id'])['status'], 'synced')
+        self.assertEqual([r['operation_id'] for r in self.sent if r['mode'] == 'push'], [mine['id']])
+        carried = self.progress.get_job(theirs['id'])
+        self.assertEqual((carried['status'], carried['pushed'], bool(carried['reviewed'])), ('synced', True, True))
         self.assertFalse(pending_progress(self.store.state))
 
-    def test_a_folder_move_that_meets_an_unreviewed_save_of_another_lab_is_kept_on_the_vm(self):
+    def test_a_folder_move_never_uploads_by_itself_and_its_review_names_another_labs_save(self):
+        # DESIGN.md 3.4, review F2 (was: the move uploads at once unless another lab's save is unreviewed).
         other = self.sibling_lab()
         response = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
         self.assertEqual(response.status_code, 200, response.text)
         job = response.json()['job']
-        self.stored_save(other['id'], 'd'*40)                # appeared while the move waited
+        theirs = self.stored_save(other['id'], 'd'*40)                # appeared while the move waited
         self.progress.execute(job['id'])
         outcome = self.client.get('/api/git/jobs/' + job['id']).json()
-        self.assertEqual(outcome['status'], 'committed', outcome); self.assertIn('other-lab', outcome['message'])
+        self.assertEqual(outcome['status'], 'committed', outcome)
         self.assertTrue([r for r in self.sent if r['mode'] == 'move'])
-        self.assertFalse([r for r in self.sent if r['mode'] == 'push'], 'the move was not uploaded with the unreviewed save')
+        self.assertFalse([r for r in self.sent if r['mode'] == 'push'], 'the move was not uploaded')
         refused = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True})
-        self.assertEqual(refused.status_code, 409, refused.text); self.assertIn('other-lab', refused.text)
+        self.assertEqual((refused.status_code, refused.json()['detail']), (409, REVIEW_FIRST))
+        answer = self.client.post(self.url + '/compare', json={'job_id': job['id']}).json()
+        self.assertEqual([row['job_id'] for row in answer['also_sends']], [theirs['id']])
 
     def test_a_folder_move_that_meets_a_kept_save_waits_on_the_vm_for_a_review_that_names_it(self):
         # Review follow-up J2 (audit M-2): a save kept with Keep snapshot only, of this lab or another lab of the checkout,
-        # no longer holds the move, but the move's upload would carry its commit with nothing naming it. The move stays on
-        # the VM instead, and its upload goes through the review that names the kept saves.
+        # does not hold the move, but the move's upload carries its commit. The move stays on the VM (every move does
+        # now, DESIGN.md 3.4), and its upload goes through the review that names the kept saves.
         other = self.sibling_lab()
         theirs = self.kept(other['id'], 'd'*40, note='OSPF done')
         mine = self.kept(self.lab['id'], 'e'*40, note='Before the move')
@@ -1256,20 +1305,18 @@ class GitPlacesTests(GitProgressTests):
         job = response.json()['job']
         self.progress.execute(job['id'])
         outcome = self.client.get('/api/git/jobs/' + job['id']).json()
-        self.assertEqual(outcome['status'], 'committed', outcome); self.assertIs(outcome['review_before_push'], True)
-        for words in ('Moved on this VM, not uploaded', "other-lab ('OSPF done')", "('Before the move')", 'Review and upload'):
-            self.assertIn(words, outcome['message'])
+        self.assertEqual(outcome['status'], 'committed', outcome)
         self.assertTrue([r for r in self.sent if r['mode'] == 'move'])
         self.assertFalse([r for r in self.sent if r['mode'] == 'push'], 'the kept commits were not uploaded unnamed')
         refused = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True})
-        self.assertEqual(refused.status_code, 409, refused.text); self.assertIn('Review this folder move', refused.text)
+        self.assertEqual(refused.status_code, 409, refused.text); self.assertIn('Review the changes', refused.text)
         self.assertFalse([r for r in self.sent if r['mode'] == 'push'])
         answer = self.client.post(self.url + '/compare', json={'job_id': job['id']}).json()
         name = self.store.lab(self.lab['id'])['name']
         self.assertEqual(answer['also_sends_kept'], [dict(lab='other-lab', note='OSPF done'), dict(lab=name, note='Before the move')])
-        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (2, 1))
-        # The reviewed upload carries them; once the checkout's HEAD is verified on the remote they stop counting, so the
-        # next move is not held again: no move is stranded behind a kept save.
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_other_labs']), (2, 1))
+        self.assertEqual([row['job_id'] for row in answer['also_sends']], [theirs['id'], mine['id']])
+        # The reviewed upload carries them; once the checkout's HEAD is verified on the remote they stop counting.
         original = self.remote
 
         def after_upload(host, request, stopping=None):
@@ -1279,7 +1326,7 @@ class GitPlacesTests(GitProgressTests):
             return result
 
         self.helper.side_effect = after_upload
-        uploaded = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True, 'reviewed': True})
+        uploaded = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True, 'reviewed': True, 'head': self.vm_head})
         self.assertEqual(uploaded.status_code, 200, uploaded.text)
         self.progress.execute(job['id'])
         outcome = self.client.get('/api/git/jobs/' + job['id']).json()
@@ -1287,15 +1334,11 @@ class GitPlacesTests(GitProgressTests):
         for kept in (theirs, mine):
             stored = self.progress.get_job(kept['id'])
             self.assertTrue(stored['head_uploaded']); self.assertFalse(kept_on_vm(stored))
-        sent = len(self.sent)
-        again = self.client.post(self.url + '/destination', json=dict(prefix='eth', move_files=True))
-        self.assertEqual(again.status_code, 200, again.text)
-        self.progress.execute(again.json()['job']['id'])
-        self.assertEqual(self.client.get('/api/git/jobs/' + again.json()['job']['id']).json()['status'], 'synced')
-        self.assertTrue([r for r in self.sent[sent:] if r['mode'] == 'push'])
+        later = self.review_of(self.lab['id'], 'f'*40)
+        self.assertEqual((later['also_sends'], later['also_sends_kept']), ([], []), 'the next review no longer names them')
 
-    def test_a_folder_move_without_a_kept_save_still_uploads_at_once_without_a_review(self):
-        # A kept save of another checkout goes along with no upload of this one: the move keeps its confirmed upload.
+    def test_a_folder_move_waits_for_upload_like_a_save_and_uploads_with_its_review(self):
+        # DESIGN.md 3.4 (was: "a folder move without a kept save still uploads at once without a review").
         other = self.sibling_lab()
         elsewhere = self.kept(other['id'], 'd'*40, note='Elsewhere')
         self.progress.update(elsewhere['id'], destination=dict(elsewhere['destination'], checkout='/home/ben/labs/other'))
@@ -1303,7 +1346,13 @@ class GitPlacesTests(GitProgressTests):
         job = response.json()['job']
         self.progress.execute(job['id'])
         outcome = self.client.get('/api/git/jobs/' + job['id']).json()
-        self.assertEqual(outcome['status'], 'synced', outcome); self.assertFalse(outcome['review_before_push'])
+        self.assertEqual(outcome['status'], 'committed', outcome)
+        self.assertFalse([r for r in self.sent if r['mode'] == 'push'])
+        self.assertEqual(self.client.get('/api/state').json()['labs'][0]['git_status']['waiting'], 1, 'it counts as a save to upload')
+        uploaded = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True, 'reviewed': True, 'head': self.vm_head})
+        self.assertEqual(uploaded.status_code, 200, uploaded.text)
+        self.progress.execute(job['id'])
+        self.assertEqual(self.client.get('/api/git/jobs/' + job['id']).json()['status'], 'synced')
         self.assertEqual(next(r for r in self.sent if r['mode'] == 'push')['operation_id'], job['id'])
 
     def test_a_save_kept_with_keep_snapshot_only_is_counted_and_named_in_the_review_until_an_upload_carried_it(self):
@@ -1312,21 +1361,21 @@ class GitPlacesTests(GitProgressTests):
         other = self.sibling_lab()
         theirs = self.stored_save(other['id'], 'd'*40, note='OSPF done')
         mine = self.stored_save(self.lab['id'], 'c'*40)
-        refused = self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json={'push': True, 'reviewed': True})
-        self.assertEqual(refused.status_code, 409, refused.text)
-        self.assertIn('goes along with the next upload from this repository', refused.text)
+        waiting = self.client.post(self.url + '/compare', json={'job_id': mine['id']}).json()
+        self.assertEqual(([row['job_id'] for row in waiting['also_sends']], waiting['also_sends_kept']), ([theirs['id']], []), 'named while it waits')
         kept = self.client.post('/api/git/jobs/' + theirs['id'] + '/dismiss', json={'acknowledge': True})
         self.assertEqual(kept.status_code, 200, kept.text)
         answer = self.client.post(self.url + '/compare', json={'job_id': mine['id']}).json()
-        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (1, 1), 'the kept commit goes along: the count says so')
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_other_labs']), (1, 1), 'the kept commit goes along: the count says so')
         self.assertEqual(answer['also_sends_kept'], [dict(lab='other-lab', note='OSPF done')])
         self.assertNotIn('upload_blocked', answer)
         # A kept save made under an earlier binding of the same checkout counts too (review issue G1-a): the binding
         # digest also changes with the device selection, while the helper still approves that registration's commits.
         # Counting it can over-report (its registration may be retired); leaving it out could under-report.
         older = self.stored_save(other['id'], 'e'*40, status='dismissed', binding_digest='older-binding', note='Before')
+        self.vm_head = 'c'*40   # it was committed before this lab's save, which is the checkout's HEAD
         answer = self.client.post(self.url + '/compare', json={'job_id': mine['id']}).json()
-        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (2, 2))
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_other_labs']), (2, 2))
         self.assertEqual(answer['also_sends_kept'], [dict(lab='other-lab', note='OSPF done'), dict(lab='other-lab', note='Before')])
         original = self.remote
 
@@ -1343,7 +1392,7 @@ class GitPlacesTests(GitProgressTests):
                          'a kept save of the checkout is matched by its checkout, not by the binding digest of the day')
         later = self.stored_save(self.lab['id'], 'f'*40)
         again = self.client.post(self.url + '/compare', json={'job_id': later['id']}).json()
-        self.assertEqual((again['also_sends'], again['also_sends_kept']), (0, []))
+        self.assertEqual((again['also_sends_count'], again['also_sends_kept']), (0, []))
 
     def kept(self, lab_id, commit, note='OSPF done', **fields):
         """A save of this release kept with Keep snapshot only: it froze its checkout and VM when it was made."""
@@ -1369,7 +1418,7 @@ class GitPlacesTests(GitProgressTests):
         response = self.client.put(self.url, json=dict(binding_id=self.repo['id'], node_names=self.names[:1]))
         self.assertEqual(response.status_code, 200, response.text)
         answer = self.review_of(self.lab['id'])
-        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (2, 0))
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_other_labs']), (2, 0))
         self.assertEqual(answer['also_sends_kept'], [dict(lab=name, note='OSPF done'), dict(lab=name, note='Older release')])
 
     def test_a_kept_save_of_a_lab_disconnected_since_is_still_counted(self):
@@ -1379,7 +1428,7 @@ class GitPlacesTests(GitProgressTests):
         self.kept(other['id'], 'd'*40)
         self.assertEqual(self.client.post('/api/labs/' + other['id'] + '/git/unlink', json={}).status_code, 200)
         answer = self.review_of(self.lab['id'])
-        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (1, 1))
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_other_labs']), (1, 1))
         self.assertEqual(answer['also_sends_kept'], [dict(lab='other-lab', note='OSPF done')])
 
     def test_a_kept_save_whose_answer_was_lost_counts_like_its_pending_form(self):
@@ -1391,7 +1440,7 @@ class GitPlacesTests(GitProgressTests):
         self.kept(other['id'], '', status='export_pending', note='Never sent')    # stopped before its publication
         self.kept(other['id'], 'd'*40, status='review_pending', pushed=True, note='Uploaded')
         answer = self.review_of(self.lab['id'])
-        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (2, 2))
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_other_labs']), (2, 2))
         self.assertEqual([k['note'] for k in answer['also_sends_kept']], ['Design lost', 'Capture lost'])
 
     def refused_then_kept(self, head_after_push):
@@ -1433,7 +1482,7 @@ class GitPlacesTests(GitProgressTests):
         # remote proves nothing of it is left to go along: it ends there, privately, never as uploaded.
         theirs = self.refused_then_kept('b'*40)
         answer = self.review_of(self.lab['id'], 'f'*40)
-        self.assertEqual((answer['also_sends'], answer['also_sends_kept']), (0, []))
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_kept']), (0, []))
         stored = self.progress.get_job(theirs['id'])
         self.assertEqual((stored['status'], stored['pushed']), ('dismissed', False), 'still kept, never claimed as uploaded')
         self.assertTrue(stored['head_uploaded']); self.assertFalse(kept_on_vm(stored))
@@ -1467,7 +1516,7 @@ class GitPlacesTests(GitProgressTests):
         for change in (dict(branch='dev'), dict(remote='https://example.test/other.git')):
             self.progress.update(theirs['id'], head_uploaded=False, destination=dict(original, **change))
             mine = self.stored_save(self.lab['id'], 'b'*40, reviewed='2026-10-03T10:00:00+00:00')
-            self.assertEqual(self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json={'push': True}).status_code, 200)
+            self.assertEqual(self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json={'push': True, 'head': self.vm_head}).status_code, 200)
             self.progress.execute(mine['id'])
             self.assertFalse(self.progress.get_job(theirs['id'])['head_uploaded'], change)
 
@@ -1487,12 +1536,12 @@ class GitPlacesTests(GitProgressTests):
         far = self.kept(other['id'], 'e'*40, note='Other VM')
         self.progress.update(far['id'], host_identity='another-vm')
         answer = self.review_of(self.lab['id'])
-        self.assertEqual((answer['also_sends'], answer['also_sends_kept']), (0, []))
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_kept']), (0, []))
 
     def test_two_labs_whose_saves_both_lack_a_commit_never_hold_each_others_retry_back(self):
         # Review follow-up G2 (audit M-2): an older release could leave one commit-less save per lab of a checkout. Both sent
-        # their publication (the HEAD recorded right before it) and lost the answer, so either may hold a commit on the VM
-        # (`may_hold_commit`, review follow-up J3: a save that never reached the VM holds nothing back at all).
+        # their publication (the HEAD recorded right before it) and lost the answer, so either may hold a commit on the VM.
+        # Neither holds the other back, with or without a commit (DESIGN.md 3.4).
         other = self.sibling_lab()
         theirs = self.stored_save(other['id'], '', status='export_pending', backup_job_id=self.capture(other['id'])['id'], expected_head='a'*40)
         mine = self.stored_save(self.lab['id'], '', status='interrupted', backup_job_id=self.capture()['id'], expected_head='a'*40)
@@ -1501,25 +1550,23 @@ class GitPlacesTests(GitProgressTests):
         self.assertFalse(self.progress.get_job(mine['id'])['retry_push'], 'a retry without a commit only saves on the VM')
         outcome, _ = self.run_save(mine); self.assertEqual(outcome['status'], 'review_pending')
         self.assertFalse([r for r in self.sent if r['mode'] == 'push'])
-        # Now this lab holds a commit nobody reviewed: the other lab's retry waits for that review, and this lab's
-        # upload for the other lab's save. The refused upload keeps its review, which lets the other retry go on.
-        self.assertEqual(self.client.post('/api/git/jobs/' + theirs['id'] + '/retry', json={'push': True}).status_code, 409)
-        held = self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json={'push': True, 'reviewed': True})
-        self.assertEqual(held.status_code, 409, held.text); self.assertIn('Your review of this save is kept', held.text)
         self.assertEqual(self.client.post('/api/git/jobs/' + theirs['id'] + '/retry', json={'push': True}).status_code, 200)
         outcome, _ = self.run_save(theirs); self.assertEqual(outcome['status'], 'review_pending')
+        self.assertFalse([r for r in self.sent if r['mode'] == 'push'])
         for job in (theirs, mine):
             outcome, _ = self.review_and_upload(job); self.assertEqual(outcome['status'], 'synced')
         self.assertFalse(pending_progress(self.store.state))
 
-    def test_a_retry_without_a_commit_still_waits_for_another_labs_save_that_has_one(self):
+    def test_a_retry_without_a_commit_goes_ahead_beside_another_labs_waiting_save_and_never_uploads(self):
+        # DESIGN.md 3.4 (was: 409, "a retry without a commit still waits for another lab's save that has one").
         other = self.sibling_lab()
         self.stored_save(other['id'], 'd'*40)
-        stalled = self.stored_save(self.lab['id'], '', status='export_pending')
+        stalled = self.stored_save(self.lab['id'], '', status='export_pending', backup_job_id=self.capture()['id'])
         for push in (True, False):
-            refused = self.client.post('/api/git/jobs/' + stalled['id'] + '/retry', json={'push': push})
-            self.assertEqual(refused.status_code, 409, refused.text); self.assertIn('other-lab', refused.text)
-        self.assertEqual(self.progress.get_job(stalled['id'])['status'], 'export_pending')
+            again = self.client.post('/api/git/jobs/' + stalled['id'] + '/retry', json={'push': push})
+            self.assertEqual(again.status_code, 200, again.text)
+            self.assertFalse(self.progress.get_job(stalled['id'])['retry_push'])
+            self.progress.update(stalled['id'], status='export_pending')
 
     def unchanged_save_on(self, commit):
         """This lab saves with no device change: the helper answers `unchanged` with the checkout's HEAD (host_git.publish)."""
@@ -1535,14 +1582,14 @@ class GitPlacesTests(GitProgressTests):
         other = self.sibling_lab()
         self.kept(other['id'], 'b'*40, note='OSPF done')
         answer = self.unchanged_save_on('b'*40)
-        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (1, 1))
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_other_labs']), (1, 1))
         self.assertEqual(answer['also_sends_kept'], [dict(lab='other-lab', note='OSPF done')])
 
     def test_an_unchanged_save_that_reuses_this_labs_own_kept_commit_names_it_in_the_review(self):
         name = self.store.lab(self.lab['id'])['name']
         self.kept(self.lab['id'], 'b'*40, note='Before the break')
         answer = self.unchanged_save_on('b'*40)
-        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (1, 0))
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_other_labs']), (1, 0))
         self.assertEqual(answer['also_sends_kept'], [dict(lab=name, note='Before the break')])
 
     def test_a_kept_save_that_only_reused_the_reviewed_saves_own_commit_is_not_counted(self):
@@ -1552,7 +1599,7 @@ class GitPlacesTests(GitProgressTests):
         self.kept(other['id'], 'c'*40, note='Nothing new', changed_files=[])
         self.kept(other['id'], 'd'*40, note='OSPF done')
         answer = self.review_of(self.lab['id'], 'c'*40)
-        self.assertEqual((answer['also_sends'], answer['also_sends_kept']), (1, [dict(lab='other-lab', note='OSPF done')]))
+        self.assertEqual((answer['also_sends_count'], answer['also_sends_kept']), (1, [dict(lab='other-lab', note='OSPF done')]))
 
     def test_a_save_of_another_lab_that_never_reached_the_vm_holds_nothing_back(self):
         # Review follow-up J3 (audit M-2): a save interrupted by a restart during its capture, or left export_pending before
@@ -1564,24 +1611,25 @@ class GitPlacesTests(GitProgressTests):
         mine = self.save_in(self.lab['id'], note='Mine').json()
         outcome, _ = self.run_save(mine); self.assertEqual(outcome['status'], 'review_pending')
         answer = self.client.post(self.url + '/compare', json={'job_id': mine['id']}).json()
-        self.assertNotIn('upload_blocked', answer); self.assertEqual((answer['also_sends'], answer['also_sends_kept']), (0, []))
+        self.assertNotIn('upload_blocked', answer); self.assertEqual((answer['also_sends_count'], answer['also_sends_kept']), (0, []))
         outcome, _ = self.review_and_upload(mine); self.assertEqual(outcome['status'], 'synced')
         moved = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
         self.assertEqual(moved.status_code, 200, moved.text)
         self.progress.update(moved.json()['job']['id'], status='dismissed')
 
-    def test_a_save_of_another_lab_whose_answer_may_have_been_lost_after_the_vm_committed_still_holds_this_lab(self):
+    def test_a_save_of_another_lab_whose_answer_may_have_been_lost_after_the_vm_committed_is_named_in_the_review(self):
         # The other direction of J3: a publication was sent (the design path's marker, or the expected HEAD a capture save
-        # records right before it), so the VM may hold its commit: M-2 stays closed.
+        # records right before it), so the VM may hold its commit. It no longer stops this lab's save (DESIGN.md 3.4,
+        # was 409); M-2 stays closed because the review of this lab's save names it.
         other = self.sibling_lab()
         for fields in (dict(published_attempt=True), dict(expected_head='a'*40)):
             held = self.stored_save(other['id'], '', status='interrupted', changed_files=[], **fields)
-            refused = self.save_in(self.lab['id'], expect=409, note='Mine')
-            self.assertIn('other-lab', refused.text); self.assertIn('review and upload that save', refused.text)
-            moved = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
-            self.assertEqual(moved.status_code, 409, moved.text); self.assertIn('other-lab', moved.text)
-            self.progress.update(held['id'], status='dismissed')
-        self.assertEqual([j['lab_id'] for j in self.store.state['git_jobs']], [other['id']] * 2, 'nothing of this lab was queued')
+            mine = self.save_in(self.lab['id'], note='Mine').json()
+            outcome, _ = self.run_save(mine); self.assertEqual(outcome['status'], 'review_pending')
+            answer = self.client.post(self.url + '/compare', json={'job_id': mine['id']}).json()
+            self.assertIn(held['id'], [row['job_id'] for row in answer['also_sends']])
+            self.progress.update(held['id'], status='dismissed', published_attempt=False, expected_head=None)
+            self.progress.get_job(held['id']).pop('expected_head'); self.progress.update(mine['id'], status='synced', pushed=True)
 
     def test_a_labs_git_work_waits_while_a_design_apply_of_that_lab_is_read_back_after_a_restart(self):
         # Review follow-up J4 (audit L-15): the read-back holds its own lab only, and the capture of a save would be
@@ -1607,24 +1655,28 @@ class GitPlacesTests(GitProgressTests):
             self.store.state['design_jobs'][-1].pop('rechecking'); self.store.save()
         self.save_in(self.lab['id'], note='Mine')
 
-    def test_a_refused_folder_change_leaves_the_lab_on_its_existing_registration(self):
+    def test_a_folder_change_drops_a_device_that_left_the_lab_and_retires_nothing(self):
+        # DESIGN.md 3.3 and 2.4 (was: "a refused folder change leaves the lab on its existing registration", refused
+        # with "Choose its devices again under Save settings"). No folder choice is refused for the device selection.
         self.faithful = True; self.registry = [dict(self.repo)]
         with self.store.lock:   # a discovery sync removed a device after the lab was connected
             self.store.lab(self.lab['id'])['git_binding']['node_names'].append('removed-router'); self.store.save()
-        refused = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
-        self.assertIn(refused.status_code, (400, 409), refused.text); self.assertIn('Save settings', refused.text)
-        self.assertEqual([r['id'] for r in self.registry], ['bens-lab'], 'the registration the lab uses still exists')
-        self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix'])
-        self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['binding_id'], 'bens-lab')
+        moved = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+        self.assertEqual(moved.status_code, 200, moved.text)
+        binding = self.store.lab(self.lab['id'])['git_binding']
+        self.assertEqual((binding['binding_id'], binding['node_names']), ('register-prefix-bgp', self.names))
+        self.assertEqual([r['id'] for r in self.registry], ['bens-lab', 'register-prefix-bgp'], 'the folder the lab left keeps its registration')
+        self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix' and r.get('retire')])
         self.assertEqual(self.client.get(self.url + '/history').status_code, 200)
-        # One connection change at a time, so nothing can take the new folder between the checks and the retire.
-        with self.store.lock: self.store.lab(self.lab['id'])['git_binding']['node_names'].remove('removed-router'); self.store.save()
+        self.progress.update(moved.json()['job']['id'], status='dismissed')
+        # One connection change at a time, so nothing can take the new folder between the checks and the VM's answer.
+        sent = len(self.sent)
         with self.progress.binding_lock:
-            busy = self.client.post(self.url + '/destination', json=dict(prefix='bgp'))
+            busy = self.client.post(self.url + '/destination', json=dict(prefix='ospf'))
             self.assertEqual(busy.status_code, 409, busy.text); self.assertIn('Try again in a moment', busy.text)
             self.assertEqual(self.client.put(self.url, json=dict(binding_id='bens-lab', node_names=self.names)).status_code, 409)
-        self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix'])
-        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='bgp')).status_code, 200)
+        self.assertFalse([r for r in self.sent[sent:] if r['mode'] == 'register-prefix'])
+        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='ospf')).status_code, 200)
 
     def test_a_folder_change_the_vm_already_made_is_kept_when_work_starts_or_the_answer_is_lost(self):
         self.faithful = True; self.registry = [dict(self.repo)]
@@ -1642,39 +1694,34 @@ class GitPlacesTests(GitProgressTests):
         moved = self.client.post(self.url + '/destination', json=dict(prefix='bgp'))
         self.assertEqual(moved.status_code, 200, moved.text)
         self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['binding_id'], 'register-prefix-bgp')
-        self.assertEqual([r['id'] for r in self.registry], ['register-prefix-bgp'])
+        self.assertEqual([r['id'] for r in self.registry], ['bens-lab', 'register-prefix-bgp'], 'nothing is retired by a folder change')
         self.store.state['jobs'].remove(backup)
+        # A lost answer: the lab stays where it was (its folder is still registered), and choosing the folder again
+        # finds the registration the VM made and follows it. Nothing is registered twice.
         lose['answer'] = True
+        again = self.client.post(self.url + '/destination', json=dict(prefix='ospf'))
+        self.assertEqual(again.status_code, 409, again.text)
+        self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'], 'bgp')
+        self.store.state['jobs'].remove(backup); lose['answer'] = False
         again = self.client.post(self.url + '/destination', json=dict(prefix='ospf'))
         self.assertEqual(again.status_code, 200, again.text)
         self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'], 'ospf')
-        self.assertEqual([r['prefix'] for r in self.registry], ['ospf'])
+        self.assertEqual([r['prefix'] for r in self.registry], ['', 'bgp', 'ospf'])
         self.store.state['jobs'].remove(backup)
         self.assertIn('ospf', self.store.state['git_folders'][self.repo['path']])
 
-    def test_a_folder_change_whose_answer_and_check_were_both_lost_is_followed_by_the_next_change(self):
-        # Review follow-up G3 (audit M-3): the VM made the change, its answer was lost and so was the list that would
-        # have shown it. The lab's registration is gone; the next Change folder follows the VM instead of browsing with it.
-        self.faithful = True; self.registry = [dict(self.repo)]
-        original = self.remote; lost = {'answer': True, 'list': 0}
-
-        def lossy(host, request, stopping=None):
-            if request['mode'] == 'list' and lost['list']:
-                lost['list'] -= 1; raise ValueError('Git connection interrupted. Retry this saved operation to reconcile its result.')
-            result = original(host, request, stopping)
-            if request['mode'] == 'register-prefix' and lost['answer']:
-                lost.update(answer=False, list=1); raise ValueError('Git connection interrupted. Retry this saved operation to reconcile its result.')
-            return result
-
-        self.helper.side_effect = lossy
-        first = self.client.post(self.url + '/destination', json=dict(prefix='bgp'))
-        self.assertEqual(first.status_code, 409, first.text)
-        self.assertEqual([r['id'] for r in self.registry], ['register-prefix-bgp'], 'the VM made the change')
+    def test_a_folder_change_an_older_release_made_on_the_vm_without_reporting_back_is_followed_by_the_next_change(self):
+        # Review follow-up G3 (audit M-3): an older release retired the lab's registration with a folder change whose
+        # answer was lost, and so was the list that would have shown it. This release retires nothing (DESIGN.md 2.4),
+        # so the case only comes from such a VM; the recovery stays: the next change follows the VM.
+        self.faithful = True
+        self.registry = [dict(self.repo, id='register-prefix-bgp', prefix='bgp', revision='rev-bgp', label='Bens lab / bgp')]
         self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['binding_id'], 'bens-lab')
         self.assertEqual(self.client.get(self.url + '/history').status_code, 409)
         # Another folder cannot be reached from a registration that no longer exists; the answer says what to do.
         elsewhere = self.client.post(self.url + '/destination', json=dict(prefix='ospf'))
         self.assertEqual(elsewhere.status_code, 409, elsewhere.text); self.assertIn('choose that folder again', elsewhere.text)
+        self.assertIn('in Save settings', elsewhere.text); self.assertNotIn('registration', elsewhere.text)
         self.assertEqual([r['id'] for r in self.registry], ['register-prefix-bgp'])
         again = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
         self.assertEqual(again.status_code, 200, again.text)
@@ -1682,7 +1729,7 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual((binding['binding_id'], binding['repository']['prefix'], binding['node_names']), ('register-prefix-bgp', 'bgp', self.names))
         self.assertEqual(again.json()['job']['target'], 'move', 'the files still move from the folder the lab left')
         self.assertEqual(self.store.state['git_jobs'][-1]['request']['source_prefix'], '')
-        self.assertEqual(len([r for r in self.sent if r['mode'] == 'register-prefix']), 1, 'nothing was registered twice')
+        self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix'], 'nothing was registered again')
         self.assertEqual(self.client.get(self.url + '/history').status_code, 200)
 
     def test_a_folder_change_is_never_adopted_from_a_vm_connection_switched_during_the_call(self):
@@ -1717,17 +1764,18 @@ class GitPlacesTests(GitProgressTests):
         self.helper.side_effect = switched
         moved = self.client.post(self.url + '/destination', json=dict(prefix='bgp'))
         self.assertEqual(moved.status_code, 409, moved.text)
-        self.assertEqual([r['id'] for r in self.registry], ['register-prefix-bgp'], 'the first VM made the change')
+        self.assertEqual([r['id'] for r in self.registry], ['bens-lab', 'register-prefix-bgp'], 'the first VM made the change')
         self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['binding_id'], 'bens-lab', 'nothing adopted from another connection')
 
-    def test_a_registration_that_vanishes_between_the_list_and_the_browse_is_followed_not_browsed(self):
-        # Review issue G3-a: the catalog still showed the lab's registration, then an earlier change of this folder
-        # landed on the VM and the browse answers "Select a registered Git repository.": the change is followed.
+    def test_a_registration_that_vanishes_between_the_list_and_the_change_is_followed(self):
+        # Review issue G3-a: the catalog still showed the lab's registration, then an earlier change of this folder (an
+        # older release's, which retired it) landed on the VM and the helper answers "Select a registered Git
+        # repository.": the change is followed. (Was: seen at the browse of the snapshot-conflict check, which is gone.)
         self.faithful = True; self.registry = [dict(self.repo)]
         original = self.remote
 
         def vanishing(host, request, stopping=None):
-            if request['mode'] == 'browse' and any(r['id'] == 'bens-lab' for r in self.registry):
+            if request['mode'] == 'register-prefix' and any(r['id'] == 'bens-lab' for r in self.registry):
                 self.registry[:] = [dict(self.repo, id='register-prefix-bgp', prefix='bgp', revision='rev-bgp', label='Bens lab / bgp')]
             return original(host, request, stopping)
 
@@ -1735,7 +1783,7 @@ class GitPlacesTests(GitProgressTests):
         moved = self.client.post(self.url + '/destination', json=dict(prefix='bgp'))
         self.assertEqual(moved.status_code, 200, moved.text)
         self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['binding_id'], 'register-prefix-bgp')
-        self.assertEqual([r['mode'] for r in self.sent if r['mode'] in ('browse', 'register-prefix')], ['browse'], 'nothing registered again')
+        self.assertEqual([r['id'] for r in self.registry], ['register-prefix-bgp'], 'nothing registered again')
         self.assertEqual(self.client.get(self.url + '/history').status_code, 200)
 
     def test_this_labs_saves_and_disconnect_wait_while_its_repository_connection_is_being_changed(self):
@@ -1783,7 +1831,8 @@ class GitPlacesTests(GitProgressTests):
         self.publish_error = ''
         self.assertEqual(self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True}).status_code, 200)
         self.progress.execute(job['id'])
-        self.assertEqual(self.client.get('/api/git/jobs/' + job['id']).json()['status'], 'synced')
+        self.assertEqual(self.client.get('/api/git/jobs/' + job['id']).json()['status'], 'committed', 'a move never uploads by itself')
+        self.assertFalse([r for r in self.sent if r['mode'] == 'push'])
         moves = [r for r in self.sent if r['mode'] == 'move']
         self.assertEqual({r['operation_id'] for r in moves}, {job['id']}, 'every retry replays the same journaled move')
 
@@ -1801,7 +1850,7 @@ class GitPlacesTests(GitProgressTests):
         response = self.client.get('/api/git/repositories/bens-lab/tree')
         self.assertEqual(response.status_code, 200, response.text)
         tree = response.json()
-        self.assertEqual([f['path'] for f in tree['files']], ['README.md', 'bgp/latest/r1.cfg', 'bgp/latest/manifest.json'])
+        self.assertEqual([f['path'] for f in tree['files']], ['README.md', 'latest/r1.cfg', 'latest/manifest.json', 'kept/latest/r1.cfg'])
         self.assertEqual(tree['folders'][0]['lab'], dict(id=self.lab['id'], name=self.lab['name']))
         self.assertEqual(tree['saved']['latest'], 1789128000); self.assertEqual(tree['head'], 'a'*40)
         browse = next(r for r in self.sent if r['mode'] == 'browse')
@@ -1820,34 +1869,41 @@ class GitPlacesTests(GitProgressTests):
         catalog = self.client.get('/api/git/repositories').json()['repositories']
         self.assertIn('courses/eth', [r['prefix'] for r in catalog])
 
-    def test_an_empty_folder_stays_in_the_tree_when_the_lab_moves_on_and_the_vm_retires_its_registration(self):
+    def test_an_empty_folder_stays_in_the_tree_when_the_lab_moves_on(self):
         # The reported case: the lab saves to JunOS-TEST-2, a folder "working" is created beneath it.
         self.faithful = True
         self.registry = [dict(self.repo, prefix='JunOS-TEST-2')]
         tree = lambda: self.client.get('/api/git/repositories/' + self.store.lab(self.lab['id'])['git_binding']['binding_id'] + '/tree').json()
         with self.store.lock:
             self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'] = 'JunOS-TEST-2'; self.store.save()
-        # Beside-the-lab registration is impossible inside the lab's own folder; a planned folder is not.
-        refused = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='JunOS-TEST-2/working'))
-        self.assertEqual(refused.status_code, 409); self.assertIn('cannot overlap', refused.text)
+        # A registration inside the lab's saved state is refused by the VM (it would write into the lab's own
+        # saves); a planned folder is not. A folder merely inside the lab's folder is allowed (see the end).
+        refused = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='JunOS-TEST-2/latest/working'))
+        self.assertEqual(refused.status_code, 409)
+        self.assertIn('is inside JunOS-TEST-2/latest, where the lab folder JunOS-TEST-2 keeps its saves', refused.text); self.assertNotIn('overlap', refused.text)
         self.assertEqual(tree()['planned'], [], 'a refused creation leaves no phantom folder')
         planned = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='JunOS-TEST-2/working', plan=True))
         self.assertEqual(planned.status_code, 200, planned.text); self.assertEqual(planned.json(), {'planned': 'JunOS-TEST-2/working'})
         self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix' and r['prefix'] == 'JunOS-TEST-2/working' and r.get('retire')], 'planning registers nothing on the VM')
         self.assertEqual(tree()['planned'], ['JunOS-TEST-2/working'])
         self.assertEqual([f['prefix'] for f in tree()['folders']], ['JunOS-TEST-2'], 'the save destination did not change')
-        # Duplicates are refused accurately: planned, a lab folder, and a committed folder.
-        for name in ('JunOS-TEST-2/working', 'JunOS-TEST-2', 'bgp'):
+        # A name that exists is the folder meant, never a refusal (DESIGN.md section 4, was 409 "already exists"):
+        # planned, a lab folder, and a committed folder.
+        for name, answer in (('JunOS-TEST-2/working', {'planned': 'JunOS-TEST-2/working'}), ('JunOS-TEST-2', {'selected': 'JunOS-TEST-2'}), ('kept', {'selected': 'kept'})):
             again = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix=name, plan=True))
-            self.assertEqual(again.status_code, 409, name); self.assertIn('already exists', again.text)
+            self.assertEqual((again.status_code, again.json()), (200, answer), name)
+        self.assertEqual(tree()['planned'], ['JunOS-TEST-2/working'], 'nothing was planned twice')
         self.assertEqual(self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='', plan=True)).status_code, 400)
-        # The lab moves into it, then on to a second folder, then back: the VM keeps one registration only.
+        # The lab moves into it, then on to a second folder, then back: each folder keeps its registration on the VM
+        # (nothing is retired, DESIGN.md 2.4; was: the VM keeps one registration only) and is reused when chosen again.
         for prefix in ('JunOS-TEST-2/working', 'JunOS-TEST-2/solution', 'JunOS-TEST-2'):
             moved = self.client.post(self.url + '/destination', json=dict(prefix=prefix))
             self.assertEqual(moved.status_code, 200, moved.text)
-            self.assertEqual([r['prefix'] for r in self.registry], [prefix])
+            self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'], prefix)
+        self.assertEqual(sorted(r['prefix'] for r in self.registry), ['JunOS-TEST-2', 'JunOS-TEST-2/solution', 'JunOS-TEST-2/working'])
+        self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix' and r.get('retire')])
         now = tree()
-        self.assertEqual([f['prefix'] for f in now['folders']], ['JunOS-TEST-2'])
+        self.assertEqual([f['prefix'] for f in now['folders'] if f['lab']], ['JunOS-TEST-2'], 'one folder has a lab')
         self.assertEqual(sorted(now['planned']), ['JunOS-TEST-2', 'JunOS-TEST-2/solution', 'JunOS-TEST-2/working'], 'the folders the lab left are still there')
         self.assertEqual(sorted(Store(self.tmp.name).state['git_folders'][self.repo['path']]), sorted(now['planned']), 'and they survive a restart')
         self.assertNotIn('git_folders', self.client.get('/api/state').json())
@@ -1858,6 +1914,12 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual(len([r for r in self.sent[sent:] if r['mode'] not in ('list',)]), 0)
         self.assertNotIn('JunOS-TEST-2/solution', tree()['planned'])
         self.assertEqual(self.client.request('DELETE', '/api/git/repositories/' + self.registry[0]['id'] + '/folders', json=dict(prefix='never-made')).status_code, 404)
+        # Lab folders may sit inside each other: a folder registered inside the lab's own folder (outside its saved
+        # state) is accepted next to it, and the lab still saves where it did.
+        nested = self.client.post('/api/git/repositories/' + self.registry[0]['id'] + '/folders', json=dict(prefix='JunOS-TEST-2/working'))
+        self.assertEqual(nested.status_code, 200, nested.text)
+        self.assertEqual(sorted(r['prefix'] for r in self.registry), ['JunOS-TEST-2', 'JunOS-TEST-2/solution', 'JunOS-TEST-2/working'])
+        self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'], 'JunOS-TEST-2')
 
     def test_a_failed_store_write_creates_no_planned_folder(self):
         persist = self.store.save
@@ -1868,7 +1930,10 @@ class GitPlacesTests(GitProgressTests):
         self.assertTrue(callable(persist))
 
     def test_changing_the_folder_rebinds_the_lab_and_moves_files_without_recapturing(self):
-        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='')).status_code, 409)
+        # The folder the lab saves to already is the one meant: nothing changes and nothing is refused (was 409).
+        same = self.client.post(self.url + '/destination', json=dict(prefix=''))
+        self.assertEqual((same.status_code, same.json()['job'], same.json()['binding']['binding_id']), (200, None, 'bens-lab'))
+        self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix'])
         response = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
         self.assertEqual(response.status_code, 200, response.text)
         binding = self.store.lab(self.lab['id'])['git_binding']
@@ -1879,26 +1944,32 @@ class GitPlacesTests(GitProgressTests):
         with patch.object(self.app.state.runner, 'submit', side_effect=AssertionError('a move never captures devices')):
             self.progress.execute(job['id'])
         outcome = self.client.get('/api/git/jobs/' + job['id']).json()
-        self.assertEqual(outcome['status'], 'synced', outcome); self.assertEqual(outcome['commit'], 'b'*40)
+        # The move commits on the VM and waits for Upload like a save (DESIGN.md 3.4; was: synced at once).
+        self.assertEqual(outcome['status'], 'committed', outcome); self.assertEqual(outcome['commit'], 'c'*40)
         move = next(r for r in self.sent if r['mode'] == 'move')
         self.assertEqual((move['source_prefix'], move['expected_head'], move['binding_id'], move['push']), ('', 'a'*40, 'register-prefix-bgp', False))
-        self.assertTrue(next(r for r in self.sent if r['mode'] == 'register-prefix')['retire'])
+        self.assertNotIn('retire', next(r for r in self.sent if r['mode'] == 'register-prefix'), 'a folder change retires nothing (DESIGN.md 2.4)')
         self.assertEqual(move['message'], 'Move ' + self.lab['name'] + ' progress to bgp/')
-        self.assertFalse([r for r in self.sent if r['mode'] == 'publish'])
-        self.assertEqual(next(r for r in self.sent if r['mode'] == 'push')['operation_id'], job['id'])
+        self.assertFalse([r for r in self.sent if r['mode'] in ('publish', 'push')])
         again = self.client.post(self.url + '/destination', json=dict(prefix='bgp'))
-        self.assertEqual(again.status_code, 409); self.assertIn('already saves', again.text)
+        self.assertEqual((again.status_code, again.json()['job']), (200, None))
+        self.assertEqual(len([r for r in self.sent if r['mode'] == 'register-prefix']), 1)
         self.assertNotIn('binding_digest', json.dumps(self.client.get('/api/state').json()))
 
-    def test_a_pending_save_blocks_folder_changes_and_moves_stay_recoverable(self):
-        job, _ = self.save()
-        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='bgp')).status_code, 409)
-        self.progress.update(job['id'], status='synced', pushed=True)  # the save finished; nothing pending
+    def test_a_waiting_save_does_not_block_a_folder_change_and_moves_stay_recoverable(self):
+        # DESIGN.md 3.1 (was: "a pending save blocks folder changes", 409). The save carries its own binding: it stays
+        # where it was made and uploads through it after the lab moved on.
+        job, _ = self.save(); outcome, _ = self.run_save(job); self.assertEqual(outcome['status'], 'review_pending')
+        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='bgp')).status_code, 200)
+        self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['binding_id'], 'register-prefix-bgp')
+        outcome, _ = self.review_and_upload(job); self.assertEqual(outcome['status'], 'synced')
+        self.assertEqual((outcome['destination']['path'], next(r for r in self.sent if r['mode'] == 'push')['binding_id']), ('latest', 'bens-lab'))
+        self.extra_files = [dict(path='bgp/latest/r1.cfg', size=30)]   # the lab saved in its new folder since
         self.publish_error = 'The repository changed since it was selected. Refresh status and retry the move.'
-        response = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+        response = self.client.post(self.url + '/destination', json=dict(prefix='ospf', move_files=True))
         self.assertEqual(response.status_code, 409, response.text)
         self.publish_error = ''
-        response = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+        response = self.client.post(self.url + '/destination', json=dict(prefix='ospf', move_files=True))
         self.assertEqual(response.status_code, 200, response.text)
         self.publish_error = 'The current folder has unsaved edits. Resolve them as the repository owner before moving.'
         self.progress.execute(response.json()['job']['id'])
@@ -1926,31 +1997,55 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual(failed.status_code, 409); self.assertIn('not signed in', failed.text)
         self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['push_url'], 'https://github.com/ben/Course-Labs')
 
-    def test_destination_refuses_reserved_names_and_snapshot_conflicts(self):
+    def test_a_folder_change_brings_the_saved_files_along_only_when_the_move_can_work(self):
+        # The rule of the chooser's route (git_place.Placement.bring, DESIGN.md 2.6; the refusal audit's F4): a move
+        # queued into a folder that holds saved files failed on every retry. Without a move the lab is pointed at the
+        # folder and the answer says so with `job: null`.
+        def change(prefix):
+            response = self.client.post(self.url + '/destination', json=dict(prefix=prefix, move_files=True))
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'], prefix)
+            return response.json()['job']
+        self.assertIsNone(change('kept'), 'the new folder holds saved files')
+        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='')).status_code, 200)   # back, without a move
+        stalled = self.stored_save(self.lab['id'], '', status='export_pending')                # a save that has not reached its commit
+        self.assertIsNone(change('ospf'), 'its retry would write into the folder the lab left')
+        self.progress.update(stalled['id'], status='dismissed')
+        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='')).status_code, 200)
+        self.assertFalse([j for j in self.store.state['git_jobs'] if j.get('target') == 'move'], 'no move was queued so far')
+        self.assertFalse([r for r in self.sent if r['mode'] == 'move'])
+        job = change('eth')                                                                 # saved files here, none there, nothing unfinished
+        self.assertEqual((job['target'], self.store.state['git_jobs'][-1]['request']['source_prefix']), ('move', ''))
+        self.progress.update(job['id'], status='dismissed')
+        self.assertIsNone(change('eth2'), 'nothing saved in the folder the lab leaves: the fixture tree holds no file under eth')
+        from app.git_progress import brings_files, saved_files
+        files = ['README.md', 'a/latest/r1.cfg', 'a/checkpoints/x/r1.cfg', 'a/baseline/manifest.json', 'a/b/latest/r1.cfg', 'a/latest', 'latest/r1.cfg']
+        self.assertEqual([saved_files(files, f) for f in ('a', 'a/b', '', 'c')], [3, 1, 1, 0])
+        self.assertEqual([brings_files(files, *case) for case in (('a', 'c', False), ('a', 'a/b', False), ('c', 'a', False), ('a', 'c', True), ('a', 'a', False))],
+                         [True, False, False, False, False])
+
+    def test_destination_refuses_reserved_names_and_takes_a_folder_that_holds_a_saved_state(self):
         # Rule 1: a reserved lab-folder shape is refused before the repository is even read.
         reserved = self.client.post(self.url + '/destination', json=dict(prefix='working/latest'))
         self.assertEqual(reserved.status_code, 400, reserved.text)
         self.assertIn('Choose the folder above them', reserved.text)
         self.assertFalse([r for r in self.sent if r['mode'] == 'browse'], 'no tree read for a name refused outright')
-        # Rule 2: a prefix at, or below, an existing snapshot folder is refused (409); the manager
-        # never registers or writes anything on the VM for it.
+        # Owner decision D8 (DESIGN.md section 4; was rule 2, 409 "is a saved configuration"): a folder at or below one
+        # that holds a saved state is no longer refused here. The chooser's route asks its question (git_places.py);
+        # this older route goes ahead.
         self.extra_files = [dict(path='Final/manifest.json', size=50), dict(path='Final/latest/manifest.json', size=60)]
-        at = self.client.post(self.url + '/destination', json=dict(prefix='Final'))
-        self.assertEqual(at.status_code, 409, at.text); self.assertIn('Final is a saved configuration', at.text)
-        self.assertIn('manifest.json', at.text)
-        below = self.client.post(self.url + '/destination', json=dict(prefix='Final/sub'))
-        self.assertEqual(below.status_code, 409, below.text); self.assertIn('Final is a saved configuration', below.text)
-        self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix'], 'a refused destination registers nothing')
-        # A folder beside the snapshot, not at or below it, is unaffected by rule 2.
-        beside = self.client.post(self.url + '/destination', json=dict(prefix='Other'))
-        self.assertEqual(beside.status_code, 200, beside.text)
+        for prefix in ('Final', 'Final/sub', 'Other'):
+            taken = self.client.post(self.url + '/destination', json=dict(prefix=prefix))
+            self.assertEqual(taken.status_code, 200, taken.text)
+            self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'], prefix)
 
-    def test_folders_route_refuses_reserved_names_and_snapshot_conflicts(self):
+    def test_folders_route_refuses_reserved_names_and_takes_a_folder_that_holds_a_saved_state(self):
+        # Owner decision D8 (was 409 "is a saved configuration" for all four).
         self.extra_files = [dict(path='Final/manifest.json', size=50), dict(path='Final/latest/manifest.json', size=60)]
-        for form in (dict(prefix='Final'), dict(prefix='Final/sub'), dict(prefix='Final', plan=True), dict(prefix='Final/sub', plan=True)):
+        for form, answer in ((dict(prefix='Final', plan=True), 'selected'), (dict(prefix='Final/sub', plan=True), 'planned'),
+                             (dict(prefix='Final'), 'repository'), (dict(prefix='Final/sub'), 'repository')):
             response = self.client.post('/api/git/repositories/bens-lab/folders', json=form)
-            self.assertEqual(response.status_code, 409, response.text); self.assertIn('is a saved configuration', response.text)
-        self.assertFalse([r for r in self.sent if r['mode'] in ('register-prefix', 'connect')])
+            self.assertEqual(response.status_code, 200, response.text); self.assertIn(answer, response.json())
         reserved = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='working/latest'))
         self.assertEqual(reserved.status_code, 400, reserved.text)
         reserved_plan = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='working/checkpoints/one', plan=True))

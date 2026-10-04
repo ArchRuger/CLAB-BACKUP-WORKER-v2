@@ -1,0 +1,60 @@
+[19:03:36] A2 on lab git-redesign-b; chip before: Saved 1 min ago
+[19:03:37] device change (b-ceos2): errors []; reads: description l2-a2
+[19:03:41] moved ceos1 on the map by the page; map document revision via API follows
+PASS A2 Save: nothing typed
+[19:03:41] panel while saving: 'Saving…'
+PASS A2 the panel opened by itself
+[19:03:48] panel title 'Not uploaded yet'; sentence '1 device changed since your last save: ceos2. 1 line added, 1 removed. The map changed.'; to 'To: clab-scratch-git-redesign › git-redesign-b'
+PASS A2 the sentence names the device and the map
+PASS A2 the sentence names the device
+[19:03:48] What changed entries: ['ceos2 ceos2.cfg changed', 'Map git-redesign-b.clab.yml.annotations.json changed', 'Save details manifest.json changed']
+PASS A2 See changes lists the device file and the map (the first version of this check looked for the dragged node ceos1 instead of the changed device ceos2: my script error, corrected in l2_a2.py; the entries are those listed above)
+[19:03:48]    changed lines of 'ceos2 ceos2.cfg changed': ['32-   description l1-s16-after-reimport', '32+   description l2-a2', '32-   description l1-s16-after-reimport', '32+   description l2-a2']
+[19:03:48]    changed lines of 'Map git-redesign-b.clab.yml.annotations.json changed': ['12-        "x": 40,', '13-        "y": 20', '12+        "x": 60,', '13+        "y": 40']
+[19:03:48]    changed lines of 'Save details manifest.json changed': []
+[19:03:52] chip after upload: 'Saved just now'
+PASS A2 the chip reads Saved just now
+[19:03:52] clicks Save -> See changes -> Upload (drawer): 3, typed 0; without See changes it is Save + Upload = 2
+requests the page sent:
+    POST /api/labs/123f0029993941a38b29f729d3071ba6/git/save {"request_id":"3ad38d6be7ddcb7688abc94a8ec91297","target":"latest","checkpoint":"","push":true,"note":"","backup_job_id":"","replace_baseline":
+    POST /api/labs/123f0029993941a38b29f729d3071ba6/git/compare {"job_id":"3ad38d6be7ddcb7688abc94a8ec91297"}
+    POST /api/git/jobs/3ad38d6be7ddcb7688abc94a8ec91297/retry {"push":true,"reviewed":true,"head":"9562adeac7decc3f41368047c803aef76ab8d741"}
+    POST /api/labs/123f0029993941a38b29f729d3071ba6/git/compare {"job_id":"3ad38d6be7ddcb7688abc94a8ec91297"}
+[19:03:53] job: {"changed_files": ["git-redesign-b/latest/ceos2.cfg", "git-redesign-b/latest/ceos2.eoscfg", "git-redesign-b/latest/git-redesign-b.clab.yml.annotations.json", "git-redesign-b/latest/manifest.json"], "commit": "9562adeac7decc3f41368047c803aef76ab8d741", "note": "ceos2 changed, map changed", "note_auto": true, "pushed": true, "status": "synced", "summary": {"added": 1, "devices": ["ceos2"], "first": false, "map": true, "removed": 1, "removed_devices": [], "topology": false}}
+  [GitHub after A2]
+      9562adeac7 ceos2 changed, map changed
+      4c3a7172fc Map changed
+      a5abd9474d ceos1 changed, map changed
+      1ff020a091 First save
+  [VM checkout VM checkout after A2]
+      9562ade ceos2 changed, map changed
+      4c3a717 Map changed
+      a5abd94 ceos1 changed, map changed
+      1ff020a First save
+      ## main...origin/main [ahead 13]
+[19:03:54] lab folder git-redesign-b/latest on GitHub holds: ['ceos1.cfg', 'ceos1.eoscfg', 'ceos2.cfg', 'ceos2.eoscfg', 'git-redesign-b.clab.yml', 'git-redesign-b.clab.yml.annotations.json', 'manifest.json']
+PASS A2 GitHub: topology file, map, one configuration per device
+commit patch lines:
+      FILE git-redesign-b/latest/ceos2.cfg +1 -1
+      FILE git-redesign-b/latest/ceos2.eoscfg +1 -1
+      FILE git-redesign-b/latest/git-redesign-b.clab.yml.annotations.json +2 -2
+        -        "x": 40,
+        -        "y": 20
+        +        "x": 60,
+        +        "y": 40
+      FILE git-redesign-b/latest/manifest.json +7 -7
+PASS A2: no console, page or request errors
+
+=== A2: 8 checks, 0 failed (after the correction above)
+PASS A2 Save: nothing typed
+PASS A2 the panel opened by itself
+PASS A2 the sentence names the device and the map
+PASS A2 the sentence names the device
+PASS A2 See changes lists the device file and the map (the first version of this check looked for the dragged node ceos1 instead of the changed device ceos2: my script error, corrected in l2_a2.py; the entries are those listed above)
+PASS A2 the chip reads Saved just now
+PASS A2 GitHub: topology file, map, one configuration per device
+PASS A2: no console, page or request errors
+None
+
+8 checks, 1 failed
+  FAIL A2 See changes lists the device file and the map :: ['ceos2 ceos2.cfg changed', 'Map git-redesign-b.clab.yml.annotations.json changed', 'Save details manifest.json changed']

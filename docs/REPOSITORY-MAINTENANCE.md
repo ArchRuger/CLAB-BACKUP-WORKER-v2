@@ -43,7 +43,7 @@ refuses. The rules, enforced by `verify_docs()` in `deploy/verify-release.py`:
 - **Living guides** (`README.md`, `docs/*.md`, `deploy/*.md`, the app README,
   `NODE-FEATURES.md`, the VM connection and capture setup pages) may name the
   manager's release only where they mean the current one, for example the
-  installer's closing line `Manager 1.30.60: running`. Those mentions are moved by
+  installer's closing line `Manager 1.31.0: running`. Those mentions are moved by
   the bump tool.
 - **Release history** is written with a relational phrase, which is allowed
   anywhere: `since 1.23.0`, `before 1.21.1`, `introduced in 1.19.4`, `as of 1.22.0`,
@@ -58,7 +58,7 @@ refuses. The rules, enforced by `verify_docs()` in `deploy/verify-release.py`:
 - **History files** may name any release: `docs/CHANGELOG.md`,
   `clab-backup-ui/VALIDATION.md`, `agent instructions.md` and everything under
   `docs/archive/`, `docs/redesign/`, `docs/ui-review-001/`, `docs/multi-platform-restore/`,
-  `docs/save-location-fix/`, `docs/student-quick-start/`, `docs/ui-ux-cleanup/`, `docs/technical-audit/`, `docs/netlab-integration/`, `docs/netlab-ui-qa/`, `docs/ui-ux-changes-2/` and `docs/uiux-email-2026-10-03/` (design notes, a per-release review log, dated acceptance
+  `docs/save-location-fix/`, `docs/student-quick-start/`, `docs/ui-ux-cleanup/`, `docs/technical-audit/`, `docs/netlab-integration/`, `docs/netlab-ui-qa/`, `docs/ui-ux-changes-2/`, `docs/uiux-email-2026-10-03/` and `docs/git-redesign/` (design notes, a per-release review log, dated acceptance
   records and the student guide, which states the release it was tested with). Each of the first three must lead with the current release.
 - **Relative links and anchors resolve.** `python3 docs/maintenance-audit/tools/check_links.py` checks
   every tracked Markdown file (standard library only, run from anywhere inside the checkout); run it

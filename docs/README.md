@@ -33,8 +33,9 @@ Three conventions hold across every guide:
 |---|---|
 | [Lab builder](LAB-BUILDER.md) | You want to draw a new lab in the browser, save it to the VM and deploy it, or edit the topology of a lab that is not deployed. |
 | [Lab operations](LAB-OPERATIONS.md) | You start, stop, redeploy or destroy labs, browse the VM's topologies, edit the map, or want to know how device readiness is judged. |
-| [Git setup](GIT-SETUP.md) | You register a VM checkout so *Save progress* can commit and push with the owner's login. |
-| [Save progress](GIT-PROGRESS.md) | You use the Progress tab: saves, checkpoints, baselines, saved versions, compare, apply to the running lab and the save location. |
+| [Git setup](GIT-SETUP.md) | You register a VM checkout so **Save** can commit and **Upload** can push with the owner's login. |
+| [Save and load](GIT-PROGRESS.md) | You use the lab header's **Save** and **Load**: saves and uploads, checkpoints, all versions, loading a saved state onto the running devices, undoing a load, and where the lab saves. |
+| [Course states: Start, Broken and Final](COURSE-STATES.md) | You are a course author: you make a lab's Start, Broken and Final states with **Save as a lab state…**, and you want to know how students load them. |
 | [Naming and structure for lab courses](NAMING.md) | You are an instructor building a course: the names the manager depends on, the recommended repository layout for reference states, and the scaffold tool. |
 | [Browser Wireshark](CAPTURE.md) | You start capture sessions, download captures, repair or remove the capture stack, or need the security boundary of the capture services. |
 | [Network telemetry](TELEMETRY.md) | The feature is retired: read the notice for what was removed, what an upgrade does, and the device-configuration migration. |
@@ -67,4 +68,4 @@ era, a [UI refinement note](archive/UI-UPDATE-1.12.1.md), the
 [repository audit](archive/REPOSITORY-AUDIT-1.15.1.md) that introduced the release
 checks, the [deployment and operation audit](archive/DEPLOYMENT-AUDIT.md) and the
 [Git lab progress proposal](archive/GIT-LAB-PROGRESS-PROPOSAL.md) that became
-*Save progress*.
+**Save** and **Load**.

@@ -45,7 +45,7 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Start / Stop / Restart all devices | Every device of the lab. Stop keeps the containers; Destroy removes them. *Restart all devices…* is containerlab's lab-wide restart (every container stops and starts with its links kept); one device is *Restart device…* below. |
 | Restart device… (one device: right-click it on the map, or *Details* in the Devices view) | containerlab's node-scoped restart of that one device (`containerlab restart --node <device>`, the operation the Containerlab VS Code extension's *Restart node* runs): the container stops and starts again with its links kept, so neighbours keep their wiring; a stopped device takes the start/restore path. The review names the device and the lab, warns that its CLI sessions and traffic through it drop and that neighbours lose their adjacencies to it, and lists that one device as affected. Nothing is saved, backed up, reset or reapplied; the device reads *Restarting*, then *Starting* until it accepts a login again (a login refused in the fifteen minutes after a restart, start or deploy the manager performed still reads *Starting*: IOS XR answers SSH before it accepts logins). A device stopped with `docker stop` outside containerlab has already lost its links; the job says how many links were restored. When a neighbour's container is not running, the review names it and says what follows: a neighbour stopped by the manager, the extension or `containerlab stop` keeps its link ends parked and the link comes back; one that exited on its own or was stopped with `docker stop` took the link with it, the job then reports *n of m links restored* with the neighbour named, and the device waits for all its interfaces before it boots (containerlab tells the image how many to expect: cEOS gives up waiting after five minutes, a VM-based image waits for good). Start the neighbour first, or redeploy the lab. Known limits, each named in the review before the student confirms: a vJunos-switch container cannot be started a second time (its launcher fails without the `init.conf` it renamed on the first start), so its restart is reported as failed by the job, with *Redeploy lab* as the way out; an XRv9k container's launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (back up first, then *Replace running configuration*). |
 | Show running devices, Running labs on the VM | A readable table (topology, lab, device, type/image, state/health, IPv4/IPv6) in the operation window. Failed or incomplete output stays visible for diagnosis. |
-| Save device configurations | containerlab's kind-dependent save command. The manager's own backups (Tools › Configuration backups) and *Save progress* are separate. |
+| Save device configurations | containerlab's kind-dependent save command. The manager's own backups (Tools › Configuration backups) and the header's **Save** are separate. |
 | Open all CLIs ↗ | A launcher page with one row per device (state pill, Open CLI ↗) and *Open all ready CLIs*. Allow pop-ups; at most 32 CLIs at once. |
 | Add to / Remove from favourites | Sorts the lab first under *All labs* on Home; *Recent labs* is ordered by the last successful deploy or redeploy this manager ran, and nothing else (visits, saves and favourites do not reorder it). |
 | Hide from Home / Show on Home | Takes the lab's card off Home (both tabs) and nothing else: the lab stays in My labs with its devices, backups, backup history, saved progress and Git binding; nothing on the VM changes, a running lab keeps running, and the background discovery never puts the card back by itself. Home says how many labs are hidden. Two ways back: **Choose a file on the lab VM…** › the lab's topology › *Add to My labs without starting* or *Deploy lab* (the same lab, not a second workspace), or **Manager ▾ › Labs found on the VM…** › *Hidden from Home* › **Show on Home**. This is not *Remove from this manager* (Advanced › Danger zone), which forgets the workspace. |
@@ -80,8 +80,9 @@ review; the manager keeps each answer for a few minutes.
 A lab operation never runs from a single click. The review names the action in plain
 words (*Destroy BGP_TheoryToPractice?*, *Stop devices?*), says what happens to the
 devices, warns that **configuration changes you have not saved are lost** for the
-disruptive ones, shows when progress was last saved to Git (in red when it never was, or
-when a lab operation ran after the last save) and offers **Save progress first** when the
+disruptive ones, shows when the lab was last saved (`Last saved 3 min ago.`, or `Never saved.`; in red
+when it never was, when a lab operation ran after the last save, or when a saved state was loaded since;
+`1 save is not uploaded yet.` follows when a save waits) and offers **Save first** when the
 lab has a save location. The affected devices and the cleanup folder are under *Technical
 details* together with the exact containerlab command; the *Start lab* review shows that
 command directly, under **Command run on the VM**, since a fresh deploy has nothing else
@@ -239,30 +240,49 @@ false sudo failures and the operations SSH response fix, follow
 
 ## Save lab progress to Git
 
-For capture, commit and push into an existing owner-scoped repository, follow
-[GIT-SETUP.md](GIT-SETUP.md). This is separate from Containerlab’s kind-dependent
-Save configurations command. Use the existing VM account, and retry the original
-manager save after authentication or export errors. No extra Linux user is required.
+Saving lives in the lab header, on every tab: a chip that says where the lab's saved work
+stands, **Save** and **Load**. For capture, commit and push into an existing owner-scoped
+repository, follow [GIT-SETUP.md](GIT-SETUP.md); the daily use is in
+[GIT-PROGRESS.md](GIT-PROGRESS.md). This is separate from Containerlab’s kind-dependent
+Save configurations command. Use the existing VM account, and try again after
+authentication or export errors. No extra Linux user is required.
+
+**Save** saves at once, without a label: the lab's topology file, its map and the
+configuration of every included device go into one folder of the repository as one commit on the
+lab VM. Then one sentence says what changed, with **Upload**, **Not now** and **See
+changes**. Nothing is uploaded without **Upload**. A save is named automatically (for example
+`ceos and xrv9k changed`); the name can be changed afterwards, and **Keep as a checkpoint**
+keeps a save under a name. A lab can save into any folder of its repository, inside, above or
+beside other labs' folders, and the folder can be created on the spot; the manager asks one
+question, with buttons only, when two labs want the very same folder, when the folder
+already holds a saved state of another lab or a course, or when a save of the lab still waits
+for upload. **Save as a lab state…** writes the lab's current state into another folder (for
+example `BGP/start`) without changing where the lab normally saves; it is how a course author
+makes Start, Broken and Final ([course states](COURSE-STATES.md)). **All versions** and **Save
+settings** open from the chip panel, and **See changes** under a save's sentence opens the drawer
+`What changed`.
 
 ## Apply a saved configuration to a running node
 
 A student who has saved a Junos, EOS or IOS XR configuration can put it back onto the
 running node without destroying the lab, editing startup files, redeploying containerlab
-or rebooting the router. On the **Progress** tab, every saved configuration — any repository
-folder that holds a manager-written `manifest.json`, whatever its name or depth: the lab's
-own *Latest*, *Checkpoints* and *Baseline*, the *Instructor and reference versions* kept in
-other folders of the same repository, folders such as `Final` or `Broken` fetched with
-*Update from the repository* — offers **Apply to running lab…**; the lab does not have to
-change its save location first, and applying never changes where it saves. The review lists the source version, the devices, and for each
+or rebooting the router. **Load** in the lab header, on any tab, lists the lab's own saves and
+checkpoints and the **Lab states** of the repository: every saved folder that holds a
+manager-written `manifest.json` and that no connected lab saves into, whatever its name or depth, such
+as a course's `Start`, `Broken` and `Final` (they are also in **All versions**, with
+**Load this state…** on each). The lab does not have to change its save location first, and
+loading never changes where it saves or the topology. A state can be a view-only version: one
+saved without the restore files, listed with the reason and never offered for loading. Choose
+a state and the review lists the saved state, the devices, and for each
 whether it already matches the saved state, how many differences there are, or why it is
 skipped — including a device whose platform cannot be restored yet, whose saved version
 predates its platform's restore support, or an IOS XR device whose saved configuration
-defines a `banner` (pasting one back in safely is not supported yet). The manager backs
+defines a `banner` (pasting one back in safely is not supported yet). The red **Load** is the confirmation. The manager backs
 up the current configuration of every target first, loads the saved configuration as a
 complete replacement inside the device's own transaction (Junos `load override`; EOS a
 configuration session reset first; IOS XR `commit replace`, which replaces the whole
 configuration natively), and activates it with a timed recovery that the device undoes on
-its own if management is lost. The manager then reconnects for the whole undo window to
+its own if management is lost. **Undo this load** loads that backup again, through the same review. The manager then reconnects for the whole undo window to
 confirm the change; on IOS XR only the CLI session that armed the change can confirm it,
 so the manager keeps that session open and confirms on it once the reconnect has proved
 management survived. EOS also saves the confirmed change to startup, since it does not do

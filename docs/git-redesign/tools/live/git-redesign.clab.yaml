@@ -1,0 +1,36 @@
+# git-redesign: disposable four-node square for the Git save/load redesign live pass (dev2).
+# Modelled on docs/multi-platform-restore/lab/restore-square.clab.yml; the vJunos-switch is replaced by a second cEOS.
+#
+#   ceos1:eth1 ---- cjunos:et-0/0/0     cjunos:et-0/0/1 ---- xrv9k:Gi0/0/0/0
+#   xrv9k:Gi0/0/0/1 ---- ceos2:eth1     ceos2:eth2 ---- ceos1:eth2
+# Logins are the kinds' published defaults (containerlab.dev); nothing secret is kept here.
+name: git-redesign
+mgmt:
+  network: clab
+  ipv4-subnet: 172.20.20.0/24
+topology:
+  defaults:
+    env:
+      TZ: UTC
+  nodes:
+    ceos1:
+      kind: arista_ceos
+      image: n24l/ceos:4.35.0F
+      mgmt-ipv4: 172.20.20.101
+    ceos2:
+      kind: arista_ceos
+      image: n24l/ceos:4.35.0F
+      mgmt-ipv4: 172.20.20.102
+    cjunos:
+      kind: juniper_cjunosevolved
+      image: n24l/cjunosevolved:26.2R1.7-EVO
+      mgmt-ipv4: 172.20.20.103
+    xrv9k:
+      kind: cisco_xrv9k
+      image: n24l/cisco_xrv9k:24.3.1
+      mgmt-ipv4: 172.20.20.104
+  links:
+    - endpoints: ["ceos1:eth1", "cjunos:et-0/0/0"]
+    - endpoints: ["cjunos:et-0/0/1", "xrv9k:Gi0/0/0/0"]
+    - endpoints: ["xrv9k:Gi0/0/0/1", "ceos2:eth1"]
+    - endpoints: ["ceos2:eth2", "ceos1:eth2"]
