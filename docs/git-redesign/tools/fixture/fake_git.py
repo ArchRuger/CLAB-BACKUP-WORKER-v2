@@ -474,7 +474,7 @@ class FakeGit:
             target = req.get('target')
             if target not in ('latest', 'baseline', 'checkpoint'):
                 raise ValueError('Choose latest, baseline or checkpoint.')
-            for key in ('replace_baseline', 'allow_removed', 'push'):
+            for key in ('replace_baseline', 'allow_removed', 'push', 'checkpoint_only'):
                 if key in req and type(req[key]) is not bool:
                     raise ValueError('Invalid save option.')
             design = manifest.get('kind') == 'network-design'
@@ -482,7 +482,12 @@ class FakeGit:
                 raise ValueError('Unsupported snapshot kind.')
             if design and target != 'checkpoint':
                 raise ValueError('A design export goes to its own checkpoint folder.')
-            folders = [] if target == 'baseline' or design else [checkout.scope(reg, 'latest')]
+            # H8, as host_git `publish`: an existing save kept as a checkpoint writes only that checkpoint; `latest` keeps
+            # the newest save. The option is refused with any other target and for a design export.
+            only = req.get('checkpoint_only') is True
+            if only and (target != 'checkpoint' or design):
+                raise ValueError('Invalid save option.')
+            folders = [] if target == 'baseline' or design or only else [checkout.scope(reg, 'latest')]
             if target == 'baseline':
                 old = checkout.manifest_at(checkout.files, checkout.scope(reg, 'baseline'))
                 if old and (not req.get('replace_baseline') or req.get('expected_baseline') != digest(old)):

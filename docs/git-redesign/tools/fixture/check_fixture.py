@@ -602,7 +602,22 @@ def saves():
     code, answer = call('POST', f'/api/git/jobs/{d["id"]}/name', dict(note='two\nlines'))
     check('a name is one line (400)', code == 400, f'{code} {answer}')
     check('renaming a save that does not exist is a 404', call('POST', '/api/git/jobs/nope/name', dict(note='x'))[0] == 404)
+    # A newer save lands first, so the save kept as a checkpoint is an OLDER one: `latest` must stay the newer save's.
+    edit('ceos', '   ip route 10.9.10.0/24 10.0.0.2')
+    newer = save(sq, 'Newer than the kept one')
+    latest_before = helper('reg-bgp', mode='read-version', commit=newer['commit'], path='BGP/latest')['snapshot']
     cp = save(sq, '', target='checkpoint', backup_job_id=d['backup_job_id'])
+    latest_after = helper('reg-bgp', mode='read-version', commit=cp['commit'], path='BGP/latest')['snapshot']
+    kept = helper('reg-bgp', mode='read-version', commit=cp['commit'], path='BGP/checkpoints/kept-name')['snapshot']
+    older = helper('reg-bgp', mode='read-version', commit=d['commit'], path='BGP/latest')['snapshot']
+    check('Keep as a checkpoint from an OLDER save leaves latest as the newest save wrote it (the helper\'s checkpoint_only): only the checkpoint folder changes',
+          newer['status'] == 'review_pending' and cp['commit'] != newer['commit'] and latest_after == latest_before and latest_before['files'] != older['files']
+          and cp['changed_files'] and all(p.startswith('BGP/checkpoints/kept-name/') for p in cp['changed_files']), f"{cp.get('status')} {cp.get('message')} {cp.get('changed_files')}")
+    check('...the checkpoint holds the older capture with its topology and map, and the review lists the checkpoint folder only', kept['files'] == older['files']
+          and any(f.get('kind') == 'topology' for f in kept['manifest']['files']) and any(f.get('kind') == 'annotations' for f in kept['manifest']['files'])
+          and sorted(f['path'] for f in review(sq, cp)['files']) == sorted(cp['changed_files']), str(sorted(kept['files']))[:200])
+    refused = helper('reg-bgp', mode='publish', operation_id=uuid.uuid4().hex, target='latest', checkpoint_only=True, expected_head=cp['commit'], snapshot=older)
+    check('...the helper refuses the option for any target but a checkpoint (Invalid save option.)', refused.get('status') == 'needs_attention' and refused.get('message') == 'Invalid save option.', str(refused)[:200])
     check('Keep as a checkpoint from a save: no device is read again (captured false), the folder is made from the save\'s name (kept-name)', cp['status'] == 'review_pending' and cp['target'] == 'checkpoint'
           and cp['checkpoint'] == 'kept-name' and cp['captured'] is False and cp['snapshot_path'] == 'BGP/checkpoints/kept-name', f"{cp['status']} {cp.get('checkpoint')} {cp.get('captured')} {cp.get('snapshot_path')} {cp.get('message')}")
     cp2 = save(sq, '', target='checkpoint', backup_job_id=d['backup_job_id'])
@@ -765,6 +780,20 @@ def causes():
     switch(**{'remote_ahead@Nested-Labs': True})
     code, answer = call('POST', f'/api/labs/{sq}/git/update')
     check('The online copy has changes and nothing waits: Update from the repository fast-forwards', code == 200 and answer['status'] == 'updated', f'{code} {answer}')
+    # A save first brings the VM copy up to date when nothing waits there, so a commit added online does not end its upload as diverged.
+    switch(**{'remote_ahead@Nested-Labs': True})
+    before = call('GET', '/fixture/state')[1]['repositories']['Nested-Labs']['commits']
+    edit('ceos', '   ip route 10.9.11.0/24 10.0.0.2')
+    caught = save(sq)
+    after = call('GET', '/fixture/state')[1]['repositories']['Nested-Labs']['commits']
+    r = review(sq, caught)
+    code, up = upload(caught, r['head'])
+    check('A commit added online while nothing waits here: the save fast-forwards the VM copy first (two new commits: the online one, then the save), and the upload ends synced with nothing done by hand',
+          caught['status'] == 'review_pending' and after == before + 2 and r['also_sends'] == []
+          and code == 200 and up['status'] == 'synced' and lab_state('restore-square')['git_status']['code'] == '' and lab_state('restore-square')['git_status']['waiting'] == 0,
+          f"{caught['status']} {before} {after} {code} {str(up)[:160]}")
+    events = [e for e in call('GET', '/api/logs?limit=2000')[1]['events'] if e['action'] == 'git.update']
+    check('...recorded once as an event with a fixed sentence', len(events) == 1 and events[0]['message'] == 'The VM copy of the repository was brought up to date with the online copy before a save.', str(events)[:200])
     action('reset')
     switch(capture_seconds=1)
     # --- a device that cannot be read, and no save at HEAD
@@ -786,7 +815,7 @@ def causes():
     code, answer = upload(job, r2['head'])
     check('no save at HEAD: the upload is refused with the sentence that sends the person to the repository owner (409)', code == 409 and 'changes the manager did not make' in json.dumps(answer), f'{code} {answer}')
     code, answer = upload(job, '')
-    check('...also when the page sends no HEAD', code == 409 and 'did not make' in json.dumps(answer))
+    check('an upload that names no HEAD is refused before the VM is asked: the review comes first (409)', code == 409 and 'Review the changes of this save' in json.dumps(answer), f'{code} {answer}')
     status, answer = place(ids['shared-b'], repository='reg-bgp', folder='brand-new', acknowledge=True)
     check('a checkout with a commit nobody journaled: registering a new folder answers with the helper\'s sentence (a 409; H2 lets a further folder sit only on manager saves)', status == 409
           and 'not made by manager saves' in json.dumps(answer), f'{status} {answer}')
