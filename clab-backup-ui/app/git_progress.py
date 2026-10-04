@@ -293,6 +293,7 @@ def sibling_refusal(name, job, upload=False, reviewed=False):
 
 
 GIT_JOB_CAP = 200
+CHECKOUT_VIEW_SECONDS = 10
 
 
 def _newest_pushed_ids(jobs):
@@ -542,6 +543,15 @@ def snapshot_diff(before_manifest, before_files, after_manifest, after_files):
     return sorted(result, key=lambda f: f['name'])
 
 
+def folder_value(value):
+    value = value.strip().strip('/')
+    if value and (len(value) > 500 or '\\' in value or any(not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', part) or part.lower() == '.git' or part in ('.', '..') for part in value.split('/'))):
+        raise HTTPException(400, 'Use folder names with letters, numbers, dashes or underscores; use / to nest. No leading slash, no .. and no .git parts.')
+    try: base_folder(value)
+    except ValueError as exc: raise HTTPException(400, str(exc))
+    return value
+
+
 class GitProgress:
     designs = None   # set by main.py: the NetworkDesign service, for design exports (kind `design`)
 
@@ -554,6 +564,9 @@ class GitProgress:
         # retires the old registration, and no other connection may take the new folder in between.
         self.binding_lock = threading.Lock()
         self.rebinding = None   # the lab whose connection is being changed while `binding_lock` is held (`changing`)
+        # The helper's three answers about a checkout (its registrations, tree and saved states), kept for a few seconds:
+        # a folder chooser asks about every typed path, and each answer is a round trip to the VM (`checkout_view`).
+        self.views = {}; self.view_lock = threading.Lock()
         self.pool = ThreadPoolExecutor(max_workers=1)
         with store.lock:
             for job in store.state.setdefault('git_jobs', []):
@@ -948,6 +961,156 @@ class GitProgress:
                 self.store.save()
             self.settle_kept(job, commit)
 
+    def catalog(self):
+        """The helper's registrations for a route: a helper problem is the request's 409."""
+        try: return self.repositories()
+        except ValueError as exc: raise HTTPException(409, str(exc))
+
+    def refuse_snapshot_conflict(self, binding, prefix):
+        """Rule 2: a lab folder cannot sit at, or below, an existing snapshot folder. `browse`
+        can cap the tree at MAX_TREE and report `truncated`; this check only sees what came
+        back, so a conflict below the cap is refused here and one beyond it is not caught this
+        early. That is not a hole: the helper's `publish` independently refuses to write into a
+        destination that already holds files outside its own manifest, so a snapshot folder the
+        browser never listed is still refused, just later, at save time rather than at folder
+        selection."""
+        if not prefix: return
+        seen = self.call({'mode': 'browse'}, binding)
+        conflict = snapshot_conflict(seen.get('files', []), prefix)
+        if conflict:
+            raise HTTPException(409, conflict + ' is a saved configuration (it holds manifest.json). '
+                                'Choose the folder above it or a folder beside it.')
+        return seen
+
+    # Folders made or chosen through the manager, per checkout. Git has no empty folders and the VM
+    # registry only knows the folder a lab saves to now (a move retires the previous registration, and
+    # a folder inside a lab's own folder cannot be registered beside it), so without this list an empty
+    # folder stops existing the moment the lab saves somewhere else. They are plans, not directories:
+    # the tree reports them as `planned` and the page says they are not in the repository yet.
+    def planned_folders(self, path):
+        with self.store.lock: return list(self.store.state.get('git_folders', {}).get(path, []))
+
+    def remember_folders(self, path, *prefixes):
+        with self.store.lock:
+            known = self.store.state.setdefault('git_folders', {}).setdefault(path, [])
+            fresh = [p for p in dict.fromkeys(prefixes) if p and p not in known]
+            if not fresh: return
+            known.extend(fresh); del known[:-MAX_PLANNED_FOLDERS]
+            try: self.store.save()
+            except OSError: del known[-len(fresh):]
+
+    def bound_labs(self):
+        return {lab['git_binding']['binding_id']: dict(id=lab['id'], name=lab['name']) for lab in self.store.state['labs'] if lab.get('git_binding')}
+
+    def catalog_binding(self, binding_id):
+        result = self.catalog()
+        repo = next((r for r in result['repositories'] if r['id'] == binding_id), None)
+        if not repo: raise HTTPException(404, 'This repository is not registered on the VM. Refresh the list.')
+        with self.store.lock: before = host_identity(self.store.state.get('host', {}))
+        return repo, dict(binding_id=repo['id'], revision=repo['revision'], repository=repo, host_identity=before)
+
+    def bind_lab(self, lab_id, repo, node_names, review, before, event, message):
+        """Point the lab at a registration after a live status check; the exposure acknowledgement is the caller's job."""
+        binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
+                       host_identity=before, node_names=node_names, review_before_push=True)
+        self.call({'mode': 'status'}, binding)
+        with self.store.lock:
+            self.idle(); self.guard_pending(lab_id)
+            if before != host_identity(self.store.state.get('host', {})): raise HTTPException(409, 'VM connection changed. Connect again.')
+            lab = self.store.lab(lab_id)
+            if not lab: raise HTTPException(404, 'Lab was removed.')
+            valid = {n['name'] for n in lab['nodes'] if n.get('platform') in PLATFORMS}
+            if len(set(node_names)) != len(node_names) or not node_names or not set(node_names) <= valid:
+                raise HTTPException(400, 'Select distinct supported devices from this lab.')
+            for other in self.store.state['labs']:
+                if other['id'] != lab_id and other.get('git_binding', {}).get('binding_id') == repo['id']:
+                    raise HTTPException(409, 'This folder is already connected to another lab (' + other['name'] + '). Choose a different folder.')
+            old = lab.get('git_binding'); lab['git_binding'] = binding
+            try: self.store.save()
+            except OSError:
+                if old is None: lab.pop('git_binding', None)
+                else: lab['git_binding'] = old
+                raise HTTPException(500, 'Could not save the repository connection.')
+        self.store.event(event, message, lab_id=lab_id)
+        return binding
+
+    def retired_already(self, binding, prefix, catalog=None):
+        """The VM may have made a folder change whose answer was lost or refused, now or in an earlier request:
+        when the lab's registration is gone and `prefix` is registered in the same checkout, that is the
+        registration to follow; else None. Only from the VM connection the binding was made on: the connection
+        can be switched during the long call, and another VM's catalog proves nothing about this one."""
+        def same_vm():
+            with self.store.lock: return host_identity(self.store.state.get('host', {})) == binding['host_identity']
+        if not same_vm(): return None
+        if catalog is None:
+            try: catalog = self.repositories()['repositories']
+            except ValueError: return None
+            if not same_vm(): return None
+        if any(r.get('id') == binding['binding_id'] for r in catalog): return None
+        return next((r for r in catalog if r.get('path') == binding['repository'].get('path') and r.get('prefix') == prefix), None)
+
+    def rebind(self, lab_id, repo, node_names, before, message):
+        """Point the lab at the registration that replaced its retired one. Nothing refuses here: every check
+        ran before the retire, `binding_lock` keeps every other connection change (link, connect, unlink) out
+        meanwhile, and this lab's saves and design exports refuse while it changes (`refuse_while_rebinding`)."""
+        binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
+                       host_identity=before, node_names=node_names, review_before_push=True)
+        with self.store.lock:
+            lab = self.store.lab(lab_id)
+            if not lab: raise HTTPException(404, 'Lab was removed.')
+            lab['git_binding'] = binding
+            try: self.store.save()
+            except OSError: raise HTTPException(500, 'The folder changed on the VM, but the manager could not store the change. Free disk space, then reopen this lab before saving.')
+        self.store.event('git.destination', message, lab_id=lab_id)
+        return binding
+
+    def call(self, request, binding=None):
+        try: return self.invoke(request, binding)
+        except ValueError as exc: raise HTTPException(409, str(exc))
+
+    def checkout_view(self, binding, fresh=False):
+        """What the folder answers are decided from (git_places.py), for the checkout `binding` points into: its
+        registrations with the labs connected to them, the committed tree, the saved states with their summaries, the
+        folders made through the manager and the lab states being saved right now. The helper's answers are kept for
+        CHECKOUT_VIEW_SECONDS per checkout unless `fresh`; the labs, the planned folders and the pending lab states
+        come from the store on every call, because they change without the VM."""
+        path = binding['repository'].get('path', ''); key = (binding['host_identity'], path)
+        with self.view_lock:
+            seen = None if fresh else self.views.get(key)
+            if seen and time.monotonic() - seen['at'] > CHECKOUT_VIEW_SECONDS: seen = None
+        if seen is None:
+            catalog = [r for r in self.catalog()['repositories'] if isinstance(r, dict) and r.get('path') == path]
+            tree = self.call({'mode': 'browse'}, binding)
+            history = self.call({'mode': 'history'}, binding)
+            states = {str(v.get('path', '')): v.get('summary') for v in history.get('versions', []) if isinstance(v, dict)}
+            seen = dict(at=time.monotonic(), catalog=catalog, head=str(tree.get('head', '')), repository=tree.get('repository') or binding['repository'],
+                        files=[f.get('path') for f in tree.get('files', []) if isinstance(f, dict) and isinstance(f.get('path'), str)],
+                        sizes={f.get('path'): f.get('size', 0) for f in tree.get('files', []) if isinstance(f, dict) and isinstance(f.get('path'), str)},
+                        dirs=tree.get('dirs') if isinstance(tree.get('dirs'), list) else None,
+                        truncated=bool(tree.get('truncated')), saved=tree.get('saved', {}), states=states)
+            with self.view_lock: self.views[key] = seen
+        with self.store.lock:
+            labs = self.bound_labs()
+            planned = list(self.store.state.get('git_folders', {}).get(path, []))
+            pending = [dict(prefix=j['binding']['repository'].get('prefix', ''), name=str(j.get('note') or ''))
+                       for j in self.store.state.get('git_jobs', [])
+                       if j.get('kind') == 'state' and job_pending(j) and isinstance(j.get('binding'), dict)
+                       and j['binding'].get('repository', {}).get('path') == path and j['binding'].get('host_identity') == binding['host_identity']]
+        registrations = [dict(id=r['id'], prefix=r.get('prefix', ''), revision=r.get('revision', ''), lab=labs.get(r['id'])) for r in seen['catalog']]
+        return dict(registrations=registrations, files=seen['files'], sizes=seen['sizes'], dirs=seen['dirs'], states=seen['states'], planned=planned,
+                    pending_states=pending, truncated=seen['truncated'], head=seen['head'], repository=seen['repository'], saved=seen['saved'])
+
+    def forget_views(self):
+        """After anything that moved a checkout's HEAD or its registrations (a save, a move, an update, a placement)."""
+        with self.view_lock: self.views.clear()
+
+    def refuse_while_rebinding(self, lab_id):
+        """A save or design export freezes the binding digest it is retried with. Created while a connection change
+        rewrites its lab's binding, it could never be retried (export_pending for good), so it waits for the change.
+        Only that lab's: another lab's binding is not touched, and connecting by URL can clone for minutes."""
+        if self.rebinding == lab_id:
+            raise HTTPException(409, "This lab's repository connection is being changed. Try again in a moment.")
+
     def install(self, app):
         # The review before an upload is mandatory (UI review 001, UI-007 C). `review_before_push` is still
         # accepted from pages loaded before that release, and ignored: a new binding records True, a
@@ -1009,115 +1172,11 @@ class GitProgress:
             review_before_push: bool = False
             acknowledge: bool = False
 
-        def folder_value(value):
-            value = value.strip().strip('/')
-            if value and (len(value) > 500 or '\\' in value or any(not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', part) or part.lower() == '.git' or part in ('.', '..') for part in value.split('/'))):
-                raise HTTPException(400, 'Use folder names with letters, numbers, dashes or underscores; use / to nest. No leading slash, no .. and no .git parts.')
-            try: base_folder(value)
-            except ValueError as exc: raise HTTPException(400, str(exc))
-            return value
-
-        def refuse_snapshot_conflict(binding, prefix):
-            """Rule 2: a lab folder cannot sit at, or below, an existing snapshot folder. `browse`
-            can cap the tree at MAX_TREE and report `truncated`; this check only sees what came
-            back, so a conflict below the cap is refused here and one beyond it is not caught this
-            early. That is not a hole: the helper's `publish` independently refuses to write into a
-            destination that already holds files outside its own manifest, so a snapshot folder the
-            browser never listed is still refused, just later, at save time rather than at folder
-            selection."""
-            if not prefix: return
-            seen = call({'mode': 'browse'}, binding)
-            conflict = snapshot_conflict(seen.get('files', []), prefix)
-            if conflict:
-                raise HTTPException(409, conflict + ' is a saved configuration (it holds manifest.json). '
-                                    'Choose the folder above it or a folder beside it.')
-            return seen
-
-        # Folders made or chosen through the manager, per checkout. Git has no empty folders and the VM
-        # registry only knows the folder a lab saves to now (a move retires the previous registration, and
-        # a folder inside a lab's own folder cannot be registered beside it), so without this list an empty
-        # folder stops existing the moment the lab saves somewhere else. They are plans, not directories:
-        # the tree reports them as `planned` and the page says they are not in the repository yet.
-        def planned_folders(path):
-            with self.store.lock: return list(self.store.state.get('git_folders', {}).get(path, []))
-
-        def remember_folders(path, *prefixes):
-            with self.store.lock:
-                known = self.store.state.setdefault('git_folders', {}).setdefault(path, [])
-                fresh = [p for p in dict.fromkeys(prefixes) if p and p not in known]
-                if not fresh: return
-                known.extend(fresh); del known[:-MAX_PLANNED_FOLDERS]
-                try: self.store.save()
-                except OSError: del known[-len(fresh):]
-
-        def bound_labs():
-            return {lab['git_binding']['binding_id']: dict(id=lab['id'], name=lab['name']) for lab in self.store.state['labs'] if lab.get('git_binding')}
-
-        def catalog_binding(binding_id):
-            result = repositories()
-            repo = next((r for r in result['repositories'] if r['id'] == binding_id), None)
-            if not repo: raise HTTPException(404, 'This repository is not registered on the VM. Refresh the list.')
-            with self.store.lock: before = host_identity(self.store.state.get('host', {}))
-            return repo, dict(binding_id=repo['id'], revision=repo['revision'], repository=repo, host_identity=before)
-
-        def bind_lab(lab_id, repo, node_names, review, before, event, message):
-            """Point the lab at a registration after a live status check; the exposure acknowledgement is the caller's job."""
-            binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
-                           host_identity=before, node_names=node_names, review_before_push=True)
-            call({'mode': 'status'}, binding)
-            with self.store.lock:
-                self.idle(); self.guard_pending(lab_id)
-                if before != host_identity(self.store.state.get('host', {})): raise HTTPException(409, 'VM connection changed. Connect again.')
-                lab = self.store.lab(lab_id)
-                if not lab: raise HTTPException(404, 'Lab was removed.')
-                valid = {n['name'] for n in lab['nodes'] if n.get('platform') in PLATFORMS}
-                if len(set(node_names)) != len(node_names) or not node_names or not set(node_names) <= valid:
-                    raise HTTPException(400, 'Select distinct supported devices from this lab.')
-                for other in self.store.state['labs']:
-                    if other['id'] != lab_id and other.get('git_binding', {}).get('binding_id') == repo['id']:
-                        raise HTTPException(409, 'This folder is already connected to another lab (' + other['name'] + '). Choose a different folder.')
-                old = lab.get('git_binding'); lab['git_binding'] = binding
-                try: self.store.save()
-                except OSError:
-                    if old is None: lab.pop('git_binding', None)
-                    else: lab['git_binding'] = old
-                    raise HTTPException(500, 'Could not save the repository connection.')
-            self.store.event(event, message, lab_id=lab_id)
-            return binding
-
-        def retired_already(binding, prefix, catalog=None):
-            """The VM may have made a folder change whose answer was lost or refused, now or in an earlier request:
-            when the lab's registration is gone and `prefix` is registered in the same checkout, that is the
-            registration to follow; else None. Only from the VM connection the binding was made on: the connection
-            can be switched during the long call, and another VM's catalog proves nothing about this one."""
-            def same_vm():
-                with self.store.lock: return host_identity(self.store.state.get('host', {})) == binding['host_identity']
-            if not same_vm(): return None
-            if catalog is None:
-                try: catalog = self.repositories()['repositories']
-                except ValueError: return None
-                if not same_vm(): return None
-            if any(r.get('id') == binding['binding_id'] for r in catalog): return None
-            return next((r for r in catalog if r.get('path') == binding['repository'].get('path') and r.get('prefix') == prefix), None)
-
-        def rebind(lab_id, repo, node_names, before, message):
-            """Point the lab at the registration that replaced its retired one. Nothing refuses here: every check
-            ran before the retire, `binding_lock` keeps every other connection change (link, connect, unlink) out
-            meanwhile, and this lab's saves and design exports refuse while it changes (`refuse_while_rebinding`)."""
-            binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
-                           host_identity=before, node_names=node_names, review_before_push=True)
-            with self.store.lock:
-                lab = self.store.lab(lab_id)
-                if not lab: raise HTTPException(404, 'Lab was removed.')
-                lab['git_binding'] = binding
-                try: self.store.save()
-                except OSError: raise HTTPException(500, 'The folder changed on the VM, but the manager could not store the change. Free disk space, then reopen this lab before saving.')
-            self.store.event('git.destination', message, lab_id=lab_id)
-            return binding
-
-        def call(request, binding=None):
-            try: return self.invoke(request, binding)
-            except ValueError as exc: raise HTTPException(409, str(exc))
+        # The route helpers are methods (other modules place labs too); the routes below keep their short names.
+        call = self.call; planned_folders = self.planned_folders; remember_folders = self.remember_folders
+        bound_labs = self.bound_labs; catalog_binding = self.catalog_binding; bind_lab = self.bind_lab
+        retired_already = self.retired_already; rebind = self.rebind
+        refuse_snapshot_conflict = self.refuse_snapshot_conflict; refuse_while_rebinding = self.refuse_while_rebinding
 
         def one_binding_change(route):
             """A route that changes which registration a lab points at (or disconnects it) runs alone (`binding_lock`):
@@ -1127,13 +1186,6 @@ class GitProgress:
             def alone(*args, **kwargs):
                 with self.changing(kwargs.get('lab_id')): return route(*args, **kwargs)
             return alone
-
-        def refuse_while_rebinding(lab_id):
-            """A save or design export freezes the binding digest it is retried with. Created while a connection change
-            rewrites its lab's binding, it could never be retried (export_pending for good), so it waits for the change.
-            Only that lab's: another lab's binding is not touched, and connecting by URL can clone for minutes."""
-            if self.rebinding == lab_id:
-                raise HTTPException(409, "This lab's repository connection is being changed. Try again in a moment.")
 
         @app.get('/api/git/repositories')
         def repositories():
