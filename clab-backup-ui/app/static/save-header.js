@@ -529,8 +529,10 @@ async function saveAction(action,job,origin){
    case 'first-start':await saveFirstPlace('start');break;
    case 'keep':{
     if(!lab||!job||typeof gitSubmitSave!=='function')throw new Error(SAVE_MISSING);
+    // Without the save's capture nothing is sent: the manager would read the devices again and write `latest` too.
+    if(!job.backup_job_id)throw new Error('The capture of this save is no longer kept. Save again to make a checkpoint.');
     saveHeader.keeping=job.id;saveHeader.naming=job.id;renderSaveHeader();
-    try{await gitSubmitSave(lab.id,{target:'checkpoint',checkpoint:'',backup_job_id:job.backup_job_id||'',push:true,note:job.note||'',allow_removed:true},undefined,{quiet:true});}
+    try{await gitSubmitSave(lab.id,{target:'checkpoint',checkpoint:'',backup_job_id:job.backup_job_id,push:true,note:job.note||'',allow_removed:true},undefined,{quiet:true});}
     finally{saveHeader.keeping='';}
     break;
    }

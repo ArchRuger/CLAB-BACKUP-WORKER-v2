@@ -566,3 +566,12 @@ test('S11-12 both sides changed while saves wait: Try again uploads a reviewed w
  await u.open();await u.press('save-cant-upload-again');await u.flush();u.render();
  assert.equal(u.posts().filter(c=>c.endpoint.endsWith('/retry')).length,0,'a save the person has not reviewed is never uploaded from here');assert.equal(u.text('save-panel-title-text'),'Not uploaded yet');
 });
+
+test('Keep as a checkpoint sends nothing when the save has no capture id (the manager would read the devices again and write latest too)',async()=>{
+ const h=harness({state:{git_jobs:[saved()]},routes:{'/git/save':()=>{throw new Error('must not be posted');}}});
+ await h.open();const box=h.el('save-keep');assert.equal(box.disabled,false);
+ h.state.git_jobs[0].backup_job_id='';   // the capture went between the render and the click
+ box.checked=true;h.panel.listeners.change({target:box});await h.flush();
+ assert.equal(h.posts().length,0,'nothing is posted');
+ assert.match(h.body.innerHTML,/The capture of this save is no longer kept\. Save again to make a checkpoint\./);
+});

@@ -622,3 +622,19 @@ test('S11-4, S11-9 Save settings: Connect by URL… opens the chooser\'s address
  const source=require('node:fs').readFileSync(require('node:path').join(__dirname,'../app/static/save-drawers.js'),'utf8');
  assert.doesNotMatch(source,/'\/git','PUT'|\/git\/connect|\/git\/destination/);
 });
+
+test('What changed says above its files that the save replaces a newer save the online copy held; Keep as a checkpoint sends nothing without the save’s capture id',async()=>{
+ const line='<p class="save-note">The online copy held a newer save of this lab. This save replaces it.</p>';
+ for(const [more,shown] of [[{replaces_online:true},true],[{},false],[{replaces_online:'yes'},false]]){
+  const job=labJob(more),h=harness({jobs:[job],extras:{gitReviewData:async()=>reviewFor(job)}});
+  h.context.saveDrawerOpen('changes',{job});await settle();
+  assert.equal(h.content().includes(line),shown,JSON.stringify(more));
+  if(shown)assert.ok(h.content().indexOf(line)<h.content().indexOf('Saved files can contain passwords or keys.'),'above the files');
+ }
+ const sent=[],job=ownJob('j3','Own save');
+ await openVersions({jobs:[job],extras:{gitSubmitSave:async(...a)=>{sent.push(a);return {};}}});
+ await h.click(node('button',{cls:'save-item',data:{saveRow:'job:j3'},parent:h.dialog.__root}));await h.click(h.button('checkpoint',{saveRow:'job:j3'}));
+ job.backup_job_id='';   // the capture went between the render and the click
+ await h.click(h.button('checkpoint-keep',{saveRow:'job:j3'}));
+ assert.equal(sent.length,0,'nothing is sent');assert.match(h.content(),/The capture of this save is no longer kept\. Save again to make a checkpoint\./);
+});

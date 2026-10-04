@@ -520,6 +520,12 @@ def manifest_changes(old, new):
                 topology=differs('topology'), map=differs('annotations'))
 
 
+def manifest_content(manifest):
+    """What a saved manifest holds, without what only says when and from which capture it was taken (the helper's
+    `content_digest` leaves out the same two): two saves of the same files are equal."""
+    return {k: v for k, v in manifest.items() if k not in ('backup_job_id', 'captured_at')} if isinstance(manifest, dict) else None
+
+
 def change_name(changes):
     """The name of a save nobody named, from what changed (`manifest_changes`): `ceos changed`, `ceos and xrv9k
     changed`, `ceos, cjunos and xrv9k changed`, `4 devices changed`, `Topology changed`, `Map changed`, `Topology and
@@ -869,8 +875,10 @@ class HelperRefused(HTTPException):
     """The 409 of a route whose call to the VM's Git helper was refused: `problem` is the helper's sentence (scrubbed; the
     manager's own for a VM it cannot reach), `detail` what the page is shown. A plain HTTPException to FastAPI; the routes
     that place a lab or a lab state record it as the lab's status first (`placement_refused`)."""
-    def __init__(self, problem, detail=None):
+    def __init__(self, problem, detail=None, checkout=None):
         super().__init__(409, problem if detail is None else detail); self.problem = str(problem)
+        # (VM identity, checkout folder) the refused call was about, when it was about one checkout (`placement_refused`).
+        self.checkout = checkout
 
 
 class HelperProblem(ValueError):
@@ -936,7 +944,10 @@ class GitProgress:
         try:
             with self.helper_lock: return remote_git(host, request, self.stopping)
         except ValueError as exc:
-            with self.store.lock: message = scrub(str(exc), self.store.state)
+            # One of the helper's own fixed sentences is passed on as it is: the scrubber takes a line that holds the
+            # word "password" for a secret, and one of them does ("your GitHub website password cannot authenticate…"),
+            # which then reached the page as "[sensitive output omitted]" without its code. Anything else is scrubbed.
+            with self.store.lock: message = str(exc) if str(exc) in PROBLEM_CODES else scrub(str(exc), self.store.state)
             raise HelperProblem(message[:600])
         except Exception:
             raise HelperProblem(VM_UNREACHABLE)
@@ -1019,6 +1030,12 @@ class GitProgress:
         manager turns into a question are not a status."""
         problem = refusal.problem
         if any(problem.startswith(sentence) for sentence in NOT_A_STATUS): return
+        # Only what says something about the lab's own save location: a refusal in the checkout the lab saves to, one of
+        # the VM as a whole (it cannot be reached, its helper does not match), or any for a lab without a save location.
+        # A lab state saved into another repository, or a placement into another checkout that the VM refuses, leaves a
+        # save location that works alone: the chip must not read Can't save for it (risk review 4, finding 4).
+        with self.store.lock: own = (self.store.lab(lab_id) or {}).get('git_binding')
+        if own and problem_code(problem) != 'vm' and getattr(refusal, 'checkout', None) != (own.get('host_identity'), own.get('repository', {}).get('path')): return
         self.seen_status(lab_id, problem=refusal.detail if isinstance(refusal.detail, str) else problem, code=problem_code(problem))
 
     def seen_status(self, lab_id, status=None, problem=None, code=None):
@@ -1028,8 +1045,18 @@ class GitProgress:
         if problem is None:
             ready = bool((status or {}).get('ready')); problem = '' if ready else str((status or {}).get('problem') or 'The repository needs attention.')
         else: ready = False
-        with self.store.lock: problem = scrub(str(problem), self.store.state)[:600]
+        if str(problem) not in PROBLEM_CODES:   # a fixed sentence holds no secret (see `invoke`)
+            with self.store.lock: problem = scrub(str(problem), self.store.state)[:600]
         self.statuses[lab_id] = dict(checked=now(), ready=ready, problem=problem, code=(code or problem_code(problem)) if problem else '')
+
+    def status_read(self, lab_id, status):
+        """Remember a `status` answer that was read for something else (the HEAD of a review or an upload, the first
+        publication of a save). The helper's `status` never asks the online copy, so its `ready` cannot take back what
+        the last upload said about it: the chip keeps `diverged` (and the commands the repository's owner runs) until an
+        upload, an update or a finished save says otherwise. A status that is not ready is always remembered."""
+        kept = self.statuses.get(lab_id) or {}
+        if status.get('ready') and kept.get('ready') is False and kept.get('code') == 'diverged': return
+        self.seen_status(lab_id, status)
 
     def git_status(self, lab_id):
         """`git_status` of a lab in /api/state: the last check (never made by the poll; `ready` is None until one was
@@ -1049,6 +1076,7 @@ class GitProgress:
         result = public_job(job)
         if job.get('target') == 'update': return result
         # A folder move says where the files came from: the folder the lab left ('' is the top level), as the move froze it.
+        if job.get('replaces_online'): result['replaces_online'] = True
         if job.get('target') == 'move': result['moved_from'] = str((job.get('request') or {}).get('source_prefix') or '').strip('/')
         backup = next((b for b in self.store.state['jobs'] if b['id'] == job.get('backup_job_id')), None) if job.get('backup_job_id') else None
         if 'own_capture' in job: result['captured'] = bool(job['own_capture'])
@@ -1186,6 +1214,8 @@ class GitProgress:
         try: result = self.invoke({'mode': 'update', 'expected_head': head}, binding)
         except ValueError:
             self.update_pauses[key] = self.clock() + UPDATE_PAUSE; return False
+        # The fast-forward worked: the VM copy holds everything the online copy has, whatever an earlier upload said.
+        self.seen_status(job.get('lab_id'), dict(ready=True))
         if not isinstance(result, dict) or not result.get('head') or result['head'] == head: return False
         self.forget_views()
         try: self.store.event('git.update', UPDATED_FIRST, lab_id=job.get('lab_id', ''), job_id=job['id'])
@@ -1196,9 +1226,18 @@ class GitProgress:
         """The checkout's `status` right before a save's first publication, after the VM copy was brought up to date
         when that was safe (`catch_up`): the HEAD the publication expects and the manifest its name is compared with
         are then the updated ones."""
-        status = self.invoke({'mode': 'status'}, binding); self.seen_status(job['lab_id'], status)
+        status = self.invoke({'mode': 'status'}, binding); self.status_read(job['lab_id'], status)
         if status.get('ready') and self.catch_up(job, binding, status.get('head', '')):
-            status = self.invoke({'mode': 'status'}, binding); self.seen_status(job['lab_id'], status)
+            before = status.get('latest_manifest')
+            status = self.invoke({'mode': 'status'}, binding); self.status_read(job['lab_id'], status)
+            # The fast-forward brought another save of this very folder (the lab was saved from another VM, or its
+            # `latest` was edited online) and this save is about to write its capture over it: the save says so, and
+            # the page words it in the upload sentence (risk review 4, finding 1). Compared by content, not by time;
+            # only for a save that writes `latest` (not a design export, a starting point or a checkpoint from a save).
+            writes_latest = job.get('kind') != 'design' and job.get('target') != 'baseline' and not (job.get('request') or {}).get('checkpoint_only')
+            after = status.get('latest_manifest')
+            if writes_latest and isinstance(after, dict) and manifest_content(before) != manifest_content(after):
+                self.update(job['id'], replaces_online=True)
         if not status.get('ready'): raise ValueError(status.get('problem') or refusal)
         return status
 
@@ -1516,7 +1555,7 @@ class GitProgress:
 
     def call(self, request, binding=None):
         try: return self.invoke(request, binding)
-        except ValueError as exc: raise HelperRefused(str(exc))
+        except ValueError as exc: raise HelperRefused(str(exc), checkout=(binding['host_identity'], binding['repository'].get('path')) if binding else None)
 
     def checkout_view(self, binding, fresh=False):
         """What the folder answers are decided from (git_places.py), for the checkout `binding` points into: its
@@ -2197,7 +2236,7 @@ class GitProgress:
             try: status = self.invoke({'mode': 'status'}, binding)
             except ValueError as exc:
                 self.seen_status(job['lab_id'], problem=str(exc)); raise HTTPException(409, str(exc))
-            self.seen_status(job['lab_id'], status)
+            self.status_read(job['lab_id'], status)   # read for HEAD; what the upload itself answers is recorded by `finish`
             head = str(status.get('head') or '')
             if not head: raise HTTPException(409, str(status.get('problem') or 'The repository on the VM could not be checked. Try again.'))
             if data.head != head: raise HTTPException(409, ANOTHER_SAVE)
@@ -2337,11 +2376,7 @@ class GitProgress:
                 if not re.fullmatch(r'[0-9a-f]{40,64}', head):
                     try:
                         status = self.invoke({'mode': 'status'}, binding); head = str(status.get('head') or '')
-                        # This read is for HEAD. The helper's `status` never asks the online copy, so its `ready` cannot
-                        # take back what the last upload said about it: the chip keeps `diverged` (and the commands the
-                        # repository's owner runs) until an upload, an update or a save says otherwise.
-                        kept = self.statuses.get(job['lab_id']) or {}
-                        if not (status.get('ready') and kept.get('ready') is False and kept.get('code') == 'diverged'): self.seen_status(job['lab_id'], status)
+                        self.status_read(job['lab_id'], status)   # this read is for HEAD: it does not take `diverged` back
                     except ValueError: head = ''
                 with self.store.lock:
                     held = {j['id'] for j in self.store.state['git_jobs']} | {j.get('commit') for j in self.store.state['git_jobs'] if j.get('commit')}

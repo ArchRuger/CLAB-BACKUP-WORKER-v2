@@ -408,5 +408,7 @@ function saveChangeSentence(summary,also,job){
   const names=rows.map(r=>{const name=String(r&&r.name||'Unnamed save');if(r&&r.job_id){const lab=r.lab&&typeof r.lab==='object'?r.lab.name:r.lab;return lab?`${name} (${lab})`:name;}return `"${name}"`;});
   parts.push(`This upload also sends ${rows.length===1?'1 other save':rows.length+' other saves'}: ${list(names,3)}.`);
  }
+ // The save's fast-forward brought a newer save of this lab from the online copy, and this save was written over it.
+ if(job&&job.replaces_online===true)parts.push('The online copy held a newer save of this lab. This save replaces it.');
  return parts.join(' ');
 }

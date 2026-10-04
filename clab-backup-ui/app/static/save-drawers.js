@@ -118,7 +118,7 @@ function drwChangesView(d){
  }else actions='<button type="button" class="button ghost small" data-save-action="files">View files</button>';
  const account=saveChangeAccount(job,review),dest=job.destination||{};
  const also=!uploaded&&review?review.also_sends||[]:[];
- const lead=job.target==='move'?`<p class="save-note">This moves the saved files of ${esc(drwLabName())}${typeof job.moved_from==='string'?' from '+esc(job.moved_from||'the top level'):''} to ${esc(typeof gitMoveFolder==='function'?gitMoveFolder(job):dest.path||'the new folder')}. No device file changes.</p>`:'';
+ const lead=job.target==='move'?`<p class="save-note">This moves the saved files of ${esc(drwLabName())}${typeof job.moved_from==='string'?' from '+esc(job.moved_from||'the top level'):''} to ${esc(typeof gitMoveFolder==='function'?gitMoveFolder(job):dest.path||'the new folder')}. No device file changes.</p>`:job.replaces_online===true?'<p class="save-note">The online copy held a newer save of this lab. This save replaces it.</p>':'';
  const to=dest.repository||dest.path?`<p class="save-kv">To: <code>${esc(dest.repository||'')}</code>${dest.path?` <span aria-hidden="true">›</span> <code>${esc(dest.path)}</code>`:''}</p>`:'';
  let content=drwNotices(d);
  if(reason)content+=`<p class="save-note">${esc(reason)}</p>`;
@@ -306,7 +306,9 @@ function drwFailure(message){const d=saveDrawer.data;if(d){d.error=message;saveD
 async function drwKeepCheckpoint(row){
  const d=saveDrawer.data,id=drwLabId(),typed=d.checkpoint?.value||'';
  if(typed&&!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(typed))throw new Error('Enter a checkpoint name using letters, numbers, underscores or hyphens.');
- const values={target:'checkpoint',checkpoint:typed,push:true,note:'',backup_job_id:row.job.backup_job_id||'',allow_removed:true};
+ // Without the save's capture nothing is sent: the manager would read the devices again and write `latest` too.
+ if(!row.job.backup_job_id)throw new Error('The capture of this save is no longer kept. Save again to make a checkpoint.');
+ const values={target:'checkpoint',checkpoint:typed,push:true,note:'',backup_job_id:row.job.backup_job_id,allow_removed:true};
  if(typeof gitSubmitSave==='function')await gitSubmitSave(id,values,undefined,{quiet:true});
  else await json('/labs/'+drwEnc(id)+'/git/save','POST',{request_id:typeof gitRequestId==='function'?gitRequestId():'0'.repeat(32),target:'checkpoint',checkpoint:typed,push:true,note:'',backup_job_id:values.backup_job_id,replace_baseline:false,expected_baseline:'',allow_removed:true});
  d.checkpoint=null;saveDrawerClose();

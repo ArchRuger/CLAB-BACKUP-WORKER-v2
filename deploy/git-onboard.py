@@ -296,10 +296,27 @@ def read_registrations(env):
         raise ValueError('The registration list is invalid. Repair it with your VM administrator; setup will not replace existing settings.') from None
 
 
+MAX_LABEL = 100   # deploy/setup-git.sh refuses a longer label
+
+
+def folder_label(name, prefix):
+    """The label of a lab folder, `<checkout> / <folder>`, cut to the label limit instead of refused: the same rule
+    as `folder_label` of the VM Git helper (clab-backup-ui/app/host_git.py), copied because guided setup cannot import
+    it. It keeps the end of the folder, which tells folders apart, behind `…`."""
+    name = ''.join(c for c in name if ord(c) >= 32 and ord(c) != 127)
+    label = name + (' / ' + prefix if prefix else '')
+    if len(label) <= MAX_LABEL:
+        return label
+    if not prefix:
+        return name[:MAX_LABEL - 1] + '…'
+    head = name[:40] + ' / …'
+    return head + prefix[-(MAX_LABEL - len(head)):]
+
+
 def new_binding(path, prefix=''):
     # The label distinguishes each subfolder of a shared repository in the manager's
     # repository list, so several labs in one repository do not look identical.
-    label = path.name + (' / ' + prefix if prefix else '')
+    label = folder_label(path.name, prefix)
     return {'remote': 'origin', 'prefix': prefix, 'label': label, 'branch': '', 'push_url': ''}
 
 

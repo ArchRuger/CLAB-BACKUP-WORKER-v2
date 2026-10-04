@@ -284,7 +284,7 @@ class Placement:
         path = handle['repository']['path']
         regs = [r for r in self.catalog() if r['path'] == path]
         hits = [r for r in regs if git_places.colliding(folder, str(r.get('prefix') or ''))]
-        if not hits: raise HelperRefused(text, clean_text(text))
+        if not hits: raise HelperRefused(text, clean_text(text), checkout=(handle['host_identity'], path))
         # Decided under the store lock; `changing` keeps every other connection change out until this request ends.
         with self.store.lock: used = self.in_use()
         if any(h['id'] in used for h in hits): return None, self.colliding_question(placed, handle, folder, hits)

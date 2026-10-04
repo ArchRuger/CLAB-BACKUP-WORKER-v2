@@ -38,7 +38,7 @@ class Vm:
         self.registry = [dict(repo)]; self.path = repo['path']
         self.order = ['a' * 40]; self.remote = 'a' * 40; self.trees = {'a' * 40: {}}
         self.log = {}; self.journals = {}; self.problem = ''; self.push_error = ''; self.compare_error = ''; self.lost = set()
-        self.online = []; self.update_error = ''   # commits only the online copy has; what `update` answers instead of working
+        self.online = []; self.update_error = ''; self.register_error = ''   # commits only the online copy has; what `update` answers instead of working
 
     @property
     def head(self): return self.order[-1]
@@ -67,6 +67,7 @@ class Vm:
         mode = request['mode']
         if mode == 'list': return dict(protocol=PROTOCOL, version=__version__, repositories=[dict(r) for r in self.registry])
         if mode == 'register-prefix':
+            if self.register_error: raise ValueError(self.register_error)
             source = next(r for r in self.registry if r['id'] == request['binding_id'])
             found = next((r for r in self.registry if r['path'] == source['path'] and r['prefix'] == request['prefix']), None)
             if not found:
@@ -1120,6 +1121,101 @@ class CatchUpTests(SaveModelCase):
         state = self.client.post(self.url + '/state', json=dict(request_id=uuid.uuid4().hex, folder='start', name='Start')).json()
         outcome, _ = self.run_job(state)
         self.assertEqual(outcome['status'], 'review_pending'); self.assertEqual([r['binding_id'] for r in self.sent[sent:] if r['mode'] == 'update'], ['reg-start'])
+
+
+class ReviewFourTests(SaveModelCase):
+    """The fourth risk review (docs/git-redesign/REVIEW.md section 7), findings 1, 3, 4 and 7."""
+
+    def setUp(self):
+        super().setUp()
+        self.now = 1000.0; self.progress.clock = lambda: self.now
+
+    def saved_elsewhere(self):
+        """Another VM saved this lab's folder online: the same devices, r1 changed there."""
+        tree = copy.deepcopy(self.vm.trees[self.vm.head]); self.texts[self.names[0]] = 'hostname elsewhere\n'
+        tree['latest'] = git_progress.captured_snapshot(self.store, self.capture())
+        self.vm.online.append(('Saved elsewhere', ['latest/r1.cfg']))
+        real = self.vm.commit
+        self.vm.commit = lambda new, operation, subject, files: real(tree if subject == 'Saved elsewhere' else new, operation, subject, files)
+
+    def test_a_save_written_over_a_newer_save_from_the_online_copy_says_so(self):
+        first = self.saved(); self.upload(first)
+        self.assertNotIn('replaces_online', first); self.assertNotIn('replaces_online', self.stored(first), 'no fast-forward moved HEAD')
+        # The fast-forward brings only another folder's files: the lab's own latest is the same before and after.
+        self.vm.added_online(); self.texts[self.names[1]] = 'hostname here\n'
+        other = self.saved()
+        self.assertEqual(self.modes().count('update'), 2); self.assertNotIn('replaces_online', other); self.upload(other)
+        # It brings a newer save of this very lab: the save goes on, waits for Upload, and says what it replaces.
+        self.saved_elsewhere(); self.texts[self.names[0]] = 'hostname mine again\n'
+        job = self.saved()
+        self.assertEqual((job['status'], job['pushed']), ('review_pending', False))
+        for view in self.public_views(job): self.assertIs(view['replaces_online'], True)
+        self.assertNotIn('push', self.modes()[-4:], 'nothing is uploaded without Upload')
+        self.assertEqual(self.upload(job)['status'], 'synced')
+        # A checkpoint made from a save writes no latest: nothing is replaced, whatever the fast-forward brought.
+        self.saved_elsewhere()
+        kept = self.saved(target='checkpoint', backup_job_id=job['backup_job_id'], checkpoint='keep-1')
+        self.assertEqual(kept['status'], 'review_pending'); self.assertNotIn('replaces_online', kept)
+        self.assertEqual(git_progress.manifest_content(dict(a=1, captured_at='x', backup_job_id='y')), dict(a=1)); self.assertIsNone(git_progress.manifest_content(None))
+
+    def diverged(self):
+        self.progress.seen_status(self.lab['id'], problem='The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.')
+        return self.client.get('/api/state').json()['labs'][0]['git_status']
+
+    def code(self): return self.client.get('/api/state').json()['labs'][0]['git_status']['code']
+
+    def test_a_status_read_for_something_else_does_not_take_diverged_back(self):
+        waiting = self.saved(note='Waits')
+        self.assertEqual(self.diverged()['code'], 'diverged')
+        # The upload route reads the status for HEAD (here it then refuses: the head shown is not the checkout's).
+        self.upload(waiting, expect=409, head='f' * 40); self.assertEqual(self.code(), 'diverged')
+        # The first status of a save (a save waits, so nothing is fetched) and the status of a review.
+        self.texts[self.names[0]] = 'hostname next\n'
+        again = self.saved(); self.assertEqual((again['status'], self.code()), ('review_pending', 'diverged'))
+        self.progress.status_read(self.lab['id'], dict(ready=True)); self.assertEqual(self.code(), 'diverged')
+        # A status that is not ready is always remembered; a ready one then is, too.
+        self.progress.status_read(self.lab['id'], dict(ready=False, problem='The repository has unsaved edits in the selected scope. Resolve them before continuing.'))
+        self.assertEqual(self.code(), 'busy')
+        self.progress.status_read(self.lab['id'], dict(ready=True)); self.assertEqual(self.code(), '')
+        # An upload that works says otherwise, and so does a save whose fast-forward worked.
+        self.diverged(); self.assertEqual(self.upload(again)['status'], 'synced'); self.assertEqual(self.code(), '')
+        self.diverged(); self.texts[self.names[0]] = 'hostname after\n'
+        self.saved(); self.assertEqual(self.code(), '', 'the update worked: the VM copy holds what the online copy has')
+        source = Path(git_progress.__file__).read_text(encoding='utf-8')
+        self.assertEqual(source.count("kept.get('code') == 'diverged'"), 1, 'one guard, used by the review, the upload and the first status')
+
+    def state_into(self, repository, expect):
+        response = self.client.post(self.url + '/state', json=dict(request_id=uuid.uuid4().hex, folder='start', name='Start', repository=repository))
+        self.assertEqual(response.status_code, expect, response.text)
+
+    def test_a_placement_refused_in_another_checkout_is_not_the_labs_own_status(self):
+        refusal = ('Git push preflight failed. Authenticate as the registered Linux owner and check remote write access. For GitHub use gh auth login and gh auth setup-git; '
+                   'your GitHub website password cannot authenticate a Git push. No commits were pushed.')
+        self.vm.registry.append(dict(self.repo, id='elsewhere', path='/home/ben/labs/other', revision='rev-elsewhere', label='Other', push_url='https://github.com/ben/other.git'))
+        self.client.get(self.url); status = lambda: self.client.get('/api/state').json()['labs'][0]['git_status']
+        self.assertTrue(status()['ready'])
+        self.vm.register_error = refusal
+        self.state_into('elsewhere', 409)
+        self.assertEqual((status()['ready'], status()['code']), (True, ''), 'the lab\'s own save location works: the chip does not read Can\'t save')
+        self.state_into('', 409)                                         # the same refusal in the checkout the lab saves to
+        self.assertEqual((status()['ready'], status()['code'], status()['problem']), (False, 'account', refusal),
+                         'the helper\'s fixed sentence arrives whole, although it holds the word "password"')
+        # A VM that cannot be reached is the lab's problem whichever repository was asked.
+        self.client.get(self.url); self.vm.register_error = 'Git connection interrupted. Retry this saved operation to reconcile its result.'
+        self.state_into('elsewhere', 409); self.assertEqual((status()['ready'], status()['code']), (False, 'vm'))
+        # A lab without a save location has no other status to keep: the refusal is recorded.
+        self.vm.register_error = refusal
+        self.assertEqual(self.client.post(self.url + '/unlink', json={}).status_code, 200)
+        self.assertIsNone(status()['ready'])
+        self.state_into('elsewhere', 409); self.assertEqual((status()['ready'], status()['code']), (False, 'account'))
+
+    def test_a_checkpoint_without_a_name_and_without_a_capture_never_starts_a_fresh_capture(self):
+        with patch.object(self.app.state.runner, 'submit') as submit:
+            for body in (dict(target='checkpoint', checkpoint=''), dict(target='checkpoint', checkpoint='', backup_job_id='')):
+                refused = self.post(expect=400, **body)
+                self.assertEqual(refused['detail'], 'Use a checkpoint name containing letters, numbers, hyphens or underscores.')
+        submit.assert_not_called(); self.dispatch.assert_not_called()
+        self.assertEqual(self.store.state['git_jobs'], [])
 
 
 class ConnectionLockTests(SaveModelCase):

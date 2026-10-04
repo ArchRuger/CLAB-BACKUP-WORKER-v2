@@ -409,6 +409,23 @@ class PlaceTests(unittest.TestCase):
         self.assertIs(self.sent('connect')[-1]['initialize'], True)
         self.assertEqual(done['binding']['repository']['prefix'], 'ux-a')
 
+    def test_a_placement_into_another_repository_that_the_vm_refuses_leaves_the_status_of_a_save_location_that_works(self):
+        # Risk review 4, finding 4: the chip must not read Can't save for a location that is fine.
+        lab = self.lab('ux-a'); self.placed(lab, 'ux-a')
+        status = lambda: next(l for l in self.client.get('/api/state').json()['labs'] if l['id'] == lab['id'])['git_status']
+        self.client.get('/api/labs/' + lab['id'] + '/git')
+        self.assertEqual((status()['ready'], status()['code']), (True, ''))
+        self.vm.connect_error = host_git.NOT_SYNCHRONIZED
+        refused = self.place(lab, 'ux-a', expect=409, url='https://github.com/ben/another')
+        self.assertEqual(refused['detail'], host_git.NOT_SYNCHRONIZED)
+        self.assertEqual((status()['ready'], status()['code'], status()['problem']), (True, '', ''), 'the lab still saves where it did, and that works')
+        self.assertEqual(self.store.lab(lab['id'])['git_binding']['repository']['prefix'], 'ux-a')
+        # The VM as a whole not answering is the lab's problem too.
+        self.vm.connect_error = ''
+        with patch('app.git_progress.remote_git', side_effect=OSError('no route')):
+            self.place(lab, 'ux-b', expect=409)
+        self.assertEqual((status()['ready'], status()['code']), (False, 'vm'))
+
     def test_a_placement_the_vm_refuses_becomes_the_labs_status_and_a_placement_that_worked_clears_it(self):
         # PROMPT 6.5, integration seam 13: the chip says why with the code of the helper's sentence, as for a refused save.
         lab = self.lab('ux-a')

@@ -686,3 +686,13 @@ test('S11-3 (C-025) loadState.recent is the lab’s newest finished load, also o
  s=ls(bound,{restore_jobs:[active,none]});assert.equal(s.key,'loading');assert.equal(s.recent.job.id,none.id,'a running load is not a finished one');
  assert.equal(chip(bound,{restore_jobs:[none],git_jobs:[gj('synced',60)]}).key,'saved');
 });
+
+test('a save written over a newer save the online copy held says so at the end of the upload sentence (risk review 4, finding 1)',()=>{
+ const c=makeContext(),one={devices:['ceos'],added:3,removed:0},end=' The online copy held a newer save of this lab. This save replaces it.';
+ const plainSentence=c.saveChangeSentence(one,null,{target:'latest'});
+ assert.equal(plainSentence,'1 device changed since your last save: ceos. 3 lines added, 0 removed.');
+ assert.equal(c.saveChangeSentence(one,null,{target:'latest',replaces_online:true}),plainSentence+end);
+ const also=[{job_id:'j2',lab:'other-lab',name:'OSPF done'}];
+ assert.equal(c.saveChangeSentence(one,also,{target:'latest',replaces_online:true}),c.saveChangeSentence(one,also,{target:'latest'})+end,'after everything else the upload sends');
+ for(const job of [undefined,{target:'latest'},{target:'latest',replaces_online:false},{target:'latest',replaces_online:'yes'}])assert.doesNotMatch(c.saveChangeSentence(one,null,job),/online copy/);
+});
