@@ -154,6 +154,21 @@ as the owner under the checkout's lock; a remote that cannot be asked refuses. *
 registration makes every later push of the checkout fail for every lab, and the manager cannot know
 whether one exists.
 
+**H8. `publish` takes `checkpoint_only`.** A boolean option, valid only with `target: 'checkpoint'`: the
+export then writes `checkpoints/<name>` alone and neither reads nor writes `latest`. Absent or false,
+a checkpoint writes `latest` and the checkpoint folder as before. *Reason* (found live, LIVE-ENV.md 9.3
+item 5): D6 makes a checkpoint from a save that already exists, by publishing that save's capture
+again; for any save but the newest, the unchanged rule turned `latest` back to the older capture, so
+the repository's latest save was no longer what the lab had saved last, and a later Load of it would
+have loaded an old configuration. The manager sends the option with every checkpoint made from an
+existing capture (3.5).
+
+**H9. A label the helper generates is cut, not refused.** `register-prefix` and `connect` name a new
+registration `<checkout> / <folder>`; a folder path of about 100 characters made that label longer than
+the label check allows and the folder was refused with `Use a short repository label.` (the refusal
+audit's F1, REFUSALS.md 9.5). The generated label now keeps its end within the limit. A label a person
+gives to the setup script keeps its check. The label is display text only.
+
 **Not changed.** `publish` still refuses a `latest`, `baseline` or checkpoint folder that holds files
 its manifest does not own. Those are someone's own files inside a folder the manager would otherwise
 write over; the manager avoids the case when it can see it (2.5) and otherwise reports it as *Can't
@@ -372,6 +387,10 @@ saves**, and the review says so instead of refusing while another lab's save wai
   `status` and pushes only when the checkout's HEAD is still that commit and is that save's commit;
   otherwise it answers 409 `Another save was made in this repository. Look at the changes again.` and
   the page shows the review again. A successful push marks every carried save reviewed and uploaded.
+  An upload that names no `head` is refused with `Review the changes of this save before uploading
+  it.`, whoever sends it: the course scaffold tool (`deploy/scaffold-lab.py`), the one other client
+  that uploads, asks for the review, prints the saves the upload also sends and sends the `head`
+  (found live: it uploaded without one, LIVE-ENV.md 9.6).
 - **No save at HEAD** (someone committed on the VM by hand, or the newest save belongs to a lab the
   manager no longer has): *Can't save* with the sentence of 3.6 for someone working in the repository.
 - A folder move's commit is one of these waiting saves. It never uploads by itself.
@@ -380,6 +399,8 @@ saves**, and the review says so instead of refusing while another lab's save wai
 
 - *Keep as a checkpoint* posts the save route with `target: 'checkpoint'`, the save's `backup_job_id`
   and a name made from the save's name (`ceos-and-xrv9k-changed`; `-2` when taken). No device is read.
+  The request carries `checkpoint_only` (H8): only the checkpoint folder is written, so a checkpoint of
+  an older save never turns `latest` back.
   A public `capture_kept` on each job tells the page whether the capture still exists; when it does not
   the tick box is disabled with `The capture of this save is no longer kept. Save again to make a
   checkpoint.`
@@ -394,7 +415,9 @@ saves**, and the review says so instead of refusing while another lab's save wai
 | The VM account cannot upload | `The VM account cannot upload to <host>.` | **Try again** · **Details** |
 | An unfinished Git operation, staged or unsaved edits in the save's folder | `Someone is working in this repository on the VM.` | **Try again** · **Details** |
 | The online copy has changes this VM lacks, and nothing waits here | `The online copy has changes this VM does not have.` | **Update from the repository** |
-| The same, while saves wait here: each side has changes the other lacks | `The online copy and this VM both have changes the other does not have. They have to be combined on the VM.` | **Details** (what the repository's owner does on the VM; the manager never merges, rebases or force-pushes) |
+| The same, while saves wait here: each side has changes the other lacks | `The online copy and this VM both have changes the other does not have. They have to be combined on the VM.` and, under it, what the repository's owner runs there: `git -C <checkout> pull --no-rebase`, then `git -C <checkout> push` | **Try again** (the upload; it works once the owner has pushed) · **Details**. The manager never merges, rebases or force-pushes |
+| Commits on the VM that no manager save made (the owner committed by hand, or pulled without pushing) | `Someone is working in this repository on the VM.` (code `busy`, not `diverged`: an update cannot help) | **Try again** · **Details** |
+| The capture could not be completed for a reason that is not a device (the topology could not be written with it, the capture is gone) | The manager's own sentence, for example `The topology could not be saved with this capture. Try again.` | **Try again** · **Details** |
 | A device cannot be read | `<device> could not be read, so nothing was saved.` | **Try again** · **Save settings** (leave it out) · **Details** |
 | Files the manager did not save are inside `latest`, `baseline` or a checkpoint folder | `<folder> holds files that were not saved by the manager.` | **Choose another place** · **Details** |
 | The save location on the VM is gone or was changed (the checkout was removed, its branch or its push address changed, the VM was replaced): code `settings` | `This lab’s save location has to be set up again.` | **Save settings** · **Details** (the helper's own sentence says what to do) |
@@ -402,6 +425,19 @@ saves**, and the review says so instead of refusing while another lab's save wai
 
 *Update from the repository* is a fast-forward and cannot work while a save waits, so it is offered only
 when nothing waits in the repository; with saves waiting the action is **Upload**.
+
+**A save first brings the VM copy up to date when that is safe** (found live, LIVE-ENV.md 9.3 item 3 and
+9.5). The helper's `status` never asks the online copy, so a copy that is ahead (a file added on
+GitHub, a save from another VM) was noticed only by the upload, when a save already waited and the
+fast-forward was no longer possible: the row above, which only the repository's owner can clear. So
+before the first publication of a job that makes a commit, when nothing waits in that checkout, the
+manager calls the helper's existing `update` mode. Best effort and silent: a refusal or a failure
+changes nothing and the save goes on as before; a success that moved HEAD is one event in the lab's
+log, and the save's name and review compare with the updated `latest`. After a failure the manager
+does not try again for that checkout for ten minutes. No new mode or option; the manager still never
+merges. What is left for the owner's two commands is the case where a save waited while the online
+copy changed. The recovery was verified live: after `pull --no-rebase` and `push` as the VM account,
+**Try again** uploads every waiting save; a pull without the push does not help.
 
 Transient states (a save or load in progress, another operation running) disable Save with the reason
 visible in the chip or beside the button; they are not refusals of a choice.
@@ -586,6 +622,9 @@ loads alone in a Node test):
 | 6.2: a lab imported again continues in its folder | One question in the first-save panel when the folder holds saves of a lab with the same name and another id | A student's copy of a course lab has the same name as the instructor's (review F3) |
 | 6.5: only outside causes stop a save | Another lab's waiting save no longer does | 1.30.60 added that refusal after the prompt was written (section 1) |
 | 9.6: "load a state on a second lab with the same topology" | The second lab carries the same lab name | Devices match by full node name and the preflight stays untouched (3.7 Q2). Open for the owner: match by the topology's node name across differently named labs |
+| 6.5: **Update from the repository** is the action that clears an online copy that is ahead | A save does that fast-forward itself first, when nothing waits on the VM; the button stays in Save settings | Live, the state was noticed only after the save had committed, when no fast-forward was possible any more (3.6) |
+| 7.4: a checkpoint from an existing save goes through the save route's existing path | The helper gains the option `checkpoint_only` (H8) | The existing path rewrote `latest` from the older capture |
+| 7.5: the server's upload rule is unchanged | An upload must also name the `head` that was reviewed | Without it a client uploads saves nobody was shown (review F1; found live with the scaffold tool) |
 | G06 mockup: `Kept previous` for a device that did not accept the state | `Not loaded` with the device's reason; `Kept previous` only for `rolled_back` | PROMPT 5.4 step 6 says to use the service's vocabulary exactly (LOAD.md 5.1) |
 
 ## 7. Rulings that override the part files
@@ -676,7 +715,7 @@ confirmation is disabled with `A save is running.` during row 2.
 | Field | Values |
 |---|---|
 | `kind` | `free`, `own`, `own-before`, `lab`, `state` |
-| `folder` | the folder that will be used; `typed` what was asked; `adjusted`: `''`, `corrected` (unsafe characters), `above-state` (part of a saved state), `beside-files` (someone's own `latest` folder) |
+| `folder` | the folder that will be used; `typed` what was asked; `adjusted`: `''`, `corrected` (unsafe characters), `above-state` (part of a saved state), `beside-files` (someone's own `latest` folder), `past-file` (a part of the path names a file of the repository, so that part got `-2`: `README.md/x` reads `README.md-2/x`; the page says `<name> is a file in the repository, so <lab> saves in <folder>.`) |
 | `exists` | false for a folder that is in no commit; such a folder is never worded as being in the repository |
 | `label`, `lab`, `layout` | the state's name; the other lab `{id, name}`; `latest` or `flat` |
 | `collision` | true when `kind` is `lab` because of a collision and not the identical folder: the question then has one button. Without a lab to name (a folder nothing uses, which still holds a waiting save) the sentence is `This folder is already used for saves on the VM.` |
