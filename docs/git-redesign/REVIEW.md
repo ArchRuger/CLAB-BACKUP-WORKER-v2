@@ -96,3 +96,28 @@ revised to follow.
 | X8 | optional | Smaller disagreements. | DESIGN.md 7.6 lists the answer to each. |
 | X9 | must-fix | *Update from the repository* is offered for diverged copies, but it is fast-forward only and refused while a save waits: a dead end. | It is offered only when nothing waits in the repository. With saves waiting the action is **Upload**. When both sides have changes the other lacks, nothing in the manager can combine them; the sentence says so and **Details** says what the repository's owner does on the VM (DESIGN.md 3.6). |
 | B1 | should-fix | More of the binding UI contract is superseded than listed. | A dated amendment to `docs/redesign/DESIGN-SPEC-ADDENDUM.md` lists every item; its J2 check runs as a test; `gitRenderAdvanced` is guarded. |
+
+## 3. Review of the first merged slice (S0, the two reproduced defects)
+
+Commit `bf02e6b` changed the root-installed helper, so its diff was reviewed by the risk reviewer (Opus
+5.5, read-only) after the lead had run both suites on it (2254 Python tests, 504 browser tests, the
+release check, the link check and `bash -n`, all passing).
+
+Verdict: no must-fix; it can ship alone. Confirmed: no pair of folders that writes the same files passes
+the new rule; the identical folder is still caught by every caller (`plan_prefix`, `plan_connect`,
+`save_registration`, `setup-git.sh`); a legacy registration ending in `latest` still collides with its
+parent; nothing but the rule changed in the helper (no mode, option, VERSION, gateway or lock change);
+no other part of the manager matches on the helper's old sentence; `setup-git.sh` applies the installed
+helper's own rule; every old assertion was rewritten, none dropped.
+
+| # | Severity | Finding | Answer |
+|---|---|---|---|
+| 1 | should-fix | Today's folder browser allows a folder the VM refuses, in the reverse direction: a lab folder that lies inside what would be the chosen folder's saved states (`course/latest/working` against `course`). | Fixed in a follow-up commit to today's browser (`gitFolderChoice` checks both directions). The new chooser never meets it: the answer comes from the manager (DESIGN.md 2.5). |
+| 2 | should-fix | *New folder…* accepts a typed name such as `latest/notes` inside a lab folder, which the VM refuses later. | Fixed in the same follow-up: the dialog refuses it with a plain sentence. |
+| 3 | should-fix | `docs/WIKI-MASTER-GUIDE.md` still says "Prefixes must not overlap." | Fixed in the same follow-up. |
+| 4 | optional | "(whole repository)" for a lab at the top level is untrue now that others may sit below it. | Reworded to "top level" in the follow-up. |
+| 5 | optional | The saved states of a lab nested inside the asking lab's folder appear in no group of Saved versions. | Fixed in the follow-up where it is a few lines; the All versions drawer groups from the manager's list in any case. |
+| 6 | optional | A stale comment in `git-progress.js`. | Reworded in the follow-up. |
+| 7, 8 | optional | One helper test passes without `retire`; the identical top-level folder has no caller-level test. | Added by the helper slice (S1), which owns `tests/test_host_git.py`. |
+| 9 | optional | For a legacy registration that is itself the saved-state folder the sentence says "x/latest is inside x/latest". | Reworded by the helper slice (S1). |
+| 10 | optional | The setup wizard tells a new lab to take a subfolder and then offers the repository root. | Wording aligned in the follow-up. |
