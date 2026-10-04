@@ -35,7 +35,8 @@ class CleanFolder(unittest.TestCase):
     def test_examples(self):
         for typed, cleaned in (('', ''), ('/', ''), (' a / b ', 'a/b'), ('a//b/', 'a/b'), ('my lab', 'my-lab'), ('UX TEST (3)', 'UX-TEST-3'),
                                ('a\\b', 'a-b'), ('..', ''), ('.', ''), ('a/../b', 'a/b'), ('.hidden', 'hidden'), ('-dash', 'dash'), ('.git', 'git'),
-                               ('.GIT', 'git'), ('a/.git/b', 'a/git/b'), ('.gitignore', 'gitignore'), ('a\x00b', 'a-b'), ('é', ''), ('grö ße', 'gr-e'),
+                               ('.GIT', 'git'), ('a/.git/b', 'a/git/b'), ('.gitignore', 'gitignore'), ('a\x00b', 'a-b'), ('é', 'e'), ('grö ße', 'gro-sse'),
+                               ('Übung größe', 'Ubung-grosse'), ('日本語', 'folder'), ('a/日本語/b', 'a/folder/b'), ('Ærø/Łódź', 'AEro/Lodz'), ('???', ''), ('a/???/b', 'a/b'),
                                ('a-', 'a-'), ('a?', 'a'), ('_x', '_x'), (None, ''), (7, '7'), ('x' * 182, 'x' * 181), ('BGP/start', 'BGP/start')):
             self.assertEqual(clean_folder(typed), cleaned, repr(typed))
 
@@ -77,7 +78,10 @@ class CleanFolder(unittest.TestCase):
         self.assertEqual(folder_name('UX-TEST-003'), 'UX-TEST-003')
         self.assertEqual(folder_name('my lab / two'), 'my-lab---two')
         self.assertEqual(folder_name(''), 'lab')
-        self.assertEqual(folder_name('é'), 'lab')
+        self.assertEqual(folder_name('é'), 'e')                     # a letter with a mark keeps its letter (blocked pass B08)
+        self.assertEqual(folder_name('Übung größe'), 'Ubung-grosse')
+        self.assertEqual((folder_name('日本語'), folder_name('日本語', 'state')), ('lab', 'state'))   # no letter a folder name can hold: named after what it is
+        self.assertEqual(folder_name('folder'), 'folder')
         self.assertEqual(folder_name('latest'), 'lab-latest')
         self.assertEqual(folder_name('checkpoints', 'state'), 'state-checkpoints')
         self.assertEqual(len(folder_name('n' * 300)), 60)

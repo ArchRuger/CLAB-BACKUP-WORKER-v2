@@ -260,10 +260,10 @@ class PlaceTests(unittest.TestCase):
     def test_row_a_name_with_characters_that_are_not_safe_in_a_path_is_corrected_as_typed(self):
         lab = self.lab('ux-a')
         answer = self.check(lab, ' my lab (2) / Übung?')
-        self.assertEqual((answer['folder'], answer['adjusted']), ('my-lab-2/bung', 'corrected'))
+        self.assertEqual((answer['folder'], answer['adjusted']), ('my-lab-2/Ubung', 'corrected'))
         done = self.placed(lab, ' my lab (2) / Übung?')
-        self.assertEqual(done['binding']['repository']['prefix'], 'my-lab-2/bung')
-        self.assertEqual(host_git.relpath(self.sent('register-prefix')[-1]['prefix'], empty=True), 'my-lab-2/bung')
+        self.assertEqual(done['binding']['repository']['prefix'], 'my-lab-2/Ubung')
+        self.assertEqual(host_git.relpath(self.sent('register-prefix')[-1]['prefix'], empty=True), 'my-lab-2/Ubung')
 
     def test_row_a_folder_while_a_save_of_this_lab_waits_for_upload_asks_upload_it_or_keep_it(self):
         lab = self.lab('ux-a'); self.placed(lab, 'a')

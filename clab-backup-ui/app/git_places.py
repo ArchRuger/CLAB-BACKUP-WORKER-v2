@@ -12,6 +12,7 @@ rest of the manager. The constants below are copies of the VM helper's and must 
 "an earlier folder of this lab", whatever lab id their manifest carries).
 """
 import re
+import unicodedata
 
 RESERVED = ('latest', 'baseline', 'checkpoints')   # host_git.RESERVED: what a lab writes inside its folder
 PART_LIMIT = 181                                   # host_git.PATH_PART: one first character and at most 180 more
@@ -22,17 +23,31 @@ BESIDE_TRIES = 1000
 UNSAFE = re.compile(r'[^A-Za-z0-9_.-]+')
 UNSAFE_ENDS = re.compile(r'\A[^A-Za-z0-9_.-]+|[^A-Za-z0-9_.-]+\Z')
 TOO_LONG = 'A folder path can be at most 500 characters long.'
+NAMELESS = 'folder'                                # a typed name whose letters cannot be written in a folder name at all
+# Letters that do not come apart into a plain letter and a mark; everything else is taken apart by NFKD.
+PLAIN = {'ß': 'ss', 'ẞ': 'SS', 'æ': 'ae', 'Æ': 'AE', 'ø': 'o', 'Ø': 'O', 'œ': 'oe', 'Œ': 'OE', 'đ': 'd', 'Đ': 'D', 'ł': 'l', 'Ł': 'L',
+         'þ': 'th', 'Þ': 'Th', 'ð': 'd', 'Ð': 'D', 'ı': 'i'}
+
+
+def plain_letters(text):
+    """Letters with marks as their plain letters (`Übung größe` reads `Ubung grosse`, `é` reads `e`): the VM's
+    folder names take A to Z, digits, dot, dash and underscore only, and a name must not lose its letters."""
+    text = ''.join(PLAIN.get(c, c) for c in text)
+    return ''.join(c for c in unicodedata.normalize('NFKD', text) if not unicodedata.combining(c))
 
 
 def clean_folder(value):
-    """The path a person typed, corrected instead of refused: '' is the top level. Unsafe characters at
-    the ends of a name are dropped like spaces (`BGP (2)` reads `BGP-2`, not `BGP-2-`), every other run
-    becomes one dash, and what cannot start a name is stripped. The only error left is the length."""
+    """The path a person typed, corrected instead of refused: '' is the top level. Letters with marks become
+    their plain letters, unsafe characters at the ends of a name are dropped like spaces (`BGP (2)` reads
+    `BGP-2`, not `BGP-2-`), every other run becomes one dash, and what cannot start a name is stripped. A
+    name written in letters no folder name can hold (`日本語`) becomes `folder`: it never vanishes, which
+    would move the lab one level up without a word. The only error left is the length."""
     parts = []
-    for part in str('' if value is None else value).split('/'):
-        part = UNSAFE.sub('-', UNSAFE_ENDS.sub('', part))
+    for typed in str('' if value is None else value).split('/'):
+        part = UNSAFE.sub('-', UNSAFE_ENDS.sub('', plain_letters(typed)))
         if part.lower() == '.git': part = 'git'
         part = part.lstrip('.-')[:PART_LIMIT]
+        if not part and any(unicodedata.category(c)[0] in 'LN' for c in typed): part = NAMELESS
         if part: parts.append(part)
     folder = '/'.join(parts)
     if len(folder) > PATH_LIMIT: raise ValueError(TOO_LONG)
@@ -42,7 +57,11 @@ def clean_folder(value):
 def folder_name(name, fallback='lab'):
     """One folder name made from a lab's or a state's name. It is never one of the names a lab writes
     inside its folder, in any case: a lab called `latest` or `Latest` saves in `lab-latest` or `lab-Latest`."""
-    name = clean_folder(str('' if name is None else name).replace('/', '-'))[:NAME_LIMIT].rstrip('-') or fallback
+    typed = str('' if name is None else name)
+    name = clean_folder(typed.replace('/', '-'))[:NAME_LIMIT].rstrip('-')
+    # A lab or state named in letters no folder name can hold is named after what it is, not `folder`.
+    if name == NAMELESS and not any(c.isascii() and c.isalnum() for c in plain_letters(typed)): name = ''
+    name = name or fallback
     # Whatever its case: a clone on a file system that ignores case would fold `Latest` into `latest`.
     return fallback + '-' + name if name.lower() in RESERVED else name
 
