@@ -78,6 +78,7 @@ class WholeLabCase(unittest.TestCase):
     def setUp(self):
         self.setUp_base()
         self.progress = self.app.state.git_progress
+        self.progress.connection_wait = 0   # a busy connection answers at once in these tests
         self.host(); self.store.state['host']['fingerprint'] = 'SHA256:fixture'
         self.lab = self.register(); self.url = '/api/labs/' + self.lab['id'] + '/git'
         # The VM: the real helper on a scratch checkout with a bare remote.
@@ -239,6 +240,35 @@ class EveryWholeSaveCarriesTheLabTests(WholeLabCase):
         self.assertEqual(outcome['status'], 'committed', outcome)
         self.assert_whole(self.published(), lab['definition_yaml'], map_text)
         self.assert_in_repository('checkpoints/from-capture', lab['definition_yaml'], map_text)
+
+    def test_an_older_save_kept_as_a_checkpoint_leaves_latest_as_it_was(self):
+        # LIVE-ENV.md 9.3 item 5, helper option H8 (`checkpoint_only`), against the real helper: Keep as a checkpoint on
+        # an older save wrote `latest` from that older capture too, so `latest` no longer was what the devices run.
+        lab = self.lab_state(); older_map = map_document(lab)
+        older, _ = self.fresh_save(target='latest', note='Before the map change')
+        self.move_node(321)
+        newer, _ = self.fresh_save(target='latest', note='After the map change')
+        newer_map = map_document(self.lab_state()); self.assertNotEqual(newer_map, older_map)
+        latest = self.raw('ls-tree', '-r', 'HEAD', 'latest')
+        self.assertIn('"x": 321', self.raw('show', f'HEAD:latest/{MAP_FILE}'))
+        job, _ = self.save(push=False, target='checkpoint', checkpoint='', backup_job_id=older['backup_job_id'], note='')
+        outcome, submit = self.run_save(job)
+        submit.assert_not_called()   # no device was read
+        self.assertEqual((outcome['status'], outcome['checkpoint'], outcome['snapshot_path']), ('committed', 'before-the-map-change', 'checkpoints/before-the-map-change'))
+        self.assertIs([r for r in self.sent if r['mode'] == 'publish'][-1]['checkpoint_only'], True)
+        self.assertEqual(self.raw('ls-tree', '-r', 'HEAD', 'latest'), latest, 'every file of latest is the blob it was')
+        self.assertIn('"x": 321', self.raw('show', f'HEAD:latest/{MAP_FILE}'))
+        self.assertTrue(outcome['changed_files'] and all(path.startswith('checkpoints/before-the-map-change/') for path in outcome['changed_files']), outcome['changed_files'])
+        # The checkpoint holds the older capture, with its topology and its map.
+        self.assert_whole(self.published(), lab['definition_yaml'], older_map)
+        self.assert_in_repository('checkpoints/before-the-map-change', lab['definition_yaml'], older_map)
+        self.assertEqual(sorted(self.names_in(outcome['commit'], 'checkpoints/before-the-map-change')), sorted(self.published()['files']))
+        self.assertEqual(self.raw('rev-list', '--count', 'HEAD'), '4', 'the README commit, the two saves and the checkpoint')
+        # The review and the stored summary describe the checkpoint folder only.
+        review = self.client.post(self.url + '/compare', json={'job_id': outcome['id']}).json()
+        self.assertEqual(sorted(row['path'] for row in review['files']), sorted(outcome['changed_files']))
+        self.assertEqual({row['status'] for row in review['files'] if 'diff' in row}, {'added'})
+        self.assertEqual((outcome['summary']['topology'], outcome['summary']['map'], outcome['summary']['first']), (True, True, False))
 
     def test_a_baseline_from_an_existing_capture_carries_the_topology_and_the_map(self):
         lab = self.lab_state(); map_text = map_document(lab)

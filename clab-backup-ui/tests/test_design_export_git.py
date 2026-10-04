@@ -158,6 +158,7 @@ class DesignExportGitTestCase(unittest.TestCase):
                        snapshot_path=request['target'])
         if mode == 'push':
             return dict(status='synced', commit='b' * 40, pushed=True, changed_files=[], snapshot_path='checkpoints/day-1')
+        if mode == 'update': return dict(status='updated', head=request['expected_head'])   # nothing new online
         raise AssertionError(mode)
 
     def export_url(self, generation_id):
@@ -457,6 +458,9 @@ class ExecuteTests(DesignExportGitTestCase):
         self.assertEqual(request['target'], 'checkpoint')
         self.assertEqual(request['checkpoint'], 'day-1')
         self.assertEqual(request['expected_head'], 'a' * 40)
+        self.assertNotIn('checkpoint_only', request, 'a design export is no checkpoint from a save')
+        # Before its first publication the export asks for the VM copy to be brought up to date, like a save.
+        self.assertEqual([r['mode'] for r in self.sent], ['status', 'update', 'publish'])
 
         lab = self.store.lab(self.lab_id); generation = self.generation(gen_id)
         expected = self.designs.design_snapshot(lab, generation)

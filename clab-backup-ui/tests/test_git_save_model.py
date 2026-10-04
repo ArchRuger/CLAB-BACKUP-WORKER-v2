@@ -38,6 +38,7 @@ class Vm:
         self.registry = [dict(repo)]; self.path = repo['path']
         self.order = ['a' * 40]; self.remote = 'a' * 40; self.trees = {'a' * 40: {}}
         self.log = {}; self.journals = {}; self.problem = ''; self.push_error = ''; self.compare_error = ''; self.lost = set()
+        self.online = []; self.update_error = ''   # commits only the online copy has; what `update` answers instead of working
 
     @property
     def head(self): return self.order[-1]
@@ -47,6 +48,10 @@ class Vm:
         self.trees[commit] = tree; self.log[commit] = dict(commit=commit, operation_id=operation, subject=subject, files=files)
         self.order.append(commit)
         return commit
+
+    def added_online(self, subject='Added a file on GitHub', files=('NOTES.md',)):
+        """A commit the online copy has and this VM does not (someone added a file there, or saved from another VM)."""
+        self.online.append((subject, list(files)))
 
     def by_hand(self, subject='Edited on the VM', files=('notes.txt',)):
         """A commit the repository's owner made on the VM, outside the manager."""
@@ -87,6 +92,7 @@ class Vm:
             folders = [] if request['target'] == 'baseline' else [scope('latest')]
             if request['target'] == 'baseline': folders.append(scope('baseline'))
             if request['target'] == 'checkpoint': folders.append(scope('checkpoints/' + request['checkpoint']))
+            if request.get('checkpoint_only') is True: folders = folders[-1:]   # host_git publish, option H8
             result = dict(pushed=False, snapshot_path=folders[-1], synced_operations=None)
             if request['expected_head'] != self.head:
                 result.update(status='needs_attention', commit=None, changed_files=[], message='The repository changed since it was selected. Refresh status and retry the preserved snapshot.')
@@ -117,6 +123,9 @@ class Vm:
             if not journal or journal['revision'] != request['revision']: raise ValueError('Saved progress journal not found for this binding.')
             commit = journal['commit']; out = dict(commit=commit, changed_files=journal['changed'], snapshot_path=journal['folder'])
             if self.push_error: return dict(out, status='needs_attention', pushed=False, message=self.push_error, synced_operations=None)
+            if self.online:
+                return dict(out, status='needs_attention', pushed=False, synced_operations=None,
+                            message='The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.')
             if self.order.index(commit) > self.order.index(self.remote):
                 if commit != self.head:
                     return dict(out, status='needs_attention', pushed=False, synced_operations=None,
@@ -160,7 +169,11 @@ class Vm:
             if not found: raise ValueError('This folder holds no saved configuration (manifest.json) at the selected commit.')
             return {'snapshot': copy.deepcopy(found)}
         if mode == 'update':
+            if self.update_error: raise ValueError(self.update_error)
+            if request.get('expected_head') != self.head: raise ValueError('The checkout changed. Refresh repository status before updating.')
             if self.remote != self.head: raise ValueError('Local and remote history diverged or local commits are pending. Resolve them as the repository owner.')
+            for subject, files in self.online: self.commit(copy.deepcopy(self.trees[self.head]), None, subject, files)
+            self.online = []; self.remote = self.head
             return dict(status='updated', head=self.head, message='Updated from remote using fast-forward only.')
         raise AssertionError(mode)
 
@@ -173,6 +186,7 @@ class SaveModelCase(unittest.TestCase):
     def setUp(self):
         self.setUp_base()
         self.progress = self.app.state.git_progress
+        self.progress.connection_wait = 0   # a connection change that meets another one answers at once here (the wait has its own test)
         self.host(); self.store.state['host']['fingerprint'] = 'SHA256:fixture'
         self.lab = self.register(); self.url = '/api/labs/' + self.lab['id'] + '/git'
         self.repo = dict(id='bens-lab', label='Bens lab', owner='ben', path='/home/ben/labs/bgp', remote='origin', branch='main',
@@ -246,6 +260,8 @@ class SaveModelCase(unittest.TestCase):
         return response.json()
 
     def upload(self, job, expect=200, **body):
+        """Upload as the page does: the review first, then the upload with the HEAD the review showed."""
+        if 'head' not in body: body['head'] = self.review(job)['head']
         response = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json=dict(dict(push=True, reviewed=True), **body))
         self.assertEqual(response.status_code, expect, response.text)
         if expect != 200: return response.json()
@@ -395,11 +411,23 @@ class UploadTests(SaveModelCase):
         self.assertEqual(self.upload(mine, head=again['head'])['status'], 'synced')
         self.assertEqual(self.stored(mine)['status'], 'synced')
 
-    def test_an_upload_without_head_from_an_older_page_still_goes_through_the_save_at_head(self):
+    def test_an_upload_without_the_head_the_person_was_shown_is_refused(self):
+        # Review F1, DESIGN.md 3.4 (was: "an upload without head from an older page still goes through the save at
+        # head"). A client that names no HEAD has shown no review of what waits in the checkout.
         other = self.second_lab()
         mine = self.saved(note='Mine'); theirs = self.saved(other['id'], note='Theirs')
-        outcome = self.upload(mine)
-        self.assertEqual(outcome['id'], theirs['id']); self.assertEqual(self.stored(mine)['status'], 'synced')
+        before = copy.deepcopy(self.store.state['git_jobs']); sent = len(self.sent)
+        for body in (dict(push=True, reviewed=True), dict(push=True, reviewed=True, head=''), dict(push=True, reviewed=True, head='HEAD'),
+                     dict(push=True, reviewed=True, head='b' * 39), dict(reviewed=True)):
+            refused = self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json=body)
+            self.assertEqual((refused.status_code, refused.json()['detail']), (409, REVIEW_FIRST), body)
+        self.assertEqual(self.modes(sent), [], 'the VM is not even asked'); self.assertEqual(self.store.state['git_jobs'], before, 'nothing changed')
+        self.dispatch.reset_mock()
+        outcome = self.upload(mine, head=self.review(mine)['head'])
+        self.assertEqual((outcome['id'], outcome['status']), (theirs['id'], 'synced')); self.assertEqual(self.stored(mine)['status'], 'synced')
+        # A save that never uploads by itself still does not: `push: true` on the save route only asks for the review.
+        self.texts[self.names[0]] = 'hostname later\n'
+        self.assertEqual(self.saved(push=True)['status'], 'review_pending'); self.assertEqual(self.modes().count('push'), 1)
 
     def test_a_review_recorded_for_an_earlier_head_does_not_upload_a_save_that_landed_since(self):
         other = self.second_lab()
@@ -453,6 +481,7 @@ class UploadTests(SaveModelCase):
         self.assertEqual(source.count("'push': True"), 0); self.assertEqual(source.count('want_push=True'), 0)
         route = source[source.index("@app.post('/api/git/jobs/{job_id}/retry')"):source.index("@app.post('/api/git/jobs/{job_id}/dismiss')")]
         self.assertIn('retry_push=True', route); self.assertLess(route.index('REVIEW_FIRST'), route.index('retry_push=True'))
+        self.assertIn("re.fullmatch(r'[0-9a-f]{40,64}', data.head)", route); self.assertLess(route.index('data.head)'), route.index('retry_push=True'))
         self.assertEqual(self.upload(mine)['status'], 'synced'); self.assertEqual(self.modes().count('push'), 1)
 
     def test_a_folder_move_and_a_kept_save_at_head_are_what_the_upload_goes_through(self):
@@ -867,6 +896,173 @@ class GitStatusTests(SaveModelCase):
         found = [n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs and ' ' in n.value
                  and n.value not in HELPER_PROBLEMS and re.search(r'Progress\b|registration|\bprefix\b|overlap|Recent saves|Git history|Save location', n.value)]
         self.assertEqual(found, [])
+
+
+class CheckpointOnlyTests(SaveModelCase):
+    """Helper option H8 (LIVE-ENV.md 9.3 item 5): a checkpoint made from a save that exists writes its own folder only."""
+
+    def published(self): return [r for r in self.sent if r['mode'] == 'publish']
+
+    def test_an_older_save_kept_as_a_checkpoint_never_turns_latest_back(self):
+        older = self.saved(note='Before the change')
+        self.texts[self.names[0]] = 'hostname newer\n'
+        newer = self.saved(note='After the change')
+        latest = copy.deepcopy(self.vm.trees[self.vm.head]['latest'])
+        kept = self.post(target='checkpoint', backup_job_id=older['backup_job_id'], checkpoint='')
+        outcome, submit = self.run_job(kept); submit.assert_not_called()
+        self.assertEqual(outcome['status'], 'review_pending', outcome)
+        request = self.published()[-1]
+        self.assertIs(request['checkpoint_only'], True); self.assertEqual((request['target'], request['checkpoint']), ('checkpoint', 'before-the-change'))
+        self.assertEqual(self.vm.trees[self.vm.head]['latest'], latest, 'latest is what the devices ran at the newest save')
+        self.assertEqual(self.vm.trees[self.vm.head]['checkpoints/before-the-change'], self.vm.trees[older['commit']]['latest'] | {'manifest': request['snapshot']['manifest']})
+        self.assertTrue(all(path.startswith('checkpoints/before-the-change/') for path in outcome['changed_files']), outcome['changed_files'])
+        # The stored summary and the review describe the checkpoint folder only.
+        self.assertEqual(outcome['summary'], dict(devices=['r1', 'r2'], added=2, removed=0, topology=True, map=True, first=False, removed_devices=[]))
+        rows = self.review(outcome)['files']
+        self.assertEqual(sorted(row['path'] for row in rows), sorted(outcome['changed_files']))
+        self.assertEqual({row['path'].rsplit('/', 1)[0] for row in rows}, {'checkpoints/before-the-change'})
+        self.assertEqual(self.review(outcome)['also_sends'][0]['job_id'], older['id'])
+        self.assertNotEqual(newer['commit'], outcome['commit'])
+
+    def test_the_option_is_sent_exactly_for_a_checkpoint_from_an_existing_capture(self):
+        save = self.saved(note='First')
+        capture = save['backup_job_id']; self.assertNotIn('checkpoint_only', self.published()[-1])
+        cases = ((dict(target='checkpoint', backup_job_id=capture, checkpoint=''), True), (dict(target='checkpoint', backup_job_id=capture, checkpoint='named'), True),
+                 (dict(target='latest', backup_job_id=capture), False), (dict(target='baseline', backup_job_id=capture), False),
+                 (dict(target='checkpoint', checkpoint='fresh'), False), (dict(target='latest'), False))
+        for n, (fields, expected) in enumerate(cases):
+            self.texts[self.names[1]] = 'hostname case-%d\n' % n
+            job = self.post(**fields)
+            self.assertEqual(self.stored(job)['request'].get('checkpoint_only'), True if expected else None, fields)
+            self.run_job(job)
+            self.assertEqual('checkpoint_only' in self.published()[-1], expected, fields)
+        state = self.client.post(self.url + '/state', json=dict(request_id=uuid.uuid4().hex, folder='start', name='Start')).json()
+        self.run_job(state)
+        self.assertEqual((self.published()[-1]['binding_id'], 'checkpoint_only' in self.published()[-1]), ('reg-start', False))
+
+
+class CatchUpTests(SaveModelCase):
+    """The lead's ruling for PROMPT 6.5 (LIVE-ENV.md 9.3 item 3, 9.5): a save first brings the VM copy up to date with the
+    online copy when nothing waits there, so a commit made online does not end the upload as diverged."""
+
+    def setUp(self):
+        super().setUp()
+        self.now = 1000.0; self.progress.clock = lambda: self.now
+
+    def events(self): return [e for e in self.store.events('', '', '', '', 500) if e['action'] == 'git.update']
+
+    def test_a_save_fast_forwards_the_vm_copy_first_and_then_uploads_without_anything_done_by_hand(self):
+        self.vm.added_online()
+        sent = len(self.sent)
+        job = self.saved()
+        self.assertEqual(self.modes(sent), ['status', 'update', 'status', 'publish', 'compare'])
+        update, publish = self.sent[sent + 1], self.sent[sent + 3]
+        self.assertEqual((update['expected_head'], update['binding_id']), ('a' * 40, 'bens-lab'))
+        self.assertNotEqual(publish['expected_head'], 'a' * 40); self.assertEqual(publish['expected_head'], self.vm.order[1], 'the head the update moved to')
+        self.assertEqual(self.stored(job)['expected_head'], self.vm.order[1])
+        self.assertEqual(job['status'], 'review_pending', job)
+        events = self.events()
+        self.assertEqual([e['message'] for e in events], ['The VM copy of the repository was brought up to date with the online copy before a save.'])
+        self.assertEqual(self.upload(job)['status'], 'synced'); self.assertEqual(self.vm.remote, self.vm.head)
+        # Nothing new online: the update answers the same head, and nothing is read twice or logged.
+        self.texts[self.names[0]] = 'hostname next\n'; sent = len(self.sent)
+        self.saved()
+        self.assertEqual(self.modes(sent), ['status', 'update', 'publish', 'compare']); self.assertEqual(len(self.events()), 1)
+
+    def test_the_automatic_name_compares_with_the_manifest_the_update_brought(self):
+        first = self.saved(); self.upload(first)
+        # Another VM saved this lab's folder online: the same devices, r1 changed there.
+        tree = copy.deepcopy(self.vm.trees[self.vm.head]); self.texts[self.names[0]] = 'hostname elsewhere\n'
+        other = git_progress.captured_snapshot(self.store, self.capture()); tree['latest'] = other
+        self.vm.online.append(('Saved elsewhere', ['latest/r1.cfg']))
+        real = self.vm.commit
+        self.vm.commit = lambda new, operation, subject, files: real(tree if subject == 'Saved elsewhere' else new, operation, subject, files)
+        self.texts[self.names[1]] = 'hostname here\n'
+        job = self.saved()
+        self.assertEqual((job['note'], job['status']), ('r2 changed', 'review_pending'), 'r1 is what the online copy already holds')
+
+    def test_nothing_is_fetched_while_a_save_waits_or_is_kept_in_the_checkout_or_on_a_retry(self):
+        other = self.second_lab()
+        waiting = self.saved(other['id'], note='Another lab waits')     # itself fetched first: nothing waited then
+        self.assertEqual(self.modes().count('update'), 1)
+        self.vm.added_online(); sent = len(self.sent)
+        mine = self.saved(note='Mine')
+        self.assertNotIn('update', self.modes(sent)); self.assertEqual(mine['status'], 'review_pending')
+        self.texts[self.names[0]] = 'hostname again\n'
+        again = self.saved(note='Mine again')                           # this lab's own save waits too
+        self.assertNotIn('update', self.modes(sent))
+        # The old behaviour remains with a save waiting: the upload is rejected and the chip reads `diverged`.
+        outcome = self.upload(again)
+        self.assertEqual(outcome['status'], 'push_pending')
+        self.assertEqual(self.client.get('/api/state').json()['labs'][0]['git_status']['code'], 'diverged')
+        # Kept saves that may hold a commit count the same.
+        for job in (waiting, mine, again): self.progress.update(job['id'], status='dismissed')
+        self.texts[self.names[0]] = 'hostname third\n'
+        self.saved(note='With kept saves below'); self.assertNotIn('update', self.modes(sent))
+
+    def test_a_retry_never_fetches(self):
+        job = self.post(); self.vm.lost.add(job['id'])
+        outcome, _ = self.run_job(job)
+        self.assertEqual(outcome['status'], 'export_pending'); self.assertEqual(self.modes().count('update'), 1)
+        with self.store.lock: self.stored(job).pop('commit', None)
+        self.vm.added_online(); sent = len(self.sent)
+        self.client.post('/api/git/jobs/' + job['id'] + '/retry', json=dict(push=False)); outcome, _ = self.run_job(job)
+        self.assertEqual((outcome['status'], self.modes(sent)), ('review_pending', ['publish', 'compare']))
+
+    def test_an_update_that_fails_is_ignored_and_not_tried_again_for_ten_minutes(self):
+        self.client.get(self.url); before = self.client.get('/api/state').json()['labs'][0]['git_status']
+        self.assertTrue(before['ready'])
+        self.vm.update_error = "The remote branch is unavailable. Check connectivity and the owner's noninteractive HTTPS Git login."
+        sent = len(self.sent)
+        job = self.saved()
+        self.assertEqual((job['status'], self.modes(sent)), ('review_pending', ['status', 'update', 'publish', 'compare']))
+        self.assertEqual(self.sent[sent + 2]['expected_head'], 'a' * 40, 'the save went on exactly as before')
+        after = self.client.get('/api/state').json()['labs'][0]['git_status']
+        self.assertEqual((after['ready'], after['problem'], after['code']), (True, '', ''), 'no problem is recorded from it')
+        self.assertEqual(self.events(), []); self.assertEqual(self.upload(job)['status'], 'synced')
+        for seconds, tried in ((1, False), (599, False), (601, True)):
+            self.now = 1000.0 + seconds; self.texts[self.names[0]] = 'hostname at-%d\n' % seconds; sent = len(self.sent)
+            job = self.saved(); self.assertEqual('update' in self.modes(sent), tried, seconds)
+            self.upload(job)
+        # Each failure starts the pause again; a checkout that works again is asked on every first save.
+        self.now += 601; self.vm.update_error = ''; self.texts[self.names[0]] = 'hostname works\n'; sent = len(self.sent)
+        self.upload(self.saved()); self.assertIn('update', self.modes(sent))
+        self.now += 1; self.texts[self.names[0]] = 'hostname works again\n'; sent = len(self.sent)
+        self.saved(); self.assertIn('update', self.modes(sent))
+
+    def test_a_lab_state_fetches_first_too_through_its_own_binding(self):
+        self.vm.added_online(); sent = len(self.sent)
+        state = self.client.post(self.url + '/state', json=dict(request_id=uuid.uuid4().hex, folder='start', name='Start')).json()
+        outcome, _ = self.run_job(state)
+        self.assertEqual(outcome['status'], 'review_pending'); self.assertEqual([r['binding_id'] for r in self.sent[sent:] if r['mode'] == 'update'], ['reg-start'])
+
+
+class ConnectionLockTests(SaveModelCase):
+    """The refusal audit's M4: a connection change that meets another one waits for it for a moment before it says so."""
+
+    def test_a_change_waits_for_a_holder_that_lets_go_and_says_so_only_after_the_wait(self):
+        import threading, time
+        from fastapi import HTTPException
+        import inspect
+        self.assertEqual(git_progress.CONNECTION_WAIT, 10); self.assertIn('self.connection_wait = CONNECTION_WAIT', inspect.getsource(GitProgress.__init__))
+        self.progress.connection_wait = 5
+        self.progress.binding_lock.acquire()
+        threading.Timer(0.2, self.progress.binding_lock.release).start()
+        started = time.monotonic()
+        job = self.client.post(self.url + '/state', json=dict(request_id=uuid.uuid4().hex, folder='start', name='Start'))
+        self.assertEqual(job.status_code, 200, job.text); self.assertLess(time.monotonic() - started, 4)
+        self.assertGreaterEqual(time.monotonic() - started, 0.15)
+        self.assertFalse(self.progress.binding_lock.locked()); self.assertIsNone(self.progress.rebinding)
+        # A holder that keeps it (a connection that clones a repository): the sentence, after the wait.
+        self.progress.update(job.json()['id'], status='dismissed'); self.progress.connection_wait = 0.2
+        with self.progress.binding_lock:
+            started = time.monotonic()
+            with self.assertRaises(HTTPException) as refused:
+                with self.progress.changing('lab'): self.fail('the lock is held')
+            self.assertEqual((refused.exception.status_code, refused.exception.detail), (409, 'Another repository connection is being changed. Try again in a moment.'))
+            self.assertGreaterEqual(time.monotonic() - started, 0.2)
+            busy = self.client.post(self.url + '/destination', json=dict(prefix='ospf'))
+            self.assertEqual(busy.status_code, 409); self.assertIn('Try again in a moment', busy.text)
 
 
 class LabStateTests(SaveModelCase):

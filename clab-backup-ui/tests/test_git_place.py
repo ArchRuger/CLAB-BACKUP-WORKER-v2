@@ -119,6 +119,7 @@ class PlaceTests(unittest.TestCase):
     def setUp(self):
         self.setUp_base()
         self.progress = self.app.state.git_progress
+        self.progress.connection_wait = 0   # a placement that meets another one answers at once here (the wait is tested in test_git_save_model.py)
         self.host(); self.store.state['host']['fingerprint'] = 'SHA256:fixture'
         self.vm = FakeVM()
         patch('app.git_progress.remote_git', side_effect=self.vm).start()
