@@ -248,7 +248,8 @@ test('the review offers each differing device its saved → running now differen
  assert.match(fallback,/--- Saved \(Final\)/);assert.match(fallback,/restore-diff-del">- set snmp contact &lt;A&gt;/);assert.match(fallback,/restore-diff-add">\+ set snmp contact B/);
  const calls=[];c.diffMarkup=(d,labels)=>{calls.push(labels);return '<div class="diff-view">shared</div>';};
  assert.match(c.restoreDiffBody({name:'r1',eligible:true,diff}),/<div class="diff-view">shared<\/div>/,'the shared diff view is used when it is loaded');
- same(calls[0],{oldLabel:'Saved (Final)',newLabel:'Running now'});
+ same(calls[0],{oldLabel:'Saved (Final)',newLabel:'Running now',sides:{old:'the saved state',new:'what the device runs now'}});   // Q1280-08: the header names the sides, as the legend and the lines do
+ assert.match(fallback,/Lines starting with - are only in the saved state: loading adds them\. Lines starting with \+ are only on the device now: loading removes them\./);
  assert.match(c.restoreDiffBody({name:'r1',eligible:true,diff:{...diff,truncated:true}}),/only its first part is shown/);
  assert.match(c.restoreDiffBody({name:'r1',eligible:true}),/The differences are not available for this device\./,'no data says why, never "0 differences"');
  assert.match(c.restoreDiffBody({name:'r1',eligible:true,diff_reason:'The differences could not be shown for this device.'}),/could not be shown/);

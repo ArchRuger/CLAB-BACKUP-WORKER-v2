@@ -106,9 +106,9 @@ function gitJobMarkup(job){
 }
 // Adapter over diff-view.js's diffFileMarkup for the compare route's file list (each file already
 // carries `diff`, `label` and, when the manager folded a suffix rename, `renamed_from`).
-function gitFilesDiffMarkup(files,oldLabel='Before',newLabel='After'){
+function gitFilesDiffMarkup(files,oldLabel='Before',newLabel='After',sides=null){
  if(!files?.length)return '<p>No differences — this version matches your latest save.</p>';
- return files.map(file=>diffFileMarkup(file.name,file.status,file.diff,{oldLabel,newLabel,renamedFrom:file.renamed_from})).join('');
+ return files.map(file=>diffFileMarkup(file.name,file.status,file.diff,{oldLabel,newLabel,renamedFrom:file.renamed_from,sides})).join('');
 }
 async function gitLoadContext(id,force=false){
  if(gitLoads.has(id))return gitLoads.get(id);

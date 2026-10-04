@@ -71,6 +71,16 @@ const classes=html=>[...html.matchAll(/class="([^"]*)"/g)].flatMap(m=>m[1].split
 const focusCount=html=>(html.match(/data-panel-focus/g)||[]).length;
 
 // ---- 9. the list ---------------------------------------------------------------------------------------------------------------------
+test('Q1440-14 one time for one save: the latest save shows when it was saved (the job’s time, as the chip and All versions show it), not when its folder was last written',async()=>{
+ const rows=[stateRow('BGP/latest','latest',{saved_at:iso(NOW-5e3)}),stateRow('BGP/checkpoints/cp1','checkpoint',{saved_at:iso(NOW-7200e3)})];
+ const job={id:'g1',lab_id:'lab',target:'latest',status:'synced',pushed:true,commit:'a'.repeat(40),note:'Interface descriptions cleaned up',created:iso(NOW-22*60e3),finished:iso(NOW-21*60e3),captured:true,changed_files:['BGP/latest/r1.cfg'],snapshot_path:'BGP/latest'};
+ const p=page({gets:e=>e==='/labs/lab/restore/states'?rowAnswer(rows):{},state:{git_jobs:[job]}});await p.open();
+ assert.match(p.body(),/<span>Interface descriptions cleaned up<\/span><span class="save-when">21 minutes ago<\/span>/);assert.doesNotMatch(p.body(),/just now|seconds ago/);
+ assert.match(p.body(),/cp1<\/span><span class="save-when">2 hours ago<\/span>/,'a checkpoint keeps its own time');
+ // a latest folder no job of this page made (saved from another manager): the folder's own time
+ const q=page({gets:e=>e==='/labs/lab/restore/states'?rowAnswer([stateRow('BGP/latest','latest',{saved_at:iso(NOW-3600e3)})]):{},state:{git_jobs:[{...job,snapshot_path:'elsewhere/latest'}]}});await q.open();
+ assert.match(q.body(),/<span class="save-when">1 hour ago<\/span>/);
+});
 test('the list: Your saves (latest and the three newest checkpoints), Lab states capped at eight, view-only rows with their reason, coverage, and only the shared class names',async()=>{
  const states=[stateRow('course/start','state',{name:'Start',view_only:true,view_only_reason:'no_restore_data'}),stateRow('course/s1','state',{name:'State 1',loadable_devices:2}),
   stateRow('course/odd','state',{name:'Odd',saved_devices:null,loadable_devices:null,view_only_reason:'unknown'})];

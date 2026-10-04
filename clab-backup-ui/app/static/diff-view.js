@@ -29,7 +29,12 @@ function diffMarkup(diff,options={}){
  const oldLabel=options.oldLabel||'Before',newLabel=options.newLabel||'After',maxHunks=options.maxHunks||200;
  if(diff.identical&&!diff.truncated)return '<p class="diff-empty">Identical — nothing changed.</p>';
  const hunks=diff.hunks||[];
- const summary=diff.truncated&&!hunks.length?'':`<p class="diff-summary">${esc(diff.added||0)} added · ${esc(diff.removed||0)} removed${esc(diffSummaryScope(diff))}</p>`;
+ // The counts. "added" and "removed" are true words only for a change over time (what a save added and removed). A comparison of
+ // two things that exist side by side (a saved state and the device, a version and the latest save) names its sides instead
+ // (`options.sides`: {old, new}), so the header reads the same way as the lines: - is only in the old side, + only in the new one.
+ const added=Number(diff.added)||0,removed=Number(diff.removed)||0,sides=options.sides&&options.sides.old&&options.sides.new?options.sides:null;
+ const counts=sides?`${removed} ${removed===1?'line':'lines'} only in ${sides.old} (−) · ${added} only in ${sides.new} (+)`:`${diff.added||0} added · ${diff.removed||0} removed`;
+ const summary=diff.truncated&&!hunks.length?'':`<p class="diff-summary">${esc(counts)}${esc(diffSummaryScope(diff))}</p>`;
  const note=diff.truncated?`<p class="diff-note">${esc(diff.note||'This comparison was too large to show in full; it was shortened.')}</p>`:'';
  const cut=hunks.some(hunk=>(hunk.lines||[]).some(row=>row.shortened))?`<p class="diff-note">${esc('Some lines are longer than 4000 characters and are shown shortened; a change may lie in the part not shown.')}</p>`:'';
  const shown=hunks.slice(0,maxHunks);

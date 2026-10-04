@@ -151,8 +151,14 @@ function loadListModel(lab,entry){
  const repository=String(entry.repository||'');
  const item=(row,name,when)=>({row,name,when,source:loadSource({type:'folder',path:'/'+String(row.path||'').replace(/^\/+/,''),commit:row.commit,repository})});
  const ctx=loadCtx(lab);
+ // One time for one save: the lab's latest save shows the time it was saved (the job's, as the chip and All versions show it),
+ // not the time its folder was last written (an upload or a checkpoint made from it touches the folder later).
+ const bare=value=>String(value||'').replace(/^\/+|\/+$/g,'');
+ const saved=own&&latest.length?(ctx.git_jobs||[]).filter(j=>j&&j.lab_id===lab.id&&j.target==='latest'&&j.kind!=='state'&&j.kind!=='design'&&j.commit&&Array.isArray(j.changed_files)&&j.changed_files.length>0)
+  .sort((a,b)=>String(b.created||'').localeCompare(String(a.created||'')))[0]:null;
+ const latestAt=row=>saved&&bare(saved.snapshot_path)===bare(row.path)?(saved.finished||saved.created||row.saved_at):row.saved_at;
  return {lab,own,repository,repoName:String(entry.repoName||''),labDevices,
-  saves:[...latest.map(r=>item(r,loadLatestName(lab),loadWhen(r.saved_at))),...checkpoints.map(r=>item(r,loadName({type:'folder',path:r.path},ctx,lab)||r.name,loadWhen(r.saved_at)))],
+  saves:[...latest.map(r=>item(r,loadLatestName(lab),loadWhen(latestAt(r)))),...checkpoints.map(r=>item(r,loadName({type:'folder',path:r.path},ctx,lab)||r.name,loadWhen(r.saved_at)))],
   states:states.slice(0,LOAD_STATE_CAP).map(r=>item(r,String(r.name||'')||(typeof savedVersionName==='function'?savedVersionName(r.path):'')||'A saved state',loadCoverage(r,labDevices))),
   more:Math.max(0,states.length-LOAD_STATE_CAP)};
 }

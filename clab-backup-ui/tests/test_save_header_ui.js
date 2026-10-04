@@ -634,6 +634,10 @@ test('Q1440-11 one state, one name: an upload refused because both sides changed
  const none=harness({lab:boundLab({git_status:{checked:true,ready:false,problem:'No device of this lab is selected for saving.',code:'devices',waiting:0}}),state:{git_jobs:[saved()]}});await none.open();
  assert.equal(none.text('save-panel-title-text'),'Can’t save');assert.equal((none.body.innerHTML.match(/>Save settings<\/button>/g)||[]).length,1);
  const rest=harness({state:{git_jobs:[saved()]}});await rest.open();assert.equal((rest.body.innerHTML.match(/>Save settings<\/button>/g)||[]).length,1);
+ // Q1280-09: Change… is off while a save runs, with the reason beside it.
+ const busy=harness({state:{git_jobs:[waiting({id:'q',status:'capturing',commit:''}),saved()]}});await busy.open();
+ assert.match(busy.body.innerHTML,/id="save-change" data-save-action="place" disabled aria-describedby="save-change-why">Change…<\/button> <span class="save-why" id="save-change-why">Available when the save has finished\.<\/span>/);
+ assert.doesNotMatch(rest.body.innerHTML,/save-change-why/);
 });
 test('Q390-05 a name being typed is never posted by the poll: a change fired by the rebuild of the panel is ignored, the caret stays where it is, Enter and a real change commit',async()=>{
  const job=saved({note:'abcdefgh'});

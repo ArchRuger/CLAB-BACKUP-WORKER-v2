@@ -123,7 +123,7 @@ function saveAlsoMarkup(cs,panel){
 function saveTailMarkup(lab,cs,options={}){
  // Last load: the lab's newest finished load, also one that changed no device (its job window has no other way in once its banner is gone).
  const bound=!!lab.git_binding,ctx=saveCtx(lab),last=options.load===false?null:(typeof loadState==='function'?loadState(lab,ctx,saveClock):null)?.recent||null;
- const place=bound&&options.place!==false?`<p class="save-kv" id="save-place"><span>Saves to:</span> ${saveEsc(savePlaceWords(lab))} ${saveButton('place','Change…','save-change',{disabled:!!options.busy})}</p>`:'';
+ const place=bound&&options.place!==false?`<p class="save-kv" id="save-place"><span>Saves to:</span> ${saveEsc(savePlaceWords(lab))} ${saveButton('place','Change…','save-change',{disabled:!!options.busy,describedby:options.busy?'save-change-why':''})}${options.busy?' <span class="save-why" id="save-change-why">Available when the save has finished.</span>':''}</p>`:'';
  const when=last?saveLongTime(last.at,saveClock):'';
  const loaded=last&&last.job?`<p class="save-kv" id="save-last-load"><span>Last load:</span> ${saveEsc(last.name+(last.changed===false?', nothing changed':when?', '+when:''))} ${saveButton('load-details','Details','save-load-details')}</p>`:'';
  const foot=bound?saveButton('versions','All versions','save-all')+saveButton('lab-state','Save as a lab state…','save-as-state')+(options.settings===false?'':saveButton('settings','Save settings','save-settings')):saveButton('lab-state','Save as a lab state…','save-as-state');

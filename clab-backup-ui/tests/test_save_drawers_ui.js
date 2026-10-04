@@ -201,6 +201,9 @@ test('D6 the newest own save has no "See what’s different"; a lab state says h
  await rowKey('state:BGP/start');assert.match(h.content(),/Lab state · covers 2 of your 4 devices/);
  const closed=await (async()=>{await rowKey('state:BGP/start');return h.content();})();
  assert.match(closed,/Design plan: view and download only/);assert.match(closed,/View only: saved without the files needed to load it/);
+ // Q1440-14: a state whose save details cannot be read says so here as it does in the Load panel (it can still be chosen).
+ assert.match(h.context.drwRowMarkup({key:'state:BGP/legacy',name:'Legacy',when:'',reason:'unknown',viewOnly:false,waiting:false,activity:false},{},9),/<span>Legacy<\/span><span class="save-when"><\/span><span class="save-why">Its save details cannot be read<\/span>/);
+ assert.doesNotMatch(h.context.drwRowMarkup({key:'state:BGP/x',name:'X',when:'',reason:'',viewOnly:false,waiting:false,activity:false},{},9),/save-why/);
  await rowKey('state:restore-square/checkpoints/design');
  const design=h.content();assert.match(design,/data-save-action="files"/);assert.match(design,/data-save-action="zip"/);assert.match(design,/data-save-action="load"[^>]*disabled/);assert.doesNotMatch(design,/Keep as a checkpoint/);
 });

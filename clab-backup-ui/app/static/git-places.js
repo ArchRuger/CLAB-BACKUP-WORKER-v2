@@ -510,7 +510,7 @@ function folderChooserMarkup(model,view){
   const bring=answer&&answer.bring&&mode==='location'?answer.bring:null,unfinished=!!(view.unfinished||(bring&&bring.unfinished));
   const notes=[info.note,bring&&unfinished?`A save of this lab has not finished. Its files stay in ${bring.from||'the folder it leaves'}.`:''].filter(Boolean);
   parts.push(`<p class="save-note" id="folder-answer-note"${notes.length?'':' hidden'}>${esc(notes.join(' '))}</p>`);
-  if(forgettable)parts.push(`<div class="save-row"><button type="button" class="button ghost small" data-folder-action="forget" data-folder-path="${esc(String(answer.path??answer.folder??''))}">Remove from the list</button></div>`);
+  if(forgettable)parts.push(`<div class="save-row"><button type="button" class="button ghost small" data-folder-action="forget" data-folder-path="${esc(String(answer.path??answer.folder??''))}">Remove from the list</button><span class="form-help" id="folder-forget-note">This folder was added here and nothing was saved into it yet. Removing it only takes it off this list.</span></div>`);
   if(bring&&bring.offered&&!unfinished)parts.push(`<label class="checkbox-label" id="folder-move"><input type="checkbox" data-folder-bring${view.bring===false?'':' checked'}> Bring this lab’s saved files along</label>`);
   parts.push(folderRefusedMarkup(view));
   const blocked=status==='loading'||status==='unreachable'||nameless;if(nameless&&!reason)reason='Give the lab state a name.';

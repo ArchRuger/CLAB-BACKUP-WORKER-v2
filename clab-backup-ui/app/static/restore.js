@@ -285,9 +285,9 @@ function restoreDiffBody(r) {
  if (!r.diff) return `<p class="form-help restore-diff-none">${esc(r.diff_reason || 'The differences are not available for this device.')}</p>`;
  if (r.diff.identical) return '';
  if (!(r.diff.hunks || []).length) return `<p class="form-help restore-diff-none">${esc(r.diff.reason || 'The differences are not available for this device.')}</p>`;
- const labels = { oldLabel: r.diff.labels?.old || 'Saved', newLabel: r.diff.labels?.new || 'Running now' };
+ const labels = { oldLabel: r.diff.labels?.old || 'Saved', newLabel: r.diff.labels?.new || 'Running now', sides: { old: 'the saved state', new: 'what the device runs now' } };
  const body = typeof diffMarkup === 'function' ? diffMarkup(r.diff, labels) : restoreDiffFallback(r.diff, labels);
- return `<p class="form-help">This compares the saved configuration with what the device runs right now. Lines starting with - are saved but missing on the device; lines starting with + are on the device now and will be removed.</p>
+ return `<p class="form-help">This compares the saved configuration with what the device runs right now. Lines starting with - are only in the saved state: loading adds them. Lines starting with + are only on the device now: loading removes them.</p>
   ${r.diff.truncated ? '<p class="form-help">The list is long; only its first part is shown.</p>' : ''}${body}`;
 }
 // Re-enterable from the lab banner ([View progress] / [Details]) and from the chip panel (What changed, Details, the Last load line).

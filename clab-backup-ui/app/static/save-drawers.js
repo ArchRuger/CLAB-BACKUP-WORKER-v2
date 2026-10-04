@@ -232,7 +232,7 @@ function drwRowButtons(row,ctx){
  return out.join('');
 }
 function drwRowMarkup(row,ctx,n){
- const open=saveDrawer.openRow===row.key,second=row.waiting&&!row.activity?'Not uploaded yet':row.viewOnly?drwViewOnlyText(row.reason):row.activity?row.why:'';
+ const open=saveDrawer.openRow===row.key,second=row.waiting&&!row.activity?'Not uploaded yet':row.viewOnly?drwViewOnlyText(row.reason):row.activity?row.why:row.reason==='unknown'||row.reason==='unreadable'?'Its save details cannot be read':'';
  const head=`<button type="button" class="save-item" aria-expanded="${open}" aria-controls="save-row-${n}" data-save-row="${esc(row.key)}"><span>${esc(row.name)}</span><span class="save-when">${esc(row.when)}</span>${second?`<span class="save-why">${esc(second)}</span>`:''}</button>`;
  if(!open)return `<li>${head}</li>`;
  const where=row.activity?'':`<p class="save-why">${esc(row.why)}</p><p class="save-kv"><code>${esc(ctx.repoName)}</code> <span aria-hidden="true">›</span> <code>${esc(row.path||'(top level)')}</code>${row.commit?` · commit <code>${esc(drwShort(row.commit))}</code>`:''}</p>`;
@@ -376,7 +376,7 @@ function drwCompareView(d){
  if(d.loading)return {title,meta,actions:'',content:'<p class="save-note">Reading what changed…</p>'};
  if(d.error)return {title,meta,actions:'',content:drwNotices(d)};
  const files=d.result?.files||[];
- return {title,meta,actions:'',content:files.length?(typeof gitFilesDiffMarkup==='function'?gitFilesDiffMarkup(files,'This version','Your latest save'):files.map(f=>`<p>${esc(f.name)}</p>`).join('')):'<p class="save-note">No differences: this version matches your latest save.</p>'};
+ return {title,meta,actions:'',content:files.length?(typeof gitFilesDiffMarkup==='function'?gitFilesDiffMarkup(files,'This version','Your latest save',{old:'this version',new:'your latest save'}):files.map(f=>`<p>${esc(f.name)}</p>`).join('')):'<p class="save-note">No differences: this version matches your latest save.</p>'};
 }
 function drwFilesView(d){
  const title='View files',meta=`${d.name}${d.source.path?' · '+drwBare(d.source.path):''}${d.source.commit?' · commit '+drwShort(d.source.commit):''}`;

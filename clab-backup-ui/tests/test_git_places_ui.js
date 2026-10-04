@@ -638,6 +638,7 @@ test('Remove from the list is offered for a folder the manager only lists, and n
  const context=makeContext(),tree=chooserTree(baseFolders());
  assert.match(markup(context,tree,{value:'week-5'}),/data-folder-action="forget" data-folder-path="week-5">Remove from the list/);
  assert.doesNotMatch(markup(context,tree,{value:'notes'}),/Remove from the list/);
+ assert.match(markup(context,tree,{value:'week-5'}),/Remove from the list<\/button><span class="form-help" id="folder-forget-note">This folder was added here and nothing was saved into it yet\. Removing it only takes it off this list\.<\/span>/,'Q1280-09: it says what it removes');
 });
 test('C9 the words registration, prefix and overlap occur in no chooser markup, for any answer, mode or state',()=>{
  const context=makeContext(),pool=[];
