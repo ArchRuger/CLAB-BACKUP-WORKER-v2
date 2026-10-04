@@ -103,6 +103,9 @@ try:
         if h.colliding(prefix,b['prefix']): raise ValueError(h.collision_message(prefix,b['prefix']))  # the helper's rule (check_collision), same sentence
     binding={'id':old['id'] if old else uuid.uuid4().hex,'label':label,'owner':owner,'uid':account.pw_uid,'gid':account.pw_gid,
              'home':account.pw_dir,'path':str(path),'remote':remote,'prefix':prefix,'branch':'','push_url':'','revision':''}
+    # H2: the registrations of this checkout and owner, this folder's own (re-registration) included; the child keeps
+    # those on the branch and push URL it reads, and with one the checkout may sit on saves that wait for upload.
+    binding['_registered']=h.registered_revisions(registry,binding)
     # Root reads only the registry/account database. The child opens the repository
     # and invokes every Git/config/credential/hook command after a permanent drop.
     read_fd,write_fd=os.pipe();pid=os.fork()
@@ -118,7 +121,7 @@ try:
             if len(urls)!=1: raise ValueError('Configure exactly one HTTPS push URL.')
             binding['push_url']=h.checked_url(urls[0])
             binding['anchor']=worker.validate();worker.clean();worker.commit_identity()
-            if worker.remote_head()!=binding['anchor']: raise ValueError('Before linking, synchronize the current branch with its existing remote branch using your ordinary Git login.')
+            worker.check_synchronized(binding['anchor'],worker.further())  # the helper's register() calls the same method
             worker.check_push_access()
             # A repeated setup for unchanged settings must not invalidate pending
             # jobs just because HEAD advanced through ordinary manager saves.
