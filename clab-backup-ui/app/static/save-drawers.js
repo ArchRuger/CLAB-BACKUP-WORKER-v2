@@ -65,6 +65,13 @@ function saveChangeAccount(job,review){
  }
  return {entries,rest};
 }
+// The exact folder a save wrote: its own recorded path, else (a save from before that was recorded) the lab's folder joined with
+// its target, as the old review window's "Open the full saved version" resolved it.
+function drwJobPath(job){
+ if(job&&job.snapshot_path)return drwBare(job.snapshot_path);
+ const binding=drwLab()?.git_binding||(typeof gitContexts!=='undefined'&&gitContexts&&typeof gitContexts.get==='function'?gitContexts.get(drwLabId())?.binding:null);
+ return typeof gitSnapshotPath==='function'&&typeof gitTargetPath==='function'&&job?drwBare(gitSnapshotPath(binding,gitTargetPath(job))):'';
+}
 function drwEntryMarkup(e){
  const word=typeof diffStatusWord==='function'?diffStatusWord(e.status):e.status==='added'?'added':e.status==='removed'?'removed':'changed';
  const small=e.file&&e.file!==e.title?` <small>${esc(e.file)}</small>`:'';
@@ -886,7 +893,7 @@ async function drwAction_(action,key,button){
  if(kind==='changes'){
   if(action==='upload'){await drwUpload();return;}
   if(action==='not-now'){const job=d.job;if(typeof saveAction==='function')await saveAction('not-now',job,'drawer');saveDrawerClose();return;}
-  if(action==='files'){const job=d.job;saveDrawerOpen('files',{row:{path:job.snapshot_path,commit:job.commit},name:job.note||'This save',back:{kind:'changes',options:{job}}});return;}
+  if(action==='files'){const job=d.job;saveDrawerOpen('files',{row:{path:drwJobPath(job),commit:job.commit},name:job.note||'This save',back:{kind:'changes',options:{job}}});return;}
   if(action==='details'){saveDrawerClose();if(typeof gitShowJob==='function')await gitShowJob(d.job.id);return;}
   if(action==='also-retry'){const key2=button&&button.dataset.saveAlso;if(key2){d.also.delete(key2);await drwOpenAlso(key2);}return;}
   return;
