@@ -309,7 +309,10 @@ function saveChipState(lab,ctx={},now){
  if(!lab)return base;
  const load=loadState(lab,ctx,now),bound=!!lab.git_binding,jobs=statusSaveJobs(lab,ctx),captures=statusCaptureSaves(lab,ctx),saveAt=captures[0]?statusSaveTime(captures[0]):0;
  const waiting=statusWaitingSaves(lab,ctx),count=new Set(waiting.map(j=>j.commit)).size,uploadFailed=waiting.find(j=>j.status==='push_pending');
- const live=load.key==='running'||load.key==='partial',loadAt=live?load.at:0;
+ // A load is worded as what the lab runs only while the lab runs: a stopped lab shows its save state (the last load stays in the
+ // panel's Last load line).
+ const deployed=lab.deployment&&lab.deployment.status,stoppedLab=deployed==='Not deployed'||deployed==='Stopped'||(typeof labState==='function'&&(()=>{try{return labState(lab,ctx).key==='stopped';}catch{return false;}})());
+ const live=(load.key==='running'||load.key==='partial')&&!stoppedLab,loadAt=live?load.at:0;
  if(load.key==='loading')return {...base,key:'loading',dot:'busy',text:load.rechecking?'Checking devices…':load.total?`Loading… ${load.done} of ${load.total}`:'Loading…',panel:'loading',job:load.job,load,count,saveDisabled:true,loadDisabled:true};
  const active=(ctx.git_jobs||[]).find(j=>j.lab_id===lab.id&&STATUS_GIT_BUSY.includes(j.status));
  if(active)return {...base,key:'saving',dot:'busy',text:active.target==='update'?'Updating…':active.status==='pushing'?'Uploading…':'Saving…',panel:'saving',job:active,count,saveDisabled:true};

@@ -523,7 +523,10 @@ function folderChooserMarkup(model,view){
   if(forgettable)parts.push(`<div class="save-row"><button type="button" class="button ghost small" data-folder-action="forget" data-folder-path="${esc(String(answer.path??answer.folder??''))}">Remove from the list</button><span class="form-help" id="folder-forget-note">This folder was added here and nothing was saved into it yet. Removing it only takes it off this list.</span></div>`);
   if(bring&&bring.offered&&!unfinished)parts.push(`<label class="checkbox-label" id="folder-move"><input type="checkbox" data-folder-bring${view.bring===false?'':' checked'}> Bring this lab’s saved files along</label>`);
   parts.push(folderRefusedMarkup(view));
-  const blocked=status==='loading'||status==='unreachable'||nameless;if(nameless&&!reason)reason='Give the lab state a name.';
+  // A lab state reads the devices like a save: while other work runs on the lab it is off, with the reason Save shows (B16).
+  const stalled=mode==='state'&&!!view.unavailable&&!busy;
+  const blocked=status==='loading'||status==='unreachable'||nameless||stalled;
+  if(nameless&&!reason)reason='Give the lab state a name.';else if(stalled&&!reason)reason=String(view.unavailable)+' Save state is available when it finishes.';
   const buttons=info.buttons.map(button=>folderButtonMarkup(blocked&&button.primary?{...button,disabled:true}:button,view)).join('');
   parts.push(`<div class="save-settings-foot" id="folder-foot">${view.showCancel===false?'':'<button type="button" class="button ghost small" data-folder-action="cancel">Cancel</button>'}${buttons}${blocked?`<span class="form-help" id="folder-reason">${esc(reason)}</span>`:''}</div>`);
   parts.push(mode==='state'?`<p class="save-note">Reads every included device now. Saved files can contain passwords or keys. Where ${esc(lab)} normally saves does not change.</p>`:'<p class="save-note">Saved files can contain passwords or keys.</p>');

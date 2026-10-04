@@ -552,7 +552,7 @@ test('D1: the Load button is disabled only while a load of the lab runs; a row c
  // A preflight the server refuses shows the manager's sentence.
  const q=page({routes:()=>{throw new Error('A backup is running on this lab.');}});
  await q.c.loadChoose('lab',{type:'folder',path:'/x'},'final');
- assert.match(q.body(),/Final cannot be loaded right now\.<\/p><p class="save-sub">A backup is running on this lab\.<\/p>/);
+ assert.match(q.body(),/Final cannot be loaded right now\.<\/p><p class="save-sub" id="load-refused-why">A backup is running on this lab\.<\/p>/);
  // loadChoose does nothing while a load of the lab runs, or for a lab not on screen.
  const r=page({state:{restore_jobs:[{id:'x',lab_id:'lab',status:'applying',targets:[]}]}});
  assert.equal(await r.c.loadChoose('lab',{type:'folder',path:'/x'},'X'),false);assert.equal(await r.c.loadChoose('other',{type:'folder',path:'/x'},'X'),false);assert.equal(r.calls.length,0);
@@ -586,6 +586,24 @@ test('not running: the Start lab view, no request; its button runs the header\'s
  assert.deepEqual(p.gets,[]);assert.equal(p.calls.length,0);
  p.els['lab-start'].disabled=false;p.close();await p.open();
  await p.click('data-load-action="start"');assert.deepEqual(started,[1]);assert.equal(p.els['load-panel'].hidden,true);
+});
+test('B06 a lab that stops while the confirmation is on screen: the poll shows the not-running view with Start lab; the chip words a load as what runs only while the lab runs; a refusal names devices by their short names',async()=>{
+ const p=confirmPage(fourTargets());
+ await p.c.loadChoose('lab',{type:'folder',path:'/BGP/final'},'Final');
+ assert.match(p.body(),/id="load-run" data-load-action="run"/);
+ p.c.loadRender();assert.match(p.body(),/id="load-run"/,'a running lab keeps its confirmation');
+ p.lab.deployment={status:'Stopped'};p.c.loadRender();
+ assert.match(p.body(),/Start the lab to load a state/);assert.doesNotMatch(p.body(),/id="load-run"/);assert.equal(vm.runInContext('loadReview',p.c),null);
+ // the chip
+ const job=partialJob({status:'verified',targets:[{name:'clab-BGP-ceos',status:'verified'}]});
+ const q=page({state:{restore_jobs:[job],jobs:[]}});
+ const running=q.c.saveChipState(q.lab,q.c.state);
+ if(['running','partial'].includes(running.key)){
+  const stopped=q.c.saveChipState({...q.lab,deployment:{status:'Stopped'}},q.c.state);
+  assert.ok(!['running','partial'].includes(stopped.key),'a stopped lab is not worded as running a loaded state: '+stopped.text);
+  assert.ok(q.c.loadState({...q.lab,deployment:{status:'Stopped'}},q.c.state).recent,'the last load is still known for the Last load line');
+ }else assert.fail('the fixture job should read as a load: '+running.key);
+ assert.equal(q.c.loadShortNames('lab','clab-BGP-ceos is not running.'),'ceos is not running.');
 });
 test('no save location: the places request, then the states of the default repository; From <repository>.; every source carries the repository',async()=>{
  const p=page({lab:makeLab({git_binding:null}),routes:()=>preflight(fourTargets()),

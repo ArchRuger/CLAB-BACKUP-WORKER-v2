@@ -99,13 +99,22 @@ function loadPanelClosed(){
  if(loadReview&&!loadReview.drawer&&!loadReview.keep)loadReview=null;
  loadView={kind:'',labId:''};loadListSeq++;
 }
+// The manager's sentence with the devices as the page names them (their short names, never the container names).
+function loadShortNames(labId,text){
+ const lab=loadLab(labId);let out=String(text||'');
+ for(const node of [...((lab&&lab.nodes)||[])].sort((x,y)=>String(y.name||'').length-String(x.name||'').length))if(node.name&&node.short_name&&node.short_name!==node.name)out=out.split(node.name).join(node.short_name);
+ return out;
+}
+function loadLabStopped(lab){
+ const deployed=lab.deployment&&lab.deployment.status,ls=typeof labState==='function'?labState(lab,typeof labContext==='function'?labContext():loadState_()):null;
+ return deployed==='Not deployed'||deployed==='Stopped'||!!(ls&&ls.key==='stopped');
+}
 async function loadShowList(labId,focus){
  loadReview=null;
  const lab=loadLab(labId);if(!lab){loadView={kind:'',labId:''};return;}
  // Not running is what the VM says about the deployment, whatever else the lab's pill reports: a lab that also "needs attention"
  // (a load that ended on some devices only, a failed operation) is still a stopped lab, and nothing can be loaded onto it.
- const deployed=lab.deployment&&lab.deployment.status,ls=typeof labState==='function'?labState(lab,typeof labContext==='function'?labContext():loadState_()):null;
- if(deployed==='Not deployed'||deployed==='Stopped'||(ls&&ls.key==='stopped')){loadView={kind:'notrunning',labId};loadPaint(focus);return;}
+ if(loadLabStopped(lab)){loadView={kind:'notrunning',labId};loadPaint(focus);return;}
  loadView={kind:loadStates.has(labId)?'list':'reading',labId};loadPaint(focus);
  const seq=++loadListSeq,still=()=>seq===loadListSeq&&loadOnScreen()===labId&&loadView.labId===labId&&['list','reading','error'].includes(loadView.kind);
  try{
@@ -284,7 +293,7 @@ function loadRefusedMarkup(r){
   const hold=loadSaveRunning(r.labId)?'A save is running.':loadBusy(r.labId);
   return `<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot busy" aria-hidden="true"></span>${esc(loadCap(r.name))} can be loaded in a moment.</p><p class="save-sub" id="load-wait-why">${esc(hold||r.error||'')}</p><div class="save-row"><button type="button" class="button primary" id="load-again" data-load-action="again"${hold?' disabled':''} aria-describedby="load-wait-why">Try again</button><button type="button" class="button ghost small" id="load-back" data-load-action="back">Back</button>${hold?'<span class="caption" id="load-wait-note">Available when it finishes.</span>':''}</div>`;
  }
- return `<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot bad" aria-hidden="true"></span>${esc(loadCap(r.name))} cannot be loaded right now.</p><p class="save-sub">${esc(r.error||'')}</p><div class="save-row"><button type="button" class="button primary" id="load-again" data-load-action="again">Try again</button><button type="button" class="button ghost small" id="load-back" data-load-action="back">Back</button></div>`;
+ return `<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot bad" aria-hidden="true"></span>${esc(loadCap(r.name))} cannot be loaded right now.</p><p class="save-sub" id="load-refused-why">${esc(loadShortNames(r.labId,r.error||''))}</p><div class="save-row"><button type="button" class="button primary" id="load-again" data-load-action="again">Try again</button><button type="button" class="button ghost small" id="load-back" data-load-action="back">Back</button></div>`;
 }
 // The poll switches only the red button's disabled state and its reason; the confirmation itself is not rebuilt, so the ticks, an open
 // Options and the focus stay.
@@ -494,6 +503,13 @@ function loadRender(){
  for(const job of loadState_().restore_jobs||[]){
   if(loadJobActive(job)){loadSeenActive.add(job.id);continue;}
   if(loadSeenActive.has(job.id)){loadSeenActive.delete(job.id);loadToast(loadFresh(job));}
+ }
+ // A lab that stopped while a list or a confirmation was on screen: nothing can be loaded onto it any more, and the panel says
+ // so with Start lab instead of keeping a red Load that the manager would refuse (B06).
+ const shown=id&&loadView.labId===id?loadLab(id):null;
+ if(shown&&loadPanelOpen()&&['review','list','reading'].includes(loadView.kind)&&!(loadReview&&loadReview.sending)&&loadLabStopped(shown)){
+  const held=loadReview&&loadReview.drawer;loadReview=null;if(held&&typeof saveDrawerClose==='function')saveDrawerClose();
+  loadView={kind:'notrunning',labId:id};loadPaint(false);return;
  }
  if(loadView.kind==='review'&&loadPanelOpen()){
   // A wait repaints when the manager is free (Try again becomes available); a confirmation only switches its red button.

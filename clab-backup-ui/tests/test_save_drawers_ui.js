@@ -637,6 +637,27 @@ test('B05 the empty-repository question can be left in the chooser; B07 a new fo
  await st.act('use-another-name');assert.equal(st.sd.chooser.pathTouched,false);
  await st.act('name',{value:'other',echo:'other'});assert.equal(st.sd.chooser.value,'hand/other','the new name names the folder: the same question cannot come back');
 });
+test('B09 a path typed key by key is cleaned from what was typed, not from the echo of the echo: UX TEST (3) is UX-TEST-3, in the folder and in a state’s name; B16 Save state is off with the reason while other work runs',async()=>{
+ const checked=[],posts=[];
+ const real=g=>{const p=require('node:vm').createContext({esc:v=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))});require('node:vm').runInContext(require('node:fs').readFileSync(require('node:path').join(__dirname,'../app/static/git-places.js'),'utf8').replace(/^const gitPlacesState[^\n]*\n/m,''),p);g.context.folderClean=p.folderClean;g.context.folderEcho=p.folderEcho;return p;};
+ const g=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>{checked.push(data.folder);return {kind:'free',folder:data.folder,typed:data.folder,exists:false};},'POST /labs/lab/git/place':data=>{posts.push(data.folder);return {saved:true};}}});
+ const places=real(g);
+ g.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
+ // each keystroke arrives appended to what the field showed (its echo)
+ let field='';for(const key of 'UX TEST (3)'){const value=field+key;await g.act('typed',{value,echo:places.folderEcho(value)});field=g.sd.chooser.value;}
+ assert.equal(g.sd.chooser.raw,'UX TEST (3)');
+ await g.act('save');for(const timer of [...g.timers])if(typeof timer==='function')timer();await settle();
+ assert.equal(checked.at(-1),'UX-TEST-3');assert.deepEqual(posts,['UX-TEST-3'],'never UX-TEST--3-');
+ const st=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>({kind:'free',folder:data.folder,typed:data.folder,exists:false}),'POST /labs/lab/git/state':data=>{posts.push(data.name+'@'+data.folder);return {id:'s',lab_id:'lab',status:'queued'};}},extras:{gitRequestId:()=>'r'.repeat(32)}});
+ const p2=real(st);st.context.saveDrawerOpen('state',{});await settle();
+ let name='';for(const key of 'UX TEST (3)'){const value=name+key;await st.act('name',{value,echo:p2.folderEcho(value)});name=st.sd.chooser.name;}
+ await st.act('save');await settle();
+ assert.equal(posts.at(-1),'UX-TEST-3@restore-square/UX-TEST-3');
+ // B16
+ st.context.busyReason=()=>'A backup is running.';st.context.saveDrawerOpen('state',{});await settle();assert.equal(st.seen.at(-1).view.unavailable,'A backup is running.');
+ const html=p2.folderChooserMarkup(null,{mode:'state',name:'x',value:'BGP/x',status:'ready',unavailable:'A backup is running.',answer:{kind:'free',folder:'BGP/x',typed:'BGP/x',exists:false}});
+ assert.match(html,/data-folder-primary="1" disabled>Save state<\/button><span class="form-help" id="folder-reason">A backup is running\. Save state is available when it finishes\.<\/span>/);
+});
 test('T1-6 a save keeps its name in All versions when a newer save arrives: its own note, or Unnamed save; never the folder’s name for the newest row only',()=>{
  const g=harness();
  const job=(id,note,created)=>({id,lab_id:'lab',target:'latest',status:'synced',pushed:true,commit:id.repeat(40).slice(0,40),note,created,finished:created,changed_files:['Work/latest/r1.cfg'],snapshot_path:'Work/latest'});

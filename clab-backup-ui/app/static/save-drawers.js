@@ -482,14 +482,14 @@ function drwChooserNew(mode,options){
 // The folder a request names: the manager's answer for what the field shows (nothing is sent before it arrived, unless the check
 // itself failed); for a repository given by its address, the field's own text corrected (the manager answers for it when it connects).
 function drwChooserFolder(c){
- if(c.address)return c.answer&&typeof c.answer.folder==='string'?c.answer.folder:(typeof folderClean==='function'?folderClean(c.value):c.value);
- const answer=c.answer||(c.model&&c.model.answers&&typeof folderClean==='function'?c.model.answers.get(folderClean(c.value)):null);
+ if(c.address)return c.answer&&typeof c.answer.folder==='string'?c.answer.folder:(typeof folderClean==='function'?folderClean(drwTyped(c)):c.value);
+ const answer=c.answer||(c.model&&c.model.answers&&typeof folderClean==='function'?c.model.answers.get(folderClean(drwTyped(c))):null);
  if(answer&&answer.folder!==undefined&&answer.folder!==null)return String(answer.folder);
- return c.checkFailed?(typeof folderClean==='function'?folderClean(c.value):c.value):null;
+ return c.checkFailed?(typeof folderClean==='function'?folderClean(drwTyped(c)):c.value):null;
 }
 function drwChooserView(){
  const c=saveDrawer.chooser,labName=drwLabName(),mode=c.mode;
- c.labName=labName;
+ c.labName=labName;c.unavailable=mode==='state'&&typeof busyReason==='function'?String(busyReason(saveDrawer.lab)||''):'';
  const title=mode==='state'?'Save as a lab state':mode==='browse'?'Browse the repository':`Where should ${labName} save?`;
  const meta=mode==='state'?`Saves ${labName} as it is now into a folder of its own. Where ${labName} normally saves does not change.`:mode==='browse'?`Every folder of ${c.repoName||'the repository'}. Looking at folders does not change where ${labName} saves.`:'Pick a folder, type a path, or make a new folder.';
  const content=typeof folderChooserMarkup==='function'?folderChooserMarkup(c.model,c):'<p class="save-note">The folder chooser is not available on this page.</p>';
@@ -497,7 +497,7 @@ function drwChooserView(){
 }
 const drwOpenBranches=new Map();   // "<lab id>|<repository id>" → Set of open folder paths (the same Set the chooser toggles)
 async function drwLoadChooser(){
- const c=saveDrawer.chooser,id=saveDrawer.lab,request=saveDrawer.request;c.status='loading';c.error='';drwDrawerRenderSoon();
+ const c=saveDrawer.chooser,id=saveDrawer.lab,request=saveDrawer.request;c.raw=null;c.status='loading';c.error='';drwDrawerRenderSoon();
  try{
   const context=typeof gitLoadContext==='function'?await gitLoadContext(id,false):null;
   const wanted=c.repository||'';
@@ -514,7 +514,7 @@ async function drwLoadChooser(){
   const own=c.model&&typeof folderOwnPath==='function'?folderOwnPath(c.model):'';
   const base=context?.binding?own||String(context.binding.repository?.prefix||'').replace(/\/$/,''):places.default?.folder||'';
   c.parent=base;c.defaultFolder=places.default?.folder||base;
-  if(c.mode==='state')c.value=drwJoin(base,typeof folderClean==='function'?folderClean(c.name):c.name);
+  if(c.mode==='state')c.value=drwJoin(base,typeof folderClean==='function'?folderClean(drwTypedName(c)):c.name);
   else if(!c.pathTouched&&!c.value)c.value=base;
   // The open branches belong to the person (CLAUDE.md: never derive `open` from the selection). They are remembered per lab and
   // repository for as long as the page lives: across the poll, and across closing and reopening the drawer. The first time a
@@ -525,7 +525,7 @@ async function drwLoadChooser(){
   drwOpenBranches.set(branches,c.expanded);
   c.answer=!c.model&&!context?.binding&&c.value===(places.default?.folder||'')?places.default?.answer||null:null;
   c.status='ready';
-  if(c.mode!=='browse'&&!c.address&&!(c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(c.value):c.value))&&!c.answer)drwChooserCheck(c.value);
+  if(c.mode!=='browse'&&!c.address&&!(c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(drwTyped(c)):c.value))&&!c.answer)drwChooserCheck(c.value);
   drwSay('');
  }catch(error){if(request!==saveDrawer.request)return;c.status=error instanceof TypeError?'unreachable':'error';c.error=c.status==='error'?error.message||'':'';}
  saveDrawerRender();
@@ -536,13 +536,13 @@ function drwDrawerRenderSoon(){saveDrawerRender();}
 // answer for that very value arrives. An answer that is a question is shown instead (its buttons are the answer); a new value
 // drops the held click. Nothing is ever sent for a folder the manager has not answered for, and no click vanishes.
 function drwChooserHold(kind){
- const c=saveDrawer.chooser,clean=value=>typeof folderClean==='function'?folderClean(value):String(value||''),value=clean(c.value);
+ const c=saveDrawer.chooser,clean=value=>typeof folderClean==='function'?folderClean(value):String(value||''),value=clean(drwTyped(c));
  c.held={kind,value};clearTimeout(c.timer);c.timer=0;
  if(!(c.checking&&c.checkingFor===value))drwChooserCheck(value);else saveDrawerRender();
 }
 function drwChooserHeld(){
  const c=saveDrawer.chooser,held=c.held,clean=value=>typeof folderClean==='function'?folderClean(value):String(value||'');c.held=null;
- if(!held||c.busy||(c.mode!=='state'&&held.value!==clean(c.value)&&held.value!==clean(c.answer&&c.answer.typed)))return false;
+ if(!held||c.busy||(c.mode!=='state'&&held.value!==clean(drwTyped(c))&&held.value!==clean(c.answer&&c.answer.typed)))return false;
  // Only an answer carries the click out: a check that failed leaves the button for a second click, and an answer that asks
  // (another lab's folder, a folder that holds a state) shows its buttons.
  if(!c.answer||['lab','state'].includes(String(c.answer.kind||'')))return false;
@@ -555,7 +555,7 @@ async function drwChooserCheck(folder){
   const answer=await json('/labs/'+drwEnc(id)+'/git/places/check','POST',{repository:c.repository,folder,purpose:c.mode==='state'?'state':'save',name:c.mode==='state'?c.name:''});
   if(seq!==c.seq||request!==saveDrawer.request)return;
   c.answer=answer;c.checkFailed=false;
-  if(answer&&typeof answer.folder==='string'&&c.mode!=='state'&&answer.folder!==c.value&&(typeof folderClean==='function'?folderClean(c.value):c.value)===folder)c.value=answer.folder;
+  if(answer&&typeof answer.folder==='string'&&c.mode!=='state'&&answer.folder!==c.value&&(typeof folderClean==='function'?folderClean(drwTyped(c)):c.value)===folder&&(answer.folder!==folder||c.raw===null||c.raw===undefined)){c.value=answer.folder;c.raw=null;}   // while the person types, only a folder the manager changed replaces the field
   c.answerFor=c.value;
  }catch(error){if(seq!==c.seq||request!==saveDrawer.request)return;c.checkFailed=true;c.answer=null;c.notice='';}
  c.checking=false;c.checkingFor=null;
@@ -566,26 +566,40 @@ async function drwChooserCheck(folder){
 // answer for an older folder never becomes the answer for what the field shows.
 function drwChooserDebounce(folder){
  const c=saveDrawer.chooser,clean=value=>typeof folderClean==='function'?folderClean(value):String(value||'');clearTimeout(c.timer);
- c.timer=setTimeout(()=>{c.timer=0;if(saveDrawer.chooser!==c||clean(c.value)!==clean(folder))return;drwChooserCheck(folder);},250);
+ c.timer=setTimeout(()=>{c.timer=0;if(saveDrawer.chooser!==c||clean(drwTyped(c))!==clean(folder))return;drwChooserCheck(folder);},250);
 }
 function drwChooserSelect(path){
- const c=saveDrawer.chooser;c.selected=path;c.question=null;c.notice='';c.answer=null;c.checkFailed=false;c.held=null;
- if(c.mode==='state'){c.parent=path;c.pathTouched=false;c.requestId='';c.value=drwJoin(path,typeof folderClean==='function'?folderClean(c.name):c.name);drwChooserDebounce(c.value);}
+ const c=saveDrawer.chooser;c.selected=path;c.question=null;c.notice='';c.answer=null;c.checkFailed=false;c.held=null;c.raw=null;
+ if(c.mode==='state'){c.parent=path;c.pathTouched=false;c.requestId='';c.value=drwJoin(path,typeof folderClean==='function'?folderClean(drwTypedName(c)):c.name);drwChooserDebounce(c.value);}
  else if(c.mode==='browse'){c.value=path;}
  else{c.value=path;c.pathTouched=true;if(!(c.model&&c.model.answers.get(path)))drwChooserCheck(path);}
  drwSay(path?'Folder '+path+' selected':'Top level selected');saveDrawerRender();
 }
+// What the person typed, kept beside what the field shows. The field shows the echo (a space reads as a dash at once), and each
+// keystroke arrives appended to that echo; the typed text is rebuilt from it, so the folder asked about and sent is the cleaning
+// of what was typed (`UX TEST (3)` is `UX-TEST-3`), never a cleaning of a cleaning (`UX-TEST--3-`, B09).
+function drwRawTyped(before,shown,now){
+ const text=String(now??'');
+ return before!==null&&before!==undefined&&shown&&text.length>shown.length&&text.startsWith(shown)?String(before)+text.slice(shown.length):text;
+}
+function drwTypedName(c){return c.rawName!==null&&c.rawName!==undefined?String(c.rawName).replace(/\//g,'-'):c.name;}
+function drwTyped(c){return c.raw!==null&&c.raw!==undefined?c.raw:c.value;}
 function drwChooserTyped(intent){
- const c=saveDrawer.chooser;c.value=intent.echo!==undefined?intent.echo:intent.value;c.selected=null;c.pathTouched=true;c.question=null;c.answer=null;c.answerFor=null;c.requestId='';c.checkFailed=false;c.held=null;c.notice='';
- const clean=typeof folderClean==='function'?folderClean(c.value):c.value;
+ const c=saveDrawer.chooser;
+ c.raw=drwRawTyped(c.raw,c.value,intent.value);
+ c.value=typeof folderEcho==='function'&&intent.echo!==undefined?folderEcho(c.raw):intent.echo!==undefined?intent.echo:intent.value;c.selected=null;c.pathTouched=true;c.question=null;c.answer=null;c.answerFor=null;c.requestId='';c.checkFailed=false;c.held=null;c.notice='';
+ const clean=typeof folderClean==='function'?folderClean(drwTyped(c)):c.value;
  if(c.address){saveDrawerRender();return;}   // nothing to ask before the repository is connected
  if(c.mode==='state')c.parent=drwDir(clean);
  if(typeof gitRevealFolder==='function'&&c.model)gitRevealFolder(c.expanded,drwDir(clean));
  drwChooserDebounce(clean);saveDrawerRender();
 }
 function drwChooserName(intent){
- const c=saveDrawer.chooser;c.name=intent.echo!==undefined?intent.echo:intent.value;c.requestId='';c.question=null;c.held=null;
- if(!c.pathTouched){c.value=drwJoin(c.parent,typeof folderClean==='function'?folderClean(c.name):c.name);c.answer=null;c.answerFor=null;drwChooserDebounce(c.value);}
+ const c=saveDrawer.chooser;
+ // The name as typed is kept beside its echo, like the folder (drwRawTyped): `UX TEST (3)` typed key by key names `UX-TEST-3`.
+ c.rawName=drwRawTyped(c.rawName,c.name,intent.value);
+ c.name=typeof folderEcho==='function'&&intent.echo!==undefined?folderEcho(String(c.rawName).replace(/\//g,'-')):intent.echo!==undefined?intent.echo:intent.value;c.requestId='';c.question=null;c.held=null;
+ if(!c.pathTouched){c.raw=null;c.value=drwJoin(c.parent,typeof folderClean==='function'?folderClean(drwTypedName(c)):c.name);c.answer=null;c.answerFor=null;drwChooserDebounce(c.value);}
  saveDrawerRender();
 }
 async function drwAwaitUpload(job){
@@ -609,7 +623,7 @@ async function drwChooserPlace(choice,pending,extra){
  const c=saveDrawer.chooser,id=saveDrawer.lab;if(c.busy)return;
  const folder=drwChooserFolder(c);if(folder===null){if(!choice&&!pending&&!extra)drwChooserHold('place');return;}
  const names=c.context?.binding?.node_names||(c.context?.supported_nodes||[]).map(n=>n.name);
- const answer=c.answer||(!c.address&&c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(c.value):c.value))||null;
+ const answer=c.answer||(!c.address&&c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(drwTyped(c)):c.value))||null;
  // A repository of the VM by its id, or one the VM does not have yet by its address (connected at its top level, then the lab is placed).
  const url=c.address?String(c.address.value||'').trim():'';
  if(c.address&&!/^https:\/\/[^\s/]+\/\S+/.test(url)){c.refused='Paste the HTTPS address, for example https://github.com/you/your-lab-repo.';c.problem=null;c.lastRequest=()=>drwChooserPlace(choice,pending,extra);saveDrawerRender();return;}
@@ -675,7 +689,7 @@ async function drwChooserState(choice){
  const c=saveDrawer.chooser,id=saveDrawer.lab;if(c.busy)return;
  // The folder the Folder field shows: the default <the lab's folder>/<the state's folder name>, what the person chose or typed, or
  // the top level when the person emptied the field (the line under it says so). Never an empty folder by omission.
- const folder=drwChooserFolder(c),name=typeof folderClean==='function'?folderClean(c.name):c.name;
+ const folder=drwChooserFolder(c),name=typeof folderClean==='function'?folderClean(drwTypedName(c)):c.name;
  if(!name)return;
  if(folder===null){if(!choice)drwChooserHold('state');return;}
  if(!c.requestId)c.requestId=typeof gitRequestId==='function'?gitRequestId():'0'.repeat(32);
@@ -699,7 +713,7 @@ async function drwAddFolder(parent,name){
   const result=await json('/git/repositories/'+drwEnc(c.repository)+'/folders/new','POST',{lab_id:id,parent,name});
   const folder=String(result.folder??drwJoin(parent,name));
   const above=result.adjusted==='above-state'||(c.answer&&c.answer.adjusted==='above-state');   // the folder the person was in is part of a saved state
-  c.newFolder=null;c.answer=result.answer||null;c.value=folder;c.selected=folder;c.answerFor=folder;
+  c.newFolder=null;c.answer=result.answer||null;c.value=folder;c.raw=null;c.selected=folder;c.answerFor=folder;
   // Inside a saved state a new folder is made in the lab folder above it, and the chooser says so (PROMPT 6.2).
   c.notice=result.existed&&result.adjusted==='above-state'?`${name} is part of a saved state, so the folder above it, ${folder||'the top level'}, is selected.`:result.existed?`${folder} already exists. It is selected.`:above?`A saved state holds no other folders, so the new folder is ${folder}, in the lab folder above it.`:'';
   if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,folder);
@@ -744,9 +758,9 @@ async function drwChooserApply(intent,event){
   case 'typed':drwChooserTyped(intent);break;
   case 'name':drwChooserName(intent);break;
   case 'address-on':{c.address={value:''};c.answer=null;c.question=null;c.pending=null;c.refused='';c.problem=null;c.selected=null;c.newFolder=null;if(!c.pathTouched)c.value=c.defaultFolder||c.value;saveDrawerRender();drwChooserFocus('#folder-url');break;}
-  case 'address-off':{c.address=null;c.answer=null;c.question=null;c.refused='';c.problem=null;saveDrawerRender();if(c.status==='ready')drwChooserCheck(typeof folderClean==='function'?folderClean(c.value):c.value);drwChooserFocus('[data-folder-action="address-on"]');break;}
+  case 'address-off':{c.address=null;c.answer=null;c.question=null;c.refused='';c.problem=null;saveDrawerRender();if(c.status==='ready')drwChooserCheck(typeof folderClean==='function'?folderClean(drwTyped(c)):c.value);drwChooserFocus('[data-folder-action="address-on"]');break;}
   case 'url':if(c.address){c.address={value:String(intent.value??'')};c.answer=null;c.question=null;c.refused='';c.problem=null;saveDrawerRender();}break;
-  case 'repository':c.repository=intent.value;c.value='';c.pathTouched=false;c.answer=null;await drwLoadChooser();break;
+  case 'repository':c.repository=intent.value;c.value='';c.raw=null;c.pathTouched=false;c.answer=null;await drwLoadChooser();break;
   case 'bring':c.bring=!!intent.value;saveDrawerRender();break;
   case 'tree-open':c.treeOpen=!!intent.value;break;
   case 'show-all':c.showAll.add(intent.path);saveDrawerRender();break;
