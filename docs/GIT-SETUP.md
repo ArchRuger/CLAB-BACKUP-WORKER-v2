@@ -86,9 +86,9 @@ Finally, open your lab in the manager and press **Save** in the lab header. The 
 save goes to the repository the wizard registered, in a folder named after the lab; press
 **Choose another place** to pick a different folder first. Saving is immediate and asks
 nothing else: it keeps the topology file, the map and the configuration of every included
-device as one save on the VM. The chip then reads **1 save to upload**; press **Upload**
-to send it to the online repository, or **Not now** to keep it on the VM for later
-(**See changes** shows what it contains). There is no separate Commit button, and nothing
+device as one save on the VM. The chip panel opens on one sentence about what changed and the chip
+then reads `1 save to upload`; press **Upload** to send it to the online repository, or **Not now** to
+keep it on the VM for later (**See changes** shows what it contains). There is no separate Commit button, and nothing
 is uploaded without **Upload**. Afterwards the repository contains `latest/` with the
 configurations and `manifest.json` inside the lab's folder.
 
@@ -104,7 +104,7 @@ flowchart TD
     H --> I[Upload: push to the online repository]
     I --> J{Push verified?}
     J -- Yes --> K[Uploaded]
-    J -- No --> L[The save stays on the VM; press Upload again]
+    J -- No --> L[The save stays on the VM; the chip reads Upload failed: press Try again]
 ```
 
 ## Connect or switch a repository from the manager
@@ -138,8 +138,9 @@ lab. A repository the account cannot push to is refused before anything is clone
 Two things the manager reports instead of guessing: the online copy of the repository
 has changes this VM does not have (`The online copy of this repository has changes this
 VM does not have.`), and the checkout holds commits that the manager did not make
-(`This checkout has commits that were not made by manager saves.`). Bring the checkout
-up to date as its owner with ordinary Git, then try again.
+(`This checkout has commits that were not made by manager saves.`; the chip words it as `Someone is working
+in this repository on the VM.`). Bring the checkout up to date as its owner with ordinary Git, then try
+again.
 
 **Use a different repository…** also lists every checkout already registered on the VM.
 Choosing one opens the folder chooser for it; pick the folder and confirm the devices to
@@ -161,15 +162,15 @@ name). A course's prepared lab states (for example `bgp/start`, `bgp/broken`, `b
 are ordinary saved folders written with **Save as a lab state…**; see
 [NAMING.md](NAMING.md).
 
-The only folder the VM helper refuses is one inside another lab's `latest`, `baseline` or
+The VM helper refuses a folder inside another lab's `latest`, `baseline` or
 `checkpoints` (for example `bgp/latest/edge`), because that lab's saves would write
-over it. You do not have to work this out: when you save, the manager chooses a folder that
-avoids it, and in **Choose another place** or **Change folder…** it marks such folders as not
-choosable with the reason. The chooser also lets you create a new folder anywhere
-(**New folder…**) and, with **Save this lab here**, moves a lab to the folder you picked.
-The manager asks one question, with buttons only, when two labs want the very same
-folder, when the folder you picked already holds a saved state of another lab or a course,
-or when a save of the lab still waits for upload. See [GIT-PROGRESS.md](GIT-PROGRESS.md).
+over it. You do not have to work this out: the manager never shows such a refusal. When you save, it
+chooses a folder that avoids it, and in **Choose another place** or **Change folder…** it corrects a typed
+or picked path and says what it did (where `bgp` is a lab folder: `bgp/latest/edge is part of a saved state, so BGP
+saves in bgp, the lab folder above it.`). The chooser also lets you create a new folder anywhere (**New folder…**) and,
+with **Save here**, sets the folder you picked. The manager asks one question, with buttons only, when two
+labs want the very same folder, when the folder you picked already holds a saved state of another lab or a
+course, or when a save of the lab still waits for upload. See [GIT-PROGRESS.md](GIT-PROGRESS.md#folders).
 
 ### Administrators: `--subfolder`
 
@@ -344,7 +345,7 @@ It never runs Git as root. Retain custom `--remote`, `--prefix` and `--label`
 options when retrying a custom registration. For new registrations the wizard
 uses `origin` and the repository root; for existing ones it retains the selected
 settings. Once registration succeeds, press **Save** in the lab header again (or open the
-chip, then **Save settings**, and pick the checkout). These identity/registration repairs
+chip, then **Save settings** › **Use a different repository…**, and pick the checkout). These identity/registration repairs
 need no container rebuild.
 
 ## Fix a failed save

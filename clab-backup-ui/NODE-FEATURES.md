@@ -131,7 +131,7 @@ starting point…** either (*This capture does not include the topology. Save ag
 They are kept under stable internal names in the backup folder and in its local Git history, download
 in the ZIP under the lab's own names, and travel into every Git save (your latest save, a checkpoint, the starting point, a lab state) as
 `<lab>.clab.yml` and `<lab>.clab.yml.annotations.json` next to the device files, listed in the save's
-manifest as files of their kind rather than as devices: **Load** ignores them (loading never changes the topology), **See changes** and **See what's different**
+manifest as files of their kind rather than as devices: **Load** ignores them (loading never changes the topology), **See changes** and **See what’s different**
 show their changes, and a save without them never counts as a removed device.
 Backups and saves made before this feature carry none and keep working as before. The manager cannot
 see a topology file edited on the VM after the lab was deployed without a redeploy; what travels is

@@ -74,8 +74,8 @@ the folder they save into, and give them the same few names in every lab:
   new folder is written. A state is a normal saved folder (topology, map and every device
   configuration), so a folder that already holds one asks before it is replaced.
 - **The student loads them** with **Load** in the lab header: the list shows the lab's own
-  saves and checkpoints, then the lab states found in the repository as **Start**, **Broken**
-  and **Final**. Load lists the devices with what differs, and the red **Load** confirms; **Undo this load**
+  saves and checkpoints, then the lab states found in the repository as `Start`, `Broken`
+  and `Final`. Load lists the devices with what differs, and the red **Load** confirms; **Undo this load**
   loads the automatic backup that was taken first.
 - **Never save the student's lab into a lab-state folder.** They are the given states; the
   lab keeps saving in its own folder.
@@ -83,7 +83,8 @@ the folder they save into, and give them the same few names in every lab:
   `final` (and `broken-02`, … when you need more faults), plus the student's own
   checkpoints. A predictable set makes the UI predictable from lab to lab.
 - A folder inside another lab's `latest`, `baseline` or `checkpoints` cannot be a lab
-  folder, so a state such as `bgp/latest/start` is not possible; `bgp/start` is.
+  folder or a state folder, so a state such as `bgp/latest/start` is not possible: the manager does not
+  refuse it, it saves the state in `bgp/start` (when `bgp` is the lab folder) and says so.
 
 ## Repositories
 
@@ -114,15 +115,17 @@ changing where they save.
 ### The scaffold tool (scripted alternative)
 
 `deploy/scaffold-lab.py` does the same with a script and creates the older layout, in which
-the states sit in a `reference/` folder and the student's saves in `work/`:
+the states sit in a `reference/` folder and the student's saves in `work/`. The lab must already be
+connected to the repository (press **Save** in the lab header once, or open **Save settings** from the
+chip); the tool talks to the manager on this VM and uses the same actions as the buttons:
 
 1. `python3 deploy/scaffold-lab.py init <lab-slug>` creates the folders
    `reference/{start,solution,broken-01}` and `work` inside `<lab-slug>/` and points the lab's
    saves at `work`; `--states start,broken,final` names the states differently.
 2. Configure the running node to the **start** state, then
    `python3 deploy/scaffold-lab.py snapshot <lab-slug> start` captures the running config and
-   saves it (and its restore-grade candidate) into `reference/start`, then points the lab
-   back at `work`.
+   saves it (with the lab's topology and map, and each device's restore-grade candidate) into
+   `reference/start`, then points the lab back at `work`.
 3. Repeat for the other states (configure, then `snapshot <lab-slug> <state>`).
 4. Each `snapshot` lists the files it saved, asks the manager what an upload would send and
    prints one line for every other save that waits in the repository on the VM
@@ -136,7 +139,7 @@ the states sit in a `reference/` folder and the student's saves in `work/`:
    save that waits for upload does not stop that. If the save cannot start, times out or the
    upload fails, the tool says what happened and that the lab is "rebound to
    `<lab-slug>/work`"; a state that was saved but not uploaded waits on the lab VM and can be
-   uploaded from the save status in the lab header. Only when the manager refuses the folder
+   uploaded from the save chip in the lab header. Only when the manager refuses the folder
    change itself (other work is running) does the tool say that the lab still saves to
    `reference/<state>`; run `scaffold-lab.py init <lab-slug>` again before the student saves.
    If the manager stops answering (a restart mid-request, a reset or a timeout), the tool
@@ -145,4 +148,4 @@ the states sit in a `reference/` folder and the student's saves in `work/`:
    `reference/<state>`, because the change may have happened. The tool talks to the manager directly and ignores `http_proxy`.
 
 The states it writes are ordinary saved folders: **Load** lists them with the other lab
-states in the repository.
+states in the repository, named from their folder (`Start`, `Solution`, `Broken-01`).

@@ -30,31 +30,37 @@ state should hold. A state is what the devices run **now**: the manager reads th
 1. Bring the lab to the state you want to record: for *Start*, the configuration a student begins
    with; for *Broken*, the same lab with the fault introduced; for *Final*, the finished,
    working configuration.
-2. In the lab header, click the **save chip** (for example *Saved 21 min ago*). The chip panel
+2. In the lab header, click the **save chip** (for example `Saved 21 min ago`). The chip panel
    opens.
-3. At the bottom of the panel, click **Save as a lab state…**. The drawer *Save as a lab state*
+3. At the bottom of the panel, click **Save as a lab state…**. The drawer `Save as a lab state`
    opens. (The same button is in **All versions**, under **Lab states**.)
 4. Under **Name**, click one of the one-click names **start**, **broken** or **final**, or type
    your own. The name is also the name of the folder.
 5. Look at **Folder**. It starts as `<the lab's folder>/<name>`: if the lab normally saves into
    `BGP`, the state `start` goes to `BGP/start`. You can pick another folder in the tree, type a
-   path, or make a folder with **New folder…**; the line under the field says what the manager
-   will do with it. If the lab has no save location yet, the folder starts as
+   path, or make a folder with **New folder…** (they are under **Put it somewhere else**); the line under
+   the field says what the manager will do with it. If the lab has no save location yet, the folder starts as
    `<a folder named after the lab>/<name>`.
-6. Click **Save state**. The drawer closes with the message *State start saved in BGP/start.* and
-   the chip reads *Saving…* while the manager reads the devices and writes the state.
-7. The state is on the lab VM only. The chip now reads *1 save to upload*. Click the chip, then
-   **Upload**: nothing reaches the online repository without that click, and students cannot get
-   the state before it does.
+6. Click **Save state**. The drawer closes with the message `State Start saved in BGP/start.` and
+   the chip reads `Saving…` while the manager reads the devices and writes the state.
+7. The state is on the lab VM only. The chip now reads `1 save to upload` and its panel opens on one
+   sentence about the state (click the chip if you closed it). Click **Upload**: nothing reaches the online
+   repository without that click, and students cannot get the state before it does.
 
 Repeat steps 1 to 7 for the other states. You can do all three in one sitting: bring the lab to
 *Broken*, save it as a lab state, then fix it and save *Final*.
 
 **If a state of that name already exists** in the folder, the drawer asks one question with
-buttons: *"start" already exists here.* **Replace it** saves the new state over it (the older
+buttons: `“Start” already exists here.` **Replace it** saves the new state over it (the older
 contents stay in the Git history) and **Use another name** takes you back to the name field.
-Where the folder is the very folder another lab saves into, the manager suggests a folder beside
-it instead and says so.
+Where the folder is a lab's own save folder (yours or another lab's), the state is not saved there: it
+goes into a folder of its own inside it, and the sentence says so (`BGP is a lab’s save folder, so the
+state is saved in BGP/start.`).
+
+The state is listed under the name you typed, with the first letter made a capital when the name is
+all lower case: `start` is listed as `Start`, `broken` as `Broken`, and a name with its own capitals
+(`Broken-01`) stays as typed. Two states with the same name are told apart by their parent folder
+(`Start · BGP`).
 
 Saving a lab state does not change where your own lab saves, does not change your lab's
 **Saves to:** line and does not count as "your latest save": **Save** continues as before.
@@ -93,10 +99,11 @@ to date with the online repository:
 
 1. Upload the states from your VM (step 7 above).
 2. On the student's VM, **Update from the repository** downloads the newest files, for example
-   the states you added. The chip panel offers it when it says *The online copy has changes this VM
-   does not have.* and it is also in the lab's **Save settings**, under *Git details*. It is a
+   the states you added. It is in the lab's **Save settings**, under `Git details`, and the chip panel
+   offers it when a save stops with `The online copy has changes this VM does not have.` It is a
    fast-forward: it is offered only when nothing waits for upload, and it never changes running
-   devices.
+   devices. (A student's next **Save** also brings the VM copy up to date by itself when nothing
+   waits, but the states are not listed before that.)
 3. After that, the states are listed under **Lab states** in **Load**.
 
 For a state to fit the student's lab, three things must be the same as on your lab.
@@ -106,7 +113,7 @@ For a state to fit the student's lab, three things must be the same as on your l
   the lab `bgp-core` is `clab-bgp-core-ce1`. The student's lab must have the same lab name as the
   lab the states were saved from, which means the same containerlab `name:` in the topology file
   (and the same node names). A student who deploys the course topology under another name gets the
-  row *Not in this lab* for every device, and nothing is loaded. Give every student the exact
+  row `Not in this lab` for every device, and nothing is loaded. Give every student the exact
   topology file you saved the states from.
 - **The platform.** A device is matched by node name and platform; a saved Arista device is never
   loaded onto a Juniper node of the same name.
@@ -123,15 +130,15 @@ For a state to fit the student's lab, three things must be the same as on your l
 Three clicks, in a lab that is running:
 
 1. **Load** in the lab header. The panel lists the lab's own saves and checkpoints under
-   *Your saves* and the course's states under **Lab states**.
-2. Click the state, for example *start*. The panel checks the devices and lists every device with
-   what would change (*3 lines differ*, *Already matches*, or the reason a device cannot be
+   **Your saves** and the course's states under **Lab states**.
+2. Click the state, for example `Start`. The panel checks the devices and lists every device with
+   what would change (`3 lines differ`, `Already matches`, or the reason a device cannot be
    loaded).
 3. Click the red **Load**.
 
 Each device replaces its whole running configuration inside its own transaction, after the manager
 has backed it up automatically; nothing reboots, and a device that loses contact undoes the change
-itself. Loading never changes the topology. When it is done the chip reads *Running start*.
+itself. Loading never changes the topology. When it is done the chip reads `Running Start`.
 
 **Undo this load.** The chip panel, shown by clicking the chip after a load, has **Undo this load**.
 It is an ordinary load of the backup the manager took before the load: the same review, the same red
@@ -144,7 +151,7 @@ come back to by name.
 ## What can go wrong, and what to tell students
 
 **A view-only state.** A state that was saved without the files needed to load it appears in the list
-with the words *Saved without the files needed to load it* and *View only*. It has **View** instead of
+with the words `Saved without the files needed to load it` and `View only`. It has **View** instead of
 a load button. It can be read and downloaded, never loaded. A state needs the restore files, and every
 save made by a current manager for a platform it can restore (Arista EOS, Juniper cJunosEvolved and
 vJunos-switch, Cisco IOS XR) has them. To avoid a view-only state, make the states with a current
@@ -153,20 +160,20 @@ manager, on a lab whose devices are of those platforms, and do not use a plan ex
 A state saved by an older manager, or one made from devices whose platform cannot be restored, is the
 usual cause; save it again with a current manager.
 
-**A state that covers only some devices.** When the states list shows *2 of 4 devices*, the state can be
+**A state that covers only some devices.** When the states list shows `2 of 4 devices`, the state can be
 loaded onto two of the lab's four devices: the other two were not included when it was saved (check
-**Save settings** on your lab: *Devices included in every save*), have no device of the same full name and
+**Save settings** on your lab: `Devices included in every save`), have no device of the same full name and
 platform in the student's lab, or have a platform that cannot be restored. Loading it replaces the two covered devices and leaves the others exactly as they are;
-the confirmation says so (*This state covers 2 of your 4 devices. The others are left as they are.*) and
-lists the others as *Not in this state*. To make a state that covers every device, include every device
+the confirmation says so (`This state covers 2 of your 4 devices. The others are left as they are.`) and
+lists the others as `Not in this state`. To make a state that covers every device, include every device
 in **Save settings** before you save it.
 
 **A state from a different topology.** If the topology the state was saved on is not the lab's current
-topology (a different set of devices or links), the confirmation says *Saved on a different topology: n of
-m devices match.* with **View its topology**. The devices whose full name and platform match can still be
-loaded; the others are listed as *Not in this lab*. The manager never changes the lab's topology to fit a
+topology (a different set of devices or links), the confirmation says `Saved on a different topology: n of
+m devices match.` with **View its topology**. The devices whose full name and platform match can still be
+loaded; the others are listed as `Not in this lab`. The manager never changes the lab's topology to fit a
 state, so a student whose lab was changed after you saved the states has to restore the course topology
 first.
 
-**Start the lab first.** **Load** needs a running lab. For a stopped lab the panel says *Start the lab to
-load a state*, with the button that starts it.
+**Start the lab first.** **Load** needs a running lab. For a stopped lab the panel says `Start the lab to
+load a state`, with **Start lab**.

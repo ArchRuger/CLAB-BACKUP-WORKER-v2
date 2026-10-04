@@ -86,12 +86,14 @@ Create the GitHub repository first, with **Add a README** selected. Then:
 | `Where are your lab configurations going?` | `1` |
 | `HTTPS clone URL (Code > HTTPS on GitHub)` | `GITHUB_URL` |
 | `Checkout directory [/home/archtop/labs/...]` | Enter |
-| `Repository subfolder for this lab` | Enter for a one-lab repository, or a folder name such as `bgp` |
-| `Install GitHub CLI with sudo apt-get? (y/N)` | `y` |
 | One-time code, then `Press Enter to open ...` | Copy the code, press Enter. On **Windows** open https://github.com/login/device, paste the code, authorize |
 | `Commit author name` | Your name |
 | `Commit author email (GitHub noreply email is also valid)` | Your email |
-| `Register this checkout with the manager? (y/N)` | `y` |
+
+The wizard installs GitHub CLI by itself when it is missing (it says so) and registers the checkout by itself once every
+check has passed; neither is a question. It does not ask for a folder on a fresh install: the repository is registered at its top level and the
+first **Save** in the lab header offers the folder (a folder named after the lab). Only when you add another lab
+to a repository that is already registered does it ask `Repository subfolder for this lab`.
 
 Wait for `Registered ...` and `Ready.` To reopen the wizard later:
 

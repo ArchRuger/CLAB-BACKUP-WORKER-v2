@@ -701,8 +701,8 @@ unknown devices to these kinds, or choose the network OS under **Edit connection
 the device panel (**Advanced**). Review
 **Include in backups** because existing selections are preserved. The same
 Junos SSH driver used for cJunosEvolved captures
-`show configuration | display set | no-more`; saved files use `.set`, Git
-manifests report `junos-display-set`, and individual downloads use
+`show configuration | display set | no-more`; the manager keeps its own backups of it as `.set`, a Git
+save writes it as `<node>.cfg`, manifests report `junos-display-set`, and individual downloads use
 `vQFX_*.cfg` or `vJunos-switch_*.cfg`. Loading a saved configuration onto a running
 node (**Load** in the lab header, see [GIT-PROGRESS.md](GIT-PROGRESS.md)) is available for vJunos-switch, not for vQFX.
 See the [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/) and
@@ -774,8 +774,9 @@ After those checks, finish the real Git workflow in the browser:
 1. Press **Save** in the lab header. The save is made at once, on the VM, without a question.
 2. The panel says what changed, with **Upload**, **Not now** and **See changes**. Press
    **Upload**.
-3. Wait until the panel shows `Uploaded: yes` and check GitHub for the files under the
-   lab's folder: `latest/` and its `manifest.json`.
+3. Wait for the message `Uploaded to github.com.`; the chip then reads `Saved just now` and its panel
+   shows `Uploaded: yes, to github.com`. Check GitHub for the files under the lab's folder: `latest/`
+   with the device files, the topology file, the map and `manifest.json`.
 
 **Save** captures the topology file, the map and the configuration of every included
 device and commits them on the VM; the push happens only when you press **Upload**. There

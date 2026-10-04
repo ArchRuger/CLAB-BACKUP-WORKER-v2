@@ -963,7 +963,7 @@ Right-click a device and choose **Capture traffic…**, click a link on the map,
 open **Tools › Packet capture › Capture traffic…**; Wireshark runs in an isolated
 container on the VM and opens in a browser tab. See [CAPTURE.md](CAPTURE.md).
 
-## Save progress to Git
+## Save lab work to Git
 
 **Save** (the lab header, on every tab) captures the selected devices and the lab's topology and map,
 exports the completed snapshot into the engineer's registered VM repository, commits
@@ -1853,8 +1853,9 @@ flowchart TD
     H -- Offline or rejected --> J[Upload failed; Try again]
 ```
 
-Only the recorded configurations and manifest enter the commit. Existing YAML,
-annotations and unrelated project files are outside the export. The manifest
+The commit holds the recorded configurations, the file Load uses beside each of them, the lab's
+topology file and map (`<lab>.clab.yml` and `<lab>.clab.yml.annotations.json`) and the manifest. Other
+files in the repository, a README or your own YAML, are outside the export. The manifest
 records node mapping, format, checksums and capture/topology provenance. Export
 uses one complete backup job, not a mixture of files from the rolling latest
 backup directory. Timestamps alone do not produce an extra commit for unchanged
@@ -1870,9 +1871,11 @@ text. These formats are recorded in the manifest.
 
 ```text
 BENS-BGP-LAB/
-  BENS-BGP-LAB.clab.yaml       existing project file
   latest/                    newest complete saved capture
+    BENS-BGP-LAB.clab.yml      the topology
+    BENS-BGP-LAB.clab.yml.annotations.json   the map
     PE1.cfg
+    PE1.eoscfg                 the file Load uses (its extension depends on the platform)
     manifest.json
   baseline/                  the starting point; changes only through Use as starting point…
     PE1.cfg
@@ -1893,9 +1896,9 @@ saves, so a separate timestamp folder is unnecessary for each **Save**. A lab st
 |---|---|
 | Save (lab header) | Capture the included devices, the topology and the map, export latest and commit the changes on the VM. Nothing is uploaded until **Upload**. |
 | Upload / Not now / See changes | The three buttons under the sentence that says what changed. **Upload** pushes the repository's waiting saves and names every one of them; **Not now** leaves the save on this VM (*1 save to upload*); **See changes** opens the files. |
-| Keep as a checkpoint | Keep a save under a name (the chip panel and **All versions**). No device is read; the save's own capture is used. |
+| Keep as a checkpoint | Keep a save under a name (the chip panel and **All versions**). No device is read; the save's own capture is used, and `latest` is not touched. |
 | Use as starting point… (All versions) | Make one of your saves the lab's starting point (the `baseline` folder); review explicit replacement if one already exists. No device is read or changed. |
-| All versions (chip panel) | Browse everything saved for the lab: *Your saves*, *Checkpoints*, the *Starting point*, *Lab states*, *Other labs in this repository* and *Save activity*, each with **View files**, **Download ZIP**, **See what's different** and **Load this state…**; **Full history…** and **Browse the repository…** at the foot. |
+| All versions (chip panel) | Browse everything saved for the lab: *Your saves*, *Checkpoints*, the *Starting point*, *Lab states*, *Other labs in this repository* and *Save activity*, each with **View files**, **Download ZIP**, **See what’s different** and **Load this state…**; **Full history…** and **Browse the repository…** at the foot. |
 | Save settings (chip panel) | The devices every save includes, where the lab saves and the repository connection. |
 | Save as a lab state… | Write the lab's current state into another folder (default `<the lab's folder>/<name>`) without changing where the lab saves. |
 | Update from the repository | Fast-forward an eligible clean checkout when the online copy has changes this VM lacks and nothing waits to be uploaded; resolve diverged history outside the app. |
@@ -1916,8 +1919,9 @@ Capture, commit and push have separate results. A successful snapshot remains
 available even if the repository is busy or remote authentication fails: the chip
 reads *Upload failed* and **Try again** sends the recorded commit without reading the devices again. A restart
 reconciles the job with the VM journal instead of issuing a new
-capture silently. Inspect the save under **All versions › Save activity** before assuming it reached
-the remote.
+capture silently. Inspect the save in **All versions** (under *Your saves*, or *Save activity* for a
+checkpoint, a starting point or a folder move; a waiting save reads `Not uploaded yet`) before assuming it
+reached the remote.
 
 Keep the checkout clean. Unexpected staged work, changed branch/remote, unsafe
 paths and conflicting history require attention. The manager does not force push,

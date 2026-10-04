@@ -80,8 +80,9 @@ review; the manager keeps each answer for a few minutes.
 A lab operation never runs from a single click. The review names the action in plain
 words (*Destroy BGP_TheoryToPractice?*, *Stop devices?*), says what happens to the
 devices, warns that **configuration changes you have not saved are lost** for the
-disruptive ones, shows when progress was last saved to Git (in red when it never was, or
-when a lab operation ran after the last save) and offers **Save first** when the
+disruptive ones, shows when the lab was last saved (`Last saved 3 min ago.`, or `Never saved.`; in red
+when it never was, when a lab operation ran after the last save, or when a saved state was loaded since;
+`1 save is not uploaded yet.` follows when a save waits) and offers **Save first** when the
 lab has a save location. The affected devices and the cleanup folder are under *Technical
 details* together with the exact containerlab command; the *Start lab* review shows that
 command directly, under **Command run on the VM**, since a fresh deploy has nothing else
@@ -250,24 +251,25 @@ authentication or export errors. No extra Linux user is required.
 configuration of every included device go into one folder of the repository as one commit on the
 lab VM. Then one sentence says what changed, with **Upload**, **Not now** and **See
 changes**. Nothing is uploaded without **Upload**. A save is named automatically (for example
-*ceos and xrv9k changed*); the name can be changed afterwards, and **Keep as a checkpoint**
+`ceos and xrv9k changed`); the name can be changed afterwards, and **Keep as a checkpoint**
 keeps a save under a name. A lab can save into any folder of its repository, inside, above or
 beside other labs' folders, and the folder can be created on the spot; the manager asks one
 question, with buttons only, when two labs want the very same folder, when the folder
 already holds a saved state of another lab or a course, or when a save of the lab still waits
 for upload. **Save as a lab state…** writes the lab's current state into another folder (for
 example `BGP/start`) without changing where the lab normally saves; it is how a course author
-makes Start, Broken and Final ([course states](COURSE-STATES.md)). **All versions**, **Save
-settings** and **What changed** open from the chip panel.
+makes Start, Broken and Final ([course states](COURSE-STATES.md)). **All versions** and **Save
+settings** open from the chip panel, and **See changes** under a save's sentence opens the drawer
+`What changed`.
 
 ## Apply a saved configuration to a running node
 
 A student who has saved a Junos, EOS or IOS XR configuration can put it back onto the
 running node without destroying the lab, editing startup files, redeploying containerlab
 or rebooting the router. **Load** in the lab header, on any tab, lists the lab's own saves and
-checkpoints and the *Lab states* of the repository: every saved folder that holds a
-manager-written `manifest.json`, whatever its name or depth, such as a course's `Start`,
-`Broken` and `Final` (they are also in **All versions**, with
+checkpoints and the **Lab states** of the repository: every saved folder that holds a
+manager-written `manifest.json` and that no connected lab saves into, whatever its name or depth, such
+as a course's `Start`, `Broken` and `Final` (they are also in **All versions**, with
 **Load this state…** on each). The lab does not have to change its save location first, and
 loading never changes where it saves or the topology. A state can be a view-only version: one
 saved without the restore files, listed with the reason and never offered for loading. Choose

@@ -22,8 +22,8 @@ You can also select **5. Check running installation** in the installer menu.
 
 Before this final check, complete **Manager ▾ › VM connection… → Save and test
 connection**, verify its saved host fingerprint, and connect the intended registered
-checkout by pressing **Save** in the lab header (the first save asks where to save; **Save settings** in the
-chip panel changes it later). You can run the report earlier for diagnostics;
+checkout by pressing **Save** in the lab header (the first save offers a place to save; **Save settings** in
+the chip panel changes it later). You can run the report earlier for diagnostics;
 missing setup will be reported instead of assumed successful. The full install
 still performs its shorter container/version/HTTP check before browser setup.
 

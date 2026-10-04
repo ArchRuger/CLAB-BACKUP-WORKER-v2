@@ -26,9 +26,12 @@ python3 deploy/scaffold-lab.py snapshot bgp-core broken-01
 ```
 
 `init` registers `reference/{start,solution,broken-01}` and `work` and points the lab at `work`.
-`snapshot <slug> <state>` captures whatever the node is running right now, saves it (and its
-restore-grade candidate) to `<slug>/reference/<state>`, lists what it saved and asks before it uploads
-(`--yes` answers for a script; no keeps the state on the lab VM), and rebinds the lab to `work`.
+`snapshot <slug> <state>` captures whatever the node is running right now, saves it (with the lab's
+topology and map, and each device's restore-grade candidate) to `<slug>/reference/<state>`, lists what it
+saved and what the upload also sends (one line for every other save that waits in the repository on the VM,
+`This upload also sends: <lab>: <name>`, because an upload always carries every waiting save), and asks
+before it uploads (`--yes` states that you reviewed it, for a script; no leaves the state waiting on the
+lab VM, as a save to upload in the lab header), and rebinds the lab to `work` in every case.
 
 Prerequisites: the lab is deployed and reachable, and the lab already saves into the target
 Git repository (press **Save** in the lab header once; the first save connects the lab, and a
@@ -36,8 +39,8 @@ repository that is not on the VM yet is connected there by its HTTPS address). T
 connected repository to create folders in.
 
 Students then use your repository on their VM, press **Load** in the lab header and choose the
-state (`start`, `solution` or `broken-01`) under **Lab states**. They save their own work with
-**Save**, which goes to `work` (and to `work/checkpoints/<name>` with **Keep as a checkpoint**).
+state (listed as `Start`, `Solution` or `Broken-01`) under **Lab states**. They save their own work with
+**Save**, which goes to `work/latest` (and to `work/checkpoints/<name>` with **Keep as a checkpoint**).
 
 ## Custom state names
 
