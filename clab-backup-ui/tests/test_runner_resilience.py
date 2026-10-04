@@ -187,6 +187,52 @@ class RunnerResilienceTests(unittest.TestCase):
         }
         self.assertEqual(protected_job_ids(state), {'b1', 'b3', 'b4', 'b4b'})
 
+    def test_the_newest_load_that_changed_a_device_protects_its_safety_backup_only(self):
+        def restore(rid, lab_id, pre, *statuses):
+            return dict(id=rid, lab_id=lab_id, status='succeeded', pre_backup_job_id=pre, post_backup_job_id=pre + 'p',
+                        targets=[dict(name='r%d' % i, status=status) for i, status in enumerate(statuses)])
+        state = {'restore_jobs': [restore('old', 'A', 'pre-old', 'verified'),             # older load of lab A: trimmed
+                                  restore('new', 'A', 'pre-new', 'failed', 'applied_unverified'),
+                                  restore('noop', 'A', 'pre-noop', 'failed', 'skipped'),   # newest, changed nothing: protects nothing
+                                  restore('b-old', 'B', 'pre-b-old', 'uncertain'),
+                                  restore('b-new', 'B', 'pre-b-new', 'verify_mismatch')]}
+        ids = protected_job_ids(state)
+        self.assertEqual({i for i in ids if i.startswith('pre')}, {'pre-new', 'pre-b-new'}, 'one backup per lab, never its post backup')
+        self.assertNotIn('pre-old', ids); self.assertNotIn('pre-noop', ids); self.assertNotIn('pre-b-old', ids)
+
+    def test_a_loads_safety_backup_survives_three_hundred_later_jobs_of_the_lab(self):
+        with patch('app.runner.JOB_CAP', 3):
+            first = self.queue(); self.execute(first)
+            self.store.state['restore_jobs'] = [dict(id='r', lab_id=self.lab['id'], status='succeeded', pre_backup_job_id=first['id'],
+                                                     targets=[dict(name='r1', status='applied')])]
+            later = [dict(id='later%d' % i, lab_id=self.lab['id'], status='succeeded') for i in range(300)]
+            self.store.state['jobs'] = later + self.store.state['jobs']
+            job = self.queue(); self.execute(job)
+        kept = [j['id'] for j in self.store.state['jobs']]
+        self.assertIn(first['id'], kept); self.assertNotIn('later150', kept)
+        self.assertEqual(len(kept), 4, 'the cap of 3 plus exactly the one protected backup')
+        # Without the load, the same history trims it.
+        self.store.state['restore_jobs'] = []
+        with patch('app.runner.JOB_CAP', 3):
+            job = self.queue(); self.execute(job)
+        self.assertNotIn(first['id'], [j['id'] for j in self.store.state['jobs']])
+
+    def test_a_backup_job_says_when_its_topology_or_map_did_not_travel(self):
+        def run(**changes):
+            self.lab.update(changes)
+            job = self.queue(); self.execute(job)
+            return self.current(job)
+        self.assertNotIn('topology_missing', run(definition_yaml='name: x\ntopology:\n  nodes: {}\n'), 'a lab without a drawing has no map to miss')
+        self.assertEqual(run(definition_yaml='')['topology_missing'], 'no-text')
+        self.lab['definition_yaml'] = 'name: x\ntopology:\n  nodes: {}\n'
+        with patch.object(self.runner, 'topology_capture', side_effect=OSError('secret disk path /x')):
+            failed = run()
+        self.assertEqual(failed['topology_missing'], 'error'); self.assertNotIn('secret', json.dumps(failed))
+        self.assertNotIn('topology', failed)
+        self.assertEqual(run(drawing={'broken': True})['topology_missing'], 'map-error')
+        self.assertEqual(self.current({'id': self.store.state['jobs'][0]['id']})['topology']['file'], 'topology.clab.yml', 'the topology still travels')
+        self.assertEqual(self.current({'id': self.store.state['jobs'][0]['id']})['status'], 'succeeded', 'the backup itself never fails for it')
+
     def test_submit_caps_stored_jobs_at_the_newest_and_keeps_downloadable_files(self):
         finished = []
         with patch('app.runner.JOB_CAP', 3):

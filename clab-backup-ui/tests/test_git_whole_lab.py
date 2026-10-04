@@ -517,19 +517,54 @@ class GapTests(WholeLabCase):
         self.assert_carries_neither(snapshot)
         self.assertEqual((snapshot['manifest']['topology_provenance'], snapshot['manifest']['topology_digest']), ('unknown', None))
 
-    def test_gap_a_map_edited_in_the_manager_loses_to_the_map_file_on_the_vm(self):
-        # G1 would require: the map the student sees (the manager's, Edit map writes nowhere else) is the map saved;
-        # topology_capture takes the VM's annotations file whenever discovery holds one (runner.py topology_capture).
-        self.service.sources[self.lab_state()['deployment_name']] = vm_bundle(LAB_YAML, VM_MAP)
+    def sync_from_vm(self, annotations):
+        """What POST /api/labs/{id}/sync applies (vm_files.prepare_lab, then replace the lab), from a held VM bundle."""
+        from app.vm_files import prepare_lab
+        bundle = vm_bundle(LAB_YAML, annotations); self.service.sources[self.lab_state()['deployment_name']] = bundle
+        lab = self.lab_state(); candidate = prepare_lab(bundle, lab['deployment_name'], lab)
+        lab.clear(); lab.update(candidate); self.store.save()
+
+    def saved_map(self):
+        outcome, _ = self.fresh_save(target='latest')
+        self.assertEqual(outcome['status'], 'committed', outcome)
+        return (base64.b64decode(self.published()['files'][MAP_FILE]).decode(),
+                self.by_kind(self.published()['manifest'])['annotations'][0]['source'])
+
+    def test_a_map_edited_in_the_manager_after_a_sync_is_the_saved_map(self):
+        self.sync_from_vm(VM_MAP)
+        self.assertEqual(self.saved_map(), (VM_MAP, 'vm'), 'nothing was edited: the VM file, as before')
         self.move_node(999)
         students_map = map_document(self.lab_state())
         self.assertIn('"x": 999', students_map); self.assertNotEqual(students_map, VM_MAP)
-        outcome, _ = self.fresh_save(target='latest')
-        self.assertEqual(outcome['status'], 'committed', outcome)
-        saved = base64.b64decode(self.published()['files'][MAP_FILE]).decode()
-        self.assertEqual(saved, VM_MAP, 'the VM\'s older map is what is saved')
-        self.assertNotIn('"x": 999', saved)
-        self.assertEqual(self.by_kind(self.published()['manifest'])['annotations'][0]['source'], 'vm')
+        saved, source = self.saved_map()
+        self.assertEqual((saved, source), (students_map, 'manager'))
+
+    def test_a_vm_map_changed_since_the_last_sync_is_the_saved_map_when_nobody_edited_here(self):
+        self.sync_from_vm(VM_MAP)
+        newer = VM_MAP.replace('"x": 500', '"x": 777')
+        self.service.sources[self.lab_state()['deployment_name']] = vm_bundle(LAB_YAML, newer)
+        self.assertEqual(self.saved_map(), (newer, 'vm'))
+
+    def test_when_both_the_vm_map_and_the_managers_map_changed_the_managers_wins(self):
+        self.sync_from_vm(VM_MAP); self.move_node(999)
+        newer = VM_MAP.replace('"x": 500', '"x": 777')
+        self.service.sources[self.lab_state()['deployment_name']] = vm_bundle(LAB_YAML, newer)
+        saved, source = self.saved_map()
+        self.assertEqual((saved, source), (map_document(self.lab_state()), 'manager')); self.assertIn('"x": 999', saved)
+
+    def test_a_drag_in_the_topology_tab_after_a_sync_is_the_saved_map_too(self):
+        self.sync_from_vm(VM_MAP)
+        alias = self.lab_state()['drawing']['nodes'][0]['id']
+        sent = self.client.put('/api/labs/' + self.lab['id'] + '/layout', json=dict(positions={alias: [321, 123]}))
+        self.assertEqual(sent.status_code, 200, sent.text)
+        saved, source = self.saved_map()
+        self.assertEqual((saved, source), (map_document(self.lab_state()), 'manager')); self.assertNotEqual(saved, VM_MAP)
+
+    def test_without_a_map_file_on_the_vm_the_managers_map_is_saved(self):
+        self.sync_from_vm(None); self.move_node(999)
+        self.service.sources[self.lab_state()['deployment_name']] = vm_bundle(LAB_YAML)
+        saved, source = self.saved_map()
+        self.assertEqual((saved, source), (map_document(self.lab_state()), 'manager'))
 
     def test_gap_a_topology_updated_in_the_manager_after_deployment_loses_to_the_deployed_file(self):
         # G1 would require: a decision between the deployed file and the manager's newer copy that the student can see
