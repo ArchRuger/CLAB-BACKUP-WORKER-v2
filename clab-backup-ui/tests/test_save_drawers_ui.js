@@ -620,6 +620,23 @@ test('Q1280-05, Q1440-07 a question, a refusal and the sentence about a new fold
  lines['#folder-refused']={textContent:'The VM refused the folder.',scrollIntoView(){scrolled.push('refused');}};scrolled.length=0;
  await g.act('save');await settle();assert.deepEqual(scrolled,['refused','foot']);assert.equal(said(),'The VM refused the folder.');
 });
+test('B05 the empty-repository question can be left in the chooser; B07 a new folder without a usable character says so; B10 a new folder named like a part of a saved state says the folder above is selected; B13 Use another name lets the name drive the folder again',async()=>{
+ const g=chooserHarness({routes:{'POST /labs/lab/git/place':()=>({question:{kind:'empty',name:'New-Empty'}}),'POST /labs/lab/git/places/check':data=>({kind:data.folder==='hand/start'?'state':'free',label:'Start',folder:data.folder,typed:data.folder,exists:true}),
+  'POST /git/repositories/b/folders/new':data=>({folder:data.parent,existed:true,adjusted:'above-state',answer:{kind:'free',folder:data.parent,typed:data.parent,exists:true}})},extras:{saveStartBody:body=>({...body,initialize:true})}});
+ g.context.saveDrawerOpen('chooser',{mode:'location',address:true});await settle();
+ await g.act('url',{value:'https://github.com/me/New-Empty.git'});await g.act('save');assert.equal(g.sd.chooser.question.kind,'empty');
+ await g.act('another-address');assert.equal(g.sd.chooser.question,null,'the question is gone and the address can be changed');
+ const k=chooserHarness({routes:{'POST /git/repositories/b/folders/new':data=>({folder:data.parent,existed:true,adjusted:'above-state',answer:{kind:'free',folder:data.parent,typed:data.parent,exists:true}})}});
+ k.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
+ await k.act('new-folder',{parent:'BGP'});await k.act('new-add',{value:'/'});   // the stub's folderClean leaves nothing of it, as the real one leaves nothing of ???
+ assert.equal(k.seen.at(-1).view.notice,'Give the folder a name with letters or digits.');assert.equal(k.requests.filter(r=>/folders\/new$/.test(r.url)).length,0);
+ await k.act('new-add',{value:'latest'});assert.equal(k.seen.at(-1).view.notice,'latest is part of a saved state, so the folder above it, BGP, is selected.');
+ const st=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>({kind:data.folder==='hand/start'?'state':'free',label:'Start',folder:data.folder,typed:data.folder,exists:true})}});
+ st.context.saveDrawerOpen('state',{});await settle();
+ await st.act('name',{value:'start',echo:'start'});await st.act('typed',{value:'hand/start',echo:'hand/start'});assert.equal(st.sd.chooser.pathTouched,true);
+ await st.act('use-another-name');assert.equal(st.sd.chooser.pathTouched,false);
+ await st.act('name',{value:'other',echo:'other'});assert.equal(st.sd.chooser.value,'hand/other','the new name names the folder: the same question cannot come back');
+});
 test('T1-6 a save keeps its name in All versions when a newer save arrives: its own note, or Unnamed save; never the folder’s name for the newest row only',()=>{
  const g=harness();
  const job=(id,note,created)=>({id,lab_id:'lab',target:'latest',status:'synced',pushed:true,commit:id.repeat(40).slice(0,40),note,created,finished:created,changed_files:['Work/latest/r1.cfg'],snapshot_path:'Work/latest'});

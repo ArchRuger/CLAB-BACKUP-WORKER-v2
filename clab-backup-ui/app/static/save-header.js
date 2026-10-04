@@ -207,7 +207,7 @@ function saveViewFirst(cs,lab,now){
   const first=saveHeader.first.lab===lab.id?saveHeader.first:{url:'',question:null},question=first.question,name=question?String(question.name||String(first.url||'').replace(/\/+$/,'').replace(/\.git$/,'').split('/').pop()||'The repository'):'';
   const field=`<label for="save-url">Repository address (HTTPS)</label><input id="save-url" class="save-name" value="${saveEsc(first.url||'')}" placeholder="https://github.com/you/your-lab-repo" autocomplete="off" spellcheck="false" inputmode="url"${question||placing?' readonly':''}>`;
   const lead=placing&&saveHeader.connecting?'<p class="save-sub" id="save-first-wait" role="status">This can take a minute.</p>':'<p class="save-sub">Your saves go to a repository on GitHub. Paste its address; ask your instructor if you do not have one.</p>';
-  const row=question?`<p class="save-sub" id="save-first-empty">${saveEsc(name)} is empty. The manager adds a README.md file to start it.</p><div class="save-row">${saveButton('first-start','Start the repository','save-first-start',options)}</div>`
+  const row=question?`<p class="save-sub" id="save-first-empty">${saveEsc(name)} is empty. The manager adds a README.md file to start it.</p><div class="save-row">${saveButton('first-start','Start the repository','save-first-start',options)}${saveButton('first-other','Use another address','save-first-other',{disabled:held})}</div>`
    :`<p class="save-note">The lab VM’s own GitHub login is used. You are never asked for a password or a token here.</p><div class="save-row">${saveButton('first-connect','Save','save-first',options)}</div>`;
   // The administrator's way (a checkout set up on the VM in a terminal), folded; Check again reads the VM's repositories anew.
   const admin=question?'':`<details id="save-first-admin"><summary>Administrator setup (terminal)</summary><p class="save-note">${saveEsc(SAVE_ADMIN_TEXT)}</p><pre class="git-setup-command" id="save-first-admin-command">bash deploy/setup-git.sh</pre><div class="save-row">${saveButton('first-check','Check again','save-first-check',{disabled:held})}</div></details>`;
@@ -486,6 +486,22 @@ async function saveRename(job,value){
  }catch(error){saveHeader.error=lab?{lab:lab.id,text:String(error&&error.message||'The name could not be changed.')}:null;return null;}
  finally{saveHeader.renaming='';const now=saveEl('save-name');if(now)now.readOnly=false;renderSaveHeader();}
 }
+// The upload of the waiting saves again (after the repository's owner combined both sides on the VM, or after an upload the VM
+// refused). A save whose review the person has not seen yet is shown first. One that was reviewed gets a fresh review, and goes up
+// without another click only when that review sends nothing the person was not shown (a save that landed meanwhile is named
+// first: DESIGN.md 7.3, 3.4).
+async function saveUploadAgain(lab){
+ const waiting=lab&&typeof statusWaitingSaves==='function'?statusWaitingSaves(lab,saveCtx(lab)):[],target=waiting.find(j=>j.status==='push_pending')||waiting[0]||null;
+ if(!target||typeof gitReviewJob!=='function'||typeof gitReviewData!=='function')throw new Error(SAVE_MISSING);
+ const show={lab:lab.id,panel:target.status==='push_pending'?'failed':'upload',job:target.id,asked:true};
+ if(!target.reviewed){saveHeader.view=show;return;}
+ saveHeader.uploading=target.id;renderSaveHeader();
+ try{
+  const fresh=await gitReviewData(target,{fresh:true});
+  if(!saveSeenAll(lab.id,target,fresh)){saveHeader.view=show;return;}
+  const next=await gitReviewJob(target,{upload:true});saveHeader.sent=next&&next.id||'';
+ }finally{saveHeader.uploading='';}
+}
 // The one dispatcher of every data-save-action, in the chip panel and in the drawer head. `job` is the save the view is about
 // (null where the view has none); `origin` is 'panel', 'drawer' or the element whose .form-error takes a failure.
 async function saveAction(action,job,origin){
@@ -514,6 +530,10 @@ async function saveAction(action,job,origin){
    }
    case 'again':{
     if(!lab)return;
+    // Saves that wait for upload and nothing that stopped a save (no stopped job, no refused request): what did not work was the
+    // upload, so Try again repeats the upload (B02), never a new save that reads every device again.
+    const refused=!!saveHeader.refusal&&saveHeader.refusal.lab===lab.id;
+    if(lab.git_binding&&!job&&!refused&&typeof statusWaitingSaves==='function'&&statusWaitingSaves(lab,saveCtx(lab)).length){saveHeader.view=null;await saveUploadAgain(lab);break;}
     saveHeader.refusal=null;saveHeader.view=null;
     if(job&&(job.kind||['export_pending','interrupted'].includes(job.status)||job.target==='move')){
      // A stopped save that can be retried reuses its capture; a lab state or a design export retries that job, never a save of the lab.
@@ -539,22 +559,7 @@ async function saveAction(action,job,origin){
     if(!status.problem&&status.ready!==false)await saveStart(lab.id);
     break;
    }
-   case 'upload-again':{
-    // The upload of the waiting saves again (after the repository's owner combined both sides on the VM). A save whose review the
-    // person has not seen yet is shown first. One that was reviewed gets a fresh review, and goes up without another click only
-    // when that review sends nothing the person was not shown (a save that landed meanwhile is named first: DESIGN.md 7.3, 3.4).
-    const waiting=lab&&typeof statusWaitingSaves==='function'?statusWaitingSaves(lab,saveCtx(lab)):[],target=waiting.find(j=>j.status==='push_pending')||waiting[0]||null;
-    if(!target||typeof gitReviewJob!=='function'||typeof gitReviewData!=='function')throw new Error(SAVE_MISSING);
-    if(!target.reviewed){saveHeader.view={lab:lab.id,panel:target.status==='push_pending'?'failed':'upload',job:target.id,asked:true};break;}
-    saveHeader.uploading=target.id;renderSaveHeader();
-    const show={lab:lab.id,panel:target.status==='push_pending'?'failed':'upload',job:target.id,asked:true};
-    try{
-     const fresh=await gitReviewData(target,{fresh:true});
-     if(!saveSeenAll(lab.id,target,fresh)){saveHeader.view=show;break;}
-     const next=await gitReviewJob(target,{upload:true});saveHeader.sent=next&&next.id||'';
-    }finally{saveHeader.uploading='';}
-    break;
-   }
+   case 'upload-again':await saveUploadAgain(lab);break;
    case 'vm':saveClosePanel(true);if(typeof openVmDialog==='function')openVmDialog();return;
    case 'update':if(!lab||typeof gitUpdateRemote!=='function')throw new Error(SAVE_MISSING);saveClosePanel(true);await gitUpdateRemote(lab.id);return;
    case 'settings':saveOpenDrawer('settings');return;
@@ -567,7 +572,14 @@ async function saveAction(action,job,origin){
     saveOpenDrawer('chooser',{mode:'location',address:true,folder:chosen?chosen.folder:'',then:lab.git_binding?null:()=>saveStart(id)});return;
    }
    case 'place':{
-    if(lab&&!lab.git_binding){const places=saveHeader.places.get(lab.id),chosen=places&&places.data?places.data.default:null,id=lab.id;saveOpenDrawer('chooser',{mode:'location',repository:chosen?chosen.repository:'',folder:chosen?chosen.folder:'',path:chosen?chosen.folder:'',then:()=>saveStart(id)});return;}
+    if(lab&&!lab.git_binding){
+     let places=saveHeader.places.get(lab.id);const id=lab.id;
+     // The view that offers this may not have looked the repositories up (a refusal's view): ask before the chooser opens.
+     if((!places||!places.data)&&typeof api==='function'){try{places={status:'ready',data:await(await api('/labs/'+encodeURIComponent(id)+'/git/places')).json(),message:''};}catch{places=null;}}
+     const chosen=places&&places.data?places.data.default:null;
+     // No repository on the VM: there is no tree to choose in, so the chooser opens on its address field (B04).
+     if(places&&places.data&&!(Array.isArray(places.data.repositories)&&places.data.repositories.length)){saveOpenDrawer('chooser',{mode:'location',address:true,then:()=>saveStart(id)});return;}
+     saveOpenDrawer('chooser',{mode:'location',repository:chosen?chosen.repository:'',folder:chosen?chosen.folder:'',path:chosen?chosen.folder:'',then:()=>saveStart(id)});return;}
     saveOpenDrawer('chooser',{mode:'location'});return;
    }
    case 'load-details':{
@@ -575,6 +587,7 @@ async function saveAction(action,job,origin){
     if(!last||!last.job||typeof restoreShowJob!=='function')throw new Error(SAVE_MISSING);
     saveClosePanel(true);await restoreShowJob(last.job.id);return;
    }
+   case 'first-other':if(lab&&saveHeader.first.lab===lab.id)saveHeader.first={...saveHeader.first,question:null};break;
    case 'first-check':if(lab){saveHeader.places.delete(lab.id);saveHeader.first={lab:'',url:'',question:null};}break;
    case 'first-save':if(lab&&lab.git_binding){await saveStart(lab.id);break;}await saveFirstPlace('save');break;
    case 'first-continue':await saveFirstPlace('continue');break;
@@ -631,6 +644,7 @@ function savePanelKey(event){
 // What a closing panel forgets: the refusal, the name being typed, a view shown in place of the chip's own, the place it looked up.
 function savePanelClosed(){
  saveHeader.refusal=null;saveHeader.naming='';saveHeader.typed=null;saveHeader.view=null;saveHeader.error=null;saveHeader.watched='';
+ if(saveHeader.first.question&&!saveHeader.placing)saveHeader.first={...saveHeader.first,question:null};   // a closed panel forgets the question (B05): the address can be changed
  for(const [id,entry] of saveHeader.places)if(entry.status!=='loading'&&saveHeader.placing!==id)saveHeader.places.delete(id);
  const body=saveEl('save-panel-body');if(body)body._listKey=undefined;
  renderSaveHeader();

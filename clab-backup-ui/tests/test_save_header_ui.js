@@ -474,7 +474,7 @@ test('no repository on the VM: one field for the address, checked in the page; a
  assert.equal(h.posts().length,0);assert.match(h.body.innerHTML,/id="save-panel-error">Paste the HTTPS address, for example https:\/\/github\.com\/you\/your-lab-repo\.</);assert.equal(h.el('save-url').value,'git@github.com:you/repo.git','the typed address stays');
  type('https://github.com/you/your-lab-repo');await h.press('save-first');
  assert.deepEqual(JSON.parse(JSON.stringify(h.posts()[0].payload)),{url:'https://github.com/you/your-lab-repo',folder:'restore-square',choice:'',pending:'',move_files:false,acknowledge:true});assert.equal('initialize' in h.posts()[0].payload,false);
- assert.match(h.body.innerHTML,/<p class="save-sub" id="save-first-empty">your-lab-repo is empty\. The manager adds a README\.md file to start it\.<\/p><div class="save-row"><button type="button" class="button primary" id="save-first-start" data-save-action="first-start">Start the repository<\/button><\/div>/);
+ assert.match(h.body.innerHTML,/<p class="save-sub" id="save-first-empty">your-lab-repo is empty\. The manager adds a README\.md file to start it\.<\/p><div class="save-row"><button type="button" class="button primary" id="save-first-start" data-save-action="first-start">Start the repository<\/button><button type="button" class="button ghost small" id="save-first-other" data-save-action="first-other">Use another address<\/button><\/div>/);
  assert.match(h.body.innerHTML,/<input id="save-url"[^>]* readonly>/);assert.equal(h.posts().length,1,'nothing is started without the click');checkMarkup(h.body.innerHTML,'first, empty repository');
  h.state.labs=[boundLab({name:'restore-square'})];await h.press('save-first-start');
  assert.deepEqual(JSON.parse(JSON.stringify(h.posts()[1].payload)),{url:'https://github.com/you/your-lab-repo',folder:'restore-square',choice:'',pending:'',move_files:false,acknowledge:true,initialize:true});
@@ -638,6 +638,29 @@ test('Q1440-11 one state, one name: an upload refused because both sides changed
  const busy=harness({state:{git_jobs:[waiting({id:'q',status:'capturing',commit:''}),saved()]}});await busy.open();
  assert.match(busy.body.innerHTML,/id="save-change" data-save-action="place" disabled aria-describedby="save-change-why">Change…<\/button><\/p><p class="save-note" id="save-change-why">Change… is available when the save has finished\.<\/p>/);
  assert.doesNotMatch(rest.body.innerHTML,/save-change-why/);
+});
+test('B02 Try again after an upload the VM refused repeats the upload (through the review rule), never a new save; B04 without a repository Choose another place opens the address field; B05 the empty-repository question can be left',async()=>{
+ const job=waiting({id:'w',status:'push_pending',reviewed:ago(3)});
+ const lab=boundLab({git_status:{checked:true,ready:false,problem:'push failed',code:'account',waiting:1}});
+ const h=harness({lab,state:{git_jobs:[job]},routes:{'/git/compare':()=>review({upload_job:'w'}),'/retry':()=>({...job,status:'queued'}),'/git/save':()=>{throw new Error('a new save must not be started');},'/labs/lab/git':()=>({repository_status:{ready:true}})}});
+ await h.open();assert.equal(h.text('save-panel-title-text'),'Can’t save');
+ await h.press('save-also-show');await h.flush();h.render();h.mem().view=null;h.render();            // the person saw the failed upload's review
+ await h.press('save-cant-again');
+ assert.equal(h.posts().filter(c=>c.endpoint.endsWith('/git/save')).length,0);assert.deepEqual(h.posts().filter(c=>c.endpoint.endsWith('/retry')).map(c=>JSON.parse(JSON.stringify(c.payload))),[{push:true,reviewed:true,head:'head-1'}]);
+ // a save the manager stopped is still retried as a save
+ const stopped=waiting({id:'x',status:'export_pending',commit:''});
+ const s2=harness({state:{git_jobs:[stopped,saved()]},routes:{'/retry':payload=>({...stopped,status:'queued',sent:payload})}});await s2.open();await s2.press('save-cant-again');
+ assert.deepEqual(s2.posts().filter(c=>c.endpoint.endsWith('/retry')).map(c=>JSON.parse(JSON.stringify(c.payload))),[{push:false}]);
+ // B04
+ const none=harness({lab:freeLab({git_status:{checked:true,ready:false,problem:'x',code:'vm',waiting:0}}),routes:{'/git/places':()=>({repositories:[],default:null})}});await none.open();await none.flush();none.render();
+ none.context.saveAction('place',null,'panel');await none.flush();
+ assert.equal(none.drawers.at(-1).kind,'chooser');assert.equal(none.drawers.at(-1).opts.address,true,'no repository: the address field, not an empty tree');
+ // B05
+ const e=harness({lab:freeLab(),routes:{'/git/places':()=>({repositories:[],default:null}),'/git/place':()=>({question:{kind:'empty',name:'New-Empty'}})}});await e.open();
+ e.el('save-url').value='https://github.com/me/New-Empty.git';e.panel.listeners.input({target:e.el('save-url')});await e.press('save-first');await e.flush();e.render();
+ assert.equal(e.el('save-url').readOnly,true);await e.press('save-first-other');assert.equal(e.el('save-url').readOnly,false,'Use another address puts the field back');assert.equal(e.el('save-first-start'),null);
+ e.el('save-url').value='https://github.com/me/New-Empty.git';await e.press('save-first');await e.flush();e.render();assert.ok(e.el('save-first-start'));
+ e.chip._menuClose(false);await e.open();assert.equal(e.el('save-url').readOnly,false,'a closed panel forgets the question');
 });
 test('Q760-05 the panel does not close by itself: the end of an older upload that arrives after the next save started leaves the newer save’s panel open; a poll that rebuilds the body and focus moving inside it close nothing',async()=>{
  const older=waiting({id:'old',status:'synced',pushed:true,commit:'c-old',created:ago(5),finished:ago(4)});

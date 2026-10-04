@@ -701,7 +701,7 @@ async function drwAddFolder(parent,name){
   const above=result.adjusted==='above-state'||(c.answer&&c.answer.adjusted==='above-state');   // the folder the person was in is part of a saved state
   c.newFolder=null;c.answer=result.answer||null;c.value=folder;c.selected=folder;c.answerFor=folder;
   // Inside a saved state a new folder is made in the lab folder above it, and the chooser says so (PROMPT 6.2).
-  c.notice=result.existed?`${folder} already exists. It is selected.`:above?`A saved state holds no other folders, so the new folder is ${folder}, in the lab folder above it.`:'';
+  c.notice=result.existed&&result.adjusted==='above-state'?`${name} is part of a saved state, so the folder above it, ${folder||'the top level'}, is selected.`:result.existed?`${folder} already exists. It is selected.`:above?`A saved state holds no other folders, so the new folder is ${folder}, in the lab folder above it.`:'';
   if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,folder);
   saveDrawerRender();
   // The field is gone: focus goes to the folder it made (the selected row of the tree), never to nothing.
@@ -753,7 +753,9 @@ async function drwChooserApply(intent,event){
   case 'new-folder':{c.newFolder={parent:String(intent.parent??''),value:''};saveDrawerRender();const field=drwEl('folder-new');if(field&&typeof field.focus==='function'){field.focus();if(typeof field.scrollIntoView==='function')field.scrollIntoView({block:'nearest'});}break;}
   case 'new-input':if(c.newFolder)c.newFolder={...c.newFolder,value:intent.echo!==undefined?intent.echo:intent.value};saveDrawerRender();break;
   case 'new-cancel':c.newFolder=null;saveDrawerRender();drwChooserFocus('[data-folder-action="new"]');break;
-  case 'new-add':{const nf=c.newFolder,typed=intent.value!==undefined?intent.value:nf?.value||'';const name=typeof folderClean==='function'?folderClean(typed):typed;if(name)await drwAddFolder(nf?nf.parent:'',name);break;}
+  case 'new-add':{const nf=c.newFolder,typed=intent.value!==undefined?intent.value:nf?.value||'';const name=typeof folderClean==='function'?folderClean(typed):typed;if(name)await drwAddFolder(nf?nf.parent:'',name);else{c.notice='Give the folder a name with letters or digits.';saveDrawerRender();drwChooserReveal();}break;}
+  // The empty-repository question is left: the address field is editable again (B05).
+  case 'another-address':c.question=null;c.refused='';c.problem=null;saveDrawerRender();drwChooserFocus('#folder-url');break;
   case 'choice':if(c.mode==='state')await drwChooserState(intent.choice);else await drwChooserPlace(intent.choice,'');break;
   case 'pending':if(intent.pending==='upload')await drwChooserUploadThenMove();else await drwChooserPlace(c.lastChoice,'keep');break;
   // Start the repository: save-header.js writes the one flag that starts an empty repository (saveStartBody).
@@ -761,7 +763,8 @@ async function drwChooserApply(intent,event){
   case 'save':if(c.mode==='state')await drwChooserState('');else await drwChooserPlace('','');break;
   case 'keep':drwDrawerClose_();break;
   case 'cancel':if(saveDrawer.back)saveDrawerBack();else saveDrawerClose();break;
-  case 'use-another-name':{c.question=null;c.answer=null;saveDrawerRender();const input=drwEl('state-name');if(input&&typeof input.focus==='function'){input.focus();if(typeof input.select==='function')input.select();}break;}
+  // The name drives the folder again (a folder typed by hand would bring the same question back: B13).
+  case 'use-another-name':{c.question=null;c.answer=null;c.pathTouched=false;c.raw=null;saveDrawerRender();const input=drwEl('state-name');if(input&&typeof input.focus==='function'){input.focus();if(typeof input.select==='function')input.select();}break;}
   case 'retry':await drwLoadChooser();break;
   case 'again':if(c.lastRequest){c.refused='';c.problem=null;await c.lastRequest();}break;
   case 'update':await drwChooserUpdate();break;

@@ -504,7 +504,7 @@ test('C6 question 3: the waiting save, the review sentence, Upload it then move 
 test('the empty-repository and same-name questions carry their one-sentence answers',()=>{
  const context=makeContext(),tree=chooserTree([ans('')],{files:[]});
  let html=markup(context,tree,{value:'',question:{kind:'empty',name:'Course-Labs'}});
- assert.equal(liveRegion(html),'Course-Labs is empty. The manager adds a README.md file to start it.');same(buttonsOf(html),['Cancel','Start the repository']);assert.match(html,/data-folder-action="initialize"/);
+ assert.equal(liveRegion(html),'Course-Labs is empty. The manager adds a README.md file to start it.');same(buttonsOf(html),['Cancel','Use another address','Start the repository']);assert.match(html,/data-folder-action="initialize"/);
  html=markup(context,chooserTree(baseFolders()),{value:'restore-square',question:{kind:'same-name',name:'restore-square',beside:'restore-square-2'}});
  assert.equal(liveRegion(html),'This repository already holds saves of a lab named restore-square.');same(buttonsOf(html),['Cancel','Continue there','Save in restore-square-2']);
  assert.match(html,/data-folder-choice="take"/);assert.match(html,/data-folder-choice="beside" data-folder-primary="1"/);
@@ -627,6 +627,10 @@ test('C14 state mode: name field and buttons, the destination in a fold with its
   }
   assert.doesNotMatch(markup(context,t,{mode:'location',value:'notes',expanded:new Set([''])}).split('data-folder="notes"')[1],/folder-inside/,'only the branch that holds it');
   const any=markup(context,t,{mode:'location',value:'notes',expanded:new Set([''])});assert.match(any,/<span class="folder-name" title="[^"]+">/);assert.doesNotMatch(any,/<span class="folder-name">/);}
+ // B11: a part of a saved state typed at the top level: no lab folder is claimed above it.
+ html=markup(context,tree,{mode:'location',value:'latest',answer:ans('',{typed:'latest',adjusted:'above-state'})});assert.equal(liveRegion(html),'latest is part of a saved state, so restore-square saves at the top level.');
+ // B12: the name of a lab state may be as long as the manager allows.
+ assert.match(markup(context,tree,{mode:'state',name:'x',value:'BGP/x'}),/<input id="state-name" maxlength="120"/);
  // Q1280-04: a held click shows on the button, which takes no second click; every other button stays as it is.
  html=markup(context,tree,{mode:'location',value:'week-9',held:{kind:'place',value:'week-9'},checking:true});same(buttonsOf(html),['Cancel','Checking the folder…']);assert.match(html,/data-folder-held="1" disabled>Checking the folder…<\/button>/);
  // What the manager really answers for a lab's folder (git_places.place_answer, purpose state): the folder inside it, `adjusted: inside-lab`,

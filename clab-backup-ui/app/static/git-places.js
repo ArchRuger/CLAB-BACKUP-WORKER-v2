@@ -372,7 +372,7 @@ function folderAnswerView(answer,view){
  const question=view.question;
  if(question&&question.kind==='empty'){
   out.sentence=`${question.name||repo} is empty. The manager adds a README.md file to start it.`;
-  out.buttons=[{label:'Start the repository',action:'initialize',primary:true}];return out;
+  out.buttons=[{label:'Use another address',action:'another-address'},{label:'Start the repository',action:'initialize',primary:true}];return out;
  }
  if(view.pending){
   const count=Number(view.pending.count)||1,summary=String(view.pending.summary||'');
@@ -386,7 +386,7 @@ function folderAnswerView(answer,view){
  }
  if(!answer)return out;
  const typed=String(answer.typed??''),folder=String(answer.folder??''),beside=String(answer.beside??''),sentences=[];
- if(answer.adjusted==='above-state')sentences.push(`${typed} is part of a saved state, so ${lab} saves in ${folder||'the top level'}, the lab folder above it.`);
+ if(answer.adjusted==='above-state')sentences.push(folder?`${typed} is part of a saved state, so ${lab} saves in ${folder}, the lab folder above it.`:`${typed} is part of a saved state, so ${lab} saves at the top level.`);
  else if(answer.adjusted==='past-file'){
   // A part of the typed path names a file of the repository: that part got -2 (the manager's past_files), and the sentence names it.
   const asked=folderClean(typed).split('/'),used=folder.split('/'),at=asked.findIndex((part,index)=>part!==used[index]);
@@ -458,7 +458,7 @@ function folderChooserMarkup(model,view){
  }
  const parts=[`<div class="folder-chooser" data-mode="${esc(mode)}">`];
  if(mode==='state'){
-  parts.push(`<label for="state-name">Name</label><input id="state-name" maxlength="100" autocomplete="off" spellcheck="false" placeholder="start" value="${esc(view.name||'')}"><div class="save-row folder-names" role="group" aria-label="Common names">${['start','broken','final'].map(name=>`<button type="button" class="pill neutral" data-state-name="${name}" aria-pressed="${view.name===name?'true':'false'}">${name}</button>`).join('')}</div>`);
+  parts.push(`<label for="state-name">Name</label><input id="state-name" maxlength="120" autocomplete="off" spellcheck="false" placeholder="start" value="${esc(view.name||'')}"><div class="save-row folder-names" role="group" aria-label="Common names">${['start','broken','final'].map(name=>`<button type="button" class="pill neutral" data-state-name="${name}" aria-pressed="${view.name===name?'true':'false'}">${name}</button>`).join('')}</div>`);
  }
  const repos=Array.isArray(view.repositories)?view.repositories:[];
  // The repository: one on the VM (the select shows with two or more), or one the VM does not have yet, by its address
