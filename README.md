@@ -37,14 +37,14 @@ vJunos-switch and vQFX, Cisco XRv9k. Any node that speaks SSH gets a terminal.
 
 ## A quick look
 
-![Lab workspace: the topology map of the 13-device example course lab with every device's state, the header with 10 of 13 devices ready and Save progress, and the device rail with Open CLI](docs/images/ui/10-topology.png)
+![Lab workspace: the topology map of the 13-device example course lab with every device's state, the header with 10 of 13 devices ready, the save chip, Save, Load and Lab actions, and the device rail with Open CLI](docs/images/ui/10-topology.png)
 
-*The manager showing the project's example course lab `BGP_TheoryToPractice` (13 devices), rendered from its topology and map files; the device states in this picture are simulated for the documentation. The other pictures are from a running lab.*
+*The manager showing the project's example course lab `BGP_TheoryToPractice` (13 devices), rendered from its topology and map files; the device states in this picture are simulated for the documentation. The Save and Load pictures below come from the same scripted fixture manager (the lab `restore-square`, with its devices and repository scripted); the Wireshark and SSH pictures are from a running lab.*
 
 | | |
 |---|---|
-| ![Progress tab: saved versions with Latest, checkpoints and the instructor's reference states](docs/images/progress-saved-versions.png) | ![Review before a saved state replaces the running configuration](docs/images/restore-review.png) |
-| *Save to Git, keep checkpoints, and load the instructor's lab states onto the running lab.* | *Every operation is reviewed first: each device's outcome, the safety rules, and a confirmation before anything changes.* |
+| ![All versions: your saves, checkpoints, the starting point and the course's lab states, with the lab state Broken opened to Load this state…, See what’s different, View files and Download ZIP](docs/images/all-versions.png) | ![The Load confirmation for the lab state Final: a tick box for each of four devices with 4 lines differ or Already matches, then Load, Cancel and See what’s different](docs/images/load-confirmation.png) |
+| *Save to Git from the header, keep checkpoints, and see every version, including the instructor's lab states, under All versions.* | *Load is reviewed first: each device with what would change, the safety rules, and a confirmation before anything changes.* |
 | ![Wireshark in the browser](docs/images/wireshark-in-browser.png) | ![SSH terminal](docs/images/ssh-terminal.png) |
 | *Wireshark runs on the VM and streams to the browser: a ping crossing the captured link.* | *SSH to any node in a browser tab with the credentials the manager already holds.* |
 
