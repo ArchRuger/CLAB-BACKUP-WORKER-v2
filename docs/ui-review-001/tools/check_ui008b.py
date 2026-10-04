@@ -14,8 +14,8 @@ Until 1.30.x this drove the folder outline of the Progress tab (`#git-places-pan
     folder. The old "closed branch says This lab is inside" hint does not exist any more: the nearest claim is that the
     destination line still names the folder (reported to the lead as a page difference);
   * the fold is the student's and survives the 4 s polls and the re-renders of selecting a folder and of typing a path
-    (was: the re-render after Save settings and leaving and reopening the tab). A new opening of the chooser starts on the
-    lab's folder again (the tab is gone; the same claim as check_ui007ab);
+    (was: the re-render after Save settings and leaving and reopening the tab). Closing the chooser and opening it again keeps what the
+    student closed closed and what they opened open (the tab is gone; the same claim as check_ui007ab);
   * "another branch opens while the first stays closed": the fixture's second branch (labs/VLAN) is a lab folder now and
     has no children, so a second branch is made by closing and reopening 'labs' while 'labs/BGP' stays closed;
   * browsing is not saving: selecting another folder (labs/BGP/start) moves the selection only; the tag stays on the
@@ -76,7 +76,7 @@ def reopen(page):
     if page.is_hidden('#save-panel'):
         page.click('#save-chip')
     page.click('#save-change')
-    page.wait_for_selector('#folder-tree [role=treeitem][aria-selected=true]')
+    page.wait_for_selector('#folder-tree:not([aria-busy=true]) [role=treeitem][data-folder="labs"]')   # loaded; the selected folder may sit in a branch the student closed
 
 
 def twist(page, path):
@@ -116,13 +116,12 @@ with sync_playwright() as pw:
     page.fill('#folder-path', 'labs/VLAN')   # typing redraws it too
     page.wait_for_function('() => !/Checking/.test(document.getElementById("folder-answer").textContent)')
     check('and the re-render of typing a path', page.evaluate(OPEN) == expected, page.evaluate(OPEN))
-    # Leaving and reopening: the chooser is a new opening that starts on the lab's folder again
+    # Leaving and reopening: the open branches belong to the student, per lab and repository (CLAUDE.md invariant)
     page.click('#save-drawer-close')
     page.wait_for_function('() => !document.getElementById("save-drawer").open')
     reopen(page)
-    check('reopening the chooser starts on the lab\'s folder again (the open branches live as long as the chooser)', page.evaluate(OPEN) == ['', 'labs', 'labs/BGP'] and HOME in page.evaluate(SHOWN))
+    check('reopening the chooser keeps a closed branch closed and an opened one open', page.evaluate(OPEN) == expected and HOME not in page.evaluate(SHOWN), (page.evaluate(OPEN), expected))
     # Reopen: nothing was lost
-    twist(page, 'labs/BGP')
     twist(page, 'labs/BGP')
     check('the ancestor reopens with its branch as it was', HOME in page.evaluate(SHOWN) and not any(p.endswith('/latest') for p in page.evaluate(SHOWN)), page.evaluate(SHOWN))
 

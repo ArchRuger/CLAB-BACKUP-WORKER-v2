@@ -12,9 +12,10 @@ Until 1.30.x this drove the Progress tab's Save location card. The tab is gone; 
     destination, branch, VM account and path; the Advanced tab keeps its own "Technical details";
   * a branch the student closed stays closed across the 4 s polls and across re-renders (selecting a folder, typing a
     path): the open branches belong to the student, never derived from the selection (CLAUDE.md invariant);
-  * the old "fold survives leaving and reopening the tab" has no tab to leave. What is asserted instead: the open
-    branches live as long as the chooser (a drawer opening), and a new opening starts again on the lab's own folder,
-    like "a fresh visit starts with Change folder open";
+  * the old "fold survives leaving and reopening the tab" has no tab to leave. What is asserted instead (the open
+    branches belong to the student, CLAUDE.md invariant): the chooser remembers them per lab and repository across
+    closing and opening the drawer again, so a branch the student closed stays closed and one they opened stays open;
+    only the first opening of a repository opens the way down to the lab's folder (a fresh visit does);
   * "Browse the repository..." (All versions) opens the tree again, in browse mode, on the lab's folder.
 
 Runs against the fixture manager; read-only apart from selecting folders (nothing is saved).
@@ -60,8 +61,7 @@ def open_settings(page):
 
 def open_chooser(page):
     page.click('#save-drawer-content [data-save-action="folder"]')
-    page.wait_for_selector('#folder-tree')
-    page.wait_for_selector(f'#folder-tree [data-folder="{HOME}"]')
+    page.wait_for_selector('#folder-tree:not([aria-busy=true]) [role=treeitem][data-folder="labs"]')   # loaded (the lab's own folder is below it, unless the student closed a branch)
 
 
 with sync_playwright() as pw:
@@ -99,22 +99,28 @@ with sync_playwright() as pw:
     check('the fold survives the re-render of typing a path', 'labs/BGP' not in page.evaluate(OPEN))
     if OUT:
         page.locator('#save-drawer').screenshot(path=os.path.join(OUT, 'ui007ab-chooser-folded.png'))
-    # Leaving: the open branches live as long as the chooser; a new opening starts on the lab's folder again
+    # Leaving and opening again: what the student closed stays closed, what they opened stays open
     page.click('#save-drawer-close')
     page.wait_for_function('() => !document.getElementById("save-drawer").open')
     open_settings(page)
     open_chooser(page)
-    check('a new opening of the chooser starts on the lab\'s own folder again', HOME in page.evaluate(SHOWN) and page.evaluate(SELECTED) == [HOME], (page.evaluate(OPEN), page.evaluate(SELECTED)))
-    # Browse the repository... (All versions) opens the tree again
+    reopened = page.evaluate(OPEN)
+    check('a branch the student closed stays closed after the chooser is closed and opened again', 'labs/BGP' not in reopened and HOME not in page.evaluate(SHOWN) and 'labs' in reopened, reopened)
     page.click('#folder-tree [data-folder-twist="labs/BGP"]')
+    check('the student opens it again', 'labs/BGP' in page.evaluate(OPEN) and HOME in page.evaluate(SHOWN), page.evaluate(OPEN))
+    page.click('#save-drawer-close')
+    page.wait_for_function('() => !document.getElementById("save-drawer").open')
+    open_settings(page)
+    open_chooser(page)
+    check('a branch the student opened stays open after the chooser is closed and opened again', 'labs/BGP' in page.evaluate(OPEN) and HOME in page.evaluate(SHOWN), page.evaluate(OPEN))
+    # Browse the repository... (All versions) opens the tree again
     page.click('#save-drawer-close')
     page.wait_for_function('() => !document.getElementById("save-drawer").open')
     page.click('#save-chip')
     page.click('#save-all')
     page.wait_for_selector('#save-drawer-content [data-save-action="browse"]')
     page.click('#save-drawer-content [data-save-action="browse"]')
-    page.wait_for_selector('#folder-tree')
-    page.wait_for_selector(f'#folder-tree [data-folder="{HOME}"]')
+    page.wait_for_selector('#folder-tree:not([aria-busy=true]) [role=treeitem][data-folder="labs"]')   # loaded (the lab's own folder is below it, unless the student closed a branch)
     check('Browse the repository... opens the tree again, in browse mode, on the lab\'s folder', page.evaluate('() => document.querySelector(".folder-chooser").dataset.mode') == 'browse' and HOME in page.evaluate(SHOWN), page.evaluate('() => document.querySelector(".folder-chooser").dataset.mode'))
     page.click('#save-drawer-close')
     # A new visit starts open on the lab's folder
