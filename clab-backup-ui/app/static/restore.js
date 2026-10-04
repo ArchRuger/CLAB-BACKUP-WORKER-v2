@@ -36,17 +36,18 @@ const restorePlatformLabels = {
  juniper_cjunosevolved: 'Junos Evolved', juniper_vjunosswitch: 'Junos', juniper_vqfx: 'Junos',
  arista_ceos: 'EOS', cisco_xrv9k: 'IOS XR'};
 function restorePlatformLabel(kind) { return restorePlatformLabels[kind] || ''; }
-// Preflight reasons, matched by prefix; anything unknown is shown verbatim.
+// Preflight reasons, matched by prefix; anything unknown is shown verbatim. [prefix, sentence (the job window), sentence without a menu path,
+// the action that clears it, its button]: the Load panel's confirmation shows the action as a button beside the sentence (review D3).
 const restoreReasons = [
  ['No running node in this lab matches this saved node', 'No running device in this lab has this name.'],
- ['Live restore is not supported for this platform', 'This kind of device cannot be updated this way yet.'],
+ ['Live restore is not supported for this platform', 'This kind of device cannot be loaded yet.'],
  ['The saved platform does not match the running node', 'The saved configuration is for a different kind of device.'],
  ['The node is not currently running or discovery is stale', 'This device is not running, or the lab status is out of date.'],
- ['Assign NOS credentials to this node first', 'Add login credentials for this device first (Advanced › Credentials).'],
- ['Refresh VM discovery before restoring', 'Refresh the lab list (Manager ▾ › Refresh lab list), then try again.'],
- ['The node rejected the login credentials', 'The device rejected the login. Check its credentials (Advanced › Credentials).'],
+ ['Assign NOS credentials to this node first', 'Add login credentials for this device first (Advanced › Credentials).', 'Add login credentials for this device first.', 'credentials', 'Credentials…'],
+ ['Refresh VM discovery before restoring', 'Refresh the lab list (Manager ▾ › Refresh lab list), then try again.', 'Refresh the lab list, then try again.', 'refresh', 'Refresh lab list'],
+ ['The node rejected the login credentials', 'The device rejected the login. Check its credentials (Advanced › Credentials).', 'The device rejected the login. Check its credentials.', 'credentials', 'Credentials…'],
  ['SSH probe failed', 'The device did not answer over SSH.'],
- ['This saved configuration has no restore data for this node', 'This saved version was made before this kind of device could be restored. Save the lab again to get a restorable version.'],
+ ['This saved configuration has no restore data for this node', 'This state was saved before this kind of device could be loaded. Save the lab again to get a loadable state.'],
  ['The saved restore data for this node is not usable', 'The saved configuration for this device is incomplete or damaged, so it was not applied.'],
  ['Another change is waiting for confirmation on this node', 'Someone else\'s configuration change is waiting for confirmation on this device. Try again when it has finished.']];
 // One device's progress, step by step, derived from the job document alone (target.stage and target.timeline, epoch
@@ -102,6 +103,13 @@ function restoreReasonLabel(reason) {
  const match = restoreReasons.find(([prefix]) => text.startsWith(prefix));
  return match ? match[1] : text;
 }
+// The same reason for a place that offers the action itself: {text, action, label}; action is '' when nothing on the page clears it.
+function restoreReasonParts(reason) {
+ const text = String(reason || '');
+ const match = restoreReasons.find(([prefix]) => text.startsWith(prefix));
+ if (!match) return { text, action: '', label: '' };
+ return { text: match[2] || match[1], action: match[3] || '', label: match[4] || '' };
+}
 // Why a device was not changed, shown beside it (not only under Details): the manager's sentence without its
 // fixed lead-in. Drivers and the service word these for the student; nothing of the device's output is in them.
 function restoreNotChangedReason(message) {
@@ -137,90 +145,33 @@ function restoreJobTitle(job) {
  return 'Configuration not replaced';
 }
 
-// Entry point from the Git version view.
+// Entry point from the Git version view (and Full history's commit view): Load this state… with a `git` source. Ends in the Load
+// panel's confirmation (loadChoose in load.js); nothing is sent before the person presses the red Load there.
 async function restoreFromVersion(labId, source, label) {
- await restoreReview(labId, source, label);
+ return restoreReview(labId, source, label);
 }
 
-// Entry point from the folder browser and the Saved versions list: apply the exact snapshot folder
-// to the running lab directly, without pointing the lab at that folder first. snapshotPath is the
-// exact repository-relative snapshot folder (never appended with /latest), with or without its
-// wire-form leading slash; '' or '/' is the repository root. Exactly one leading slash is sent on
-// the wire ('/' for the root); nothing is chosen when snapshotPath is null/undefined.
+// Entry point from the folder browser and the Saved versions list: load the exact snapshot folder into the running lab directly,
+// without pointing the lab at that folder first. snapshotPath is the exact repository-relative snapshot folder (never appended with
+// /latest), with or without its wire-form leading slash; '' or '/' is the repository root. Exactly one leading slash is sent on the
+// wire ('/' for the root); nothing is chosen when snapshotPath is null/undefined.
 async function restoreFromFolder(labId, snapshotPath, tree) {
  if (snapshotPath == null) { notify('Choose a saved folder to apply.'); return; }
  const bare = String(snapshotPath).replace(/^\/+/, '').replace(/\/+$/, '');
  const wire = '/' + bare;
  const displayFolder = restoreDisplayFolder(wire);
  const repoName = tree && tree.repository && typeof gitRepoName === 'function' ? gitRepoName(tree.repository) : '';
- const friendly = typeof savedVersionName === 'function' ? savedVersionName(displayFolder) : displayFolder;
+ const friendly = typeof savedVersionName === 'function' ? savedVersionName(displayFolder) || displayFolder : displayFolder;
  // The label is for the student: it never shows the wire form's leading slash.
  const where = repoName ? repoName + (bare ? ' › ' + bare : '') : bare;
  await restoreReview(labId, { type: 'folder', path: wire }, friendly + ' · ' + where);
 }
 
-async function restoreReview(labId, source, label) {
- const dialog = opDialog('restore-review-dialog', 'Replace running configuration',
-  '<p role="status">Checking the saved configuration and your devices…</p>');
- let review;
- try { review = await json('/labs/' + encodeURIComponent(labId) + '/restore/preflight', 'POST', { source }); }
- catch (error) {
-  dialog.innerHTML = `<div class="dialog-head"><h2>Replace running configuration</h2><button class="icon-button" data-op-close aria-label="Close">×</button></div>
-   <p role="status">The saved configuration cannot be applied right now.</p><p class="form-error" role="alert">${esc(error.message)}</p>
-   <div class="dialog-actions"><button class="button secondary" data-op-close>Close</button></div>`;
-  dialog.querySelectorAll('[data-op-close]').forEach(b => b.onclick = () => dialog.close());
-  return;
- }
- const rows = review.targets || [], eligible = rows.filter(r => r.eligible), skipped = rows.filter(r => !r.eligible && r.reason);
- const requestId = restoreRequestId(), confirmDefault = 5;
- const targetRow = r => {
-  const detail = r.eligible
-   ? (r.matches_saved ? 'Already matches — nothing to change'
-     : r.pending_changes != null ? r.pending_changes + ' differences from the running configuration' : 'Ready to apply')
-   : 'Skipped — ' + restoreReasonLabel(r.reason || 'Not eligible');
-  const platform = restorePlatformLabel(r.platform);
-  return `<div class="restore-target-item"><label class="checkbox-label restore-target ${r.eligible ? '' : 'disabled'}">
-   <input type="checkbox" name="restore-node" value="${esc(r.name)}" ${r.eligible ? 'checked' : 'disabled'}>
-   <span><strong>${esc(r.short_name || r.name)}</strong>${platform ? ` <span class="caption">${esc(platform)}</span>` : ''} <small>${esc(detail)}</small></span></label>${restoreDiffDetails(r)}</div>`;
- };
- const savedAt = review.source?.captured_at ? restoreWhen(review.source.captured_at) : '';
- // Review-to-submit consistency (rule 6): a folder source pins the commit the preflight read at HEAD
- // (or the one it was asked to read), so the submitted request applies exactly what was reviewed.
- const submitSource = source.type === 'folder' ? { type: 'folder', path: source.path, commit: review.source?.commit } : source;
- const commitLabel = (source.type === 'folder' || source.type === 'git') && review.source?.commit
-  ? ` <span class="caption mono">· ${esc(String(review.source.commit).slice(0, 10))}</span>` : '';
- dialog.innerHTML = `<div class="dialog-head"><h2>Replace running configuration</h2><button class="icon-button" data-op-close aria-label="Close">×</button></div>
- <p>Lab: <strong>${esc((state.labs || []).find(l => l.id === labId)?.name || '')}</strong></p>
- <p>Source: <strong>${esc(label || restoreSourceLabel(review.source))}</strong>${savedAt ? ` <span class="caption" title="${esc(utcDisplay(review.source.captured_at))}">· saved ${esc(savedAt)}</span>` : ''}${commitLabel}</p>
- <p>Current configurations are backed up first. The devices are not rebooted.</p>
- <fieldset class="restore-targets"><legend>Devices</legend>${rows.map(targetRow).join('') || '<p>None of the devices in this saved configuration are running in this lab.</p>'}</fieldset>
- ${skipped.length ? `<details class="caption"><summary>Details</summary><ul>${skipped.map(r => `<li><strong>${esc(r.short_name || r.name)}</strong>: ${esc(r.reason)}</li>`).join('')}</ul></details>` : ''}
- <ul class="restore-safety">
-  <li>Each device's current configuration is backed up first. A device whose backup fails is left unchanged.</li>
-  <li>The devices are not rebooted. The device itself checks the new configuration when it is activated, and the change is undone on its own if the device cannot be reached again within <span id="restore-minutes-text">${confirmDefault}</span> minutes.</li>
-  <li>Devices that are skipped above are not touched.</li>
- </ul>
- <details class="restore-advanced"><summary>Advanced options</summary>
-  <label for="restore-confirm-minutes">Undo automatically if the device cannot be reached again within (minutes)</label>
-  <input id="restore-confirm-minutes" type="number" min="2" max="60" value="${confirmDefault}">
-  <p class="form-help">After the configuration is loaded, the manager reconnects to prove the device is reachable, then confirms the change. If it cannot reconnect in time, the device returns to its previous configuration on its own.</p></details>
- <label id="restore-ack-label" class="checkbox-label"><input id="restore-ack" type="checkbox"> I understand the running configuration on the selected devices will be replaced.</label>
- <p class="form-error" role="alert"></p>
- <div class="dialog-actions"><button class="button secondary" data-op-close>Cancel</button>
-  <button class="button danger" id="restore-run" ${eligible.length ? '' : 'disabled'}>Replace configurations</button></div>`;
- dialog.querySelectorAll('[data-op-close]').forEach(b => b.onclick = () => dialog.close());
- const minutesField = $('restore-confirm-minutes');
- if (minutesField) minutesField.oninput = () => { const text = $('restore-minutes-text'); if (text) text.textContent = String(Math.min(60, Math.max(2, parseInt(minutesField.value, 10) || confirmDefault))); };
- $('restore-run').onclick = () => opTask(dialog, async () => {
-  const chosen = [...dialog.querySelectorAll('[name="restore-node"]:checked')].map(i => i.value);
-  if (!chosen.length) throw new Error('Choose at least one device.');
-  if (!$('restore-ack').checked) throw new Error('Tick the box to confirm that the running configuration will be replaced.');
-  const minutes = Math.min(60, Math.max(2, parseInt($('restore-confirm-minutes').value, 10) || confirmDefault));
-  const job = await json('/labs/' + encodeURIComponent(labId) + '/restore', 'POST',
-   { request_id: requestId, source: submitSource, node_names: chosen, confirm_minutes: minutes, acknowledge: true });
-  dialog.close();
-  await restoreShowJob(job.id, job); await refresh();
- });
+// The old review dialog with its acknowledgement tick box is replaced by the Load panel's confirmation (owner decision D4: the red Load
+// is the acknowledgement). The name stays for the scripts and tools that call it: it starts the same confirmation.
+async function restoreReview(labId, source, label, options) {
+ if (typeof loadChoose !== 'function') { if (typeof notify === 'function') notify('Loading is not available on this page.'); return false; }
+ return loadChoose(labId, source, label, options);
 }
 
 function restoreDuration(seconds) {
@@ -334,23 +285,31 @@ function restoreDiffFallback(diff, labels) {
  return `<pre class="restore-diff-text"><span class="restore-diff-head">${esc('--- ' + labels.oldLabel + '\n+++ ' + labels.newLabel)}</span>\n${(diff.hunks || []).map(h =>
   esc(`@@ -${h.old_start},${h.old_count} +${h.new_start},${h.new_count} @@`) + '\n' + (h.lines || []).map(line).join('\n')).join('\n')}</pre>`;
 }
-function restoreDiffDetails(r) {
- if (!r.eligible) return '';
+// The differences of one device without their fold: the help sentence, the truncation note and the diff (the Load panel's "See what's
+// different" shows them open); a sentence instead when there is nothing to show.
+function restoreDiffBody(r) {
  if (!r.diff) return `<p class="form-help restore-diff-none">${esc(r.diff_reason || 'The differences are not available for this device.')}</p>`;
  if (r.diff.identical) return '';
  if (!(r.diff.hunks || []).length) return `<p class="form-help restore-diff-none">${esc(r.diff.reason || 'The differences are not available for this device.')}</p>`;
  const labels = { oldLabel: r.diff.labels?.old || 'Saved', newLabel: r.diff.labels?.new || 'Running now' };
  const body = typeof diffMarkup === 'function' ? diffMarkup(r.diff, labels) : restoreDiffFallback(r.diff, labels);
+ return `<p class="form-help">This compares the saved configuration with what the device runs right now. Lines starting with - are saved but missing on the device; lines starting with + are on the device now and will be removed.</p>
+  ${r.diff.truncated ? '<p class="form-help">The list is long; only its first part is shown.</p>' : ''}${body}`;
+}
+function restoreDiffDetails(r) {
+ if (!r.eligible) return '';
+ if (!r.diff || !(r.diff.hunks || []).length) return restoreDiffBody(r);
+ if (r.diff.identical) return '';
  return `<details class="restore-diff"><summary>Show differences (saved → running now)</summary>
-  <p class="form-help">This compares the saved configuration with what the device runs right now. Lines starting with - are saved but missing on the device; lines starting with + are on the device now and will be removed.</p>
-  ${r.diff.truncated ? '<p class="form-help">The list is long; only its first part is shown.</p>' : ''}${body}</details>`;
+  ${restoreDiffBody(r)}</details>`;
 }
 
-// Re-enterable from the lab banner ([View progress] / [Details]) and from the Progress tab.
-async function restoreShowJob(id, known) {
+// Re-enterable from the lab banner ([View progress] / [Details]) and from the chip panel (What changed, Details, the Last load line).
+// `opener` is the control focus returns to when the window closes (the chip, whose panel is closed by then).
+async function restoreShowJob(id, known, opener) {
  const job = known || await (await api('/restore/jobs/' + encodeURIComponent(id))).json();
  restoreDialogJob = id; restorePaused = false;
- const dialog = opDialog('restore-job-dialog', restoreJobTitle(job), '<div id="restore-job-detail"></div>');
+ const dialog = opDialog('restore-job-dialog', restoreJobTitle(job), '<div id="restore-job-detail"></div>', opener);
  dialog.onclose = () => { restoreDialogJob = ''; if (restoreWatch === id) restoreStopWatch(); };
  dialog.querySelector('[data-op-close]').onclick = () => dialog.close();
  restoreRenderJob(job);
@@ -377,12 +336,12 @@ function restoreRenderJob(job) {
  if (restoreDialogJob !== job.id || !$('restore-job-dialog')?.open) return;
  restoreLastJob = job;
  const heading = $('restore-job-dialog').querySelector('h2'); if (heading) heading.textContent = restoreJobTitle(job);
- const backupLink = (id, label) => id ? `<dt>${label}</dt><dd><button type="button" class="link-button mono" data-restore-backup="${esc(id)}">${esc(id.slice(0, 12))}</button></dd>` : '';
+ const backupLink = (id, label, extra = '') => id ? `<dt>${label}</dt><dd><button type="button" class="link-button mono" data-restore-backup="${esc(id)}">${esc(id.slice(0, 12))}</button>${extra}</dd>` : '';
  const rechecking = restoreJobRechecking(job);
  $('restore-job-detail').innerHTML = `<div class="git-job-summary">${rechecking ? restoreRecheckBadge(restoreRecheckWords.job) : restoreBadge(job.status, restoreJobLabels)}<p>${esc(restoreResultSentence(job))}</p></div>
   ${restoreProgressLine(job)}<div class="restore-targets-status">${(job.targets || []).map(t => restoreTargetRow(t, restoreJobNow(job), restoreTargetRechecking(job, t), restoreRestartedAt(job))).join('')}</div>
   <details class="restore-job-details"><summary>Details</summary><dl class="health-grid">
-   ${backupLink(job.pre_backup_job_id, 'Backup taken before the change')}${backupLink(job.post_backup_job_id, 'Backup taken after the change')}
+   ${backupLink(job.pre_backup_job_id, 'Backup taken before the change', restoreBackupLoadable(job) ? ' <button type="button" class="link-button" data-restore-load-backup>Load this backup…</button>' : '')}${backupLink(job.post_backup_job_id, 'Backup taken after the change')}
    <dt>Automatic undo window</dt><dd>${esc(job.confirm_minutes || 5)} minutes</dd>
    <dt>Status</dt><dd>${esc(job.status || '')}</dd><dt>Message</dt><dd>${esc(job.message || '')}</dd></dl></details>
   ${restoreJobActive(job) ? (restorePaused
@@ -396,7 +355,18 @@ function restoreRenderJob(job) {
   const capture = [...document.querySelectorAll('.job')].find(item => item.dataset.job === button.dataset.restoreBackup);
   if (capture) { capture.open = true; capture.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
  };
+ // Load this backup… (review U1): the way back to before this load, while the manager keeps that backup. It ends in the Load panel's
+ // confirmation through loadUndo, like Undo this load; it sends no request itself.
+ for (const button of $('restore-job-detail').querySelectorAll('[data-restore-load-backup]')) button.onclick = () => { $('restore-job-dialog').close(); if (typeof loadUndo === 'function') loadUndo(job); };
  const resume = $('restore-resume'); if (resume) resume.onclick = () => { restorePaused = false; restoreStartWatch(job); };
+}
+// Whether the job window offers Load this backup…: a finished load that changed a device, whose automatic backup the manager still
+// keeps (state.jobs) and which did not fail. The backup of a load that changed nothing is not offered.
+function restoreBackupLoadable(job) {
+ if (!job || !job.pre_backup_job_id || restoreJobActive(job) || typeof loadUndo !== 'function') return false;
+ const effective = typeof statusLoadEffective === 'function' ? statusLoadEffective(job) : (job.targets || []).some(t => restoreReplacedTarget.has(t.status) || t.status === 'uncertain');
+ const backup = ((typeof state === 'object' && state && state.jobs) || []).find(j => j.id === job.pre_backup_job_id);
+ return effective && !!backup && ['succeeded', 'partial'].includes(backup.status);
 }
 function restoreStartWatch(job) {
  if (restoreWatch === job.id) return; restoreStopWatch();

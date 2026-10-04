@@ -51,31 +51,43 @@ test('restoreFromFolder sends the exact snapshot path over the wire with one lea
  await c.restoreFromFolder('lab',undefined,{});
  assert.equal(sent.length,5,'nothing chosen sends no request');assert.match(toasts[0],/Choose a saved folder/);
 });
-test('restoreReview submits exactly the reviewed folder source (type, path, commit) and shows the pinned commit beside the source line; git and backup sources are sent unchanged',async()=>{
- const c=ctx(),calls=[],elements=new Map(),dialogs=[];
- const field=()=>({checked:false,value:'5',textContent:''});
- const makeDialog=()=>({innerHTML:'',close(){},querySelector:()=>({onclick:null}),querySelectorAll(sel){return sel==='[data-op-close]'?[]:sel==='[name="restore-node"]:checked'?[{value:'r1'}]:[];}});
- c.opDialog=()=>{const d=makeDialog();dialogs.push(d);return d;};c.opTask=async(d,fn)=>fn();c.refresh=async()=>{};
- c.$=id=>elements.get(id)||(elements.set(id,field()),elements.get(id));
- c.json=async(endpoint,method,payload)=>{calls.push({endpoint,method,payload});
-  if(endpoint.endsWith('/preflight'))return {source:{commit:'c'.repeat(40)},targets:[{name:'r1',short_name:'r1',eligible:true,platform:'arista_ceos'}]};
-  return {id:'job',lab_id:'lab',status:'queued',targets:[]};};
+// Owner decision D4: the review dialog with its acknowledgement tick box is replaced by the Load panel's confirmation (load.js); the red
+// Load is the acknowledgement. restoreReview keeps its name and leads there. The claims of the old test are kept: the folder source that
+// is submitted is exactly the reviewed one with the commit the preflight read (now in the five keys of review L3), the pinned commit is
+// shown (in the differences drawer's meta line, LOAD.md 3.4), and git and backup sources are sent as chosen.
+function withLoad(routes){
+ const els={},el=id=>els[id]||(els[id]={id,hidden:id==='load-panel',innerHTML:'',listeners:{},addEventListener(t,f){(this.listeners[t]=this.listeners[t]||[]).push(f);},dispatch(t){for(const f of this.listeners[t]||[])f({});},querySelector:()=>null,contains:()=>false});
+ for(const id of ['load-panel','load-panel-body','load-button'])el(id);
+ const calls=[];
+ const context=vm.createContext({console,esc:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
+  crypto:require('node:crypto').webcrypto,setTimeout:()=>0,clearTimeout:()=>{},activeId:'lab',notify:()=>{},refresh:async()=>{},utcDisplay:v=>String(v),
+  state:{labs:[{id:'lab',name:'BGP',deployment:{status:'Running'},nodes:[{name:'r1',short_name:'r1',platform:'arista_ceos'},{name:'r2',short_name:'r2',platform:'arista_ceos'}]}],platforms:{arista_ceos:{restore_suffix:'eoscfg'}},jobs:[],git_jobs:[],restore_jobs:[]},
+  $:id=>els[id]||null,setMarkup:(e,h)=>{e.innerHTML=h;return true;},
+  openPanel:()=>{els['load-panel'].hidden=false;els['load-panel'].dispatch('panelopen');return true;},saveOpenPanel:()=>{},
+  json:async(endpoint,method,payload)=>{calls.push({endpoint,method,payload:JSON.parse(JSON.stringify(payload))});return routes(endpoint);}});
+ for(const name of ['status.js','load.js','restore.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static',name),'utf8'),context);
+ return {c:context,calls,body:()=>els['load-panel-body'].innerHTML};
+}
+test('D4: restoreReview leads to the Load panel confirmation; the submit sends exactly the reviewed folder source with the preflight\'s commit, the commit is shown, and git and backup sources are sent as chosen',async()=>{
+ let pre={source:{commit:'c'.repeat(40)},targets:[{name:'r1',short_name:'r1',eligible:true,requested:true,platform:'arista_ceos',pending_changes:2}]};
+ const {c,calls,body}=withLoad(endpoint=>endpoint.endsWith('/preflight')?pre:{id:'job',lab_id:'lab',status:'queued',targets:[]});
  await c.restoreReview('lab',{type:'folder',path:'course/lab/latest'},'Latest · Course-Labs › course/lab/latest');
- assert.match(dialogs[0].innerHTML,/c{10}/,'the commit is shown, first 10 characters, beside the source line');
- c.$('restore-ack').checked=true;
- await elements.get('restore-run').onclick();
+ assert.match(body(),/Load Latest · Course-Labs › course\/lab\/latest\?/,'the confirmation, not a dialog');
+ assert.doesNotMatch(body(),/I understand|restore-ack/,'no acknowledgement tick box: the red Load is the acknowledgement');
+ assert.match(c.loadDifferentMarkup().meta,/ · c{10}$/,'the pinned commit, first 10 characters');
+ assert.equal(calls.length,1,'nothing is submitted before the red Load');
+ await c.loadSubmit();
  assert.equal(calls[1].endpoint,'/labs/lab/restore');
- assert.deepEqual(Object.keys(calls[1].payload.source).sort(),['commit','path','type'],'the API model forbids extra keys on a folder source');
- assert.equal(calls[1].payload.source.commit,'c'.repeat(40));assert.equal(calls[1].payload.source.path,'course/lab/latest');
+ assert.deepEqual(Object.keys(calls[1].payload.source).sort(),['backup_job_id','commit','path','repository','type'],'the API model forbids extra keys: five, never more (review L3)');
+ assert.equal(calls[1].payload.source.commit,'c'.repeat(40));assert.equal(calls[1].payload.source.path,'course/lab/latest');assert.equal(calls[1].payload.acknowledge,true);
  // A git source is submitted unchanged: it already names its own commit.
- calls.length=0;elements.clear();
- c.json=async(endpoint,method,payload)=>{calls.push({endpoint,method,payload});
-  if(endpoint.endsWith('/preflight'))return {source:{commit:'d'.repeat(40)},targets:[{name:'r1',short_name:'r1',eligible:true,platform:'arista_ceos'}]};
-  return {id:'job2',lab_id:'lab',status:'queued',targets:[]};};
+ pre={source:{commit:'d'.repeat(40)},targets:[{name:'r1',short_name:'r1',eligible:true,requested:true,platform:'arista_ceos'}]};
  await c.restoreReview('lab',{type:'git',commit:'e'.repeat(40),path:'checkpoints/day-1'},'Checkpoint');
- c.$('restore-ack').checked=true;
- await elements.get('restore-run').onclick();
- same(calls[1].payload.source,{type:'git',commit:'e'.repeat(40),path:'checkpoints/day-1'});
+ await c.loadSubmit();
+ same(calls[3].payload.source,{type:'git',commit:'e'.repeat(40),path:'checkpoints/day-1',backup_job_id:'',repository:''});
+ await c.restoreReview('lab',{type:'backup',backup_job_id:'b'},'Backup');
+ await c.loadSubmit();
+ same(calls[5].payload.source,{type:'backup',commit:'',path:'',backup_job_id:'b',repository:''});
 });
 test('badge classes reflect status and escape the label text',()=>{
  const c=ctx(),labels={verified:'Applied and verified',applying:'Replacing',rollback_expected:'Rolled back',verify_mismatch:'Differences',rolled_back:'Undone',uncertain:'Unknown'};
@@ -103,8 +115,15 @@ test('restore words: preflight reasons, result sentence and titles are the stude
  assert.equal(c.restoreReasonLabel('SSH probe failed: TimeoutError'),'The device did not answer over SSH.');
  assert.equal(c.restoreReasonLabel('The node rejected the login credentials.'),'The device rejected the login. Check its credentials (Advanced › Credentials).','a wrong password is not "did not answer"');
  assert.equal(c.restoreReasonLabel('Assign NOS credentials to this node first.'),'Add login credentials for this device first (Advanced › Credentials).');
- assert.equal(c.restoreReasonLabel('Live restore is not supported for this platform: cisco_iosv'),'This kind of device cannot be updated this way yet.','no platform is singled out any more');
- assert.equal(c.restoreReasonLabel('This saved configuration has no restore data for this node'),'This saved version was made before this kind of device could be restored. Save the lab again to get a restorable version.');
+ // Reworded by LOAD.md section 10 ("state", "loaded"): the meaning is kept, no platform is singled out.
+ assert.equal(c.restoreReasonLabel('Live restore is not supported for this platform: cisco_iosv'),'This kind of device cannot be loaded yet.','no platform is singled out any more');
+ assert.equal(c.restoreReasonLabel('This saved configuration has no restore data for this node'),'This state was saved before this kind of device could be loaded. Save the lab again to get a loadable state.');
+ // The Load panel shows the action that clears a reason as a button beside it (review D3); the job window keeps the menu path.
+ same(c.restoreReasonParts('Assign NOS credentials to this node first.'),{text:'Add login credentials for this device first.',action:'credentials',label:'Credentials…'});
+ same(c.restoreReasonParts('The node rejected the login credentials.'),{text:'The device rejected the login. Check its credentials.',action:'credentials',label:'Credentials…'});
+ same(c.restoreReasonParts('Refresh VM discovery before restoring.'),{text:'Refresh the lab list, then try again.',action:'refresh',label:'Refresh lab list'});
+ same(c.restoreReasonParts('SSH probe failed: OSError'),{text:'The device did not answer over SSH.',action:'',label:''});
+ same(c.restoreReasonParts('Something new'),{text:'Something new',action:'',label:''});
  assert.equal(c.restoreReasonLabel('The saved restore data for this node is not usable'),'The saved configuration for this device is incomplete or damaged, so it was not applied.');
  assert.equal(c.restoreReasonLabel('Another change is waiting for confirmation on this node'),'Someone else\'s configuration change is waiting for confirmation on this device. Try again when it has finished.');
  assert.equal(c.restoreReasonLabel('Something new'),'Something new');
@@ -238,18 +257,21 @@ test('the review offers each differing device its saved → running now differen
  assert.match(c.restoreDiffDetails({name:'r1',eligible:true,diff_reason:'The differences could not be shown for this device.'}),/could not be shown/);
  assert.equal(c.restoreDiffDetails({name:'r1',eligible:false,reason:'SSH probe failed'}),'','a skipped device already says why');
 });
-test('the review dialog places the differences beside each device, outside its checkbox label',async()=>{
- const c=ctx(),dialogs=[];
- c.opDialog=()=>{const d={innerHTML:'',close(){},querySelector:()=>({onclick:null}),querySelectorAll:()=>[]};dialogs.push(d);return d;};
- c.$=()=>({checked:false,value:'5',textContent:''});
- c.json=async()=>({source:{type:'backup',backup_job_id:'b'},targets:[
-  {name:'r1',eligible:true,platform:'arista_ceos',pending_changes:2,diff:{identical:false,labels:{old:'Saved (backup b)',new:'Running now'},hunks:[{old_start:1,old_count:1,new_start:1,new_count:1,lines:[{type:'del',text:'hostname A'}]}]}},
-  {name:'r2',eligible:true,platform:'arista_ceos',matches_saved:true,diff:{identical:true,hunks:[]}}]});
+// D4 moved the per-device differences out of the review: the confirmation's device rows are labels with a tick box and nothing that
+// could be opened inside them; the differences are in "See what's different" (LOAD.md 3.4). The claims kept: opening the differences
+// never ticks a box, only a differing device has a diff, and the device that already matches says so.
+test('the differences are never inside a tick box label: the confirmation rows hold none, the differences view shows only the differing device',async()=>{
+ const {c,body}=withLoad(()=>({source:{type:'backup',backup_job_id:'b'},targets:[
+  {name:'r1',eligible:true,requested:true,platform:'arista_ceos',pending_changes:2,diff:{identical:false,labels:{old:'Saved (backup b)',new:'Running now'},hunks:[{old_start:1,old_count:1,new_start:1,new_count:1,lines:[{type:'del',text:'hostname A'}]}]}},
+  {name:'r2',eligible:true,requested:true,platform:'arista_ceos',matches_saved:true,diff:{identical:true,hunks:[]}}]}));
  await c.restoreReview('lab',{type:'backup',backup_job_id:'b'},'Backup');
- const html=dialogs[0].innerHTML;
- assert.match(html,/<\/label><details class="restore-diff">/,'the details follow the label, so opening them never ticks the box');
- assert.equal((html.match(/restore-diff"/g)||[]).length,1,'only the differing device has a diff');
- assert.match(html,/Already matches — nothing to change/);
+ const html=body();
+ for(const label of html.match(/<label>.*?<\/label>/g))assert.doesNotMatch(label,/<details|<button/,'nothing inside a label opens or acts');
+ assert.match(html,/Already matches/);
+ const different=c.loadDifferentMarkup().html;
+ assert.equal((different.match(/<h3 class="save-heading">/g)||[]).length,1,'only the differing device has a diff');
+ assert.match(different,/hostname A/);assert.doesNotMatch(different,/type="checkbox"/,'the differences view has no tick box');
+ assert.match(c.restoreDiffDetails({name:'r1',eligible:true,diff:{identical:false,hunks:[{old_start:1,old_count:1,new_start:1,new_count:1,lines:[{type:'del',text:'x'}]}]}}),/^<details class="restore-diff"><summary>Show differences \(saved → running now\)<\/summary>/,'the folded diff of one device is still available');
 });
 test('elapsed times are measured on the manager\'s clock, never the browser\'s',()=>{
  const c=ctx();
@@ -407,4 +429,31 @@ test('a device that differs is never shown as identical: with no lines to show i
  const c=ctx();
  const html=c.restoreDiffDetails({name:'r1',eligible:true,diff:{identical:false,hunks:[],reason:'The comparison found differences in spacing or layout that this line view cannot show.'}});
  assert.match(html,/differences in spacing or layout/);assert.doesNotMatch(html,/<details/);
+});
+// Review U1: the job window offers Load this backup… beside its backup from before the load, only while the manager keeps that backup,
+// only for a load that changed a device and that has finished; its click closes the window and ends in loadUndo, never in a request.
+test('U1: the job window shows Load this backup… only while the backup taken before the change is kept, and its click ends in loadUndo',()=>{
+ const job={id:'j',lab_id:'lab',status:'partial',pre_backup_job_id:'pre1',post_backup_job_id:'post1',confirm_minutes:5,
+  targets:[{name:'a',status:'verified',stage:'replaced',timeline:{settled:1}},{name:'b',status:'failed',stage:'failed',timeline:{settled:1}}]};
+ const render=(jobs,value,undo=true)=>{
+  const {c,detail}=recheckingDialog(),buttons=[],dialog={open:true,querySelector:()=>({textContent:''}),closed:0,close(){this.closed++;this.open=false;}};
+  const undone=[];if(undo)c.loadUndo=x=>{undone.push(x.id);return true;};
+  c.$=id=>id==='restore-job-dialog'?dialog:id==='restore-job-detail'?detail:null;
+  detail.querySelectorAll=sel=>sel==='[data-restore-load-backup]'&&/data-restore-load-backup/.test(detail.innerHTML)?buttons.concat(buttons.length?[]:[buttons[0]={onclick:null}]):[];
+  c.state={labs:[],jobs};vm.runInContext('restoreDialogJob="j"',c);c.restoreRenderJob(value||job);
+  return {html:detail.innerHTML,buttons,dialog,undone,c};
+ };
+ const kept=render([{id:'pre1',status:'succeeded'}]);
+ assert.match(kept.html,/<dt>Backup taken before the change<\/dt><dd><button type="button" class="link-button mono" data-restore-backup="pre1">pre1<\/button> <button type="button" class="link-button" data-restore-load-backup>Load this backup…<\/button><\/dd>/);
+ assert.match(kept.html,/<dt>Backup taken after the change<\/dt><dd><button[^>]*data-restore-backup="post1">post1<\/button><\/dd>/,'only beside the backup from before the load');
+ kept.buttons[0].onclick();
+ assert.equal(kept.dialog.closed,1,'the window closes first');assert.deepEqual(kept.undone,['j'],'then loadUndo, which ends in the confirmation');
+ assert.match(render([{id:'pre1',status:'partial'}]).html,/Load this backup…/,'a partial safety backup can still be loaded (B4)');
+ assert.doesNotMatch(render([]).html,/Load this backup…/,'trimmed: not offered');
+ assert.doesNotMatch(render([{id:'pre1',status:'failed'}]).html,/Load this backup…/,'failed: not offered');
+ assert.doesNotMatch(render([{id:'pre1',status:'succeeded'}],{...job,status:'failed',targets:[job.targets[1]]}).html,/Load this backup…/,'a load that changed nothing: not offered');
+ assert.doesNotMatch(render([{id:'pre1',status:'succeeded'}],{...job,status:'applying'}).html,/Load this backup…/,'not while the load runs');
+ assert.doesNotMatch(render([{id:'pre1',status:'succeeded'}],job,false).html,/Load this backup…/,'not on a page without load.js');
+ // The window's other words are unchanged: the closing sentences still name the lab header and Advanced › Action logs.
+ assert.doesNotMatch(fs.readFileSync(path.join(__dirname,'../app/static/restore.js'),'utf8'),/Progress tab|Progress ›|showTab\('progress'\)/,'nothing names the removed tab');
 });
