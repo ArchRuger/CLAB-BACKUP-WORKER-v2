@@ -321,10 +321,10 @@ def validate_subfolder(value):
         raise ValueError('Use letters, numbers, dashes and underscores, with / to nest (for example courses/bgp). '
                           'No leading slash, no ".." and no .git parts.')
     # Rule 1 (docs/save-location-fix/PICKUP.md): latest, baseline and checkpoints/<name> are
-    # the folders Save progress writes inside a lab folder, never the lab folder itself.
+    # the folders a save writes inside a lab folder, never the lab folder itself.
     is_checkpoint = len(parts) >= 2 and parts[-2] == 'checkpoints'
     if parts[-1] in ('latest', 'baseline', 'checkpoints') or is_checkpoint:
-        raise ValueError('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. '
+        raise ValueError('latest, baseline and checkpoints are the folders a save writes inside a lab folder. '
                           'Choose the folder above them.')
     return value
 
@@ -553,10 +553,10 @@ def main(argv=None):
         return 2
     success_banner(['SUCCESS', 'Lab-config checkout registered with the manager.',
                     'Destination: ' + (binding['prefix'] or 'repository root')])
-    print('\nReady. In the manager: open your lab > Progress > Save location.')
-    print('Select this checkout and devices, review the destination, then Save progress.')
-    print('Save progress commits, then shows what changed: choose Upload these changes to push. No separate Commit button is needed.')
-    print('If a push fails, reopen that save and Retry; do not create a new capture or manually commit its staged files.')
+    print('\nReady. In the manager: open your lab and press Save in the lab header.')
+    print('The first save goes to this repository, in a folder named after the lab (Choose another place changes that).')
+    print('A save is kept on the VM first, then says what changed: choose Upload to send it to the online repository. No separate Commit button is needed.')
+    print('If an upload fails, open the chip in the lab header and try Upload again; do not create a new save or manually commit its staged files.')
     return 0
 
 

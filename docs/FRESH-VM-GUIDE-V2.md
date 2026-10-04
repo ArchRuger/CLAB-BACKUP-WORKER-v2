@@ -68,9 +68,9 @@ flowchart TD
     E --> F[Upload lab files and load device images]
     F --> G[Connect manager to VM and deploy lab]
     G --> H[Import lab and verify device backup]
-    H --> I[Choose a save location for the lab]
+    H --> I[Press Save in the lab header: the first save picks the place]
     I --> J[Run check-install.sh and resolve report]
-    J --> K[Save progress and confirm Saved to Git]
+    J --> K[Save, Upload and confirm the files on GitHub]
     K --> L[Record recovery locations]
 ```
 
@@ -372,7 +372,7 @@ rules can still reject a future changed commit. Retry or sign-in recovery stays
 within the wizard. Cancel keeps completed work.
 
 If Git setup is incomplete, the manager can still run. Finish Git setup before
-the final Git save in step 12. More recovery detail is in [GIT-SETUP.md](GIT-SETUP.md).
+the first save in step 12. More recovery detail is in [GIT-SETUP.md](GIT-SETUP.md).
 
 ## 7. Verify SSH, WinSCP and VS Code before transferring lab files
 
@@ -703,8 +703,8 @@ the device panel (**Advanced**). Review
 Junos SSH driver used for cJunosEvolved captures
 `show configuration | display set | no-more`; saved files use `.set`, Git
 manifests report `junos-display-set`, and individual downloads use
-`vQFX_*.cfg` or `vJunos-switch_*.cfg`. Applying a saved configuration to a running
-node ([GIT-PROGRESS.md](GIT-PROGRESS.md#apply-a-saved-configuration-to-a-running-node)) is available for vJunos-switch, not for vQFX.
+`vQFX_*.cfg` or `vJunos-switch_*.cfg`. Loading a saved configuration onto a running
+node (**Load** in the lab header, see [GIT-PROGRESS.md](GIT-PROGRESS.md)) is available for vJunos-switch, not for vQFX.
 See the [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/) and
 [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) requirements,
 including the nested-virtualization requirement in step 1. vJunos-switch's live login,
@@ -721,9 +721,13 @@ discovery smoke test does not validate EOS/Junos/IOS-XR backup.
 
 After the Git wizard reported **Registered** and **Ready**:
 
-1. Click **Save progress** in the lab header (or open **Progress › Save location**).
-2. Select the registered checkout, the folder and the devices to include; review the
-   destination and save the connection.
+1. Press **Save** in the lab header. The panel says where the first save goes: the
+   registered repository, in a folder named after the lab. Press **Choose another place**
+   to pick a different folder, or open the chip, then **Save settings**, to change the
+   repository or the devices included in every save.
+2. If no repository is registered yet, paste the repository's HTTPS address in the panel
+   instead; an empty repository is started with **Start the repository**.
+   The save itself needs no further question.
 
 Now return to the **Ubuntu terminal** for the separate installation report:
 
@@ -767,21 +771,23 @@ for diagnosis, larger folder trees, JSON output and all options.
 
 After those checks, finish the real Git workflow in the browser:
 
-1. Choose **Save progress** in the lab header.
-2. In **Review before uploading**, check what changed and click **Upload these changes**.
-3. Wait for **Saved to Git** and check GitHub for the files under `latest/` and its
-   `manifest.json`.
+1. Press **Save** in the lab header. The save is made at once, on the VM, without a question.
+2. The panel says what changed, with **Upload**, **Not now** and **See changes**. Press
+   **Upload**.
+3. Wait until the panel shows `Uploaded: yes` and check GitHub for the files under the
+   lab's folder: `latest/` and its `manifest.json`.
 
-Save progress captures, exports and commits, and pushes once you confirm the review. There is no separate Commit
-button, and setup itself did not already push these configs. You may then save a
-baseline or named checkpoint as appropriate for your lab.
+**Save** captures the topology file, the map and the configuration of every included
+device and commits them on the VM; the push happens only when you press **Upload**. There
+is no separate Commit button, and setup itself did not already push these configs. You
+may then keep a save under a name (**Keep as a checkpoint**) or set a starting point
+(**All versions**, then **Use as starting point…**) as appropriate for your lab.
 
-If a push fails, open the **original save** under **Recent saves** and use its
-**Retry save, then review**, **Review and upload…** or **Upload now** action after
-fixing the reported problem. Do not keep making captures or manually commit the
+If an upload fails, open the chip in the lab header: it says what stopped it and offers the
+action that clears it, on the same save. Do not keep making new saves or manually commit the
 manager's staged files as the normal repair. [Git recovery guide](GIT-SETUP.md#fix-a-failed-save)
 
-**Checkpoint:** the manager reports **Saved to Git**, and GitHub shows the intended
+**Checkpoint:** the manager shows the save as uploaded, and GitHub shows the intended
 configuration files. A clean `git status`, working GitHub login or running
 container alone would not establish this end-to-end result.
 
@@ -1042,5 +1048,5 @@ Retry the same installation step only after APT succeeds.
 | Backup records and persistence confirmation | Step 13 |
 
 Once these checkpoints pass, daily use is to run your lab, make changes, and
-choose **Save progress**. Return to the Git-only menu for setup repair; return
+press **Save** in the lab header. Return to the Git-only menu for setup repair; return
 to installation checks for manager problems.

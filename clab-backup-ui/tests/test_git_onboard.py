@@ -199,7 +199,7 @@ class GitOnboardTests(unittest.TestCase):
     def test_ask_subfolder_refuses_reserved_snapshot_shapes_and_reprompts(self):
         # ask_subfolder() itself (the advanced, --subfolder-adjacent prompt) keeps its
         # validation and its tests. Rule 1 (docs/save-location-fix/PICKUP.md): latest,
-        # baseline and checkpoints/<name> are the folders Save progress writes inside a
+        # baseline and checkpoints/<name> are the folders a save writes inside a
         # lab folder, never the lab folder itself.
         for bad in ('latest', 'baseline', 'checkpoints', 'course/latest', 'course/baseline',
                     'course/checkpoints', 'working/checkpoints/one'):

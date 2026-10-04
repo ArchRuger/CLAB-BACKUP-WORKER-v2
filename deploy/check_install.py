@@ -85,7 +85,7 @@ class Context:
             'WinSCP: authenticate as the normal VM user, upload and download a small file; '
             'for administrative SFTP test the intended destination.',
             'Devices: verify a real login and configuration capture on the intended NOS nodes.',
-            'Git: use Save progress and confirm Pushed plus the expected files on the remote. '
+            'Git: press Save in the lab header, choose Upload and confirm the expected files on the remote. '
             'Remote-read checks cannot prove push permission or branch-rule acceptance.',
         ]
 

@@ -152,4 +152,4 @@ if [[ $status -ne 0 ]]; then
   fi
   exit 1
 fi
-echo 'Git login remains with the repository owner. Select the repository under Progress > Save location in the manager.'
+echo 'Git login remains with the repository owner. Open your lab in the manager and press Save in the lab header; the first save goes to this repository.'

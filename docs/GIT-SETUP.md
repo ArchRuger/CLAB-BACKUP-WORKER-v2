@@ -8,8 +8,8 @@ opens the Git terminal wizard. For a working manager, choose **Git setup / repai
 only**, or run `bash "$HOME/projects/clab-manager/deploy/install.sh" --git`. See [INSTALL.md](INSTALL.md).
 
 **From the manager:** once the VM account is signed in to GitHub CLI, a lab can also
-be connected without the terminal: open the lab → the **Progress** tab → **Connect
-a repository by URL**, paste the repository's HTTPS clone URL and choose its folder. See
+be connected without the terminal: open the lab, press **Save** in the lab header, paste the
+repository's HTTPS address and press **Save** again. See
 [Connect or switch a repository from the manager](#connect-or-switch-a-repository-from-the-manager).
 
 The Git wizard has numbered phases with **Retry**, **Sign in again** where
@@ -53,11 +53,13 @@ The wizard shows the Linux account it will use, then:
 - Installs Git if missing, with your confirmation, and GitHub CLI (`gh`) automatically
   if missing (it prints that it is doing so; no question is asked for `gh`).
 - Offers to clone a repository into `~/labs/REPOSITORY`, or reuse an existing checkout.
-  Registering a repository that is new to the manager always uses the **repository
-  root**, without asking; adding another lab to a repository that already has a
-  registration still asks for its subfolder (each lab keeps its saves in a folder of its own). See
-  [One repository, one subfolder per lab](#one-repository-one-subfolder-per-lab) below for
-  the advanced `--subfolder` option that answers that question ahead of time.
+  Registering a repository that is new to the manager uses the **repository root**,
+  without asking. Labs may sit anywhere in a repository (see
+  [Where labs save in a repository](#where-labs-save-in-a-repository)), so the manager
+  places each lab in its own folder when you save; you do not choose a folder in the
+  wizard. When the repository is already registered, the wizard offers to reuse a saved
+  destination or to register a new subfolder; the advanced `--subfolder` option answers
+  that question ahead of time.
 - Reuses a GitHub login or opens GitHub's browser authorization flow for that account.
 - Configures the Git credential helper and asks for missing commit author name/email.
 - Checks GitHub repository write permission, then registers the displayed checkout
@@ -76,17 +78,19 @@ non-interactively so `gh`'s own credential-helper and browser-open questions do 
 appear; only the device code and URL are shown.
 
 **Checkout directory** means the local repository on the VM, for example
-`/home/archtop/labs/my-bgp-lab`. The wizard clones into that directory; subsequent
-saves write `latest/`, `baseline/` or checkpoints inside it. It is separate from
-the manager's application source directory under `~/projects/`.
+`/home/archtop/labs/my-bgp-lab`. The wizard clones into that directory; later saves write
+into folders inside it (each lab folder holds `latest/`, `baseline/` and `checkpoints/`).
+It is separate from the manager's application source directory under `~/projects/`.
 
-Finally, open your lab in the manager and click **Save progress** in the lab header:
-the first save asks for the registered checkout, the folder and the devices (the
-same settings are under **Progress › Save location**). It captures, exports and commits
-automatically, then opens **Review before uploading**; choose **Upload these changes**
-to push. There is no separate Commit button. Confirm the save
-reports **Saved to Git** and the
-repository contains `latest/` with configurations and `manifest.json`.
+Finally, open your lab in the manager and press **Save** in the lab header. The first
+save goes to the repository the wizard registered, in a folder named after the lab; press
+**Choose another place** to pick a different folder first. Saving is immediate and asks
+nothing else: it keeps the topology file, the map and the configuration of every included
+device as one save on the VM. The chip then reads **1 save to upload**; press **Upload**
+to send it to the online repository, or **Not now** to keep it on the VM for later
+(**See changes** shows what it contains). There is no separate Commit button, and nothing
+is uploaded without **Upload**. Afterwards the repository contains `latest/` with the
+configurations and `manifest.json` inside the lab's folder.
 
 ```mermaid
 flowchart TD
@@ -95,11 +99,12 @@ flowchart TD
     C --> D[Clone or reuse checkout]
     D --> E[Commit identity and access checks]
     E --> F[Register current branch]
-    F --> G[Select repository and devices in manager]
-    G --> H[Save progress: capture, commit, push]
-    H --> I{Push verified?}
-    I -- Yes --> J[Progress saved to Git]
-    I -- No --> K[Keep snapshot and retry the same save]
+    F --> G[Press Save in the lab header]
+    G --> H[Save: capture and commit on the VM]
+    H --> I[Upload: push to the online repository]
+    I --> J{Push verified?}
+    J -- Yes --> K[Uploaded]
+    J -- No --> L[The save stays on the VM; press Upload again]
 ```
 
 ## Connect or switch a repository from the manager
@@ -110,12 +115,17 @@ browser, for a student who already has the repository and the GitHub login on th
 1. Sign in to GitHub CLI on the VM once, as your ordinary account, without sudo:
    `gh auth login --hostname github.com --git-protocol https --web`. The manager uses
    this login for every clone and push; it never asks for a token or password.
-2. Open the lab → the **Progress** tab. With no repository connected, choose
-   **Connect a repository by URL**; with the wrong one connected, open **Save location ›
-   Change folder…**, choose **Use a different repository…** and then **Connect by URL…**.
-3. Paste the HTTPS clone URL (**Code → HTTPS**; a page link such as `/tree/main` is
-   turned into the clone URL for you), keep or change the lab's folder, acknowledge that
-   full configurations will be pushed, and confirm.
+2. Open the lab and press **Save** in the lab header. When the VM has no repository yet,
+   the panel asks for **Repository address (HTTPS)**: paste the clone URL (**Code → HTTPS**;
+   a page link such as `/tree/main` is turned into the clone URL for you) and press
+   **Save**. The lab saves into a folder named after it, and the manager connects the
+   repository first. To change the repository later, open the chip, then **Save
+   settings**, and choose **Use a different repository…** or **Connect by URL…**; **Change
+   folder…** there moves the lab to another folder.
+3. If the repository is brand new and empty, the panel says `<name> is empty. The manager
+   adds a README.md file to start it.` Press **Start the repository**: the manager
+   uploads a README.md as the first commit, then saves. Nothing is uploaded without that
+   click, and a repository that already has a branch or a tag never gets one.
 
 The manager then, as the VM account that owns the registered repositories (the engineer
 account on a VM without any), reuses an existing checkout of that repository or clones it
@@ -123,65 +133,82 @@ into `~/labs/REPOSITORY`, checks that the GitHub login has write permission for 
 repository, sets a commit name and email from the GitHub account (its private noreply
 address) when the checkout has none, registers the folder exactly as the wizard would
 (clean managed files, identity, remote synchronization, push dry run) and connects the
-lab. A repository the account cannot push to is refused before anything is cloned; a
-folder inside another lab's saved state (its `latest`, `baseline` or `checkpoints` folder) is
-refused as well.
+lab. A repository the account cannot push to is refused before anything is cloned.
+
+Two things the manager reports instead of guessing: the online copy of the repository
+has changes this VM does not have (`The online copy of this repository has changes this
+VM does not have.`), and the checkout holds commits that the manager did not make
+(`This checkout has commits that were not made by manager saves.`). Bring the checkout
+up to date as its owner with ordinary Git, then try again.
 
 **Use a different repository…** also lists every checkout already registered on the VM.
-Choosing one opens the folder browser for it; pick the folder and confirm the devices to
-connect. Switching never deletes anything: the files saved in the previous repository stay
+Choosing one opens the folder chooser for it; pick the folder and confirm the devices to
+include. Switching never deletes anything: the files saved in the previous repository stay
 there, and the lab's saved versions remain in that repository's history.
 
 Prefer the terminal wizard when the VM account is not signed in yet, when several VM
 accounts own repositories, or for a non-GitHub HTTPS host whose credential helper needs
 configuring first.
 
-## One repository, one subfolder per lab
+## Where labs save in a repository
 
-The normal guided path registers a **repository new to the manager** at its root and
-no longer asks a subfolder question. Adding another lab to a repository that already
-has a registration is different: the new lab gets a subfolder of its own (the root may
-already be another lab's folder), so the wizard still asks for a subfolder there unless
-one is supplied ahead of time. To keep every lab of a course in a single
-repository, for example `Patricks-AF-Learning-Labs`, give each lab its own
-**subfolder**, either by answering that prompt or with the advanced `--subfolder`
-option, still without sudo:
+A repository can hold any number of labs, and a lab can save into any folder of it: the
+top level, a folder named after the lab (the first-save default), or a folder inside,
+above or beside another lab's folder. `bgp`, `bgp/edge`, `eth` and the top level can all
+be lab folders at once. A lab keeps three things inside its folder: `latest/` (the newest
+save), `baseline/` (the starting point) and `checkpoints/<name>/` (saves you keep under a
+name). A course's prepared lab states (for example `bgp/start`, `bgp/broken`, `bgp/final`)
+are ordinary saved folders written with **Save as a lab state…**; see
+[NAMING.md](NAMING.md).
 
-1. Create the one course repository on GitHub with a README, and run guided setup
-   with this lab's subfolder, for example `bgp`:
+The only folder the VM helper refuses is one inside another lab's `latest`, `baseline` or
+`checkpoints` (for example `bgp/latest/edge`), because that lab's saves would write
+over it. You do not have to work this out: when you save, the manager chooses a folder that
+avoids it, and in **Choose another place** or **Change folder…** it marks such folders as not
+choosable with the reason. The chooser also lets you create a new folder anywhere
+(**New folder…**) and, with **Save this lab here**, moves a lab to the folder you picked.
+The manager asks one question, with buttons only, when two labs want the very same
+folder, when the folder you picked already holds a saved state of another lab or a course,
+or when a save of the lab still waits for upload. See [GIT-PROGRESS.md](GIT-PROGRESS.md).
 
-   ```bash
-   bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --guided --subfolder bgp
-   ```
+### Administrators: `--subfolder`
 
-   It clones the repository once and registers `bgp/` as this lab's destination.
-2. For the next lab, resume the **same** checkout and give the new subfolder, for
-   example `eth`:
+Guided setup registers a repository that is new to the manager at its root. When a
+repository is already registered, the wizard asks whether to reuse a saved destination
+or register a new subfolder (it explains that a blank answer is the top level). To answer
+that question ahead of time, still without sudo, run guided setup with `--subfolder`:
 
-   ```bash
-   bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --guided --repo "$HOME/labs/Patricks-AF-Learning-Labs" --subfolder eth
-   ```
+```bash
+bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --guided --repo "$HOME/labs/Patricks-AF-Learning-Labs" --subfolder eth
+```
 
-   Because the repository is already registered, setup offers to reuse a saved
-   destination or **register a new subfolder**; giving `--subfolder` here skips the
-   prompt, and omitting it makes the wizard ask for one instead (it explains that this
-   repository already holds a lab folder, so the root is not offered as a default).
-3. In the manager, open each lab → **Progress › Save location › Change folder…** and
-   select its subfolder registration (each is listed with its subfolder). **Save
-   progress** pushes that lab
-   to its own subfolder, for example `bgp/latest/`, without touching the others.
+`--subfolder` takes letters, numbers, dashes and underscores with `/` to nest; it refuses
+`latest`, `baseline`, `checkpoints` and `checkpoints/<name>` as the folder itself
+and tells you to choose the folder above. Without `--repo` it applies to the repository
+the wizard clones. For a non-interactive registration by an administrator the equivalent is
+`--prefix`, described under
+[Advanced](#advanced-separate-owner-other-https-host-or-managed-prefix) below.
 
-Lab folders in one repository may sit inside, above or beside each other: `bgp`,
-`bgp/edge`, `eth` and the repository root (blank subfolder) can all be lab folders. Only a
-folder inside another lab's saved state, such as `bgp/latest/edge`, is refused, because that
-lab's saves would write over it. An administrator can register subfolders non-interactively with
-`--prefix`, described under [Advanced](#advanced-separate-owner-other-https-host-or-managed-prefix) below.
+### Setup again for a folder whose save still waits for upload
 
-Folders can also be created and changed from the manager: the **Save location** card
-on the lab's **Progress** tab (**Change folder…**) shows the repository's folders as
-**Folders in this repository**, **New folder…** registers another lab folder, and
-**Save this lab here** moves a lab to a folder, optionally with its saved files. See
-[Save location](GIT-PROGRESS.md#save-location).
+Re-running setup with other settings for a folder (a different branch, remote or
+owner) replaces the registration, which is refused while a save made in that folder still
+waits for upload. The helper prints:
+
+```
+A save made in that folder still waits for upload.
+```
+
+or, when the online copy cannot be asked:
+
+```
+The online copy could not be asked whether a save made in that folder still waits for upload.
+```
+
+Open the lab in the manager, open the chip in the lab header and press **Upload** on the
+waiting save (check the connection first if the second sentence appears), then run setup
+again. Running setup again with unchanged settings is always safe: it keeps the
+registration as it is.
 
 ## Already working? Upgrade without setting it up again
 
@@ -316,15 +343,18 @@ Explicit sudo registration validates identity/login but does not configure them.
 It never runs Git as root. Retain custom `--remote`, `--prefix` and `--label`
 options when retrying a custom registration. For new registrations the wizard
 uses `origin` and the repository root; for existing ones it retains the selected
-settings. Once registration succeeds, reopen the lab's **Progress** tab
-and select the checkout under **Save location**. These identity/registration repairs
+settings. Once registration succeeds, press **Save** in the lab header again (or open the
+chip, then **Save settings**, and pick the checkout). These identity/registration repairs
 need no container rebuild.
 
 ## Fix a failed save
 
-Open the **original failed save** from progress history. Its snapshot is already
-preserved. Repair the stated problem, then use its **Retry save, then review**,
-**Review and upload…** or **Upload now** button. Retry uses the existing snapshot/commit.
+A save that could not be made or uploaded keeps what it captured. Open the chip in the lab
+header: it names the problem (the VM cannot be reached, the VM account cannot upload,
+someone works in the repository on the VM, the online copy has changes this VM lacks, or a
+device cannot be read) and the action that clears it. Repair the stated problem, then press
+the action the panel offers (for example **Upload**) on that same save; do not start a second save to get past it.
+**All versions** (opened from the chip panel) lists every save, including the one that waits.
 
 | Symptom | Action |
 |---|---|
@@ -333,10 +363,10 @@ preserved. Repair the stated problem, then use its **Retry save, then review**,
 | Missing checkout / `.git` | Use the wizard's Clone option. `mkdir` creates a folder, not a repository. |
 | Permission denied | Check who owns the checkout. Clone as its intended owner; do not use `sudo git clone` or recursively change ownership of an existing project. |
 | `gh` missing / owner not in sudoers | Your VM administrator installs `gh`. Authenticate as the repository owner. The owner does not need sudo membership to use Git or the manager. |
-| Invalid username/token or interactive password prompt | Run the commands below **as the registered Linux owner**, then retry the original save. |
-| Missing/invalid commit identity, despite a clean `git status` | Use guided existing-checkout recovery above, or set local name/email and verify both Git identities. Retry registration if it failed; retry the original save if already registered. |
-| Already staged changes after a failed manager export | Retry the original failed save after fixing its error. Do not start another save or manually commit its staged files. Resolve unrelated staged work separately. |
-| You already committed the manager files manually | As the owner, publish that manual commit with normal Git. Check it reached the remote. In the manager dismiss the old export using **Keep snapshot only**, then start a new save. The manager does not automatically push unrelated/manual history. |
+| Invalid username/token or interactive password prompt | Run the commands below **as the registered Linux owner**, then retry that save. |
+| Missing/invalid commit identity, despite a clean `git status` | Use guided existing-checkout recovery above, or set local name/email and verify both Git identities. Retry registration if it failed; retry the save if already registered. |
+| Already staged changes after a failed manager export | Retry that save from the chip after fixing its error. Do not start another save or manually commit its staged files. Resolve unrelated staged work separately. |
+| You already committed the manager files manually | As the owner, publish that manual commit with normal Git. Check it reached the remote. In the manager, press **Save** again once the checkout is clean. The manager does not automatically push unrelated/manual history. |
 | Local and remote branch differ | Inspect `git status -sb` and resolve synchronization as the owner. Setup does not reset, merge, stash or force-push your work. |
 | Push rejected despite successful setup | Check branch protection/rules, current write permission and credential expiry. A dry run checks transport/access but cannot guarantee a later changed commit passes every server rule. |
 
@@ -371,12 +401,19 @@ sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --owner patrick --re
 For a separate owner, prepare its checkout/login/identity under that account, then
 return to the administrator for registration. Optional `--remote NAME`,
 `--label "Display name"` and `--prefix labs/bgp` select an existing remote,
-display label and managed subfolder. A prefix inside the `latest`, `baseline` or
+display label and the lab folder inside the repository (`--prefix` is the
+administrator's way to register a folder without the manager's chooser). A prefix inside the `latest`, `baseline` or
 `checkpoints` folder of another registered prefix is refused (nesting is otherwise allowed), and `latest`, `baseline`
 and `checkpoints`/`checkpoints/<name>` are refused as a prefix for the same reason as in
 the wizard. A normal checkout
 with an existing published commit is required; linked worktrees, submodules,
 bare repositories and symbolic-link paths are unsupported.
+
+To read the registered checkouts without changing anything, run
+`sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --list`; it prints each
+registration's label, owner, path, remote, folder, branch and push URL as JSON
+(`deploy/git-registrations.py`). `--refresh` reinstalls the helper and retains every
+registration; it cannot be combined with other options.
 
 This command and the manager's folder and connect actions may run at the same time. Each
 checks the checkout first (that can take minutes), then saves its registration under one

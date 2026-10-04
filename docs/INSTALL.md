@@ -255,7 +255,7 @@ can select the saved path without typing it again. Your account name is detected
 there is no need to copy an example `--owner` command or create another Linux account.
 
 Read [GIT-SETUP.md](GIT-SETUP.md) for repository preparation, device-code login,
-registration and the detailed recovery table. You still create the destination
+registration, where labs save in the repository and the detailed recovery table. You still create the destination
 GitHub repository with an initial README. The wizard does not create a remote
 repository, invent commit identity, or publish commits during setup.
 
@@ -337,8 +337,9 @@ The final terminal checks verify the local manager. On your workstation:
    reports every device ready (*n of n devices ready*).
 3. Right-click a device on the lab map for **Capture traffic…** and confirm Wireshark
    opens.
-4. Take a backup (**Tools › Configuration backups › Back up now**), then click **Save
-   progress** and choose the registered checkout as the save location.
+4. Take a backup (**Tools › Configuration backups › Back up now**), then press **Save**
+   in the lab header; the first save goes to the registered checkout, in a folder named after the lab
+   (**Choose another place** picks a different folder).
 5. Back in the VM terminal, run the [full installation report](HEALTH-CHECK.md):
 
    ```bash
@@ -352,7 +353,7 @@ The final terminal checks verify the local manager. On your workstation:
    ```
 
 6. Resolve any **FAIL**, **WARN** or **SKIP** items using their displayed next
-   steps. Then choose **Save progress**, confirm **Upload these changes** in the review and check that it reports **Saved to Git** and
+   steps. Then press **Save** in the lab header, press **Upload** and check that the chip reports the save as uploaded and
    that the intended files appear on GitHub.
 
 Host trust, lab selection and device credentials still require your choices in

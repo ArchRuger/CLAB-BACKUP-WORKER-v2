@@ -16,7 +16,7 @@ uploads a save only after a review; ``--yes`` states that review for scripted us
 rebinds the lab to ``<slug>/work``. Answering no keeps the state on the lab VM only.
 
 Prerequisites: the lab is deployed and reachable, and it is already connected to the target
-repository in the manager (Progress -> Save location -> Connect by URL). See docs/NAMING.md
+repository in the manager (press Save in the lab header and paste its HTTPS address, or open Save settings from the chip). See docs/NAMING.md
 and deploy/lab-template/README.md.
 """
 import argparse
@@ -92,7 +92,7 @@ def binding_id(manager, lab_id):
     status, git = api(manager, '/labs/%s/git' % lab_id)
     binding = (git or {}).get('binding')
     if not binding:
-        die('the lab is not connected to a Git repository yet. Connect one under Progress -> Save location.')
+        die('the lab is not connected to a Git repository yet. Press Save in the lab header and connect one, or open Save settings from the chip.')
     return binding['binding_id']
 
 
@@ -186,10 +186,10 @@ def say_where_it_saves(args, reference, reason, unsure):
     """Stop with `reason` and the way out when the lab is not known to be back on the work folder. `unsure` is for
     a folder change that was under way or whose answer was lost: it may or may not have happened."""
     if unsure:
-        sys.exit('%s The lab MAY STILL SAVE TO %s. Check where it saves under Progress > Save location (finish or '
-                 'set aside any pending save under Progress > Recent saves first), then run: '
+        sys.exit('%s The lab MAY STILL SAVE TO %s. Check where it saves under Save settings in the lab header (upload any save that waits '
+                 'for upload first), then run: '
                  'scaffold-lab.py init %s' % (reason, reference, args.slug))
-    sys.exit('%s The lab STILL SAVES TO %s. Finish or set aside that save under Progress > Recent saves, '
+    sys.exit('%s The lab STILL SAVES TO %s. Upload that save from the chip in the lab header, '
              'then run: scaffold-lab.py init %s' % (reason, reference, args.slug))
 
 
@@ -245,8 +245,8 @@ def cmd_snapshot(args):
     if status == 'synced' or (status == 'unchanged' and final.get('pushed')):
         where = 'uploaded'
     if not where and status not in ('failed', 'capture_incomplete'):
-        die('the snapshot into %s is not finished: %s (%s). The lab STILL SAVES TO %s. Finish or set aside that '
-            'save under Progress > Recent saves, then run: scaffold-lab.py init %s'
+        die('the snapshot into %s is not finished: %s (%s). The lab STILL SAVES TO %s. Upload that '
+            'save from the chip in the lab header, then run: scaffold-lab.py init %s'
             % (reference, status, final.get('message', ''), reference, args.slug))
     try:
         bind_to(args.manager, lab['id'], work)           # rebind so the student keeps saving in work

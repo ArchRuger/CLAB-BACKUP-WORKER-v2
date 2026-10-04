@@ -188,7 +188,7 @@ def check_repository(ctx, binding, number):
                 '' if remote_ok else repair)
     ctx.add(prefix + '.push', 'INFO', title + ': push permission',
             'Not exercised. Remote read access does not prove write permission or acceptance by branch rules. '
-            'Complete a deliberate Save progress and push to verify publishing.')
+            'Press Save in the lab header and Upload to verify publishing.')
 
 
 def check_git(ctx):
