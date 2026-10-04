@@ -136,6 +136,7 @@ class DesignExportGitTestCase(unittest.TestCase):
         self.addCleanup(self.app.state.design_apply.close)
         self.store = self.app.state.store
         self.progress = self.app.state.git_progress
+        self.progress.connection_wait = 0   # a busy connection answers at once in these tests
         self.designs = self.app.state.network_design
         set_host(self.app)
         self.lab_id = add_lab(self.app)
@@ -487,7 +488,7 @@ class ExecuteTests(DesignExportGitTestCase):
         pending = self.client.get('/api/git/jobs/' + job_id).json()
         self.assertEqual(pending['status'], 'review_pending')
 
-        retry = self.client.post('/api/git/jobs/' + job_id + '/retry', json={'push': True, 'reviewed': True})
+        retry = self.client.post('/api/git/jobs/' + job_id + '/retry', json={'push': True, 'reviewed': True, 'head': self.vm_head})   # the HEAD the review showed
         self.assertEqual(retry.status_code, 200, retry.text)
         self.progress.execute(job_id)
 

@@ -310,6 +310,7 @@ class GitProgressTests(unittest.TestCase):
     def setUp(self):
         self.setUp_base()
         self.progress = self.app.state.git_progress
+        self.progress.connection_wait = 0   # a connection change that meets another one answers at once here (the wait has its own test)
         self.host(); self.store.state['host']['fingerprint'] = 'SHA256:fixture'
         self.lab = self.register(); self.url = '/api/labs/' + self.lab['id'] + '/git'
         self.repo = dict(id='bens-lab', label='Bens lab', owner='ben', path='/home/ben/labs/bgp',
@@ -393,8 +394,11 @@ class GitProgressTests(unittest.TestCase):
         return self.client.get('/api/git/jobs/'+job['id']).json(), submit
 
     def review_and_upload(self, job, expect=200):
-        """The student's explicit decision after the review: the only way a save is uploaded."""
-        response = self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True, 'reviewed': True})
+        """The student's explicit decision after the review: the only way a save is uploaded. The review comes first,
+        and the upload carries the HEAD it showed (an upload without it is refused)."""
+        review = self.client.post('/api/labs/'+job['lab_id']+'/git/compare', json={'job_id': job['id']})
+        self.assertEqual(review.status_code, 200, review.text)
+        response = self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True, 'reviewed': True, 'head': review.json()['head']})
         self.assertEqual(response.status_code, expect, response.text)
         return self.run_save(job)
 
@@ -649,7 +653,7 @@ class GitProgressTests(unittest.TestCase):
         self.assertEqual(outcome['status'], 'push_pending'); submit.assert_not_called()
         self.push_error = ''
         # The review is recorded with the first upload attempt: repeating a failed upload needs no second one.
-        self.assertEqual(self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True}).status_code, 200)
+        self.assertEqual(self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True, 'head': self.vm_head}).status_code, 200)
         outcome, submit = self.run_save(job)
         self.assertEqual(outcome['status'], 'synced'); submit.assert_not_called()
         self.assertEqual(sum(r['mode'] == 'publish' for r in self.sent), 1)
@@ -1145,7 +1149,7 @@ class GitPlacesTests(GitProgressTests):
         if mode == 'browse':
             self.sent.append(copy.deepcopy(request))
             repo = next(r for r in self.registry if r['id'] == request['binding_id'])
-            return dict(repository=repo, head='a'*40, files=[dict(path='README.md', size=12), dict(path='bgp/latest/r1.cfg', size=30), dict(path='bgp/latest/manifest.json', size=200)] + self.extra_files,
+            return dict(repository=repo, head='a'*40, files=[dict(path='README.md', size=12), dict(path='latest/r1.cfg', size=30), dict(path='latest/manifest.json', size=200), dict(path='kept/latest/r1.cfg', size=30)] + self.extra_files,
                         truncated=False, saved={'latest': 1789128000, 'baseline': None, 'checkpoints': None},
                         folders=[dict(id=r['id'], label=r['label'], prefix=r['prefix']) for r in self.registry if r['path'] == repo['path']])
         if mode in ('register-prefix', 'connect'):
@@ -1315,7 +1319,7 @@ class GitPlacesTests(GitProgressTests):
             return result
 
         self.helper.side_effect = after_upload
-        uploaded = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True, 'reviewed': True})
+        uploaded = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True, 'reviewed': True, 'head': self.vm_head})
         self.assertEqual(uploaded.status_code, 200, uploaded.text)
         self.progress.execute(job['id'])
         outcome = self.client.get('/api/git/jobs/' + job['id']).json()
@@ -1323,10 +1327,7 @@ class GitPlacesTests(GitProgressTests):
         for kept in (theirs, mine):
             stored = self.progress.get_job(kept['id'])
             self.assertTrue(stored['head_uploaded']); self.assertFalse(kept_on_vm(stored))
-        again = self.client.post(self.url + '/destination', json=dict(prefix='eth', move_files=True))
-        self.assertEqual(again.status_code, 200, again.text)
-        self.progress.execute(again.json()['job']['id'])
-        later = self.client.post(self.url + '/compare', json={'job_id': again.json()['job']['id']}).json()
+        later = self.review_of(self.lab['id'], 'f'*40)
         self.assertEqual((later['also_sends'], later['also_sends_kept']), ([], []), 'the next review no longer names them')
 
     def test_a_folder_move_waits_for_upload_like_a_save_and_uploads_with_its_review(self):
@@ -1341,7 +1342,7 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual(outcome['status'], 'committed', outcome)
         self.assertFalse([r for r in self.sent if r['mode'] == 'push'])
         self.assertEqual(self.client.get('/api/state').json()['labs'][0]['git_status']['waiting'], 1, 'it counts as a save to upload')
-        uploaded = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True, 'reviewed': True})
+        uploaded = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True, 'reviewed': True, 'head': self.vm_head})
         self.assertEqual(uploaded.status_code, 200, uploaded.text)
         self.progress.execute(job['id'])
         self.assertEqual(self.client.get('/api/git/jobs/' + job['id']).json()['status'], 'synced')
@@ -1508,7 +1509,7 @@ class GitPlacesTests(GitProgressTests):
         for change in (dict(branch='dev'), dict(remote='https://example.test/other.git')):
             self.progress.update(theirs['id'], head_uploaded=False, destination=dict(original, **change))
             mine = self.stored_save(self.lab['id'], 'b'*40, reviewed='2026-10-03T10:00:00+00:00')
-            self.assertEqual(self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json={'push': True}).status_code, 200)
+            self.assertEqual(self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json={'push': True, 'head': self.vm_head}).status_code, 200)
             self.progress.execute(mine['id'])
             self.assertFalse(self.progress.get_job(theirs['id'])['head_uploaded'], change)
 
@@ -1842,7 +1843,7 @@ class GitPlacesTests(GitProgressTests):
         response = self.client.get('/api/git/repositories/bens-lab/tree')
         self.assertEqual(response.status_code, 200, response.text)
         tree = response.json()
-        self.assertEqual([f['path'] for f in tree['files']], ['README.md', 'bgp/latest/r1.cfg', 'bgp/latest/manifest.json'])
+        self.assertEqual([f['path'] for f in tree['files']], ['README.md', 'latest/r1.cfg', 'latest/manifest.json', 'kept/latest/r1.cfg'])
         self.assertEqual(tree['folders'][0]['lab'], dict(id=self.lab['id'], name=self.lab['name']))
         self.assertEqual(tree['saved']['latest'], 1789128000); self.assertEqual(tree['head'], 'a'*40)
         browse = next(r for r in self.sent if r['mode'] == 'browse')
@@ -1881,7 +1882,7 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual([f['prefix'] for f in tree()['folders']], ['JunOS-TEST-2'], 'the save destination did not change')
         # A name that exists is the folder meant, never a refusal (DESIGN.md section 4, was 409 "already exists"):
         # planned, a lab folder, and a committed folder.
-        for name, answer in (('JunOS-TEST-2/working', {'planned': 'JunOS-TEST-2/working'}), ('JunOS-TEST-2', {'selected': 'JunOS-TEST-2'}), ('bgp', {'selected': 'bgp'})):
+        for name, answer in (('JunOS-TEST-2/working', {'planned': 'JunOS-TEST-2/working'}), ('JunOS-TEST-2', {'selected': 'JunOS-TEST-2'}), ('kept', {'selected': 'kept'})):
             again = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix=name, plan=True))
             self.assertEqual((again.status_code, again.json()), (200, answer), name)
         self.assertEqual(tree()['planned'], ['JunOS-TEST-2/working'], 'nothing was planned twice')
@@ -1956,6 +1957,7 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['binding_id'], 'register-prefix-bgp')
         outcome, _ = self.review_and_upload(job); self.assertEqual(outcome['status'], 'synced')
         self.assertEqual((outcome['destination']['path'], next(r for r in self.sent if r['mode'] == 'push')['binding_id']), ('latest', 'bens-lab'))
+        self.extra_files = [dict(path='bgp/latest/r1.cfg', size=30)]   # the lab saved in its new folder since
         self.publish_error = 'The repository changed since it was selected. Refresh status and retry the move.'
         response = self.client.post(self.url + '/destination', json=dict(prefix='ospf', move_files=True))
         self.assertEqual(response.status_code, 409, response.text)
@@ -1987,6 +1989,33 @@ class GitPlacesTests(GitProgressTests):
         failed = self.client.post(self.url + '/connect', json=dict(url='https://github.com/ben/Other', prefix='', acknowledge=True))
         self.assertEqual(failed.status_code, 409); self.assertIn('not signed in', failed.text)
         self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['push_url'], 'https://github.com/ben/Course-Labs')
+
+    def test_a_folder_change_brings_the_saved_files_along_only_when_the_move_can_work(self):
+        # The rule of the chooser's route (git_place.Placement.bring, DESIGN.md 2.6; the refusal audit's F4): a move
+        # queued into a folder that holds saved files failed on every retry. Without a move the lab is pointed at the
+        # folder and the answer says so with `job: null`.
+        def change(prefix):
+            response = self.client.post(self.url + '/destination', json=dict(prefix=prefix, move_files=True))
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'], prefix)
+            return response.json()['job']
+        self.assertIsNone(change('kept'), 'the new folder holds saved files')
+        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='')).status_code, 200)   # back, without a move
+        stalled = self.stored_save(self.lab['id'], '', status='export_pending')                # a save that has not reached its commit
+        self.assertIsNone(change('ospf'), 'its retry would write into the folder the lab left')
+        self.progress.update(stalled['id'], status='dismissed')
+        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='')).status_code, 200)
+        self.assertFalse([j for j in self.store.state['git_jobs'] if j.get('target') == 'move'], 'no move was queued so far')
+        self.assertFalse([r for r in self.sent if r['mode'] == 'move'])
+        job = change('eth')                                                                 # saved files here, none there, nothing unfinished
+        self.assertEqual((job['target'], self.store.state['git_jobs'][-1]['request']['source_prefix']), ('move', ''))
+        self.progress.update(job['id'], status='dismissed')
+        self.assertIsNone(change('eth2'), 'nothing saved in the folder the lab leaves: the fixture tree holds no file under eth')
+        from app.git_progress import brings_files, saved_files
+        files = ['README.md', 'a/latest/r1.cfg', 'a/checkpoints/x/r1.cfg', 'a/baseline/manifest.json', 'a/b/latest/r1.cfg', 'a/latest', 'latest/r1.cfg']
+        self.assertEqual([saved_files(files, f) for f in ('a', 'a/b', '', 'c')], [3, 1, 1, 0])
+        self.assertEqual([brings_files(files, *case) for case in (('a', 'c', False), ('a', 'a/b', False), ('c', 'a', False), ('a', 'c', True), ('a', 'a', False))],
+                         [True, False, False, False, False])
 
     def test_destination_refuses_reserved_names_and_takes_a_folder_that_holds_a_saved_state(self):
         # Rule 1: a reserved lab-folder shape is refused before the repository is even read.

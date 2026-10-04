@@ -52,6 +52,9 @@ WAITING_FIRST = 'Upload the waiting saves first; the online copy can only be fet
 STILL_WAITING = 'A save is still waiting to be uploaded. Upload it, or open its Details and choose Keep snapshot only, then try again.'
 VM_UNREACHABLE = 'Cannot reach the VM Git helper. The local capture is retained; check VM setup and retry.'
 MAX_SAVE_NAMES = 2000
+CONNECTION_WAIT = 10        # seconds a connection change waits for another one before it says so (`changing`)
+UPDATE_PAUSE = 600          # seconds without a new attempt after the VM copy could not be brought up to date (`catch_up`)
+UPDATED_FIRST = 'The VM copy of the repository was brought up to date with the online copy before a save.'
 NOTE_LIMIT = 120
 SLUG = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,99}')   # host_git.SLUG: a checkpoint's folder name
 # A save with a filename that changed between releases (Junos moved its human backup extension from
@@ -498,6 +501,24 @@ def checkpoint_slug(note):
     return slug if SLUG.fullmatch(slug) else 'checkpoint'
 
 
+def saved_files(files, folder):
+    """How many committed files a lab folder holds in its saved-state folders (latest, baseline, checkpoints), from the
+    paths of the checkout's tree. The count `git_place.saved_index` gives for that one folder."""
+    base = [p for p in str(folder or '').split('/') if p]; count = 0
+    for path in files or ():
+        parts = str(path).split('/')
+        if len(parts) > len(base) + 1 and parts[:len(base)] == base and parts[len(base)] in git_places.RESERVED: count += 1
+    return count
+
+
+def brings_files(files, source, folder, unfinished):
+    """Whether a folder change may bring the lab's saved files along (DESIGN.md 2.6, review F12; the rule of
+    `git_place.Placement.bring`): the lab has saved files in the folder it leaves, the new folder holds none (the
+    helper's move refuses a destination with saved files, on every retry), and no save of the lab is unfinished (its
+    retry would write into the folder the lab left)."""
+    return source != folder and bool(saved_files(files, source)) and not saved_files(files, folder) and not unfinished
+
+
 def free_checkpoint(slug, taken):
     """`slug`, or the first of `slug-2`, `slug-3`, … that no known checkpoint has (names compare without case: the
     VM's file system may not tell them apart)."""
@@ -829,6 +850,10 @@ class GitProgress:
         # The last answer of the helper's `status` per lab, for the header chip (`git_status`). In memory only: a
         # restart forgets it and the next settings read, save or update asks again; the poll never asks the VM.
         self.statuses = {}
+        # When a save may next try to bring a VM checkout up to date, after an attempt that failed (`catch_up`): in
+        # memory, per VM checkout. `clock` and `connection_wait` are seams for the tests.
+        self.update_pauses = {}; self.clock = time.monotonic
+        self.connection_wait = CONNECTION_WAIT
         self.pool = ThreadPoolExecutor(max_workers=1)
         with store.lock:
             store.state.setdefault('git_save_names', {})
@@ -996,8 +1021,11 @@ class GitProgress:
     def changing(self, lab_id):
         """One change of a repository connection at a time (`binding_lock`), recorded with the lab it changes: a folder
         change checks everything before the VM is asked, and nothing may take the new folder meanwhile.
-        Saves and design exports of that lab wait for it (`refuse_while_rebinding`); other labs' work goes on."""
-        if not self.binding_lock.acquire(blocking=False):
+        Saves and design exports of that lab wait for it (`refuse_while_rebinding`); other labs' work goes on.
+        A change that meets another one waits for it for up to `connection_wait` seconds (most take a moment), and only
+        then says so: a connection that clones a repository can hold the lock for minutes."""
+        wait = self.connection_wait
+        if not (self.binding_lock.acquire(timeout=wait) if wait > 0 else self.binding_lock.acquire(blocking=False)):
             raise HTTPException(409, 'Another repository connection is being changed. Try again in a moment.')
         self.rebinding = lab_id
         try: yield
@@ -1082,6 +1110,39 @@ class GitProgress:
             self.update(job['id'], status='interrupted', message='Manager is stopping. Retry after restarting.')
         with self.store.lock: return self.public(job)
 
+    def catch_up(self, job, binding, head):
+        """Before the first publication of a save: bring the VM copy up to date with the online copy when that is safe,
+        so a commit made online (a file added there, a save from another VM) does not end the save's upload as
+        diverged with no way out from the page (the helper's `status` never asks the online copy). Only when nothing
+        waits in the checkout (no waiting save of any lab, no kept save that may hold a commit): then the helper's
+        `update`, a fast-forward, can work; the manager never merges. Best effort and silent: whatever the helper
+        refuses or cannot do is ignored, the save goes on as before and nothing is recorded as a problem; after a failed
+        attempt the checkout is not asked again for UPDATE_PAUSE seconds, so a VM without a route to the online copy
+        does not wait for it on every save. True when HEAD moved: the caller reads `status` again."""
+        key = (binding['host_identity'], binding['repository'].get('path', ''))
+        if not head or self.clock() < self.update_pauses.get(key, float('-inf')): return False
+        with self.store.lock:
+            if self.waiting_saves(binding, but=job['id']) or any(j['id'] != job['id'] and kept_on_vm(j) and self.made_in(j, binding) for j in self.store.state['git_jobs']):
+                return False
+        try: result = self.invoke({'mode': 'update', 'expected_head': head}, binding)
+        except ValueError:
+            self.update_pauses[key] = self.clock() + UPDATE_PAUSE; return False
+        if not isinstance(result, dict) or not result.get('head') or result['head'] == head: return False
+        self.forget_views()
+        try: self.store.event('git.update', UPDATED_FIRST, lab_id=job.get('lab_id', ''), job_id=job['id'])
+        except OSError: pass
+        return True
+
+    def first_status(self, job, binding, refusal):
+        """The checkout's `status` right before a save's first publication, after the VM copy was brought up to date
+        when that was safe (`catch_up`): the HEAD the publication expects and the manifest its name is compared with
+        are then the updated ones."""
+        status = self.invoke({'mode': 'status'}, binding); self.seen_status(job['lab_id'], status)
+        if status.get('ready') and self.catch_up(job, binding, status.get('head', '')):
+            status = self.invoke({'mode': 'status'}, binding); self.seen_status(job['lab_id'], status)
+        if not status.get('ready'): raise ValueError(status.get('problem') or refusal)
+        return status
+
     def execute(self, job_id):
         result = None; binding = None
         try:
@@ -1137,8 +1198,7 @@ class GitProgress:
                 self.update(job_id, status='exporting', snapshot_digest=fingerprint, message='Saving the plan to the VM repository.')
                 request = copy.deepcopy(job['request'])
                 if 'expected_head' not in job:
-                    status = self.invoke({'mode': 'status'}, binding); self.seen_status(job['lab_id'], status)
-                    if not status.get('ready'): raise ValueError(status.get('problem') or 'Repository needs attention before exporting.')
+                    status = self.first_status(job, binding, 'Repository needs attention before exporting.')
                     expected_head = status.get('head', '')
                     self.update(job_id, expected_head=expected_head)
                 else: expected_head = job['expected_head']
@@ -1185,8 +1245,7 @@ class GitProgress:
             self.update(job_id, status='exporting', snapshot_digest=fingerprint, message='Saving captured configurations to the VM repository.')
             request = copy.deepcopy(job['request'])
             if 'expected_head' not in job:
-                status = self.invoke({'mode': 'status'}, binding); self.seen_status(job['lab_id'], status)
-                if not status.get('ready'): raise ValueError(status.get('problem') or 'Repository needs attention before exporting.')
+                status = self.first_status(job, binding, 'Repository needs attention before exporting.')
                 expected_head = status.get('head', '')
                 # The save's name, once, before the first publication (its body must never change afterwards: the
                 # helper compares its digest on every retry): what the person typed, else what changed against the
@@ -1487,7 +1546,7 @@ class GitProgress:
             model_config = ConfigDict(extra='forbid')
             push: bool = True
             reviewed: bool = False
-            head: str = Field(default='', pattern=r'^([0-9a-f]{40,64})?$')   # the HEAD the review showed, with an upload
+            head: str = Field(default='', max_length=200)   # the HEAD the review showed: required with an upload
 
         class Name(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -1687,7 +1746,19 @@ class GitProgress:
             for repo in catalog:
                 if repo['path'] == binding['repository'].get('path') and repo['prefix'] == prefix and labs.get(repo['id'], {}).get('id') not in (None, lab_id):
                     raise HTTPException(409, 'This folder is already connected to another lab (' + labs[repo['id']]['name'] + '). Choose a different folder.')
-            # Once more right before the VM is asked: the helper round trip above takes time.
+            # The saved files come along only when the rule of the chooser's own route holds (`brings_files`): otherwise the
+            # lab is pointed at the folder without a move, which the answer says with `job: null`. A move queued into a
+            # folder that holds saved files would fail on every retry.
+            move = bool(data.move_files)
+            if move:
+                with self.store.lock:
+                    unfinished = any(j.get('lab_id') == lab_id and job_pending(j) and not j.get('commit') and j.get('kind') != 'state'
+                                     and j.get('target') != 'update' for j in self.store.state['git_jobs'])
+                # Read with a registration of the checkout that exists (the lab's own may be gone, see above).
+                reader = binding if registered else next((dict(binding, binding_id=r['id'], revision=r['revision'], repository=r) for r in catalog
+                                                          if r.get('path') == binding['repository'].get('path')), None)
+                move = reader is not None and brings_files(self.checkout_view(reader, fresh=True)['files'], source, prefix, unfinished)
+            # Once more right before the VM is asked: the helper round trips above take time.
             if digest(refusals()[0]) != digest(binding): raise HTTPException(409, 'The repository connection changed meanwhile. Choose the folder again.')
             if not registered:
                 created = retired_already(binding, prefix, catalog)
@@ -1707,7 +1778,7 @@ class GitProgress:
             remember_folders(binding['repository'].get('path', ''), source, prefix)
             new_binding = rebind(lab_id, created, node_names, before, 'Lab repository folder changed to ' + (prefix or 'the repository root') + '.')
             job = None
-            if data.move_files:
+            if move:
                 # No refusal here either: the lab already saves to the new folder, and a move that is not queued
                 # could never be asked for again. The job queues behind running work. It never uploads by itself
                 # (`want_push` false): its commit waits for Upload like a save (DESIGN.md 3.4, review F2).
@@ -1845,6 +1916,10 @@ class GitProgress:
                 request = dict(target=data.target, checkpoint=checkpoint, push=False,
                                replace_baseline=data.replace_baseline, expected_baseline=data.expected_baseline,
                                allow_removed=True, message=note)
+                # A checkpoint made from a capture that exists already (Keep as a checkpoint) writes its own folder only
+                # (helper option H8): the helper's publish would otherwise write `latest` from that capture too, and
+                # an older save kept as a checkpoint would turn `latest` back to what the devices ran then.
+                if data.target == 'checkpoint' and data.backup_job_id: request['checkpoint_only'] = True
                 job = dict(id=data.request_id, request_digest=request_digest, lab_id=lab_id, lab_name=lab['name'],
                            created=now(), status='queued', message='Save queued.', backup_job_id=data.backup_job_id,
                            target=data.target, checkpoint=checkpoint, note=note, note_auto=note_auto, pushed=False,
@@ -2023,6 +2098,9 @@ class GitProgress:
                 # An upload needs its review: stated with this request, or recorded by an earlier one (an upload that
                 # failed after the review). There is no upload without it, for a folder move as for a save.
                 if uploading and not (data.reviewed or job.get('reviewed')): raise HTTPException(409, REVIEW_FIRST)
+                # And it carries the HEAD the person was shown, always (review F1, X3): a client that names none has
+                # shown no review of what waits in the checkout, and would upload it unseen.
+                if uploading and not re.fullmatch(r'[0-9a-f]{40,64}', data.head): raise HTTPException(409, REVIEW_FIRST)
                 if not uploading:
                     # A save without a commit has nothing to review yet: its retry saves on the VM and then waits for
                     # the review, whatever the request asked. A retry on the VM only never uploads.
@@ -2038,7 +2116,7 @@ class GitProgress:
             self.seen_status(job['lab_id'], status)
             head = str(status.get('head') or '')
             if not head: raise HTTPException(409, str(status.get('problem') or 'The repository on the VM could not be checked. Try again.'))
-            if data.head and data.head != head: raise HTTPException(409, ANOTHER_SAVE)
+            if data.head != head: raise HTTPException(409, ANOTHER_SAVE)
             with self.store.lock:
                 job = self.get_job(job_id); target = self.head_save(head, binding, prefer=job)
                 if target is None: raise HTTPException(409, NOT_OURS)
