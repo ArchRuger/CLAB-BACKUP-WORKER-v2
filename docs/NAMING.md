@@ -124,19 +124,25 @@ the states sit in a `reference/` folder and the student's saves in `work/`:
    saves it (and its restore-grade candidate) into `reference/start`, then points the lab
    back at `work`.
 3. Repeat for the other states (configure, then `snapshot <lab-slug> <state>`).
-4. Each `snapshot` lists the files it saved and asks before it uploads, because the manager
-   uploads a save only when it is told to; `--yes` states that you reviewed it for scripted use.
-   Answering no keeps the state on the lab VM only (it goes up with the next upload of the
-   repository). Either way the lab is pointed back at `work`. If the save cannot start, times
-   out, cannot be set aside or the upload fails, the tool tries to point the lab back at `work`
-   and says what happened: either "rebound to `<lab-slug>/work`", or that the lab still saves
-   to `reference/<state>` (a save that still waits for upload refuses the folder change). In
-   that case upload that save from the chip in the lab header, then run
-   `scaffold-lab.py init <lab-slug>` again before the student saves. If the manager stops
-   answering (a restart mid-request, a reset or a timeout), the tool exits with "Cannot reach
-   the manager" and the same account of where the lab saves; when the lost answer belonged to a
-   folder change it says the lab **may** still save to `reference/<state>`, because the change
-   may have happened. The tool talks to the manager directly and ignores `http_proxy`.
+4. Each `snapshot` lists the files it saved, asks the manager what an upload would send and
+   prints one line for every other save that waits in the repository on the VM
+   (`This upload also sends: <lab>: <name>`), because an upload always carries every waiting
+   save. Then it asks before it uploads; `--yes` states that you reviewed it for scripted use.
+   The upload names the state of the repository that was shown: when another save was made in
+   between, nothing is uploaded and the tool shows what an upload sends now and asks again
+   (with `--yes` it tries once more, then leaves the state on the lab VM). Answering no leaves
+   the state waiting on the lab VM: it shows as a save to upload in the lab header and goes up
+   with the next upload of the repository. In every case the lab is pointed back at `work`; a
+   save that waits for upload does not stop that. If the save cannot start, times out or the
+   upload fails, the tool says what happened and that the lab is "rebound to
+   `<lab-slug>/work`"; a state that was saved but not uploaded waits on the lab VM and can be
+   uploaded from the save status in the lab header. Only when the manager refuses the folder
+   change itself (other work is running) does the tool say that the lab still saves to
+   `reference/<state>`; run `scaffold-lab.py init <lab-slug>` again before the student saves.
+   If the manager stops answering (a restart mid-request, a reset or a timeout), the tool
+   exits with "Cannot reach the manager" and the same account of where the lab saves; when
+   the lost answer belonged to a folder change it says the lab **may** still save to
+   `reference/<state>`, because the change may have happened. The tool talks to the manager directly and ignores `http_proxy`.
 
 The states it writes are ordinary saved folders: **Load** lists them with the other lab
 states in the repository.
