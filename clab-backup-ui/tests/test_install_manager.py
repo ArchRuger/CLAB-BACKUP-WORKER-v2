@@ -564,7 +564,9 @@ class LazydockerTests(unittest.TestCase):
 class MainLoopTests(unittest.TestCase):
     def setUp(self):
         self.enterContext(patch.object(install, 'source_version', return_value='1.30.35'))
-        self.enterContext(patch('os.geteuid', return_value=1000))
+        # An ordinary (non-root) account. The real uid where there is one: the lock names a file's owner, and the
+        # files these tests create belong to the account that runs them (1001 on a CI runner, not 1000).
+        self.enterContext(patch('os.geteuid', return_value=os.geteuid() or 1000))
         self.enterContext(patch('pwd.getpwuid', return_value=SimpleNamespace(pw_name='owner', pw_dir='/home/owner')))
         self.enterContext(patch('sys.stdin.isatty', return_value=True))
         fake_stdout = io.StringIO()

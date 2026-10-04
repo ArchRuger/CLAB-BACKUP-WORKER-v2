@@ -57,7 +57,9 @@ tests with fakes, the fixture manager, or reading the code.
 
 ## Not run
 
-- CI: see the pull request; nothing is claimed here beyond what its run shows.
+- CI: the first run on PR #69 (`861362c`) failed in `test_install_manager.py`: the suite pinned the simulated account
+  to uid 1000, which matched this VM but not the runner's 1001, so the lock's new owner check (L-40) took the
+  foreign-owner branch. The test now simulates the real non-root uid; see the pull request for the run on that commit.
 - The capture smoke test (`deploy/capture/smoke.py`) runs only in CI; it is what proves the pinned viewer hashes and
   the per-session VNC password against the real image.
 - No dev1 upgrade, no helper refresh, no health check, no live restore, design apply, Test login or capture session
