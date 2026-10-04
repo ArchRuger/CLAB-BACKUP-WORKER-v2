@@ -196,15 +196,24 @@ a fake `$`, `esc` and `state`. Copy `tests/test_operations_ui.js` for a module o
 
 ## Delegating work
 
-Three project agents in `.claude/agents/` carry their model in the definition, so a task's route does not
-depend on the session's model: `docs-auditor` (Sonnet: one domain's guides against the code, edits only the
-files it is given), `mechanical-editor` (Haiku: replacements that were already decided) and `risk-reviewer`
-(Opus, read-only: deletions, instruction migrations and the sensitive boundaries above). Run scripts and
-searches before asking any model; give a worker the exact question, its files, the invariants that apply and
-the acceptance checks, not the whole history; one owner per file; the lead alone bumps the release, writes
-the shared records, commits and pushes. A user or managed setting can force every subagent onto one model
-(`CLAUDE_CODE_SUBAGENT_MODEL`, `availableModels`): check what a worker actually ran on before you report
-a route as used, and do not work around such a setting.
+A session is its own lead. `.claude/rules/fable-opus-routing.md` is the routing policy and
+`.claude/rules/clab-ui-routing.md` the roster of the project agents in `.claude/agents/`, each of which
+carries its model in the definition, so a task's route does not depend on the session's model. Fable 5.1
+leads and designs (`clab-fable-designer` for design slices, `clab-fable-specialist` for the hardest build
+work). Opus 5.5 reviews and specializes (`risk-reviewer` and `clab-ui-reviewer`, both read-only;
+`clab-opus-specialist`; `clab-network-specialist`). Sonnet 5.5 implements, tests, documents and runs QA
+(`clab-backend-engineer`, `clab-ui-builder`, `clab-test-engineer`, `clab-editor-specialist`,
+`clab-devops-engineer`, `clab-ui-qa`, `docs-auditor`). Haiku 4.5 scouts and applies decided edits
+(`clab-ui-scout`, `mechanical-editor`). The project skills in `.claude/skills/clab-*` are preloaded by the
+definitions that need them.
+
+Run scripts and searches before asking any model; give a worker the exact question, its files, the
+invariants that apply and the acceptance checks, not the whole history; run as many workers in parallel as
+there is independent work, with one owner per file at a time (own files or an own worktree); an implementer
+is never the only verifier of its work; the lead alone bumps the release, writes the shared records and the
+CI test lists, commits to the task branch and pushes. A user or managed setting can force every subagent
+onto one model (`CLAUDE_CODE_SUBAGENT_MODEL`, `availableModels`): check what a worker actually ran on
+before you report a route as used, and do not work around such a setting.
 
 ## Invariants that must not regress
 

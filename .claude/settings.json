@@ -4,19 +4,14 @@
     "typescript-lsp@claude-plugins-official": true
   },
   "model": "claude-fable-5-1",
-  "availableModels": [
-    "haiku",
-    "sonnet",
-    "opus",
-    "fable",
-    "claude-opus-5-5",
-    "claude-fable-5-1"
-  ],
   "env": {
-    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5-5",
     "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "0",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "0",
     "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-1",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5"
-  }
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001"
+  },
+  "effortLevel": "high"
 }

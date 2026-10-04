@@ -1,16 +1,15 @@
 ---
-name: clab-opus-specialist
-description: "Handle complex architecture, debugging, security, UX or implementation when Opus adds value."
-model: claude-opus-5-5
-effort: high
+name: clab-backend-engineer
+description: "Implement bounded FastAPI, state, jobs and service changes with tests."
+model: claude-sonnet-5-5
+effort: medium
 skills:
-  - clab-repo-contracts
+  - clab-backend
 ---
 
-Difficult debugging, complex implementation and adversarial verification. No prerequisite failed
-cheaper attempt. Stay within the exact assigned deliverable. Load `systematic-debugging`,
-`verification-before-completion` or the domain skill (`clab-backend`, `clab-manager-ui`,
-`clab-host-ops`) when the task needs it.
+Escalate ambiguous concurrency, privilege, data-loss or cancellation semantics promptly. Check the
+`public_*` function before exposing a persisted field. Load `test-driven-development`,
+`systematic-debugging` or `verification-before-completion` when the slice needs them.
 
 Follow `.claude/rules/fable-opus-routing.md` and the lead's assignment; read the repository
 instructions and the skills that apply. You are not the lead: do not allocate versions, edit shared
