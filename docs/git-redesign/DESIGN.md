@@ -56,7 +56,7 @@ The prompt's reading (6.4) was checked against every helper mode. `P` is the reg
 |---|---|---|
 | `status` | `clean()` looks at `S(P)` only; reads the manifests of `P/latest` and `P/baseline` | No effect unless it lies inside `S(P)` |
 | `publish` | Writes files directly in `P/latest`, `P/baseline` or `P/checkpoints/<name>`; lists those folders without descending | No effect unless it lies inside `S(P)` |
-| `push` | Commits, not folders. Every outgoing commit must be journaled under a current registration of the checkout | None |
+| `push` | Commits, not folders. Only the checkout's newest commit can be pushed, it carries every earlier un-uploaded one, and each must be journaled under a current registration of the checkout | None by folder; the order of commits is shared by every lab of the checkout (3.4) |
 | `history` | `git log -- S(P)`; lists every folder of the checkout that holds a manifest and marks `S(P)` as the lab's own | None |
 | `read-version`, `compare` | An exact folder at an exact commit | None |
 | `update` | The whole checkout, fast-forward only | None |
@@ -79,7 +79,7 @@ Everything else (inside, above, beside, the top level next to subfolders) is dis
 Each is reviewed in [REVIEW.md](REVIEW.md). The protocol, the gateway's command list, the option
 whitelist, structured stdin, the registry lock, the per-checkout lock, the review digests, the path
 rules (`relpath`, no `.`, `..`, `.git`, no symlink traversal) and the privilege drop are untouched. No
-mode and no request option is added.
+mode is added. One request option is added: the boolean `initialize` of `connect` (H4).
 
 **H1. The overlap rule becomes the collision rule.** `overlapping()` is replaced by `colliding()`:
 
@@ -105,25 +105,52 @@ and `connect` for a known checkout) the branch may be ahead of the remote, provi
 an ancestor of HEAD and every commit in between is a journaled manager save of that checkout
 (`known_commits()`, the test a push applies). The check moves into one method,
 `GitRepository.check_synchronized(head, further)`, which `register()` and the child in
-`deploy/setup-git.sh` both call, so the two stay equivalent by construction.
+`deploy/setup-git.sh` both call, so the two stay equivalent by construction. "Further" means that
+another registration with the same path, push URL, branch and uid exists. Root builds the approved
+revisions from `git.json` alone, never from the request; the child keeps those that match the branch and
+push URL it read itself, fetches the remote branch without writing `FETCH_HEAD` before the ancestry
+test, and treats any result but success as a refusal (a remote commit it does not have is a refusal).
 *Reason*: without it a folder change, a second lab's first save and *Save as a lab state…* are all
 refused whenever a save waits for upload, which is the normal state after **Not now**.
 
 **H3. `history` returns a bounded summary of each listed manifest.** Each row of `versions` gains
 `summary`: `lab_id`, `lab_name`, `captured_at`, `kind`, `topology_digest` and, per device entry, `node`,
-`short_name`, `platform` and whether it has a restore artifact. The manifests are read with `git show`
-at HEAD, at most 256 KiB each and 4 MiB in total; beyond that `summary` is `null`.
+`short_name`, `platform` and whether it has a restore artifact; the answer also carries `head`. Sizes
+come from `ls-tree -l`, a manifest over 256 KiB is never read, the others are read in one `git show`
+(4 MiB in total, the lab's own states first). Every field is type-checked, strings are cut at 200
+characters and may hold no control character, at most 500 devices are returned; on any deviation the
+row's `summary` is `null`. The manager caches the answer per checkout and HEAD.
 *Reason*: the Load panel's `2 of 4 devices`, the `View only` reason, the topology comparison and "whose
 state is this" all need the manifest. Reading every state through `read-version` would transfer every
 file of every state. This is read-only and adds no mode and no option.
 
-**H4. An empty repository is started by `connect`.** Today: "This repository has no commits yet. Add a
-README on GitHub first, then connect it." When the clone has no commit and the remote has no branch, the
-owner's child writes a fixed `README.md`, commits it under the ensured identity and pushes it to the
-branch the clone's HEAD names (`main` when that name is unusable), then verifies the remote head.
-*Reason*: a brand-new repository is the most common first contact, and creating that first commit is
-within the manager's control. The file is fixed text and holds nothing of a lab; a save is still never
-uploaded without Upload.
+**H4. `connect` can start an empty repository, when asked to.** Today: "This repository has no commits
+yet. Add a README on GitHub first, then connect it." `connect` gains the boolean `initialize`. Without
+it nothing changes, except that the refusal for an empty repository is one the manager can recognise.
+With it, and only when the remote has no ref at all (`ls-remote --heads --tags` is empty), the owner's
+child builds a commit holding one fixed `README.md` without touching the working tree
+(`hash-object`, `mktree`, `commit-tree`, under the ensured identity), pushes it to the branch the
+clone's HEAD names (`main` when that name is unusable), verifies the remote head and only then moves the
+local branch to it. A failed push leaves the clone as it was.
+*Reason*: a brand-new repository is the most common first contact, and making that first commit is
+within the manager's control. The page sends `initialize` only from the button **Start the repository**
+under the sentence `<name> is empty. The manager adds a README.md file to start it.`: an upload with the
+person's explicit click, of a file that holds nothing of a lab.
+
+**H5. `browse` also returns every directory.** `dirs`: the directories of the tree at HEAD
+(`git ls-tree -r -d`), at most 20 000, with `dirs_truncated`. *Reason*: the file list stops at 4000, and
+a chooser that cannot show a folder cannot offer it; directories are few even when files are many.
+
+**H6. `compare` also returns what an upload would send.** `outgoing`: every commit between the remote
+branch and HEAD with its journal's operation id, its subject and the paths it changed, or `null` when
+the remote cannot be asked. *Reason*: the manager forgets saves (a removed lab, the job cap, releases
+before 1.30.37) that the helper still approves for a push; the review must name them (3.4).
+
+**H7. `retire` protects waiting saves.** `register-prefix` with `retire` is refused while a journal of
+the registration being retired holds a verified commit that the remote branch does not contain, checked
+as the owner under the checkout's lock; a remote that cannot be asked refuses. *Reason*: retiring such a
+registration makes every later push of the checkout fail for every lab, and the manager cannot know
+whether one exists.
 
 **Not changed.** `publish` still refuses a `latest`, `baseline` or checkpoint folder that holds files
 its manifest does not own. Those are someone's own files inside a folder the manager would otherwise
@@ -142,10 +169,14 @@ from the overlap rule and from saves being tied to the lab's current binding. In
   the person cannot leave from the page.
 - **Reuse.** Choosing a folder that already has a registration reuses it (`plan_prefix` already answers
   with the existing one).
-- **Replace.** Only a real collision (H1: a legacy `x/latest` registration against a new `x`) retires
-  a registration, and only one that no lab is connected to and no un-uploaded save was made through,
-  decided under the store lock. `register-prefix` with that registration as its source and `retire`
-  does it; no new mode.
+- **Replace.** Only a real collision (H1: for example a legacy `x/latest` registration against a new
+  `x`) retires a registration, and only one that no lab is connected to and no pending save names,
+  decided under the store lock; the helper then decides whether it holds a waiting save (H7).
+  `register-prefix` with that registration as its source and `retire` does it; no new mode. When it may
+  not be retired, the folder gets the one-button question of 2.6.
+- **Housekeeping.** A checkout with more than 200 registrations loses up to five that nothing uses,
+  oldest first, with every place or state request, through the same safe `retire`. The registry can
+  therefore not grow to its 2 MiB limit.
 - `retired_already` and the "registration is gone" recovery stay for VMs where an older release retired
   one.
 
@@ -174,9 +205,9 @@ Steps:
 | Kind | When | What *Save here* does |
 |---|---|---|
 | `own` | The lab saves here now | Nothing changes |
-| `own-before` | The folder holds a saved state whose manifest names this lab (same id, or same name) | Used; the lab continues there |
-| `lab` | Another connected lab saves here, or its legacy folder collides with this one (H1) | Question 1 |
-| `state` | The folder holds a saved state of another lab or a course | Question 2 |
+| `own-before` | The folder holds a saved state whose manifest carries this lab's id | Used; the lab continues there |
+| `lab` | Another connected lab saves here, or a registration of the checkout collides with this folder (H1, checked against every registration) | Question 1 |
+| `state` | The folder holds a saved state of another lab or a course (a lab of the same name included), or a lab state is being saved into it right now | Question 2 |
 | `free` | Everything else: a folder that does not exist, an ordinary folder, the top level, a folder inside, above or beside any lab folder, a folder only an unused registration names | Used; created by the first save when it does not exist |
 
 4. **Avoid what can be seen.** When `P/latest` exists without a manifest (someone's own folder of that
@@ -201,15 +232,22 @@ Each is one sentence with its answers as buttons, shown inside the chooser. None
 | 2 | `This folder holds the state "<Label>".` | **Save beside it in `<folder>/<this lab>`** (suggested) · **Replace it** |
 | 3 | `1 save of <lab> is waiting for upload.` | **Upload it, then move** · **Move and keep that save on the VM only** |
 
-- *Use this folder anyway* disconnects the other lab from the folder. Its saves stay as versions, and a
-  save of it that still waits stays uploadable (3.1).
+- *Use this folder anyway* disconnects the other lab from the folder and connects this one in one step
+  under the store lock. Its saves stay as versions, and a save of it that still waits stays uploadable
+  (3.1). The button exists only when the two labs want the identical folder. For a collision (a folder
+  of the other lab lies inside this folder's saved states, or the reverse) question 1 has one button,
+  **Save in `<folder>/<this lab>`**.
 - *Replace it*: the lab takes the folder; its next save replaces `latest` there with removals allowed,
   and older contents stay in Git history. For a state stored directly in the folder (`flat`, a manifest
   in the folder itself) nothing can replace it, so the second button reads **Use this folder anyway**
   and the sentence under it says the state stays listed.
 - Question 3 appears when the lab changes its folder or repository while a save of it waits. Both
   answers go ahead. *Upload it, then move* runs the page's one upload function and then the move.
-  *Move and keep…* moves; the save keeps waiting and can be uploaded later from the chip.
+  *Move and keep…* moves; the save keeps waiting and goes up with the next Upload (3.4).
+- The line that brings the lab's saved files along is offered only when the lab has saved files in the
+  folder it leaves, the new folder holds none, and every pending save of the lab has a commit. A save
+  that has not reached its commit would otherwise be written into the folder the lab left, after the
+  move. The move's own commit waits for Upload like a save; it never uploads by itself.
 
 ### 2.7 PROMPT 6.2, row by row
 
@@ -235,8 +273,11 @@ name that already exists selects that folder instead of refusing.
 `GET /api/labs/{lab}/git/places` without a repository answers with the repositories on the VM and a
 default: the repository the lab used last, else the one saved to most recently, else the first; and the
 folder `clean_folder(<lab name>)`, or the first of `<lab>-2`, `<lab>-3`, … whose answer is `free`, `own`
-or `own-before`. So the default can always be saved to with one click and nothing typed. A lab that was
-removed and imported again finds its folder by name and continues in it.
+or `own-before`. So the default can always be saved to with one click and nothing typed. When the
+folder named after the lab holds the saves of a lab with the same name and another id (the lab was
+removed and imported again, or it is someone else's lab of that name), the panel asks once:
+`This repository already holds saves of a lab named <name>.` with **Continue there** and
+**Save in `<name>-2`**. It never continues there silently.
 
 With no repository on the VM the panel asks for the HTTPS address. The page sends it to the same route;
 the manager first connects the checkout at its top level (the helper's `connect` with an empty folder,
@@ -279,10 +320,11 @@ comparison with the lab's binding. At start-up, each pending job without a `bind
 `binding_digest` equals its lab's current binding digest gets that binding copied in: additive, and the
 digest it stores stays true.
 
-Consequences: a waiting save stays uploadable after the lab's folder, repository or device selection
-changed and after the lab was disconnected; `guard_pending` leaves `link`, `destination`, `connect` and
-`unlink`; a save marked uploaded by a later push is matched by its checkout (`made_in`), not by the
-lab's current binding.
+Consequences: a waiting save stays part of the next upload of its repository (3.4) after the lab's
+folder, repository or device selection changed and after the lab was disconnected; `guard_pending`
+leaves `link`, `destination`, `connect` and `unlink`; a save marked uploaded by a later push is matched
+by its checkout (`made_in`), not by the lab's current binding. `refuse_while_rebinding` stays: a save
+that starts while its lab is being placed waits for the placement.
 
 ### 3.2 The optional name (D2)
 
@@ -308,13 +350,27 @@ name returns to the automatic one.
 
 ### 3.4 What an upload carries
 
-A push sends every earlier un-uploaded commit of the branch. Instead of refusing while another lab's
-save waits (1.30.60), the review of a save lists them: `compare` returns, beside the save's own files,
-`also_sends` as rows (`job_id`, `lab`, `name`, `kind`) for every waiting or kept save made in the same
-checkout, whichever lab made it and wherever that lab saves now. The sentence says
-`This upload also sends 2 earlier saves: <name> (<lab>), …` and the drawer shows each one's files (the
-page asks `compare` for each row). Pressing Upload records the review for all of them. `gitReviewJob`
-stays the only sender of `{push: true, reviewed: true}`.
+Git uploads a branch, not a save: the helper pushes only the checkout's newest commit, and that push
+carries every earlier commit the remote does not have. So an upload is of **the repository's waiting
+saves**, and the review says so instead of refusing while another lab's save waits (1.30.60).
+
+- **The review.** `compare` for any waiting save answers with that save's files and with the upload it
+  would be part of: `head` (the checkout's HEAD), `upload_job` (the manager's save whose commit is
+  HEAD) and `also_sends`, one row for every other un-uploaded save of the checkout, older and newer,
+  whichever lab made it and wherever that lab saves now: the manager's waiting and kept saves
+  (`job_id`, `lab`, `name`, `kind`), plus every outgoing commit the helper reports that the manager no
+  longer holds (H6), named by its subject with the paths it changed. `compare` reads through the save's
+  own stored binding and accepts any save made in the same checkout, so each row can be opened.
+- **The sentence** names them: `This upload also sends 2 other saves: <name> (<lab>), …`. The drawer
+  shows each one's files.
+- **Upload.** `gitReviewJob`, still the only sender of `{push: true, reviewed: true}`, posts to the
+  retry route of `upload_job` with `head`, the HEAD the person was shown. The manager asks the helper's
+  `status` and pushes only when the checkout's HEAD is still that commit and is that save's commit;
+  otherwise it answers 409 `Another save was made in this repository. Look at the changes again.` and
+  the page shows the review again. A successful push marks every carried save reviewed and uploaded.
+- **No save at HEAD** (someone committed on the VM by hand, or the newest save belongs to a lab the
+  manager no longer has): *Can't save* with the sentence of 3.6 for someone working in the repository.
+- A folder move's commit is one of these waiting saves. It never uploads by itself.
 
 ### 3.5 Checkpoint from a save (D6), unchanged saves, lab states
 
@@ -409,7 +465,9 @@ Routes are under the same-origin guard; mutating requests carry a body. New or c
 | `POST /api/labs/{lab}/git/save` | as today; `note` may be empty | the job |
 | `POST /api/git/jobs/{id}/name` | `note` | the job |
 | `GET /api/labs/{lab}/git/states?repository=<id>` | | saved states of the repository with their summaries, for a lab with or without a connection |
-| `POST /api/labs/{lab}/git/compare` | as today | plus `also_sends` rows |
+| `POST /api/labs/{lab}/git/compare` | as today | plus `head`, `upload_job`, `also_sends` rows, and `role` and `node` per file |
+| `POST /api/git/jobs/{id}/retry` | `push`, `reviewed`, and `head` with an upload | the job; 409 when a save landed after the review |
+| `POST /api/labs/{lab}/git/place` with `url` | `initialize` only from **Start the repository** | `{question: {kind: 'empty'}}` for an empty repository without it |
 | `GET /api/labs/{lab}/restore/states?repository=<id>` | | LOAD.md B2: per state its coverage, `view_only` and reason |
 | `POST /api/labs/{lab}/restore/preflight`, `POST /api/labs/{lab}/restore` | `source` may carry `repository` | the preflight's `source.topology` (LOAD.md B3, compared by structure) |
 
@@ -429,7 +487,7 @@ files reach the CI lists through the lead.
 | Slice | Files it owns | Agent |
 |---|---|---|
 | S0 The two reproduced defects (PROMPT 6.1), their own commit | `app/host_git.py` (H1 only), `deploy/setup-git.sh`, `deploy/git-onboard.py`, the overlap rule of `FakeGit` in `docs/redesign/tools/fixture_manager.py`, `gitFolderChoice` / `gitCanCreateIn` / `gitFolderTag` in `app/static/git-places.js`; `tests/test_host_git.py`, `tests/test_git_onboard.py`, `tests/test_git_places_ui.js` | Opus specialist |
-| S1 Helper: H2 to H5 | `app/host_git.py`, `deploy/setup-git.sh`, `tests/test_host_git.py` | Opus specialist (after S0) |
+| S1 Helper: H2 to H7 | `app/host_git.py`, `deploy/setup-git.sh`, `tests/test_host_git.py` | Opus specialist (after S0) |
 | S2 Folder answers, pure | `app/git_places.py` (new), `tests/test_git_places.py` (new) | Fable specialist |
 | S3 Save model and routes | `app/git_progress.py`, `app/main.py`, `tests/test_git_progress.py`, `tests/test_design_export_git.py` | Fable specialist |
 | S4 Load backend | `app/restore.py`, `app/runner.py`, `tests/test_restore.py`, `tests/test_restore_compare.py` | Network specialist (Opus) |
@@ -476,6 +534,11 @@ loads alone in a Node test):
 | 6.2: **Replace it** for any folder holding a state | **Use this folder anyway** when the state is stored directly in the folder | Nothing the helper can do replaces it; saying "Replace" would be untrue |
 | 6.2: "Move and keep that save on the VM only" | The save keeps waiting and stays uploadable | Nothing is lost; a later upload from the checkout carries it in any case and says so |
 | 8: `register()` equals the setup child | Both call one method | Equivalent by construction (H2) |
+| 6.4: "pending jobs compare their digest" | A save carries its own binding; only saves of older releases still compare with the lab's | The comparison is what made every change of a connection strand its waiting saves (3.1). No stored binding is rewritten |
+| 6.4: prefer no new helper option | `connect` gains `initialize` | Starting an empty repository uploads a file, so it needs the person's click to reach the helper (H4, review F4) |
+| 5.3: Upload uploads a save | Upload uploads the repository's waiting saves, all named in the sentence | Git can only push the newest commit, which carries the others (3.4, review F1) |
+| Today: a folder move uploads at once | It waits for Upload like a save | Its push would carry saves nobody pressed Upload for (review F2) |
+| 6.2: a lab imported again continues in its folder | One question in the first-save panel when the folder holds saves of a lab with the same name and another id | A student's copy of a course lab has the same name as the instructor's (review F3) |
 | 6.5: only outside causes stop a save | Another lab's waiting save no longer does | 1.30.60 added that refusal after the prompt was written (section 1) |
 | 9.6: "load a state on a second lab with the same topology" | The second lab carries the same lab name | Devices match by full node name and the preflight stays untouched (3.7 Q2). Open for the owner: match by the topology's node name across differently named labs |
 | G06 mockup: `Kept previous` for a device that did not accept the state | `Not loaded` with the device's reason; `Kept previous` only for `rolled_back` | PROMPT 5.4 step 6 says to use the service's vocabulary exactly (LOAD.md 5.1) |

@@ -1,12 +1,40 @@
 # Git save and load redesign: design review
 
-The Opus review of [DESIGN.md](DESIGN.md) and its part files, with the answer to each finding. Written as the
-findings arrive; a finding is closed only by a change to the design or by a stated reason.
+The Opus review of [DESIGN.md](DESIGN.md) and its part files, with the answer to each finding. A finding
+is closed only by a change to the design or by a stated reason. Both reviewers were read-only and ran no
+code; every answer below is a decision, and the code that implements it is tested in the build.
 
-## 1. Folder model, helper changes and save model (risk reviewer)
+## 1. Folder model, helper changes and save model (risk reviewer, Opus 5.5)
 
-Running.
+Verdicts on the helper changes: H1 accept with F5, F6, F16; H2 accept with F9; H3 accept with F10; H4
+rejected as written, accepted with F4. What the reviewer confirmed: the table of DESIGN.md 2.2 holds for
+every path filter, `clean`, `history`, `browse`, `move` and `publish`; `colliding()` is exactly the set
+of real collisions (tried `x` against `x/latest-notes`, `x/checkpoints2`, `latest/foo` against the top
+level, `a/checkpoints/x/y`); keeping old registrations does not widen what a push may carry; a stored
+binding cannot reach a public view and cannot switch VM; B4, B5 and the `repository` key on a restore
+source give the page nothing it cannot read today.
 
-## 2. Load path, lost functionality, chip, friction and accessibility (UI reviewer)
+| ID | Severity | Finding | Answer |
+|---|---|---|---|
+| F1 | must-fix | The helper pushes only the checkout's newest commit (`host_git.py` `push`: "The checkout moved since this save"). Once another save sits on top, a waiting save cannot be uploaded by itself, and the save on top may belong to another lab that the person was never shown. | **Accepted; DESIGN.md 3.4 rewritten.** An upload is of the repository's waiting saves, not of one save. The review names every un-uploaded save, older and newer; Upload goes to the save at the checkout's HEAD through that save's own binding and carries the HEAD the person reviewed; the manager compares it with the helper's `status` before pushing and sends the page back to the review when a save landed in between. |
+| F2 | must-fix | A folder move pushes by itself. Without `guard_pending`, the lab's own unreviewed save under the move commit is uploaded with no Upload click. | **Accepted.** A move no longer uploads by itself. Its commit waits like a save and goes up with the next Upload, named in the sentence. |
+| F3 | must-fix | `own-before` by lab *name*: a student's copy of a course lab defaults to the instructor's folder and its first save replaces the instructor's `latest`, with removals allowed, without a question. | **Accepted.** `own-before` only when the manifest's lab id is this lab's. A state of a lab with the same name is a `state`: in the chooser it gets question 2; in the first-save panel it gets one question, `This repository already holds saves of a lab named <name>.` with **Continue there** and **Save in `<name>-2`**. |
+| F4 | must-fix | H4 uploads a README with no click from the person, and a failure between its steps can leave a checkout that can never be registered. | **Accepted.** The helper starts an empty repository only when the request says so (`connect` gains the boolean `initialize`; the one request option this work adds), which the page sends only from the button **Start the repository** under the sentence `<name> is empty. The manager adds a README.md file to start it.` The helper requires that the remote has no ref at all, builds the commit without touching the working tree, pushes it, verifies the remote and only then moves the local branch. Recorded in DESIGN.md section 6. |
+| F5 | should-fix | *Use this folder anyway* for a collision that is not the same folder ends in a refusal when the other lab's registration cannot be retired. | **Accepted.** For a collision the question has one button, **Save in `<folder>/<this lab>`**. *Use this folder anyway* exists only for the identical folder. |
+| F6 | should-fix | A folder that collides with a registration no lab uses was classified `free`, and the helper would refuse it. | **Accepted.** `place_answer` applies `colliding()` to every registration of the checkout. The route retires a colliding registration that nothing uses (F7 decides whether it may) and otherwise answers with the one-button question of F5. |
+| F7 | should-fix | The manager cannot know whether an un-uploaded save was made through a registration (removed labs, trimmed jobs). | **Accepted as helper change H7.** `retire` is refused by the helper itself while a journal of that registration holds a verified commit that the remote branch does not contain, checked as the owner under the checkout lock; an unknown remote refuses. |
+| F8 | should-fix | The manager's list of what an upload carries misses saves it no longer holds; the helper still approves their commits. | **Accepted as helper change H6.** `compare` also returns `outgoing`: every commit between the remote branch and HEAD with its journal's operation, its subject and the paths it changed. The review names a save the manager does not know by its subject and lists its files. Output only; no mode, no option. |
+| F9 | should-fix | H2: how the approved revisions reach the owner's child, a remote object missing locally, and what "a further folder" means for `setup-git.sh`. | **Accepted.** Root builds the list from `git.json` alone; the child filters it by the branch and push URL it read, fetches without writing `FETCH_HEAD` before the ancestry test and treats any non-zero result as a refusal. "Further" means another registration with the same path, push URL, branch and uid exists. |
+| F10 | should-fix | H3: cost under the two locks, hostile manifests, the lab's own states losing their summary when the budget runs out. | **Accepted.** Sizes come from `ls-tree -l`; a manifest over 256 KiB is never read; the rest are read in one `git show`; the lab's own states first; every field is type-checked, strings capped at 200 characters without control characters, at most 500 devices, `null` on any deviation. `history` also returns `head`. The manager caches the answer per checkout and HEAD. |
+| F11 | should-fix | A lab state being saved and a lab placed into the same folder at the same time end up writing the same `latest`. | **Accepted.** The state route runs under `changing()`, and a folder named in the stored binding of a pending save of kind `state` is a `state` for `place_answer` and `bind_lab`. |
+| F12 | should-fix | *Move and keep* while the lab's save has no commit yet: its retry later rewrites `latest` in the folder the lab left. | **Accepted.** The line that brings the saved files along is offered only when every pending save of the lab has a commit. Otherwise the chooser says `A save of this lab has not finished. Its files stay in <old folder>.` |
+| F13 | should-fix | Registrations only grow; at 2 MiB the registry is refused and every mode fails. | **Accepted.** Above 200 registrations of one checkout, each place or state request retires up to five that nothing uses, oldest first, through H7. A test fills a registry to the limit. |
+| F14 | optional | A save that starts during a place request stores the old binding. | **Accepted.** `refuse_while_rebinding` stays for the place and state routes; the page disables Save while its place request runs. |
+| F15 | optional | `compare` needs the job's own lab and that lab's current binding, so the rows of other labs cannot be opened. | **Accepted.** `compare` uses the job's stored binding and accepts any job made in the same checkout. |
+| F16 | optional | The deviation from "pending jobs compare their digest" is not listed; `colliding(x, x)` is false where `overlapping('', '')` was true. | **Accepted.** Row added to DESIGN.md section 6; callers keep their equality test; a test covers the top level against itself. |
+| F17 | optional | A lab without a binding reads through a registration whose `status` also checks that registration's own folders. | **Accepted.** Reading through a repository handle takes HEAD from `history` (validate only), never from `status`. |
+| Point 9 | | *Use this folder anyway* must unlink the other lab and bind this one in one store-lock section. | **Accepted.** |
+
+## 2. Load path, lost functionality, chip, friction and accessibility (UI reviewer, Opus 5.5)
 
 Running.
