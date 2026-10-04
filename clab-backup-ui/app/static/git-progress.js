@@ -185,6 +185,9 @@ async function gitSaveProgress(id=activeId){
  if(!id||typeof id!=='string')id=activeId;if(!id)return;
  const lab=(state.labs||[]).find(item=>item.id===id),bound=lab?!!lab.git_binding:!!(await gitLoadContext(id)).binding;
  const panel=typeof saveOpenPanel==='function'&&id===activeId;
+ // A lab without a save location: Save always leads to the first-save view, whatever the chip says (a lab that loaded a state
+ // reads Running <name>, and its panel has no place to save to: live finding L2-2).
+ if(panel&&!bound&&typeof saveShowFirst==='function')saveShowFirst(id);
  if(panel)saveOpenPanel('status',{focus:true});
  if(!bound){if(!panel)throw new Error('Open this lab and choose Save: its first save asks where to save.');return;}
  try{await gitSubmitSave(id,{target:'latest',push:true,note:'',allow_removed:true},undefined,{quiet:true});}

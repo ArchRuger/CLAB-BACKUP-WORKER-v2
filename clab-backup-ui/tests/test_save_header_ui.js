@@ -662,6 +662,17 @@ test('B02 Try again after an upload the VM refused repeats the upload (through t
  e.el('save-url').value='https://github.com/me/New-Empty.git';await e.press('save-first');await e.flush();e.render();assert.ok(e.el('save-first-start'));
  e.chip._menuClose(false);await e.open();assert.equal(e.el('save-url').readOnly,false,'a closed panel forgets the question');
 });
+test('L2-2 a lab without a save location that runs a loaded state: Save opens the first-save view (the place and its Save), not the Running view; the Running state stays one line away',async()=>{
+ const loaded={id:'r',lab_id:'lab',status:'verified',created:ago(3),finished:ago(2),source:{type:'folder',path:'/Course/start'},targets:[{name:'n1',status:'verified'}]};
+ const h=harness({lab:freeLab({deployment:{status:'Running'}}),state:{restore_jobs:[loaded]},routes:{'/git/places':()=>({repositories:[{id:'r',name:'Course',remote:'https://github.com/me/course.git',branch:'main'}],default:{repository:'r',folder:'restore-square',answer:{kind:'free',exists:false}}})}});
+ h.render();assert.match(h.text('save-chip-text'),/^(Running|Loaded) /,'the chip names the load');
+ h.context.gitLoadContext=async()=>({binding:null});h.context.saveOpenPanel=(kind,opts)=>{h.chip._menuOpen(opts);return true;};
+ await h.context.gitSaveProgress('lab');await h.flush();h.render();await h.flush();h.render();
+ assert.ok(h.el('save-first'),'the first-save view with its Save');assert.match(h.body.innerHTML,/Your first save goes to Course, in a folder named restore-square\./);assert.ok(h.el('save-first-place-other'));
+ assert.equal(h.posts().length,0,'pressing Save in the header sends nothing by itself');
+ assert.match(h.body.innerHTML,/Also: [^<]+ <button[^>]*data-save-action="show-also"/);
+ for(let i=0;i<3;i++)h.render();assert.ok(h.el('save-first'),'a poll keeps it');
+});
 test('Q760-05 the panel does not close by itself: the end of an older upload that arrives after the next save started leaves the newer save’s panel open; a poll that rebuilds the body and focus moving inside it close nothing',async()=>{
  const older=waiting({id:'old',status:'synced',pushed:true,commit:'c-old',created:ago(5),finished:ago(4)});
  const newer=waiting({id:'new',status:'review_pending',commit:'c-new',created:ago(1),finished:ago(0)});

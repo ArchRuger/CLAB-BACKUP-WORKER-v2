@@ -238,6 +238,7 @@ function saveViewLoad(shown,lab,cs){
 function saveWantedView(cs,lab){
  const want=saveHeader.view;if(!want||want.lab!==lab.id)return null;
  if(cs.key==='loading'||cs.key==='saving')return null;
+ if(want.panel==='first')return lab.git_binding?null:{panel:'first',job:null};   // Save on a lab without a save location
  if(want.panel==='upload'||want.panel==='failed'){
   const job=saveJobById(want.job);if(!job||!job.commit||job.pushed||!['committed','review_pending','push_pending','interrupted'].includes(job.status))return null;
   // One state, one name (DESIGN.md 7.1: Can't save comes before Upload failed): an upload refused because both sides changed is
@@ -248,6 +249,8 @@ function saveWantedView(cs,lab){
  const holds=[cs,cs.also,cs.also2].some(s=>s&&s.panel===want.panel);
  return holds&&['cant','running','partial'].includes(want.panel)?{panel:want.panel,job:null}:null;
 }
+// Save was pressed on a lab without a save location: the first-save view, instead of the view of whatever the chip names.
+function saveShowFirst(labId){saveHeader.view={lab:labId,panel:'first',job:'',asked:true};renderSaveHeader();}
 // Pure: the chip panel for a chip state → {title, dot, key, html, name, job, needs}. The views: first, saving, upload, failed, cant,
 // rest (and its naming form); loading, running and partial are load.js's (loadChipView). `key` holds no time and no typed text.
 function savePanelView(cs,lab,now){

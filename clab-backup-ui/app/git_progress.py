@@ -2241,7 +2241,17 @@ class GitProgress:
             if not head: raise HTTPException(409, str(status.get('problem') or 'The repository on the VM could not be checked. Try again.'))
             if data.head != head: raise HTTPException(409, ANOTHER_SAVE)
             with self.store.lock:
+                job = self.get_job(job_id); target = self.head_save(head, binding, prefer=job); waits = bool(job.get('commit') and not job.get('pushed') and job_pending(job))
+            # No save of the manager at HEAD (the repository's owner committed there, for example the merge that combines both
+            # sides): when the online copy already holds everything (nothing is outgoing), the asked save, which still waits,
+            # reconciles itself: the helper answers `synced` for a commit the remote holds. With anything outgoing it stays refused.
+            settled = False
+            if target is None and waits and job.get('target') != 'move':
+                try: settled = self.invoke({'mode': 'compare', 'operation_id': job_id}, binding).get('outgoing') == []
+                except ValueError: settled = False
+            with self.store.lock:
                 job = self.get_job(job_id); target = self.head_save(head, binding, prefer=job)
+                if target is None and settled: target = job
                 if target is None: raise HTTPException(409, NOT_OURS)
                 # A save at HEAD that is uploaded already carries nothing: the asked save reconciles itself (the helper
                 # answers that its commit is on the remote).
@@ -2391,8 +2401,15 @@ class GitProgress:
                     stored = job.get('summary') if isinstance(job.get('summary'), dict) else None
                     for entry in also:
                         if 'name' in entry: entry['name'] = scrub(entry['name'], self.store.state)
+                upload = at_head['id'] if at_head and not at_head.get('pushed') else None
+                # After the repository's owner combined both sides on the VM (the two commands the page shows) HEAD is the
+                # owner's commit, not a save of the manager, and the online copy already has everything: nothing is outgoing.
+                # The waiting save is then confirmed through its own upload (the helper answers `synced` for a commit the
+                # remote holds), so the page can finish the recovery. Never when anything would still be sent.
+                if upload is None and at_head is None and head and result.get('outgoing') == [] and job.get('commit') and not job.get('pushed') and job_pending(job):
+                    upload = job['id']
                 return {'files': files, 'summary': stored or (save_summary(files, first=bool(job.get('first_save')) and job.get('target') == 'latest') if files and job.get('target') != 'move' else None),
-                        'head': head, 'upload_job': at_head['id'] if at_head and not at_head.get('pushed') else None,
+                        'head': head, 'upload_job': upload,
                         'also_sends': also, 'also_sends_count': count, 'also_sends_other_labs': elsewhere, 'also_sends_kept': kept_names}
             if not re.fullmatch(r'[0-9a-f]{40,64}', data.commit): raise HTTPException(400, 'Choose a saved commit.')
             before_manifest, before = version_data(lab_id, data)

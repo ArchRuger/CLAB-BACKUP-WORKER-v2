@@ -1058,6 +1058,22 @@ class CatchUpTests(SaveModelCase):
         job = self.saved()
         self.assertEqual((job['note'], job['status']), ('r2 changed', 'review_pending'), 'r1 is what the online copy already holds')
 
+    def test_after_the_owner_combined_both_sides_the_waiting_save_is_confirmed_through_its_own_upload(self):
+        # Live finding L2-1: both sides had changed; the repository's owner ran `git pull --no-rebase` and `git push` on the VM.
+        # HEAD is now the owner's merge commit (no save of the manager) and the online copy has everything. The review used to
+        # answer `upload_job: null`, so the page could not finish; it now names the reviewed save, whose upload ends `synced`.
+        waiting = self.saved(note='Waits')
+        self.vm.by_hand('Merge branch main of github.com:me/repo'); self.vm.remote = self.vm.head     # the owner's pull and push
+        review = self.review(waiting)
+        self.assertEqual((review['upload_job'], review['head'], review['also_sends']), (waiting['id'], self.vm.head, []))
+        outcome = self.upload(waiting, head=review['head'])
+        self.assertEqual((outcome['status'], outcome['pushed']), ('synced', True))
+        # While something would still be sent (the owner's commit is not online yet) no save is named: nothing is uploaded blind.
+        self.texts[self.names[0]] = 'hostname second\n'
+        second = self.saved(note='Second')
+        self.vm.by_hand('Edited on the VM')
+        self.assertIsNone(self.review(second)['upload_job'])
+
     def test_nothing_is_fetched_while_a_save_waits_or_is_kept_in_the_checkout_or_on_a_retry(self):
         other = self.second_lab()
         waiting = self.saved(other['id'], note='Another lab waits')     # itself fetched first: nothing waited then
