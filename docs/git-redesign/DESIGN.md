@@ -1,0 +1,436 @@
+# Git save and load redesign: design
+
+The decisions of the design round, written before code. The task is [PROMPT.md](PROMPT.md), the owner's
+corrections are in [PICKUP.md](PICKUP.md) section 1, and the acceptance lists are in
+[INVENTORY.md](INVENTORY.md). Base: `main` at 1.30.60.
+
+| Part | Where |
+|---|---|
+| The folder model, the save model, the API between backend and page, the build slices | this file |
+| The header control, the chip state function, the save and upload panels, the first save | [design/HEADER.md](design/HEADER.md) |
+| Load (today's *Apply to running lab* in full), lab states, undo | [design/LOAD.md](design/LOAD.md) |
+| The drawers, the folder chooser as a component, *Save as a lab state…*, the Progress tab's removal | [design/DRAWERS.md](design/DRAWERS.md) |
+| The Opus design review and the answer to each finding | [REVIEW.md](REVIEW.md) |
+
+Where a part file and this file disagree, this file wins: it was written last, with all three in hand.
+
+## 1. What 1.30.60 changed against the prompt
+
+The prompt was written on 1.30.59. Release 1.30.60 (the audit of 2026-10-03) added rules that the prompt's
+goals now meet:
+
+- **A save or an upload waits while another lab of the same repository has an unreviewed save**
+  (`guard_siblings`, `sibling_refusal`, `git_progress.py`). This is a refusal inside the manager's
+  control, so by PROMPT 6.5 it may not stop a save. Section 3.4 replaces it: the upload sentence names
+  every save the upload carries and the *What changed* drawer shows their files. The audit's rule
+  survives in its real form: no upload carries a save that the person pressing Upload was not shown.
+- **A folder move whose upload would carry saves kept with *Keep snapshot only* waits for a review**
+  (`kept_saves`, `kept_refusal`). Kept as it is; only its wording stops naming the Progress tab.
+- **`Host` allowlist, checked restart read-backs, capture hardening**: untouched by this work.
+
+## 2. The folder model (PROMPT section 6, D8)
+
+### 2.1 Vocabulary
+
+- **Repository**: a checkout on the VM that root registered (`deploy/setup-git.sh`, or the helper's
+  `connect` for a pasted address).
+- **Lab folder**: the folder a lab saves into. The lab writes exactly three things inside it: `latest/`,
+  `baseline/` and `checkpoints/<name>/`, its *saved-state folders*.
+- **Saved state**: a folder that holds a `manifest.json` committed at HEAD. A **lab state** is a saved
+  state no connected lab owns: a course's `start`, another lab's last save, an earlier folder of this lab.
+- **Registration**: the VM's record `(checkout, folder)` in `/etc/clab-manager/git.json` that the helper
+  needs before it writes. It is plumbing. The page never shows the word, a registration that no lab is
+  connected to is invisible, and nothing a person does depends on knowing one exists.
+
+### 2.2 Why folders could not overlap, and what is true
+
+No document or comment gives a technical reason for the rule ([INVENTORY.md](INVENTORY.md), "Why
+folders may not overlap today"): the handoff says only that "a root registration and subfolders in one
+repository overlap by design". The only reasoned rule is the reserved names (`host_git.py`
+`base_prefix`): a lab folder named `latest` would nest a second saved state inside the first.
+
+The prompt's reading (6.4) was checked against every helper mode. `P` is the registration's folder and
+`S(P)` its three saved-state folders.
+
+| Mode | What it reads or writes by folder | Another lab folder inside, above or beside `P` |
+|---|---|---|
+| `status` | `clean()` looks at `S(P)` only; reads the manifests of `P/latest` and `P/baseline` | No effect unless it lies inside `S(P)` |
+| `publish` | Writes files directly in `P/latest`, `P/baseline` or `P/checkpoints/<name>`; lists those folders without descending | No effect unless it lies inside `S(P)` |
+| `push` | Commits, not folders. Every outgoing commit must be journaled under a current registration of the checkout | None |
+| `history` | `git log -- S(P)`; lists every folder of the checkout that holds a manifest and marks `S(P)` as the lab's own | None |
+| `read-version`, `compare` | An exact folder at an exact commit | None |
+| `update` | The whole checkout, fast-forward only | None |
+| `browse` | The whole committed tree | None |
+| `move` | Moves `S(source)` to `S(P)` | Moves another lab's files only if that lab lies inside `S(source)` |
+| `register-prefix`, `connect` | The registry | The overlap rule itself |
+
+Whole-checkout checks (a staged change, an unfinished Git operation, the branch, the push URL) are the
+same for every lab and stay.
+
+So the reading holds. Two lab folders write the same files in exactly two cases:
+
+1. they are the same folder;
+2. one lies inside a saved-state folder of the other (`P/latest/…`, `P/baseline/…`, `P/checkpoints/…`).
+
+Everything else (inside, above, beside, the top level next to subfolders) is disjoint.
+
+### 2.3 Helper changes
+
+Each is reviewed in [REVIEW.md](REVIEW.md). The protocol, the gateway's command list, the option
+whitelist, structured stdin, the registry lock, the per-checkout lock, the review digests, the path
+rules (`relpath`, no `.`, `..`, `.git`, no symlink traversal) and the privilege drop are untouched. No
+mode and no request option is added.
+
+**H1. The overlap rule becomes the collision rule.** `overlapping()` is replaced by `colliding()`:
+
+```python
+def colliding(prefix, other):
+    """Two lab folders write the same files only when one lies inside a folder the other writes its saves
+    into (latest, baseline, checkpoints). Otherwise they may sit inside, above or beside each other."""
+    def inside(a, b): return any(a == f or a.startswith(f + '/') for f in ((b + '/' if b else '') + n for n in RESERVED))
+    return prefix != other and (inside(prefix, other) or inside(other, prefix))
+```
+
+It is used wherever `overlapping()` was: `check_overlap` (renamed `check_collision`, called by
+`plan_prefix` and `plan_connect`) and the race check in `save_registration`. `base_prefix` stays: a new
+lab folder still cannot be named `latest`, `baseline`, `checkpoints` or `checkpoints/<name>`. The same
+rule replaces the copy in `deploy/setup-git.sh` (it calls `h.colliding`), the wording in
+`deploy/git-onboard.py` and the scripted helper of the fixture.
+*Reason*: G2, and section 2.2 shows the old rule protected nothing the new one does not.
+
+**H2. A further lab folder may be registered while saves wait on the VM.** `register()` refuses when the
+branch is not exactly the remote branch ("Before linking, synchronize…"). For the first registration of
+a checkout that stays. For a further folder of a checkout that is already registered (`register-prefix`,
+and `connect` for a known checkout) the branch may be ahead of the remote, provided the remote branch is
+an ancestor of HEAD and every commit in between is a journaled manager save of that checkout
+(`known_commits()`, the test a push applies). The check moves into one method,
+`GitRepository.check_synchronized(head, further)`, which `register()` and the child in
+`deploy/setup-git.sh` both call, so the two stay equivalent by construction.
+*Reason*: without it a folder change, a second lab's first save and *Save as a lab state…* are all
+refused whenever a save waits for upload, which is the normal state after **Not now**.
+
+**H3. `history` returns a bounded summary of each listed manifest.** Each row of `versions` gains
+`summary`: `lab_id`, `lab_name`, `captured_at`, `kind`, `topology_digest` and, per device entry, `node`,
+`short_name`, `platform` and whether it has a restore artifact. The manifests are read with `git show`
+at HEAD, at most 256 KiB each and 4 MiB in total; beyond that `summary` is `null`.
+*Reason*: the Load panel's `2 of 4 devices`, the `View only` reason, the topology comparison and "whose
+state is this" all need the manifest. Reading every state through `read-version` would transfer every
+file of every state. This is read-only and adds no mode and no option.
+
+**H4. An empty repository is started by `connect`.** Today: "This repository has no commits yet. Add a
+README on GitHub first, then connect it." When the clone has no commit and the remote has no branch, the
+owner's child writes a fixed `README.md`, commits it under the ensured identity and pushes it to the
+branch the clone's HEAD names (`main` when that name is unusable), then verifies the remote head.
+*Reason*: a brand-new repository is the most common first contact, and creating that first commit is
+within the manager's control. The file is fixed text and holds nothing of a lab; a save is still never
+uploaded without Upload.
+
+**Not changed.** `publish` still refuses a `latest`, `baseline` or checkpoint folder that holds files
+its manifest does not own. Those are someone's own files inside a folder the manager would otherwise
+write over; the manager avoids the case when it can see it (2.5) and otherwise reports it as *Can't
+save* with **Choose another place**. `move` still refuses a destination that already holds saved
+files; the chooser does not offer the move there.
+
+### 2.4 Registrations are never retired by a folder change
+
+Today a folder change calls `register-prefix` with `retire`, and pending saves block it. Both follow
+from the overlap rule and from saves being tied to the lab's current binding. In the new model:
+
+- **A folder change registers the new folder and rebinds the lab. It retires nothing.** A registration
+  costs nothing, blocks nothing (H1) and stays invisible. Retiring one makes every un-uploaded commit
+  journaled under it unpushable for good ("commits created outside manager saves"), which is a dead end
+  the person cannot leave from the page.
+- **Reuse.** Choosing a folder that already has a registration reuses it (`plan_prefix` already answers
+  with the existing one).
+- **Replace.** Only a real collision (H1: a legacy `x/latest` registration against a new `x`) retires
+  a registration, and only one that no lab is connected to and no un-uploaded save was made through,
+  decided under the store lock. `register-prefix` with that registration as its source and `retire`
+  does it; no new mode.
+- `retired_already` and the "registration is gone" recovery stay for VMs where an older release retired
+  one.
+
+### 2.5 One answer per folder
+
+One function, `place_answer(lab, checkout, folder, purpose)` in `git_progress.py`, decides what a folder
+is for the asking lab. The tree marks, the sentence under a typed path, the question in the chooser and
+the route that applies the choice all call it, so two texts on one screen cannot disagree.
+
+Inputs: the registrations of the checkout (`list`), the labs connected to them (the store), the
+committed tree (`browse`), the manifest summaries (`history`, H3), the folders made through the manager
+(`git_folders`). The two helper answers are cached per checkout and HEAD for a few seconds.
+
+Steps:
+
+1. **Correct the path.** `clean_folder()` splits on `/`, trims, replaces every run of characters outside
+   `A-Za-z0-9_.-` by `-`, strips what cannot start a name, drops empty parts and turns `.git` into `git`.
+   It never refuses a character. A path longer than 500 characters is the one validation error left.
+2. **Leave a saved state.** A part named `latest`, `baseline` or `checkpoints` is part of a saved state
+   when it is the last part, when it is `checkpoints` followed by one name, when the folder above it is a
+   lab folder, or when the tree shows a manifest there. The folder above the first such part is used and
+   the answer says so (`adjusted`). A `latest` in the middle of a path that is none of these
+   (`course/latest/working`) stays an ordinary name, as today.
+3. **Classify.**
+
+| Kind | When | What *Save here* does |
+|---|---|---|
+| `own` | The lab saves here now | Nothing changes |
+| `own-before` | The folder holds a saved state whose manifest names this lab (same id, or same name) | Used; the lab continues there |
+| `lab` | Another connected lab saves here, or its legacy folder collides with this one (H1) | Question 1 |
+| `state` | The folder holds a saved state of another lab or a course | Question 2 |
+| `free` | Everything else: a folder that does not exist, an ordinary folder, the top level, a folder inside, above or beside any lab folder, a folder only an unused registration names | Used; created by the first save when it does not exist |
+
+4. **Avoid what can be seen.** When `P/latest` exists without a manifest (someone's own folder of that
+   name), the answer for `P` is `free` with `folder` moved to `P/<lab>` and a note saying why.
+
+The answer carries `folder` (what will be used), `typed`, `kind`, `exists` (false for a folder that is
+only planned: it is never worded as being in the repository), `label`, `lab`, `layout` (`latest` or
+`flat` for a state), `adjusted`, `beside` (the suggested alternative, the first free of
+`<folder>/<lab>`, `<folder>/<lab>-2`, …) and `mark` (the text beside the folder in the tree).
+
+A repository larger than the tree cap (4000 files) lists only what came back. The answer for a typed
+path there falls back to the registrations and the manifest summaries, which are not capped by the
+tree; a state beyond both is met at save time as in 2.3 "Not changed".
+
+### 2.6 The questions
+
+Each is one sentence with its answers as buttons, shown inside the chooser. None is an error.
+
+| # | Sentence | Buttons |
+|---|---|---|
+| 1 | `<Other lab> saves here too.` | **Save in `<folder>/<this lab>`** (suggested) · **Use this folder anyway** |
+| 2 | `This folder holds the state "<Label>".` | **Save beside it in `<folder>/<this lab>`** (suggested) · **Replace it** |
+| 3 | `1 save of <lab> is waiting for upload.` | **Upload it, then move** · **Move and keep that save on the VM only** |
+
+- *Use this folder anyway* disconnects the other lab from the folder. Its saves stay as versions, and a
+  save of it that still waits stays uploadable (3.1).
+- *Replace it*: the lab takes the folder; its next save replaces `latest` there with removals allowed,
+  and older contents stay in Git history. For a state stored directly in the folder (`flat`, a manifest
+  in the folder itself) nothing can replace it, so the second button reads **Use this folder anyway**
+  and the sentence under it says the state stays listed.
+- Question 3 appears when the lab changes its folder or repository while a save of it waits. Both
+  answers go ahead. *Upload it, then move* runs the page's one upload function and then the move.
+  *Move and keep…* moves; the save keeps waiting and can be uploaded later from the chip.
+
+### 2.7 PROMPT 6.2, row by row
+
+| The person chooses | Outcome | By |
+|---|---|---|
+| A folder that does not exist | Created with the first save and used; listed as planned until then | `free` |
+| An existing folder with ordinary files and no saved state | Used; other files are not touched (`publish` writes only inside `latest`, `baseline`, `checkpoints/<name>`) | `free` |
+| The repository's top level | Used | `free` (H1) |
+| A folder inside, above or beside another lab's folder | Used | `free` (H1) |
+| The very folder another connected lab saves to | Question 1 | `lab` |
+| A folder that holds a saved state of another lab or a course | Question 2 | `state` |
+| A folder that is part of a saved state | The lab folder above it is used, and the chooser says so | step 2 |
+| A name with unsafe characters | Corrected as typed, result shown | step 1 |
+| A folder while a save of this lab waits | Question 3 | 2.6 |
+| A folder registered on the VM that no lab uses | Invisible; reused when chosen, replaced only on a real collision | 2.4 |
+
+**New folder…** is always enabled. It adds the folder to the manager's list (`git_folders`, as today)
+below the folder being looked at; inside a saved state it adds it in the lab folder above and says so. A
+name that already exists selects that folder instead of refusing.
+
+### 2.8 First save and the default place
+
+`GET /api/labs/{lab}/git/places` without a repository answers with the repositories on the VM and a
+default: the repository the lab used last, else the one saved to most recently, else the first; and the
+folder `clean_folder(<lab name>)`, or the first of `<lab>-2`, `<lab>-3`, … whose answer is `free`, `own`
+or `own-before`. So the default can always be saved to with one click and nothing typed. A lab that was
+removed and imported again finds its folder by name and continues in it.
+
+With no repository on the VM the panel asks for the HTTPS address. The page sends it to the same route;
+the manager first connects the checkout at its top level (the helper's `connect` with an empty folder,
+exactly what guided setup registers) and then places the lab in its folder inside it.
+
+### 2.9 *Save as a lab state…* (D9)
+
+A lab state is a normal saved state in its own folder, written by a normal save that carries its own
+binding:
+
+1. The page sends the destination folder (by default `<the lab's folder>/<name>`, so `BGP/start`) and
+   the name. `place_answer(…, purpose='state')` classifies it. `free`: go on. `state`: one question,
+   `"Start" already exists here.` with **Replace it** and **Use another name**. `own` or `lab`: the
+   state goes to `<folder>/<name>` and the dialog says so.
+2. The manager registers the folder (`register-prefix`, nothing retired) and creates a save job of kind
+   `state` whose frozen binding (3.1) is that registration. The lab's own binding is not touched.
+3. The job captures the lab now and publishes with target `latest`, so the state is
+   `<folder>/latest/manifest.json` with the topology, the map, every device configuration and the
+   restore artifacts, exactly like any save. It ends waiting for upload with the same sentence.
+
+Load reads it from any lab, because it lists every saved state of the repository (LOAD.md).
+
+### 2.10 Old installations
+
+Existing registrations, legacy `x/latest` registrations (they keep saving to `x/latest/latest`), schema
+1 snapshots, the `.set` to `.cfg` pairing, `review_before_push`, stored bindings and stored jobs are
+read as before. No stored binding is rewritten. The one migration is additive (3.1).
+
+## 3. The save model
+
+### 3.1 A save carries its own binding
+
+Today a job stores `binding_digest` and is executed, retried and reviewed with the lab's *current*
+binding; when the two differ the job is dead ("Repository settings changed"). That is why pending saves
+block folder changes, device changes, reconnects and disconnects.
+
+New: a job stores `binding`, a private copy of the binding it was created with (never in `PUBLIC_JOB`).
+`execute`, `retry` and `compare` use it. A job without one (made by an older release) keeps today's
+comparison with the lab's binding. At start-up, each pending job without a `binding` whose
+`binding_digest` equals its lab's current binding digest gets that binding copied in: additive, and the
+digest it stores stays true.
+
+Consequences: a waiting save stays uploadable after the lab's folder, repository or device selection
+changed and after the lab was disconnected; `guard_pending` leaves `link`, `destination`, `connect` and
+`unlink`; a save marked uploaded by a later push is matched by its checkout (`made_in`), not by the
+lab's current binding.
+
+### 3.2 The optional name (D2)
+
+`Save.note` may be empty. After the capture and the helper's `status` (which returns the manifest of
+`latest`), and before the first `publish`, the manager names the save from what changed between that
+manifest and the new one, pairing entries by device, not by file name: `ceos changed`,
+`ceos and xrv9k changed`, `ceos, cjunos and xrv9k changed`, `4 devices changed`,
+`Topology changed`, `Map changed`, `First save`. The name is stored once in `note` and in the publish
+request (the request body is immutable for the helper's idempotent retry) with `note_auto: true`.
+
+`POST /api/git/jobs/{id}/name` renames. It validates like today's note (one line, 120 characters),
+changes what the manager shows and never touches a commit. The names are kept by commit in
+`state['git_save_names']` (capped), so a renamed save keeps its name after its job is trimmed. An empty
+name returns to the automatic one.
+
+### 3.3 Devices
+
+- The selection lives in Save settings. A device of the selection that left the lab is dropped at the
+  next save (a new binding; the stored one is not edited) and the upload sentence says its file was
+  removed. An empty selection is *Can't save* with **Save settings**.
+- `allow_removed` is always sent as true: the selection is explicit, the removal is in the sentence and
+  the drawer before anything is uploaded, and the commit stays on the VM until Upload.
+
+### 3.4 What an upload carries
+
+A push sends every earlier un-uploaded commit of the branch. Instead of refusing while another lab's
+save waits (1.30.60), the review of a save lists them: `compare` returns, beside the save's own files,
+`also_sends` as rows (`job_id`, `lab`, `name`, `kind`) for every waiting or kept save made in the same
+checkout, whichever lab made it and wherever that lab saves now. The sentence says
+`This upload also sends 2 earlier saves: <name> (<lab>), …` and the drawer shows each one's files (the
+page asks `compare` for each row). Pressing Upload records the review for all of them. `gitReviewJob`
+stays the only sender of `{push: true, reviewed: true}`.
+
+### 3.5 Checkpoint from a save (D6), unchanged saves, lab states
+
+- *Keep as a checkpoint* posts the save route with `target: 'checkpoint'`, the save's `backup_job_id`
+  and a name made from the save's name (`ceos-and-xrv9k-changed`; `-2` when taken). No device is read.
+  A public `capture_kept` on each job tells the page whether the capture still exists; when it does not
+  the tick box is disabled with `The capture of this save is no longer kept. Save again to make a
+  checkpoint.`
+- An unchanged save still ends `unchanged` and the page shows the toast.
+- A job of kind `state` counts as a save to upload and never as "your latest save".
+
+### 3.6 What may still stop a save (PROMPT 6.5)
+
+| Cause | Sentence in the chip panel | Action |
+|---|---|---|
+| The VM cannot be reached | `The lab VM could not be reached.` | **Try again** · **Check the VM connection…** |
+| The VM account cannot upload | `The VM account cannot upload to <host>.` | **Try again** · **Details** |
+| An unfinished Git operation, staged or unsaved edits in the save's folder | `Someone is working in this repository on the VM.` | **Try again** · **Details** |
+| The local and online copies diverged | `The online copy has changes this VM does not have.` | **Update from the repository** |
+| A device cannot be read | `<device> could not be read, so nothing was saved.` | **Try again** · **Details** |
+| Files the manager did not save are inside `latest`, `baseline` or a checkpoint folder | `<folder> holds files that were not saved by the manager.` | **Choose another place** · **Details** |
+
+Transient states (a save or load in progress, another operation running) disable Save with the reason
+visible in the chip; they are not refusals of a choice.
+
+### 3.7 Load: the lead's answers to LOAD.md section 14
+
+| Question | Decision |
+|---|---|
+| Q1, B1: manifest contents at list time | Accepted as **H3** of this file: the summaries ride on the existing `history` mode instead of a new `states` mode, so the helper gains no mode name. The manager route is LOAD.md's B2 (`GET /api/labs/{lab}/restore/states`), built on it. |
+| Q2: matching a saved device to a lab device | **Unchanged: by full node name.** PROMPT section 7 item 6 leaves the preflight untouched, and a saved configuration carries its management address, so a state fits the lab it was saved from and a lab deployed from the same topology file under the same name (a student's copy of the course lab). The live pass loads onto a second lab record of the same topology and name. Matching by the topology's node name across differently named labs is left open for the owner (section 6). |
+| Q3: a lab without a save location | **Load works before the first save.** The restore `Source` gains an optional `repository` (a registration id of this VM, checked against the helper's `list`). With it, or for a lab without a binding, the state is read through that registration; the lab's own binding stays the default. The Load panel uses the default repository of 2.8. |
+| Q4: the topology comparison | Compared **by structure, not by bytes**: the node names with their kinds and the link endpoints of the state's embedded topology file against the lab's topology, parsed in the preflight. `differs` is `null` when either side is missing or unreadable, and no line is shown then. |
+| Q5, B4: undo after an incomplete safety backup | Accepted: `captured_snapshot(complete=False)` only for a backup whose `source` is `restore-pre`; the strict default is pinned by a test. |
+| B5: keep the newest load's safety backup | Accepted: one more protected job id per lab. |
+| Q6: a load that changed nothing | As designed: the chip keeps what it showed; the banner and the panel carry the failure. |
+| Q7: the job window's vocabulary | Kept. Only wording that names the removed tab changes. |
+| Q8: another lab's saves | Out of the Load panel, folded in All versions. "Another lab's" means inside the saved-state folders of a lab that is connected now; every other saved state is a lab state. |
+
+### 3.8 Header and drawers: the lead's rulings on the part files
+
+**Chip precedence (HEADER.md 3.3 and LOAD.md 5.2 disagreed).** The newest event wins between the load
+family and the save family, because PROMPT 5.4 step 5 makes the chip *Running* after a load without
+condition and step 9 ends it only "when the next save completes":
+
+1. *Loading* (a load is active), 2. *Saving* (a save is active);
+3. when the newest effective load (LOAD.md 5.2) is newer than the newest save attempt of any outcome:
+   *Partial* or *Running*;
+4. otherwise *Can't save*, *Upload failed*, *N saves to upload*, *Saved*, *Kept on this VM*, *Not saved yet*.
+
+`also` (HEADER.md 3.4) carries the highest hidden save state into the *Running* and *Partial* panels as
+one line with **Show** (`Also: 1 save to upload.`), so a waiting upload is never out of reach. This
+matters for safety, not only for order: after a load the Save button saves what the devices run now,
+and the chip must say what that is.
+
+**HEADER.md NEEDS.**
+
+| Need | Ruling |
+|---|---|
+| N1 `lab.git_status` in `/api/state` | Yes: `{checked, ready, problem, code}` kept in memory per lab from the last helper `status` the manager ran for it (the settings route, a save, a place, an update); never fetched by the poll. `code` is one of `vm`, `account`, `busy`, `diverged`, `files`, `settings`, `other`, mapped from the helper's fixed sentences in one table in `git_progress.py`. |
+| N2 `source.label` on a restore job | No. The name is derived in the page (`loadSourceName`, LOAD.md 5.2) so that a renamed save shows its current name. |
+| N3 empty note, `note_auto` | Yes (3.2). |
+| N4 the change summary | Yes, stored on the job: after a save committed, the worker asks the helper's `compare` once and stores `summary = {devices: [labels], added, removed, topology, map, first, removed_devices}` (counts and labels only, public). The sentence then needs no request. `compare` answers gain `role` (`device`, `restore`, `topology`, `map`, `manifest`, `other`) and `node` per file, derived from the names the manager itself gave the files, and one row for every path in `changed_files`. |
+| N5 `upload_blocked_lab` | Not needed: the sibling refusal is gone (3.4). |
+| N6 rename | `POST /api/git/jobs/{id}/name`; not held by `idle()`. |
+| N7 checkpoint name | Yes: an empty `checkpoint` with `target: 'checkpoint'` and a `backup_job_id` derives a free name from the save's name. |
+| N8 `capture_kept` | Yes (3.5). |
+| N9 one place call | Yes (section 4). |
+
+**DRAWERS.md NEEDS and questions.**
+
+| Item | Ruling |
+|---|---|
+| N3, one list of saved states | The states route of 3.7 Q1 returns each state with `path`, `commit`, `name`, `group` (`latest`, `checkpoint`, `baseline`, `state`, `other-lab`), `lab`, `kind`, device counts and `saved_at`. The name rule lives there: the last folder name once a trailing `latest` is dropped, its first letter upper-cased when the name is all lower case; two equal names each add their parent (`Start · BGP`). The Load panel, All versions and the chooser's marks all read it. `savedVersionName` in `status.js` follows the same rule for a page without the list. |
+| N4, a lab without a save location | List, view, download and compare take an optional `repository`, as Load does (3.7 Q3). |
+| N5, a device change or a disconnect while a save waits | They go ahead (3.1). The drawer says that the waiting save stays uploadable. |
+| N6, one answer per folder | The tree embeds the answer of 2.5 for every listed folder. A typed path asks `…/places/check`; the page's own `folderClean` only echoes the correction while typing and is replaced by the answer's `folder`. |
+| N8, every folder of a large repository | **H5**: `browse` also returns `dirs`, every directory of the tree at HEAD (`git ls-tree -r -d`), capped at 20 000 with `dirs_truncated`. Read-only, no new mode or option. |
+| Q1, the folder-change budget | The chip panel at rest gains one line, `Saves to: <repository> › <folder>` with **Change…**, which opens the chooser: chip, Change…, a folder, **Save here** is four clicks. |
+| Q5, earlier saves on a folder change | Today's ticked box stays as one line in the chooser (`Bring this lab's saved files along`), shown only when the lab has saved files in the folder it leaves and the new folder holds none. |
+
+## 4. Backend contract for the page
+
+Routes are under the same-origin guard; mutating requests carry a body. New or changed:
+
+| Route | Body | Answer |
+|---|---|---|
+| `GET /api/labs/{lab}/git/places?repository=<id>` | | `repositories`, `default`, and for a repository: the tree (`files`, `truncated`, `head`), `folders` (path, `mark`, `kind`, `exists`), `own`, `states` |
+| `POST /api/labs/{lab}/git/places/check` | `repository`, `folder`, `purpose` | the answer of 2.5 |
+| `POST /api/labs/{lab}/git/place` | `repository` or `url`, `folder`, `choice` (`''`, `beside`, `take`), `pending` (`''`, `keep`), `move_files`, `node_names`, `acknowledge` | `{question}` or `{saved, binding, job}` |
+| `POST /api/labs/{lab}/git/state` | `request_id`, `repository`, `folder`, `name`, `choice` (`''`, `replace`) | `{question}` or the job |
+| `POST /api/labs/{lab}/git/save` | as today; `note` may be empty | the job |
+| `POST /api/git/jobs/{id}/name` | `note` | the job |
+| `GET /api/labs/{lab}/git/states?repository=<id>` | | saved states of the repository with their summaries, for a lab with or without a connection |
+| `POST /api/labs/{lab}/git/compare` | as today | plus `also_sends` rows |
+| `GET /api/labs/{lab}/restore/states?repository=<id>` | | LOAD.md B2: per state its coverage, `view_only` and reason |
+| `POST /api/labs/{lab}/restore/preflight`, `POST /api/labs/{lab}/restore` | `source` may carry `repository` | the preflight's `source.topology` (LOAD.md B3, compared by structure) |
+
+The existing routes (`…/git` PUT, `…/git/destination`, `…/folders`, `…/git/connect`, `…/git/unlink`) stay
+for stored pages and tests; they lose `guard_pending`, the snapshot-conflict refusal and the
+duplicate-folder refusal, and `destination` stops retiring.
+
+Public job fields added: `note_auto`, `capture_kept`. Private: `binding`. The exact fields the chip
+needs in `/api/state` are in HEADER.md section 3 and LOAD.md section 7.
+
+## 5. Build slices
+
+Written after the part files and the review; see section 7.
+
+## 6. Decisions that differ from the prompt's letter
+
+| Prompt | Decision | Why |
+|---|---|---|
+| 6.2: **Replace it** for any folder holding a state | **Use this folder anyway** when the state is stored directly in the folder | Nothing the helper can do replaces it; saying "Replace" would be untrue |
+| 6.2: "Move and keep that save on the VM only" | The save keeps waiting and stays uploadable | Nothing is lost; a later upload from the checkout carries it in any case and says so |
+| 8: `register()` equals the setup child | Both call one method | Equivalent by construction (H2) |
+| 6.5: only outside causes stop a save | Another lab's waiting save no longer does | 1.30.60 added that refusal after the prompt was written (section 1) |
+| 9.6: "load a state on a second lab with the same topology" | The second lab carries the same lab name | Devices match by full node name and the preflight stays untouched (3.7 Q2). Open for the owner: match by the topology's node name across differently named labs |
+| G06 mockup: `Kept previous` for a device that did not accept the state | `Not loaded` with the device's reason; `Kept previous` only for `rolled_back` | PROMPT 5.4 step 6 says to use the service's vocabulary exactly (LOAD.md 5.1) |
