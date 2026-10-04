@@ -325,9 +325,9 @@ Scanned with `git ls-files` + regular expressions (route `view=progress`/`view=g
 | path:line | kind | quoted text |
 |---|---|---|
 | README.md:46 | text | \\| ![Progress tab: saved versions with Latest, checkpoints and the instructor's reference states](docs/imag |
-| README.md:141 | text | [Tour](docs/TOUR.md) \\| See the student UI — My labs, the lab workspace, Progress and Tools — in screenshots \\| |
+| README.md:141 | text | Tour (link to `docs/TOUR.md`) \\| See the student UI — My labs, the lab workspace, Progress and Tools — in screenshots \\| |
 | README.md:148 | text | ister a checkout, then save, checkpoint, compare, apply and push from the Progress tab \\| |
-| docs/README.md:37 | text | \\| [Save progress](GIT-PROGRESS.md) \\| You use the Progress tab: saves, checkpoints, baselines, saved versions, compare, apply to the running lab and |
+| docs/README.md:37 | text | \\| Save progress (link to `GIT-PROGRESS.md`) \\| You use the Progress tab: saves, checkpoints, baselines, saved versions, compare, apply to the running lab and |
 
 #### docs (231)
 
