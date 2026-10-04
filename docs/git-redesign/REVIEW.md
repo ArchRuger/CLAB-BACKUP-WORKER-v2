@@ -165,3 +165,22 @@ more commit (S1c).
 | 4 | should-fix | With many large checkpoints of its own, a lab's `latest` can lose its summary to the budget. | The lab's own rows are budgeted latest, starting point, checkpoints. |
 | 5 | should-fix | The commit subjects of `history` are not filtered. | They pass the same display filter. |
 | 6 to 12 | optional | The default label counting as a changed setting; the ownership check after a folder was made; details of the unborn clone, of `outgoing`, of the filter and of the check's cost; a stale test message. | Done where small; listed in the commit. |
+
+## 6. Third review of the helper (the follow-up S1c)
+
+The risk reviewer read `187059a` and the helper once more. No must-fix. Confirmed by reading (no test was
+run by the reviewer): the waiting check follows the registered branch, runs last and under the checkout's
+lock, and skips uploaded saves; the lock is released on every path and cannot deadlock; every
+construction of the repository object comes after the privilege drop; a corrupt journal approves nothing,
+which fails closed; filtered text is never used as an identifier or a path; no new mode, the gateway is
+unchanged. Verdict: **ready for the live pass on a disposable VM**; rows 1 to 4 land before the release
+(S1d).
+
+| # | Severity | Finding | Answer |
+|---|---|---|---|
+| 1 | should-fix | The display filter keeps lone surrogates; a committed manifest with one makes `history` fail for every lab of the checkout. | Category Cs is dropped too. |
+| 2 | should-fix | `history` decodes the log strictly: one commit subject that is not UTF-8 fails the whole mode. | Read as `outgoing` reads it, with replacement. |
+| 3 | should-fix | `mark_synced` reads journals raw: one corrupt journal makes every successful upload end as needing attention. | It reads through `journals()`. |
+| 4 | should-fix | The waiting check always asks the previous push address: after the owner moved the repository to a new remote and pushed everything there, setup is refused for ever. | A commit the new remote already has does not wait. |
+| 5 to 8, 10 | optional | An unchanged journal of the owner's own commit counted as a waiting save; the cost of the reachability walk on a very large history; a remote that moves between the two remote calls; the lock that does not wait and the misleading hint after it; missing tests. | Done where small; listed in the commit. |
+| 9 | optional | The window between the retire check and the new registration in `register-prefix`. | Closed on the manager's side: `git_place.register` retires only records no lab is connected to and no waiting save names (`in_use`, under the store lock) while `changing` keeps every other connection change out; a lab saves only through a record it is connected to. |
