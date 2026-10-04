@@ -28,8 +28,16 @@ text = s.text('#load-panel-body'); s.say('Load panel (no save location): %r' % t
 s.shot('C6-load-without-location')
 names = [x.split('\n')[0] for x in p.locator('#load-panel-body .save-list > li .save-item > span:first-child').all_inner_texts()]
 s.say('lists: %s' % names)
-s.check('C6 Load lists the lab states of the default repository', STATE in names and 'This lab has no saves of its own yet' in text, (names, text[:200]))
-load_choose(s, STATE)
+s.check('C6 Load lists the lab states of the default repository', 'This lab has no saves of its own yet' in text and len(names) >= 4, (names, text[:200]))
+s.check('C6 the state asked for is on the first screen of the Load panel', STATE in names, 'not among the %d rows shown: %s; the panel says %r' % (len(names), names, re.findall(r'\d+ more in All versions', text)))
+if STATE in names:
+    load_choose(s, STATE)
+else:
+    s.click('#load-all'); expect(p.locator('#save-drawer')).to_be_visible(timeout=15000)
+    expect(p.locator('#save-drawer-content .save-list > li > button.save-item').first).to_be_visible(timeout=20000)
+    s.click(p.locator('#save-drawer-content .save-list > li > button.save-item').filter(has_text=re.compile('^' + STATE)).first)
+    s.click(p.locator('#save-drawer [data-save-action="load"]').first)
+    expect(p.locator('#load-run')).to_be_visible(timeout=40000)
 s.say('confirmation: %r ; rows %s' % (s.text('#load-panel-body .save-state'), device_words(s)))
 s.say('preflight request source: %s' % s.calls('/restore/preflight')[-1][:260])
 s.click('#load-run'); s.wait_chip(r'^(Running .*|Loaded \d of \d)$', timeout=180000)

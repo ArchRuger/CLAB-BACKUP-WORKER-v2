@@ -1,0 +1,25 @@
+[19:47:15] second removal/import: DELETE eda9e422 -> 200
+[19:47:16] import 200 -> c352ba81
+[19:47:19] readiness {'status': 'ready', 'total': 4, 'ready': 4, 'booting': 0, 'failed': 0} ; chip 'Not saved yet'
+[19:47:22] FIRST SAVE panel (no load before it): 'This repository already holds saves of a lab named git-redesign. |  | Save in git-redesign-2 | Continue there | Connect by URL… |  | Uploads go to github.com/ArchRuger/clab-scratch-git-redesign, branch main. |  | Saved files can contain passwords or keys. |  | Save as a lab state…'
+[19:47:22] buttons: ['save-first:Save in git-redesign-2', 'save-first-continue:Continue there', 'save-first-url:Connect by URL…', 'save-as-state:Save as a lab state…']
+PASS C6 the first save asks the same-name question and offers Continue there
+[19:47:31] after Continue there: chip '1 save to upload' ; sentence '4 devices changed since your last save: ceos1, ceos2, cjunos and xrv9k. 5 lines added, 5 removed. The map changed.' ; clicks 2
+[19:47:35] lab saves in git-redesign ; chip 'Saved just now' ; clicks (Save, Continue there, Upload) = 3
+[19:47:35] job {"destination": {"branch": "main", "checkout": "/home/archtop/labs/clab-scratch-git-redesign", "path": "git-redesign/latest", "remote": "https://github.com/ArchRuger/clab-scratch-git-redesign.git", "repository": "clab-scratch-git-redesign"}, "note": "4 devices changed, map changed", "pushed": true, "status": "synced", "summary": {"added": 5, "devices": ["ceos1", "ceos2", "cjunos", "xrv9k"], "first": false, "map": true, "removed": 5, "removed_devices": [], "topology": false}}
+PASS C6 the save continues in the old folder git-redesign
+  [GitHub after C6]
+      68184adaf3 4 devices changed, map changed
+      af91328e52 C6probe
+      68fedc7349 Final
+      4e6ca03ac8 Broken
+[19:47:36] errors [] ; failed []
+PASS C6: no console, page or request errors
+
+=== C6: 3 checks, 0 failed
+PASS C6 the first save asks the same-name question and offers Continue there
+PASS C6 the save continues in the old folder git-redesign
+PASS C6: no console, page or request errors
+None
+
+3 checks, 0 failed

@@ -1,0 +1,80 @@
+[19:48:34] A2 on lab git-redesign; chip before: Running Final
+[19:48:35] device change (a-cjunos): errors []; reads: description l2-a2;
+[19:48:40] moved ceos1 on the map by the page; map document revision via API follows
+PASS A2 Save: nothing typed
+[19:48:40] panel while saving: 'Saving…'
+PASS A2 the panel opened by itself
+[19:48:46] panel title 'Not uploaded yet'; sentence '4 devices changed since your last save: ceos1, ceos2, cjunos and xrv9k. 5 lines added, 5 removed. The map changed.'; to 'To: clab-scratch-git-redesign › git-redesign'
+PASS A2 the sentence names the device and the map
+PASS A2 the sentence names the device
+[19:48:47] What changed entries: ['ceos1 ceos1.cfg changed', 'ceos2 ceos2.cfg changed', 'cjunos cjunos.cfg changed', 'Map git-redesign.clab.yml.annotations.json changed', 'xrv9k xrv9k.cfg changed', 'Save details manifest.json changed']
+PASS A2 See changes lists the device file and the map
+[19:48:47]    changed lines of 'ceos1 ceos1.cfg changed': ['32-   description l2-c1-start', '32+   description l2-c1-final', '32-   description l2-c1-start', '32+   description l2-c1-final']
+[19:48:47]    changed lines of 'ceos2 ceos2.cfg changed': ['34-   description l2-c1-start', '34+   description l2-c1-final', '34-   description l2-c1-start', '34+   description l2-c1-final']
+[19:48:47]    changed lines of 'cjunos cjunos.cfg changed': ['11-set interfaces et-0/0/1 description l2-c1-start', '11+set interfaces et-0/0/1 description l2-a2', '1-## Last commit: 2026-10-04 19:44:30 UTC by admin', '1+## Last commit: 2026-10-04 19:48:35 UTC by admin', '32-        description l2-c1-start;', '32+        description l2-a2;']
+[19:48:47]    changed lines of 'Map git-redesign.clab.yml.annotations.json changed': ['2+  "freeTextAnnotations": [],', '3+  "freeShapeAnnotations": [],', '4+  "trafficRateAnnotations": [],', '5+  "groupStyleAnnotations": [],', '6+  "networkNodeAnnotations": [],', '7-        "x": 0,', '8-        "y": 0', '12+        "x": 40,']
+[19:48:47]    changed lines of 'xrv9k xrv9k.cfg changed': ['3-!! Last configuration change at Sun Oct  4 19:44:26 2026 by clab', '3+!! Last configuration change at Sun Oct  4 19:48:01 2026 by clab', '30- description l2-c1-start', '30+ description l2-c1-final', '3-!! Last configuration change at Sun Oct  4 19:44:26 2026 by clab', '3+!! Last configuration change at Sun Oct  4 19:48:01 2026 by clab', '30- description l2-c1-start', '30+ description l2-c1-final']
+[19:48:47]    changed lines of 'Save details manifest.json changed': []
+[19:48:51] chip after upload: 'Saved just now'
+PASS A2 the chip reads Saved just now
+[19:48:51] clicks Save -> See changes -> Upload (drawer): 3, typed 0; without See changes it is Save + Upload = 2
+requests the page sent:
+    POST /api/labs/c352ba8164dd426a8f31925fdceea848/git/save {"request_id":"331cac62b85c1789bebbb07efb1f7675","target":"latest","checkpoint":"","push":true,"note":"","backup_job_id":"","replace_baseline":
+    POST /api/labs/c352ba8164dd426a8f31925fdceea848/git/compare {"job_id":"331cac62b85c1789bebbb07efb1f7675"}
+    POST /api/git/jobs/331cac62b85c1789bebbb07efb1f7675/retry {"push":true,"reviewed":true,"head":"03aff0b42ee24ed31fda9baa16aee4f9582573fc"}
+    POST /api/labs/c352ba8164dd426a8f31925fdceea848/git/compare {"job_id":"331cac62b85c1789bebbb07efb1f7675"}
+[19:48:51] job: {"changed_files": ["git-redesign/latest/ceos1.cfg", "git-redesign/latest/ceos1.eoscfg", "git-redesign/latest/ceos2.cfg", "git-redesign/latest/ceos2.eoscfg", "git-redesign/latest/cjunos.cfg", "git-redesign/latest/cjunos.jcfg", "git-redesign/latest/xrv9k.cfg", "git-redesign/latest/xrv9k.xrcfg", "git-redesign/latest/git-redesign.clab.yml.annotations.json", "git-redesign/latest/manifest.json"], "commit": "03aff0b42ee24ed31fda9baa16aee4f9582573fc", "note": "4 devices changed, map changed", "note_auto": true, "pushed": true, "status": "synced", "summary": {"added": 5, "devices": ["ceos1", "ceos2", "cjunos", "xrv9k"], "first": false, "map": true, "removed": 5, "removed_devices": [], "topology": fal ...[trimmed]
+  [GitHub after A2]
+      03aff0b42e 4 devices changed, map changed
+      68184adaf3 4 devices changed, map changed
+      af91328e52 C6probe
+      68fedc7349 Final
+  [VM checkout VM checkout after A2]
+      03aff0b 4 devices changed, map changed
+      68184ad 4 devices changed, map changed
+      af91328 C6probe
+      68fedc7 Final
+      ## main...origin/main [ahead 7]
+[19:48:52] lab folder git-redesign/latest on GitHub holds: ['ceos1.cfg', 'ceos1.eoscfg', 'ceos2.cfg', 'ceos2.eoscfg', 'cjunos.cfg', 'cjunos.jcfg', 'git-redesign.clab.yml', 'git-redesign.clab.yml.annotations.json', 'manifest.json', 'xrv9k.cfg', 'xrv9k.xrcfg']
+PASS A2 GitHub: topology file, map, one configuration per device
+commit patch lines:
+      FILE git-redesign/latest/ceos1.cfg +1 -1
+        -   description l2-c1-start
+        +   description l2-c1-final
+      FILE git-redesign/latest/ceos1.eoscfg +1 -1
+      FILE git-redesign/latest/ceos2.cfg +1 -1
+      FILE git-redesign/latest/ceos2.eoscfg +1 -1
+      FILE git-redesign/latest/cjunos.cfg +1 -1
+      FILE git-redesign/latest/cjunos.jcfg +2 -2
+      FILE git-redesign/latest/git-redesign.clab.yml.annotations.json +10 -6
+        +  "freeTextAnnotations": [],
+        +  "freeShapeAnnotations": [],
+        +  "trafficRateAnnotations": [],
+        +  "groupStyleAnnotations": [],
+        +  "networkNodeAnnotations": [],
+        -        "x": 0,
+        -        "y": 0
+        +        "x": 40,
+        +        "y": 20
+        -      "yamlNodeId": "xrv9k"
+        +      "yamlNodeId": "xrv9k",
+        +      "interfacePattern": "Gi0/0/0/{n}"
+        -  "freeTextAnnotations": [],
+        -  "freeShapeAnnotations": [],
+      FILE git-redesign/latest/manifest.json +14 -14
+      FILE git-redesign/latest/xrv9k.cfg +2 -2
+      FILE git-redesign/latest/xrv9k.xrcfg +2 -2
+PASS A2: no console, page or request errors
+
+=== A2: 8 checks, 0 failed
+PASS A2 Save: nothing typed
+PASS A2 the panel opened by itself
+PASS A2 the sentence names the device and the map
+PASS A2 the sentence names the device
+PASS A2 See changes lists the device file and the map
+PASS A2 the chip reads Saved just now
+PASS A2 GitHub: topology file, map, one configuration per device
+PASS A2: no console, page or request errors
+None
+
+8 checks, 0 failed

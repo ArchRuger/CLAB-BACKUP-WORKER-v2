@@ -409,3 +409,134 @@ of 9.3 (1)); other files `l1-online/online-{1,2,3}.txt`. Devices: ceos1 and ceos
 `l1-s11b2-ceos1` / `l1-s11b2-ceos2`, cJunosEvolved and XRv9k run the Broken state (`l1-s6-broken`); `git-redesign-b` ceos1
 `l1-s17-solution`, ceos2 `l1-s16-after-reimport`. The manager's planned folders I made in step 13 were forgotten again;
 the registrations they or the moves created remain. No merge, force-push, tag or image publication; no data deleted.
+
+## 10. Live browser pass (L2)
+
+Run 2026-10-04 18:50 to 19:50 UTC by the VM operator (one operator on the live labs), through the real page
+(Playwright and Chromium from `~/pw-venv`, 1440x900, 390x844 for group D) against the manager built from `2578f22`
+(branch `slice/l2-live`), the real devices and real GitHub. Evidence: numbered text files and screenshots in
+[evidence/live/](evidence/live/) (screenshots show no configuration text: panels, lists and trees only; the What changed
+and differences drawers were not kept). Scripts: `tools/live/l2lib.py` (the integration scripts' `Session` pointed at the
+real manager), `l2_a1.py` to `l2_d3.py`, and `l2_x_*.py` (the small follow-up scripts that were run by hand). No code was
+changed. The device changes are interface descriptions (`l2-a2`, `l2-c1-start`, `l2-c1-broken`, `l2-c1-final`, ...).
+
+### 10.1 Build and the environment
+
+`docker compose --env-file <installed .env> -f <worktree>/clab-backup-ui/compose.yml up -d --build` exit 0, then
+`sudo bash deploy/setup-git.sh --refresh` exit 0 (file `00`). API version 1.30.60, installed `host_git.py` `cmp`-identical,
+every `app/*.py`, `static/*.js` and `static/*.html` in the container equals the worktree (`01`); `deploy/check-install.sh`
+exit 2 with PASS 110, FAIL 0, WARN 1 (`Folder coverage`, as before), INFO 28 (`02`).
+
+**The XRv9k guest stopped answering SSH after the manager rebuild** (TCP accepted, no banner for more than 10 minutes,
+connections stay CLOSE-WAIT in the container, the console shows only telnet negotiation) although the manager still read it
+Ready. `sudo containerlab restart -t git-redesign.clab.yaml -n xrv9k`: the first boot hung again in
+`BUG: soft lockup - CPU#0 stuck for 23s! [tune2fs]` for 20 minutes (container "unhealthy"), the second restart came up
+(about 9 minutes; the configuration persisted, `l1-s6-broken` was still there). Group A and most of B and D therefore ran on
+lab `git-redesign-b` (two cEOS) while the guest started; A2 and the unchanged save were repeated on lab A afterwards (`11b`,
+`12c`). `docker ps` still lists the container as unhealthy; SSH and the manager work. Details in `03`.
+
+### 10.2 Results
+
+| Step | Result | What the page showed and did |
+|---|---|---|
+| A1 | PASS | Chip, Save, Load, Lab actions on all four tabs, one row, in order; no Progress tab; `#lab=<id>&view=progress` and `view=git` rewrite to `view=topology` with the chip panel open (`10`). |
+| A2 | PASS | Lab B, then lab A. Device `l2-a2` plus the map moved by Edit map: **Save** opened the panel by itself: `1 device changed since your last save: ceos2. 1 line added, 1 removed. The map changed.` **See changes** lists `ceos2.cfg`, `Map ... annotations.json`, `manifest.json`; **Upload**; chip `Saved just now`. GitHub: the lab folder holds topology, map and one config per device; the map patch moves ceos1 `40,20` to `60,40`. **2 clicks (Save, Upload), 3 with See changes, nothing typed** (`11`, `11b`). |
+| A3 | PASS | Not now: panel closes, chip `1 save to upload`, the commit exists only on the VM; Upload later from the chip (4 clicks counted: Save, Not now, chip, Upload). Unchanged Save: toast `Nothing changed since your last save.`, no commit (lab B and lab A with Junos and IOS XR). Name field renames (commit subject unchanged), **Keep as a checkpoint** (2 clicks, 3 with Upload) wrote `git-redesign-b/checkpoints/l2-named-save`. In **All versions** an older save kept as `l2-older-checkpoint` (7 clicks, 1 typed): the commit adds only `checkpoints/l2-older-checkpoint/*` and `latest/ceos1.cfg` kept its blob; the checkpoint holds `l2-a2`, `latest/` holds `l2-a3-named` (L1's defect is fixed) (`12`, `12b`, `12c`). |
+| A4 | PASS, DIFFERS | github.com blocked by the trap-guarded hosts line (restored byte-identical): chip `Upload failed`, panel `Your save is safe on the lab VM, but github.com could not be reached.` with Try again, See changes, Details; `git_status` still `ready: true`. After the network was back **Try again** ended `Saved just now` (1 click). See 10.3 (4) for the second Try again while blocked (`13`). |
+| A5 part 1 | PASS | The online copy one commit ahead, nothing waiting: **Save** then **Upload** (2 clicks) ended `Saved just now`; the VM log shows the online commit merged first (fast-forward) and the lab events `git.update` "The VM copy of the repository was brought up to date with the online copy before a save." (read through `/api/logs`; the Advanced tab did not show it on first view) (`14`). |
+| A5 part 2 | **FAIL** | One save kept with Not now, one more commit online, Upload: chip `Can’t save`, panel `The online copy and this VM both have changes the other does not have. They have to be combined on the VM.` / `The repository’s owner runs these on the lab VM, then Try again uploads the waiting saves:` / `git -C /home/archtop/labs/clab-scratch-git-redesign pull --no-rebase` / `git -C ... push`. Both commands ran as the owner (exit 0). **Try again then does nothing**: the panel shows the error `See what this upload sends before uploading.` and no upload request is made (see 10.3 (1)) (`15`). |
+| B1 | PASS | **New folder…** enabled at the top level, inside `git-redesign` and nested; each created, said as planned (`... is new. It appears in the repository with the first save.`), no refusal (`20`, screenshots `B1-*`). |
+| B2 | PASS | Remove and import again: first-save panel `This repository already holds saves of a lab named git-redesign-b.` with **Save in git-redesign-b-2** and **Continue there**. Continue there: 2 clicks to the commit (3 with Upload), the save continued in the old folder (`Map changed`, not a first save). Save in git-redesign-b-2: 2 clicks, `First save`. The case with no question was measured in B5 (`21`, `22`). |
+| B3 | PASS | Lab B moved to `git-redesign/inner` with its files brought along (chip, Change..., type, Save here = 3 clicks, 1 typed; the move waits for Upload, 7 files in the new folder, none left in the old). Two tries with a waiting save: question `1 save of git-redesign-b is waiting for upload.` with **Upload it, then move** (the save went up first, the move then waited as `1 save to upload`) and **Move and keep that save on the VM only** (the save stayed waiting with the move, `2 saves to upload`, one Upload sent both) (`23`). |
+| B4 | PASS | Lab B chose lab A's folder: `git-redesign saves here too.` / **Save in git-redesign/git-redesign-b** / **Use this folder anyway** (note names the disconnection); answered with Save in...; lab A kept its folder (`24`). |
+| B5 | PASS, DIFFERS | New private repository `ArchRuger/clab-scratch-git-redesign-empty` (no README). From a lab without a save location: Connect by URL..., address, folder, **Connect and save here**: `clab-scratch-git-redesign-empty is empty. The manager adds a README.md file to start it.` / **Start the repository**; GitHub: `Start the repository for lab saves` (README.md) then `First save` (`lab-b-empty/latest/*`). 5 clicks and 3 typed fields including Upload. Lab B was pointed back at `clab-scratch-git-redesign` `git-redesign-b` with **Replace it** (2 clicks) (`25`). See 10.3 (6). |
+| C1 | PASS | Chip, **Save as a lab state...**, a name chip (`start`, `broken`, `final`), **Save state**: 4 clicks, 0 typed, folder `git-redesign/<name>`; one Upload sent all three; manifests carry `state`; every device file holds `l2-c1-start`, `-broken`, `-final`. **Load** lists Start, Broken, Final under LAB STATES. A first Broken attempt of mine was spoiled by my own timing (the cEOS were changed while it was still reading, `33a`); saving it again asked `“Broken” already exists here.` with **Replace it** / **Use another name** (`33`). |
+| C2 | PASS | Load, the state, the red Load = **3 clicks** each: Start, Broken, Final; confirmation `Load Start?` with `2 lines differ` per device; chip `Loading… 0 of 4`, then `Running <name>`; CLI read-back on all four devices matches each state. Panel `Running Start` / `Loaded just now on all 4 devices.`; the per-device words (`Waiting`, `Loaded`) are in the loading view; the finished panel does not list them when all four loaded. Every target's timeline has `armed` before `confirming` (`34`, timings in 10.4). |
+| C3 | PASS | **Undo this load** pressed at once after `Running Start`: the page showed `Checking the configuration from before Start against your devices...` with **Cancel** (screenshot `C3-undo-after-click-a.png`), the confirmation `Undo loading Start?` came after about 4 s, the undo job started 2.8 s after the red Load; no failure shown; the four devices were back on `l2-c1-final` (`35`; `35a` is my first run, which read the devices too early). |
+| C4 | PASS, DIFFERS | The confirmation was open, ceos2 paused, red Load: the manager answered after about 38 s (the page showed the confirmation with a dimmed Load and the old chip), then job `partial`, chip `Loaded 3 of 4`, panel `Loaded on 3 of 4 devices` / `ceos2 was not changed.` / ceos2 `Node is not currently running.` `Skipped` / **Try ceos2 again**, **Undo this load**, **Details**. After the unpause the first Try again said `Can't load` / `This device is not running, or the lab status is out of date.`; about a minute later it loaded; all four on Start (`36`). |
+| C5 | PASS | Lab B destroyed with the manager's lab operation: label `Stopped`, Load says `Start the lab to load a state` / `Loading puts a saved configuration onto running devices. This lab is not running.` / **Start lab**, which opens the review `Start git-redesign-b?` (the `containerlab deploy` command shown); confirmed, Ready in about 36 s (`30`). |
+| C6 | **FAIL**, DIFFERS | Lab A removed and imported again (new record): Load without a save location says `This lab has no saves of its own yet. You can start from one of these.` and lists 8 of 10 lab states alphabetically, **Start is not among them** (`2 more in All versions`), so the load took 5 clicks via All versions > Start > Load this state... > Load; all four devices ran Start (`37`). Then **Save does not open the first-save panel**: see 10.3 (2). After a second removal and import the first save asked `This repository already holds saves of a lab named git-redesign.`, **Continue there**, and the save continued in `git-redesign` (Save, Continue there, Upload = 3 clicks) (`38`). |
+| D | PASS, DIFFERS | 390x844: A2's save and upload (2 clicks), B1's chooser and C2's load of Final (3 clicks) all worked, no console error (`40`, `41`). See 10.3 (8). |
+
+### 10.3 Differences from the documents (the exact words and requests)
+
+1. **A5 recovery: Try again does nothing after the owner's two commands.** After `git -C <checkout> pull --no-rebase` and
+   `git -C <checkout> push` HEAD is the owner's merge commit and the waiting save is already on GitHub, but the manager still
+   lists the job `push_pending` (`git_status` `{ready: false, code: 'diverged'}`). **Try again** (`#save-cant-upload-again`)
+   posts `POST /api/labs/<id>/git/compare {"job_id": ...}` and no upload: the answer has `head` = the merge and
+   `upload_job: null` (no manager save at HEAD), and `gitReviewJob` throws `See what this upload sends before uploading.`, shown as
+   the panel error; the chip stays `Can’t save`. What works: press **Save** (nothing changed: a new empty save becomes the
+   save at HEAD, panel `Nothing changed since your last save, which is not uploaded yet. This upload also sends 1 other
+   save`), then **Try again** or Upload: every waiting save ends `synced` ("Saved commit is included in the verified remote
+   history"). The panel and the guide say Try again uploads the waiting saves (DESIGN.md 3.6); in L1 the same recovery worked
+   only because a save was made after the owner's merge. Evidence `15`, screenshot `A5-try-again-does-nothing.png`.
+2. **A lab with no save location that loaded a state cannot make its first save from the header.** The chip reads `Running
+   Start`; **Save** opens the Running panel (`Loaded 1 minute ago on all 4 devices.` / `Before loading: backed up automatically` /
+   Undo this load / What changed / Save as a lab state...) and sends **no request**; there is no `Choose another place`, no
+   address field and no Save settings in it. `Save as a lab state...` does not clear the chip (a state is not "your latest
+   save"), nor does Undo. PROMPT 5.9 says Save shows `Not saved yet` / `Your first save goes to ...`. Only removing and importing
+   the lab again led to the first-save panel (screenshot `C6-save-opens-running-panel.png`, `37`, `38`).
+3. **Load panel for a lab without saves shows 8 rows, alphabetical, and `2 more in All versions`**; `Start` and `Solution`
+   are the hidden two. It also lists the old lab record's own saves as lab states (`Git-redesign`, two checkpoints) and the
+   old rows of lab B (`B`, `L1-moved-b`, `L2-move-2`) with `0 of 4 devices`. PROMPT 5.4 step 1 wants the instructor's
+   `Start`, `Broken`, `Final` first.
+4. **Two failure views for one cause.** First upload failure: `Upload failed` / `Your save is safe on the lab VM, but github.com
+   could not be reached.` Pressing Try again while github.com is still blocked changes the chip to `Can’t save` and the
+   sentence to `The VM account cannot upload to github.com.` (helper sentence "The remote branch is unavailable. Check
+   connectivity and the owner's noninteractive HTTPS Git login."); that view's **Try again** is a new Save, which added a
+   second, empty waiting job (`waiting: 2`, "No configuration changes."); after the network was back the first view's Try
+   again uploaded both. When the chip turns to `Can’t save` after an Upload, the panel still showed the old `Upload failed` view
+   with `Checking what this upload sends...` for several seconds (`13`, `15`).
+5. **A device paused during a load**: `POST /api/labs/<id>/restore` returned only after about 38 s; during that time the
+   confirmation stayed open with a dimmed **Load** and the old chip, with no sentence (screenshot `C4-just-after-load.png`).
+   Right after the unpause the manager still said `Can't load` / `This device is not running, or the lab status is out of date.`
+6. **Address of a repository the VM does not have yet** (B5): while the address is typed, the chooser keeps the question of
+   the repository that was selected before (`This folder holds the state “Git-redesign-b”.` with `Save beside it in
+   git-redesign-b/git-redesign-b` / `Replace it`), for the other repository; with a free folder name the button reads
+   `Connect and save here`. The folder default of the lab's name could not be used in the new repository without
+   typing another name.
+7. **The state drawer accepts a name chip before its folder list has loaded.** Clicked at once, `broken` gave the folder
+   `broken` (top level, repository empty) and `POST /api/labs/<id>/git/places/check {"repository":"","folder":"broken","purpose":"state","name":"broken"}`
+   answered **422** `Check the request fields and upload sizes.` (the only console error of the pass; `31c`). With the
+   list loaded the folder is `git-redesign/broken`.
+8. **390 px.** The top bar overflows (the page scrolls sideways by 40 px; the **Manager** button is cut off at the right and
+   the breadcrumb runs into the product name); the chip, Save and Load wrap to two rows and nothing overlaps; panels, lists
+   and the chooser are readable; **Upload** is 40 px high, **New folder...** and **Cancel** 30 px (under 44). The map editor
+   at 390 px is not usable for moving a device: the nodes are 4 px wide, off the right edge, a drag does nothing. Hence D's
+   save was a device change only.
+9. Smaller: the chip says `Saved 3 h ago`, its panel `Saved 3 hours ago`; the first-save panel shows `Device logins are being
+   checked. Save is available when it finishes.` for a few seconds after an import; the map editor's save added empty
+   `...Annotations` keys to the map file (first save of lab B's map shows `+"freeTextAnnotations": []` lines).
+
+### 10.4 Load timings (seconds from the job's `queued`, three loads of lab A)
+
+| Platform | applying to armed | applying to settled | whole target (to `checked`) |
+|---|---|---|---|
+| cEOS | 1.1 to 1.2 | 2.0 to 2.3 | 13.2 to 14.6 (the job, all targets) |
+| cJunosEvolved | 3.8 to 3.9 | 5.0 to 5.9 | same job |
+| XRv9k | 5.0 to 5.4 | 7.4 to 8.0 | same job |
+
+From the click on the red Load to the chip `Running <name>`: 16 s (Start), 18 s (Broken), 16 s (Final). Every target in all
+loads, undo and retry has `armed` before `confirming`, `persistence: saved`, one attempt, `status: verified`.
+
+### 10.5 Not demonstrated
+
+Moving a device on the map at 390 px (the editor is not usable there). The `REMOTE_AHEAD` sentence for a placement. The
+lab event log in the Advanced tab (the `git.update` event was read from `/api/logs`). Device-side command output of the
+timed recovery (the job's timeline is the evidence). Everything else in the brief ran.
+
+### 10.6 State left behind
+
+Both labs run and are Ready (4 of 4 and 2 of 2); nothing is paused; `/etc/hosts` has no extra line; nothing waits. Lab A
+(`git-redesign`, record `c352ba81...`, imported twice during C6) saves in `git-redesign`; lab B (`git-redesign-b`, record
+`aa4ee92a...`, redeployed in C5) saves in `git-redesign-b` of `clab-scratch-git-redesign`. Devices: lab A
+ceos1, ceos2 and XRv9k run `l2-c1-final`, cJunosEvolved `l2-a2`; lab B ceos1 `l2-d1`, ceos2 `l2-a5` (the redeploy reset
+them). `main` of the scratch repository: lab states `git-redesign/{start,broken,final,c6probe}/latest`, saves
+`git-redesign/latest`, `git-redesign-b/latest`, checkpoints `git-redesign/checkpoints/ceos1-changed{,-2}` and
+`git-redesign-b/checkpoints/{l2-named-save,l2-older-checkpoint}`, `l2-move-2/latest`, `git-redesign/b/latest`, `l1-moved-b/latest`,
+`l1-scaffold/reference/solution/latest`; online files `l1-online/*`, `l2-online/a5-online-{1,2}.txt`. I removed the L1 states
+(`git-redesign/{start,broken,final}`, the stray top-level `latest/`, `l1-scaffold/reference/start`) and the L2 trial states with
+an owner commit (`eb4eb58`, `32`), so the lab's Start, Broken and Final carry no suffix. The new private repository
+`ArchRuger/clab-scratch-git-redesign-empty` holds `README.md` and `lab-b-empty/latest/*`. The manager's list of VM
+registrations still holds the folders the moves and states created. No merge, force-push, tag or image publication; no data
+deleted.
