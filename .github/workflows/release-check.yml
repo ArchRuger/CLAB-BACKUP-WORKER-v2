@@ -79,6 +79,7 @@ jobs:
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_background_recovery.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_git_command_timeout.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_git_progress.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_git_whole_lab.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_git_transport.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_host_git.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_restore.py -v

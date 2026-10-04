@@ -361,16 +361,20 @@ def remote_git(host, request, stopping=None):
         client.close()
 
 
-def captured_snapshot(store, backup, context=None, embedded_files=True):
+def captured_snapshot(store, backup, context=None, embedded_files=True, complete=True):
+    """`complete=False` keeps only the devices whose file was captured and skips the scope check. It is for loading the
+    automatic backup of a load back (a device whose safety backup failed was never changed by that load); a Git save
+    always passes the strict default, so an older configuration is never saved in place of a device that failed."""
     if backup.get('operation') != 'backup' or backup.get('status') not in ('succeeded', 'partial'):
         raise ValueError('Choose a completed configuration capture.')
     nodes = backup.get('nodes', [])
+    if not complete: nodes = [n for n in nodes if n.get('status') == 'succeeded']
     if not nodes or len(nodes) > 500 or any(n.get('status') != 'succeeded' for n in nodes):
         raise ValueError('Capture incomplete. Every included device must have a successful file; latest is unchanged.')
     if len({n.get('name') for n in nodes}) != len(nodes): raise ValueError('Capture has ambiguous device identities.')
     context = context or backup.get('progress_context') or {}
     expected = context.get('node_names')
-    if expected and set(expected) != {n['name'] for n in nodes}:
+    if complete and expected and set(expected) != {n['name'] for n in nodes}:
         raise ValueError('Capture device scope changed; save a new progress snapshot.')
     names = {}; files = {}; rows = []; total = 0
     for node in sorted(nodes, key=lambda n: n['name']):
@@ -594,6 +598,25 @@ class GitProgress:
         if not lab: raise HTTPException(404, 'Lab not found.')
         if not lab.get('git_binding'): raise HTTPException(409, 'Connect this lab to a Git repository first.')
         return copy.deepcopy(lab['git_binding'])
+
+    def reader(self, lab_id, repository=''):
+        """The binding to read a repository with: the lab's own, or, for a lab without a save location or for another
+        repository of the connected VM, the registration `repository` once the helper's own list names it. Read-only
+        callers only (the saved states of a repository, a state to load); a save always uses a binding of its own."""
+        with self.store.lock:
+            lab = self.store.lab(lab_id)
+            if not lab: raise HTTPException(404, 'Lab not found.')
+            own = copy.deepcopy(lab.get('git_binding'))
+            host = host_identity(self.store.state.get('host', {}))
+        if not repository:
+            if not own: raise HTTPException(409, 'Connect this lab to a Git repository first.')
+            return own
+        if own and own.get('binding_id') == repository: return own
+        try: catalog = self.repositories()['repositories']
+        except ValueError as exc: raise HTTPException(409, str(exc))
+        repo = next((r for r in catalog if isinstance(r, dict) and r.get('id') == repository), None)
+        if not repo: raise HTTPException(404, 'This repository is not registered on the VM. Refresh the list.')
+        return dict(binding_id=repo['id'], revision=repo['revision'], repository=repo, host_identity=host)
 
     def idle(self, lab_id=None):
         # A network-design apply read back after a restart holds its own lab only, so `operation_busy` without a lab does not
