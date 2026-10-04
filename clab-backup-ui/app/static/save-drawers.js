@@ -495,7 +495,7 @@ function drwChooserView(){
  const content=typeof folderChooserMarkup==='function'?folderChooserMarkup(c.model,c):'<p class="save-note">The folder chooser is not available on this page.</p>';
  return {title,meta,actions:'',content};
 }
-const drwOpenBranches=new Map();   // "<lab id>|<repository id>" → Set of open folder paths (the same Set the chooser toggles)
+const drwOpenBranches=new Map();   // "<lab id>|<repository id>" → {open: Set of open folder paths (the Set the chooser toggles), start: the folder it last started on}
 async function drwLoadChooser(){
  const c=saveDrawer.chooser,id=saveDrawer.lab,request=saveDrawer.request;c.raw=null;c.status='loading';c.error='';drwDrawerRenderSoon();
  try{
@@ -519,10 +519,12 @@ async function drwLoadChooser(){
   // The open branches belong to the person (CLAUDE.md: never derive `open` from the selection). They are remembered per lab and
   // repository for as long as the page lives: across the poll, and across closing and reopening the drawer. The first time a
   // repository is shown the path to the lab's folder is opened; after that only the person's own actions open or close a branch.
-  const branches=id+'|'+c.repository,kept=drwOpenBranches.get(branches);
-  if(kept)c.expanded=c.model&&typeof gitKeepExpanded==='function'?gitKeepExpanded(kept,c.model):kept;
-  else{c.expanded=c.model&&typeof folderDefaultExpanded==='function'?folderDefaultExpanded(c.model):new Set(['']);if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,drwDir(c.value));}
-  drwOpenBranches.set(branches,c.expanded);
+  // (When the folder the chooser starts on is another one than last time, because the lab was placed elsewhere meanwhile, the
+  // path to it is opened once more; nothing is closed.)
+  const branches=id+'|'+c.repository,kept=drwOpenBranches.get(branches),start=drwDir(c.value);
+  if(kept){c.expanded=c.model&&typeof gitKeepExpanded==='function'?gitKeepExpanded(kept.open,c.model):kept.open;if(kept.start!==start&&typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,start);}
+  else{c.expanded=c.model&&typeof folderDefaultExpanded==='function'?folderDefaultExpanded(c.model):new Set(['']);if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,start);}
+  drwOpenBranches.set(branches,{open:c.expanded,start});
   c.answer=!c.model&&!context?.binding&&c.value===(places.default?.folder||'')?places.default?.answer||null:null;
   c.status='ready';
   if(c.mode!=='browse'&&!c.address&&!(c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(drwTyped(c)):c.value))&&!c.answer)drwChooserCheck(c.value);
