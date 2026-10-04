@@ -37,7 +37,12 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
 - **Details** offers latest and historical successful configuration downloads,
   **Test login** (authenticates over SSH and asks for `show version`, or a harmless shell
   command for a device with no NOS platform; its timestamped result is a last check, not a
-  continuous reachability guarantee. A login that is accepted while the CLI is still starting
+  continuous reachability guarantee. A device with a NOS platform must really answer `show version`.
+  A device without one (a Linux host, or a network OS of a kind the manager does not back up) counts as
+  answering when its CLI says anything but a not-ready reply, even an error for the shell command it does
+  not know. The CLI must have answered completely within 25 seconds of being asked, or the check ends
+  there and counts as no answer; the readiness monitor's own check follows the same rules. A login
+  that is accepted while the CLI is still starting
   shows the *Starting* login-result badge with its own message, never *Login OK*. In a lab
   linked to a VM deployment the device reads *Starting* too, the readiness monitor keeps asking
   and replaces the result with the real answer. A lab with no VM deployment (an inventory

@@ -23,7 +23,7 @@ import paramiko
 
 from .discovery import discovery_fresh, lab_status, node_available, uptime_seconds
 from .lab_operations import operation_busy
-from .node_services import CLI_COMMAND, CLI_TIMEOUT, GENERIC_CLI_COMMAND, cli_answers, connect, node_cli_command   # the one CLI check, shared with Test login
+from .node_services import CLI_COMMAND, CLI_TIMEOUT, GENERIC_CLI_COMMAND, cli_answers, connect, node_cli_answers, node_cli_command   # the one CLI check, shared with Test login
 from .runner import effective_credentials, now
 
 SCAN_INTERVAL = 5
@@ -284,7 +284,7 @@ class ReadinessMonitor:
         except Exception: return None
         try:
             connect(client, node, creds)
-            return 'reachable' if cli_answers(client, node_cli_command(node)) else 'booting'
+            return 'reachable' if node_cli_answers(client, node) else 'booting'
         except (paramiko.AuthenticationException, ValueError): return 'failed'
         except Exception: return 'booting'
         finally: self.services.release(client)

@@ -3,6 +3,7 @@ import asyncio
 import copy
 import io
 import json
+import re
 import secrets
 import threading
 import time
@@ -32,26 +33,57 @@ CLI_COMMAND = 'show version'
 # a real, harmless shell command still proves the SSH login answers a real command,
 # without faking readiness for a host that was never a NOS in the first place.
 GENERIC_CLI_COMMAND = 'echo readiness-check'
-CLI_TIMEOUT = 25
+CLI_TIMEOUT = 25      # seconds for the whole CLI check: the exec request, the command and all of its output
+# The replies that mean "the CLI is still starting": the not-ready answers of runner.CLI_ERROR and cEOS's early-boot
+# agent error. For a node without a NOS platform only these (or no answer) keep it booting; a CLI that rejects the
+# generic command ("% Invalid input", "error: unknown command") is a CLI that answered.
+CLI_NOT_READY = re.compile(r'(?im)System is not yet ready|Waiting for editing of configuration|could not connect to agent')
 
 
-def cli_answers(client, command=CLI_COMMAND, timeout=CLI_TIMEOUT):
-    """True when the NOS CLI returns a real answer to show version over an exec channel.
+def cli_answers(client, command=CLI_COMMAND, timeout=None, refused=CLI_ERROR):
+    """True when the CLI returns a real answer to `command` over an exec channel before one deadline.
 
     SSH can accept a login while the CLI is still starting (cEOS agents, Junos
-    daemons); an empty or not-ready reply keeps the node in booting.
+    daemons); an empty reply, or one that matches `refused` (by default any CLI error
+    or not-ready reply: show version must really succeed), keeps the node in booting.
+    The deadline (CLI_TIMEOUT unless given) bounds the whole check: paramiko waits for
+    the exec request's reply with no timeout of its own and keeps reading while output
+    trickles in, so a timer closes the transport when it passes (which ends either
+    wait), and an answer that was not complete by then is no answer.
     """
+    timeout = CLI_TIMEOUT if timeout is None else timeout
+    expired = threading.Event()
+    def expire(transport):
+        expired.set()
+        if transport is not None: transport.close()
+    timer = None
     try:
+        timer = threading.Timer(timeout, expire, (client.get_transport(),)); timer.daemon = True; timer.start()
         stdin, stdout, _ = client.exec_command(command, timeout=timeout)
         stdin.close()
         output = stdout.read(65536).decode('utf-8', 'replace')
     except Exception:
         return False
-    return bool(output.strip()) and not CLI_ERROR.search(output)
+    finally:
+        if timer is not None: timer.cancel()
+    if expired.is_set(): return False
+    return bool(output.strip()) and not refused.search(output)
 
 
 def node_cli_command(node):
     return CLI_COMMAND if node.get('platform') else GENERIC_CLI_COMMAND
+
+
+def node_cli_answers(client, node):
+    """The one CLI check of Test login, Test logins and the readiness monitor's probe.
+
+    A node with a NOS platform must really answer show version. A node without one is
+    asked the generic shell command: a Linux shell runs it, and a NOS kind outside the
+    supported ones (stored with platform '', for example cisco_iol from discovery) rejects
+    it, which still proves an answering CLI; for it only no answer, the deadline or a
+    not-ready reply (CLI_NOT_READY) keeps the node booting.
+    """
+    return cli_answers(client, node_cli_command(node), refused=CLI_ERROR if node.get('platform') else CLI_NOT_READY)
 
 
 class NodeRequest(BaseModel):
@@ -156,13 +188,13 @@ class NodeServices:
 
     def login_result(self, client, node, creds, monitored=False):
         """The stored outcome of one Test login, shared by the per-node route and Test logins so the two
-        always agree: 'reachable' only when the CLI answered a real command after the login (the check the
-        readiness monitor's probe makes), 'booting' when the login was accepted but the CLI is silent,
-        'failed' when the login itself did not work. A booting result promises a re-check only when
-        `monitored` (the lab is linked to a VM deployment). Never raises."""
+        always agree: 'reachable' only when the CLI answered a real command after the login (node_cli_answers,
+        the check the readiness monitor's probe makes), 'booting' when the login was accepted but the CLI is
+        silent, still starting or past CLI_TIMEOUT, 'failed' when the login itself did not work. A booting
+        result promises a re-check only when `monitored` (the lab is linked to a VM deployment). Never raises."""
         try:
             connect(client, node, creds)
-            answered = cli_answers(client, node_cli_command(node))
+            answered = node_cli_answers(client, node)
         except Exception:
             return {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
         if answered:

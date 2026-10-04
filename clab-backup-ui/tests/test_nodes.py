@@ -26,10 +26,21 @@ class CliStream:
         pass
 
 
+class CliTransport:
+    def __init__(self):
+        self.closed = threading.Event()
+
+    def close(self):
+        self.closed.set()
+
+
 class CliClient:
     """Stands in for the SSH client after connect(): records the command and answers (or not)."""
     def __init__(self, output=b'', error=None):
-        self.output = output; self.error = error; self.commands = []
+        self.output = output; self.error = error; self.commands = []; self.transport = CliTransport()
+
+    def get_transport(self):
+        return self.transport
 
     def exec_command(self, command, timeout=None):
         self.commands.append(command)
@@ -38,6 +49,18 @@ class CliClient:
 
     def close(self):
         pass
+
+
+class HungCliClient(CliClient):
+    """The device accepted the SSH session but never answers the exec request; only closing the transport ends the wait
+    (it gives up by itself after `limit`, so a missing deadline fails the test instead of hanging it)."""
+    def __init__(self, limit=3):
+        super().__init__(); self.limit = limit; self.waiting = threading.Event()
+
+    def exec_command(self, command, timeout=None):
+        self.commands.append(command); self.waiting.set()
+        self.transport.closed.wait(self.limit)
+        raise OSError('Channel closed.')
 
 
 class NodeTests(unittest.TestCase):
@@ -308,6 +331,60 @@ class NodeTests(unittest.TestCase):
         self.assertFalse(self.services.clients)
         logs = self.client.get('/api/logs', headers=self.auth).text
         self.assertNotIn('never-log-this', logs); self.assertNotIn('not yet ready', logs)
+
+    def test_test_login_counts_any_real_answer_from_a_node_without_a_platform(self):
+        # N2 (M-11 follow-up): a NOS kind outside the supported four is stored with platform '' and asked the generic shell
+        # command; its CLI rejects it, and that rejection is an answering CLI (before M-11 a manual Test login made such a
+        # node ready, after it nothing could). The monitor's probe and Test login / Test logins decide every case alike.
+        from app.node_readiness import ReadinessMonitor
+        monitor = ReadinessMonitor(self.app.state.store, self.services, None)
+        self.addCleanup(monitor.close)
+        rejecting = (b"           ^\n% Invalid input detected at '^' marker.\n\nrouter#", b'error: unknown command: echo\n')
+        cases = [('linux', b'readiness-check\n', 'reachable')] + [('linux', output, 'reachable') for output in rejecting] + [
+            ('linux', b'', 'booting'), ('linux', b'% System is not yet ready. Please try again later.\n', 'booting'),
+            ('linux', b'error: could not connect to agent\n', 'booting'), ('linux', b'Waiting for editing of configuration\n', 'booting'),
+            ('r1', rejecting[0], 'booting'), ('r1', b'% System is not yet ready\n', 'booting'), ('r1', b'Arista cEOSLab\n', 'reachable')]
+        for name, output, expected in cases:
+            node = next(n for n in self.lab['nodes'] if n['name'] == name)
+            with patch('app.node_services.paramiko.SSHClient', return_value=CliClient(output)), patch('app.node_services.connect'), \
+                 patch('app.node_readiness.connect'):
+                manual = self.post('/api/labs/lab/ssh-check', {'name': name}).json()
+                probed = monitor.ssh_probe(node, {'username': 'user', 'password': 'x'})
+            self.assertEqual((manual['status'], probed), (expected, expected), (name, output))
+        self.services.checks.clear()
+        with patch('app.node_services.paramiko.SSHClient', return_value=CliClient(rejecting[0])), patch('app.node_services.connect'):
+            self.assertEqual(self.post('/api/labs/lab/ssh-check-all', {}).status_code, 200)
+            deadline = time.monotonic() + 3
+            while (self.services.checking_all or len(self.services.checks) < 3) and time.monotonic() < deadline:
+                time.sleep(0.01)
+        bulk = {k[1]: v['status'] for k, v in self.services.checks.items()}
+        self.assertEqual(bulk, {'r1': 'booting', 'r2': 'booting', 'linux': 'reachable'}, 'Test logins applies the same rule')
+        self.assertFalse(self.services.clients)
+
+    def test_a_hung_exec_ends_test_login_as_booting_within_the_cli_timeout_and_frees_the_node(self):
+        # N3 (M-11 follow-up): Test login runs the CLI check in the request thread while the node's 'checking' key and an SSH
+        # client slot are held. A device that accepts the session but never answers the exec request used to hold both
+        # until it gave up, and every further Test login of that node answered 409 'already running'.
+        hung = HungCliClient()
+        outcome = {}
+        def first():
+            with patch('app.node_services.paramiko.SSHClient', return_value=hung), patch('app.node_services.connect'):
+                started = time.monotonic()
+                outcome['response'] = self.post('/api/labs/lab/ssh-check', {'name': 'r1'})
+                outcome['elapsed'] = time.monotonic() - started
+        with patch('app.node_services.CLI_TIMEOUT', 0.5):
+            worker = threading.Thread(target=first); worker.start()
+            self.assertTrue(hung.waiting.wait(2))
+            self.assertEqual(self.post('/api/labs/lab/ssh-check', {'name': 'r1'}).status_code, 409, 'still inside the deadline')
+            worker.join(5)
+        self.assertLess(outcome['elapsed'], 2, 'the hung exec ends at the stated CLI_TIMEOUT, not when the device gives up')
+        self.assertEqual(outcome['response'].status_code, 200)
+        self.assertEqual(outcome['response'].json()['status'], 'booting', 'a silent CLI is never ready')
+        self.assertTrue(hung.transport.closed.is_set())
+        self.assertNotIn(('lab', 'r1'), self.services.checking); self.assertFalse(self.services.clients)
+        with patch('app.node_services.paramiko.SSHClient', return_value=CliClient(b'Arista cEOSLab\n')), patch('app.node_services.connect'):
+            again = self.post('/api/labs/lab/ssh-check', {'name': 'r1'})
+        self.assertEqual((again.status_code, again.json()['status']), (200, 'reachable'), 'the node is free for the next Test login')
 
     def test_booting_message_promises_a_recheck_only_for_a_lab_linked_to_a_vm_deployment(self):
         # M-11 follow-up: ReadinessMonitor.scan() skips a lab with no deployment_name (an inventory import),
