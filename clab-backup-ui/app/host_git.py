@@ -129,8 +129,26 @@ def descriptor(binding):
     return {k: binding[k] for k in ('id', 'label', 'owner', 'path', 'remote', 'push_url', 'branch', 'prefix', 'revision')}
 
 
-def overlapping(prefix, other):
-    return not prefix or not other or prefix.startswith(other + '/') or other.startswith(prefix + '/')
+def saves_holding(prefix, other):
+    """The saved-state folder of the lab folder `other` (`<other>/latest`, `<other>/baseline` or
+    `<other>/checkpoints`) that `prefix` is, or lies inside; '' when there is none."""
+    return next((f for f in ((other + '/' if other else '') + n for n in RESERVED) if prefix == f or prefix.startswith(f + '/')), '')
+
+
+def colliding(prefix, other):
+    """Two lab folders write the same files only when one lies inside a folder the other writes its saves
+    into (latest, baseline, checkpoints). Otherwise they may sit inside, above or beside each other.
+    The same folder is not a collision here: callers test equality themselves."""
+    return prefix != other and bool(saves_holding(prefix, other) or saves_holding(other, prefix))
+
+
+def collision_message(prefix, other):
+    """One sentence for a colliding pair: `prefix` is the folder asked for, `other` a registered lab folder."""
+    if saves_holding(prefix, other):
+        return ('The folder ' + prefix + ' is inside ' + saves_holding(prefix, other) + ', where ' +
+                ('the lab folder ' + other if other else 'the lab folder at the repository top level') + ' keeps its saves; choose a folder above that saved state.')
+    return ('The lab folder ' + other + ' is inside ' + saves_holding(other, prefix) + ', where ' +
+            (prefix if prefix else 'a lab folder at the repository top level') + ' would keep its saves; choose another folder for this lab.')
 
 
 def no_links(path, require=True):
@@ -983,18 +1001,18 @@ def account_binding(owner, path, remote, prefix, label, lookup=None):
             'path': str(path), 'remote': remote, 'prefix': prefix, 'branch': '', 'push_url': '', 'revision': ''}
 
 
-def check_overlap(config, path, prefix, ignore=None):
+def check_collision(config, path, prefix, ignore=None):
     for b in config['repositories']:
         if b is ignore or b['path'] != str(path): continue
-        if overlapping(prefix, b['prefix']):
-            raise ValueError('Lab folders in one repository cannot overlap: ' + (b['prefix'] or 'the repository root') + ' is already a lab folder. Choose a folder beside it.')
+        if colliding(prefix, b['prefix']): raise ValueError(collision_message(prefix, b['prefix']))
 
 
 def plan_prefix(config, req, lookup=None):
     """Root: describe a sibling registration of an existing checkout; nothing has run as the owner yet.
 
-    With retire, the source registration is about to be replaced by the new folder, so it does not
-    count as an overlap: a lab registered at the repository root can move into a subfolder."""
+    Lab folders may sit inside, above or beside each other; only a folder inside another's saved state
+    (or one whose saved state would hold another) collides. With retire, the source registration is about
+    to be replaced by the new folder, so it is not compared."""
     source = next((b for b in config['repositories'] if b['id'] == req.get('binding_id')), None)
     if not source or source['revision'] != req.get('revision'): raise ValueError('The repository binding changed. Select it again.')
     prefix = relpath(req.get('prefix'), empty=True)
@@ -1004,7 +1022,7 @@ def plan_prefix(config, req, lookup=None):
     # A registration that already exists (a legacy `x/latest` one included) stays selectable and
     # repairable; only a new lab folder must not be a snapshot folder name.
     base_prefix(prefix)
-    check_overlap(config, source['path'], prefix, ignore=source if req.get('retire') is True else None)
+    check_collision(config, source['path'], prefix, ignore=source if req.get('retire') is True else None)
     label = req.get('label') or (Path(source['path']).name + (' / ' + prefix if prefix else ''))
     binding = account_binding(source['owner'], source['path'], source['remote'], prefix, label, lookup)
     return None, binding
@@ -1025,7 +1043,7 @@ def plan_connect(config, req, lookup=None):
         path = str(Path((lookup or account_lookup)(owner).pw_dir) / 'labs' / repository_name(url)); remote = 'origin'
         if any(b['path'] == path for b in config['repositories']):
             raise ValueError('The VM folder for this repository name already holds another registered repository. Choose a repository with a different name.')
-    check_overlap(config, path, prefix)
+    check_collision(config, path, prefix)
     label = repository_name(url) + (' / ' + prefix if prefix else '')
     binding = account_binding(owner, path, remote, prefix, label, lookup)
     binding['_pending'] = True
@@ -1078,7 +1096,7 @@ def save_registration(binding, retire=None, add=True):
             # The lab moved away: its previous folder registration is retired so it cannot block or confuse later choices.
             repositories = [b for b in repositories if b['id'] != retire[0]]
         if add:
-            if any(b['id'] != binding['id'] and b['path'] == binding['path'] and (b['prefix'] == binding['prefix'] or overlapping(binding['prefix'], b['prefix']))
+            if any(b['id'] != binding['id'] and b['path'] == binding['path'] and (b['prefix'] == binding['prefix'] or colliding(binding['prefix'], b['prefix']))
                    for b in repositories):
                 raise ValueError('Another Git registration for this checkout folder was saved meanwhile. Nothing was registered; choose the folder again.')
             repositories = [b for b in repositories if b['id'] != binding['id']] + [binding]

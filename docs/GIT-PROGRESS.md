@@ -193,8 +193,8 @@ naming such a folder is refused with that explanation. A folder named `latest` h
 
 **Set baseline…** changes `baseline/` explicitly. Replacing an existing baseline
 requires review. **Create checkpoint…** creates a named milestone; choose a new name
-for another milestone (the dialog shows the folder name it becomes as you type). The helpers reject unsafe paths, overlapping registered
-destinations and unsupported repository layouts rather than guessing a location.
+for another milestone (the dialog shows the folder name it becomes as you type). The helpers reject unsafe paths, a lab folder inside
+another lab's saved state and unsupported repository layouts rather than guessing a location.
 
 When one repository holds several labs, each lab registers a **subfolder** and the
 whole `latest/`, `baseline/` and `checkpoints/` layout nests under it, for example
@@ -357,12 +357,15 @@ registration IDs and folder names.
   this repository, the folder is only added to the manager's list (see above) and nothing
   is registered on the VM. For a lab that is not connected yet, the new folder is
   registered and preselected for **Connect**.
-- Folders of one repository never overlap: a folder cannot be created inside another
-  lab's folder or inside a saved configuration, `baseline/` and `checkpoints/` cannot be
+- Lab folders of one repository may sit inside, above or beside each other, the
+  repository root included, and a folder registered on the VM that no lab uses is shown as
+  an ordinary folder. What stays out: a folder cannot be created inside a saved state
+  (`latest/`, `baseline/`, `checkpoints/`, a checkpoint, a folder that holds a
+  `manifest.json`, or any folder below one), `baseline/` and `checkpoints/` cannot be
   chosen as destinations, choosing a `latest/` folder means the folder above it (the
   browser says *Saves go to …/latest*), a folder that itself holds a `manifest.json` is a
-  saved configuration and not a destination, and a repository that a lab saves to at its
-  root cannot also hold lab folders unless that lab moves first. The manager and the VM
+  saved configuration and not a destination, and a folder another connected lab already
+  saves to is not offered to a second lab. The manager and the VM
   helper enforce the same rules again, so a folder named `latest`, `baseline` or
   `checkpoints/<name>` is never registered as a lab folder.
 - A lab that an older release registered at a `…/latest` folder keeps working exactly as

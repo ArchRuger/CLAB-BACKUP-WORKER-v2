@@ -39,6 +39,7 @@ from app import git_progress as gp  # noqa: E402
 from app.discovery import reconcile, stamp  # noqa: E402
 from app.downloads import FORMATS, component, short_name  # noqa: E402
 from app.git_progress import PROTOCOL, digest, host_identity  # noqa: E402
+from app.host_git import colliding, collision_message  # noqa: E402
 from app.inventory import PLATFORMS  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.runner import filename, now  # noqa: E402
@@ -184,16 +185,17 @@ class FakeGit:
             if parts and (parts[-1] in ('latest', 'baseline', 'checkpoints') or (len(parts) >= 2 and parts[-2] == 'checkpoints')):
                 raise ValueError('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. Choose the folder above them.')
             existing = next((r for r in self.registrations if r['prefix'] == prefix and r['path'] == reg['path']), None)
-            # Like app/host_git.py: lab folders of one checkout cannot overlap unless the source registration
-            # is being retired, and a retire removes it (an empty folder the lab leaves is then known to nobody
-            # but the manager's planned-folder list).
+            # The real helper's rule (app/host_git.py check_collision): lab folders of one checkout may sit inside,
+            # above or beside each other; only a folder inside another's latest, baseline or checkpoints collides,
+            # unless that other is the source registration being retired. A retire removes it (an empty folder the
+            # lab leaves is then known to nobody but the manager's planned-folder list).
             retire = request.get('retire') is True
             if not existing:
                 for other in self.registrations:
                     if other['path'] != reg['path'] or (other is reg and retire):
                         continue
-                    if not prefix or not other['prefix'] or prefix.startswith(other['prefix'] + '/') or other['prefix'].startswith(prefix + '/'):
-                        raise ValueError('Lab folders in one repository cannot overlap: ' + (other['prefix'] or 'the repository root') + ' is already a lab folder. Choose a folder beside it.')
+                    if colliding(prefix, other['prefix']):
+                        raise ValueError(collision_message(prefix, other['prefix']))
             if retire and (not existing or existing is not reg):
                 self.registrations.remove(reg)
             if existing:

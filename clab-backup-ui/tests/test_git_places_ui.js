@@ -26,7 +26,7 @@ test('path chips start at the repository root',()=>{
  same(gitPathChips('courses/bgp'),[{name:'',path:''},{name:'courses',path:'courses'},{name:'bgp',path:'courses/bgp'}]);
  same(gitPathChips(''),[{name:'',path:''}]);
 });
-test('folder rules: own, other lab, inside, managed, unused, root versus subfolders',()=>{
+test('folder rules: own, other lab, inside, managed, unused, root and subfolders side by side',()=>{
  const {gitTreeModel,gitFolderChoice,gitCanCreateIn}=makeContext(),model=gitTreeModel(files,folders);
  assert.equal(gitFolderChoice(model,'bgp','bgp').allowed,false);assert.match(gitFolderChoice(model,'bgp','bgp').reason,/already saves here/);
  assert.match(gitFolderChoice(model,'eth','bgp').reason,/Ethernet lab already saves here/);
@@ -35,19 +35,45 @@ test('folder rules: own, other lab, inside, managed, unused, root versus subfold
  assert.equal(gitFolderChoice(model,'bgp/latest','bgp').target,'bgp');
  assert.match(gitFolderChoice(model,'bgp/latest','bgp').reason,/This is the saved state of bgp\. Saves go to bgp\/latest\. This lab already saves here\./);
  assert.match(gitFolderChoice(model,'bgp/checkpoints/peering','other').reason,/saved milestone/);
- assert.match(gitFolderChoice(model,'bgp/docs','other').reason,/inside BGP lab's lab folder/);
+ // Lab folders may sit inside, above or beside another lab's folder (the VM refuses only a folder inside its saved state).
+ same(JSON.parse(JSON.stringify(gitFolderChoice(model,'bgp/docs','other'))),{allowed:true,reason:'',target:'bgp/docs'});
  assert.equal(gitFolderChoice(model,'bgp/docs','bgp').allowed,true,'a lab may move deeper inside its own folder; the old registration is retired');
  assert.match(gitFolderChoice(model,'eth','other').reason,/already saves here/);
- assert.equal(gitFolderChoice(model,'free','bgp').allowed,true);
+ same(JSON.parse(JSON.stringify(gitFolderChoice(model,'free','bgp'))),{allowed:true,reason:'',target:'free'},'a registration no lab uses is an ordinary folder: allowed, and never called "free"');
  assert.equal(gitFolderChoice(model,'notes','bgp').allowed,true);
- assert.match(gitFolderChoice(model,'','bgp').reason,/already has lab folders/);
+ same(JSON.parse(JSON.stringify(gitFolderChoice(model,'','bgp'))),{allowed:true,reason:'',target:''},'the top level above other labs\' folders is a folder of its own');
  assert.match(gitFolderChoice(model,'missing','bgp').reason,/Choose a folder/);
  assert.equal(gitFolderChoice(model,'free','bgp').target,'free','every result names its own target, not only the resolved ones');
  const rooted=gitTreeModel([{path:'latest/PE1.cfg',size:1},{path:'docs/a.md',size:1}],[{id:'root',label:'repo',prefix:'',lab:{id:'lab',name:'Root lab'}}]);
  assert.equal(gitFolderChoice(rooted,'docs','root').allowed,true,'a root lab may move into a subfolder because its old registration is retired');
- assert.match(gitFolderChoice(rooted,'docs','other').reason,/inside Root lab's lab folder/);
- assert.equal(gitCanCreateIn(model,'','bgp'),true);assert.equal(gitCanCreateIn(model,'notes','bgp'),true);assert.equal(gitCanCreateIn(model,'eth','bgp'),false);assert.equal(gitCanCreateIn(model,'bgp','bgp'),true);assert.equal(gitCanCreateIn(rooted,'docs','other'),false);
+ assert.equal(gitFolderChoice(rooted,'docs','other').allowed,true,'another lab may save in a subfolder beside a lab at the top level');
+ // Still refused: a folder inside a saved state (here a planned folder below another lab's latest, which holds no manifest yet).
+ const planned=gitTreeModel(files,folders,['eth/latest/notes']),below=gitFolderChoice(planned,'eth/latest/notes','bgp');
+ assert.equal(below.allowed,false);assert.equal(below.reason,'This folder is inside eth/latest, where Save progress keeps a lab’s saves. Choose a folder outside it.');
+ assert.equal(gitCanCreateIn(model,'','bgp'),true);assert.equal(gitCanCreateIn(model,'notes','bgp'),true);assert.equal(gitCanCreateIn(model,'eth','bgp'),true,'New folder works inside another lab\'s folder');assert.equal(gitCanCreateIn(model,'bgp','bgp'),true);assert.equal(gitCanCreateIn(rooted,'docs','other'),true);assert.equal(gitCanCreateIn(model,'bgp/docs','other'),true);
  assert.equal(gitCanCreateIn(model,'bgp/latest','bgp'),false,'nothing is created inside a saved configuration');
+ assert.equal(gitCanCreateIn(model,'bgp/checkpoints','other'),false,'nor in a saved-state folder of another lab');assert.equal(gitCanCreateIn(planned,'eth/latest','bgp'),false);assert.equal(gitCanCreateIn(planned,'eth/latest/notes','bgp'),false,'nor below one');
+});
+test('the owner\'s defect (1.30.59): a repository registered at its top level by guided setup, used by no lab, is an ordinary folder',()=>{
+ const context=makeContext(),files=[{path:'README.md',size:12},{path:'docs/notes.md',size:5}],folders=[{id:'setup-root',label:'Archtop-Lab',prefix:'',lab:null}];
+ const model=context.gitTreeModel(files,folders,['UX-TEST-003']);
+ for(const current of ['','other-binding']){   // the lab is not connected yet ('' as git-progress.js passes it), or saves elsewhere
+  assert.equal(context.gitFolderTag(model.root,current),'','no tag on the top level');assert.equal(context.gitFolderTag(model.root,current,true),'');
+  for(const path of ['','docs','UX-TEST-003']){
+   assert.equal(context.gitCanCreateIn(model,path,current),true,'New folder… is enabled in '+(path||'the top level'));
+   same(JSON.parse(JSON.stringify(context.gitFolderChoice(model,path,current))),{allowed:true,reason:'',target:path});
+  }
+  for(const selected of ['','docs','UX-TEST-003']){
+   const html=context.gitPlacesMarkup(model,{selected,current,repoName:'Archtop-Lab',head:'a',saved:{},canAct:true,connected:false});
+   assert.match(html,/data-git-places-action="new"  title="Create a folder here">New folder…/);assert.match(html,/data-git-places-action="use"  title="">Choose this folder/);
+   assert.doesNotMatch(html,/Lab folder/);assert.doesNotMatch(html,/class="git-folder-icon lab/);
+   assert.doesNotMatch(html,/free|another lab|cannot be created|already has lab folders|cannot be used here/i,'no text calls it free or another lab\'s folder, and nothing contradicts that');
+  }
+ }
+ // Once a lab is connected to that registration it is that lab's folder again, as before.
+ const used=context.gitTreeModel(files,[{id:'setup-root',label:'Archtop-Lab',prefix:'',lab:{id:'lab-2',name:'UX-TEST-002'}}]);
+ assert.match(context.gitFolderTag(used.root,''),/UX-TEST-002/);assert.match(context.gitFolderChoice(used,'','').reason,/^UX-TEST-002 already saves here\.$/);
+ assert.equal(context.gitFolderChoice(used,'docs','').allowed,true,'and a folder below it is still a place of its own');assert.equal(context.gitCanCreateIn(used,'','',),true);
 });
 test('selecting a snapshot folder named latest resolves to its parent; any other snapshot folder is refused outright',()=>{
  const {gitTreeModel,gitFolderChoice}=makeContext();
@@ -96,7 +122,11 @@ test('the browser markup escapes names and labels and explains each folder',()=>
  const root=context.gitPlacesMarkup(model,{selected:'',current:'me',repoName:attack,head:'abcdef1234567890',saved:{latest:1789128000},truncated:true,canAct:true,connected:true});
  assert.doesNotMatch(root,/<img/);assert.match(root,/&lt;img src=x onerror=alert\(1\)&gt; saves here/);assert.match(root,/shortened to the first 4000 files/);assert.match(root,/as of commit abcdef1234/);
  const inside=context.gitPlacesMarkup(model,{selected:attack,current:'me',repoName:attack,head:'',saved:{},canAct:true,connected:true});
- assert.doesNotMatch(inside,/<img/);assert.match(inside,/Most recent save/);assert.match(inside,/aria-current="page">&lt;img/);assert.match(inside,/data-git-places-action="new" disabled/);
+ assert.doesNotMatch(inside,/<img/);assert.match(inside,/Most recent save/);assert.match(inside,/aria-current="page">&lt;img/);
+ // New folder… works inside another lab's folder; only inside its saved state is it disabled, with the reason.
+ assert.match(inside,/data-git-places-action="new"  title="Create a folder here"/);assert.doesNotMatch(inside,/another lab/);
+ const saves=context.gitPlacesMarkup(model,{selected:attack+'/latest',current:'me',repoName:attack,head:'',saved:{},canAct:true,connected:true});
+ assert.match(saves,/data-git-places-action="new" disabled title="Folders cannot be created inside a saved state\."/);assert.match(saves,/<p class="caption git-places-caption">Folders cannot be created inside a saved state\.<\/p>/);
  const mine=context.gitTreeModel(files,folders),own=context.gitPlacesMarkup(mine,{selected:'bgp',current:'bgp',repoName:'repo',head:'a',saved:{latest:1},canAct:true,connected:true});
  assert.match(own,/data-git-places-action="use" disabled/);assert.match(own,/This lab already saves here/);assert.match(own,/Named milestones/);
  const latest=context.gitPlacesMarkup(mine,{selected:'bgp/latest',current:'bgp',repoName:'repo',head:'a',saved:{latest:1},canAct:true,connected:true});
@@ -115,7 +145,7 @@ test('an empty folder made through the manager stays in the tree, is told apart 
  assert.equal(model.nodes.get('JunOS-TEST-2').pending,false,'a planned folder that holds saved files is an ordinary folder');assert.equal(model.nodes.get('JunOS-TEST-2/solution').pending,false,'an unplanned parent is not flagged');assert.equal(model.nodes.get('JunOS-TEST-2/solution/week-1').pending,true);
  assert.equal(model.nodes.has('/bad'),false);assert.equal(model.nodes.size,6);
  const choice=context.gitFolderChoice(model,'JunOS-TEST-2/working','j2');assert.equal(choice.allowed,true,'a folder inside the lab\'s own folder is a valid destination for that lab');
- assert.equal(context.gitFolderChoice(model,'JunOS-TEST-2/working','someone-else').allowed,false,'and stays closed to other labs');
+ assert.equal(context.gitFolderChoice(model,'JunOS-TEST-2/working','someone-else').allowed,true,'and another lab may save in it too: lab folders may sit inside each other');
  const parent=context.gitPlacesMarkup(model,{selected:'JunOS-TEST-2',current:'j2',repoName:'repo',head:'a',saved:{latest:1},canAct:true,connected:true,canForget:true});
  assert.match(parent,/data-git-place="JunOS-TEST-2\/working"><td><span class="name"><i class="git-folder-icon  pending"><\/i>working<\/span><\/td><td class="desc">Empty folder  <b class="git-tag pending">not in the repository until the first save<\/b>/);
  assert.doesNotMatch(parent,/data-git-places-action="forget"/,'only the empty folder itself offers its removal');

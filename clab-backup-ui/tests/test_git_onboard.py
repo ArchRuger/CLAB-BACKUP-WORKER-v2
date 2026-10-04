@@ -238,10 +238,10 @@ class GitOnboardTests(unittest.TestCase):
             self.assertEqual(binding['push_url'], '')
 
     def test_registered_repository_new_choice_without_subfolder_option_still_prompts(self):
-        # Unlike a brand-new registration, the repository root is not a safe default
-        # for an additional lab folder in an already-registered repository (it would
-        # overlap every existing prefix and fail later, at the helper's own check), so
-        # this choice still falls back to ask_subfolder() when --subfolder is not given.
+        # Unlike a brand-new registration, an additional lab in an already-registered
+        # repository gets a subfolder of its own rather than the repository root (the
+        # root may already be a lab's folder), so this choice still falls back to
+        # ask_subfolder() when --subfolder is not given.
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)
             (path / '.git').mkdir()
@@ -258,6 +258,7 @@ class GitOnboardTests(unittest.TestCase):
             self.assertEqual(binding['prefix'], 'eth')
             messages = [call.args[0] for call in output.call_args_list if call.args]
             self.assertTrue(any('already holds at least one registered lab folder' in message for message in messages))
+            self.assertFalse(any('overlap' in message for message in messages), 'lab folders may nest; the wizard no longer says the root would overlap them')
 
     def test_resume_command_points_to_existing_checkout_after_cancellation(self):
         with tempfile.TemporaryDirectory(prefix='lab with spaces ') as folder:

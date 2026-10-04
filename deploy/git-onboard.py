@@ -356,9 +356,9 @@ def selected_registration(account, path, registrations, subfolder=''):
     if not (path / '.git').is_dir():
         raise ValueError('This path has an existing registration but its checkout is missing. Restore the original checkout including .git, or select a new directory.')
     # An already-registered repository can gain another lab: reuse a saved destination
-    # to repair it, or register a new subfolder alongside the existing ones. Unlike a
-    # brand-new registration, the repository root is not a safe default here: it would
-    # overlap every existing prefix and only fail later, at the helper's own check.
+    # to repair it, or register a new subfolder for it. Unlike a brand-new registration,
+    # the new lab gets a subfolder of its own rather than the repository root: the root
+    # may already be a lab's folder, and each lab keeps its saves in a folder of its own.
     options = [(str(i), entry['label'] + ' — ' + (entry['prefix'] or 'repository root')) for i, entry in enumerate(matches, 1)]
     options.append(('new', 'Register a new subfolder in this repository for another lab'))
     prompt = 'This repository is already registered. Reuse a saved destination, or add a new subfolder:'
@@ -366,7 +366,7 @@ def selected_registration(account, path, registrations, subfolder=''):
     if choice == 'new':
         if subfolder:
             return new_binding(path, subfolder)
-        print('This repository already holds at least one registered lab folder; the repository root would overlap it.')
+        print('This repository already holds at least one registered lab folder; give the new lab a subfolder of its own.')
         return new_binding(path, ask_subfolder())
     binding = matches[int(choice) - 1]
     print('Keeping existing registration: ' + binding['label'])

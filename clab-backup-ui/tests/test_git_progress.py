@@ -1123,14 +1123,15 @@ class GitPlacesTests(GitProgressTests):
             prefix = request['prefix']
             existing = next((r for r in self.registry if r['prefix'] == prefix and (mode == 'register-prefix' or r.get('push_url') == request['url'])), None)
             if mode == 'register-prefix' and getattr(self, 'faithful', False):
-                # What the real helper does (host_git.plan_prefix / register_prefix): lab folders of one
-                # checkout cannot overlap unless the source is being retired, and retiring removes it.
+                # What the real helper does (host_git.plan_prefix / register_prefix, with its own rule): lab folders
+                # of one checkout may nest; only a folder inside another's saved state collides, unless that other is
+                # the source being retired, and retiring removes it.
+                from app.host_git import colliding, collision_message
                 source = next(r for r in self.registry if r['id'] == request['binding_id'])
                 if not existing:
                     for other in self.registry:
                         if other is source and request.get('retire'): continue
-                        if not prefix or not other['prefix'] or prefix.startswith(other['prefix'] + '/') or other['prefix'].startswith(prefix + '/'):
-                            raise ValueError('Lab folders in one repository cannot overlap: ' + (other['prefix'] or 'the repository root') + ' is already a lab folder. Choose a folder beside it.')
+                        if colliding(prefix, other['prefix']): raise ValueError(collision_message(prefix, other['prefix']))
                 if request.get('retire'): self.registry.remove(source)
             if existing: return dict(existing)
             created = dict(self.repo, id=mode + '-' + (prefix or 'root'), prefix=prefix, revision='rev-' + (prefix or 'root'), label='Bens lab / ' + (prefix or 'root'))
@@ -1827,9 +1828,11 @@ class GitPlacesTests(GitProgressTests):
         tree = lambda: self.client.get('/api/git/repositories/' + self.store.lab(self.lab['id'])['git_binding']['binding_id'] + '/tree').json()
         with self.store.lock:
             self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'] = 'JunOS-TEST-2'; self.store.save()
-        # Beside-the-lab registration is impossible inside the lab's own folder; a planned folder is not.
-        refused = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='JunOS-TEST-2/working'))
-        self.assertEqual(refused.status_code, 409); self.assertIn('cannot overlap', refused.text)
+        # A registration inside the lab's saved state is refused by the VM (it would write into the lab's own
+        # saves); a planned folder is not. A folder merely inside the lab's folder is allowed (see the end).
+        refused = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='JunOS-TEST-2/latest/working'))
+        self.assertEqual(refused.status_code, 409)
+        self.assertIn('is inside JunOS-TEST-2/latest, where the lab folder JunOS-TEST-2 keeps its saves', refused.text); self.assertNotIn('overlap', refused.text)
         self.assertEqual(tree()['planned'], [], 'a refused creation leaves no phantom folder')
         planned = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='JunOS-TEST-2/working', plan=True))
         self.assertEqual(planned.status_code, 200, planned.text); self.assertEqual(planned.json(), {'planned': 'JunOS-TEST-2/working'})
@@ -1858,6 +1861,12 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual(len([r for r in self.sent[sent:] if r['mode'] not in ('list',)]), 0)
         self.assertNotIn('JunOS-TEST-2/solution', tree()['planned'])
         self.assertEqual(self.client.request('DELETE', '/api/git/repositories/' + self.registry[0]['id'] + '/folders', json=dict(prefix='never-made')).status_code, 404)
+        # Lab folders may sit inside each other: a folder registered inside the lab's own folder (outside its saved
+        # state) is accepted next to it, and the lab still saves where it did.
+        nested = self.client.post('/api/git/repositories/' + self.registry[0]['id'] + '/folders', json=dict(prefix='JunOS-TEST-2/working'))
+        self.assertEqual(nested.status_code, 200, nested.text)
+        self.assertEqual(sorted(r['prefix'] for r in self.registry), ['JunOS-TEST-2', 'JunOS-TEST-2/working'])
+        self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'], 'JunOS-TEST-2')
 
     def test_a_failed_store_write_creates_no_planned_folder(self):
         persist = self.store.save

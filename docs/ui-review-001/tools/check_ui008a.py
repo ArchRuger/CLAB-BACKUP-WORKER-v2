@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """UI-008 (part 1) browser check: a folder made in the folder browser does not disappear.
 
-Runs against the fixture manager, whose scripted Git helper retires registrations and refuses
-overlapping lab folders like app/host_git.py. It changes where the fixture lab saves; use a scratch
+Runs against the fixture manager, whose scripted Git helper retires registrations and refuses a lab
+folder inside another's saved state like app/host_git.py. It changes where the fixture lab saves; use a scratch
 FIXTURE_DATA directory.
 
     CLAB_BASE=http://127.0.0.1:8090 clab-backup-ui/.venv/bin/python docs/ui-review-001/tools/check_ui008a.py

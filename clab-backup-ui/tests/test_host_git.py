@@ -672,19 +672,27 @@ class HostGitPlacesTests(HostGitTests):
         with self.assertRaisesRegex(ValueError, 'synchronize'):
             GitRepository(binding, git=self.git, allow_local=True, env=self.env).register(None)
 
-    def test_planning_refuses_overlap_and_reuses_identical_folders(self):
+    def test_planning_refuses_a_collision_and_reuses_identical_folders(self):
         config = {'repositories': [dict(self.binding, prefix='bgp', uid=1000, gid=1000, revision='r-bgp')]}
         req = {'binding_id': self.binding['id'], 'revision': 'r-bgp'}
         existing, planned = host_git.plan_prefix(config, dict(req, prefix='bgp'), self.account)
         self.assertIs(existing, config['repositories'][0]); self.assertIsNone(planned)
+        # Lab folders may sit above (the top level) or inside another; only one inside its saved state collides.
         for prefix in ('', 'bgp/edge'):
-            with self.assertRaisesRegex(ValueError, 'cannot overlap'): host_git.plan_prefix(config, dict(req, prefix=prefix), self.account)
+            existing, planned = host_git.plan_prefix(config, dict(req, prefix=prefix), self.account)
+            self.assertIsNone(existing); self.assertEqual(planned['prefix'], prefix)
+        for prefix, state in (('bgp/latest/edge', 'bgp/latest'), ('bgp/checkpoints/a/b', 'bgp/checkpoints')):
+            with self.assertRaisesRegex(ValueError, '^The folder ' + prefix + ' is inside ' + state + ', where the lab folder bgp keeps its saves; choose a folder above that saved state\\.$'):
+                host_git.plan_prefix(config, dict(req, prefix=prefix), self.account)
         with self.assertRaisesRegex(ValueError, 'binding changed'): host_git.plan_prefix(config, dict(req, revision='stale', prefix='eth'), self.account)
         with self.assertRaises(ValueError): host_git.plan_prefix(config, dict(req, prefix='../eth'), self.account)
         existing, planned = host_git.plan_prefix(config, dict(req, prefix='courses/eth'), self.account)
         self.assertIsNone(existing); self.assertEqual(planned['prefix'], 'courses/eth'); self.assertEqual(planned['label'], 'repo / courses/eth')
         rooted = {'repositories': [dict(self.binding, prefix='', uid=1000, gid=1000, revision='r-root')]}
-        with self.assertRaisesRegex(ValueError, 'cannot overlap'): host_git.plan_prefix(rooted, dict(req, revision='r-root', prefix='bgp'), self.account)
+        # The owner's defect: a repository registered at its top level takes a lab folder without retiring the root.
+        self.assertEqual(host_git.plan_prefix(rooted, dict(req, revision='r-root', prefix='bgp'), self.account)[1]['prefix'], 'bgp')
+        with self.assertRaisesRegex(ValueError, 'is inside latest, where the lab folder at the repository top level keeps its saves'):
+            host_git.plan_prefix(rooted, dict(req, revision='r-root', prefix='latest/notes'), self.account)
         self.assertEqual(host_git.plan_prefix(rooted, dict(req, revision='r-root', prefix='bgp', retire=True), self.account)[1]['prefix'], 'bgp')
         # The registry write reloads git.json under its lock (audit L-1): here the registry as it is now is `rooted`.
         (self.base / 'registry.json').write_text(json.dumps(rooted))
@@ -701,12 +709,54 @@ class HostGitPlacesTests(HostGitTests):
             self.assertIs(existing, config['repositories'][0]); self.assertTrue(host_git.same_repository(resolved, url))
             existing, planned, _ = host_git.plan_connect(config, {'url': url, 'prefix': 'eth'}, self.account)
             self.assertIsNone(existing); self.assertEqual(planned['path'], str(self.repo)); self.assertTrue(planned['_pending'])
-            with self.assertRaisesRegex(ValueError, 'cannot overlap'): host_git.plan_connect(config, {'url': url, 'prefix': ''}, self.account)
+            existing, planned, _ = host_git.plan_connect(config, {'url': url, 'prefix': ''}, self.account)
+            self.assertIsNone(existing); self.assertEqual((planned['path'], planned['prefix']), (str(self.repo), ''), 'the top level beside a lab folder is a folder of its own')
+            with self.assertRaisesRegex(ValueError, 'The folder bgp/baseline/x is inside bgp/baseline, where the lab folder bgp keeps its saves'):
+                host_git.plan_connect(config, {'url': url, 'prefix': 'bgp/baseline/x'}, self.account)
             existing, planned, _ = host_git.plan_connect(config, {'url': 'https://github.com/Owner/Other-Lab', 'prefix': ''}, self.account)
             self.assertEqual(planned['path'], str(self.home / 'labs' / 'Other-Lab')); self.assertEqual(planned['label'], 'Other-Lab')
             with self.assertRaisesRegex(ValueError, 'No VM account'): host_git.plan_connect({'repositories': []}, {'url': url, 'prefix': ''}, self.account)
             with self.assertRaisesRegex(ValueError, 'Several VM accounts'):
                 host_git.plan_connect({'repositories': [dict(self.binding, uid=1, gid=1, revision='a'), dict(self.binding, id='x', owner='alice', uid=2, gid=2, revision='b')]}, {'url': url, 'prefix': ''}, self.account)
+
+    def test_a_checkout_registered_at_its_top_level_takes_a_lab_folder_and_both_save_independently(self):
+        # The owner's defect (1.30.59): guided setup registered the checkout at its top level, and the first save
+        # of UX-TEST-003 into a folder of its name was refused. Real Git, the real registration and real saves.
+        registry = self.base / 'git.json'; root = dict(self.binding, uid=1000, gid=1000)
+        registry.write_text(json.dumps({'repositories': [root]}))
+        owner = lambda binding, work: GitRepository(binding, git=self.git, allow_local=True, env=self.env).register(None)
+        with patch.object(host_git, 'REGISTRY', registry), patch.object(host_git, 'load_registry', lambda: json.loads(registry.read_text())):
+            created = host_git.register_prefix(host_git.load_registry(), {'binding_id': root['id'], 'revision': root['revision'], 'prefix': 'UX-TEST-003'}, owner, lookup=self.account)
+            self.assertEqual(created['prefix'], 'UX-TEST-003')
+            saved = {b['prefix']: b for b in json.loads(registry.read_text())['repositories']}
+            self.assertEqual(sorted(saved), ['', 'UX-TEST-003'], 'the top-level registration is kept: no retire was asked')
+            self.assertEqual(saved['']['revision'], root['revision'])
+            # A folder inside the saved state of either is still refused, and nothing is registered.
+            for prefix, message in (('UX-TEST-003/latest/notes', 'is inside UX-TEST-003/latest, where the lab folder UX-TEST-003 keeps'),
+                                    ('latest/notes', 'is inside latest, where the lab folder at the repository top level keeps')):
+                with self.assertRaisesRegex(ValueError, message):
+                    host_git.register_prefix(host_git.load_registry(), {'binding_id': root['id'], 'revision': root['revision'], 'prefix': prefix}, owner, lookup=self.account)
+            self.assertEqual(sorted(b['prefix'] for b in json.loads(registry.read_text())['repositories']), ['', 'UX-TEST-003'])
+        lab = GitRepository(saved['UX-TEST-003'], git=self.git, allow_local=True, env=self.env)
+        def publish(worker, binding, text):
+            result = worker.dispatch({'mode': 'publish', 'binding_id': binding['id'], 'revision': binding['revision'], 'operation_id': uuid.uuid4().hex,
+                                      'expected_head': self.raw('rev-parse', 'HEAD'), 'target': 'latest', 'push': True, 'snapshot': self.capture(text)})
+            self.assertEqual(result['status'], 'synced', result); return result
+        tree = lambda folder: self.raw('ls-tree', '-r', 'HEAD', '--', folder)
+        first = publish(lab, saved['UX-TEST-003'], 'ux first\n')
+        self.assertEqual(sorted(first['changed_files']), ['UX-TEST-003/latest/PE1.cfg', 'UX-TEST-003/latest/manifest.json'])
+        lab_files = tree('UX-TEST-003')
+        top = publish(self.worker, self.binding, 'top level\n')
+        self.assertEqual(sorted(top['changed_files']), ['latest/PE1.cfg', 'latest/manifest.json'])
+        self.assertEqual(tree('UX-TEST-003'), lab_files, 'a save at the top level leaves the lab folder below it untouched')
+        top_files = tree('latest')
+        publish(lab, saved['UX-TEST-003'], 'ux second\n')
+        self.assertEqual(tree('latest'), top_files, 'a save into the lab folder leaves the top level\'s saves untouched')
+        self.assertEqual(self.raw('show', 'HEAD:UX-TEST-003/latest/PE1.cfg'), 'ux second'); self.assertEqual(self.raw('show', 'HEAD:latest/PE1.cfg'), 'top level')
+        self.assertEqual(self.raw('ls-remote', 'origin', 'refs/heads/main').split()[0], self.raw('rev-parse', 'HEAD'))
+        for worker, binding in ((self.worker, self.binding), (lab, saved['UX-TEST-003'])):
+            status = worker.dispatch({'mode': 'status', 'binding_id': binding['id'], 'revision': binding['revision']})
+            self.assertTrue(status['ready'], status); self.assertEqual(status['problem'], '')
 
     def test_move_relocates_every_saved_folder_in_one_pushed_commit(self):
         old_binding, old = self.sibling('old'); new_binding, new = self.sibling('new')
@@ -871,12 +921,21 @@ class RegistryRaceTests(unittest.TestCase):
         self.assertEqual((result['id'], result['revision'], result['label']), (bgp['id'], 'r-admin', readmin['label']))
         self.assertEqual(sorted(self.saved()), ['bgp'])
 
-    def test_an_overlapping_folder_saved_meanwhile_refuses_the_registration_and_writes_nothing(self):
-        bgp = self.binding('bgp'); nested = self.binding('eth/core'); self.write(bgp)
-        with self.assertRaisesRegex(ValueError, 'saved meanwhile'):
-            host_git.register_prefix(host_git.load_registry(), {'binding_id': bgp['id'], 'revision': bgp['revision'], 'prefix': 'eth'},
-                                     self.owner_git(lambda: self.write(bgp, nested)), lookup=self.account)
-        self.assertEqual(sorted(self.saved()), ['bgp', 'eth/core'])
+    def test_a_colliding_folder_saved_meanwhile_refuses_the_registration_and_writes_nothing(self):
+        # A legacy registration inside the new folder's saved state (eth/latest/core), or the very same folder, saved
+        # while the owner's Git ran: nothing is registered.
+        bgp = self.binding('bgp'); self.write(bgp)
+        for meanwhile in (self.binding('eth/latest/core'), self.binding('eth')):
+            self.write(bgp)
+            with self.assertRaisesRegex(ValueError, 'saved meanwhile'):
+                host_git.register_prefix(host_git.load_registry(), {'binding_id': bgp['id'], 'revision': bgp['revision'], 'prefix': 'eth'},
+                                         self.owner_git(lambda: self.write(bgp, meanwhile)), lookup=self.account)
+            self.assertEqual(sorted(self.saved()), sorted(['bgp', meanwhile['prefix']]))
+        # A folder merely nested in it (eth/core) does not collide: both are kept.
+        self.write(bgp); nested = self.binding('eth/core')
+        result = host_git.register_prefix(host_git.load_registry(), {'binding_id': bgp['id'], 'revision': bgp['revision'], 'prefix': 'eth'},
+                                          self.owner_git(lambda: self.write(bgp, nested)), lookup=self.account)
+        self.assertEqual(result['prefix'], 'eth'); self.assertEqual(sorted(self.saved()), ['bgp', 'eth', 'eth/core'])
 
     @unittest.skipUnless(os.name == 'posix', 'flock')
     def test_the_registry_write_waits_for_the_lock_and_gives_up_with_a_clear_message(self):
@@ -895,3 +954,40 @@ class RegistryRaceTests(unittest.TestCase):
         self.assertFalse('h.atomic_json(h.REGISTRY,registry)\n    print(' in script, 'setup-git.sh writes back the registry it loaded at start')
         self.assertTrue('h.save_registration(binding)' in script, 'setup-git.sh must save through the locked merge')
         self.assertTrue('with h.registry_lock():' in script, 'setup-git.sh --refresh must create the registry under the lock')
+
+
+class CollisionRuleTests(unittest.TestCase):
+    """DESIGN.md 2.2/2.3 (H1): two lab folders write the same files only when one lies inside a folder the other
+    writes its saves into (latest, baseline, checkpoints). Inside, above and beside are allowed."""
+
+    def test_colliding_is_exactly_the_saved_state_rule_in_both_directions(self):
+        allowed = [('', 'UX-TEST-003'), ('', 'a/b'), ('bgp/edge', 'bgp'), ('bgp', 'bgp/edge'), ('bgp', 'eth'), ('a/b', 'a/c'),
+                   ('x', 'x/latest-notes'), ('x', 'x/checkpoints2'), ('x', 'x/baselines/w'), ('latest-x', ''), ('course/latest/working', 'course/lab'),
+                   ('', ''), ('x', 'x')]  # the same folder is not a collision: callers test equality themselves
+        colliding = [('x', 'x/latest'), ('x', 'x/latest/w'), ('x', 'x/baseline/w'), ('x', 'x/checkpoints'), ('x', 'x/checkpoints/a/b'),
+                     ('latest/foo', ''), ('baseline', ''), ('checkpoints/a', ''), ('a/checkpoints/x/y', 'a')]
+        for a, b in allowed:
+            for first, second in ((a, b), (b, a)):
+                self.assertFalse(host_git.colliding(first, second), (first, second))
+        for a, b in colliding:
+            for first, second in ((a, b), (b, a)):
+                self.assertTrue(host_git.colliding(first, second), (first, second))
+
+    def test_the_refusal_names_both_folders_and_never_says_overlap(self):
+        self.assertEqual(host_git.collision_message('x/latest/w', 'x'),
+                         'The folder x/latest/w is inside x/latest, where the lab folder x keeps its saves; choose a folder above that saved state.')
+        self.assertEqual(host_git.collision_message('latest/foo', ''),
+                         'The folder latest/foo is inside latest, where the lab folder at the repository top level keeps its saves; choose a folder above that saved state.')
+        self.assertEqual(host_git.collision_message('x', 'x/checkpoints/a/b'),
+                         'The lab folder x/checkpoints/a/b is inside x/checkpoints, where x would keep its saves; choose another folder for this lab.')
+        self.assertEqual(host_git.collision_message('', 'baseline/w'),
+                         'The lab folder baseline/w is inside baseline, where a lab folder at the repository top level would keep its saves; choose another folder for this lab.')
+        self.assertFalse(hasattr(host_git, 'overlapping'), 'the overlap rule is gone')
+
+    def test_check_collision_compares_only_folders_of_the_same_checkout_and_skips_the_retired_source(self):
+        root = {'path': '/home/ben/labs/Course', 'prefix': ''}; other = {'path': '/home/ben/labs/Other', 'prefix': 'x'}
+        config = {'repositories': [root, other]}
+        host_git.check_collision(config, '/home/ben/labs/Course', 'UX-TEST-003')
+        host_git.check_collision(config, '/home/ben/labs/Course', 'x/latest/w')  # x is a lab folder of another checkout
+        with self.assertRaisesRegex(ValueError, 'is inside latest'): host_git.check_collision(config, '/home/ben/labs/Course', 'latest/w')
+        host_git.check_collision(config, '/home/ben/labs/Course', 'latest/w', ignore=root)

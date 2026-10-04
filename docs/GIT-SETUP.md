@@ -55,7 +55,7 @@ The wizard shows the Linux account it will use, then:
 - Offers to clone a repository into `~/labs/REPOSITORY`, or reuse an existing checkout.
   Registering a repository that is new to the manager always uses the **repository
   root**, without asking; adding another lab to a repository that already has a
-  registration still asks for its subfolder (the root would overlap). See
+  registration still asks for its subfolder (each lab keeps its saves in a folder of its own). See
   [One repository, one subfolder per lab](#one-repository-one-subfolder-per-lab) below for
   the advanced `--subfolder` option that answers that question ahead of time.
 - Reuses a GitHub login or opens GitHub's browser authorization flow for that account.
@@ -124,7 +124,8 @@ repository, sets a commit name and email from the GitHub account (its private no
 address) when the checkout has none, registers the folder exactly as the wizard would
 (clean managed files, identity, remote synchronization, push dry run) and connects the
 lab. A repository the account cannot push to is refused before anything is cloned; a
-folder that would overlap another lab's folder is refused as well.
+folder inside another lab's saved state (its `latest`, `baseline` or `checkpoints` folder) is
+refused as well.
 
 **Use a different repository…** also lists every checkout already registered on the VM.
 Choosing one opens the folder browser for it; pick the folder and confirm the devices to
@@ -139,9 +140,9 @@ configuring first.
 
 The normal guided path registers a **repository new to the manager** at its root and
 no longer asks a subfolder question. Adding another lab to a repository that already
-has a registration is different: the root would overlap every existing subfolder and
-only fail later, at the registration check, so the wizard still asks for a subfolder
-there unless one is supplied ahead of time. To keep every lab of a course in a single
+has a registration is different: the new lab gets a subfolder of its own (the root may
+already be another lab's folder), so the wizard still asks for a subfolder there unless
+one is supplied ahead of time. To keep every lab of a course in a single
 repository, for example `Patricks-AF-Learning-Labs`, give each lab its own
 **subfolder**, either by answering that prompt or with the advanced `--subfolder`
 option, still without sudo:
@@ -170,9 +171,10 @@ option, still without sudo:
    progress** pushes that lab
    to its own subfolder, for example `bgp/latest/`, without touching the others.
 
-Subfolders in one repository must not overlap: use `bgp` and `eth`, not `bgp` and
-`bgp/edge`. A repository registered at its root (blank subfolder) cannot also register
-subfolders. An administrator can register subfolders non-interactively with
+Lab folders in one repository may sit inside, above or beside each other: `bgp`,
+`bgp/edge`, `eth` and the repository root (blank subfolder) can all be lab folders. Only a
+folder inside another lab's saved state, such as `bgp/latest/edge`, is refused, because that
+lab's saves would write over it. An administrator can register subfolders non-interactively with
 `--prefix`, described under [Advanced](#advanced-separate-owner-other-https-host-or-managed-prefix) below.
 
 Folders can also be created and changed from the manager: the **Save location** card
@@ -369,7 +371,8 @@ sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --owner patrick --re
 For a separate owner, prepare its checkout/login/identity under that account, then
 return to the administrator for registration. Optional `--remote NAME`,
 `--label "Display name"` and `--prefix labs/bgp` select an existing remote,
-display label and managed subfolder. Prefixes must not overlap, and `latest`, `baseline`
+display label and managed subfolder. A prefix inside the `latest`, `baseline` or
+`checkpoints` folder of another registered prefix is refused (nesting is otherwise allowed), and `latest`, `baseline`
 and `checkpoints`/`checkpoints/<name>` are refused as a prefix for the same reason as in
 the wizard. A normal checkout
 with an existing published commit is required; linked worktrees, submodules,
@@ -378,8 +381,9 @@ bare repositories and symbolic-link paths are unsupported.
 This command and the manager's folder and connect actions may run at the same time. Each
 checks the checkout first (that can take minutes), then saves its registration under one
 lock (`/etc/clab-manager/git.json.lock`) into `git.json` as it is at that moment, so a
-registration saved in the meantime is kept. If the other one registered the same or an
-overlapping folder meanwhile, nothing is saved and the command says so; run it again.
+registration saved in the meantime is kept. If the other one registered the same folder
+meanwhile, or one inside its saved state (or the reverse), nothing is saved and the command
+says so; run it again.
 
 Back up the complete checkout including `.git`, the owner's credential recovery
 method, `/etc/clab-manager/git.json` and manager data separately. The manager data

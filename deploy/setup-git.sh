@@ -100,8 +100,7 @@ try:
     if not old: h.base_prefix(prefix)  # a new lab folder must not be a snapshot folder name; an existing registration stays repairable
     for b in registry['repositories']:
         if b is old or b['path']!=str(path): continue
-        p=b['prefix']
-        if not prefix or not p or prefix.startswith(p+'/') or p.startswith(prefix+'/'): raise ValueError('Managed prefixes in the same repository must not overlap.')
+        if h.colliding(prefix,b['prefix']): raise ValueError(h.collision_message(prefix,b['prefix']))  # the helper's rule (check_collision), same sentence
     binding={'id':old['id'] if old else uuid.uuid4().hex,'label':label,'owner':owner,'uid':account.pw_uid,'gid':account.pw_gid,
              'home':account.pw_dir,'path':str(path),'remote':remote,'prefix':prefix,'branch':'','push_url':'','revision':''}
     # Root reads only the registry/account database. The child opens the repository
