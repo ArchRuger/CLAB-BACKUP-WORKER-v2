@@ -64,14 +64,15 @@ function goHome(options={}){
  if(typeof render==='function')render();
  return true;
 }
-// Menus. New menus are button + sibling div.menu-list inside span.menu (initMenu); #git-save-menu and
-// #lab-switcher stay <details>. closeMenus(except) closes everything except the menu containing `except`
-// and returns true when it closed something, so topology.js can defer its Escape handling.
+// Menus. New menus are button + sibling div.menu-list inside span.menu (initMenu); the header's chip and
+// Load panels are button + sibling [data-panel] inside span.menu (initPanel); #lab-switcher stays <details>.
+// closeMenus(except) closes every menu and panel except the one containing `except` and returns true when
+// it closed something, so topology.js can defer its Escape handling. A drawer or dialog that opens calls it first.
 function shellContains(menu,el){return !!menu&&!!el&&(menu===el||(typeof menu.contains==='function'&&menu.contains(el)));}
 function closeMenus(except){
  let closed=false;
- for(const button of document.querySelectorAll('.menu-button[aria-expanded="true"]')){if(shellContains(button.parentElement||button,except))continue;if(typeof button._menuClose==='function'&&button._menuClose(false))closed=true;}
- for(const details of document.querySelectorAll('details.menu[open], details#git-save-menu[open], details#lab-switcher[open]')){if(shellContains(details,except))continue;details.open=false;closed=true;}
+ for(const button of document.querySelectorAll('.menu-button[aria-expanded="true"], .panel-button[aria-expanded="true"]')){if(shellContains(button.parentElement||button,except))continue;if(typeof button._menuClose==='function'&&button._menuClose(false))closed=true;}
+ for(const details of document.querySelectorAll('details.menu[open], details#lab-switcher[open]')){if(shellContains(details,except))continue;details.open=false;closed=true;}
  return closed;
 }
 function initMenu(button){
@@ -119,19 +120,77 @@ function initMenu(button){
  list.addEventListener('click',e=>{const item=e.target&&typeof e.target.closest==='function'?e.target.closest('[role="menuitem"]'):null;if(!item||item.disabled||!shellContains(list,item))return;if(panelOf(item)){setGroup(item,item.getAttribute('aria-expanded')!=='true',false);return;}close(true);},true);
  return {open,close};
 }
-// Escape priority: node context menu (topology.js) → open menus → expanded map (topology.js). Closing a
-// menu stops the event here so the map handler never sees it; focus inside a .menu-list is handled by
-// the list's own keydown, which restores focus to the button.
+// Panels: a .panel-button and its sibling [data-panel] inside span.menu (the chip panel, the Load panel). A panel is a
+// non-modal dialog, not a menu: no roving focus, Tab moves through it, a click inside never closes it. It shares
+// closeMenus(), so one panel or menu is open at a time; shellPointerDown closes it on an outside click.
+// The panel element gets a `panelopen` event when it opens (before focus moves, so a listener can render the
+// focus target first) and `panelclose` when it closes: each once per change, never for a call that changes nothing.
+function initPanel(button){
+ if(!button||button._menuReady)return null;
+ // The panel is the opener's sibling, never one nested deeper in another wrapper.
+ const wrapper=button.parentElement,panel=wrapper&&wrapper.children?[...wrapper.children].find(child=>child!==button&&typeof child.hasAttribute==='function'&&child.hasAttribute('data-panel'))||null:null;
+ if(!panel)return null;button._menuReady=true;
+ button.setAttribute('aria-expanded','false');panel.hidden=true;
+ const fire=name=>{if(typeof CustomEvent==='function'&&typeof panel.dispatchEvent==='function')panel.dispatchEvent(new CustomEvent(name));};
+ const focusIn=()=>{const target=panel.querySelector('[data-panel-focus]')||panel;if(typeof target.focus==='function')target.focus();};
+ const close=restore=>{if(panel.hidden)return false;panel.hidden=true;button.setAttribute('aria-expanded','false');fire('panelclose');if(restore&&typeof button.focus==='function')button.focus();return true;};
+ // A panel is right-aligned to its opener. Where that would put it past the left edge of a narrow screen it anchors to
+ // the opener's left instead (menu-clamped); where even that leaves the screen on the right (the opener is not at the
+ // left gutter) the wrapper stops being its anchor (panel-anchored) and it hangs under the whole action row, from that
+ // row's left edge. Measured each time it opens; classes only, never an inline style.
+ const clamp=()=>{
+  if(typeof panel.getBoundingClientRect!=='function'||!panel.classList||!wrapper.classList)return;
+  panel.classList.remove('menu-clamped');wrapper.classList.remove('panel-anchored');
+  if(panel.getBoundingClientRect().left>=8)return;
+  panel.classList.add('menu-clamped');
+  const width=typeof innerWidth==='number'?innerWidth:0;
+  if(width&&panel.getBoundingClientRect().right>width-8)wrapper.classList.add('panel-anchored');
+ };
+ // options.focus===false: opened by the page, not by the person; focus stays where it is. An open panel stays as it
+ // is (no second event, no focus move) unless the caller asks for the focus with options.focus===true.
+ const open=(options={})=>{
+  if(!panel.hidden){if(options.focus===true)focusIn();return true;}
+  closeMenus(wrapper);panel.hidden=false;clamp();button.setAttribute('aria-expanded','true');fire('panelopen');
+  if(options.focus!==false)focusIn();
+  return true;
+ };
+ button._menuClose=close;button._menuOpen=open;button._panelButton=true;
+ button.addEventListener('click',()=>{if(panel.hidden)open();else close(false);});
+ panel.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close(true);}});
+ // Tab or a click that moves focus to another control closes it; a rebuilt body (focus falls to nothing) does not.
+ wrapper.addEventListener('focusout',e=>{const next=e.relatedTarget;if(next&&!shellContains(wrapper,next))close(false);});
+ return {open,close};
+}
+// Open a panel by the id of its opener or of the panel itself (openPanel('save-chip'), openPanel('load-panel')).
+// Returns false when there is no such panel. options.focus as in initPanel.
+function openPanel(id,options={}){
+ const el=shellEl(id);if(!el)return false;
+ let button=null;
+ if(el._panelButton)button=el;
+ else if(typeof el.hasAttribute==='function'&&el.hasAttribute('data-panel')&&el.parentElement&&el.parentElement.children)button=[...el.parentElement.children].find(child=>child._panelButton)||null;
+ return !!button&&!!button._panelButton&&button._menuOpen(options);
+}
+// Whether the page may open a panel by itself: never over a modal dialog, never while another menu or panel is open.
+function panelCanOpen(button){
+ if(typeof document==='undefined'||typeof document.querySelector!=='function')return false;
+ if(document.querySelector('dialog[open]'))return false;
+ const other=document.querySelector('.menu-button[aria-expanded="true"], .panel-button[aria-expanded="true"], details.menu[open], details#lab-switcher[open]');
+ return !other||other===button;
+}
+// Escape priority: node context menu (topology.js) → open menus and panels → expanded map (topology.js). Closing a
+// menu stops the event here so the map handler never sees it; focus inside a .menu-list or a panel is handled by
+// its own keydown, which restores focus to the button. A panel the page opened while focus was elsewhere is closed
+// by closeMenus() below and focus stays where it is.
 function shellEscape(e){
  if(e.key!=='Escape')return;
  const target=e.target&&typeof e.target.closest==='function'?e.target:null;
  const nodeMenu=shellEl('node-context-menu');if(nodeMenu&&!nodeMenu.hidden)return;
- if(target&&target.closest('.menu-list'))return;
- const details=target?target.closest('details#git-save-menu, details#lab-switcher, details.menu'):null;
+ if(target&&target.closest('.menu-list, [data-panel]'))return;
+ const details=target?target.closest('details#lab-switcher, details.menu'):null;
  if(details&&details.open){details.open=false;const summary=typeof details.querySelector==='function'?details.querySelector('summary'):null;if(summary&&typeof summary.focus==='function')summary.focus();e.stopPropagation();return;}
  if(closeMenus())e.stopPropagation();
 }
-function shellPointerDown(e){const target=e.target&&typeof e.target.closest==='function'?e.target:null;const menu=target?target.closest('.menu, details#git-save-menu, details#lab-switcher'):null;closeMenus(menu||undefined);}
+function shellPointerDown(e){const target=e.target&&typeof e.target.closest==='function'?e.target:null;const menu=target?target.closest('.menu, details#lab-switcher'):null;closeMenus(menu||undefined);}
 // localStorage: when each lab was opened (the card's "Opened …" line in home.js), and dismissed job warnings.
 function rememberOpened(id){if(!id)return false;return shellSet('localStorage','clab.opened.'+id,new Date().toISOString());}
 // sessionStorage: the Home list tab the student chose (home.js), for this browser session.
@@ -180,7 +239,7 @@ function clearDesignDraft(labId){return !!labId&&shellRemove('localStorage',desi
 // message under Details; a toast when there is no lab page to show it on.
 function shellErrorSentence(message){
  const text=String(message||'');
- if(/Configured devices changed/i.test(text))return 'The devices in this lab changed since the save location was set up. Check the devices under Progress › Save settings.';
+ if(/Configured devices changed/i.test(text))return 'The devices in this lab changed since the save location was set up. Check the devices under Save settings.';
  if(/Reconnect the original VM/i.test(text))return 'This lab was set up on a different VM. Reconnect that VM before saving.';
  if(/not connected|VM connection|discovery is not configured/i.test(text))return 'The lab VM is not connected. Choose Manager › VM connection… to set it up.';
  if(/^Restart device… is not available: /.test(text))return text;   // the reason is the sentence
@@ -197,9 +256,10 @@ function showActionError(message){
 }
 function actionError(){return shellActionError;}
 function dismissActionError(){shellActionError=null;}
-// Load-time wiring: every static .menu-button, the Home links, the drawer's close event, the router and
+// Load-time wiring: every static .menu-button and .panel-button, the Home links, the drawer's close event, the router and
 // the delayed skeleton (only shown when the first /state takes longer than 200 ms).
 document.querySelectorAll('.menu-button').forEach(initMenu);
+document.querySelectorAll('.panel-button').forEach(initPanel);
 for(const id of ['nav-home','crumb-home']){const el=shellEl(id);if(el)el.addEventListener('click',e=>{e.preventDefault();goHome({push:true});});}
 {const dialog=shellEl('details-dialog');if(dialog)dialog.addEventListener('close',()=>{if(!shellApplying)writeRoute({...currentRoute(),device:''});});}
 document.addEventListener('keydown',shellEscape,true);

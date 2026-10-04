@@ -15,9 +15,33 @@ function restoreRunning(j){return typeof statusRestoreActive==='function'?status
 function restoreRechecking(j){return !APP_RESTORE_BUSY.includes(j?.status)&&restoreRunning(j);}
 function designRechecking(j){return typeof statusDesignRechecking==='function'?statusDesignRechecking(j):j?.status==='interrupted'&&Array.isArray(j.rechecking)&&j.rechecking.length>0;}
 const RECHECK_BANNER='Checking the devices after a manager restart…';
-const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-retry-save','banner-save-details','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-dismiss'],'home-banner':['home-banner-output']};
+const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-dismiss'],'home-banner':['home-banner-output']};
 const current=()=>state.labs.find(l=>l.id===activeId);
-const busy=()=>state.jobs.some(j=>['queued','running'].includes(j.status))||(state.operations||[]).some(j=>['queued','running'].includes(j.status))||(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status));
+// What holds the manager right now, as one sentence, or '' when nothing does. It mirrors the server's guard for a save
+// (GitProgress.idle: lab_operations.operation_busy for every lab, plus backup and login jobs, plus a design read-back of
+// the lab asked about), in the server's order, so a control is disabled before the click would be refused with a 409.
+// labId is the lab the caller acts on (default: the open lab); only the design read-back depends on it.
+const APP_GIT_BUSY=['queued','capturing','exporting','pushing'],APP_DESIGN_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
+const APP_RECHECK_REASON='The manager is checking devices after a restart.';
+function busyReason(labId=activeId){
+ const active=j=>['queued','running'].includes(j.status),on=j=>{const lab=j&&j.lab_id?(state.labs||[]).find(l=>l.id===j.lab_id):null;return lab&&lab.name?' on '+lab.name:'';};
+ const op=(state.operations||[]).find(active);
+ if(op)return (typeof operationLabel==='function'?operationLabel(op.action,op):'A lab operation')+' is running.';
+ const design=(state.design_jobs||[]).find(j=>APP_DESIGN_BUSY.includes(j.status));
+ if(design)return 'A network design is being applied'+on(design)+'.';
+ if(labId&&(state.design_jobs||[]).some(j=>j.lab_id===labId&&designRechecking(j)))return APP_RECHECK_REASON;
+ const save=(state.git_jobs||[]).find(j=>APP_GIT_BUSY.includes(j.status));
+ if(save)return 'A save is running'+on(save)+'.';
+ const load=(state.restore_jobs||[]).find(restoreRunning);
+ if(load)return restoreRechecking(load)?APP_RECHECK_REASON:'A load is running'+on(load)+'.';
+ const retiring=(state.labs||[]).find(l=>l.telemetry_retired&&l.telemetry_retired.removing);
+ if(retiring)return 'Retired telemetry configuration is being removed on '+retiring.name+'.';
+ const job=(state.jobs||[]).find(active);
+ if(job)return job.operation==='backup'?'A backup is running.':'Device logins are being checked.';
+ return '';
+}
+// The same answer as a flag, for the callers that only ask whether (several pass it on as an argument).
+const busy=()=>!!busyReason();
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
 async function api(path,options={}){
  const headers={...(options.headers||{})};
@@ -100,7 +124,6 @@ function renderLabHeader(lab){
  const ls=labStateOf(lab),pill=$('lab-state');
  if(pill){pill.textContent=ls.label;pill.className='pill '+(ls.pill||'neutral');}
  if($('lab-ready'))$('lab-ready').textContent=readyLine(lab,ls);
- if($('lab-progress'))$('lab-progress').textContent=typeof progressSummary==='function'?progressSummary(lab,state.git_jobs,undefined,gitProblem(lab)):'';
 }
 function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=value||'—';};set('tech-lab-id',lab.id);set('tech-source',lab.source);set('tech-path',lab.vm_project_path||lab.vm_source?.files?.definition?.path);set('tech-prefix',lab.container_prefix??'clab');set('tech-deployment',lab.deployment_name);set('tech-binding',lab.git_binding?[lab.git_binding.binding_id,lab.git_binding.revision].filter(Boolean).join(' · '):'');}
 function render(){
@@ -120,6 +143,10 @@ function render(){
  if(typeof renderManagement==='function')renderManagement();
  if(typeof renderLabOperations==='function')renderLabOperations();
  if(typeof renderGitProgress==='function')renderGitProgress();
+ // The header's chip, Save and Load (save-header.js) and the one drawer (save-drawers.js) follow every poll and every lab
+ // switch from here: a lab change reaches them as a render with another current().
+ if(typeof renderSaveHeader==='function')renderSaveHeader();
+ if(typeof saveDrawerRender==='function')saveDrawerRender();
  if(typeof renderNetworkDesign==='function')renderNetworkDesign();
  if(typeof renderHome==='function')renderHome();
  if(!lab){renderLabBanner();syncProxies();syncRoute();return;}
@@ -164,6 +191,8 @@ function noticeDigest(text){let hash=0;const s=String(text||'');for(let i=0;i<s.
 // spec.identity names which failure a notice is about (a job id, an action-error counter): two different failures
 // share one generic headline, and closing the first must not hide the second.
 function noticeKey(id,spec){return (id==='home-banner'?'home':(typeof activeId==='string'?activeId:''))+'.'+id+'.'+noticeDigest(spec.text)+(spec.identity?'.'+noticeDigest(spec.identity):'');}
+// What a save reports (a save location problem, a failed or waiting upload) is the header chip's (save-header.js),
+// not a banner: the lab banner keeps what an operation, a load, a design apply or the lab's own state reports.
 // The situational banner: static children only (text, hidden, className), never innerHTML, so an open
 // menu or a focused button survives the 4 s poll. One case at a time, in priority order.
 function setBanner(id,spec={}){
@@ -211,7 +240,6 @@ function renderLabBanner(){
  const ops=(state.operations||[]).filter(j=>j.lab_id===lab.id),restores=(state.restore_jobs||[]).filter(j=>j.lab_id===lab.id);
  const runningOp=ops.find(j=>['queued','running'].includes(j.status)),runningRestore=restores.find(j=>APP_RESTORE_BUSY.includes(j.status))||restores.find(restoreRunning);
  const recheckDesign=(state.design_jobs||[]).find(j=>j.lab_id===lab.id&&designRechecking(j));
- const ps=typeof progressState==='function'?progressState(lab,state.git_jobs,undefined,gitProblem(lab)):null;
  const credentials=typeof credentialsNeeded==='function'?credentialsNeeded(lab):0;
  // The menu item carries its label in a <span> and its disabled reason in a <small>; the banner button takes the label only.
  const startLabel=()=>{const b=$('lab-start');const span=b&&typeof b.querySelector==='function'?b.querySelector('span'):null;return (span?span.textContent:b?.textContent)?.trim()||'Start lab';};
@@ -233,13 +261,6 @@ function renderLabBanner(){
    else if(typeof openLabOperations==='function')actions['banner-try-again']={label:'Open lab operations',run:()=>{if(typeof opTask==='function')opTask(null,()=>openLabOperations(lab.id));else openLabOperations(lab.id);}};
   }
   spec={tone:ls.pill==='warn'?'warn':'danger',icon:'alert',text:ls.detail,detail:job.message||'',identity:'job.'+job.id,actions};
- }
- else if(ps&&ps.problem)spec={tone:'warn',icon:'alert',text:'Saving to Git is not possible right now.',detail:ps.problem,identity:'git-problem.'+ps.problem,actions:{'banner-save-details':{label:'Save location settings',run:()=>{if(typeof gitOpenRepository==='function')gitOpenRepository();}}}};
- else if(ps&&['attention','failed','interrupted'].includes(ps.key)){
-  const actions={};
-  if(ps.key==='attention')actions['banner-retry-save']={label:'Retry',run:()=>{if(typeof gitPushPending==='function'&&typeof opTask==='function')opTask(null,()=>gitPushPending(lab.id));}};
-  if(ps.job)actions['banner-save-details']={label:'Details',run:()=>{if(typeof gitShowJob==='function'&&typeof opTask==='function')opTask(null,()=>gitShowJob(ps.job.id));}};
-  spec={tone:ps.key==='attention'?'warn':'danger',icon:'alert',text:ps.detail,detail:ps.job?.message||'',identity:ps.job?'save.'+ps.job.id:'',actions};
  }
  else if(ls.key==='attention')spec={tone:'danger',icon:'alert',text:ls.detail,actions:lab.deployment?.status==='Partially running'?start():{'banner-credentials':{label:'Check credentials',run:()=>showTab('credentials')}}};
  else if(credentials)spec={tone:'warn',icon:'alert',text:`${credentials} ${credentials===1?'device needs':'devices need'} login credentials before you can open ${credentials===1?'its':'their'} CLI.`,actions:{'banner-credentials':{label:'Add credentials',run:()=>openProfile()}}};

@@ -562,7 +562,7 @@ footer {
 .drawer-advanced-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 
 /* --------------------------------------------------------------------------
-   7. Menus (details.menu, save split menu, extra views, node context menu)
+   7. Menus (details.menu, the header's Save and Load panels, extra views, node context menu)
    -------------------------------------------------------------------------- */
 .menu { position: relative; display: inline-block; }
 .menu > summary {
@@ -645,66 +645,152 @@ footer {
 .menu-list small { display: block; padding: 0 12px 6px; font-size: 12px; color: var(--muted); }
 .manager-menu .menu-list, #manager-menu .menu-list { min-width: 280px; }
 
-/* split "Save progress ▾" control (git-progress.js) */
-.git-save-control { display: flex; flex-shrink: 0; gap: 1px; align-items: stretch; }
-.git-save-control > .button { border-radius: var(--radius) 0 0 var(--radius); }
-.git-save-control:has(.git-save-menu[hidden]) > .button { border-radius: var(--radius); }
-.git-save-menu { position: relative; margin: 0; }
-.git-save-menu > summary {
-  list-style: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0 var(--radius) var(--radius) 0;
-  min-width: 36px;
-  height: 100%;
-  padding: 7px 10px;
-}
-.git-save-menu > summary::-webkit-details-marker { display: none; }
-.git-save-options {
+/* Save and Load in the lab header (save-header.js, load.js). The chip and the Load button are .panel-button openers
+   (shell.js initPanel); each opens the .save-panel beside it. Class names: docs/git-redesign/DESIGN.md 7.5. */
+.save-control { display: contents; }                       /* its children wrap with Lab actions as one flex row */
+.save-pair { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; }
+.save-pair > .menu { display: flex; min-width: 0; }        /* lets the chip shrink on a narrow screen */
+.save-pair > .button { flex: none; }
+.save-chip { gap: 8px; font-weight: 500; min-width: 0; max-width: 16rem; }
+#save-chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.save-chip .icon { flex: none; }
+.panel-button[aria-expanded="true"]:not(.primary):not(.danger) { background: var(--surface-2); border-color: var(--muted); color: var(--ink); }
+/* State dots: the text beside a dot always names the state; the hollow one is a border so it survives forced colours.
+   On surface / surface-2: ok 5.32 / 4.72 · warn 6.22 / 5.53 · danger 6.54 / 5.81 · accent 5.65 / 5.02 · muted ring 5.51 / 4.90. */
+.save-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; box-sizing: border-box; background: var(--ok); }
+.save-dot.warn { background: var(--warn); }
+.save-dot.bad { background: var(--danger); }
+.save-dot.info { background: var(--accent); }
+.save-dot.busy { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); animation: pill-pulse 1.6s ease-in-out infinite; }
+.save-dot.none { background: transparent; border: 2px solid var(--muted); }
+.lab-header:has(.pill.busy) .save-dot.busy { animation: none; }   /* one pulsing element per surface */
+#save-reason { flex-basis: 100%; margin: 0; }
+.save-panel {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  display: grid;
-  grid-template-columns: 300px 248px;
-  grid-template-areas: "help list";
-  width: max-content;
-  max-width: calc(100vw - 32px);
-  z-index: 20;
+  width: min(380px, calc(100vw - 32px));
+  box-sizing: border-box;
+  max-height: calc(100dvh - 140px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 6px;
   box-shadow: var(--shadow-menu);
-}
-.git-save-list { grid-area: list; }
-/* The explanation sits beside the options, never over them: to their left while the window has the
-   room, below them otherwise. */
-.git-save-help { grid-area: help; margin-right: 6px; padding: 9px 14px 9px 8px; border-right: 1px solid var(--line); font-size: 13px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
-.git-save-help strong { display: block; margin-bottom: 4px; color: var(--ink); }
-.git-save-help p { margin: 0 0 6px; }
-.git-save-help p:last-child { margin-bottom: 0; }
-/* git-progress.js places the menu when it opens (gitSaveMenuPlacement): hanging from the control's left
-   edge when the control has wrapped to the left of the window, and with the explanation under the
-   options when the window cannot hold the two side by side. */
-.git-save-control.menu-from-left { position: relative; }
-.git-save-control.menu-from-left .git-save-menu { position: static; }
-.git-save-control.menu-from-left .git-save-options { left: 0; right: auto; grid-template-areas: "list help"; grid-template-columns: 248px 300px; }
-.git-save-control.menu-from-left .git-save-help { margin: 0 0 0 6px; padding: 9px 8px 9px 14px; border-right: 0; border-left: 1px solid var(--line); }
-.git-save-control.menu-stacked .git-save-options { grid-template-columns: minmax(0, 260px); grid-template-areas: "list" "help"; }
-.git-save-control.menu-stacked .git-save-help { margin: 6px 0 0; padding: 10px 12px 6px; border-left: 0; border-right: 0; border-top: 1px solid var(--line); min-height: 9.5em; }
-.git-save-options button {
-  display: block;
-  width: 100%;
-  background: none;
-  border: 0;
-  border-radius: var(--radius);
+  z-index: 20;
   text-align: left;
-  padding: 9px 12px;
+  white-space: normal;
   font-size: 13px;
+  font-weight: 400;
   color: var(--text);
 }
-.git-save-options button:hover:not(:disabled), .git-save-options button:focus-visible { background: var(--surface-2); }
+.save-panel.wide { width: min(440px, calc(100vw - 32px)); }
+.save-panel.menu-clamped { right: auto; left: 0; }
+/* shell.js initPanel: a panel that fits neither way beside its opener (a phone-width screen, the opener in the middle of
+   the row) hangs under the whole action row from that row's left edge, where min(…, 100vw - 32px) always fits. */
+.lab-header-actions { position: relative; }
+.menu.panel-anchored { position: static; }
+.menu.panel-anchored > .save-panel { right: auto; left: 0; }
+.save-state { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; color: var(--ink); overflow-wrap: anywhere; }
+.save-state .save-dot { width: 10px; height: 10px; }
+.save-state:focus-visible { outline-offset: 4px; }
+.save-sub { margin: 6px 0 14px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.save-row { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.save-panel .save-row .button.primary, .save-panel .save-row .button.danger { min-height: 40px; padding: 8px 22px; }
+.save-note { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+.save-kv { margin: 0 0 4px; font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
+.save-kv span { color: var(--muted); }
+.save-kv .button.ghost { margin-left: 4px; }               /* Change… and Details at the end of a line */
+.save-name { width: 100%; margin: 8px 0 12px; box-sizing: border-box; }
+.checkbox-label.save-keep { margin: 0 0 4px; font-size: 13px; font-weight: 400; color: var(--text); }
+.save-keep input { width: auto; margin: 0; flex: none; }
+.save-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; margin: 10px -10px 0; padding: 10px 0 0; border-top: 1px solid var(--line); }
+.save-foot .button.ghost { font-size: 13px; }
+/* Lists of saved states (the Load panel, the All versions drawer): a row is a real button; .open is the row opened in
+   place, .picked the chosen one (bold as well as tinted: ink on accent-soft 13.53, its time 4.73), .off a row that
+   cannot be used, whose reason is text in a .save-why. */
+.save-heading { margin: 16px 0 0; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.save-panel .save-heading:first-of-type { margin-top: 0; }
+.save-list { list-style: none; margin: 0; padding: 0; }
+.save-list > li { border-bottom: 1px solid var(--line); }
+.save-panel .save-list > li:last-child { border-bottom: 0; }
+.save-item { display: flex; width: 100%; box-sizing: border-box; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 2px; border: 0; border-radius: var(--radius); background: none; font: inherit; font-size: 13px; color: var(--text); text-align: left; }
+button.save-item { cursor: pointer; }
+button.save-item:hover { background: var(--surface-2); }
+.save-item > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.save-when { flex: none; font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; }
+.save-why { display: block; margin: 2px 0 0; font-size: 12px; font-weight: 400; color: var(--muted); }
+.save-list > li.open { margin: 6px -10px; padding: 2px 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.save-list > li.open > .save-item { font-weight: 600; color: var(--ink); }
+.save-list > li.open p { margin: 0 0 10px; }
+.save-list > li.open .save-row + .save-row { margin-top: 8px; }
+.save-list > li.picked { border-bottom-color: transparent; }
+.save-list > li.picked > .save-item { padding-left: 10px; padding-right: 10px; background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.save-list > li.off { display: flex; align-items: center; gap: 8px; }
+.save-list > li.off > .save-item { flex: 1 1 auto; min-width: 0; color: var(--muted); }
+.save-list > li.off > .button { flex: none; }
+/* The devices of a load: a tick box with its label, or a plain row, and the device's word at the end. The word is
+   text; its colour only repeats it (ok-strong 7.69, danger-strong 8.91, accent-strong 7.32, warn-strong 7.84 on surface). */
+.save-devices { list-style: none; margin: 0 0 14px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); }
+.save-devices li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13px; }
+.save-devices li:first-child { border-top: 0; }
+.save-devices label { display: flex; align-items: center; gap: 10px; min-width: 0; margin: 0; font-size: 13px; font-weight: 500; color: var(--ink); }
+.save-devices li > span:first-child { min-width: 0; font-weight: 500; color: var(--ink); }
+.save-devices input { width: auto; margin: 0; flex: none; }
+.save-devices small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.save-end { flex: none; margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.save-end.ok { color: var(--ok-strong); font-weight: 600; }
+.save-end.bad { color: var(--danger-strong); font-weight: 600; }
+.save-end.now { color: var(--accent-strong); font-weight: 600; }
+.save-end.warn { color: var(--warn-strong); font-weight: 600; }
+.save-devices li.off label, .save-devices li.off > span:first-child { color: var(--muted); }
+.save-panel details { margin: 0 0 12px; }
+.save-panel details > summary, .save-drawer details:not(.diff-file) > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent-strong); }
+.save-panel details label { display: block; margin: 8px 0 4px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.save-panel details input[type=number] { width: 6rem; }
+/* The one drawer (save-drawers.js): What changed, All versions, Save settings, the folder chooser. */
+/* dialog.drawer.save-drawer, not dialog.save-drawer: the device drawer's width rule (section 18) comes later in this file. */
+dialog.drawer.save-drawer { width: min(760px, 100vw); }
+dialog.drawer.save-drawer.save-settings, dialog.drawer.save-drawer:has(.save-settings), dialog.drawer.save-drawer:has(.folder-chooser) { width: min(600px, 100vw); }
+.save-drawer .dialog-head { align-items: center; }
+.save-drawer .dialog-head h2 { flex: 1 1 auto; min-width: 0; }
+.save-drawer .dialog-head .icon-button { margin-top: 0; }
+.save-drawer .drawer-head .save-row { margin-top: 14px; }
+.save-drawer .drawer-content { padding-top: 16px; }
+.save-drawer .diff-file { margin: 0 0 8px; }
+.save-drawer .save-heading { margin: 28px 0 4px; }
+.save-drawer .drawer-content > .save-heading:first-child, .save-drawer .save-settings > .save-heading:first-child { margin-top: 0; }
+.save-drawer .save-row > .save-heading { flex: 1 1 auto; margin: 0; }
+.save-drawer .save-row:has(> .save-heading) { margin: 28px 0 4px; }
+.save-drawer .save-item { padding: 14px 2px; font-size: 15px; }
+.save-drawer .save-when { font-size: 13px; }
+.save-drawer .save-list > li.open { margin: 8px -12px; padding: 4px 12px 14px; }
+.save-drawer .save-list > li.open p { margin-bottom: 14px; }
+.save-drawer details:not(.diff-file) { margin-top: 8px; }
+.save-drawer .save-foot { margin: 24px 0 0; }
+.save-settings .git-node-scope { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 8px 0; }
+.save-settings-foot { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+/* The folder chooser inside the drawer (git-places.js): a field, a real tree with one tab stop, the answer as a sentence.
+   The selected row is bold with an accent bar as well as tinted (ink on accent-soft 13.53, muted 4.73, bar 4.85); the
+   focus ring is drawn on the row, not around the item's whole branch. */
+.folder-tree, .folder-tree ul { list-style: none; margin: 0; padding: 0; }
+.folder-tree { max-height: min(360px, 45dvh); margin-top: 12px; padding: 6px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+.folder-tree ul { padding-left: 18px; }
+.folder-row { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 6px 8px; border-radius: var(--radius); font-size: 13px; color: var(--ink); cursor: pointer; }
+.folder-row:hover { background: var(--surface-2); }
+.folder-row small { flex: none; font-size: 12px; color: var(--muted); }
+.folder-row .git-tag { flex: none; }
+.folder-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-tree [aria-selected="true"] > .folder-row { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
+.folder-tree [aria-expanded="true"] > .folder-row > .git-twist::before { transform: rotate(90deg); margin: 4px 0 0; }
+.folder-tree [role="treeitem"]:focus-visible { outline: none; box-shadow: none; }
+.folder-tree [role="treeitem"]:focus-visible > .folder-row { outline: 2px solid var(--focus-ring); outline-offset: -3px; }
+.git-tag.folder-state { background: var(--neutral-soft); color: var(--neutral); }
+.folder-answer { margin: 16px 0 0; font-size: 14px; font-weight: 600; line-height: 1.45; color: var(--ink); }
+.folder-answer:empty { display: none; }
+.folder-names { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 8px 0 0; }
 
 /* right-click node menu (topology.js) */
 .node-context-menu {
@@ -878,11 +964,13 @@ footer {
 .banner.banner-collapsed p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .banner.banner-collapsed details, .banner.banner-collapsed .banner-actions { display: none; }
 
-/* Lab page action column (desktop): the header's actions (Save progress / Connect a save location…, Lab actions)
+/* Lab page action column (desktop): the header's actions (the save chip, Save, Load, Lab actions)
    and the not-running banner's buttons (Start lab and the others) start at the same left edge. Both rows are
    grids whose last real column is --lab-action-col wide, counted from the same right edge; the banner's column
    is shortened by what follows it in the banner (its close button, gap and padding) so the two left edges meet.
-   Narrower than 901px both rows wrap as before. Other banners (home, git, errors) are not touched. */
+   Narrower than 901px both rows wrap as before. Other banners (home, git, errors) are not touched.
+   From 1280px the column is 36rem, which holds the chip at its widest (16rem), Save, Load and Lab actions on one row;
+   between 901 and 1279px it stays 26rem and Lab actions wraps to a second row under chip, Save and Load. */
 @media (min-width: 901px) {
   #lab-content { --lab-action-col: 26rem; --lab-banner-pad: 14px; --lab-banner-gap: 16px; --lab-banner-close: 28px; }
   .lab-header { display: grid; grid-template-columns: minmax(0, 1fr) var(--lab-action-col); align-items: start; column-gap: var(--lab-banner-gap); }
@@ -894,6 +982,7 @@ footer {
   #lab-banner .banner-actions { margin-left: 0; justify-content: flex-start; min-width: 0; }
   #lab-banner .notice-close { margin-left: 0; width: var(--lab-banner-close); min-width: var(--lab-banner-close); }
 }
+@media (min-width: 1280px) { #lab-content { --lab-action-col: 36rem; } }
 
 /* dark surfaces (only #toast and the capture screen stay dark in-page): re-scope the tokens
    that light-surface rules read, so any .caption/.muted/.timestamp and any focus ring inside
@@ -2319,7 +2408,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .map-device:focus:not(:focus-visible), .topology-wire:focus:not(:focus-visible) { outline: none; }
 /* inset rings for items drawn inside a menu or a tab strip */
 .lab-switcher > summary:focus-visible, .lab-switcher > .menu-button:focus-visible, .tabs button:focus-visible,
-.menu-list button:focus-visible, .menu-list a:focus-visible, .git-save-options button:focus-visible,
+.menu-list button:focus-visible, .menu-list a:focus-visible,
 .lab-item:focus-visible, .op-tree-file:focus-visible, .git-outline summary:focus-visible { outline-offset: -3px; box-shadow: none; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2331,7 +2420,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (prefers-contrast: more) {
   :root { --line-strong: var(--muted); --line: #a9b6c0; --wire: var(--muted); }
   .pill, .badge { border: 1px solid currentColor; }
-  .pill.neutral, .git-tag.other { background: var(--neutral); color: #fff; }
+  .pill.neutral, .git-tag.other, .git-tag.folder-state { background: var(--neutral); color: #fff; }
   .pill.ok, .badge.good { background: var(--ok-strong); color: #fff; }
   .pill.warn, .badge.warn, .git-tag.pending { background: var(--warn-strong); color: #fff; }
   .pill.danger, .badge.bad { background: var(--danger-strong); color: #fff; }
@@ -2348,6 +2437,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .map-device.state-neutral .device-state-dot { fill: Canvas; }
   .map-device.state-neutral .device-state-glyph .glyph-hollow, .map-device.state-neutral .device-state-glyph [data-glyph="hollow"] { stroke: CanvasText; }
   .tabs button.active, .tabs button[aria-selected="true"] { border-bottom: 3px solid Highlight; }
+  .save-dot { forced-color-adjust: none; box-shadow: none; }
+  .save-dot:not(.none) { background: CanvasText; }
+  .save-dot.none { background: Canvas; border: 1px solid CanvasText; }
+  .folder-tree [aria-selected="true"] > .folder-row { border-left: 3px solid Highlight; }
   .device-row[aria-current="true"] { border-left: 3px solid Highlight; box-shadow: none; }
   .skeleton, .skeleton-line { border: 1px solid GrayText; }
 }
@@ -2441,8 +2534,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .kv dd { margin-bottom: 8px; }
   .empty-state { padding: 32px 16px; }
   .git-progress-bar { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px; }
-  .git-save-control { align-self: flex-end; }
-  .git-save-control.menu-stacked .git-save-options { width: min(274px, calc(100vw - 48px)); }
   .git-binding-form { padding: 14px; }
   #git-version-dialog .button { white-space: normal; }
   .git-node-scope .checkbox-label span { overflow-wrap: anywhere; }
