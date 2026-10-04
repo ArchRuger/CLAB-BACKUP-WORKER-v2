@@ -121,3 +121,28 @@ helper's own rule; every old assertion was rewritten, none dropped.
 | 7, 8 | optional | One helper test passes without `retire`; the identical top-level folder has no caller-level test. | Added by the helper slice (S1), which owns `tests/test_host_git.py`. |
 | 9 | optional | For a legacy registration that is itself the saved-state folder the sentence says "x/latest is inside x/latest". | Reworded by the helper slice (S1). |
 | 10 | optional | The setup wizard tells a new lab to take a subfolder and then offers the repository root. | Wording aligned in the follow-up. |
+
+## 4. Review of the helper slice (S1, H2 to H7)
+
+The diff of `host_git.py` and `deploy/setup-git.sh` against the helper as S0 left it was reviewed by
+the risk reviewer (Opus 5.5, read-only) after the lead had merged it and run its tests (114 in
+`tests/test_host_git.py`). Confirmed: every id is checked as a full commit id before it reaches an
+argv; the approved revisions are built by root from `git.json` and a request cannot bring its own; the
+temporary object files are created exclusively with mode 0600 in the owner's state folder and removed;
+no push uses force or a `+` refspec; the registry lock is never held across a network call; summaries
+and outgoing rows carry metadata and paths only; the gateway and the modes are unchanged. Verdicts: H3
+and H5 accept; H2, H4, H6, H7 accept with the named fix. All fixes were sent back to the slice's author
+as one follow-up commit (S1b).
+
+| # | Severity | Finding | Answer |
+|---|---|---|---|
+| 1 | must-fix | `setup-git.sh` re-registering an existing folder with other options (a changed label) while a save waits gives the folder a new revision; the waiting save's commit is then no longer approved and every later push of the checkout refuses. | The child computes the registration first; when its revision would change, the waiting-save check of H7 runs for the old registration and refuses while a save made through it waits. |
+| 2 | should-fix | A clone of an empty repository that already exists on the VM is never finished: after a README is added on GitHub every connect repeats the empty-repository sentence. | `connect` fetches the remote branch into an unborn clone and fast-forwards it; nothing is pushed. |
+| 3 | should-fix | H7 decided "a save waits" by the remote alone: a commit no longer reachable from HEAD blocked for ever, and an unverified journal with a commit was skipped. | A save waits when its commit is an ancestor of HEAD and not of the remote branch, verified or not. |
+| 4 | should-fix | An outgoing row could name a save that the push will refuse. | Each row gains `approved`, the push's own rule. The manager shows an unapproved commit as someone working in the repository (DESIGN.md 3.6). |
+| 5 | optional | A commit subject is not filtered for control or bidi characters. | Filtered like the summary strings; the page names rows by the manager's own saves first. |
+| 6 | optional | The 15 second bound covered only `ls-remote`. | The fetch of a missing remote commit gets 20 seconds. |
+| 7 | optional | No byte budget: a hostile repository fails a whole mode at the 24 MiB check. | Summaries, `dirs` and `outgoing` are capped by bytes with their `truncated` flags. |
+| 8 | optional | A branch of another name created between the check and the push leaves the README beside it. | The remote is listed again after the push and must hold exactly the one ref. |
+| 9 | optional | `check-ref-format --branch` expands `@{-N}`; `start()` wrote before the ownership check. | `check-ref-format refs/heads/<branch>`; the ownership check runs first. |
+| 10 | should-fix | Missing tests (the re-registration case, sibling and unverified journals in H7, the fetch path of `outgoing`, the real wiring of `initialize`, a tag-only remote). | Added in the follow-up. |
