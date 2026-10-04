@@ -682,30 +682,48 @@ then says `This lab has not been saved yet.` with **Save**.
 ## When saving is not possible
 
 What can still stop a save is outside the manager. The chip reads `Can’t save`; the panel says which
-cause it is and offers the action that clears it. None of them asks you to type Git commands except the
-last.
+cause it is and offers the action that clears it. None of them asks you to type Git commands except
+one, and for that one the panel shows the two commands.
 
 | What the panel says | What it means | Action |
 |---|---|---|
 | `The lab VM could not be reached.` | The manager cannot reach the lab VM. | **Try again**, **Check the VM connection…** |
-| `The VM account cannot upload to github.com.` | The VM account's own GitHub login is expired or has no write access. | **Try again**, **Details**; the administrator repairs the login (see [Failure and recovery](#failure-and-recovery)). |
-| `Someone is working in this repository on the VM.` | An unfinished Git operation, or staged or unsaved edits, in the folder the save writes. | **Try again**, **Details**; finish or put away that work on the VM. |
+| `The VM account cannot upload to github.com.` | The VM account's own GitHub login is expired or has no write access, or GitHub cannot be reached from the VM. | **Try again**, **Details**; the administrator repairs the login (see [Failure and recovery](#failure-and-recovery)). |
+| `Someone is working in this repository on the VM.` | An unfinished Git operation, staged or unsaved edits in the folder the save writes, or commits somebody made there by hand and did not upload. | **Try again**, **Details**; finish, put away or upload that work on the VM. |
 | `The online copy has changes this VM does not have.` | The online repository has newer commits and nothing waits here. | **Update from the repository** |
-| `The online copy and this VM both have changes the other does not have. They have to be combined on the VM.` | Saves wait here **and** the online copy moved on. | **Details**, see below. |
+| `The online copy and this VM both have changes the other does not have. They have to be combined on the VM.` | Saves wait here **and** the online copy moved on. | The repository's owner runs the two commands the panel shows, then **Try again**; see below. |
 | `ceos could not be read, so nothing was saved.` | A device could not be read; nothing was written and the last save stays as it was. | **Try again**, **Save settings** (leave it out), **Details** |
+| `The topology could not be saved with this capture. Try again.` | The lab's topology file or map could not be written with the capture; nothing was saved. | **Try again**, **Details** |
 | `Course-Labs/BGP holds files that were not saved by the manager.` | Someone else's files sit inside `latest`, `baseline` or a checkpoint folder of the lab. | **Choose another place**, **Details** |
+| `This lab’s save location has to be set up again.` | The repository on the VM is gone or was changed: the checkout was removed, its branch or its upload address changed, or the VM was replaced. | **Save settings** (choose the repository again), **Details** (the exact cause) |
 | `No device of this lab is selected for saving.` | The device selection is empty or names devices that left the lab. | **Save settings** |
 | `The save did not work.` | A cause the manager has no sentence for. | **Try again**, **Details** |
 
-**The one case nothing in the manager can clear** is the fifth row: the online copy and the VM both
-have changes the other lacks. The manager never merges, rebases, stashes or force-pushes, and it will
-not guess which side is right. The repository's owner, on the VM and as that owner, opens the
-checkout (the path is under **Save settings › Git details**), looks at it with `git status -sb`,
-brings the two histories together with ordinary Git in the way the course prefers, and checks that the
-result reached GitHub. Then **Try again** in the chip panel. The saves the manager made are ordinary
-commits in that checkout; do not discard them, and never force-push merely to clear the status. If the
-manager still cannot upload afterwards because the checkout now holds commits it did not make, use
-the recovery below and **Keep snapshot only** on the superseded saves.
+**The online copy is brought in by itself when that is safe.** Before a save commits, and only while no
+save waits for upload in that repository, the manager fast-forwards the VM's copy to the online
+repository (the same step as **Update from the repository**). A file somebody added on GitHub, or a
+save made from another VM, therefore does not stand in the way of the next save. If that step is not
+possible (GitHub cannot be reached, or the copies differ), the save goes on exactly as before and the
+upload says what is wrong.
+
+**The one case that needs Git commands** is the fifth row: saves wait on the VM **and** the online copy
+moved on in the meantime, so neither side can simply be brought to the other. The manager never merges,
+rebases, stashes or force-pushes, and it will not guess which side is right. The repository's owner
+runs, on the VM and as the account that owns the checkout (its own GitHub login is used; the path is
+shown in the panel and under **Save settings › Git details**):
+
+```bash
+git -C <checkout> pull --no-rebase
+git -C <checkout> push
+```
+
+Then **Try again** in the chip panel: every waiting save is found in the online history and reads
+`Saved`. Both commands are needed: after the pull alone the manager still refuses to upload, because the
+checkout then holds a commit it did not make (`The repository on the VM has changes the manager did not
+make.`), and the owner's `push` is what clears it. The saves the manager made are ordinary commits in
+that checkout; do not discard them, and never force-push to clear the status. (`git status -sb` in the
+checkout may read `ahead` after the manager's own uploads until a `git fetch`: the manager uploads to
+the repository's address and does not move the remote-tracking name.)
 
 ## Failure and recovery
 
