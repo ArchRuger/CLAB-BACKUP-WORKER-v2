@@ -94,9 +94,9 @@ try:
     if not path.is_absolute() or '..' in path.parts or str(path)=='/': raise ValueError('Supply the absolute checkout root.')
     prefix=h.relpath(prefix,empty=True)
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}',remote): raise ValueError('Use a literal remote name.')
-    label=label or path.name
-    if len(label)>100 or any(ord(c)<32 for c in label): raise ValueError('Use a short repository label.')
     old=next((b for b in registry['repositories'] if b['path']==str(path) and b['prefix']==prefix),None)
+    label=label or (old['label'] if old else path.name)  # re-running without --label keeps the folder's label and revision
+    if len(label)>100 or any(ord(c)<32 for c in label): raise ValueError('Use a short repository label.')
     if not old: h.base_prefix(prefix)  # a new lab folder must not be a snapshot folder name; an existing registration stays repairable
     for b in registry['repositories']:
         if b is old or b['path']!=str(path): continue

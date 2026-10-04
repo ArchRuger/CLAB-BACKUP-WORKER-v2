@@ -17,6 +17,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import uuid
 from urllib.parse import urlsplit
 
@@ -238,15 +239,13 @@ def content_digest(manifest):
     return digest({k: v for k, v in manifest.items() if k not in ('backup_job_id', 'captured_at')})
 
 
-BIDI = {'\u061c', '\u200e', '\u200f', *map(chr, range(0x202a, 0x202f)), *map(chr, range(0x2066, 0x206a))}
+def control(c): return unicodedata.category(c) == 'Cc'
 
 
-def control(c): return ord(c) < 32 or 127 <= ord(c) < 160
-
-
-def display_text(value):
-    """A text for display: control characters and the Unicode bidi controls dropped, cut at 200 characters."""
-    return ''.join(c for c in value if not control(c) and c not in BIDI)[:SUMMARY_TEXT]
+def display_text(value, limit=SUMMARY_TEXT):
+    """A text for display: every control (Cc), format (Cf: bidi, zero-width and tag characters) and line or
+    paragraph separator (Zl, Zp) character dropped, then cut at `limit` characters."""
+    return ''.join(c for c in value if unicodedata.category(c) not in ('Cc', 'Cf', 'Zl', 'Zp'))[:limit]
 
 
 def manifest_summary(raw):
@@ -372,6 +371,7 @@ class GitRepository:
         if binding.get('_pending') and not self.control.exists(): return
         if not self.control.exists(): raise ValueError('This directory is not a Git checkout: .git is missing. Run guided Git setup to clone a repository; mkdir alone is insufficient.')
         if not self.control.is_dir(): raise ValueError('Linked worktrees and bare repositories are not supported.')
+        self.check_owner()   # before anything is created inside the checkout
         self.state = self.control / 'clab-manager'; no_links(self.state, False)
         self.state.mkdir(mode=0o700, exist_ok=True)
         if os.name == 'posix':
@@ -504,16 +504,11 @@ class GitRepository:
     def save_journal(self, journal): atomic_json(self.journal_path(journal['operation_id']), journal)
 
     def known_commits(self):
-        result = set()
-        directory = no_links(self.state / 'journals', False)
-        if not directory.exists(): return result
-        for path in directory.glob('*.json'):
-            no_links(path)
-            if path.stat().st_size > MAX_JSON: continue
-            value = json.loads(path.read_text(encoding='utf8'))
-            if value.get('commit') and value.get('verified') and value.get('binding_revision') in self.binding.get('_approved_revisions', [self.binding['revision']]):
-                result.add(value['commit'])
-        return result
+        """The commits a push accepts: those of verified journals under an approved revision. An unreadable journal
+        approves nothing (its commit then refuses the push as made outside manager saves)."""
+        approved = self.binding.get('_approved_revisions', [self.binding['revision']])
+        return {value['commit'] for value in self.journals()
+                if value.get('commit') and value.get('verified') and value.get('binding_revision') in approved}
 
     def remote_head(self, timeout=45):
         code, raw = self.run('ls-remote', '--exit-code', self.binding['push_url'], 'refs/heads/' + self.binding['branch'], check=False, limit=4096, timeout=timeout)
@@ -565,23 +560,28 @@ class GitRepository:
         if not between or not between.issubset(self.known_commits()): raise ValueError(NOT_MANAGER_SAVES)
 
     def check_retire(self):
-        """H7: this registration may be retired only while no save made through it waits for upload. A save waits
-        when a journal of this registration's revision (verified or not) holds a commit that HEAD contains and the
-        remote branch does not; a commit HEAD no longer reaches (reset away, pruned) cannot be uploaded and does not
-        wait. Runs as the owner under the checkout's lock; a remote that cannot be asked refuses."""
-        with self.lock():
-            commits = sorted({j['commit'] for j in self.journals() if isinstance(j.get('commit'), str) and HEX.fullmatch(j['commit'])
-                              and j.get('binding_revision') == self.binding['revision']})
-            code, raw = self.run('rev-parse', '--verify', 'HEAD', check=False)
-            head = raw.decode('utf8', errors='replace').strip() if not code else ''
-            reachable = [c for c in commits if head and self.run('merge-base', '--is-ancestor', c, head, check=False)[0] == 0]
-            if not reachable: return None
-            try:
-                remote = self.remote_head()
-                if not self.has_commit(remote): self.fetch_remote()
-            except ValueError: raise ValueError(SAVE_UNKNOWN) from None
-            for commit in reachable:
-                if self.run('merge-base', '--is-ancestor', commit, remote, check=False)[0]: raise ValueError(SAVE_WAITS)
+        """H7: refuse while a save made through this registration waits for upload (check_waiting), under the lock."""
+        with self.lock(): self.check_waiting()
+
+    def check_waiting(self):
+        """H7, the caller holds the checkout's lock. A save waits when a journal of this registration's revision that
+        is not marked pushed (verified or not) holds a commit that the registration's own branch (`refs/heads/<branch>`,
+        never the current HEAD, which a branch switch would move) contains and the remote branch does not. A commit
+        that branch no longer reaches (reset away, pruned) cannot be uploaded and does not wait, and with nothing
+        waiting the remote is not asked; a remote that cannot be asked refuses."""
+        commits = {j['commit'] for j in self.journals() if isinstance(j.get('commit'), str) and HEX.fullmatch(j['commit'])
+                   and j.get('binding_revision') == self.binding['revision'] and j.get('pushed') is not True}
+        if not commits: return None
+        branch = 'refs/heads/' + self.binding['branch']
+        code, raw = self.run('rev-parse', '--verify', '--quiet', branch + '^{commit}', check=False, limit=4096)
+        tip = raw.decode('utf8', errors='replace').strip() if not code else ''
+        if not HEX.fullmatch(tip): return None
+        if not commits & set(self.run('rev-list', tip).splitlines()): return None
+        try:
+            remote = self.remote_head()
+            if not self.has_commit(remote): self.fetch_remote()
+        except ValueError: raise ValueError(SAVE_UNKNOWN) from None
+        if commits & set(self.run('rev-list', tip, '^' + remote).splitlines()): raise ValueError(SAVE_WAITS)
         return None
 
     def outgoing(self):
@@ -609,9 +609,13 @@ class GitRepository:
                 files = self.run('diff-tree', '--no-commit-id', '--name-only', '-r', '--root', '-z', commit).split('\0')
                 row = {'commit': commit, 'operation_id': made.get(commit), 'approved': commit in approved,
                        'subject': display_text(subject), 'files': [f for f in files if f][:OUTGOING_FILES]}
-                size += len(json.dumps(row, ensure_ascii=False).encode())
-                if size > OUTGOING_BYTES: truncated = True; break
-                result.append(row)
+                cost = len(json.dumps(row, ensure_ascii=False).encode())
+                if not result:   # the newest commit is always named: when it alone exceeds the budget its files are cut
+                    while cost > OUTGOING_BYTES and row['files']:
+                        row['files'] = row['files'][:len(row['files']) // 2]; truncated = True
+                        cost = len(json.dumps(row, ensure_ascii=False).encode())
+                elif size + cost > OUTGOING_BYTES: truncated = True; break
+                size += cost; result.append(row)
             return result[::-1], truncated
         except ValueError:
             return None, False
@@ -863,9 +867,9 @@ class GitRepository:
         self.validate()
         raw = self.run('log', '-50', '--format=%H%x00%ct%x00%s', '--', self.scope('latest'), self.scope('baseline'), self.scope('checkpoints'), limit=128 * 1024)
         commits = []
-        for line in raw.splitlines():
+        for line in raw.split('\n'):   # not splitlines(): a subject may hold U+2028 or other characters it splits at
             parts = line.split('\0', 2)
-            if len(parts) == 3: commits.append({'commit': parts[0], 'time': int(parts[1]), 'message': parts[2][:500]})
+            if len(parts) == 3: commits.append({'commit': parts[0], 'time': int(parts[1]), 'message': display_text(parts[2], 500)})
         head = self.run('rev-parse', 'HEAD'); versions = []; blobs = {}; others = 0
         # Every snapshot folder committed anywhere in this checkout (a folder holding manifest.json,
         # whatever its name or depth: Final, Broken/latest, course/lab/reference/solution, the root),
@@ -891,13 +895,15 @@ class GitRepository:
         return {'head': head, 'commits': commits, 'versions': versions, 'summaries_truncated': truncated}
 
     def summarize(self, versions, blobs):
-        """H3: a bounded summary per listed saved state, in list order so the lab's own states come first and
-        never lose theirs to the budget. A manifest over 256 KiB is never read; the others, up to 4 MiB in all,
+        """H3: a bounded summary per listed saved state. The budgets go to the lab's own states first, `latest`, then
+        `baseline`, then its checkpoints, so its latest state never loses its summary to them. A manifest over 256 KiB is never read; the others, up to 4 MiB in all,
         are read by blob id in one `git show` (a second only when the id list is long) and split by their known
         sizes. A batch whose output is not exactly those sizes yields no summaries. The summaries themselves stop at
         about 4 MiB of JSON. True when a budget, not the manifest, left a row without its summary."""
+        own = {self.scope('latest'): 0, self.scope('baseline'): 1}
+        order = sorted(versions, key=lambda v: (not v['connected'], own.get(v['path'], 2) if v['connected'] else 0, v['path']))
         budget = SUMMARY_TOTAL; wanted = []; truncated = False
-        for version in versions:
+        for version in order:
             mode, blob, size = blobs[version['path']]
             if mode not in ('100644', '100755') or not HEX.fullmatch(blob) or size is None or size > SUMMARY_FILE: continue
             if size > budget: truncated = True; continue
@@ -911,7 +917,7 @@ class GitRepository:
             for version, _, size in batch:
                 version['summary'] = manifest_summary(raw[offset:offset + size]); offset += size
         output = 0
-        for version in versions:   # list order: the lab's own states first
+        for version in order:
             if version['summary'] is None: continue
             output += len(json.dumps(version['summary'], ensure_ascii=False).encode())
             if output > SUMMARY_BYTES: version['summary'] = None; truncated = True
@@ -998,6 +1004,7 @@ class GitRepository:
     def prepare_state(self):
         self.control = no_links(self.root / '.git', False)
         if not self.control.is_dir(): raise ValueError('Linked worktrees and bare repositories are not supported.')
+        self.check_owner()   # before anything is created inside the checkout
         self.state = self.control / 'clab-manager'; no_links(self.state, False)
         self.state.mkdir(mode=0o700, exist_ok=True)
         if os.name == 'posix':
@@ -1082,13 +1089,17 @@ class GitRepository:
         binding['push_url'] = checked_url(urls[0], self.allow_local)
         binding['anchor'] = self.validate(); self.clean(); self.commit_identity()
         result = self.registration(previous)
-        if previous and result['revision'] != previous['revision']:
-            # Re-registering a folder with other settings replaces its revision, which then approves no push: refused
-            # while a save made through the old one waits for upload (H7's test, as its owner, under the lock).
-            type(self)(dict(previous), git=self.git, allow_local=self.allow_local, env=self.env, gh=self.gh).check_retire()
         self.check_synchronized(binding['anchor'], self.further())
         self.check_push_access()
-        return result
+        if not previous or result['revision'] == previous['revision']: return result
+        # Re-registering a folder with other settings replaces its revision, which then approves no push: refused while
+        # a save made through the old one waits for upload. The check runs last and the checkout's lock is held until
+        # this returns, so no manager save can commit under the old revision after it; still uncovered is only the
+        # time from here to root's write of git.json (this child's exit and save_registration).
+        old = type(self)(dict(previous), git=self.git, allow_local=self.allow_local, env=self.env, gh=self.gh)
+        with old.lock():
+            old.check_waiting()
+            return result
 
     def unborn(self, url, initialize, identity):
         """A clone whose branch has no commit yet (an empty repository when it was cloned). When the remote now has
@@ -1111,8 +1122,9 @@ class GitRepository:
             commit = refs[target]
             if not HEX.fullmatch(commit): raise ValueError(finish_failed(self.root))
             if not self.has_commit(commit):
-                self.run('fetch', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', url, target, check=False, timeout=60)
+                self.run('fetch', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', url, target, check=False, timeout=300)
             failed = finish_failed(self.root)
+            if not self.has_commit(commit): raise ValueError(failed)
         else:
             self.ensure_identity(identity); commit = self.start(url, branch); failed = START_FAILED
         if named != target: self.run('symbolic-ref', 'HEAD', target)
