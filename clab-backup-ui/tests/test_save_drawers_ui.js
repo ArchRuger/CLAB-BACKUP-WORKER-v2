@@ -531,6 +531,16 @@ test('chooser: a new folder is added through the check and the list, a name that
  await g.act('bring',{value:false});g.sd.chooser.answer={kind:'free',folder:'BGP',bring:{offered:true,files:4,from:'old'}};g.sd.chooser.answerFor=g.sd.chooser.value;
  await g.act('save');assert.equal(posted.at(-1)[1].move_files,false);
 });
+test('New folder… inside a saved state: the folder is made in the lab folder above it and the chooser says so; anywhere else nothing is added to the sentence',async()=>{
+ const g=chooserHarness({routes:{'POST /git/repositories/b/folders/new':data=>data.parent==='BGP/start/latest'
+  ?{folder:'BGP/start/extra',existed:false,adjusted:'above-state',answer:{kind:'free',folder:'BGP/start/extra',typed:'BGP/start/extra',exists:false}}
+  :{folder:data.parent+'/'+data.name,existed:false,adjusted:'',answer:{kind:'free',folder:data.parent+'/'+data.name,exists:false}}}});
+ g.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
+ await g.act('new-folder',{parent:'BGP/start/latest'});await g.act('new-add',{value:'extra'});
+ assert.equal(g.sd.chooser.value,'BGP/start/extra');assert.equal(g.seen.at(-1).view.notice,'BGP/start/latest/extra would be inside a saved state, so the new folder is BGP/start/extra, in the lab folder above it.');
+ await g.act('new-folder',{parent:'BGP'});await g.act('new-add',{value:'plain'});
+ assert.equal(g.sd.chooser.value,'BGP/plain');assert.equal(g.seen.at(-1).view.notice,'');
+});
 test('the different kind: the drawer is the shell of load.js\'s view (its title, meta and markup with its own buttons); the drawer submits nothing itself',async()=>{
  const events=[];
  const view=review=>({title:'What\'s different',meta:review.name+' compared with what the devices run now',html:`<div class="save-row"><button type="button" class="button danger" data-load-action="diff-run">Load on 3 devices</button></div><p>${escapeHtml(review.name)}</p>`});
@@ -572,6 +582,19 @@ test('S11-15 Save as a lab state always sends the folder its Folder field shows:
  k.context.saveDrawerOpen('state',{});await settle();await k.act('name',{value:'final',echo:'final'});await k.act('typed',{value:'',echo:''});k.timers.at(-1)();await settle();
  assert.equal(k.seen.at(-1).view.value,'','the field is empty because the person emptied it');await k.act('save');
  assert.equal(posts.at(-1).folder,'','then, and only then, the top level');assert.equal(posts.at(-1).name,'final');
+});
+test('a name typed while the chooser is still loading: the check for the folder it had then is dropped, the state is saved in the folder the field shows',async()=>{
+ // Found in the browser (evidence pass): the field read BGP/mine while the answer, and so the save, was for "mine" at the top level.
+ const asked=[],posts=[];
+ const g=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>{asked.push(data.folder);return {kind:'free',folder:data.folder,typed:data.folder,exists:false};},'POST /labs/lab/git/state':data=>{posts.push(data);return {id:'s1',lab_id:'lab',status:'queued'};}},extras:{gitRequestId:()=>'r'.repeat(32)}});
+ g.context.saveDrawerOpen('state',{});
+ await g.act('name',{value:'mine',echo:'mine'});          // before the places answer: the lab's folder is not known yet
+ await settle();                                              // the chooser loaded: the name goes under the lab's folder
+ assert.equal(g.sd.chooser.value,'restore-square/mine');assert.ok(g.timers.length>=1,'the keystroke left its check waiting');
+ for(const timer of [...g.timers])timer();await settle();     // the keystroke's check comes due after that
+ assert.ok(!asked.includes('mine'),'the folder the field no longer shows is not asked about: '+JSON.stringify(asked));assert.ok(asked.includes('restore-square/mine'));
+ assert.equal(g.sd.chooser.answer.folder,'restore-square/mine','the answer is for what the field shows');
+ await g.act('save');assert.equal(posts.length,1);assert.equal(posts[0].folder,'restore-square/mine');assert.equal(posts[0].name,'mine');
 });
 test('S11-9 a repository by its address goes through the chooser and the place route with url: never POST …/git/connect; an empty repository is asked about and started on request',async()=>{
  const posts=[];let empty=true;

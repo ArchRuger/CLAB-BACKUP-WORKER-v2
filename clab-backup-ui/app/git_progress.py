@@ -2335,7 +2335,13 @@ class GitProgress:
                 # landed in between sends the person back to this review (DESIGN.md 3.4, review X3).
                 head = str(result.get('head') or '')
                 if not re.fullmatch(r'[0-9a-f]{40,64}', head):
-                    try: status = self.invoke({'mode': 'status'}, binding); self.seen_status(job['lab_id'], status); head = str(status.get('head') or '')
+                    try:
+                        status = self.invoke({'mode': 'status'}, binding); head = str(status.get('head') or '')
+                        # This read is for HEAD. The helper's `status` never asks the online copy, so its `ready` cannot
+                        # take back what the last upload said about it: the chip keeps `diverged` (and the commands the
+                        # repository's owner runs) until an upload, an update or a save says otherwise.
+                        kept = self.statuses.get(job['lab_id']) or {}
+                        if not (status.get('ready') and kept.get('ready') is False and kept.get('code') == 'diverged'): self.seen_status(job['lab_id'], status)
                     except ValueError: head = ''
                 with self.store.lock:
                     held = {j['id'] for j in self.store.state['git_jobs']} | {j.get('commit') for j in self.store.state['git_jobs'] if j.get('commit')}

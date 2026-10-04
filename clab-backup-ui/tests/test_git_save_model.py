@@ -1071,6 +1071,15 @@ class CatchUpTests(SaveModelCase):
         outcome = self.upload(again)
         self.assertEqual(outcome['status'], 'push_pending')
         self.assertEqual(self.client.get('/api/state').json()['labs'][0]['git_status']['code'], 'diverged')
+        # The panel reads the review again right after the refused upload. That read asks the checkout for HEAD only: the
+        # helper's `status` knows nothing about the online copy, so its `ready` does not erase why the upload was refused.
+        # (The real helper's `compare` answers no `head`, so the manager asks `status` for it; this VM is told to do the same.)
+        answer = self.vm.answer
+        self.vm.answer = lambda request: {k: v for k, v in answer(request).items() if k != 'head'} if request['mode'] == 'compare' else answer(request)
+        try: self.assertEqual(self.review(outcome)['head'], self.vm.head)
+        finally: self.vm.answer = answer
+        status = self.client.get('/api/state').json()['labs'][0]['git_status']
+        self.assertEqual((status['ready'], status['code']), (False, 'diverged'), 'the chip keeps the cause and its commands')
         # Kept saves that may hold a commit count the same.
         for job in (waiting, mine, again): self.progress.update(job['id'], status='dismissed')
         self.texts[self.names[0]] = 'hostname third\n'

@@ -530,7 +530,13 @@ async function drwChooserCheck(folder){
  }catch(error){if(seq!==c.seq||request!==saveDrawer.request)return;c.checkFailed=true;c.answer=null;c.notice='';}
  c.checking=false;saveDrawerRender();
 }
-function drwChooserDebounce(folder){const c=saveDrawer.chooser;clearTimeout(c.timer);c.timer=setTimeout(()=>{c.timer=0;drwChooserCheck(folder);},250);}
+// The check asked 250 ms after the last keystroke. It is dropped when the field no longer shows that folder (a name typed while
+// the chooser was still loading: the loaded chooser puts the name under the lab's folder and asks for that one itself), so an
+// answer for an older folder never becomes the answer for what the field shows.
+function drwChooserDebounce(folder){
+ const c=saveDrawer.chooser,clean=value=>typeof folderClean==='function'?folderClean(value):String(value||'');clearTimeout(c.timer);
+ c.timer=setTimeout(()=>{c.timer=0;if(saveDrawer.chooser!==c||clean(c.value)!==clean(folder))return;drwChooserCheck(folder);},250);
+}
 function drwChooserSelect(path){
  const c=saveDrawer.chooser;c.selected=path;c.question=null;c.notice='';c.answer=null;c.checkFailed=false;
  if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,path);
@@ -662,7 +668,8 @@ async function drwAddFolder(parent,name){
   const result=await json('/git/repositories/'+drwEnc(c.repository)+'/folders/new','POST',{lab_id:id,parent,name});
   const folder=String(result.folder??drwJoin(parent,name));
   c.newFolder=null;c.answer=result.answer||null;c.value=folder;c.selected=folder;c.answerFor=folder;
-  c.notice=result.existed?`${folder} already exists. It is selected.`:'';
+  // Inside a saved state a new folder is made in the lab folder above it, and the chooser says so (PROMPT 6.2).
+  c.notice=result.existed?`${folder} already exists. It is selected.`:result.adjusted==='above-state'?`${drwJoin(parent,name)} would be inside a saved state, so the new folder is ${folder}, in the lab folder above it.`:'';
   if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,folder);
   saveDrawerRender();
   // The field is gone: focus goes to the folder it made (the selected row of the tree), never to nothing.

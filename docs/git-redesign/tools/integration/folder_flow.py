@@ -329,7 +329,7 @@ def main():
     s.click('#folder-foot [data-folder-pending="upload"]')
     saved_here(s, 'shared-b', 'Nested-Labs:moved-2', 'D question 3, Upload it, then move')
     wait_until(lambda: not any(j.get('note') and 'Loopback' in str(j.get('summary')) and not j.get('pushed') for j in s.api_state()['git_jobs']), timeout=20, what='the upload before the move')
-    s.check('D question 3, upload: the waiting save was uploaded before the move', all(j.get('pushed') for j in s.api_state()['git_jobs'] if j.get('lab_name') == 'shared-b' and j.get('target') == 'latest'))
+    s.check('D question 3, upload: the waiting save was uploaded before the move', all(j.get('pushed') for j in s.api_state()['git_jobs'] if j.get('lab_id') == s.lab_id('shared-b') and j.get('target') == 'latest'))
     s.wait_chip('^Saved ', timeout=40000)
     s.no_errors('D question 3 and the bring-along line')
 

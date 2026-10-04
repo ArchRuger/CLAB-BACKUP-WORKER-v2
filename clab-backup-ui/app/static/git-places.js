@@ -385,6 +385,8 @@ function folderAnswerView(answer,view){
  else if(answer.adjusted==='beside-files')sentences.push(`${typed} holds a folder named latest that the manager did not save, so ${lab} saves in ${folder}.`);
  const other=answer.lab&&answer.lab.name?String(answer.lab.name):'';
  if(mode==='state'){
+  // The manager never makes a lab's own folder a lab state: the state gets a folder inside it (the answer's `inside-lab`).
+  if(answer.adjusted==='inside-lab')sentences.push(`${typed||'The top level'} is a lab’s save folder, so the state is saved in ${folder}.`);
   if(answer.kind==='state'){sentences.push(`“${answer.label||''}” already exists here.`);out.note='The older contents stay in the Git history.';out.buttons=[{label:'Replace it',choice:'take'},{label:'Use another name',action:'use-another-name',primary:true}];}
   else if(answer.kind==='own')sentences.push(`${lab} saves in ${typed}, so the state is saved in ${folder}.`);
   else if(answer.kind==='lab')sentences.push(`${other||'Another lab'} saves in ${typed}, so the state is saved in ${folder}.`);

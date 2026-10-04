@@ -618,6 +618,10 @@ test('C14 state mode: name field and buttons, the destination in a fold with its
  html=markup(context,tree,{mode:'state',value:'start',name:'start',answer:ans('start',{kind:'state',label:'Start'})});
  assert.equal(liveRegion(html),'“Start” already exists here.');same(buttonsOf(html),['Cancel','Replace it','Use another name']);assert.match(html,/data-folder-choice="take"/);assert.match(html,/data-folder-action="use-another-name"/);assert.doesNotMatch(html,/Use this folder anyway/);
  html=markup(context,tree,{mode:'state',value:'BGP',name:'start',answer:ans('BGP/start',{typed:'BGP',kind:'own'})});assert.equal(liveRegion(html),'restore-square saves in BGP, so the state is saved in BGP/start.');same(buttonsOf(html),['Cancel','Save state']);
+ // What the manager really answers for a lab's folder (git_places.place_answer, purpose state): the folder inside it, `adjusted: inside-lab`,
+ // and the kind of THAT folder. The field shows what was typed and the result line the folder used, so one sentence says why they differ.
+ html=markup(context,tree,{mode:'state',value:'BGP',name:'Inside',answer:ans('BGP/Inside',{typed:'BGP',kind:'free',adjusted:'inside-lab'})});assert.equal(liveRegion(html),'BGP is a lab’s save folder, so the state is saved in BGP/Inside.');same(buttonsOf(html),['Cancel','Save state']);
+ html=markup(context,tree,{mode:'state',value:'BGP',name:'start',answer:ans('BGP/start',{typed:'BGP',kind:'state',label:'Start',adjusted:'inside-lab'})});assert.equal(liveRegion(html),'BGP is a lab’s save folder, so the state is saved in BGP/start. “Start” already exists here.');same(buttonsOf(html),['Cancel','Replace it','Use another name']);
  html=markup(context,tree,{mode:'state',value:'eth',name:'start',answer:ans('eth/start',{typed:'eth',kind:'lab',lab:{id:'o',name:'Ethernet'}})});assert.equal(liveRegion(html),'Ethernet saves in eth, so the state is saved in eth/start.');
  assert.match(markup(context,tree,{mode:'state',busy:true}),/Saving…/);
 });
