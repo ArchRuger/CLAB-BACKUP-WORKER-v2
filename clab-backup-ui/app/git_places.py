@@ -86,12 +86,13 @@ class Tree:
         self.prefix = lab['prefix'].strip('/') if isinstance(lab.get('prefix'), str) else None
         self.folder_name = folder_name(self.name)
         self.dirs = {''}        # committed at HEAD
+        self.files = set()      # committed files: no folder can be made where one of them is
         self.listed = {''}      # what the tree shows: committed, planned, or a connected lab's folder
         self.states = {}        # folder that holds manifest.json -> summary or None
         for path in paths(checkout.get('files')):
             path = path.strip('/')
             if not path: continue
-            self.grow(self.dirs, above(path))
+            self.files.add(path); self.grow(self.dirs, above(path))
             if path == 'manifest.json' or path.endswith('/manifest.json'): self.states.setdefault(above(path), None)
         for path in paths(checkout.get('dirs')): self.grow(self.dirs, path.strip('/'))
         given = checkout.get('states')
@@ -156,6 +157,19 @@ class Tree:
             else: break
         return parts
 
+    def past_files(self, parts):
+        """A folder cannot be made where the repository holds a file of that name. The first part of the path
+        that names a committed file gets `-2`, `-3`, ... until it names none (`README.md/x` reads
+        `README.md-2/x`), so a typed path is corrected, never refused. A folder of that name is used as it is."""
+        parts = list(parts)
+        for i in range(len(parts)):
+            if '/'.join(parts[:i + 1]) not in self.files: continue
+            name = parts[i]
+            for n in range(2, BESIDE_TRIES):
+                end = '-' + str(n); parts[i] = name[:PART_LIMIT - len(end)] + end
+                if '/'.join(parts[:i + 1]) not in self.files: break
+        return parts
+
     def own_latest(self, folder):
         """Step 4: someone's own folder named `latest`, which a save would have to write over."""
         latest = join(folder, 'latest')
@@ -189,7 +203,7 @@ class Tree:
     def free(self, folder):
         if len(folder) > PATH_LIMIT: return False
         parts = folder.split('/') if folder else []
-        return self.leave_state(parts) == parts and self.classify(folder)['kind'] == 'free' and not self.own_latest(folder)
+        return self.past_files(parts) == parts and self.leave_state(parts) == parts and self.classify(folder)['kind'] == 'free' and not self.own_latest(folder)
 
     def beside(self, folder, name):
         """The first of <folder>/<name>, <folder>/<name>-2, ... that can be saved to without a question. Inside
@@ -206,9 +220,11 @@ class Tree:
     def answer(self, typed, purpose='save', name=''):
         typed = str('' if typed is None else typed)
         cleaned = clean_folder(typed)
-        folder = '/'.join(self.leave_state(cleaned.split('/') if cleaned else []))
+        above_state = '/'.join(self.leave_state(cleaned.split('/') if cleaned else []))
+        folder = '/'.join(self.past_files(above_state.split('/') if above_state else []))
+        if len(folder) > PATH_LIMIT: raise ValueError(TOO_LONG)
         as_typed = '/'.join(p.strip() for p in typed.split('/') if p.strip())
-        adjusted = 'above-state' if folder != cleaned else 'corrected' if cleaned != as_typed else ''
+        adjusted = 'past-file' if folder != above_state else 'above-state' if folder != cleaned else 'corrected' if cleaned != as_typed else ''
         found = self.classify(folder); beside = ''
         base = folder if found['within'] is None else found['within']
         if purpose == 'state':
@@ -229,7 +245,7 @@ class Tree:
             if moved: folder, adjusted, found = moved, 'beside-files', self.classify(moved)
         elif found['kind'] in ('lab', 'state'): beside = self.beside(base, self.folder_name)
         kind = found['kind']; mark = ''
-        if adjusted in ('', 'corrected'):
+        if adjusted in ('', 'corrected', 'past-file'):
             if kind == 'own': mark = 'This lab saves here'
             elif kind == 'lab' and not found['collision']: mark = found['lab']['name'] + ' saves here'
             elif kind in ('state', 'own-before'): mark = 'Lab state: ' + found['label']

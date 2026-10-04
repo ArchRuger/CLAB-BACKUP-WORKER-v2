@@ -116,6 +116,27 @@ class PromptRows(unittest.TestCase):
         planned = place_answer(ME, checkout(files=['README.md'], planned=['course/week-1']), 'course/week-1')
         self.assertEqual((planned['kind'], planned['exists']), ('free', False))   # planned is never worded as being in the repository
 
+    def test_a_path_through_a_committed_file_is_corrected_never_refused(self):
+        """The refusal audit's open case (REFUSALS.md 9.7): a typed folder whose part is a FILE of the repository.
+        No folder can be made there, so that part gets -2 (the next free number) and the answer says so."""
+        c = checkout([reg('')], files=['README.md', 'docs/guide.txt', 'docs/guide.txt-2', 'notes/a.txt', 'Makefile'])
+        for typed, folder in (('README.md', 'README.md-2'), ('README.md/x', 'README.md-2/x'), ('docs/guide.txt/labs', 'docs/guide.txt-3/labs'),
+                              ('notes/a.txt', 'notes/a.txt-2'), ('Makefile/latest', 'Makefile-2')):
+            answer = place_answer(lab(), c, typed)
+            self.assertEqual((answer['kind'], answer['folder'], answer['adjusted']), ('free', folder, 'past-file'), typed)
+            self.assertEqual(host_git.relpath(answer['folder'], True), answer['folder'])
+        # A folder of that name is used as it is, and so is a file's own folder.
+        for typed in ('notes', 'docs', 'docs/new'):
+            answer = place_answer(lab(), c, typed)
+            self.assertEqual((answer['kind'], answer['folder'], answer['adjusted']), ('free', typed, ''), typed)
+        # The longest name still gets its number inside the helper's limit for one part.
+        long = 'x' * 181
+        answer = place_answer(lab(), checkout([reg('')], files=[long]), long)
+        self.assertEqual((answer['folder'], len(answer['folder']), answer['adjusted']), ('x' * 179 + '-2', 181, 'past-file'))
+        # A first save of a lab named like a file of the repository goes beside the file without a question.
+        place = default_place({'id': 'lab-9', 'name': 'Makefile', 'prefix': None}, [{'id': 'r', 'path': '/p', 'name': 'repo', 'checkout': c}])
+        self.assertEqual((place['folder'], place['ask'], place['answer']['kind']), ('Makefile-2', False, 'free'))
+
     def test_an_existing_folder_with_ordinary_files_and_no_saved_state_is_used(self):
         answer = place_answer(ME, checkout(files=['notes/todo.md', 'notes/img/a.png']), 'notes')
         self.assertEqual((answer['kind'], answer['folder'], answer['exists'], answer['adjusted'], answer['beside']), ('free', 'notes', True, '', ''))
