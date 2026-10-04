@@ -256,8 +256,8 @@ def snapshot_conflict(files, prefix):
 
 def job_pending(job):
     """True while a Git save still needs attention: awaiting review, a retry, capture, export or
-    push. Also used to protect an entry from ``_append_git_job``'s cap: a pending save is compared
-    by digest later and must stay findable."""
+    push. Also used to protect an entry from ``_append_git_job``'s cap: a pending save is retried,
+    reviewed and uploaded later and must stay findable."""
     return (job.get('status') not in ('synced', 'dismissed', 'capture_incomplete', 'failed') and
             not (job.get('status') == 'unchanged' and job.get('pushed')))
 
@@ -273,13 +273,6 @@ def may_hold_commit(job):
     sends its publication, `expected_head`). A save that stopped before that (a capture a restart interrupted, an export
     that never reached the VM) has none: nothing of it is on the VM to review or to go along with an upload."""
     return bool(job.get('commit') or job.get('published_attempt') or 'expected_head' in job)
-
-
-def awaits_review(job):
-    """A save that holds, or may hold (`may_hold_commit`), a commit in the VM checkout that nobody reviewed: any pending
-    save but a folder move (no configuration change of its own) and one whose review is recorded. A save without a known
-    commit counts while its answer may have been lost after the VM committed."""
-    return job_pending(job) and not job.get('reviewed') and job.get('target') not in ('move', 'update') and may_hold_commit(job)
 
 
 def kept_on_vm(job):
@@ -827,7 +820,7 @@ class GitProgress:
         # reading the history while a save publishes would otherwise turn the save into "already running" (seen live).
         self.helper_lock = threading.Lock()
         # One change of a lab's repository connection at a time: a folder change checks everything before the VM
-        # retires the old registration, and no other connection may take the new folder in between.
+        # is asked, and no other connection may take the new folder in between.
         self.binding_lock = threading.Lock()
         self.rebinding = None   # the lab whose connection is being changed while `binding_lock` is held (`changing`)
         # The helper's three answers about a checkout (its registrations, tree and saved states), kept for a few seconds:
@@ -1002,7 +995,7 @@ class GitProgress:
     @contextlib.contextmanager
     def changing(self, lab_id):
         """One change of a repository connection at a time (`binding_lock`), recorded with the lab it changes: a folder
-        change checks everything before the VM retires the old registration, and nothing may take the new one meanwhile.
+        change checks everything before the VM is asked, and nothing may take the new folder meanwhile.
         Saves and design exports of that lab wait for it (`refuse_while_rebinding`); other labs' work goes on."""
         if not self.binding_lock.acquire(blocking=False):
             raise HTTPException(409, 'Another repository connection is being changed. Try again in a moment.')
@@ -1470,8 +1463,8 @@ class GitProgress:
     def install(self, app):
         # The review before an upload is mandatory (UI review 001, UI-007 C). `review_before_push` is still
         # accepted from pages loaded before that release, and ignored: a new binding records True, a
-        # stored False is never consulted, and stored bindings are left alone so pending saves keep
-        # their binding digest.
+        # stored False is never consulted, and stored bindings are never rewritten (a save of an older
+        # release still compares its digest with its lab's binding).
         class Link(BaseModel):
             model_config = ConfigDict(extra='forbid')
             binding_id: str = Field(min_length=1, max_length=120)
@@ -1812,9 +1805,12 @@ class GitProgress:
                     previous = repeated()
                     if previous: return self.public(previous)
                     binding = self.binding(lab_id)
-                    source = next((j for j in reversed(self.store.state['git_jobs']) if j.get('lab_id') == lab_id and j.get('backup_job_id') == data.backup_job_id
-                                   and j.get('kind') not in ('design',) and j.get('target') != 'move' and str(j.get('note') or '').strip()), None)
-                    if not note and source: note, note_auto = str(source['note']).strip()[:NOTE_LIMIT], bool(source.get('note_auto'))
+                    # The save whose capture this is: the one that read the devices, else the oldest made from it.
+                    made = [j for j in self.store.state['git_jobs'] if j.get('lab_id') == lab_id and j.get('backup_job_id') == data.backup_job_id
+                            and j.get('kind') != 'design' and j.get('target') != 'move']
+                    source = next((j for j in made if j.get('own_capture')), made[0] if made else None)
+                    if not note and source and str(source.get('note') or '').strip():
+                        note, note_auto = str(source['note']).strip()[:NOTE_LIMIT], bool(source.get('note_auto'))
                 checkpoint = free_checkpoint(checkpoint_slug(note), known_checkpoints(lab_id, binding))
             with self.store.lock:
                 previous = repeated()
@@ -2051,7 +2047,10 @@ class GitProgress:
                 if target.get('pushed') or target['status'] == 'synced': target = job
                 self.idle(target['lab_id'])
                 if target['status'] in GIT_BUSY: raise HTTPException(409, 'Wait for the active backup, Git save or lab operation to finish.')
-                if target is not job: self.job_binding(target)   # a save of an older release still needs its lab's binding
+                if target is not job:
+                    self.job_binding(target)   # a save of an older release still needs its lab's binding
+                    # The review recorded for the asked save was of an earlier HEAD: this upload needs its own.
+                    if not (data.reviewed or target.get('reviewed')): raise HTTPException(409, REVIEW_FIRST)
                 reviewed = target.get('reviewed') or now()
                 self.update(target['id'], status='queued', retry=True, retry_push=True, reviewed=reviewed,
                             message='Upload queued; the saved commit will be reused.')
