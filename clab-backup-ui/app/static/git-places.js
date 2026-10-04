@@ -241,3 +241,412 @@ async function gitPlacesShow(container,labId,bindingId,options={}){
  };
  draw();return tree;
 }
+
+// ===========================================================================================================
+// The folder chooser (docs/git-redesign/design/DRAWERS.md section 4). ONE component: the first-save panel's
+// folder field, the Save location card and the folder browser's modes. It is hosted by the drawer
+// (save-drawers.js: kinds `chooser` and `state`) and by the first-save panel; this file owns markup and the
+// mapping from a DOM event to an action. The host owns the requests, the debounce and every piece of state.
+// The page decides nothing about a folder: marks, sentences and questions are printed from the manager's
+// answer for that folder (DESIGN.md 2.5, 7.4), and the correction echoed while typing is replaced by it.
+//
+// folderChooserMarkup(model, view) -> html. `model` = folderChooserModel(tree) (null while loading).
+//   view.mode          'location' | 'state' | 'browse'
+//   view.labName, view.repoName, view.repositories [{id,name}], view.repository   (the select shows only with 2 or more)
+//   view.status        'loading' | 'ready' | 'error' | 'unreachable';  view.error the manager's sentence
+//   view.value         the text of the path field (echo: folderEcho);  view.selected the picked path or null
+//   view.answer        the answer for the typed path from POST .../places/check, else null (the tree's own answer
+//                      for a listed path is used when this is null; with neither, "Checking…" is shown)
+//   view.expanded      Set of open branches: the person's own (gitPlacesState-style helpers below); view.focus path
+//   view.showAll       Set of paths whose branch lists every folder;  view.treeOpen  the state mode's fold
+//   view.newFolder     null | {parent, value};  view.notice  a sentence for the answer line (already exists, ...)
+//   view.question      null | {kind:'empty', name} | {kind:'same-name', name, beside}
+//   view.pending       null | {count, summary}  question 3; `summary` is the upload sentence, '' until the review arrived
+//   view.bring         the tick box of the bring-along line (default true);  view.unfinished a save has no commit yet
+//   view.firstSave     true in the first-save panel (an answer with same_name then asks the same-name question)
+//   view.busy          a place/state request runs;  view.refused  the manager's sentence for a refusal (Try again)
+//   view.name          state mode: the name field;  view.showCancel false hides Cancel
+// folderChooserEvent(type, event) -> null (not for the chooser) or one of:
+//   {action:'select', path}  {action:'toggle', path}  {action:'focus', path}  {action:'typed', value, echo}
+//   {action:'new-folder', parent}  {action:'new-input', value, echo}  {action:'new-add', value}  {action:'new-cancel'}
+//   {action:'choice', choice}  ('', 'beside' or 'take': what the person chose; the host sends it as it is)
+//   {action:'pending', pending}  ('upload': the host runs gitReviewJob(job,{upload:true}) and then posts pending '';
+//   'keep': post pending 'keep'; the string 'upload' is never sent)
+//   {action:'save'}  {action:'keep'} (close, nothing is sent)  {action:'cancel'}  {action:'bring', value}
+//   {action:'repository', value}  {action:'name', value, echo}  {action:'use-another-name'}  {action:'initialize'}
+//   {action:'retry'} (load the folders again)  {action:'again'} (send the refused request again)  {action:'vm'}
+//   {action:'forget', path}  {action:'show-all', path}  {action:'tree-open', value}  {action:'load', path}  {action:'view', path}
+// Enter in the path or name field returns the action of the primary button; a handled key calls preventDefault.
+// ===========================================================================================================
+const FOLDER_RESERVED=['latest','baseline','checkpoints'],FOLDER_BRANCH_CAP=200;
+const FOLDER_UNSAFE=/[^A-Za-z0-9_.-]+/g,FOLDER_UNSAFE_ENDS=/^[^A-Za-z0-9_.-]+|[^A-Za-z0-9_.-]+$/g;
+// The manager's clean_folder() (app/git_places.py), the same result for every input: '' is the top level, each
+// part is trimmed of unsafe characters at its ends, every other run becomes one '-', what cannot start a name
+// is stripped, empty parts go, `.git` becomes `git`. It never refuses. The manager's one error (more than 500
+// characters) is answered here by cutting at 500, which the field's maxlength makes unreachable.
+function folderClean(value){
+ const parts=[];
+ for(const raw of String(value??'').split('/')){
+  let part=raw.replace(FOLDER_UNSAFE_ENDS,'').replace(FOLDER_UNSAFE,'-');
+  if(part.toLowerCase()==='.git')part='git';
+  part=part.replace(/^[.-]+/,'').slice(0,181);
+  if(part)parts.push(part);
+ }
+ return parts.join('/').slice(0,500).replace(/\/+$/,'');
+}
+// What the field shows WHILE typing: folderClean, except that the last part keeps one trailing '-' for a space
+// the person just typed ("my " reads "my-", so "my lab" can be typed) and one trailing '/' survives. Only an echo.
+function folderEcho(value){
+ const text=String(value??''),segments=text.split('/'),parts=[];
+ segments.forEach((raw,index)=>{
+  const last=index===segments.length-1;
+  let part=raw.replace(/^[^A-Za-z0-9_.-]+/,'');
+  if(!last)part=part.replace(/[^A-Za-z0-9_.-]+$/,'');
+  part=part.replace(FOLDER_UNSAFE,'-');
+  if(part.toLowerCase()==='.git')part='git';
+  part=part.replace(/^[.-]+/,'').slice(0,181);
+  if(part)parts.push(part);
+ });
+ let folder=parts.join('/');
+ if(folder&&segments.length>1&&!segments[segments.length-1].replace(/^[^A-Za-z0-9_.-]+/,'').replace(/^[.-]+/,''))folder+='/';
+ return folder.slice(0,500);
+}
+// The keyboard reducer of the tree (DRAWERS.md 4.8). rows: the visible rows [{path, level, kids, name}],
+// expanded: Set of open paths. Focus moves; the selection and `expanded` only change through the returned
+// `toggle` / `select`, which the host applies. null: the key is not the tree's.
+function folderKey(rows,focusIndex,key,expanded){
+ if(!rows||!rows.length)return null;
+ const index=Math.min(Math.max(Number(focusIndex)||0,0),rows.length-1),row=rows[index],open=!!expanded&&expanded.has(row.path),stay={focus:index,toggle:null,select:null};
+ switch(key){
+  case 'ArrowDown':return {...stay,focus:Math.min(index+1,rows.length-1)};
+  case 'ArrowUp':return {...stay,focus:Math.max(index-1,0)};
+  case 'Home':return {...stay,focus:0};
+  case 'End':return {...stay,focus:rows.length-1};
+  case 'ArrowRight':
+   if(!row.kids)return stay;
+   if(!open)return row.path===''?stay:{...stay,toggle:row.path};
+   return rows[index+1]&&rows[index+1].level>row.level?{...stay,focus:index+1}:stay;
+  case 'ArrowLeft':{
+   if(open&&row.kids&&row.path!=='')return {...stay,toggle:row.path};
+   for(let up=index-1;up>=0;up--)if(rows[up].level<row.level)return {...stay,focus:up};
+   return stay;}
+  case 'Enter':case ' ':return {...stay,select:row.path};
+ }
+ if(typeof key==='string'&&key.length===1&&/\S/.test(key)){
+  const letter=key.toLowerCase();
+  for(let step=1;step<=rows.length;step++){const at=(index+step)%rows.length;if(String(rows[at].name||'').toLowerCase().startsWith(letter))return {...stay,focus:at};}
+  return stay;
+ }
+ return null;
+}
+// The model of the tree answer (DESIGN.md 7.4): the nested folders from `files`, the optional helper `dirs`
+// and every listed answer, plus the answers by path. `tree.folders` holds one answer per listed folder.
+function folderChooserModel(tree){
+ if(!tree||typeof tree!=='object')return null;
+ const answers=new Map(),listed=[];
+ for(const answer of Array.isArray(tree.folders)?tree.folders:[]){if(!answer||typeof answer!=='object')continue;const path=String(answer.path??answer.folder??'');answers.set(path,answer);if(path)listed.push(path);}
+ for(const dir of Array.isArray(tree.dirs)?tree.dirs:[]){const path=typeof dir==='string'?dir:dir&&dir.path;if(typeof path==='string'&&path&&!path.startsWith('/'))listed.push(path);}
+ const base=gitTreeModel(Array.isArray(tree.files)?tree.files:[],[],listed),below=new Map();
+ const mark=node=>{let any=!!node.snapshot;for(const child of node.dirs)if(mark(child))any=true;below.set(node.path,any);return any;};
+ mark(base.root);
+ return {root:base.root,nodes:base.nodes,answers,below,tree};
+}
+// The folder this lab saves to in the tree (its answer of kind `own`), so a first display opens the way to it.
+function folderOwnPath(model){
+ if(!model)return '';
+ for(const answer of model.answers.values())if(answer.kind==='own')return String(answer.path??answer.folder??'');
+ const own=model.tree&&model.tree.own;
+ return own&&typeof own==='object'?String(own.folder??own.path??''):'';
+}
+function folderDefaultExpanded(model){const open=new Set(['']),own=folderOwnPath(model);if(own){for(const path of gitAncestors(own))open.add(path);open.add(own);}return open;}
+// The children a branch lists. A lab folder shows its other subfolders but not latest, baseline or checkpoints,
+// a folder that holds a manifest is a leaf, and browse lists everything.
+function folderChildren(model,node,mode,showAll,selected){
+ let kids=node.dirs;
+ if(model.extra&&model.extra.has(node.path))kids=kids.concat(model.extra.get(node.path));
+ if(mode!=='browse'){
+  if(node.snapshot&&node.path!=='')return {shown:[],more:0};
+  const own=model.answers.get(node.path),labFolder=!!own&&['own','lab','own-before'].includes(own.kind);
+  kids=kids.filter(child=>!(FOLDER_RESERVED.includes(child.name)&&(labFolder||model.below.get(child.path))));
+ }
+ if(showAll&&showAll.has(node.path)||kids.length<=FOLDER_BRANCH_CAP)return {shown:kids,more:0};
+ const head=kids.slice(0,FOLDER_BRANCH_CAP),sel=String(selected||''),extra=kids.slice(FOLDER_BRANCH_CAP).filter(child=>sel===child.path||sel.startsWith(child.path+'/'));
+ return {shown:head.concat(extra),more:kids.length};
+}
+// A typed path that is in no commit and in no list shows as a provisional row marked New at its place: the
+// deepest folder that exists gets the missing parts as virtual children. The model itself is not changed.
+function folderWithProvisional(model,path){
+ if(!model||!path||model.nodes.has(path))return model;
+ const extra=new Map(),parts=path.split('/');let at='',made=false;
+ for(const part of parts){
+  const next=at?at+'/'+part:part;
+  if(!made&&model.nodes.has(next)){at=next;continue;}
+  made=true;
+  const virtual={path:next,name:part,dirs:[],files:[],snapshot:false,virtual:true};
+  extra.set(at,(extra.get(at)||[]).concat([virtual]));at=next;
+ }
+ return {...model,extra};
+}
+// The rows that are on screen, in order: [{path, level, kids, name}].
+function folderVisibleRows(model,view){
+ const rows=[];if(!model)return rows;
+ const mode=view.mode||'location',walk=(node,level)=>{
+  const {shown}=folderChildren(model,node,mode,view.showAll,view.selected),open=node.path===''||!!node.virtual||!!(view.expanded&&view.expanded.has(node.path));
+  rows.push({path:node.path,level,kids:shown.length>0,name:node.name||view.repoName||'Repository'});
+  if(open)for(const child of shown)walk(child,level+1);
+ };
+ walk(model.root,1);return rows;
+}
+function folderTagFor(answer){
+ if(!answer||!answer.mark)return '';
+ const cls=answer.kind==='lab'?'git-tag other':answer.kind==='state'?'git-tag folder-state':'git-tag';
+ return `<b class="${cls}">${esc(answer.mark)}</b>`;
+}
+function folderTreeMarkup(model,view){
+ const mode=view.mode||'location',rows=folderVisibleRows(model,view),paths=new Set(rows.map(row=>row.path));
+ const tab=paths.has(view.focus)?view.focus:paths.has(view.selected)?view.selected:'';
+ const repo=view.repoName||'Repository',busy=view.busy;
+ let placed=false;
+ const rowHtml=()=>`<li role="none" class="folder-new"><label class="sr-only" for="folder-new">New folder in ${esc(view.newFolder.parent||repo)}</label><input id="folder-new" maxlength="500" autocomplete="off" spellcheck="false" value="${esc(view.newFolder.value||'')}"><button type="button" class="button secondary small" data-folder-action="new-add">Add</button><button type="button" class="button ghost small" data-folder-action="new-cancel">Cancel</button></li>`;
+ const newRow=parent=>{if(!view.newFolder||placed||view.newFolder.parent!==parent)return '';placed=true;return rowHtml();};
+ const item=(node,level)=>{
+  const {shown,more}=folderChildren(model,node,mode,view.showAll,view.selected),root=node.path==='',open=root||!!node.virtual||!!(view.expanded&&view.expanded.has(node.path)),answer=model.answers.get(node.path);
+  const kids=shown.length>0,selected=view.selected===node.path,label=node.name||repo;
+  const cls=answer&&(answer.kind==='own'||answer.kind==='lab'||answer.kind==='own-before')?' lab':answer&&answer.kind==='state'?' managed':'',fresh=!root&&(!!node.virtual||(!!answer&&answer.exists===false));
+  const twist=kids&&!root?`<span class="git-twist" data-folder-twist="${esc(node.path)}" aria-hidden="true"></span>`:'<span class="git-twist-space" aria-hidden="true"></span>';
+  const row=`<span class="folder-row">${twist}<i class="git-folder-icon${cls}${fresh?' pending':''}"></i><span class="folder-name">${esc(label)}</span>${root?'<small>top level</small>':''}${folderTagFor(answer)}${fresh?'<b class="git-tag pending">New</b>':''}</span>`;
+  let children='';
+  if(open&&(kids||view.newFolder)){
+   children=`<ul role="group">${shown.map(child=>item(child,level+1)).join('')}${more?`<li role="none" class="folder-more"><button type="button" class="link-button" data-folder-action="show-all" data-folder-path="${esc(node.path)}">Show all ${esc(Number(more).toLocaleString('en-US'))} folders</button></li>`:''}${newRow(node.path)}</ul>`;
+  }
+  return `<li role="treeitem" aria-level="${level}"${kids?` aria-expanded="${open?'true':'false'}"`:''} aria-selected="${selected?'true':'false'}" tabindex="${node.path===tab?'0':'-1'}" data-folder="${esc(node.path)}" data-folder-level="${level}" data-folder-label="${esc(label)}">${row}${children}</li>`;
+ };
+ const html=item(model.root,1);
+ return `<ul class="folder-tree" role="tree" aria-label="${esc('Folders of '+repo)}" id="folder-tree"${busy?' aria-busy="true"':''}>${html}</ul>${view.newFolder&&!placed?`<ul class="folder-new-list" role="none">${rowHtml()}</ul>`:''}`;
+}
+// browse mode: what the selected folder holds, with the file listing of today's folder browser.
+function folderListingMarkup(model,path){
+ const dir=model.nodes.get(path||'');if(!dir)return '';
+ const rows=[...dir.dirs.map(child=>`<tr class="row folder"><td><span class="name"><i class="git-folder-icon"></i>${esc(child.name)}</span></td><td class="size">${esc(gitSize(child.size))}</td></tr>`),...dir.files.map(file=>`<tr class="row"><td><span class="name"><i class="git-file-icon"></i>${esc(file.name)}</span></td><td class="size">${esc(gitSize(file.size))}</td></tr>`)];
+ const source=gitApplySource(dir),buttons=source?`<div class="save-row"><button type="button" class="button secondary small" data-folder-action="load" data-folder-path="${esc(source.path)}">Load this state…</button><button type="button" class="button ghost small" data-folder-action="view" data-folder-path="${esc(source.path)}">View files</button></div>`:'';
+ return `<div class="git-listing">${rows.length?`<table><thead><tr><th>Name</th><th>Size</th></tr></thead><tbody>${rows.join('')}</tbody></table>`:'<p class="git-empty-folder">Nothing saved here yet.</p>'}</div>${buttons}`;
+}
+function folderPlural(count,one,many){return count===1?one:many;}
+// One answer in, one sentence, one note and the buttons out. Nothing here classifies a folder.
+function folderAnswerView(answer,view){
+ const mode=view.mode||'location',lab=view.labName||'This lab',repo=view.repoName||'the repository',out={sentence:'',note:'',buttons:[]};
+ const save={label:mode==='state'?'Save state':'Save here',action:'save',primary:true};
+ out.buttons=[save];
+ const question=view.question;
+ if(question&&question.kind==='empty'){
+  out.sentence=`${question.name||repo} is empty. The manager adds a README.md file to start it.`;
+  out.buttons=[{label:'Start the repository',action:'initialize',primary:true}];return out;
+ }
+ if(view.pending){
+  const count=Number(view.pending.count)||1,summary=String(view.pending.summary||'');
+  out.sentence=`${count} ${folderPlural(count,'save','saves')} of ${lab} ${folderPlural(count,'is','are')} waiting for upload.`;
+  out.note=(summary||'Checking what this upload sends…')+' '+folderPlural(count,'That save stays','Those saves stay')+' on the VM and '+folderPlural(count,'stays','stay')+' part of the next upload.';
+  out.buttons=[{label:'Upload it, then move',pending:'upload',disabled:!summary},{label:'Move and keep that save on the VM only',pending:'keep',primary:true}];return out;
+ }
+ if(question&&question.kind==='same-name'){
+  out.sentence=`This repository already holds saves of a lab named ${question.name||lab}.`;
+  out.buttons=[{label:'Continue there',choice:'take'},{label:'Save in '+(question.beside||''),choice:'beside',primary:true}];return out;
+ }
+ if(!answer)return out;
+ const typed=String(answer.typed??''),folder=String(answer.folder??''),beside=String(answer.beside??''),sentences=[];
+ if(answer.adjusted==='above-state')sentences.push(`${typed} is part of a saved state, so ${lab} saves in ${folder||'the top level'}, the lab folder above it.`);
+ else if(answer.adjusted==='beside-files')sentences.push(`${typed} holds a folder named latest that the manager did not save, so ${lab} saves in ${folder}.`);
+ const other=answer.lab&&answer.lab.name?String(answer.lab.name):'';
+ if(mode==='state'){
+  if(answer.kind==='state'){sentences.push(`“${answer.label||''}” already exists here.`);out.note='The older contents stay in the Git history.';out.buttons=[{label:'Replace it',choice:'take'},{label:'Use another name',action:'use-another-name',primary:true}];}
+  else if(answer.kind==='own')sentences.push(`${lab} saves in ${typed}, so the state is saved in ${folder}.`);
+  else if(answer.kind==='lab')sentences.push(`${other||'Another lab'} saves in ${typed}, so the state is saved in ${folder}.`);
+  out.sentence=sentences.join(' ');return out;
+ }
+ switch(answer.kind){
+  case 'own':sentences.push(`${lab} already saves here.`);out.buttons=[{label:'Keep saving here',action:'keep',primary:true}];break;
+  case 'own-before':sentences.push(`${lab} saved here before and continues there.`);break;
+  case 'lab':{
+   sentences.push(other?`${other} saves here too.`:'This folder is already used for saves on the VM.');
+   const suggest={label:'Save in '+beside,choice:'beside',primary:true};
+   if(answer.collision){out.note=`${lab} gets a folder of its own inside it.`;out.buttons=[suggest];}
+   else{out.note=`If you use this folder anyway, ${other||'the other lab'} is disconnected from it. Its saves stay as versions, and a save of it that is still waiting stays part of the next upload.`;out.buttons=[suggest,{label:'Use this folder anyway',choice:'take'}];}
+   break;}
+  case 'state':{
+   sentences.push(`This folder holds the state “${answer.label||''}”.`);
+   const aside={label:beside?'Save beside it in '+beside:'Save beside it',choice:'beside',primary:true};
+   if(answer.layout==='flat'){out.note=`If you use this folder anyway, the state “${answer.label||''}” stays listed: its files are stored directly in the folder and are not replaced.`;out.buttons=[aside,{label:'Use this folder anyway',choice:'take'}];}
+   else{out.note=`If you replace it, the next save of ${lab} replaces its files. The older contents stay in the Git history.`;out.buttons=[aside,{label:'Replace it',choice:'take'}];}
+   break;}
+  default:
+   if(answer.adjusted==='above-state'||answer.adjusted==='beside-files')break;
+   if(folder==='')sentences.push(`${lab} will save at the top level of ${repo}.`);
+   else if(answer.exists===false)sentences.push(`${folder} is new. It appears in the repository with the first save.`);
+ }
+ if(view.firstSave&&answer.same_name){
+  sentences.length=0;sentences.push(`This repository already holds saves of a lab named ${lab}.`);
+  out.buttons=[{label:'Continue there',choice:'take'},{label:'Save in '+beside,choice:'beside',primary:true}];
+ }
+ out.sentence=sentences.join(' ');return out;
+}
+function folderButtonMarkup(button,view){
+ const busy=!!view.busy,label=busy&&button.primary&&(button.action==='save'||button.choice!==undefined||button.pending!==undefined)?(view.mode==='state'?'Saving…':'Saving here…'):button.label;
+ const data=button.pending!==undefined?`data-folder-pending="${esc(button.pending)}"`:button.choice!==undefined?`data-folder-choice="${esc(button.choice)}"`:`data-folder-action="${esc(button.action)}"`;
+ return `<button type="button" class="button ${button.primary?'primary':'secondary'}" ${data}${button.primary?' data-folder-primary="1"':''}${busy||button.disabled?' disabled':''}>${esc(label)}</button>`;
+}
+function folderChooserMarkup(model,view){
+ view=view||{};
+ const mode=view.mode||'location',status=view.status||(model?'ready':'loading'),repo=view.repoName||'Repository',lab=view.labName||'This lab',busy=!!view.busy;
+ const chosen=model?folderClean(view.value):'';
+ const answer=view.answer&&typeof view.answer==='object'?view.answer:(model&&model.answers.get(chosen))||null;
+ if(model&&mode!=='browse'&&status==='ready'){
+  const target=answer&&answer.folder!==undefined&&answer.folder!==null?String(answer.folder):chosen;
+  if(view.selected===undefined||view.selected===null)view={...view,selected:model.nodes.has(target)?target:null};
+  model=folderWithProvisional(model,target);
+ }
+ const parts=[`<div class="folder-chooser" data-mode="${esc(mode)}">`];
+ if(mode==='state'){
+  parts.push(`<label for="state-name">Name</label><input id="state-name" maxlength="100" autocomplete="off" spellcheck="false" placeholder="start" value="${esc(view.name||'')}"><div class="save-row folder-names" role="group" aria-label="Common names">${['start','broken','final'].map(name=>`<button type="button" class="pill neutral" data-state-name="${name}" aria-pressed="${view.name===name?'true':'false'}">${name}</button>`).join('')}</div>`);
+ }
+ const repos=Array.isArray(view.repositories)?view.repositories:[];
+ if(repos.length>1&&mode!=='browse')parts.push(`<label for="folder-repo">Repository</label><select id="folder-repo"${busy?' disabled':''}>${repos.map(item=>`<option value="${esc(item.id)}"${String(item.id)===String(view.repository)?' selected':''}>${esc(item.name||item.id)}</option>`).join('')}</select>`);
+ const shown=answer&&answer.folder!==undefined&&answer.folder!==null?String(answer.folder):folderClean(view.value);
+ if(mode!=='browse'){
+  parts.push(`<label for="folder-path">Folder</label><input id="folder-path" maxlength="500" autocomplete="off" spellcheck="false" aria-describedby="folder-result folder-answer" value="${esc(view.value??'')}">`);
+  parts.push(`<p class="git-destination-line" id="folder-result"><span>${mode==='state'?'The state is saved in':'Saves go to'}</span><code>${esc(repo)}</code><span aria-hidden="true">›</span><code>${esc(shown||'top level')}</code></p>`);
+ }
+ // The tree area: every state of 4.9.
+ let tree='',reason='',tools='';
+ if(status==='loading')reason='The folders are still loading.';
+ if(status==='unreachable')reason='The lab VM cannot be reached, so its folders cannot be shown.';
+ if(status==='loading')tree='<p role="status" class="git-empty-folder">Loading folders…</p>';
+ else if(status==='unreachable')tree=`<p class="form-error" role="alert">${esc(reason)}</p><div class="save-row"><button type="button" class="button secondary small" data-folder-action="retry">Try again</button><button type="button" class="button ghost small" data-folder-action="vm">Check the VM connection…</button></div>`;
+ else if(status==='error')tree=`<p class="form-error" role="alert">The folders could not be loaded.${view.error?' '+esc(view.error):''}</p><div class="save-row"><button type="button" class="button secondary small" data-folder-action="retry">Try again</button></div>`;
+ else if(model)tree=folderTreeMarkup(model,view);
+ let note='';
+ if(status==='ready'&&model){
+  const t=model.tree||{},empty=!(t.files||[]).length&&![...model.answers.keys()].some(Boolean)&&!model.root.dirs.length;
+  if(empty)note=`${repo} is empty. ${lab} can save at the top level or in a new folder.`;
+  else if(t.dirs_truncated||(t.truncated&&!Array.isArray(t.dirs)))note='This repository is very large and not every folder is listed. Type the path of a folder that is not shown.';
+ }
+ const treeBlock=`${tree}<p class="save-note" id="folder-tree-note"${note?'':' hidden'}>${esc(note)}</p>`;
+ if(mode==='state')parts.push(`<details data-folder-details${view.treeOpen?' open':''}><summary>Put it somewhere else</summary>${treeBlock}`);
+ else parts.push(treeBlock);
+ parts.push(`<div class="save-row"><button type="button" class="button secondary small" data-folder-action="new" data-folder-parent="${esc(view.selected??'')}">New folder…</button></div>`);
+ if(mode==='state')parts.push('</details>');
+ if(mode==='browse'&&status==='ready'&&model)parts.push(folderListingMarkup(model,view.selected));
+ if(mode!=='browse'){
+  // The sentence, its note and its questions. The live region holds only the sentence; buttons are in the foot.
+  const checking=!answer&&!view.question&&!view.pending&&(!!view.checking||status==='ready');
+  const info=folderAnswerView(answer,{...view,mode,labName:lab,repoName:repo});
+  const sentence=[view.notice||'',checking?'Checking…':info.sentence].filter(Boolean).join(' ');
+  parts.push(`<p class="folder-answer" id="folder-answer" role="status" aria-live="polite">${esc(sentence)}</p>`);
+  const forgettable=!!answer&&answer.kind==='free'&&answer.exists===false&&!!model&&model.answers.has(String(answer.path??answer.folder??''))&&mode==='location';
+  const bring=answer&&answer.bring&&mode==='location'?answer.bring:null,unfinished=!!(view.unfinished||(bring&&bring.unfinished));
+  const notes=[info.note,bring&&unfinished?`A save of this lab has not finished. Its files stay in ${bring.from||'the folder it leaves'}.`:''].filter(Boolean);
+  parts.push(`<p class="save-note" id="folder-answer-note"${notes.length?'':' hidden'}>${esc(notes.join(' '))}</p>`);
+  if(forgettable)parts.push(`<div class="save-row"><button type="button" class="button ghost small" data-folder-action="forget" data-folder-path="${esc(String(answer.path??answer.folder??''))}">Remove from the list</button></div>`);
+  if(bring&&bring.offered&&!unfinished)parts.push(`<label class="checkbox-label" id="folder-move"><input type="checkbox" data-folder-bring${view.bring===false?'':' checked'}> Bring this lab’s saved files along</label>`);
+  if(view.refused)parts.push(`<div class="save-row"><p class="form-error" role="alert" id="folder-refused">${esc(view.refused)}</p><button type="button" class="button secondary small" data-folder-action="again">Try again</button></div>`);
+  const blocked=status==='loading'||status==='unreachable';
+  const buttons=info.buttons.map(button=>folderButtonMarkup(blocked&&button.primary?{...button,disabled:true}:button,view)).join('');
+  parts.push(`<div class="save-settings-foot" id="folder-foot">${view.showCancel===false?'':'<button type="button" class="button ghost small" data-folder-action="cancel">Cancel</button>'}${buttons}${blocked?`<span class="form-help" id="folder-reason">${esc(reason)}</span>`:''}</div>`);
+  parts.push(mode==='state'?`<p class="save-note">Reads every included device now. Saved files can contain passwords or keys. Where ${esc(lab)} normally saves does not change.</p>`:'<p class="save-note">Saved files can contain passwords or keys.</p>');
+ }
+ parts.push('</div>');
+ return parts.join('');
+}
+// ---- the event seam -----------------------------------------------------------------------------------------
+function folderUp(event,selector){const target=event&&event.target;return target&&typeof target.closest==='function'?target.closest(selector):null;}
+function folderAttr(element,name){return element&&typeof element.getAttribute==='function'?element.getAttribute(name):null;}
+function folderRoot(event){return folderUp(event,'.folder-chooser');}
+function folderInputValue(event,id){const root=folderRoot(event),input=root&&typeof root.querySelector==='function'?root.querySelector('#'+id):null;return input?String(input.value??''):'';}
+function folderButtonAction(button,event){
+ if(!button)return null;
+ const data=button.dataset||{};
+ if(data.folderPending!==undefined)return {action:'pending',pending:String(data.folderPending)};
+ if(data.folderChoice!==undefined)return {action:'choice',choice:String(data.folderChoice)};
+ if(data.stateName!==undefined){const value=String(data.stateName);return {action:'name',value,echo:folderEcho(value)};}
+ const name=data.folderAction;
+ if(name===undefined)return null;
+ if(name==='new')return {action:'new-folder',parent:String(data.folderParent??'')};
+ if(name==='new-add')return {action:'new-add',value:folderInputValue(event,'folder-new')};
+ const out={action:String(name)};
+ if(data.folderPath!==undefined)out.path=String(data.folderPath);
+ return out;
+}
+function folderChooserEvent(type,event){
+ if(!event)return null;
+ const stop=()=>{if(typeof event.preventDefault==='function')event.preventDefault();};
+ if(type==='click'){
+  const twist=folderUp(event,'[data-folder-twist]');
+  if(twist)return {action:'toggle',path:String(twist.dataset.folderTwist)};
+  const button=folderUp(event,'[data-folder-pending],[data-folder-choice],[data-state-name],[data-folder-action]');
+  if(button){if(button.disabled)return null;return folderButtonAction(button,event);}
+  const row=folderUp(event,'.folder-row'),item=row&&folderUp(event,'[data-folder]');
+  if(item)return {action:'select',path:String(item.dataset.folder)};
+  return null;
+ }
+ if(type==='input'){
+  const id=event.target&&event.target.id,value=String(event.target&&event.target.value!==undefined?event.target.value:'');
+  if(id==='folder-path')return {action:'typed',value,echo:folderEcho(value)};
+  if(id==='folder-new')return {action:'new-input',value,echo:folderEcho(value)};
+  if(id==='state-name')return {action:'name',value,echo:folderEcho(value.replace(/\//g,'-'))};
+  return null;
+ }
+ if(type==='change'){
+  const target=event.target||{};
+  if(target.id==='folder-repo')return {action:'repository',value:String(target.value??'')};
+  if(target.dataset&&target.dataset.folderBring!==undefined)return {action:'bring',value:!!target.checked};
+  return null;
+ }
+ if(type==='toggle'){
+  const details=folderUp(event,'[data-folder-details]');
+  return details?{action:'tree-open',value:!!details.open}:null;
+ }
+ if(type==='keydown'){
+  const id=event.target&&event.target.id,key=event.key;
+  if(id==='folder-new'){
+   if(key==='Enter'){stop();return {action:'new-add',value:folderInputValue(event,'folder-new')};}
+   if(key==='Escape'){stop();if(typeof event.stopPropagation==='function')event.stopPropagation();return {action:'new-cancel'};}
+   return null;
+  }
+  if(id==='folder-path'||id==='state-name'){
+   if(key!=='Enter')return null;
+   const root=folderRoot(event),primary=root&&typeof root.querySelector==='function'?root.querySelector('[data-folder-primary]'):null;
+   stop();
+   return primary&&!primary.disabled?folderButtonAction(primary,event):null;
+  }
+  const item=folderUp(event,'[role="treeitem"]'),root=folderRoot(event);
+  if(!item||!root||typeof root.querySelectorAll!=='function'||folderUp(event,'button,input,select'))return null;
+  const items=[...root.querySelectorAll('[role="treeitem"]')],expanded=new Set(),rows=items.map(element=>{
+   const path=String(element.dataset.folder??'');if(folderAttr(element,'aria-expanded')==='true')expanded.add(path);
+   return {path,level:Number(element.dataset.folderLevel)||1,kids:folderAttr(element,'aria-expanded')!==null,name:String(element.dataset.folderLabel??'')};
+  });
+  const index=rows.findIndex(row=>row.path===String(item.dataset.folder??'')),moved=folderKey(rows,index,key,expanded);
+  if(!moved||event.ctrlKey||event.metaKey||event.altKey)return null;
+  stop();
+  if(moved.toggle!==null)return {action:'toggle',path:moved.toggle};
+  if(moved.select!==null)return {action:'select',path:moved.select};
+  return {action:'focus',path:rows[moved.focus].path};
+ }
+ return null;
+}
+// Focus and scroll survive a re-render: the host calls the first before it replaces the markup and the second
+// after (setMarkup keeps the typed text of the two fields).
+function folderChooserSnapshot(root){
+ if(!root||typeof document==='undefined')return null;
+ const active=document.activeElement;if(!active||typeof root.contains!=='function'||!root.contains(active))return null;
+ const item=typeof active.closest==='function'?active.closest('[role="treeitem"]'):null,tree=typeof root.querySelector==='function'?root.querySelector('#folder-tree'):null;
+ const key=active.id?{id:active.id}:active.dataset&&active.dataset.folder!==undefined&&item===active?{path:active.dataset.folder}:active.dataset&&active.dataset.folderAction!==undefined?{action:active.dataset.folderAction,path:active.dataset.folderPath||''}:null;
+ return {key,scroll:tree?tree.scrollTop:0};
+}
+function folderChooserRestore(root,snapshot){
+ if(!root||!snapshot||typeof root.querySelectorAll!=='function')return false;
+ const tree=root.querySelector('#folder-tree');if(tree&&snapshot.scroll)tree.scrollTop=snapshot.scroll;
+ const key=snapshot.key;if(!key)return false;
+ const all=[...root.querySelectorAll('[role="treeitem"],[id],[data-folder-action]')];
+ const found=all.find(element=>key.id!==undefined?element.id===key.id:key.path!==undefined?element.dataset&&element.dataset.folder===key.path&&element.getAttribute&&element.getAttribute('role')==='treeitem':element.dataset&&element.dataset.folderAction===key.action&&(element.dataset.folderPath||'')===key.path);
+ if(found&&typeof found.focus==='function'){found.focus();return true;}
+ return false;
+}

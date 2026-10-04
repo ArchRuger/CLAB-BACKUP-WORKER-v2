@@ -431,3 +431,371 @@ test('New folder: a name such as latest/notes inside a lab folder is refused in 
  await assert.rejects(elements.get('git-new-folder-confirm').onclick(),/eth is a lab folder, and latest inside it is where it keeps its saves/);
  assert.equal(calls.length,0);
 });
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// The folder chooser (docs/git-redesign/design/DRAWERS.md section 4, tests C1 to C14 that belong to this file).
+// ---------------------------------------------------------------------------------------------------------------
+// [typed, clean_folder(typed)] produced by the manager's own clean_folder() (app/git_places.py) over the HOSTILE
+// list of tests/test_git_places.py plus the examples of DRAWERS.md 4.4; null: the manager's one error (> 500).
+const CLEAN_TABLE=[["", ""], [" ", ""], ["/", ""], ["//", ""], ["a//b", "a/b"], ["a/b/", "a/b"], ["/a/b", "a/b"], [" a / b ", "a/b"], ["my lab", "my-lab"], ["UX TEST (3)", "UX-TEST-3"], ["\u00e9", ""], ["\u00dcbung/gr\u00f6\u00dfe", "bung/gr-e"], ["\u65e5\u672c\u8a9e", ""], ["a\\b", "a-b"], ["\\\\server\\share", "server-share"], ["..", ""], [".", ""], ["../..", ""], ["a/../b", "a/b"], ["a/./b", "a/b"], [".hidden", "hidden"], ["..hidden", "hidden"], ["-dash", "dash"], ["--", ""], ["-.-", ""], [".git", "git"], [".GIT", "git"], ["a/.git/b", "a/git/b"], [".Git/hooks", "git/hooks"], [".gitignore", "gitignore"], ["a\u0000b", "a-b"], ["a\nb", "a-b"], ["\t", ""], ["\u007f", ""], ["a\r\n/b", "a/b"], ["latest", "latest"], ["a/latest", "a/latest"], ["checkpoints/x", "checkpoints/x"], ["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], ["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], ["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], ["------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------a", "a"], ["ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab", "ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab/ab"], ["a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a", "a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a"], ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], ["a?", "a"], ["?a", "a"], ["a?b", "a-b"], ["a-", "a-"], ["a.", "a."], ["a..b", "a..b"], ["~", ""], ["$(rm -rf)", "rm--rf"], ["a;b|c", "a-b-c"], ["a\u200bb", "a-b"], ["\ufeffa", "a"], ["a//////////////////////////////////////////////////b", "a/b"], [null, ""], [7, "7"], ["CON", "CON"], ["a:b", "a-b"], ["%2e%2e", "2e-2e"], ["a/%2f/b", "a/2f/b"], [" a / b ", "a/b"], ["Week 4//BGP lab/", "Week-4/BGP-lab"], ["a\\b", "a-b"], ["\u00e9", ""], ["gr\u00f6 \u00dfe", "gr-e"], ["a-", "a-"], ["a?", "a"], ["_x", "_x"], ["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], ["BGP/start", "BGP/start"], ["my lab", "my-lab"], ["UX TEST (3)", "UX-TEST-3"], ["CON", "CON"], [".GIT", "git"], ["a/.git/b", "a/git/b"]];
+const ans=(path,more={})=>({path,folder:path,typed:path,kind:'free',exists:true,label:'',lab:null,layout:'',collision:false,adjusted:'',beside:'',mark:'',same_name:false,bring:{offered:false,files:0,from:''},...more});
+const chooserTree=(folders,more={})=>({repository:{path:'/srv/course'},head:'abc1234567',truncated:false,saved:{},files:[{path:'README.md',size:3},{path:'BGP/latest/manifest.json',size:5},{path:'BGP/latest/PE1.cfg',size:5},{path:'BGP/week-2/a.txt',size:1},{path:'start/manifest.json',size:5},{path:'notes/a.md',size:1}],own:{},folders,...more});
+const baseFolders=()=>[ans('',{mark:''}),ans('BGP',{kind:'own',mark:'This lab saves here'}),ans('BGP/week-2'),ans('notes'),ans('start',{kind:'state',label:'Start',layout:'flat',mark:'Lab state: Start',beside:'start/restore-square'}),ans('week-5',{exists:false})];
+const view=(more={})=>({mode:'location',labName:'restore-square',repoName:'Course-Labs',status:'ready',value:'notes',expanded:new Set(['']),...more});
+const markup=(context,tree,more={})=>context.folderChooserMarkup(context.folderChooserModel(tree),view(more));
+const FORBIDDEN=/registration|prefix|overlap/i;
+const foot=html=>html.slice(html.indexOf('id="folder-foot"'));
+const liveRegion=html=>(html.match(/id="folder-answer"[^>]*>([^]*?)<\/p>/)||[])[1];
+const buttonsOf=html=>[...foot(html).matchAll(/<button [^>]*>([^<]*)<\/button>/g)].map(m=>m[1]);
+
+test('C2 folderClean equals the manager\'s clean_folder for the whole shared table, is idempotent and never throws',()=>{
+ const {folderClean}=makeContext();
+ let checked=0;
+ for(const [typed,cleaned] of CLEAN_TABLE){
+  if(cleaned===null){assert.ok(folderClean(typed).length<=500,'the one manager error is answered by a cut');continue;}
+  assert.equal(folderClean(typed),cleaned,JSON.stringify(typed));
+  assert.equal(folderClean(folderClean(typed)),cleaned,'idempotent '+JSON.stringify(typed));
+  checked++;
+ }
+ assert.ok(checked>60);
+ assert.equal(folderClean('Week 4//BGP lab/'),'Week-4/BGP-lab');
+ assert.equal(folderClean('.git'),'git');assert.equal(folderClean('x'.repeat(182)),'x'.repeat(181));
+ assert.equal(folderClean(undefined),'');assert.equal(folderClean(7),'7');
+});
+test('C2 folderEcho is only an echo: it keeps the space just typed as a dash and one trailing slash, and agrees with folderClean elsewhere',()=>{
+ const {folderEcho,folderClean}=makeContext();
+ assert.equal(folderEcho('my '),'my-');assert.equal(folderEcho('my lab'),'my-lab');assert.equal(folderEcho('Week 4//BGP lab/'),'Week-4/BGP-lab/');
+ assert.equal(folderEcho('a/ '),'a/');assert.equal(folderEcho('a//'),'a/');assert.equal(folderEcho('a/b'),'a/b');assert.equal(folderEcho('/'),'');assert.equal(folderEcho('é'),'');
+ for(const [typed,cleaned] of CLEAN_TABLE)if(cleaned!==null&&/[A-Za-z0-9_]$/.test(String(typed??'')))assert.equal(folderEcho(typed),cleaned,JSON.stringify(typed));
+ for(const [typed] of CLEAN_TABLE)assert.equal(folderEcho(folderEcho(typed)).replace(/\/$/,''),folderEcho(typed).replace(/\/$/,''));
+ assert.equal(folderClean(folderEcho('Week 4//BGP lab/')),'Week-4/BGP-lab');
+});
+test('C1 New folder… is present and enabled in every mode, every kind of answer and every state of the tree',()=>{
+ const context=makeContext(),kinds=[ans('x'),ans('x',{kind:'own',mark:'This lab saves here'}),ans('x',{kind:'own-before'}),ans('x',{kind:'lab',lab:{id:'o',name:'Other'},beside:'x/restore-square',mark:'Other saves here'}),ans('x',{kind:'lab',collision:true,lab:null,beside:'x/r'}),ans('x',{kind:'state',label:'Start',layout:'latest',beside:'x/r'}),ans('x',{kind:'state',layout:'flat',beside:'x/r'}),ans('',{}),ans('x',{adjusted:'above-state',typed:'x/latest'}),ans('x',{exists:false})];
+ const trees=[chooserTree(baseFolders()),chooserTree([ans('')],{files:[]}),chooserTree(baseFolders(),{truncated:true}),chooserTree(baseFolders(),{truncated:true,dirs:['a','b'],dirs_truncated:true})];
+ let count=0;
+ const enabled=html=>{const m=html.match(/<button [^>]*data-folder-action="new"[^>]*>/);assert.ok(m,'New folder… is missing');assert.ok(!/disabled/.test(m[0]),'New folder… is disabled');assert.match(html,/New folder…<\/button>/);count++;};
+ for(const mode of ['location','state','browse'])for(const tree of trees)for(const answer of kinds)for(const extra of [{},{busy:true},{pending:{count:1,summary:''}},{question:{kind:'empty',name:'repo'}}])enabled(context.folderChooserMarkup(context.folderChooserModel(tree),view({mode,answer,...extra})));
+ for(const status of ['loading','error','unreachable'])for(const mode of ['location','state','browse'])enabled(context.folderChooserMarkup(null,view({mode,status,error:'boom'})));
+ for(const selected of ['','BGP','BGP/latest','BGP/latest/x','start','start/latest'])enabled(markup(context,chooserTree(baseFolders()),{selected,value:selected,expanded:new Set(['','BGP','start'])}));
+ assert.ok(count>400);
+});
+test('C4 free, own, own-before: marks, sentences and the one button',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders());
+ let html=markup(context,tree,{value:'notes'});
+ assert.equal(liveRegion(html),'');same(buttonsOf(html),['Cancel','Save here']);assert.match(html,/data-folder-action="save" data-folder-primary="1"/);
+ html=markup(context,tree,{value:'week-5'});assert.equal(liveRegion(html),'week-5 is new. It appears in the repository with the first save.');
+ assert.doesNotMatch(liveRegion(html),/(?:is|exists) in the repository/);
+ html=markup(context,tree,{value:''});assert.equal(liveRegion(html),'restore-square will save at the top level of Course-Labs.');assert.match(html,/<code>top level<\/code>/);
+ html=markup(context,tree,{value:'BGP',expanded:new Set(['','BGP'])});assert.equal(liveRegion(html),'restore-square already saves here.');same(buttonsOf(html),['Cancel','Keep saving here']);assert.match(html,/data-folder-action="keep"/);assert.doesNotMatch(foot(html),/disabled/);
+ const before=chooserTree([ans(''),ans('old',{kind:'own-before'})],{files:[{path:'old/latest/manifest.json',size:1}]});
+ html=markup(context,before,{value:'old'});assert.equal(liveRegion(html),'restore-square saved here before and continues there.');same(buttonsOf(html),['Cancel','Save here']);
+});
+test('C4 another lab: the identical folder has two buttons, a collision one, a folder nothing can name has its own sentence',()=>{
+ const context=makeContext(),lab={id:'o',name:'BGP <b>'},tree=chooserTree([ans(''),ans('eth',{kind:'lab',lab,beside:'eth/restore-square',mark:'BGP <b> saves here'})]);
+ let html=markup(context,tree,{value:'eth'});
+ assert.equal(liveRegion(html),'BGP &lt;b&gt; saves here too.');same(buttonsOf(html),['Cancel','Save in eth/restore-square','Use this folder anyway']);
+ assert.match(html,/data-folder-choice="beside" data-folder-primary="1"/);assert.match(html,/data-folder-choice="take"/);assert.doesNotMatch(html,/<b>x|BGP <b>/);
+ assert.match(html,/If you use this folder anyway, BGP &lt;b&gt; is disconnected from it\. Its saves stay as versions, and a save of it that is still waiting stays part of the next upload\./);
+ const collision=chooserTree([ans(''),ans('eth',{kind:'lab',collision:true,lab,beside:'eth/restore-square'})]);
+ html=markup(context,collision,{value:'eth'});same(buttonsOf(html),['Cancel','Save in eth/restore-square']);assert.match(html,/restore-square gets a folder of its own inside it\./);assert.doesNotMatch(html,/data-folder-choice="take"/);
+ const nobody=chooserTree([ans(''),ans('eth',{kind:'lab',collision:true,lab:null,beside:'eth/restore-square'})]);
+ html=markup(context,nobody,{value:'eth'});assert.equal(liveRegion(html),'This folder is already used for saves on the VM.');same(buttonsOf(html),['Cancel','Save in eth/restore-square']);
+});
+test('C4 a saved state: Replace it for a latest layout, Use this folder anyway and the stays-listed note for a flat one',()=>{
+ const context=makeContext();
+ let tree=chooserTree([ans(''),ans('start',{kind:'state',label:'Start',layout:'latest',beside:'start/restore-square',mark:'Lab state: Start'})]);
+ let html=markup(context,tree,{value:'start'});
+ assert.equal(liveRegion(html),'This folder holds the state “Start”.');same(buttonsOf(html),['Cancel','Save beside it in start/restore-square','Replace it']);
+ assert.match(html,/If you replace it, the next save of restore-square replaces its files\. The older contents stay in the Git history\./);assert.match(html,/<b class="git-tag folder-state">Lab state: Start<\/b>/);
+ tree=chooserTree([ans(''),ans('start',{kind:'state',label:'Start',layout:'flat',beside:'start/restore-square',mark:'Lab state: Start'})]);
+ html=markup(context,tree,{value:'start'});same(buttonsOf(html),['Cancel','Save beside it in start/restore-square','Use this folder anyway']);
+ assert.match(html,/the state “Start” stays listed: its files are stored directly in the folder and are not replaced\./);assert.doesNotMatch(html,/Replace it/);
+});
+test('C4 an adjusted path says what happened and the result line shows the folder, never what was typed',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders());
+ let html=markup(context,tree,{value:'BGP/latest',answer:ans('BGP',{typed:'BGP/latest',adjusted:'above-state',kind:'own'})});
+ assert.match(liveRegion(html),/^BGP\/latest is part of a saved state, so restore-square saves in BGP, the lab folder above it\. restore-square already saves here\.$/);
+ assert.match(html,/<code>BGP<\/code><\/p>/);
+ html=markup(context,tree,{value:'x/latest',answer:ans('x/restore-square',{typed:'x/latest',adjusted:'beside-files'})});
+ assert.match(liveRegion(html),/^x\/latest holds a folder named latest that the manager did not save, so restore-square saves in x\/restore-square\.$/);assert.match(html,/<code>x\/restore-square<\/code>/);
+ html=markup(context,tree,{value:'Week 4//BGP lab/',answer:ans('Week-4/BGP-lab',{typed:'Week 4//BGP lab/',adjusted:'corrected',exists:false})});
+ assert.match(html,/<code>Week-4\/BGP-lab<\/code>/);assert.doesNotMatch(liveRegion(html),/part of a saved state/);
+});
+test('C3 until the answer arrives the echoed correction and a neutral Checking… are shown, never a guess',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders());
+ const html=markup(context,tree,{value:folderEchoOf(context,'Week 4//BGP lab/'),checking:true});
+ assert.equal(liveRegion(html),'Checking…');assert.match(html,/<code>Week-4\/BGP-lab<\/code>/);same(buttonsOf(html),['Cancel','Save here']);
+ assert.doesNotMatch(html,/is new|saves here too|holds the state/);
+ const answered=markup(context,tree,{value:'Week-4/BGP-lab',answer:ans('Week-4/BGP-lab-2',{typed:'Week 4//BGP lab/'})});
+ assert.match(answered,/<code>Week-4\/BGP-lab-2<\/code>/);assert.doesNotMatch(liveRegion(answered),/Checking/);
+});
+function folderEchoOf(context,value){return context.folderEcho(value);}
+test('C7 the bring-along line is a real tick box offered only when the answer says so; an unfinished save replaces it with its sentence',()=>{
+ const context=makeContext(),offered=chooserTree([ans(''),ans('new',{bring:{offered:true,files:3,from:'BGP'}})]);
+ let html=markup(context,offered,{value:'new'});
+ assert.match(html,/<label class="checkbox-label" id="folder-move"><input type="checkbox" data-folder-bring checked> Bring this lab’s saved files along<\/label>/);
+ assert.doesNotMatch(markup(context,offered,{value:'new',bring:false}),/data-folder-bring checked/);
+ html=markup(context,chooserTree([ans(''),ans('new')]),{value:'new'});assert.doesNotMatch(html,/Bring this lab/);
+ const unfinished=chooserTree([ans(''),ans('new',{bring:{offered:false,files:3,from:'BGP'}})]);
+ html=markup(context,unfinished,{value:'new',unfinished:true});
+ assert.match(html,/A save of this lab has not finished\. Its files stay in BGP\./);assert.doesNotMatch(html,/Bring this lab|uploaded right away/);
+ const both=markup(context,chooserTree([ans(''),ans('new',{bring:{offered:true,files:3,from:'BGP',unfinished:true}})]),{value:'new'});
+ assert.doesNotMatch(both,/data-folder-bring/);assert.match(both,/has not finished/);
+});
+test('C6 question 3: the waiting save, the review sentence, Upload it then move waits for the review, Move and keep never does',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders());
+ let html=markup(context,tree,{value:'notes',pending:{count:1,summary:''}});
+ assert.equal(liveRegion(html),'1 save of restore-square is waiting for upload.');
+ assert.match(html,/Checking what this upload sends…/);
+ assert.match(html,/<button [^>]*data-folder-pending="upload"[^>]* disabled>Upload it, then move<\/button>/);
+ assert.match(html,/<button [^>]*data-folder-pending="keep" data-folder-primary="1">Move and keep that save on the VM only<\/button>/);
+ assert.match(html,/That save stays on the VM and stays part of the next upload\./);
+ html=markup(context,tree,{value:'notes',pending:{count:2,summary:'ceos changed. 4 lines added.'}});
+ assert.equal(liveRegion(html),'2 saves of restore-square are waiting for upload.');assert.match(html,/ceos changed\. 4 lines added\./);
+ assert.doesNotMatch(html,/data-folder-pending="upload"[^>]*disabled/);assert.doesNotMatch(html,/uploaded right away|must be uploaded first|Open restore-square/);
+ same(buttonsOf(html),['Cancel','Upload it, then move','Move and keep that save on the VM only']);
+});
+test('the empty-repository and same-name questions carry their one-sentence answers',()=>{
+ const context=makeContext(),tree=chooserTree([ans('')],{files:[]});
+ let html=markup(context,tree,{value:'',question:{kind:'empty',name:'Course-Labs'}});
+ assert.equal(liveRegion(html),'Course-Labs is empty. The manager adds a README.md file to start it.');same(buttonsOf(html),['Cancel','Start the repository']);assert.match(html,/data-folder-action="initialize"/);
+ html=markup(context,chooserTree(baseFolders()),{value:'restore-square',question:{kind:'same-name',name:'restore-square',beside:'restore-square-2'}});
+ assert.equal(liveRegion(html),'This repository already holds saves of a lab named restore-square.');same(buttonsOf(html),['Cancel','Continue there','Save in restore-square-2']);
+ assert.match(html,/data-folder-choice="take"/);assert.match(html,/data-folder-choice="beside" data-folder-primary="1"/);
+ html=markup(context,chooserTree([ans(''),ans('restore-square',{kind:'state',label:'Restore-square',same_name:true,beside:'restore-square-2'})]),{value:'restore-square',firstSave:true});
+ same(buttonsOf(html),['Cancel','Continue there','Save in restore-square-2']);
+});
+test('C13 a large repository: only open branches are drawn, a branch lists 200 folders and offers the rest, the type-it note needs dirs_truncated',()=>{
+ const context=makeContext(),dirs=Array.from({length:5000},(_,i)=>'d'+String(i).padStart(4,'0'));
+ const tree=chooserTree([ans('')],{files:[{path:'README.md',size:1}],dirs,truncated:true});
+ let html=markup(context,tree,{value:''});
+ assert.equal((html.match(/role="treeitem"/g)||[]).length,201);assert.match(html,/Show all 5,000 folders/);assert.doesNotMatch(html,/very large/);
+ const rows=context.folderVisibleRows(context.folderChooserModel(tree),view());assert.equal(rows.length,201);
+ html=markup(context,tree,{value:'',showAll:new Set([''])});assert.equal((html.match(/role="treeitem"/g)||[]).length,5001);assert.doesNotMatch(html,/Show all/);
+ html=markup(context,tree,{value:'d4999',selected:'d4999'});assert.match(html,/data-folder="d4999"/);
+ html=markup(context,chooserTree([ans('')],{dirs,truncated:true,dirs_truncated:true}),{value:''});assert.match(html,/id="folder-tree-note">This repository is very large and not every folder is listed\. Type the path of a folder that is not shown\.</);
+ html=markup(context,chooserTree([ans('')],{truncated:true}),{value:''});assert.match(html,/not every folder is listed/);
+ html=markup(context,chooserTree([ans('')],{dirs,truncated:true}),{value:''});assert.match(html,/id="folder-tree-note" hidden/);
+});
+test('C13 every folder is reached by the person through the tree: an open branch lists its children, a closed one none',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders());
+ let html=markup(context,tree,{expanded:new Set([''])});assert.doesNotMatch(html,/data-folder="BGP\/week-2"/);assert.match(html,/data-folder="BGP"[^>]*>/);assert.match(html,/aria-expanded="false"[^>]*data-folder="BGP"/);
+ html=markup(context,tree,{expanded:new Set(['','BGP'])});assert.match(html,/data-folder="BGP\/week-2"/);assert.match(html,/aria-expanded="true"[^>]*data-folder="BGP"/);
+});
+test('C12 aria-expanded and the drawn children depend on `expanded` only: selecting never opens or closes a branch, a new answer keeps the set',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders()),open=new Set(['','BGP']),shape=html=>[...html.matchAll(/aria-expanded="(\w+)"[^>]*data-folder="([^"]*)"/g)].map(m=>m[2]+':'+m[1]).join('|');
+ const first=markup(context,tree,{expanded:open,selected:'notes',value:'notes'});
+ for(const path of ['','BGP','BGP/week-2','start','week-5']){assert.equal(shape(markup(context,tree,{expanded:open,selected:path,value:path,answer:ans(path,{kind:'own'})})),shape(first),path);}
+ assert.ok(open.has('BGP')&&open.size===2,'the markup does not touch the set');
+ const {gitRevealFolder,gitToggleFolder,gitKeepExpanded,gitAncestors}=context,set=new Set(['','notes']);
+ gitRevealFolder(set,'BGP/week-2');same([...set].sort(),['','BGP','BGP/week-2','notes'].sort());
+ gitToggleFolder(set,'notes');assert.equal(set.has('notes'),false);
+ const kept=gitKeepExpanded(set,context.folderChooserModel(chooserTree(baseFolders(),{files:[{path:'BGP/week-2/a.txt',size:1}]})));
+ assert.ok(kept.has('BGP')&&kept.has('BGP/week-2')&&!kept.has('notes'),'a new answer keeps what still exists');
+ same(gitAncestors('a/b/c'),['','a','a/b']);
+ same([...context.folderDefaultExpanded(context.folderChooserModel(tree))].sort(),['','BGP'].sort());
+});
+test('inside a saved state is not listed: a lab folder hides latest, baseline and checkpoints, a folder with a manifest is a leaf, browse lists everything',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders(),{files:[{path:'BGP/latest/manifest.json',size:1},{path:'BGP/other/x.txt',size:1},{path:'start/sub/y.txt',size:1},{path:'start/manifest.json',size:1},{path:'course/latest/working/z.txt',size:1}]}),open=new Set(['','BGP','start','course','course/latest']);
+ let html=markup(context,tree,{expanded:open});
+ assert.doesNotMatch(html,/data-folder="BGP\/latest"/);assert.match(html,/data-folder="BGP\/other"/);assert.doesNotMatch(html,/data-folder="start\/sub"/);
+ assert.match(html,/data-folder="course\/latest"/,'a latest that is no saved state is an ordinary name');assert.match(html,/data-folder="course\/latest\/working"/);
+ html=markup(context,tree,{expanded:open,mode:'browse'});assert.match(html,/data-folder="BGP\/latest"/);assert.match(html,/data-folder="start\/sub"/);
+});
+test('marks are the answer\'s own text, as tags; a folder in no commit carries New and is never worded as in the repository',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders()),html=markup(context,tree,{expanded:new Set(['','BGP']),value:'notes'});
+ assert.match(html,/<b class="git-tag">This lab saves here<\/b>/);assert.match(html,/<b class="git-tag folder-state">Lab state: Start<\/b>/);
+ assert.match(html,/data-folder="week-5"[^]*?<b class="git-tag pending">New<\/b>/);
+ const labs=markup(context,chooserTree([ans(''),ans('eth',{kind:'lab',mark:'<i>Eth</i> saves here',lab:{id:'o',name:'Eth'},beside:'eth/x'})]),{value:'eth'});
+ assert.match(labs,/<b class="git-tag other">&lt;i&gt;Eth&lt;\/i&gt; saves here<\/b>/);
+ const planned=markup(context,tree,{value:'week-5',selected:'week-5'});assert.doesNotMatch(liveRegion(planned),/in the repository\./);
+ const typed=markup(context,tree,{value:'brand/new',expanded:new Set(['']),answer:ans('brand/new',{exists:false})});
+ assert.match(typed,/data-folder="brand\/new"[^]*?<b class="git-tag pending">New<\/b>/,'a typed path that is nowhere gets a provisional row marked New');
+});
+test('C10 the live region holds text only; the questions\' buttons are in the foot; no inline style, no disabled primary without a reason',()=>{
+ const context=makeContext(),all=[];
+ for(const answer of [ans('x'),ans('x',{kind:'lab',lab:{id:'o',name:'O'},beside:'x/r'}),ans('x',{kind:'state',label:'S',layout:'latest',beside:'x/r'}),ans('x',{kind:'own'})])
+  for(const extra of [{},{pending:{count:1,summary:'s'}},{refused:'The VM is busy.'},{notice:'x already exists. It is selected.'}])all.push(markup(context,chooserTree(baseFolders()),{answer,value:'x',...extra}));
+ for(const status of ['loading','error','unreachable'])all.push(context.folderChooserMarkup(null,view({status,error:'No answer.'})));
+ for(const html of all){
+  assert.doesNotMatch(liveRegion(html)??'',/[<]/);
+  for(const m of html.matchAll(/role="(?:status|alert)"[^>]*>([^]*?)<\/(?:p|div)>/g))assert.doesNotMatch(m[1],/<(?:button|a|input|select)\b/);
+  assert.doesNotMatch(html,/ style=/);
+  const foots=html.includes('id="folder-foot"')?foot(html):'';
+  if(/data-folder-primary="1"[^>]* disabled/.test(foots))assert.match(foots,/id="folder-reason">[^<]+</,'a disabled primary says why');
+ }
+});
+test('4.9 loading, error and the VM unreachable: the visible reason and the action beside it',()=>{
+ const context=makeContext();
+ let html=context.folderChooserMarkup(null,view({status:'loading'}));
+ assert.match(html,/<p role="status" class="git-empty-folder">Loading folders…<\/p>/);assert.match(html,/id="folder-path"/);assert.match(html,/data-folder-primary="1"[^>]* disabled/);assert.match(html,/id="folder-reason">The folders are still loading\.</);
+ html=context.folderChooserMarkup(null,view({status:'error',error:'The VM said no.'}));
+ assert.match(html,/The folders could not be loaded\. The VM said no\./);assert.match(html,/data-folder-action="retry">Try again/);assert.doesNotMatch(foot(html),/disabled/);
+ html=context.folderChooserMarkup(null,view({status:'unreachable'}));
+ assert.match(html,/The lab VM cannot be reached, so its folders cannot be shown\./);assert.match(html,/data-folder-action="retry">Try again/);assert.match(html,/data-folder-action="vm">Check the VM connection…/);
+ assert.match(html,/data-folder-primary="1"[^>]* disabled/);assert.match(foot(html),/id="folder-reason">The lab VM cannot be reached/);
+ html=markup(context,chooserTree([ans('')],{files:[]}),{value:'lab'});
+ assert.match(html,/Course-Labs is empty\. restore-square can save at the top level or in a new folder\./);assert.doesNotMatch(foot(html),/disabled/);
+ html=markup(context,chooserTree(baseFolders()),{refused:'The lab VM is busy.'});assert.match(html,/id="folder-refused">The lab VM is busy\.<\/p><button [^>]*data-folder-action="again">Try again/);
+ html=markup(context,chooserTree(baseFolders()),{busy:true});assert.match(html,/Saving here…/);assert.match(html,/aria-busy="true"/);
+});
+test('the Repository select appears with two or more repositories, and the escaped names',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders());
+ assert.doesNotMatch(markup(context,tree,{repositories:[{id:'a',name:'A'}]}),/folder-repo/);
+ const html=markup(context,tree,{repositories:[{id:'a',name:'A <x>'},{id:'b',name:'B'}],repository:'b'});
+ assert.match(html,/<select id="folder-repo">/);assert.match(html,/<option value="b" selected>B<\/option>/);assert.match(html,/A &lt;x&gt;/);
+});
+test('New folder: an inline row with its own field, Add and Cancel, placed under the parent that is looked at',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders());
+ let html=markup(context,tree,{expanded:new Set(['','BGP']),selected:'BGP',newFolder:{parent:'BGP',value:'week-<3>'}});
+ assert.match(html,/data-folder-action="new" data-folder-parent="BGP">New folder…/);assert.match(html,/<li role="none" class="folder-new"><label class="sr-only" for="folder-new">New folder in BGP<\/label><input id="folder-new"[^>]*value="week-&lt;3&gt;">/);
+ assert.ok(html.indexOf('data-folder="BGP/week-2"')<html.indexOf('id="folder-new"'));
+ html=markup(context,tree,{expanded:new Set(['']),newFolder:{parent:'BGP/closed',value:''}});assert.match(html,/id="folder-new"/);
+});
+test('C14 state mode: name field and buttons, the destination in a fold with its tree, Save state, the state answers',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders());
+ let html=markup(context,tree,{mode:'state',value:'BGP/start',name:'start',answer:ans('BGP/start')});
+ assert.match(html,/data-mode="state"/);assert.match(html,/<input id="state-name"[^>]*value="start">/);
+ assert.match(html,/data-state-name="start" aria-pressed="true">start/);assert.match(html,/data-state-name="final" aria-pressed="false">final/);
+ assert.match(html,/The state is saved in<\/span><code>Course-Labs<\/code>[^]*<code>BGP\/start<\/code>/);assert.match(html,/<details data-folder-details><summary>Put it somewhere else<\/summary>[^]*New folder…[^]*<\/details>/);
+ same(buttonsOf(html),['Cancel','Save state']);assert.match(html,/Reads every included device now\. Saved files can contain passwords or keys\. Where restore-square normally saves does not change\./);
+ assert.match(markup(context,tree,{mode:'state',treeOpen:true}),/<details data-folder-details open>/);
+ html=markup(context,tree,{mode:'state',value:'start',name:'start',answer:ans('start',{kind:'state',label:'Start'})});
+ assert.equal(liveRegion(html),'“Start” already exists here.');same(buttonsOf(html),['Cancel','Replace it','Use another name']);assert.match(html,/data-folder-choice="take"/);assert.match(html,/data-folder-action="use-another-name"/);assert.doesNotMatch(html,/Use this folder anyway/);
+ html=markup(context,tree,{mode:'state',value:'BGP',name:'start',answer:ans('BGP/start',{typed:'BGP',kind:'own'})});assert.equal(liveRegion(html),'restore-square saves in BGP, so the state is saved in BGP/start.');same(buttonsOf(html),['Cancel','Save state']);
+ html=markup(context,tree,{mode:'state',value:'eth',name:'start',answer:ans('eth/start',{typed:'eth',kind:'lab',lab:{id:'o',name:'Ethernet'}})});assert.equal(liveRegion(html),'Ethernet saves in eth, so the state is saved in eth/start.');
+ assert.match(markup(context,tree,{mode:'state',busy:true}),/Saving…/);
+});
+test('browse mode: no field and no primary button, the listing of the selected folder and Load this state… with the exact path',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders());
+ let html=markup(context,tree,{mode:'browse',selected:'start',expanded:new Set(['','start'])});
+ assert.doesNotMatch(html,/id="folder-path"|data-folder-primary|id="folder-foot"/);assert.match(html,/data-folder-action="load" data-folder-path="\/start">Load this state…/);assert.match(html,/data-folder-action="view" data-folder-path="\/start">View files/);assert.match(html,/manifest\.json/);
+ html=markup(context,tree,{mode:'browse',selected:'BGP',expanded:new Set(['','BGP'])});assert.match(html,/data-folder-path="\/BGP\/latest"/);
+ html=markup(context,tree,{mode:'browse',selected:'notes'});assert.doesNotMatch(html,/Load this state/);
+});
+test('Remove from the list is offered for a folder the manager only lists, and never for one in a commit',()=>{
+ const context=makeContext(),tree=chooserTree(baseFolders());
+ assert.match(markup(context,tree,{value:'week-5'}),/data-folder-action="forget" data-folder-path="week-5">Remove from the list/);
+ assert.doesNotMatch(markup(context,tree,{value:'notes'}),/Remove from the list/);
+});
+test('C9 the words registration, prefix and overlap occur in no chooser markup, for any answer, mode or state',()=>{
+ const context=makeContext(),pool=[];
+ const kinds=[{},{kind:'own',mark:'This lab saves here'},{kind:'own-before'},{kind:'lab',lab:{id:'o',name:'Other'},beside:'x/r',mark:'Other saves here'},{kind:'lab',collision:true,beside:'x/r'},{kind:'state',label:'S',layout:'latest',beside:'x/r',mark:'Lab state: S'},{kind:'state',label:'S',layout:'flat',beside:'x/r'},{adjusted:'above-state',typed:'x/latest'},{adjusted:'beside-files',typed:'x/latest'},{adjusted:'corrected'},{exists:false},{bring:{offered:true,files:1,from:'a'}},{bring:{offered:false,files:1,from:'a',unfinished:true}}];
+ for(const mode of ['location','state','browse'])for(const more of kinds)for(const extra of [{},{pending:{count:2,summary:''}},{question:{kind:'empty',name:'r'}},{question:{kind:'same-name',name:'r',beside:'r-2'}},{refused:'x'},{busy:true},{newFolder:{parent:'',value:'a'}},{firstSave:true}])
+  pool.push(markup(context,chooserTree(baseFolders(),{truncated:true}),{mode,answer:ans('x',more),value:'x',...extra}));
+ for(const status of ['loading','error','unreachable'])for(const mode of ['location','state','browse'])pool.push(context.folderChooserMarkup(null,view({mode,status,error:'e'})));
+ pool.push(markup(context,chooserTree([ans('')],{files:[]})));
+ assert.ok(pool.length>300);
+ for(const html of pool){assert.doesNotMatch(html,FORBIDDEN);assert.doesNotMatch(html,/ style=/);}
+ const source=fs.readFileSync(path.join(__dirname,'../app/static/git-places.js'),'utf8'),chooser=source.slice(source.indexOf('// The folder chooser'));
+ assert.doesNotMatch(chooser.replace(/\/\/[^\n]*/g,''),/registration|prefix|overlap/i,'no string of the chooser code uses the words');
+});
+test('C11 folderKey: every key of DRAWERS.md 4.8; moving focus never changes expanded or the selection',()=>{
+ const {folderKey}=makeContext(),rows=[{path:'',level:1,kids:true,name:'Repo'},{path:'a',level:2,kids:true,name:'alpha'},{path:'a/b',level:3,kids:false,name:'beta'},{path:'c',level:2,kids:true,name:'charlie'},{path:'d',level:2,kids:false,name:'delta'}];
+ const open=new Set(['','a']),keep=[...open],step=(i,key)=>folderKey(rows,i,key,open);
+ same(step(0,'ArrowDown'),{focus:1,toggle:null,select:null});same(step(4,'ArrowDown'),{focus:4,toggle:null,select:null});same(step(2,'ArrowUp'),{focus:1,toggle:null,select:null});same(step(0,'ArrowUp'),{focus:0,toggle:null,select:null});
+ same(step(2,'Home'),{focus:0,toggle:null,select:null});same(step(1,'End'),{focus:4,toggle:null,select:null});
+ same(step(3,'ArrowRight'),{focus:3,toggle:'c',select:null},'Right opens a closed branch');same(step(1,'ArrowRight'),{focus:2,toggle:null,select:null},'Right on an open branch: first child');same(step(2,'ArrowRight'),{focus:2,toggle:null,select:null},'Right on a leaf: nothing');
+ same(step(1,'ArrowLeft'),{focus:1,toggle:'a',select:null},'Left closes an open branch');same(step(2,'ArrowLeft'),{focus:1,toggle:null,select:null},'Left on a leaf: the parent');same(step(3,'ArrowLeft'),{focus:0,toggle:null,select:null});same(step(0,'ArrowLeft'),{focus:0,toggle:null,select:null});
+ same(step(2,'Enter'),{focus:2,toggle:null,select:'a/b'});same(step(3,' '),{focus:3,toggle:null,select:'c'});
+ same(step(0,'d'),{focus:4,toggle:null,select:null});same(step(4,'c'),{focus:3,toggle:null,select:null});same(step(0,'z'),{focus:0,toggle:null,select:null});
+ assert.equal(step(0,'Tab'),null);assert.equal(step(0,'Escape'),null);assert.equal(folderKey([],0,'ArrowDown',open),null);
+ same([...open],keep);
+ for(const key of ['ArrowDown','ArrowUp','Home','End','a','d'])assert.equal(step(1,key).select,null,key+' never selects');
+});
+// A small DOM for the seam: an element knows its parents, its attributes and the few selectors the chooser uses.
+function fakeDom(){
+ const camel=name=>name.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
+ const attrOf=(el,name)=>name.startsWith('data-')?el.dataset[camel(name.slice(5))]:name==='id'?el.id:el.attrs[name];
+ const simple=(el,sel)=>{
+  let m;
+  if((m=sel.match(/^\[([\w-]+)(?:="([^"]*)")?\]$/)))return m[2]===undefined?attrOf(el,m[1])!==undefined:attrOf(el,m[1])===m[2];
+  if((m=sel.match(/^\.([\w-]+)$/)))return el.cls.includes(m[1]);
+  if((m=sel.match(/^#([\w-]+)$/)))return el.id===m[1];
+  return el.tag===sel;
+ };
+ const matches=(el,sel)=>sel.split(',').some(part=>simple(el,part.trim()));
+ const all=[];
+ const make=(tag,{id='',cls=[],attrs={},data={},parent=null,value,checked,disabled,open}={})=>{
+  const el={tag,id,cls,attrs,dataset:data,parent,value,checked,disabled,open,focused:false,prevented:0,
+   closest(sel){for(let at=el;at;at=at.parent)if(matches(at,sel))return at;return null;},
+   getAttribute:name=>{const v=attrOf(el,name);return v===undefined?null:v;},
+   focus(){el.focused=true;},preventDefault(){el.prevented++;},contains:other=>{for(let at=other;at;at=at.parent)if(at===el)return true;return false;}};
+  all.push(el);return el;
+ };
+ const root=make('div',{cls:['folder-chooser']});
+ root.querySelectorAll=sel=>all.filter(el=>el!==root&&root.contains(el)&&matches(el,sel));
+ root.querySelector=sel=>root.querySelectorAll(sel)[0]||null;
+ return {make,root,all};
+}
+const fire=(context,type,target,more={})=>{let stopped=0;const event={target,key:more.key,preventDefault:()=>{target.prevented=(target.prevented||0)+1;},stopPropagation:()=>{stopped++;},...more};const out=context.folderChooserEvent(type,event);return {out,event,target,stopped};};
+test('the event seam maps clicks: a row selects, a twist only toggles, the buttons name their choice',()=>{
+ const context=makeContext(),dom=fakeDom(),{make,root}=dom;
+ const li=make('li',{attrs:{role:'treeitem'},data:{folder:'BGP/week-2'},parent:root}),row=make('span',{cls:['folder-row'],parent:li}),name=make('span',{cls:['folder-name'],parent:row}),twist=make('span',{cls:['git-twist'],data:{folderTwist:'BGP'},parent:row});
+ same(fire(context,'click',name).out,{action:'select',path:'BGP/week-2'});
+ same(fire(context,'click',twist).out,{action:'toggle',path:'BGP'});
+ const child=make('li',{attrs:{role:'treeitem'},data:{folder:'BGP/x'},parent:li}),crow=make('span',{cls:['folder-row'],parent:child});
+ same(fire(context,'click',crow).out,{action:'select',path:'BGP/x'},'the innermost folder wins');
+ same(fire(context,'click',make('ul',{attrs:{role:'group'},parent:li})).out,null,'the group between rows is not a row');
+ const button=data=>make('button',{data,parent:root});
+ same(fire(context,'click',button({folderChoice:'beside'})).out,{action:'choice',choice:'beside'});same(fire(context,'click',button({folderChoice:'take'})).out,{action:'choice',choice:'take'});
+ same(fire(context,'click',button({folderPending:'keep'})).out,{action:'pending',pending:'keep'});same(fire(context,'click',button({folderPending:'upload'})).out,{action:'pending',pending:'upload'});
+ same(fire(context,'click',button({folderAction:'save'})).out,{action:'save'});same(fire(context,'click',button({folderAction:'keep'})).out,{action:'keep'});same(fire(context,'click',button({folderAction:'cancel'})).out,{action:'cancel'});
+ same(fire(context,'click',button({folderAction:'new',folderParent:'BGP'})).out,{action:'new-folder',parent:'BGP'});
+ same(fire(context,'click',button({folderAction:'show-all',folderPath:'x'})).out,{action:'show-all',path:'x'});same(fire(context,'click',button({folderAction:'forget',folderPath:'w5'})).out,{action:'forget',path:'w5'});
+ same(fire(context,'click',button({folderAction:'load',folderPath:'/start'})).out,{action:'load',path:'/start'});same(fire(context,'click',button({folderAction:'view',folderPath:'/start'})).out,{action:'view',path:'/start'});
+ for(const name of ['retry','again','vm','initialize','use-another-name','new-cancel'])same(fire(context,'click',button({folderAction:name})).out,{action:name});
+ same(fire(context,'click',button({stateName:'broken'})).out,{action:'name',value:'broken',echo:'broken'});
+ assert.equal(fire(context,'click',make('button',{data:{folderAction:'save'},disabled:true,parent:root})).out,null,'a disabled button does nothing');
+ const field=make('input',{id:'folder-new',value:'week 3',parent:root});
+ same(fire(context,'click',button({folderAction:'new-add'})).out,{action:'new-add',value:'week 3'});
+ assert.equal(context.folderChooserEvent('click',null),null);assert.equal(context.folderChooserEvent('click',{target:{}}),null);assert.equal(context.folderChooserEvent('wheel',{target:root}),null);
+});
+test('the event seam maps typing, the select, the tick box and the fold; Enter in a field presses the primary button',()=>{
+ const context=makeContext(),dom=fakeDom(),{make,root}=dom;
+ const path=make('input',{id:'folder-path',value:'Week 4//BGP lab/',parent:root});
+ same(fire(context,'input',path).out,{action:'typed',value:'Week 4//BGP lab/',echo:'Week-4/BGP-lab/'});
+ const added=make('input',{id:'folder-new',value:'a b',parent:root});
+ same(fire(context,'input',added).out,{action:'new-input',value:'a b',echo:'a-b'});
+ same(fire(context,'input',make('input',{id:'state-name',value:'my/state',parent:root})).out,{action:'name',value:'my/state',echo:'my-state'});
+ same(fire(context,'change',make('select',{id:'folder-repo',value:'r2',parent:root})).out,{action:'repository',value:'r2'});
+ same(fire(context,'change',make('input',{data:{folderBring:''},checked:false,parent:root})).out,{action:'bring',value:false});
+ same(fire(context,'toggle',make('details',{data:{folderDetails:''},open:true,parent:root})).out,{action:'tree-open',value:true});
+ const primary=make('button',{data:{folderChoice:'beside',folderPrimary:'1'},parent:root});
+ let hit=fire(context,'keydown',path,{key:'Enter'});same(hit.out,{action:'choice',choice:'beside'});assert.ok(path.prevented>0);
+ primary.disabled=true;assert.equal(fire(context,'keydown',path,{key:'Enter'}).out,null,'a disabled primary is not pressed');
+ assert.equal(fire(context,'keydown',path,{key:'a'}).out,null);
+ added.value='x';
+ same(fire(context,'keydown',added,{key:'Enter'}).out,{action:'new-add',value:'x'});
+ hit=fire(context,'keydown',added,{key:'Escape'});same(hit.out,{action:'new-cancel'});assert.equal(hit.stopped,1,'Escape in the new-folder field does not close the drawer');
+});
+test('C11 the tree keyboard through the seam: arrows move focus only, Right and Left toggle, Enter and Space select',()=>{
+ const context=makeContext(),dom=fakeDom(),{make,root}=dom;
+ const item=(path,level,expanded,label)=>make('li',{attrs:{role:'treeitem',...(expanded===null?{}:{'aria-expanded':expanded})},data:{folder:path,folderLevel:String(level),folderLabel:label},parent:root});
+ const top=item('',1,'true','Repo'),a=item('a',2,'false','alpha'),b=item('b',2,'true','beta'),b1=item('b/1',3,null,'one');
+ let hit=fire(context,'keydown',top,{key:'ArrowDown'});same(hit.out,{action:'focus',path:'a'});assert.equal(hit.target.prevented,1);
+ same(fire(context,'keydown',a,{key:'ArrowRight'}).out,{action:'toggle',path:'a'});same(fire(context,'keydown',b,{key:'ArrowRight'}).out,{action:'focus',path:'b/1'});same(fire(context,'keydown',b,{key:'ArrowLeft'}).out,{action:'toggle',path:'b'});
+ same(fire(context,'keydown',b1,{key:'ArrowLeft'}).out,{action:'focus',path:'b'});same(fire(context,'keydown',a,{key:'Enter'}).out,{action:'select',path:'a'});same(fire(context,'keydown',b,{key:' '}).out,{action:'select',path:'b'});
+ same(fire(context,'keydown',top,{key:'End'}).out,{action:'focus',path:'b/1'});same(fire(context,'keydown',top,{key:'b'}).out,{action:'focus',path:'b'});
+ assert.equal(fire(context,'keydown',top,{key:'Tab'}).out,null);assert.equal(fire(context,'keydown',top,{key:'ArrowDown',ctrlKey:true}).out,null);
+ const field=make('input',{id:'other',parent:item('c',2,null,'c')});assert.equal(fire(context,'keydown',field,{key:'ArrowDown'}).out,null,'a field inside a row keeps its own keys');
+});
+test('focus and scroll survive a re-render: the snapshot names the focused row, the restore finds it again',()=>{
+ const context=makeContext(),dom=fakeDom(),{make,root}=dom;
+ const tree=make('ul',{id:'folder-tree',parent:root});tree.scrollTop=140;
+ const first=make('li',{attrs:{role:'treeitem'},data:{folder:'a'},parent:tree}),second=make('li',{attrs:{role:'treeitem'},data:{folder:'b'},parent:tree});
+ context.document={activeElement:second};
+ const snap=context.folderChooserSnapshot(root);same(snap,{key:{path:'b'},scroll:140});
+ const fresh=fakeDom(),t2=fresh.make('ul',{id:'folder-tree',parent:fresh.root}),a2=fresh.make('li',{attrs:{role:'treeitem'},data:{folder:'a'},parent:t2}),b2=fresh.make('li',{attrs:{role:'treeitem'},data:{folder:'b'},parent:t2});
+ assert.equal(context.folderChooserRestore(fresh.root,snap),true);assert.equal(b2.focused,true);assert.equal(a2.focused,false);assert.equal(t2.scrollTop,140);
+ const field=fresh.make('input',{id:'folder-path',parent:fresh.root});context.document={activeElement:field};
+ assert.equal(context.folderChooserRestore(fresh.root,context.folderChooserSnapshot(fresh.root)),true);assert.equal(field.focused,true);
+ context.document={activeElement:{}};assert.equal(context.folderChooserSnapshot(root),null);
+});
+test('the old folder browser keeps working for the Progress tab beside the chooser: every name it needs is still defined',()=>{
+ const context=makeContext();
+ for(const name of ['gitFolderChoice','gitCanCreateIn','gitPlacesMarkup','gitPlacesShow','gitFolderPath','gitFolderName','gitDestinationPreview','gitNewFolderRefusal','gitFolderTag','gitPathChips','gitTreeModel','gitApplySource','gitSize','gitAncestors','gitDefaultExpanded','gitToggleFolder','gitRevealFolder','gitKeepExpanded','folderChooserMarkup','folderChooserEvent','folderClean','folderKey','folderChooserModel'])assert.equal(typeof context[name],'function',name);
+ assert.equal(typeof vm.runInContext('gitPlacesState',context).expanded.has,'function');
+});
