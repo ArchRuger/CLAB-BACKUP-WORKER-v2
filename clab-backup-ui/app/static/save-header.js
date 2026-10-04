@@ -366,6 +366,9 @@ async function saveStart(id){
 // The first save: place the lab, then save, in one click. kind: 'save' (the default place, or the folder beside a lab of the same
 // name), 'continue' (the folder named after the lab, taken on purpose), 'connect' (the address of a repository the VM does not have
 // yet), 'start' (the same after the person agreed to start an empty repository).
+// The one place a page script writes the flag that lets the VM helper start an empty repository (a README.md is
+// pushed): reached only from a Start the repository button, here and in the folder chooser.
+function saveStartBody(body){return {...body,initialize:true};}
 async function saveFirstPlace(kind){
  const lab=saveLab();if(!lab||saveHeader.placing)return null;
  const id=lab.id,entry=saveHeader.places.get(id),chosen=entry&&entry.data?entry.data.default:null,base={choice:'',pending:'',move_files:false,acknowledge:true};
@@ -375,7 +378,7 @@ async function saveFirstPlace(kind){
   if(!/^https:\/\/[^\s/]+\/\S+/.test(url))throw new Error(SAVE_URL_ERROR);
   saveHeader.first={lab:id,url,question:kind==='start'?saveHeader.first.question:null};
   body={url,folder:String(lab.name||'').replace(/\//g,'-'),...base};
-  if(kind==='start')body={...body,initialize:true};
+  if(kind==='start')body=saveStartBody(body);
  }else{
   if(!chosen)throw new Error('Looking for a place to save…');
   body=kind==='continue'?{repository:chosen.repository,folder:chosen.folder||'',...base,choice:'take'}:{repository:chosen.repository,folder:(chosen.ask?chosen.beside:chosen.folder)||'',...base};

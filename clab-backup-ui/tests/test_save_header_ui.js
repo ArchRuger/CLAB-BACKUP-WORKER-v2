@@ -207,7 +207,10 @@ test('the reviewed flag is written in exactly one place of the static scripts, g
  assert.equal(reviewed,1);assert.equal(initialize,1);
  const h=harness();
  assert.match(strip(h.context.gitReviewJob.toString()),/\{push:true,reviewed:true,head:review\.head\}/);
- assert.match(strip(h.context.saveFirstPlace.toString()),/kind==='start'\)body=\{\.\.\.body,initialize:true\}/);
+ assert.match(strip(h.context.saveFirstPlace.toString()),/kind==='start'\)body=saveStartBody\(body\)/);
+ assert.match(strip(h.context.saveStartBody.toString()),/\{\.\.\.body,initialize:true\}/);
+ // The folder chooser's Start the repository goes through the same function, behind a guard.
+ assert.match(strip(read('save-drawers.js')),/case 'initialize':if\(typeof saveStartBody==='function'\)await drwChooserPlace\(c\.lastChoice,'',saveStartBody\(\{\}\)\)/);
 });
 test('gitReviewJob without upload posts nothing and opens the What changed drawer; See changes passes the chip as the opener',async()=>{
  const h=harness({state:{git_jobs:[waiting(),saved()]},routes:{'/git/compare':review()}});

@@ -524,17 +524,18 @@ test('chooser: a new folder is added through the check and the list, a name that
  await g.act('bring',{value:false});g.sd.chooser.answer={kind:'free',folder:'BGP',bring:{offered:true,files:4,from:'old'}};g.sd.chooser.answerFor=g.sd.chooser.value;
  await g.act('save');assert.equal(posted.at(-1)[1].move_files,false);
 });
-test('the different kind: loadDifferentMarkup is the body, Load on n devices calls loadSubmit, Back and the close tell load.js, the button explains why it is off',async()=>{
+test('the different kind: the drawer is the shell of load.js\'s view (its title, meta and markup with its own buttons); the drawer submits nothing itself',async()=>{
  const events=[];
- const g=harness({extras:{loadDifferentMarkup:review=>`<p>${escapeHtml(review.name)}</p>`,loadSubmit:async()=>{events.push('submit');}}});
- g.context.saveDrawerOpen('different',{review:{name:'Start'},count:3,meta:'Start compared with what the devices run now',onBack:()=>events.push('back'),onClose:()=>events.push('close')});
- assert.equal(g.title(),'What’s different');assert.match(g.content(),/<p>Start<\/p>/);assert.match(g.actions(),/Load on 3 devices/);assert.equal(g.$('save-drawer-back').hidden,false);
- await g.click(g.button('load-different'));assert.deepEqual(events,['submit']);
- g.context.saveDrawerBack();assert.deepEqual(events,['submit','back']);assert.equal(g.dialog.open,false);
- g.context.saveDrawerOpen('different',{review:{name:'Start'},count:1,onClose:()=>events.push('close')});assert.match(g.actions(),/Load on 1 device</);
- g.context.saveDrawerClose();assert.deepEqual(events,['submit','back','close']);
- g.context.saveDrawerOpen('different',{review:{name:'Start'},count:0});assert.match(g.actions(),/disabled/);assert.match(g.actions(),/Tick at least one device\./);
- g.context.state.git_jobs=[{id:'x',status:'capturing'}];g.sd.options.count=2;g.context.saveDrawerRender();assert.match(g.actions(),/A save is running\./);
+ const view=review=>({title:'What\'s different',meta:review.name+' compared with what the devices run now',html:`<div class="save-row"><button type="button" class="button danger" data-load-action="diff-run">Load on 3 devices</button></div><p>${escapeHtml(review.name)}</p>`});
+ const g=harness({extras:{loadDifferentMarkup:view,loadSubmit:async()=>{events.push('submit');}}});
+ g.context.saveDrawerOpen('different',{review:{name:'Start'},onBack:()=>events.push('back'),onClose:()=>events.push('close')});
+ assert.equal(g.title(),'What\'s different');assert.match(g.content(),/<p>Start<\/p>/);assert.match(g.content(),/data-load-action="diff-run"[^>]*>Load on 3 devices/);
+ assert.equal(g.actions(),'','the buttons are load.js\'s own, inside its markup; the drawer adds none');
+ assert.doesNotMatch(fs.readFileSync(path.join(__dirname,'..','app','static','save-drawers.js'),'utf8').split('\n').filter(line=>!/^\s*\/\//.test(line)).join('\n'),/loadSubmit\(/,'only load.js submits a load');
+ g.context.saveDrawerBack();assert.deepEqual(events,['back']);assert.equal(g.dialog.open,false);
+ g.context.saveDrawerOpen('different',{review:{name:'Start'},onClose:()=>events.push('close')});
+ g.context.saveDrawerClose();assert.deepEqual(events,['back','close']);
+ const plain=harness({extras:{loadDifferentMarkup:review=>`<p>${escapeHtml(review.name)}</p>`}});plain.context.saveDrawerOpen('different',{review:{name:'Old'},meta:'m'});assert.match(plain.content(),/<p>Old<\/p>/);
  const bare=harness();bare.context.saveDrawerOpen('different',{review:{}});assert.match(bare.content(),/The differences are not available on this page\./);
 });
 test('the poll keeps focus, caret and scroll: a rebuild puts focus back on the same control, and typed text lives in the drawer state',async()=>{

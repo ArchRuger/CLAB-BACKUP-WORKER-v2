@@ -646,7 +646,8 @@ async function drwChooserApply(intent,event){
   case 'new-add':{const nf=c.newFolder,typed=intent.value!==undefined?intent.value:nf?.value||'';const name=typeof folderClean==='function'?folderClean(typed):typed;if(name)await drwAddFolder(nf?nf.parent:'',name);break;}
   case 'choice':if(c.mode==='state')await drwChooserState(intent.choice);else await drwChooserPlace(intent.choice,'');break;
   case 'pending':if(intent.pending==='upload')await drwChooserUploadThenMove();else await drwChooserPlace(c.lastChoice,'keep');break;
-  case 'initialize':await drwChooserPlace(c.lastChoice,'',{initialize:true});break;
+  // Start the repository: save-header.js writes the one flag that starts an empty repository (saveStartBody).
+  case 'initialize':if(typeof saveStartBody==='function')await drwChooserPlace(c.lastChoice,'',saveStartBody({}));else{c.refused='The repository cannot be started from this page.';saveDrawerRender();}break;
   case 'save':if(c.mode==='state')await drwChooserState('');else await drwChooserPlace('','');break;
   case 'keep':drwDrawerClose_();break;
   case 'cancel':if(saveDrawer.back)saveDrawerBack();else saveDrawerClose();break;
@@ -664,13 +665,12 @@ async function drwChooserApply(intent,event){
 function drwDrawerClose_(){saveDrawerClose();}
 // ---- The different kind: load.js's differences of a load (loadDifferentMarkup(review)) in this shell ----
 function drwDifferentView(d){
- const o=d.options||{},title=o.title||'What’s different';
- const count=Number.isFinite(o.count)?o.count:null,saving=((typeof state==='object'&&state&&state.git_jobs)||[]).some(j=>DRW_ACTIVE.includes(j.status));
- const reason=count===0?'Tick at least one device.':saving?'A save is running.':'';
- const body=typeof loadDifferentMarkup==='function'&&o.review?loadDifferentMarkup(o.review):'<p class="save-note">The differences are not available on this page.</p>';
- const label=count===null?'Load':'Load on '+(count===1?'1 device':count+' devices');
- const actions=`<button type="button" class="button danger" data-save-action="load-different" ${reason?'disabled':''}>${esc(label)}</button>${reason?`<p class="save-note">${esc(reason)}</p>`:''}`;
- return {title,meta:o.meta||'',actions,content:body};
+ // load.js owns this view: {title, meta, html}. Its markup carries its own buttons (Load on n devices, Back) with
+ // data-load-action, which load.js handles through its own listener on the drawer; nothing here submits a load.
+ const o=d.options||{},view=typeof loadDifferentMarkup==='function'&&o.review?loadDifferentMarkup(o.review):null;
+ if(!view)return {title:o.title||'What’s different',meta:o.meta||'',actions:'',content:'<p class="save-note">The differences are not available on this page.</p>'};
+ if(typeof view==='string')return {title:o.title||'What’s different',meta:o.meta||'',actions:'',content:view};
+ return {title:view.title||o.title||'What’s different',meta:view.meta||o.meta||'',actions:'',content:view.html||''};
 }
 // ---- The shell ----
 function drwView(){
@@ -839,12 +839,6 @@ async function drwAction_(action,key,button){
  }
  if(kind==='versions'){await drwVersionAction(action,key);return;}
  if(kind==='settings'){await drwSettingsAction(action);return;}
- if(kind==='different'&&action==='load-different'){
-  const o=saveDrawer.options||{};
-  if(typeof o.onLoad==='function'){await o.onLoad();return;}
-  if(typeof loadSubmit==='function')await loadSubmit();
-  return;
- }
 }
 function saveDrawerInput(event){
  const t=event&&event.target;if(!t)return;
