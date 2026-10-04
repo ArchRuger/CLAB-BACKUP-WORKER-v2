@@ -22,7 +22,7 @@ imported.
   feature-to-documentation map, remaining debt) and its pickup file.
 - Pickup files of finished work streams stay useful for their open points and tooling:
   `docs/ui-review-001/PICKUP.md`, `docs/redesign/PICKUP.md` (§2 rebuild loop and live labs, §7 log),
-  `docs/lab-builder/PICKUP.md`, `docs/lab-builder/QA-FINDINGS.md` and `docs/multi-platform-restore/PICKUP.md`
+  `docs/git-redesign/PICKUP.md` (with `LIVE-ENV.md`: the live labs and passes), `docs/lab-builder/PICKUP.md`, `docs/lab-builder/QA-FINDINGS.md` and `docs/multi-platform-restore/PICKUP.md`
   (the four-node acceptance lab, its tools and evidence). Their branch and pull-request
   lines are a record of when they were written: ask Git and GitHub for live status.
 
@@ -32,7 +32,7 @@ imported.
   lab builder and UI review 001 are all released and merged; nothing on `main` is "unreleased". For
   work in flight look at `git log`, the open pull requests and the pickup files, not at this file.
 - The redesign's contracts still bind frontend work: `docs/redesign/DESIGN-SPEC-ADDENDUM.md` is the
-  binding UI contract, and every capability in `docs/redesign/inventory/*.md` and
+  binding UI contract (its amendment K puts saving and loading into the lab header), and every capability in `docs/redesign/inventory/*.md` and
   `docs/redesign/parity/*.md` keeps working (zero functional regression).
 - Every existing test keeps its behavioural claim: a label pinned by an old regex is rewritten, never
   deleted.
@@ -41,7 +41,7 @@ imported.
   rely on them. The container rebuild loop and the live labs are described in
   `docs/redesign/PICKUP.md` §2. Never claim a VM, browser or live-device validation that did not
   happen in this session, and never point tests or a `Store` at live data.
-- `docs/redesign/tools/`, `docs/ui-review-001/tools/` and `docs/lab-builder/tools/` are working
+- `docs/redesign/tools/`, `docs/ui-review-001/tools/`, `docs/lab-builder/tools/` and `docs/git-redesign/tools/` are working
   regression tooling (fixture manager, Playwright checks), not disposable notes.
 
 ## Commands
@@ -112,8 +112,8 @@ everything in reverse. Tests call `create_app(<temp dir>)` with `httpx`;
 constructing a `Store` writes startup state, so never point one at live data.
 
 **Public views strip secrets.** Every module that exposes a job or lab has a `public_*` function
-(`downloads.decorate_job`, `git_progress.public_job`, `restore.public_job`, the lab summary in
-`main.py`). A new persisted field is private until one of those copies it out; profile secrets,
+(`downloads.decorate_job`, `git_progress.public_job` and `GitProgress.public`, `restore.public_job`, the lab
+summary in `main.py`). A new persisted field is private until one of those copies it out; profile secrets,
 imported node passwords, host identity, restore candidates and a lab's stored annotations document
 never reach `/api/state`.
 
@@ -152,8 +152,10 @@ queued/running work `interrupted`. There is no multi-instance coordination.
    (pure status vocabulary), `shell.js` (hash router, menus, browser storage: keep new
    `window`/`location`/`history`/`localStorage`/document listeners here so the other files still load
    in Node), `app.js` (state, `render`, `PANELS`), then the feature files (`topology-render`,
-   `topology`, `home`, `management`, `operations`, `diagram-editor`, `git-progress`, `git-places`,
-   `restore`, `capture`). Standalone pages (`terminal`, `workspace`, `debug`,
+   `topology`, `home`, `management`, `operations`, `diagram-editor`, `diff-view`, `git-progress`,
+   `save-header`, `git-places`, `save-drawers`, `load`, `restore`, `network-design`, `capture`). Classic scripts
+   share one global scope: a top-level name declared in two files breaks the page
+   (`tests/test_page_load_ui.js` loads them all in one context). Standalone pages (`terminal`, `workspace`, `debug`,
    `vm-connection`, `capture-setup`, `capture-session`, `lab-builder`, `map-editor`) have their own
    small scripts. Because globals are shared, "no reference in this file" never proves a function
    unused: check the other scripts, the HTML, the tests and the Playwright tools.
@@ -228,8 +230,9 @@ One line each; the handoff section named in the routing table has the reasoning 
   and one host lock. The removed `write` mode stays removed; `publish` derives every path itself;
   `revise` needs an undeployed lab and the opened versions' hashes.
 - The manager never collects Git tokens or accepts Git command text; Git runs as the registered owner
-  in that owner's `HOME`; no force push, stash or destructive reset of a checkout; `register()` in
-  `host_git.py` stays equivalent to the child in `deploy/setup-git.sh`.
+  in that owner's `HOME`; no force push, stash, merge, rebase or destructive reset of a checkout (a save may fast-forward the VM copy
+  with the helper's `update` when nothing waits there); the child in `deploy/setup-git.sh` calls `register()` of
+  `host_git.py`: keep it that way.
 - There is no login: `/api/` is protected by the same-origin `guard` in `main.py` (a mutating request
   needs a body; content-length 0 is refused, so pages post `{}`); every WebSocket checks `Origin`
   itself and terminals need a single-use ticket. Never add a route or socket outside this. All three
@@ -272,13 +275,33 @@ One line each; the handoff section named in the routing table has the reasoning 
   baseline §11 of the handoff; internal storage names intentionally differ and stay stable;
   frozen snapshot metadata is never relabelled from the current inventory.
 
-*Save progress*
-- A review before every upload is mandatory; there is no opt-out, and `gitReviewJob` is the only
-  sender of `{push: true, reviewed: true}`.
-- Pending saves block folder moves and reconnects; one registration per lab; overlap rules are the
-  VM's. A planned (empty) folder is never worded as existing in the repository.
-- The folder tree's open branches belong to the student (`gitPlacesState.expanded`); never derive
-  `open` from the selection.
+*Saving and loading* (the Git save and load redesign; `docs/git-redesign/DESIGN.md` sections 2 to 4 and 7 bind)
+- Nothing is uploaded without a person's explicit **Upload**: no opt-out, no setting. The review is the
+  upload sentence with the diff on request; `gitReviewJob` is the only sender of
+  `{push: true, reviewed: true, head}`, the manager refuses an upload that names no reviewed `head`, and
+  an upload never carries a save the person was not shown (one upload carries every waiting save of the
+  repository, each named).
+- Any folder may be chosen. The only collision is a folder inside another lab's `latest`, `baseline` or
+  `checkpoints` (`colliding()` in `host_git.py` and `git_places.py`, kept equal). The manager resolves
+  folder situations itself: one answer per folder from `git_places.py`, a question with buttons
+  (`{question}`, HTTP 200) where a decision is needed, never a refusal; **New folder…** is never
+  disabled; a pending save is resolved inline when the folder changes. A folder change never retires a
+  registration and never uploads by itself. A planned (empty) folder is never worded as existing in
+  the repository.
+- A save's label is optional: the manager names it from what changed; a rename changes what the manager
+  shows, never a commit. A save carries its own frozen `binding`.
+- A save is the whole lab (topology file, map, one configuration per included device). A checkpoint made
+  from an existing save carries `checkpoint_only` and never changes `latest`.
+- One function decides the state: `saveChipState()` in `status.js` (with `loadState()` and
+  `saveProblem()`); panels, drawers and the Home card never derive their own.
+- The red **Load** is the acknowledgement of a load, after the confirmation listed every device;
+  `loadSubmit` in `load.js` is the only sender of `acknowledge: true` to a restore route. Load never
+  changes the topology.
+- There is no Progress tab: `PANELS` is `topology, devices, tools, advanced`; `TAB_ALIAS` and
+  `SAVE_ROUTES` open the save surface an old address meant. No page script calls the old folder routes
+  (`tests/test_save_router_ui.js`); they stay for `deploy/scaffold-lab.py`.
+- The folder chooser's open branches belong to the student, remembered per lab and repository; never
+  derive `open` from the selection.
 - A deployment time comes only from `LabOperations.record_deployment()`.
 
 *Maps and the editor*
@@ -316,8 +339,8 @@ Sections are headings of `agent instructions.md`, named by their release.
 | Area | Handoff sections | Guide | Tests and tools |
 |---|---|---|---|
 | Home, menus, Devices tab, shell, status vocabulary | 1.30.17 items 1, 2, 8–10; 1.29.1; 1.29.0 | `docs/LAB-OPERATIONS.md`, `docs/redesign/DESIGN-SPEC-ADDENDUM.md` | `test_home_ui.js`, `test_shell_ui.js`, `test_status_ui.js`, `verify_after.py`, `check_ui00{1,2a,2b,5,6}.py` |
-| Save progress, folders, upload review | 1.30.17 items 3–7; 1.29.0; 1.28.0 (2), (5); 1.27.0; 1.15.3, 1.15.2 (top level); 1.15.1, 1.15.0 (under the old title) | `docs/GIT-PROGRESS.md`, `docs/GIT-SETUP.md` | `test_git_progress.py`, `test_host_git.py`, `test_git_*_ui.js`, `check_ui004.py`, `check_ui007*.py`, `check_ui008*.py` |
-| Apply to running lab (restore), all platforms | 1.30.29, 1.30.28, 1.30.27 (multi-platform); 1.28.0; 1.29.0 (live facts) | `docs/GIT-PROGRESS.md`, `docs/LAB-OPERATIONS.md`, `docs/multi-platform-restore/README.md` (support matrix, live facts, how to rerun) | `test_restore*.py`, `test_restore_ui.js`, `docs/multi-platform-restore/tools/` (`nodecli.py`, `square_check.py`, `manager_restore.py`) |
+| Saving in the header (chip, Save, drawers), folders, upload | 1.31.0; `docs/git-redesign/DESIGN.md`, `REVIEW.md`, `PICKUP.md`; history: 1.30.17 items 3–7; 1.29.0; 1.28.0 (2), (5); 1.27.0; 1.15.3, 1.15.2 (top level); 1.15.1, 1.15.0 (under the old title) | `docs/GIT-PROGRESS.md`, `docs/GIT-SETUP.md`, `docs/COURSE-STATES.md` | `test_git_progress.py`, `test_git_save_model.py`, `test_git_place.py`, `test_git_places.py`, `test_git_whole_lab.py`, `test_host_git.py`, `test_save_header_ui.js`, `test_save_drawers_ui.js`, `test_save_router_ui.js`, `test_page_load_ui.js`, `test_git_*_ui.js`, `check_ui004.py`, `check_ui007*.py`, `check_ui008*.py`, `docs/git-redesign/tools/` (`fixture/check_fixture.py`, `integration/evidence_pass.py`) |
+| Load (restore), all platforms | 1.31.0 (the Load panel, undo); 1.30.29, 1.30.28, 1.30.27 (multi-platform); 1.28.0; 1.29.0 (live facts) | `docs/GIT-PROGRESS.md`, `docs/LAB-OPERATIONS.md`, `docs/multi-platform-restore/README.md` (support matrix, live facts, how to rerun) | `test_restore*.py`, `test_restore_ui.js`, `test_load_ui.js`, `docs/multi-platform-restore/tools/` (`nodecli.py`, `square_check.py`, `manager_restore.py`) |
 | Topology tab, Edit map, map document, drawing, exports | 1.30.17 items 11–16; 1.29.1; 1.29.0; 1.26.0 (1); 1.25.0 (1); 1.14.0, 1.6.x and 1.5.0 addenda | `docs/ui-review-001/MAP-PARITY.md`, `docs/LAB-OPERATIONS.md` | `test_map_editor_ui.js`, `test_lab_builder_ui.js`, `test_lab_operations.py` (map document), `test_topology.py`, `test_topology_ui.js`, `test_topology_menu_ui.js`, `test_diagram_editor*`, `check_ui003.py`, `check_ui003b.py` |
 | Lab builder, `publish` / `revise` | 1.30.1; 1.30.0 | `docs/LAB-BUILDER.md`, `docs/lab-builder/QA-FINDINGS.md` | `test_lab_operations.py` (helper and manager side), `test_lab_builder_ui.js`, `student_workflow.py`, `node build.mjs --check` |
 | Lab operations, topology browser, upload, destroy, the operations helper | 1.30.17 items 9–10; 1.30.1 (3), (8); 1.30.0 (4)–(5); 1.26.0 (2)–(3); 1.22.0 (4); 1.19.4 (`create` file modes); 1.12.x and 1.11.0 addenda | `docs/LAB-OPERATIONS.md` | `test_lab_operations.py`, `test_operations_ssh.py`, `test_operations_ui.js` |
