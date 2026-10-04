@@ -178,9 +178,13 @@ class Tree:
         path, layout = (latest, 'latest') if latest in self.states else (folder, 'flat') if folder in self.states else (None, '')
         if path is None: return out
         summary = self.states[path] or {}
+        # A save made with "Save as a lab state…" says so in its manifest (`state`: its name), so the lab that
+        # authored it never continues there by itself, whatever the manager still remembers of its jobs.
+        marked = state_mark(summary)
         mine = bool(self.id) and summary.get('lab_id') == self.id
-        if mine and folder not in self.lab_states and path not in self.lab_states: return dict(out, kind='own-before', layout=layout, label=state_name(path))
-        return dict(out, kind='state', layout=layout, label=state_name(path), same_name=not mine and bool(self.name) and summary.get('lab_name') == self.name)
+        if mine and not marked and folder not in self.lab_states and path not in self.lab_states: return dict(out, kind='own-before', layout=layout, label=state_name(path))
+        return dict(out, kind='state', layout=layout, label=marked or state_name(path),
+                    same_name=not mine and not marked and bool(self.name) and summary.get('lab_name') == self.name)
 
     def free(self, folder):
         if len(folder) > PATH_LIMIT: return False
@@ -284,6 +288,12 @@ def default_place(lab, checkouts):
     return dict(out, folder=answer['folder'], answer=answer)
 
 
+def state_mark(summary):
+    """The name a lab state gave itself in its manifest ('' for every other saved state)."""
+    value = summary.get('state') if isinstance(summary, dict) else None
+    return value.strip()[:200] if isinstance(value, str) else ''
+
+
 def state_rows(lab, checkout):
     """One row per saved state of the checkout, named by one rule (DESIGN.md 3.8, N3) for the Load panel,
     All versions and the chooser's marks. Order: the lab's latest, its checkpoints, its baseline, the lab
@@ -300,7 +310,7 @@ def state_rows(lab, checkout):
         group = role(path, tree.prefix) if tree.prefix is not None else ''
         who = '' if group else next((lab_['name'] for prefix, lab_ in tree.others.items() if role(path, prefix)), None)
         if not group: group = 'state' if who is None else 'other-lab'
-        rows.append({'path': path, 'name': state_name(path), 'group': group, 'lab': who if group == 'other-lab' else str(known.get('lab_name') or ''),
+        rows.append({'path': path, 'name': (state_mark(known) if group == 'state' else '') or state_name(path), 'group': group, 'lab': who if group == 'other-lab' else str(known.get('lab_name') or ''),
                      'kind': 'design' if known.get('kind') in ('design', 'network-design') else 'capture', 'summary': summary,
                      'layout': 'latest' if path == 'latest' or path.endswith('/latest') else 'flat'})
     # Two lab states of one name each say where they are: `Start · BGP`; the whole path when that is equal too.

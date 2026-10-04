@@ -423,6 +423,16 @@ class StateDestination(unittest.TestCase):
         self.assertEqual(place_answer(lab('BGP'), marked, 'BGP/start')['kind'], 'state')
         self.assertEqual(place_answer(lab('BGP'), self.repo, 'BGP/start')['kind'], 'own-before')   # without the mark only the lab id speaks
 
+    def test_a_lab_state_says_so_in_its_manifest_and_is_never_this_labs_earlier_folder(self):
+        # "Save as a lab state…" writes `state: <name>` into the manifest; the helper's summary carries it.
+        authored = checkout(states={'BGP/week-2/latest': summary(lab_id=ME['id'], lab_name=ME['name'], state='Start (week 2)')})
+        answer = place_answer(lab('BGP'), authored, 'BGP/week-2')
+        self.assertEqual((answer['kind'], answer['label'], answer['same_name']), ('state', 'Start (week 2)', False))
+        self.assertEqual([(row['group'], row['name']) for row in state_rows(lab('BGP'), authored)], [('state', 'Start (week 2)')])
+        for odd in (7, '', None, ['x']):   # anything but a name is no mark
+            plain = checkout(states={'BGP/week-2/latest': summary(lab_id=ME['id'], lab_name=ME['name'], state=odd)})
+            self.assertEqual(place_answer(lab('BGP'), plain, 'BGP/week-2')['kind'], 'own-before', odd)
+
 
 class FolderAnswers(unittest.TestCase):
     repo = checkout([reg('', None), reg('BGP', OTHER), reg('unused/spare'), reg('mine', {'id': 'lab-1', 'name': 'UX-TEST-003'})],
