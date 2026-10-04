@@ -126,9 +126,11 @@ class WholeLabCase(unittest.TestCase):
         job = self.capture(lab_id, **kwargs)
         lab = copy.deepcopy(self.store.lab(job['lab_id']))
         log = lambda action, message, level='info', node='': self.store.event(action, message, level=level, lab_id=lab['id'], job_id=job['id'], node=node)
-        record = self.app.state.runner.embed_topology(lab, self.store.root / 'backups' / lab['id'], job['id'], log)
+        outcome = {}
+        record = self.app.state.runner.embed_topology(lab, self.store.root / 'backups' / lab['id'], job['id'], log, outcome=outcome)
         stored = next(j for j in self.store.state['jobs'] if j['id'] == job['id'])
         if record: stored['topology'] = record
+        if outcome.get('missing'): stored['topology_missing'] = outcome['missing']   # as Runner.execute records it on the backup
         self.store.save()
         return copy.deepcopy(stored)
 
@@ -287,7 +289,9 @@ class ChangesAreRealChangesTests(WholeLabCase):
     def review_entries(self, job):
         response = self.client.post(self.url + '/compare', json={'job_id': job['id']})
         self.assertEqual(response.status_code, 200, response.text)
-        return {f['name']: f for f in response.json()['files']}
+        # The review lists every path the save changed; the entries with a diff are the helper's comparison (the
+        # manifest is listed without one).
+        return {f['name']: f for f in response.json()['files'] if 'diff' in f}
 
     def compare_with_latest(self, commit):
         response = self.client.post(self.url + '/compare', json=dict(commit=commit, path='latest'))
@@ -428,72 +432,69 @@ class WhichCopyIsCapturedTests(WholeLabCase):
 
 
 class GapTests(WholeLabCase):
-    """Claim 7: every way found by which a save reaches the repository without the lab's topology or map, or with
-    a different one. Today's behaviour is asserted; the comment on each says what G1 would require instead."""
+    """Claim 7: every way found by which a save could reach the repository without the lab's topology or map, or with
+    a different one. The save model closes the first five (DESIGN.md 3.9): a capture that is not whole is not saved.
+    The remaining `test_gap_*` assert today's behaviour; the comment on each says what G1 would require instead."""
 
     def assert_carries_neither(self, snapshot):
         self.assertEqual(self.by_kind(snapshot['manifest']), {})
         self.assertFalse({TOPOLOGY_FILE, MAP_FILE} & set(snapshot['files']))
 
-    def test_gap_a_backup_without_an_embedded_record_saves_without_the_topology_to_latest(self):
-        # G1 would require: refuse the save, or take the lab's current files, when the lab has a topology the capture lacks.
-        # Reached by: Save progress -> POST /api/labs/{id}/git/save with a backup_job_id, or a manual / scheduled /
-        # restore-pre backup taken before embedding existed.
+    def refused(self, capture, **fields):
+        """A save from an existing capture that the route refuses: nothing is queued and nothing reaches the VM."""
+        data = dict(request_id=uuid.uuid4().hex, target='latest', push=False, note='From a capture', backup_job_id=capture['id']); data.update(fields)
+        jobs = len(self.store.state['git_jobs']); sent = len([r for r in self.sent if r['mode'] == 'publish'])
+        response = self.client.post(self.url + '/save', json=data)
+        self.assertEqual((response.status_code, response.json()['detail']), (400, 'This capture does not include the topology. Save again first.'))
+        self.assertEqual((len(self.store.state['git_jobs']), len([r for r in self.sent if r['mode'] == 'publish'])), (jobs, sent))
+
+    def test_a_backup_without_an_embedded_record_is_not_saved_to_latest(self):
+        # Was gap 2: such a save went to latest without the topology. Reached by POST /api/labs/{id}/git/save with the
+        # backup_job_id of a manual, scheduled or restore-pre backup taken before embedding existed.
         self.assertTrue(self.lab_state()['definition_yaml'])
-        outcome, _ = self.saved(self.old_capture(), target='latest')
-        self.assertEqual(outcome['status'], 'committed', outcome)
-        self.assert_carries_neither(self.published())
-        self.assertEqual((self.published()['manifest']['topology_provenance'], self.published()['manifest']['topology_digest']), ('unknown', None),
-                         'a save from an existing capture even loses the manager copy\'s digest: only a fresh capture has the save context')
-        self.assertNotIn('topology', outcome['message'].lower())
+        self.refused(self.old_capture(), target='latest')
 
-    def test_gap_a_checkpoint_and_a_baseline_from_an_older_capture_carry_no_topology(self):
-        # G1 would require: the same refusal or fallback for checkpoint and baseline (the route builds the snapshot from the capture only).
+    def test_a_checkpoint_and_a_starting_point_from_an_older_capture_are_not_saved(self):
+        # Was gap 3: a checkpoint and a baseline from such a capture carried no topology.
         capture = self.old_capture()
-        for fields in (dict(target='checkpoint', checkpoint='old-1'), dict(target='baseline')):
-            outcome, submit = self.saved(capture, **fields)
-            submit.assert_not_called()
-            self.assertEqual(outcome['status'], 'committed', outcome)
-            self.assert_carries_neither(self.published())
-            self.assertEqual(sorted(self.names_in(outcome['commit'], outcome['snapshot_path'])), sorted(self.published()['files']))
-            self.assertNotIn(TOPOLOGY_FILE, self.names_in(outcome['commit'], outcome['snapshot_path']))
+        for fields in (dict(target='checkpoint', checkpoint='old-1'), dict(target='checkpoint', checkpoint=''), dict(target='baseline')):
+            self.refused(capture, **fields)
 
-    def test_gap_a_later_save_without_the_topology_removes_the_one_the_repository_held(self):
-        # G1 would require: a save without the lab's files never deletes the ones latest/ already holds.
+    def test_a_save_without_the_topology_never_removes_the_one_the_repository_holds(self):
+        # Was a gap that followed from the two above: a later save without the lab's files deleted them from latest.
         first, _ = self.fresh_save(target='latest')
         self.assertTrue({TOPOLOGY_FILE, MAP_FILE} <= set(self.names_in(first['commit'])))
-        second, _ = self.saved(self.old_capture(), target='latest')
-        self.assertEqual(second['status'], 'committed', second)
-        self.assertNotIn(TOPOLOGY_FILE, self.names_in(second['commit'])); self.assertNotIn(MAP_FILE, self.names_in(second['commit']))
-        self.assertIn(f'latest/{TOPOLOGY_FILE}', second['changed_files'], 'the helper deletes the files the new manifest no longer owns')
-        self.assertEqual(self.raw('rev-list', '--count', 'HEAD'), '3')
-        removed = self.client.post(self.url + '/compare', json={'job_id': second['id']}).json()['files']
-        self.assertEqual({f['name']: f['status'] for f in removed if f['name'] in (TOPOLOGY_FILE, MAP_FILE)},
-                         {TOPOLOGY_FILE: 'removed', MAP_FILE: 'removed'}, 'visible in the review, but a plain removed file, not a warning')
+        self.refused(self.old_capture(), target='latest')
+        self.assertEqual(self.raw('rev-list', '--count', 'HEAD'), '2', 'the README commit and the first save only')
+        self.assertTrue({TOPOLOGY_FILE, MAP_FILE} <= set(self.names_in(self.raw('rev-parse', 'HEAD'))))
 
-    def test_gap_a_capture_whose_embedding_failed_is_saved_without_a_word_to_the_student(self):
-        # G1 would require: the save says the capture carries no topology (or retries the embedding) instead of committing silently.
-        # Reached by: any backup where Runner.embed_topology swallowed an error (runner.py: log 'topology.skip', returns None).
-        with patch.object(self.app.state.runner, 'topology_capture', side_effect=OSError('disk')):
-            capture = self.fresh_capture()
-        self.assertNotIn('topology', capture)
-        outcome, _ = self.saved(capture, target='latest')
-        self.assertEqual(outcome['status'], 'committed', outcome)
-        self.assert_carries_neither(self.published())
-        self.assertNotIn('topology', outcome['message'].lower()); self.assertNotIn('map', outcome['message'].lower())
+    def test_a_capture_whose_embedding_failed_stops_the_save_and_says_so(self):
+        # Was gap 4: saved without a word to the student. Reached by any backup where Runner.embed_topology met an
+        # error (runner.py: log 'topology.skip', the backup records `topology_missing: 'error'`).
+        job, _ = self.save(push=False)
+        with patch.object(self.app.state.runner, 'topology_capture', side_effect=OSError('disk')), \
+                patch.object(self.app.state.runner, 'submit', side_effect=self.fresh_capture):
+            self.progress.execute(job['id'])
+        outcome = self.client.get('/api/git/jobs/' + job['id']).json()
+        self.assertEqual((outcome['status'], outcome['message']), ('capture_incomplete', 'The topology could not be saved with this capture. Try again.'))
+        self.assertFalse([r for r in self.sent if r['mode'] == 'publish'], 'nothing is committed')
+        self.assertEqual((outcome['captured'], outcome['capture_kept'], outcome['capture_whole']), (True, True, False))
+        capture = next(j for j in self.store.state['jobs'] if j['id'] == outcome['backup_job_id'])
+        self.assertEqual(capture['topology_missing'], 'error'); self.assertNotIn('topology', capture)
+        self.refused(capture, target='latest')   # nor can that capture be saved afterwards
         events = self.client.get('/api/logs?job_id=' + capture['id'], headers=self.auth).json()['events']
-        self.assertEqual([e['level'] for e in events if e['action'] == 'topology.skip'], ['warning'], 'only the event log of the backup knows')
+        self.assertEqual([e['level'] for e in events if e['action'] == 'topology.skip'], ['warning'])
 
-    def test_gap_an_unwritable_drawing_saves_the_topology_without_the_map(self):
-        # G1 would require: fail or warn when the lab has a map the capture could not write, rather than saving the topology alone.
+    def test_an_unwritable_map_stops_the_save_instead_of_saving_the_topology_alone(self):
+        # Was gap 5: the lab has a map the capture could not write, and the save carried the topology without it.
         self.lab_state()['drawing'] = {'broken': True}; self.store.save()
-        capture = self.fresh_capture()
-        self.assertEqual(capture['topology']['file'], 'topology.clab.yml'); self.assertNotIn('annotations_file', capture['topology'])
-        outcome, _ = self.saved(capture, target='latest')
-        self.assertEqual(outcome['status'], 'committed', outcome)
-        kinds = self.by_kind(self.published()['manifest'])
-        self.assertEqual(sorted(kinds), ['topology']); self.assertNotIn(MAP_FILE, self.published()['files'])
-        self.assertNotIn('map', outcome['message'].lower())
+        outcome, _ = self.fresh_save(target='latest')
+        self.assertEqual((outcome['status'], outcome['message']), ('capture_incomplete', 'The topology could not be saved with this capture. Try again.'))
+        self.assertFalse([r for r in self.sent if r['mode'] == 'publish'])
+        capture = next(j for j in self.store.state['jobs'] if j['id'] == outcome['backup_job_id'])
+        self.assertEqual((capture['topology']['file'], capture['topology_missing']), ('topology.clab.yml', 'map-error')); self.assertNotIn('annotations_file', capture['topology'])
+        self.assertFalse(outcome['capture_whole'])
+        self.refused(capture, target='latest')
 
     def test_gap_a_lab_known_only_from_an_inventory_has_no_topology_to_save(self):
         # G1 would require: say so when a save cannot carry the lab's topology (an inventory import has none; it

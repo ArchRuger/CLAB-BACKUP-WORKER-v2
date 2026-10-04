@@ -24,7 +24,7 @@ from . import topology
 from .discovery import Discovery, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path, stored_file, topology_names
 from .lab_operations import LabOperations, design_rechecking, last_deployed, operation_busy, restarting_nodes
-from .git_progress import GitProgress, public_job as public_git_job
+from .git_progress import GitProgress
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
 from .diagnostics import Diagnostics
@@ -183,6 +183,9 @@ def create_app(data_dir=None):
         # Network design: presence, revision and the newest plan only; the intent and the plans have their own routes.
         design=public_design(lab)
         if design: result['design']=design
+        # The save location as the manager last saw it, and how many saves wait for upload in the lab's repository:
+        # kept in memory from the last time the VM was asked for this lab, never fetched by this poll.
+        result['git_status']=git_progress.git_status(lab['id'])
         return result
     discovery.install(app,public_lab)
     class ResetManager(BaseModel):
@@ -222,7 +225,7 @@ def create_app(data_dir=None):
             return {'labs':[public_lab(l) for l in store.state['labs']],
                     'jobs':[decorate_job(copy.deepcopy(j)) for j in store.state['jobs']],
                     'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(),
-                    'git_jobs':[public_git_job(j) for j in store.state.get('git_jobs', [])],
+                    'git_jobs':[git_progress.public(j) for j in store.state.get('git_jobs', [])],
                     'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])],
                     'design_jobs':[public_design_job(j) for j in store.state.get('design_jobs', [])],
                     'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])]}

@@ -149,9 +149,9 @@ class DesignExportGitTestCase(unittest.TestCase):
     def remote(self, host, request, stopping=None):
         self.sent.append(copy.deepcopy(request))
         mode = request['mode']
-        if mode == 'status': return dict(ready=True, head='a' * 40)
+        if mode == 'status': return dict(ready=True, head=getattr(self, 'vm_head', 'a' * 40))   # the checkout's HEAD moves with a save
         if mode == 'publish':
-            self.snapshots[request['operation_id']] = copy.deepcopy(request['snapshot'])
+            self.snapshots[request['operation_id']] = copy.deepcopy(request['snapshot']); self.vm_head = 'b' * 40
             return dict(status='synced' if request['push'] else 'committed', commit='b' * 40,
                        pushed=request['push'], changed_files=list(request['snapshot']['files']),
                        snapshot_path=request['target'])
