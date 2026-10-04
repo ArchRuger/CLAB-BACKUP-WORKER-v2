@@ -420,9 +420,54 @@ duplicate-folder refusal, and `destination` stops retiring.
 Public job fields added: `note_auto`, `capture_kept`. Private: `binding`. The exact fields the chip
 needs in `/api/state` are in HEADER.md section 3 and LOAD.md section 7.
 
-## 5. Build slices
+## 5. Build slices, file ownership and the names they share
 
-Written after the part files and the review; see section 7.
+One owner per file. Each slice works in its own Git worktree from the commit the lead names, runs its
+focused tests there and hands back a branch; the lead merges, runs both suites and commits. New test
+files reach the CI lists through the lead.
+
+| Slice | Files it owns | Agent |
+|---|---|---|
+| S0 The two reproduced defects (PROMPT 6.1), their own commit | `app/host_git.py` (H1 only), `deploy/setup-git.sh`, `deploy/git-onboard.py`, the overlap rule of `FakeGit` in `docs/redesign/tools/fixture_manager.py`, `gitFolderChoice` / `gitCanCreateIn` / `gitFolderTag` in `app/static/git-places.js`; `tests/test_host_git.py`, `tests/test_git_onboard.py`, `tests/test_git_places_ui.js` | Opus specialist |
+| S1 Helper: H2 to H5 | `app/host_git.py`, `deploy/setup-git.sh`, `tests/test_host_git.py` | Opus specialist (after S0) |
+| S2 Folder answers, pure | `app/git_places.py` (new), `tests/test_git_places.py` (new) | Fable specialist |
+| S3 Save model and routes | `app/git_progress.py`, `app/main.py`, `tests/test_git_progress.py`, `tests/test_design_export_git.py` | Fable specialist |
+| S4 Load backend | `app/restore.py`, `app/runner.py`, `tests/test_restore.py`, `tests/test_restore_compare.py` | Network specialist (Opus) |
+| S5 Page skeleton | `app/static/index.html`, `style.css`, `shell.js`, `app.js`; `tests/test_shell_ui.js` | Fable specialist |
+| S6 Status functions | `app/static/status.js`, `tests/test_status_ui.js` | UI builder |
+| S7 Header panels and save flow | `app/static/save-header.js` (new), `app/static/git-progress.js` (first wave: `gitReviewJob`, `gitSubmitSave`, `gitStartWatch` only), `tests/test_save_header_ui.js` (new) | UI builder |
+| S8 Load panel | `app/static/load.js` (new), `app/static/restore.js`, `tests/test_load_ui.js` (new), `tests/test_restore_ui.js` | Opus specialist |
+| S9 Drawers | `app/static/save-drawers.js` (new), `tests/test_save_drawers_ui.js` (new) | UI builder |
+| S10 Folder chooser | `app/static/git-places.js`, `tests/test_git_places_ui.js` | UI builder (after S0) |
+| S11 Progress tab removal, rewording | `app/static/git-progress.js` (second wave), `home.js`, `operations.js`, `network-design.js`, the Python-emitted texts outside `git_progress.py`, `tests/test_git_progress_ui.js`, `tests/test_home_ui.js` and every test that pins the tab | Fable specialist (after S5 to S10 merged) |
+| S12 Fixture and browser tooling | `docs/redesign/tools/fixture_manager.py`, `docs/git-redesign/tools/` | Test engineer, then QA |
+| S13 The whole lab in every save (G1) | `tests/test_git_whole_lab.py` (new); reports gaps to the lead | Test engineer |
+| S14 Documentation | the guides of PROMPT section 10 | Docs auditors |
+
+**Names shared between page scripts** (each is read at call time behind a `typeof` guard, so every file
+loads alone in a Node test):
+
+| Name | In | Meaning |
+|---|---|---|
+| `saveChipState(lab, ctx, now)`, `loadState(lab, ctx, now)`, `loadSourceName`, `loadDeviceWord`, `saveChangeSentence(summary, also)`, `savedVersionName(path)`, `relativeTimeShort` | `status.js` | pure status and wording functions |
+| `initPanel`, `openPanel(id)`, `closeMenus()` | `shell.js` | panel mechanics; the only global listeners |
+| `renderSaveHeader()`, `saveOpenPanel(kind)` (`'status'` or `'load'`), `saveFinished(job)`, `saveAction(action, job, origin)` | `save-header.js` | header rendering and the chip panel |
+| `gitReviewJob(job, options)` | `git-progress.js` | the only sender of `{push: true, reviewed: true}`, reached with `options.upload === true` from the panel and from the drawer |
+| `loadOpen(labId)`, `loadChoose(labId, source, name, options)`, `loadUndo(job)`, `loadRetry(job)`, `loadJobMarkup(job)`, `loadChipView(cs, lab)` | `load.js` | Load; `loadSubmit()` is the only sender of `acknowledge: true` to a restore route |
+| `saveDrawerOpen(kind, options)` (`'changes'`, `'versions'`, `'settings'`, `'chooser'`, `'state'`), `saveDrawerRender()`, `saveDrawerClose()` | `save-drawers.js` | the one drawer |
+| `folderChooserMarkup(model, view)`, `folderClean(value)`, `gitTreeModel`, `gitApplySource` | `git-places.js` | the chooser's pure parts |
+
+**Backend seams** (so S2, S3 and S4 can be built at the same time):
+
+- `git_places.py` is pure and takes plain data: `place_answer(lab, checkout, folder, purpose)`,
+  `folder_answers(lab, checkout)`, `default_place(lab, checkouts)`, `state_rows(lab, checkout)`,
+  `clean_folder(value)`, `state_name(path)`. `lab` is `{id, name, prefix}` (`prefix` is its folder in
+  this checkout or `None`); `checkout` is `{registrations: [{id, prefix, lab}], files, dirs, states:
+  {path: summary}, planned, truncated}`.
+- `GitProgress` offers to `restore.py`: `reader(lab_id, repository='')` (the binding to read with: the
+  lab's own, or the registration `repository` after checking it against the helper's `list`) and
+  `states(lab_id, repository='')` (`{head, truncated, states}` with the rows of `state_rows`), and
+  `captured_snapshot(store, backup, context=None, embedded_files=True, complete=True)`.
 
 ## 6. Decisions that differ from the prompt's letter
 

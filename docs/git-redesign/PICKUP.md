@@ -23,7 +23,7 @@ Branch `claude/git-save-load-redesign`, cut from `68f24d9`. Steps are those of P
 | Step | State |
 |---|---|
 | 1. Routing rules, agent definitions, baseline | Done: `e0481a7`. Baseline on 1.30.60: 2223 Python tests OK (2 skipped), 503 browser tests pass, `verify-release.py` and the link check pass. |
-| 2. Inventory, design round, Opus review | In progress |
+| 2. Inventory, design round, Opus review | Inventory and design written (`489de1b`): [INVENTORY.md](INVENTORY.md), [DESIGN.md](DESIGN.md) and three part files under `design/`. The Opus review (risk reviewer on the folder and save model, UI reviewer on the load path and lost functionality) is running; findings and answers go to `REVIEW.md`. |
 | 3. The two reproduced defects of section 6.1 as their own commit | Not started |
 | 4. Folder model | Not started |
 | 5. Header control, save, load, lab states | Not started |
@@ -48,6 +48,17 @@ Branch `claude/git-save-load-redesign`, cut from `68f24d9`. Steps are those of P
 - **Agent teams** stay off: the flag takes effect only in a new session, so it could not be checked in
   this one. Parallel work uses background subagents and the Workflow tool.
 - **External skills** (third-party) stay VM-local and untracked; the 11 project skills are committed.
+- **`clab-fable-designer`** was created in this session and an agent definition is only loaded when a
+  session starts, so the three design slices ran on `clab-fable-specialist` (the same model, Fable 5.1)
+  with the designer's definition as their instructions.
+- **Build method**: each slice in its own Git worktree from a named commit, owning the files listed in
+  DESIGN.md section 5; the lead merges and runs both suites. Worktrees have no virtual environment of
+  their own and use the main checkout's interpreter by path.
+
+## 4a. The live environment
+
+A disposable four-node lab `git-redesign` (two cEOS, cJunosEvolved, XRv9k) and a private scratch
+repository are prepared by a VM-operations worker; the facts are in `LIVE-ENV.md` once it reports.
 
 ## 5. How to resume
 
