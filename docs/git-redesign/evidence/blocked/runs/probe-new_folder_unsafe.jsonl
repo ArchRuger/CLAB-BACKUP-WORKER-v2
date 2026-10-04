@@ -1,0 +1,1 @@
+{"script": "probe-new_folder_unsafe", "attack": "New folder\u2026 named \u65e5\u672c\u8a9e: Add", "said": "requests [] | field still open True", "ok": false, "kind": "nothing", "note": "Add sent nothing, said nothing", "request": "", "errors": [], "shot": "docs/git-redesign/evidence/blocked/probe-new_folder_unsafe-New-folder-named-Add.png"}

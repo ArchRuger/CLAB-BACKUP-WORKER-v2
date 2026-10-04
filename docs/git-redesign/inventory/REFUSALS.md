@@ -938,8 +938,8 @@ The last column of every row. **R1** filled sections A to D from `claude/git-sav
 found F1 to F4 and M1 to M5. **R2** (branch `slice/r2-refusals`, cut from 2578f22, after the Progress tab was
 removed and the R1 findings were acted on) filled section E from the finished page and corrected every row of A to D
 whose outcome changed. Both passes are read-only and by a checker who wrote none of the code. No `TBD` is left.
-The "try to get blocked" pass in the fixture is reported separately in
-`docs/git-redesign/evidence/blocked/FINDINGS.md`.
+The "try to get blocked" pass in the fixture (R2 part 2) keeps its evidence in `docs/git-redesign/evidence/blocked/`
+(one screenshot per finding, B01 to B16, and every attack as a JSON line under `runs/`); its findings are in the R2 report.
 
 ### 9.1 How the column was filled
 
@@ -1063,8 +1063,8 @@ All 490 rows:
 
 **Verdict on G2 from the code.** No folder refusal of the 35 category-F rows can be reached from the page at
 2578f22: every one is Gone, a question, a guard the page cannot reach, or one of the outside causes DESIGN 3.6
-lists (R-092, R-095, R-096). Whether the page behaves so in a browser is the subject of the blocked pass
-(FINDINGS.md).
+lists (R-092, R-095, R-096). In the browser (the blocked pass) no folder choice ended in a folder refusal either;
+its findings concern the flows around the choice (B01 to B16).
 
 ### 9.5 The R1 findings
 
@@ -1109,7 +1109,7 @@ lists (R-092, R-095, R-096). Whether the page behaves so in a browser is the sub
 - **Decided.** R-136 through the old route: `destination` now applies the same rule as the chooser.
 - **Not decided by reading.** R-092: no page flow lands a capture on a design manifest; only a hand commit was found.
 - **Not decided by reading.** R-136 through the chooser: a race between the checkout view (cached 10 s) and the move.
-- The browser behaviour of every flow above is tried in the blocked pass (FINDINGS.md).
+- The browser behaviour of the flows above was tried in the blocked pass (evidence/blocked).
 
 ### 9.8 New refusals since 1.30.60
 
@@ -1149,7 +1149,7 @@ Helper, manager and restore service:
 | 24 | `A lab state is being saved into this folder right now. Try again when it has finished, or choose another folder.` | app/git_progress.py:1474 | old …/git/connect into a folder a lab state is being saved into | S | not reachable through the page (F2 closed); the place route asks question 2 |
 | 25 | `Could not store the name. Nothing was changed.` | app/git_progress.py:2164 | rename: the store write failed | O | 500 |
 | 26 | `A folder path can be at most 500 characters long.` | app/git_places.py:24, 38, 225; app/git_place.py:316-337, 429-446, 505-511 | a typed path over 500 characters (2.5 step 1), and since R1 a path that grows over 500 when a part is moved past a file (`past_files`) | V | 400 in the chooser; the fields have `maxlength="500"` |
-| 27 | `Choose a repository, or paste the address of one.` | app/git_place.py:36, 320 | a place request with both or neither of `repository` and `url` | V | not reachable |
+| 27 | `Choose a repository, or paste the address of one.` | app/git_place.py:36, 320 | a place request with both or neither of `repository` and `url` | V | reachable: Save here in the chooser opened with no repository on the VM (blocked pass B04), where the page shows the previous cause's chip sentence instead |
 | 28 | `This repository is not on the VM. Refresh the list.` | app/git_place.py:37; 115, 499 | a registration that left the VM's list | S | 404 in the chooser |
 | 29 | `The VM did not answer with the repository folder. Try again.` | app/git_place.py:38; 261, 369 | the helper's answer has no id or path | X | 409 in the chooser |
 | 30 | `The VM could not use this folder right now. Try again in a moment.` | app/git_place.py:39, 58-61 | stands in for a helper sentence naming `registration`, `prefix` or `overlap` | X | 409 in the chooser, with the chip sentence of the helper sentence's code |
