@@ -98,8 +98,10 @@ function loadPanelClosed(){
 async function loadShowList(labId,focus){
  loadReview=null;
  const lab=loadLab(labId);if(!lab){loadView={kind:'',labId:''};return;}
- const ls=typeof labState==='function'?labState(lab,typeof labContext==='function'?labContext():loadState_()):null;
- if(ls&&ls.key==='stopped'){loadView={kind:'notrunning',labId};loadPaint(focus);return;}
+ // Not running is what the VM says about the deployment, whatever else the lab's pill reports: a lab that also "needs attention"
+ // (a load that ended on some devices only, a failed operation) is still a stopped lab, and nothing can be loaded onto it.
+ const deployed=lab.deployment&&lab.deployment.status,ls=typeof labState==='function'?labState(lab,typeof labContext==='function'?labContext():loadState_()):null;
+ if(deployed==='Not deployed'||deployed==='Stopped'||(ls&&ls.key==='stopped')){loadView={kind:'notrunning',labId};loadPaint(focus);return;}
  loadView={kind:loadStates.has(labId)?'list':'reading',labId};loadPaint(focus);
  const seq=++loadListSeq,still=()=>seq===loadListSeq&&loadOnScreen()===labId&&loadView.labId===labId&&['list','reading','error'].includes(loadView.kind);
  try{
@@ -504,7 +506,8 @@ async function loadAction(action,el){
   case 'reload':loadStates.delete(id);return loadShowList(id,true);
   case 'all':return loadDrawer('versions',{repository});
   case 'browse':return loadDrawer('chooser',{mode:'browse',repository});
-  case 'topology':{if(!r||!r.review)return;const s=r.review.source||{};return loadDrawer('versions',{repository:r.source.repository,path:String(s.folder||s.path||r.source.path||''),commit:String(s.commit||''),view:'files',file:'topology'});}
+  // The state's own files, by the exact snapshot folder this review was started with (the preflight's `folder` is a display name without `latest`).
+  case 'topology':{if(!r||!r.review)return;const s=r.review.source||{};return loadDrawer('files',{repository:r.source.repository,row:{path:String(r.source.path||s.path||''),commit:String(s.commit||r.source.commit||'')},name:r.name,file:'topology'});}
   case 'start':loadClosePanel();if(typeof startLab==='function')startLab();return;
   case 'save':loadClosePanel();if(typeof saveOpenPanel==='function')saveOpenPanel('status');return;
   case 'credentials':loadClosePanel();if(typeof showTab==='function')showTab('credentials');return;
@@ -523,7 +526,7 @@ function loadClick(event){
  if(data.loadAction)return loadAction(data.loadAction,control);
  const items=loadList&&loadList.labId===loadOnScreen()?loadList.items:[];
  if(data.loadRow!=null){const item=items[Number(data.loadRow)];if(item)return loadChoose(loadOnScreen(),item.source,item.name);return;}
- if(data.loadView!=null){const item=items[Number(data.loadView)];if(item)loadDrawer('versions',{repository:loadList.repository,path:String(item.row.path||''),view:'files'});}
+ if(data.loadView!=null){const item=items[Number(data.loadView)];if(item)loadDrawer('files',{repository:loadList.repository,row:{path:String(item.row.path||''),commit:String(item.row.commit||'')},name:item.name});}
 }
 function loadChange(event){
  const target=event&&event.target,r=loadReview;if(!target||!r||r.phase!=='confirm')return;

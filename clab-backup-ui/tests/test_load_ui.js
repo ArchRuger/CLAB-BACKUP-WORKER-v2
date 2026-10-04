@@ -106,7 +106,7 @@ test('the list foot opens All versions and the browse mode of the chooser throug
  await p.open();
  await p.click('data-load-action="all"');assert.equal(p.drawers[0].kind,'versions');
  await p.open();await p.click('data-load-action="browse"');assert.equal(p.drawers[1].kind,'chooser');assert.equal(p.drawers[1].opts.mode,'browse');
- await p.open();await p.click('data-load-view="0"');assert.equal(p.drawers[2].kind,'versions');assert.equal(p.drawers[2].opts.path,'course/start');assert.equal(p.drawers[2].opts.view,'files');
+ await p.open();await p.click('data-load-view="0"');assert.equal(p.drawers[2].kind,'files','the drawer kind that shows a state’s files (the versions kind only lists; integration)');assert.equal(p.drawers[2].opts.row.path,'course/start');
  assert.equal(p.calls.length,0,'nothing is sent');
 });
 
@@ -156,7 +156,7 @@ test('the subset sentence, the topology line and the "none can be loaded" senten
  assert.match(html,/value="clab-BGP-vjunos" disabled><span>vjunos <small>Junos<\/small><\/span><\/label><span class="save-end">Not in this state<\/span>/);
  assert.match(html,/<p class="save-note">Saved on a different topology: 3 of 4 devices match\. <button type="button" class="button ghost small" id="load-topology" data-load-action="topology">View its topology<\/button><\/p>/);
  await p.click('data-load-action="topology"');
- assert.equal(p.drawers[0].kind,'versions');assert.equal(p.drawers[0].opts.file,'topology');assert.equal(p.drawers[0].opts.view,'files');
+ assert.equal(p.drawers[0].kind,'files');assert.equal(p.drawers[0].opts.file,'topology');assert.ok(p.drawers[0].opts.row.path);
  assert.equal(p.calls.filter(c=>c.endpoint.endsWith('/restore')).length,0,'View its topology never changes anything');
  const q=confirmPage([target('ceos','arista_ceos',{eligible:false,reachable:false,reason:'SSH probe failed: OSError'})],{source:{topology:{differs:null}}});
  await q.c.loadChoose('lab',{type:'folder',path:'/x'},'X');

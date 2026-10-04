@@ -336,9 +336,11 @@ async function drwVersionAction(action,key){
  if(action==='baseline-confirm'){await drwUseBaseline(row);return;}
 }
 // ---- View files, See what's different (rows of All versions and Full history) ----
-function drwFilesMarkup(data,name){
+// `shown`: 'topology' opens the topology file and the map from the start (View its topology of a Load confirmation).
+function drwFilesMarkup(data,name,shown){
  const manifest=data.manifest||{},entries=Array.isArray(manifest.files)?manifest.files:[],files=new Map((data.files||[]).map(f=>[f.name,f.text]));
- const block=(path,label)=>`<details data-fold="${esc('file:'+path)}" ${drwFold('file:'+path,false)?'open':''}><summary>${esc(label||path)}</summary><pre class="git-file-content" tabindex="0">${esc(files.get(path)??'')}</pre></details>`;
+ const wanted=new Set(shown==='topology'?entries.filter(e=>e.kind==='topology'||e.kind==='annotations').map(e=>e.path):[]);
+ const block=(path,label)=>`<details data-fold="${esc('file:'+path)}" ${drwFold('file:'+path,wanted.has(path))?'open':''}><summary>${esc(label||path)}</summary><pre class="git-file-content" tabindex="0">${esc(files.get(path)??'')}</pre></details>`;
  const devices=entries.filter(e=>e.node&&e.kind!=='topology'&&e.kind!=='annotations'),topo=entries.filter(e=>e.kind==='topology'||e.kind==='annotations');
  const artifacts=devices.map(e=>e.restore_artifact).filter(Boolean);
  const covered=new Set([...devices.map(e=>e.path),...topo.map(e=>e.path),...artifacts]);
@@ -370,7 +372,7 @@ function drwFilesView(d){
  const title='View files',meta=`${d.name}${d.source.path?' · '+drwBare(d.source.path):''}${d.source.commit?' · commit '+drwShort(d.source.commit):''}`;
  if(d.loading)return {title,meta,actions:'',content:'<p class="save-note">Reading the saved files…</p>'};
  if(d.error)return {title,meta,actions:'',content:drwNotices(d)};
- return {title,meta,actions:'',content:drwFilesMarkup(d.result||{},d.name)};
+ return {title,meta,actions:'',content:drwFilesMarkup(d.result||{},d.name,d.shown)};
 }
 // ---- Save settings (DRAWERS.md 3) ----
 const DRW_ADMIN_TEXT='On the VM, run this as your normal account (no sudo). It sets up the checkout and Git login. Then click Check again.';
@@ -749,7 +751,7 @@ function saveDrawerOpen(kind,options={}){
  else if(kind==='settings')saveDrawer.data={context:null,catalog:null,loading:true,failure:null,error:'',notice:''};
  else if(kind==='chooser'||kind==='state'){saveDrawer.data={};saveDrawer.chooser=options.keep||drwChooserNew(kind==='state'?'state':options.mode==='browse'?'browse':'location',options);}
  else if(kind==='compare'||kind==='files'){
-  const row=options.row||{};saveDrawer.data={name:options.name||row.name||'',source:{commit:row.commit||options.commit||'',path:'/'+drwBare(row.path||options.path),repository:options.repository||''},loading:true,error:'',result:null};
+  const row=options.row||{};saveDrawer.data={name:options.name||row.name||'',source:{commit:row.commit||options.commit||'',path:'/'+drwBare(row.path||options.path),repository:options.repository||''},loading:true,error:'',result:null,shown:options.file||''};
  }
  else if(kind==='different')saveDrawer.data={options};
  if(onClose)onClose();
