@@ -206,12 +206,18 @@ const FOLDER_UNSAFE=/[^A-Za-z0-9_.-]+/g,FOLDER_UNSAFE_ENDS=/^[^A-Za-z0-9_.-]+|[^
 // part is trimmed of unsafe characters at its ends, every other run becomes one '-', what cannot start a name
 // is stripped, empty parts go, `.git` becomes `git`. It never refuses. The manager's one error (more than 500
 // characters) is answered here by cutting at 500, which the field's maxlength makes unreachable.
+// Letters with marks as their plain letters, exactly as the manager's plain_letters (app/git_places.py): the few letters that do not
+// come apart are replaced, everything else is taken apart (NFKD) and its combining marks dropped. `Übung größe` reads `Ubung grosse`.
+const FOLDER_PLAIN={'ß':'ss','ẞ':'SS','æ':'ae','Æ':'AE','ø':'o','Ø':'O','œ':'oe','Œ':'OE','đ':'d','Đ':'D','ł':'l','Ł':'L','þ':'th','Þ':'Th','ð':'d','Ð':'D','ı':'i'};
+function folderPlain(text){return Array.from(String(text??''),c=>FOLDER_PLAIN[c]??c).join('').normalize('NFKD').replace(/\p{M}/gu,'');}
 function folderClean(value){
  const parts=[];
  for(const raw of String(value??'').split('/')){
-  let part=raw.replace(FOLDER_UNSAFE_ENDS,'').replace(FOLDER_UNSAFE,'-');
+  let part=folderPlain(raw).replace(FOLDER_UNSAFE_ENDS,'').replace(FOLDER_UNSAFE,'-');
   if(part.toLowerCase()==='.git')part='git';
   part=part.replace(/^[.-]+/,'').slice(0,181);
+  // A name written in letters no folder name can hold never vanishes (the lab would save one level up without a word).
+  if(!part&&/[\p{L}\p{N}]/u.test(raw))part='folder';
   if(part)parts.push(part);
  }
  return parts.join('/').slice(0,500).replace(/\/+$/,'');
@@ -221,12 +227,14 @@ function folderClean(value){
 function folderEcho(value){
  const text=String(value??''),segments=text.split('/'),parts=[];
  segments.forEach((raw,index)=>{
-  const last=index===segments.length-1;
+  const last=index===segments.length-1,typed=raw;
+  raw=folderPlain(raw);
   let part=raw.replace(/^[^A-Za-z0-9_.-]+/,'');
   if(!last)part=part.replace(/[^A-Za-z0-9_.-]+$/,'');
   part=part.replace(FOLDER_UNSAFE,'-');
   if(part.toLowerCase()==='.git')part='git';
   part=part.replace(/^[.-]+/,'').slice(0,181);
+  if(!part&&/[\p{L}\p{N}]/u.test(typed))part='folder';
   if(part)parts.push(part);
  });
  let folder=parts.join('/');
