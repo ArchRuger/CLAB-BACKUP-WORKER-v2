@@ -333,7 +333,7 @@ test('7.1 row 6 Can\'t save: a failed attempt newer than the capture save, or gi
  const stopped=chip(bound,{git_jobs:[save,gj('failed',5,{message:'boom'})]});
  assert.deepEqual(shape(stopped),['cant','bad','Can’t save','cant']);assert.equal(stopped.detail,'boom');assert.equal(stopped.code,'');
  const later=chip(bound,{git_jobs:[gj('failed',50),save]});assert.equal(later.key,'saved','a failed attempt older than the save ends nothing');
- for(const code of ['vm','account','busy','diverged','files','settings','other']){const s=chip({...bound,git_status:{checked:true,ready:false,problem:'text',code}},{git_jobs:[save]});assert.equal(s.key,'cant',code);assert.equal(s.code,code);assert.equal(s.detail,'text');}
+ for(const code of ['vm','account','busy','diverged','files','settings','devices','other']){const s=chip({...bound,git_status:{checked:true,ready:false,problem:'text',code}},{git_jobs:[save]});assert.equal(s.key,'cant',code);assert.equal(s.code,code);assert.equal(s.detail,'text');}
  assert.equal(chip({...bound,git_status:{checked:true,ready:false,problem:'',code:''}},{git_jobs:[save]}).code,'other');
  for(const status of [{checked:false,ready:false,code:'vm'},undefined])assert.equal(chip({...bound,git_status:status},{git_jobs:[save]}).key,'saved','an unchecked or missing status is not Can\'t save');
  const refused=chip(bound,{git_jobs:[save],refusal:{message:'No.',at:ago(1)}});assert.equal(refused.key,'cant');assert.equal(refused.detail,'No.');
@@ -555,7 +555,10 @@ test('DESIGN.md 3.6: Can\'t save sentence and actions for each code',()=>{
  assert.equal(problem(st('diverged'),{git_jobs:[{...waitingJob,pushed:true}]}).actions[0].action,'update');
  p=problem(st('files'));assert.equal(p.sentence,'bgp holds files that were not saved by the manager.');assert.equal(acts(p),'Choose another place | Details');
  assert.equal(problem({...st('files'),git_binding:{repository:{prefix:''}}}).sentence,'The top level holds files that were not saved by the manager.');
- p=problem(st('settings'));assert.equal(p.sentence,'No device of this lab is selected for saving.');assert.equal(acts(p),'Save settings');
+ // `settings` is the backend's code for a save location that has to be set up again (the VM's record or checkout is gone or changed);
+ // Details carries the VM's own sentence. `devices` is the empty device selection (seam 11 of the integration, a ruling of the lead).
+ p=problem(st('settings'));assert.equal(p.code,'settings');assert.equal(p.sentence,'This lab’s save location has to be set up again.');assert.equal(acts(p),'Save settings | Details');assert.equal(p.actions[0].action,'settings');
+ p=problem(st('devices'));assert.equal(p.code,'devices');assert.equal(p.sentence,'No device of this lab is selected for saving.');assert.equal(acts(p),'Save settings');assert.equal(p.actions[0].action,'settings');
  for(const code of ['other','','nonsense']){p=problem(st(code));assert.equal(p.sentence,'The save did not work.',code);assert.equal(acts(p),'Try again | Details');assert.equal(p.code,'other');}
  assert.equal(problem(bound).code,'other','a refusal or a failed job with no status is the fallback');
  // A device that could not be read, from the backup job the stopped save made.

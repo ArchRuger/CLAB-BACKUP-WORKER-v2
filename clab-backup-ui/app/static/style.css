@@ -791,6 +791,17 @@ dialog.drawer.save-drawer.save-settings, dialog.drawer.save-drawer:has(.save-set
 .folder-answer { margin: 16px 0 0; font-size: 14px; font-weight: 600; line-height: 1.45; color: var(--ink); }
 .folder-answer:empty { display: none; }
 .folder-names { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 8px 0 0; }
+/* New folder…: its row sits in the tree at the place the folder will be (or under the tree when that branch is not listed);
+   Show all … folders ends a long branch. Both are rows of the tree, never tree items. */
+.folder-new { display: flex; align-items: center; gap: 8px; padding: 6px 8px; }
+.folder-new input { flex: 1 1 auto; width: auto; min-width: 0; margin: 0; }
+.folder-new .button { flex: none; }
+.folder-new-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.folder-more { padding: 4px 8px; font-size: 13px; }
+.folder-chooser > .save-row, .folder-chooser details > .save-row { margin-top: 12px; }
+/* A form opened inside a row of All versions (the checkpoint's name): its label and field stack. */
+.save-drawer .save-list > li.open label { display: block; margin: 12px 0 4px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.save-drawer .save-list > li.open .form-help { margin: 4px 0 10px; }
 
 /* right-click node menu (topology.js) */
 .node-context-menu {

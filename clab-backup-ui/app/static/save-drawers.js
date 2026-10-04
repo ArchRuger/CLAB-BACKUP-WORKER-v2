@@ -111,7 +111,7 @@ function drwChangesView(d){
  }else actions='<button type="button" class="button ghost small" data-save-action="files">View files</button>';
  const account=saveChangeAccount(job,review),dest=job.destination||{};
  const also=!uploaded&&review?review.also_sends||[]:[];
- const lead=job.target==='move'?`<p class="save-note">This moves the saved files of ${esc(drwLabName())}${job.moved_from?' from '+esc(job.moved_from):''} to ${esc(typeof gitMoveFolder==='function'?gitMoveFolder(job):dest.path||'the new folder')}. No device file changes.</p>`:'';
+ const lead=job.target==='move'?`<p class="save-note">This moves the saved files of ${esc(drwLabName())}${typeof job.moved_from==='string'?' from '+esc(job.moved_from||'the top level'):''} to ${esc(typeof gitMoveFolder==='function'?gitMoveFolder(job):dest.path||'the new folder')}. No device file changes.</p>`:'';
  const to=dest.repository||dest.path?`<p class="save-kv">To: <code>${esc(dest.repository||'')}</code>${dest.path?` <span aria-hidden="true">›</span> <code>${esc(dest.path)}</code>`:''}</p>`:'';
  let content=drwNotices(d);
  if(reason)content+=`<p class="save-note">${esc(reason)}</p>`;
@@ -214,11 +214,11 @@ function drwRowButtons(row,ctx){
   if(!ok)out.push(`<p class="save-note">${esc(reason)}</p><div class="save-row">${btn('save-again','Save')}</div>`);
   else if(d.checkpoint&&d.checkpoint.key===row.key){
    const typed=d.checkpoint.value||'',made=typed||drwCheckpointPlaceholder(row);
-   out.push(`<div class="save-field"><label for="save-checkpoint-name">Checkpoint name</label><input id="save-checkpoint-name" data-save-field="checkpoint-name" maxlength="100" autocomplete="off" spellcheck="false" value="${esc(typed)}" placeholder="${esc(drwCheckpointPlaceholder(row))}"><p class="form-help">Saved as: ${esc(made)}</p><div class="save-row">${btn('checkpoint-keep','Keep','button primary')}${btn('checkpoint-cancel','Cancel')}</div></div>`);
+   out.push(`<div><label for="save-checkpoint-name">Checkpoint name</label><input id="save-checkpoint-name" data-save-field="checkpoint-name" maxlength="100" autocomplete="off" spellcheck="false" value="${esc(typed)}" placeholder="${esc(drwCheckpointPlaceholder(row))}"><p class="form-help">Saved as: ${esc(made)}</p><div class="save-row">${btn('checkpoint-keep','Keep','button primary')}${btn('checkpoint-cancel','Cancel')}</div></div>`);
   }
   else if(d.baseline===row.key){
    const rev=ctx.baselineRevision,startRow=ctx.model.start[0];
-   out.push(`<div class="save-field"><p class="save-note">Make this save the starting point of ${esc(drwLabName())}? No device is read or changed.</p>${rev?`<p class="save-note">It replaces the current starting point${startRow&&startRow.when?', saved '+esc(startRow.when):''}. The previous one stays in the history.</p>`:''}<div class="save-row">${btn('baseline-confirm',rev?'Replace the starting point':'Use as starting point','button primary')}${btn('baseline-cancel','Cancel')}</div></div>`);
+   out.push(`<div><p class="save-note">Make this save the starting point of ${esc(drwLabName())}? No device is read or changed.</p>${rev?`<p class="save-note">It replaces the current starting point${startRow&&startRow.when?', saved '+esc(startRow.when):''}. The previous one stays in the history.</p>`:''}<div class="save-row">${btn('baseline-confirm',rev?'Replace the starting point':'Use as starting point','button primary')}${btn('baseline-cancel','Cancel')}</div></div>`);
   }
  }
  return out.join('');
@@ -617,7 +617,15 @@ async function drwAddFolder(parent,name){
   c.notice=result.existed?`${folder} already exists. It is selected.`:'';
   if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,folder);
   saveDrawerRender();
+  // The field is gone: focus goes to the folder it made (the selected row of the tree), never to nothing.
+  drwChooserFocus('[role="treeitem"][aria-selected="true"]')||drwChooserFocus('#folder-path');
  }catch(error){c.refused=error.message||'The folder could not be added.';saveDrawerRender();}
+}
+// Focus a control of the chooser after a change that removed the focused one. → whether it was found.
+function drwChooserFocus(selector){
+ const content=drwEl('save-drawer-content'),el=content&&typeof content.querySelector==='function'?content.querySelector(selector):null;
+ if(!el||typeof el.focus!=='function')return false;
+ el.focus();if(typeof el.scrollIntoView==='function')el.scrollIntoView({block:'nearest'});return true;
 }
 async function drwChooserForget(path){
  const c=saveDrawer.chooser;
@@ -640,9 +648,9 @@ async function drwChooserApply(intent,event){
   case 'bring':c.bring=!!intent.value;saveDrawerRender();break;
   case 'tree-open':c.treeOpen=!!intent.value;break;
   case 'show-all':c.showAll.add(intent.path);saveDrawerRender();break;
-  case 'new-folder':c.newFolder={parent:String(intent.parent??''),value:''};saveDrawerRender();break;
+  case 'new-folder':{c.newFolder={parent:String(intent.parent??''),value:''};saveDrawerRender();const field=drwEl('folder-new');if(field&&typeof field.focus==='function'){field.focus();if(typeof field.scrollIntoView==='function')field.scrollIntoView({block:'nearest'});}break;}
   case 'new-input':if(c.newFolder)c.newFolder={...c.newFolder,value:intent.echo!==undefined?intent.echo:intent.value};saveDrawerRender();break;
-  case 'new-cancel':c.newFolder=null;saveDrawerRender();break;
+  case 'new-cancel':c.newFolder=null;saveDrawerRender();drwChooserFocus('[data-folder-action="new"]');break;
   case 'new-add':{const nf=c.newFolder,typed=intent.value!==undefined?intent.value:nf?.value||'';const name=typeof folderClean==='function'?folderClean(typed):typed;if(name)await drwAddFolder(nf?nf.parent:'',name);break;}
   case 'choice':if(c.mode==='state')await drwChooserState(intent.choice);else await drwChooserPlace(intent.choice,'');break;
   case 'pending':if(intent.pending==='upload')await drwChooserUploadThenMove();else await drwChooserPlace(c.lastChoice,'keep');break;
@@ -729,7 +737,8 @@ function saveDrawerOpen(kind,options={}){
  if(saveDrawer.chooser&&saveDrawer.chooser.timer)clearTimeout(saveDrawer.chooser.timer);
  const onClose=saveDrawer.options&&saveDrawer.options.onClose&&saveDrawer.kind==='different'&&kind!=='different'?saveDrawer.options.onClose:null;
  saveDrawer.request++;saveDrawer.kind=kind;saveDrawer.options=options;saveDrawer.lab=typeof activeId==='string'?activeId:'';
- saveDrawer.back=options.back||(typeof options.onBack==='function'?{fn:options.onBack}:kind==='different'?{fn:()=>{if(typeof saveOpenPanel==='function')saveOpenPanel('load');}}:null);
+ // The differences of a load carry load.js's own Back (the confirmation with the same ticks): the head shows no second one.
+ saveDrawer.back=options.back||(typeof options.onBack==='function'?{fn:options.onBack}:null);
  if(first||(!keepDraft&&!options.restore))saveDrawer.draft=null;
  if(first||kind!=='versions'||!options.restore)saveDrawer.openRow=options.openRow||'';
  saveDrawer.chooser=null;

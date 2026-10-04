@@ -11,7 +11,8 @@
 // naming: the save being named in this panel session. view: {lab, panel, job}, a view shown instead of the chip's own (the result
 // of a save that just ended, or the state behind an Also line). places: lab id → {status, data, message}. first: the address
 // form. typed: the name typed and not committed. reviewErrors: job id → {key, message}. shown: what the panel body shows now.
-const saveHeader={refusal:null,placing:'',connecting:false,opened:new Map(),last:new Map(),naming:'',view:null,places:new Map(),first:{lab:'',url:'',question:null},typed:null,reviewErrors:new Map(),reviewing:new Set(),uploading:'',sent:'',keeping:'',renaming:'',error:null,shown:{lab:'',view:'',job:''}};
+// watched: the lab whose Saving… view the open panel showed last (the poll may repaint the panel before the save's end is handed over).
+const saveHeader={refusal:null,placing:'',connecting:false,opened:new Map(),last:new Map(),naming:'',view:null,places:new Map(),first:{lab:'',url:'',question:null},typed:null,reviewErrors:new Map(),reviewing:new Set(),uploading:'',sent:'',keeping:'',renaming:'',error:null,shown:{lab:'',view:'',job:''},watched:''};
 let saveClock;   // the `now` of the render in progress (tests pass one; the page uses the real time)
 const SAVE_EXPOSURE='Saved files can contain passwords or keys.';
 const SAVE_URL_ERROR='Paste the HTTPS address, for example https://github.com/you/your-lab-repo.';
@@ -27,8 +28,9 @@ function saveHost(lab){return (typeof statusHost==='function'&&statusHost(lab?.g
 function saveRepoName(repo){return typeof gitRepoName==='function'?gitRepoName(repo):String(repo?.path||'').split('/').filter(Boolean).pop()||repo?.label||'Repository';}
 function saveFolder(value){return String(value||'').replace(/^\/+|\/+$/g,'');}
 function saveLongTime(value,now){return typeof relativeTime==='function'?relativeTime(value,now):'';}
-// The /api/state document plus what this page remembers, as saveChipState and saveProblem take it.
-function saveCtx(lab){return {...saveState(),refusal:saveHeader.refusal&&lab&&saveHeader.refusal.lab===lab.id?saveHeader.refusal:null};}
+// The /api/state document plus what this page remembers, as saveChipState and saveProblem take it: the refusal of a save it just
+// sent and, when load.js holds the saved-states list of the lab (loadCtx), its rows, so a loaded lab state is named from that list.
+function saveCtx(lab){const base=typeof loadCtx==='function'?loadCtx(lab):saveState();return {...base,refusal:saveHeader.refusal&&lab&&saveHeader.refusal.lab===lab.id?saveHeader.refusal:null};}
 // The moment between the click on Save and the manager's answer: git-progress.js holds it in gitSubmitting.
 function saveSubmitting(lab){return typeof gitSubmitting!=='undefined'&&!!gitSubmitting&&(typeof gitSubmittingLab==='undefined'||!gitSubmittingLab||gitSubmittingLab===lab.id);}
 function saveBusyReason(lab){
@@ -132,7 +134,7 @@ function saveViewCant(cs,lab){
 // Whether the devices are still known to run the lab's latest save: no deploy, redeploy, destroy or design apply finished after it.
 function saveRunsLatest(cs,lab){
  if(cs.key!=='saved'||cs.load||typeof statusJobTime!=='function')return false;
- const ctx=saveState(),newest=typeof statusCaptureSaves==='function'?statusCaptureSaves(lab,ctx)[0]:cs.job,at=statusJobTime(newest||cs.job);if(!at)return false;
+ const ctx=saveState(),newest=typeof statusCaptureSaves==='function'?statusCaptureSaves(lab,ctx)[0]:cs.job,at=(typeof statusSaveTime==='function'?statusSaveTime:statusJobTime)(newest||cs.job);if(!at)return false;
  const mine=j=>!!j&&j.lab_id===lab.id,done=j=>!['queued','running'].includes(j.status);
  if((ctx.operations||[]).some(j=>mine(j)&&['deploy','redeploy','destroy'].includes(j.action)&&done(j)&&statusJobTime(j)>at))return false;
  if((ctx.design_jobs||[]).some(j=>mine(j)&&statusJobTime(j)>at))return false;
@@ -150,7 +152,8 @@ function saveNamingMarkup(job,lab){
 }
 function saveViewRest(cs,lab,now){
  const job=cs.job,kept=cs.key==='kept',when=saveLongTime(cs.at,now),title=kept?'Kept on this VM':when?'Saved '+when:'Saved';
- const naming=!kept&&!!job&&(job.note_auto===true||saveHeader.naming===job.id);
+ // The panel of a finished save always shows its name in the editable field and Keep as a checkpoint (PROMPT 5.3 step 7).
+ const naming=!kept&&!!job;
  const head=naming?saveNamingMarkup(job,lab):`<p class="save-sub" id="save-rest-name">${saveEsc((job&&job.note)||'Saved without a name')}</p>`;
  const lines=`${saveRunsLatest(cs,lab)?'<p class="save-kv" id="save-running"><span>Running:</span> your latest save</p>':''}<p class="save-kv" id="save-uploaded"><span>Uploaded:</span> ${kept?'no, kept on the lab VM':saveEsc('yes, to '+saveHost(lab))}</p>`;
  return {title,dot:cs.dot||'ok',name:naming?'naming':'rest',job:job?job.id:'',extra:job?String(job.note||''):'',html:head+lines+(naming?'':saveErrorMarkup(lab))+saveTailMarkup(lab,cs,{panel:'rest'})};
@@ -298,6 +301,7 @@ function renderSaveHeader(now){
  const panel=saveEl('save-panel'),body=saveEl('save-panel-body');
  if(!panel||panel.hidden||!body)return;
  saveHeader.shown={lab:lab.id,view:view.name,job:view.job};
+ if(view.name==='saving')saveHeader.watched=lab.id;
  savePanelMarkup(body,view.key,()=>view.html);
  if(view.needs&&view.needs.places&&typeof api==='function')saveLoadPlaces(lab.id);
  if(view.needs&&view.needs.review)saveLoadReview(view.needs.review);
@@ -317,7 +321,10 @@ function saveRefused(labId,error,values){
  if(!error){if(saveHeader.refusal&&saveHeader.refusal.lab===labId)saveHeader.refusal=null;return false;}
  const lab=saveLab();if(!lab||lab.id!==labId||!saveEl('save-chip')||(values&&values.target&&values.target!=='latest'))return false;
  saveHeader.refusal={lab:labId,message:String(error.message||'The save did not work.'),at:new Date().toISOString()};saveHeader.view=null;
- renderSaveHeader();return true;
+ renderSaveHeader();
+ // The manager may have recorded why (lab.git_status: no device selected, the VM's answer): read it now, not with the next poll.
+ if(typeof refresh==='function')Promise.resolve().then(refresh).catch(()=>{});
+ return true;
 }
 // A save of the lab on screen that this page started has ended (called by gitStartWatch). Nothing changed and uploaded are a
 // toast; every other ending opens the chip panel by itself on that save's result, unless a dialog, a drawer or another menu is
@@ -325,7 +332,10 @@ function saveRefused(labId,error,values){
 function saveFinished(job){
  if(!job)return false;
  const lab=saveLab(),mine=!!lab&&lab.id===job.lab_id,status=job.status;
- const shows=mine&&savePanelOpen()&&(saveHeader.shown.job===job.id||saveHeader.shown.view==='saving'||(saveHeader.view&&saveHeader.view.job===job.id));
+ // The panel shows this save: its own view, or the Saving… view it has shown since the click (a poll that arrived first has
+ // already repainted it with the chip's state, which is why the view on screen alone cannot tell).
+ const watched=mine&&saveHeader.watched===lab.id;if(mine)saveHeader.watched='';
+ const shows=mine&&savePanelOpen()&&(saveHeader.shown.job===job.id||saveHeader.shown.view==='saving'||watched||(saveHeader.view&&saveHeader.view.job===job.id));
  const sent=saveHeader.sent===job.id&&savePanelOpen();   // the upload this page sent, which may be the save of another lab
  if(status==='unchanged'||status==='synced'){
   if(typeof notify==='function')notify(status==='unchanged'?'Nothing changed since your last save.':job.target==='update'?'Repository updated.':`Uploaded to ${(typeof statusHost==='function'&&statusHost(job.destination?.remote))||saveHost(mine?lab:null)}.`);
@@ -349,7 +359,7 @@ function saveShowError(origin,message){
  const lab=saveLab();saveHeader.error=lab?{lab:lab.id,text:message}:null;renderSaveHeader();
 }
 // A drawer of save-drawers.js; the panel closes first and the chip is the control focus returns to.
-function saveDrawer(kind,options={}){
+function saveOpenDrawer(kind,options={}){
  const chip=saveEl('save-chip');saveClosePanel(false);
  if(typeof saveDrawerOpen==='function'){saveDrawerOpen(kind,{opener:chip,...options});return;}
  // A page without the drawers keeps today's places for what it can.
@@ -390,7 +400,7 @@ async function saveFirstPlace(kind){
    if(answer.question.kind==='empty'&&body.url&&!body.initialize){saveHeader.first={lab:id,url:body.url,question:answer.question};return answer;}
    // The repository changed between the two requests: the chooser takes over with the question in it.
    saveHeader.placing='';
-   saveDrawer('chooser',{mode:'location',repository:body.repository||'',folder:body.folder,path:body.folder,question:answer.question,then:()=>saveStart(id)});
+   saveOpenDrawer('chooser',{mode:'location',repository:body.repository||'',folder:body.folder,path:body.folder,question:answer.question,then:()=>saveStart(id)});
    return answer;
   }
   saveHeader.first={lab:'',url:'',question:null};saveHeader.places.delete(id);
@@ -438,7 +448,7 @@ async function saveAction(action,job,origin){
    case 'changes':if(!job||typeof gitReviewJob!=='function')throw new Error(SAVE_MISSING);saveClosePanel(false);await gitReviewJob(job,{opener:chip});return;
    case 'details':
     if(job&&typeof gitShowJob==='function'){saveClosePanel(true);await gitShowJob(job.id,job);return;}
-    saveDrawer('settings',{section:'details'});return;
+    saveOpenDrawer('settings',{section:'details'});return;
    case 'review-again':{
     if(!job||typeof gitReviewData!=='function')throw new Error(SAVE_MISSING);
     const key=typeof gitWaitingKey==='function'?gitWaitingKey():'',mark=job.id+'|'+key;
@@ -464,12 +474,12 @@ async function saveAction(action,job,origin){
    }
    case 'vm':saveClosePanel(true);if(typeof openVmDialog==='function')openVmDialog();return;
    case 'update':if(!lab||typeof gitUpdateRemote!=='function')throw new Error(SAVE_MISSING);saveClosePanel(true);await gitUpdateRemote(lab.id);return;
-   case 'settings':saveDrawer('settings');return;
-   case 'versions':saveDrawer('versions');return;
-   case 'lab-state':{const places=lab?saveHeader.places.get(lab.id):null,chosen=places&&places.data?places.data.default:null;saveDrawer('state',chosen&&!lab.git_binding?{repository:chosen.repository}:{});return;}
+   case 'settings':saveOpenDrawer('settings');return;
+   case 'versions':saveOpenDrawer('versions');return;
+   case 'lab-state':{const places=lab?saveHeader.places.get(lab.id):null,chosen=places&&places.data?places.data.default:null;saveOpenDrawer('state',chosen&&!lab.git_binding?{repository:chosen.repository}:{});return;}
    case 'place':{
-    if(lab&&!lab.git_binding){const places=saveHeader.places.get(lab.id),chosen=places&&places.data?places.data.default:null,id=lab.id;saveDrawer('chooser',{mode:'location',repository:chosen?chosen.repository:'',folder:chosen?chosen.folder:'',path:chosen?chosen.folder:'',then:()=>saveStart(id)});return;}
-    saveDrawer('chooser',{mode:'location'});return;
+    if(lab&&!lab.git_binding){const places=saveHeader.places.get(lab.id),chosen=places&&places.data?places.data.default:null,id=lab.id;saveOpenDrawer('chooser',{mode:'location',repository:chosen?chosen.repository:'',folder:chosen?chosen.folder:'',path:chosen?chosen.folder:'',then:()=>saveStart(id)});return;}
+    saveOpenDrawer('chooser',{mode:'location'});return;
    }
    case 'load-details':{
     const last=lab&&typeof loadState==='function'?loadState(lab,saveCtx(lab)).last:null;
@@ -524,7 +534,7 @@ function savePanelKey(event){
 }
 // What a closing panel forgets: the refusal, the name being typed, a view shown in place of the chip's own, the place it looked up.
 function savePanelClosed(){
- saveHeader.refusal=null;saveHeader.naming='';saveHeader.typed=null;saveHeader.view=null;saveHeader.error=null;
+ saveHeader.refusal=null;saveHeader.naming='';saveHeader.typed=null;saveHeader.view=null;saveHeader.error=null;saveHeader.watched='';
  for(const [id,entry] of saveHeader.places)if(entry.status!=='loading'&&saveHeader.placing!==id)saveHeader.places.delete(id);
  const body=saveEl('save-panel-body');if(body)body._listKey=undefined;
  renderSaveHeader();

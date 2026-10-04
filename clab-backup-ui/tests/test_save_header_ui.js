@@ -293,21 +293,25 @@ test('the panel at rest: the name, Running, Uploaded, Saves to with Change…, L
  const h=harness({state:{git_jobs:[saved({note:'Interface descriptions cleaned up',note_auto:false})],restore_jobs:[load]}});const shown=[];h.context.restoreShowJob=async id=>shown.push(id);
  await h.open();
  assert.equal(h.text('save-panel-title-text'),'Saved 21 minutes ago');
- assert.match(h.body.innerHTML,/<p class="save-sub" id="save-rest-name">Interface descriptions cleaned up<\/p>/);
+ // PROMPT 5.3 step 7 (integration seam 6): the panel of a finished save shows its name in the editable field and Keep as a checkpoint,
+ // whether the name is automatic or the person's own.
+ assert.match(h.body.innerHTML,/^<label class="sr-only" for="save-name">Name of this save<\/label><input id="save-name" class="save-name" value="Interface descriptions cleaned up" maxlength="120" autocomplete="off" spellcheck="false">/);
+ assert.match(h.body.innerHTML,/<label class="checkbox-label save-keep"><input type="checkbox" id="save-keep" data-save-action="keep"> Keep as a checkpoint<\/label>/);
  assert.match(h.body.innerHTML,/<span>Running:<\/span> your latest save/);assert.match(h.body.innerHTML,/<span>Uploaded:<\/span> yes, to github\.com/);
  assert.match(h.body.innerHTML,/<p class="save-kv" id="save-place"><span>Saves to:<\/span> CLAB-MNGR-DEV-LLM › bgp <button[^>]*id="save-change" data-save-action="place">Change…<\/button><\/p>/);
  assert.match(h.body.innerHTML,/<p class="save-kv" id="save-last-load"><span>Last load:<\/span> Start, 2 hours ago <button[^>]*id="save-load-details" data-save-action="load-details">Details<\/button><\/p>/);
  assert.match(h.body.innerHTML,/<div class="save-foot"><button[^>]*id="save-all"[^>]*>All versions<\/button><button[^>]*id="save-as-state"[^>]*>Save as a lab state…<\/button><button[^>]*id="save-settings"[^>]*>Save settings<\/button><\/div>$/);
- checkMarkup(h.body.innerHTML,'rest');
+ checkMarkup(h.body.innerHTML,'naming');
  await h.press('save-load-details');assert.deepEqual(shown,['r']);assert.equal(h.document.activeElement,h.chip);
  for(const [id,kind] of [['save-change','chooser'],['save-all','versions'],['save-as-state','state'],['save-settings','settings']]){await h.open();await h.press(id);const last=h.drawers[h.drawers.length-1];assert.equal(last.kind,kind);assert.equal(last.opts.opener,h.chip);assert.equal(h.panel.hidden,true);}
  // Without a load the line is not there; after a redeploy the manager no longer claims what runs; a save from before names existed.
  h.state.restore_jobs=[];h.state.operations=[{id:'o',lab_id:'lab',action:'redeploy',status:'succeeded',created:ago(10),finished:ago(9)}];h.state.git_jobs=[saved({note:'',note_auto:false})];await h.open();
- assert.equal(h.el('save-last-load'),null);assert.doesNotMatch(h.body.innerHTML,/Running:/);assert.match(h.body.innerHTML,/id="save-rest-name">Saved without a name</);
+ assert.equal(h.el('save-last-load'),null);assert.doesNotMatch(h.body.innerHTML,/Running:/);assert.match(h.body.innerHTML,/<input id="save-name" class="save-name" value="" /,'a save from before names existed has an empty field to name it in');
  // Kept on this VM.
  h.state.operations=[];h.state.git_jobs=[saved({status:'dismissed',pushed:false})];h.render();assert.equal(h.text('save-chip-text'),'Kept on this VM');assert.match(h.body.innerHTML,/<span>Uploaded:<\/span> no, kept on the lab VM/);
+ assert.equal(h.el('save-name'),null,'a save that was put aside is plain text');assert.match(h.body.innerHTML,/<p class="save-sub" id="save-rest-name">[^<]+<\/p>/);checkMarkup(h.body.innerHTML,'rest');
 });
-test('the name of the latest save is an editable field while it is automatic: Enter commits once, an empty name returns to the automatic one, a failure keeps what was typed',async()=>{
+test('the name of the latest save is an editable field: Enter commits once, an empty name returns to the automatic one, a failure keeps what was typed',async()=>{
  let fail=false;const h=harness({state:{git_jobs:[saved()]},routes:{'/name':payload=>fail?Object.assign(new Error('The name could not be stored.'),{status:500}):saved({note:payload.note||'ceos and xrv9k changed',note_auto:!payload.note})}});
  await h.open();
  assert.match(h.body.innerHTML,/<label class="sr-only" for="save-name">Name of this save<\/label><input id="save-name" class="save-name" value="ceos and xrv9k changed" maxlength="120" autocomplete="off" spellcheck="false">/);
@@ -325,8 +329,8 @@ test('the name of the latest save is an editable field while it is automatic: En
  fail=true;input=type('Lost?');h.document.activeElement=h.document.body;h.panel.listeners.change({target:input});await h.flush();h.render();
  assert.equal(h.el('save-name').value,'Lost?','the typed text survives the failure and the rebuild');assert.match(h.body.innerHTML,/id="save-panel-error">The name could not be stored\.</);
  input=type('x'.repeat(121));h.panel.listeners.change({target:input});await h.flush();assert.equal(names().length,3,'too long is refused in the page');
- // After the panel closed, a save the person named is plain text.
- h.chip._menuClose(false);h.state.git_jobs=[saved({note:'OSPF works',note_auto:false})];await h.open();assert.equal(h.el('save-name'),null);assert.match(h.body.innerHTML,/id="save-rest-name">OSPF works</);
+ // After the panel closed, a save the person named keeps its field (PROMPT 5.3 step 7: both stay offered), with nothing typed left over.
+ h.chip._menuClose(false);h.state.git_jobs=[saved({note:'OSPF works',note_auto:false})];await h.open();assert.match(h.body.innerHTML,/<input id="save-name" class="save-name" value="OSPF works" maxlength="120" autocomplete="off" spellcheck="false">/);assert.equal(h.el('save-rest-name'),null);assert.ok(h.el('save-keep'));
 });
 test('Keep as a checkpoint posts the save route with the save’s capture and an empty checkpoint name, and is disabled with its reason when the capture cannot be used',async()=>{
  const h=harness({state:{git_jobs:[saved()]},routes:{'/git/save':payload=>({id:payload.request_id,lab_id:'lab',status:'queued',target:'checkpoint',checkpoint:'ceos-and-xrv9k-changed',backup_job_id:'bk',captured:false,created:ago(0)})}});
@@ -351,7 +355,8 @@ test('Can’t save shows one sentence and exactly the actions of its row',async(
   [{code:'diverged'},[],'The online copy has changes this VM does not have.',['update:Update from the repository']],
   [{code:'diverged'},[waiting({id:'o',lab_id:'other',lab_name:'ospf'})],'The online copy and this VM both have changes the other does not have. They have to be combined on the VM.',['details:Details']],
   [{code:'files'},[],'bgp holds files that were not saved by the manager.',['place:Choose another place','details:Details']],
-  [{code:'settings'},[],'No device of this lab is selected for saving.',['settings:Save settings']],
+  [{code:'settings'},[],'This lab’s save location has to be set up again.',['settings:Save settings','details:Details']],
+  [{code:'devices'},[],'No device of this lab is selected for saving.',['settings:Save settings']],
   [{code:'other'},[],'The save did not work.',['again:Try again','details:Details']]];
  for(const [status,jobs,sentence,actions] of rows){
   const h=harness({lab:boundLab({git_status:{checked:true,ready:false,problem:'<raw helper text>',...status}}),state:{git_jobs:[...jobs,saved()]}});await h.open();

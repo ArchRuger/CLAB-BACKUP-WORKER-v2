@@ -293,7 +293,8 @@ def kept_on_vm(job):
 # What stops a save or an upload, as one code for the header chip (DESIGN.md 3.6, 3.8 N1): `vm` the VM cannot be
 # reached, `account` the VM account cannot commit or upload, `busy` someone is working in the checkout (or it moved
 # under a save), `diverged` the online copy and the VM have changes the other lacks, `files` files the manager did
-# not save are where a save goes, `settings` the save location has to be set up again, `other` everything else.
+# not save are where a save goes, `settings` the save location has to be set up again (the VM's record or checkout
+# is gone or changed), `devices` no device of the lab is selected for saving, `other` everything else.
 # Every sentence the helper's `status`, `publish`, `push` and `update` can answer is listed with its code, as it is
 # written in host_git.py (tests/test_git_save_model.py compares both ways, so a reworded sentence breaks the test).
 HELPER_PROBLEMS = {
@@ -411,6 +412,7 @@ MANAGER_PROBLEMS = {
     'Update the VM Git helper to match manager ': 'vm',
     'The VM identity changed. Return to the original VM or reconnect the repository.': 'settings',
     'Git snapshot exceeds the transfer limit.': 'other',
+    NO_DEVICES: 'devices',
     ANOTHER_SAVE: 'busy',
     NOT_OURS: 'busy',
 }
@@ -991,6 +993,8 @@ class GitProgress:
         the store lock held."""
         result = public_job(job)
         if job.get('target') == 'update': return result
+        # A folder move says where the files came from: the folder the lab left ('' is the top level), as the move froze it.
+        if job.get('target') == 'move': result['moved_from'] = str((job.get('request') or {}).get('source_prefix') or '').strip('/')
         backup = next((b for b in self.store.state['jobs'] if b['id'] == job.get('backup_job_id')), None) if job.get('backup_job_id') else None
         if 'own_capture' in job: result['captured'] = bool(job['own_capture'])
         elif job.get('kind') == 'design' or job.get('target') == 'move': result['captured'] = False
@@ -1311,13 +1315,16 @@ class GitProgress:
         if commit and not re.fullmatch(r'[0-9a-f]{40,64}', commit): raise ValueError('Git helper returned an invalid commit identifier.')
         pushed = result.get('pushed') is True
         # A save with nothing new reuses HEAD. It has nothing to review and nothing to upload when the
-        # manager already knows that exact commit was uploaded through this same binding; only then is it
-        # 'unchanged'. A HEAD that was never uploaded keeps the ordinary path: there is still a save to review.
+        # manager already knows that exact commit was uploaded from this checkout to this push URL and branch: through
+        # this same binding, or as the save of another lab of the repository (labs share one checkout, so HEAD is as often
+        # another lab's uploaded save as this lab's own); only then is it 'unchanged'. A HEAD that was never uploaded
+        # keeps the ordinary path: there is still a save to review.
         uploaded = False
         if result.get('status') == 'unchanged' and commit and not pushed and job.get('target') != 'move':
             with self.store.lock:
                 uploaded = any(other.get('id') != job['id'] and other.get('commit') == commit and other.get('pushed') is True
-                               and other.get('binding_digest') == job.get('binding_digest') for other in self.store.state['git_jobs'])
+                               and (other.get('binding_digest') == job.get('binding_digest') or (self.made_in(other, binding) and self.same_branch(other, binding)))
+                               for other in self.store.state['git_jobs'])
         if pushed: status = 'synced'
         elif result.get('status') == 'needs_attention': status = 'push_pending' if commit else 'export_pending'
         elif uploaded: status = 'unchanged'
@@ -1346,6 +1353,10 @@ class GitProgress:
                 reviewed = self.get_job(job['id']).get('reviewed') or now()
                 for previous in self.store.state['git_jobs']:
                     if previous['id'] == job['id'] or previous['id'] not in (result.get('synced_operations') or []) or not self.made_in(previous, binding): continue
+                    # The helper names every save of the checkout the remote holds, the ones uploaded long ago included: a
+                    # save the manager already knows as uploaded keeps its time and its sentence (the page orders and
+                    # dates saves by them).
+                    if previous.get('status') == 'synced' and previous.get('pushed'): continue
                     if previous.get('status') == 'dismissed':
                         # A dismissed save stays dismissed; it is only known as uploaded now, so later reviews stop counting it.
                         previous.update(pushed=True, message='Snapshot kept; its commit is included in the verified remote history.')
@@ -1835,7 +1846,10 @@ class GitProgress:
             """The devices a save reads: the binding's selection without the devices that left the lab (DESIGN.md 3.3)."""
             known = {n['name'] for n in lab['nodes'] if n.get('platform') in PLATFORMS}
             kept = [n for n in dict.fromkeys(names or []) if n in known]
-            if not kept: raise HTTPException(409, NO_DEVICES)
+            if not kept:
+                # The chip learns why (code `devices`); the next status check, made when the selection is saved in Save
+                # settings, replaces it.
+                self.seen_status(lab['id'], problem=NO_DEVICES); raise HTTPException(409, NO_DEVICES)
             return kept
 
         def capture_context(lab, names):

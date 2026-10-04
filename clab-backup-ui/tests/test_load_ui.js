@@ -608,7 +608,7 @@ test('parity: restoreFromVersion, restoreFromFolder, restoreReview and the job w
  await p.c.restoreFromVersion('lab',{type:'git',commit:'b'.repeat(40),path:'BGP/checkpoints/day-1'},'day-1');
  assert.ok(confirmed());assert.deepEqual(p.calls.at(-1).body.source,{type:'git',commit:'b'.repeat(40),path:'BGP/checkpoints/day-1',backup_job_id:'',repository:''});
  await p.c.restoreFromFolder('lab','course/final',{repository:{path:'/home/ben/Course-Labs'}});
- assert.ok(confirmed());assert.deepEqual(p.calls.at(-1).body.source,{type:'folder',commit:'',path:'/course/final',backup_job_id:'',repository:''});assert.match(p.body(),/Load Final · course\/final\?/);
+ assert.ok(confirmed());assert.deepEqual(p.calls.at(-1).body.source,{type:'folder',commit:'',path:'/course/final',backup_job_id:'',repository:''});assert.match(p.body(),/>Load Final\?<\/p>/,'the headline is the state’s name alone, never its repository or folder (integration seam 8)');assert.doesNotMatch(p.body(),/Course-Labs|course\/final\?/);
  await p.c.restoreReview('lab',{type:'backup',backup_job_id:'b1'},'A backup');
  assert.ok(confirmed());assert.equal(p.calls.at(-1).body.source.backup_job_id,'b1');
  // The job window's Load this backup… (rendered by restoreRenderJob) ends in loadUndo, which ends in a confirmation.

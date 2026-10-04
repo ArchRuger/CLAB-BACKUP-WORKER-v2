@@ -177,6 +177,12 @@ def create_app(data_dir=None):
         result['last_deployed']=last_deployed(store.state,lab)
         # Edit map opens the full map editor when the manager has the lab's topology text and a map; otherwise the simple dialog.
         result['map_editor']=bool(lab.get('definition_yaml') and lab.get('drawing'))
+        # Whether a save of this lab carries its topology file (Runner.topology_capture): the file beside the deployed topology as
+        # the last discovery pass read it, else the manager's own copy. False for a lab imported from an inventory alone; Save
+        # settings then says that its saves hold device configurations only. A boolean, never the text.
+        source=discovery.sources.get(lab.get('deployment_name') or '')
+        files=source.get('files') if isinstance(source,dict) else None
+        result['topology_in_manager']=bool(lab.get('definition_yaml') or (isinstance(files,dict) and files.get('definition')))
         result['nos_readiness']=summarize([row['nos_login'] for row in result['nodes']])
         retired=public_retired_telemetry(lab)
         if retired: result['telemetry_retired']=retired

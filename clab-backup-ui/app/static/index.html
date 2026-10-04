@@ -292,9 +292,9 @@
         <label for="design-export-git-note">Note <span class="muted">optional</span></label>
         <input id="design-export-git-note" maxlength="200" autocomplete="off" spellcheck="false">
         <p class="form-help">Shown in the history and used as the Git commit message. Left blank, a note naming this plan is used.</p>
-        <p class="form-help">The export contains the design file, the plan, the netlab topology, the endpoint mapping and every generated device file. It is never a backup and never a restore source; the upload happens only after you review it.</p>
+        <p class="form-help">The export contains the design file, the plan, the netlab topology, the endpoint mapping and every generated device file. It is never a backup and never a restore source. It is saved on the lab VM and waits there: the save chip in the header shows it, and nothing is uploaded until you choose Upload there.</p>
         <p class="form-error" role="alert" id="design-export-git-error"></p>
-        <div class="dialog-actions"><button type="button" class="button secondary" data-design-export-git-close>Cancel</button><button type="button" class="button primary" id="design-export-git-confirm">Save to VM and review</button></div>
+        <div class="dialog-actions"><button type="button" class="button secondary" data-design-export-git-close>Cancel</button><button type="button" class="button primary" id="design-export-git-confirm">Save to the lab VM</button></div>
       </dialog>
     </section>
       </details>

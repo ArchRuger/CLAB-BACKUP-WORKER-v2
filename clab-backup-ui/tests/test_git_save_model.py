@@ -395,6 +395,36 @@ class UploadTests(SaveModelCase):
         self.assertEqual(self.vm.remote, self.vm.head)
         self.assertEqual([lab['git_status']['waiting'] for lab in self.client.get('/api/state').json()['labs']], [0, 0])
 
+    def test_a_later_upload_leaves_a_save_uploaded_before_as_it_was(self):
+        # The helper's push answer names every save of the checkout the remote holds (`synced_operations`), also the
+        # ones uploaded earlier: their time and sentence stay, so the page still orders and dates the saves truthfully.
+        first = self.saved(note='First'); self.upload(first, head=self.review(first)['head'])
+        before = copy.deepcopy(self.stored(first))
+        self.assertEqual((before['status'], before['pushed']), ('synced', True))
+        self.texts[self.names[0]] = 'hostname changed\n'
+        second = self.saved(note='Second'); self.assertEqual(second['status'], 'review_pending')
+        with patch('app.git_progress.now', return_value='2099-01-01T00:00:00+00:00'):
+            outcome = self.upload(second, head=self.review(second)['head'])
+        self.assertEqual((outcome['status'], outcome['finished']), ('synced', '2099-01-01T00:00:00+00:00'))
+        after = self.stored(first)
+        self.assertEqual((after['finished'], after['message'], after['status'], after['pushed']), (before['finished'], before['message'], 'synced', True))
+
+    def test_nothing_changed_after_another_labs_uploaded_save_is_unchanged_not_a_save_to_upload(self):
+        # Two labs share the checkout: once the other lab's save is uploaded, HEAD is that save. A save of this lab that
+        # changed nothing reuses HEAD, which is uploaded: it ends `unchanged` and nothing waits.
+        other = self.second_lab()
+        mine = self.saved(note='Mine'); self.upload(mine, head=self.review(mine)['head'])
+        theirs = self.saved(other['id'], note='Theirs'); self.upload(theirs, head=self.review(theirs)['head'])
+        self.assertEqual(self.vm.remote, theirs['commit'])
+        again = self.saved()
+        self.assertEqual((again['status'], again['pushed'], again['commit'], again['changed_files']), ('unchanged', True, theirs['commit'], []))
+        self.assertEqual([lab['git_status']['waiting'] for lab in self.client.get('/api/state').json()['labs']], [0, 0])
+        # A HEAD that is another lab's save still waiting is not uploaded: the save keeps the ordinary path.
+        self.texts[self.store.lab(other['id'])['nodes'][0]['name']] = 'hostname other-changed\n'
+        waiting = self.saved(other['id'], note='Theirs again'); self.assertEqual(waiting['status'], 'review_pending')
+        same = self.saved()
+        self.assertEqual((same['status'], same['pushed'], same['commit']), ('review_pending', False, waiting['commit']))
+
     def test_a_save_that_lands_between_the_review_and_upload_sends_the_person_back_to_the_review(self):
         other = self.second_lab()
         mine = self.saved(note='Mine'); shown = self.review(mine)
@@ -716,6 +746,18 @@ class WholeLabAndDeviceTests(SaveModelCase):
             self.assertEqual((outcome['status'], outcome['message'], outcome['capture_whole']), ('capture_incomplete', TOPOLOGY_FAILED, False))
         self.assertNotIn('publish', self.modes())
 
+    def test_the_public_lab_says_whether_a_save_carries_its_topology(self):
+        # Save settings says "saves hold device configurations only" from this boolean (DESIGN.md 3.9); the text stays private.
+        public = lambda: next(l for l in self.client.get('/api/state').json()['labs'] if l['id'] == self.lab['id'])
+        self.assertIs(public()['topology_in_manager'], True); self.assertNotIn('definition_yaml', public())
+        with self.store.lock: kept = self.store.lab(self.lab['id']).pop('definition_yaml')
+        self.assertIs(public()['topology_in_manager'], False)
+        # The file beside the deployed topology, as the last discovery pass read it, counts as well (Runner.topology_capture).
+        name = self.store.lab(self.lab['id']).get('deployment_name')
+        with patch.dict(self.app.state.discovery.sources, {name: {'files': {'definition': kept.encode()}}}):
+            self.assertIs(public()['topology_in_manager'], True)
+        self.assertIs(public()['topology_in_manager'], False)
+
     def test_a_lab_without_topology_text_saves_its_devices_as_before(self):
         self.missing = 'no-text'; self.topology = ''
         with self.store.lock: self.store.lab(self.lab['id'])['definition_yaml'] = ''; self.store.save()
@@ -751,6 +793,16 @@ class WholeLabAndDeviceTests(SaveModelCase):
         self.assertEqual(refused['detail'], NO_DEVICES)
         self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['node_names'], ['gone-1', 'gone-2'], 'nothing was changed')
         self.assertEqual(self.store.state['git_jobs'], [])
+        # The chip learns why by its code (`devices`), and the status check made when the selection is saved clears it.
+        status = lambda: next(l for l in self.client.get('/api/state').json()['labs'] if l['id'] == self.lab['id'])['git_status']
+        seen = status()
+        self.assertEqual((seen['ready'], seen['code'], seen['problem']), (False, 'devices', NO_DEVICES))
+        self.assertEqual(problem_code(NO_DEVICES), 'devices')
+        response = self.client.put(self.url, json=dict(binding_id=self.repo['id'], node_names=self.names))
+        self.assertEqual(response.status_code, 200, response.text)
+        seen = status()
+        self.assertEqual((seen['ready'], seen['code'], seen['problem']), (True, '', ''))
+        self.assertEqual(self.post()['status'], 'queued')
 
     def test_removals_are_always_allowed_whatever_an_older_page_sends(self):
         for value in (False, True):
@@ -873,7 +925,7 @@ class GitStatusTests(SaveModelCase):
         self.assertEqual(sorted(raised - set(HELPER_PROBLEMS)), [], 'a helper sentence without a code')
         own = Path(git_progress.__file__).read_text(encoding='utf-8')
         for sentence in MANAGER_PROBLEMS: self.assertIn(sentence, own)
-        self.assertEqual(set(HELPER_PROBLEMS.values()) | set(MANAGER_PROBLEMS.values()), {'vm', 'account', 'busy', 'diverged', 'files', 'settings', 'other'})
+        self.assertEqual(set(HELPER_PROBLEMS.values()) | set(MANAGER_PROBLEMS.values()), {'vm', 'account', 'busy', 'diverged', 'files', 'settings', 'devices', 'other'})
         for sentence, code in (('The repository already has staged changes. If an earlier manager save failed, fix its reported issue and retry that original save: Retry commits automatically. For unrelated staged work, resolve it as the repository owner first.', 'busy'),
                                ('Finish the existing Git operation before saving lab progress.', 'busy'),
                                ('The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.', 'diverged'),

@@ -549,6 +549,11 @@ class PlaceTests(unittest.TestCase):
         self.assertEqual((job['target'], job['want_push'], job['request']['source_prefix'], job['request']['push']), ('move', False, 'b', False))
         self.assertEqual(job['binding_digest'], git_digest(done['binding'])); self.assertEqual(job['binding'], done['binding'])
         self.submit.assert_called()
+        # The page says where the files came from: the public job names the folder the lab left, never the request itself.
+        public = self.client.get('/api/git/jobs/' + job['id']).json()
+        self.assertEqual(public['moved_from'], 'b'); self.assertNotIn('request', public)
+        listed = next(j for j in self.client.get('/api/state').json()['git_jobs'] if j['id'] == job['id'])
+        self.assertEqual(listed['moved_from'], 'b')
 
     # ----- the listing and New folder…
 

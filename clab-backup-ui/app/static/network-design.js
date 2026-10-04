@@ -2119,10 +2119,10 @@ function designExportGitOpen(){
  $('design-export-git-dialog').showModal();
 }
 function designExportGitClose(){if($('design-export-git-dialog')&&typeof $('design-export-git-dialog').close==='function')$('design-export-git-dialog').close();}
-// On success this hands the job straight to git-progress.js's own quiet watch (gitStartWatch), the
-// same path a plain Save progress takes: it polls the job and, once the export reaches review_pending,
-// opens the mandatory review itself (gitReviewJob) — this file never opens the review or uploads
-// directly, and never sends {push:true,reviewed:true}.
+// On success this hands the job to git-progress.js's own quiet watch (gitStartWatch), the same path a plain Save takes. The
+// export ends in the header's save chip (`1 save to upload`): it never opens a panel or a review by itself and it leaves the
+// person where they are. The chip panel shows its upload view with See changes and Upload, and gitReviewJob stays the only
+// sender of {push:true,reviewed:true}: this file never opens the review or uploads directly.
 async function designExportGitSubmit(){
  if($('design-export-git-error'))$('design-export-git-error').textContent='';
  const checkpoint=String($('design-export-git-checkpoint')?$('design-export-git-checkpoint').value:'').trim();
@@ -2135,8 +2135,8 @@ async function designExportGitSubmit(){
   const job=await json('/labs/'+encodeURIComponent(designExportGitState.labId)+'/design/generations/'+encodeURIComponent(designExportGitState.generationId)+'/git','POST',body);
   designExportGitClose();
   if(typeof gitRememberJob==='function')gitRememberJob(job);
-  if(typeof showTab==='function')showTab('progress');
   if(typeof gitStartWatch==='function')gitStartWatch(job,{quiet:true});
+  if(typeof notify==='function')notify('Exporting the plan to the lab VM. It is not uploaded: the save chip shows it when it is ready.');
   if(typeof refresh==='function')await refresh();
  }catch(error){if($('design-export-git-error'))$('design-export-git-error').textContent=error.message;}
 }

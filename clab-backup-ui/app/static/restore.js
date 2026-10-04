@@ -145,26 +145,35 @@ function restoreJobTitle(job) {
  return 'Configuration not replaced';
 }
 
+// The name a confirmation's headline uses ("Load <name>?"): derived like every other name of a loaded state (loadSourceName in
+// status.js, with the saved-states rows load.js holds), so the lab's own latest reads "your latest save" and a course state its
+// name. `fallback` is the caller's label, used only when nothing better is known. Never a path with its repository.
+function restoreSourceName(labId, source, fallback) {
+ const lab = typeof state === 'object' && state ? (state.labs || []).find(l => l.id === labId) || null : null;
+ const ctx = typeof loadCtx === 'function' ? loadCtx(lab) : (typeof state === 'object' && state) || {};
+ const derived = typeof loadSourceName === 'function' ? loadSourceName(source, ctx, lab) : '';
+ return derived && derived !== 'a saved state' ? derived : String(fallback || '') || derived || 'a saved state';
+}
 // Entry point from the Git version view (and Full history's commit view): Load this state… with a `git` source. Ends in the Load
 // panel's confirmation (loadChoose in load.js); nothing is sent before the person presses the red Load there.
 async function restoreFromVersion(labId, source, label) {
- return restoreReview(labId, source, label);
+ const plain = String(label || ''), named = plain && !plain.includes('/') ? plain : restoreSourceName(labId, source, plain);
+ return restoreReview(labId, source, named);
 }
 
 // Entry point from the folder browser and the Saved versions list: load the exact snapshot folder into the running lab directly,
 // without pointing the lab at that folder first. snapshotPath is the exact repository-relative snapshot folder (never appended with
 // /latest), with or without its wire-form leading slash; '' or '/' is the repository root. Exactly one leading slash is sent on the
-// wire ('/' for the root); nothing is chosen when snapshotPath is null/undefined.
+// wire ('/' for the root); nothing is chosen when snapshotPath is null/undefined. The confirmation is headed by the state's name
+// alone (`Load Final?`): the repository and the folder are not part of a name.
 async function restoreFromFolder(labId, snapshotPath, tree) {
  if (snapshotPath == null) { notify('Choose a saved folder to apply.'); return; }
  const bare = String(snapshotPath).replace(/^\/+/, '').replace(/\/+$/, '');
  const wire = '/' + bare;
  const displayFolder = restoreDisplayFolder(wire);
- const repoName = tree && tree.repository && typeof gitRepoName === 'function' ? gitRepoName(tree.repository) : '';
  const friendly = typeof savedVersionName === 'function' ? savedVersionName(displayFolder) || displayFolder : displayFolder;
- // The label is for the student: it never shows the wire form's leading slash.
- const where = repoName ? repoName + (bare ? ' › ' + bare : '') : bare;
- await restoreReview(labId, { type: 'folder', path: wire }, friendly + ' · ' + where);
+ const source = { type: 'folder', path: wire };
+ await restoreReview(labId, source, restoreSourceName(labId, source, bare ? friendly : 'the repository’s top level'));
 }
 
 // The old review dialog with its acknowledgement tick box is replaced by the Load panel's confirmation (owner decision D4: the red Load

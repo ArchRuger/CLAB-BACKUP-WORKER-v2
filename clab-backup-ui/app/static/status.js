@@ -186,7 +186,7 @@ const STATUS_SAVE_STOPPED=['export_pending','capture_incomplete','failed'];
 const STATUS_SAVE_CAPTURED=['synced','unchanged','committed','review_pending','push_pending'];
 const STATUS_LOAD_REPLACED=['verified','applied','applied_unverified','verify_mismatch'];
 const STATUS_LOAD_ENDERS=['deploy','redeploy','destroy'];
-const STATUS_PROBLEM_CODES=['vm','account','busy','diverged','files','settings','other'];
+const STATUS_PROBLEM_CODES=['vm','account','busy','diverged','files','settings','devices','other'];
 // A device's words in a load (LOAD.md 5.1), keyed by the restore service's target status; `matched` is a verified or applied device
 // whose stage is `matched`. The only mapping from an outcome to words. `help` sits under the device's name.
 const STATUS_LOAD_WORDS={
@@ -219,8 +219,11 @@ function statusSaveJobs(lab,ctx){return statusLabGitJobs(lab,ctx?.git_jobs).filt
 function statusOwnKind(job){return job.kind!=='state'&&job.kind!=='design';}
 // S of DESIGN.md 7.1: the lab's save jobs that read the devices themselves, newest first. A job stored before `captured` existed counts
 // when it wrote `latest`; a checkpoint or starting point made from an existing capture (captured false) is not one.
+// The time of S is when the save read the devices: its creation (the capture follows at once). `finished` is not that time: it moves
+// again when the save is uploaded, which may be long after a load, and an upload must never end Running or reorder the saves.
+function statusSaveTime(job){return statusEpoch(job?.created)||statusEpoch(job?.finished);}
 function statusCaptureSaves(lab,ctx){
- return statusSaveJobs(lab,ctx).filter(j=>statusOwnKind(j)&&STATUS_SAVE_CAPTURED.includes(j.status)&&(j.captured===undefined?j.target==='latest':j.captured===true)).sort((a,b)=>statusJobTime(b)-statusJobTime(a));
+ return statusSaveJobs(lab,ctx).filter(j=>statusOwnKind(j)&&STATUS_SAVE_CAPTURED.includes(j.status)&&(j.captured===undefined?j.target==='latest':j.captured===true)).sort((a,b)=>statusSaveTime(b)-statusSaveTime(a));
 }
 // Jobs with a commit that is not uploaded. A lab state, a design export and a folder move are in it; the lab need not be connected.
 function statusWaitingSaves(lab,ctx){return statusSaveJobs(lab,ctx).filter(j=>j.commit&&!j.pushed&&STATUS_SAVE_WAITING.includes(j.status));}
@@ -306,7 +309,7 @@ function loadState(lab,ctx={},now){
  const active=restores.filter(statusRestoreActive).sort((a,b)=>statusJobTime(b)-statusJobTime(a))[0];
  if(active){const counts=loadCounts(active);return {...none,key:'loading',job:active,name:loadSourceName(active.source,ctx,lab,now),loaded:counts.loaded,total:counts.total,done:counts.done,at:statusJobTime(active),rechecking:statusRestoreRechecking(active),last};}
  if(!effective)return none;
- const save=statusCaptureSaves(lab,ctx)[0];if(save&&statusJobTime(save)>=at)return {...none,last};
+ const save=statusCaptureSaves(lab,ctx)[0];if(save&&statusSaveTime(save)>=at)return {...none,last};
  const ended=(ctx.operations||[]).some(j=>mine(j)&&STATUS_LOAD_ENDERS.includes(j.action)&&!STATUS_OPERATION_BUSY.includes(j.status)&&statusJobTime(j)>at)
   ||(ctx.design_jobs||[]).some(j=>mine(j)&&!STATUS_RESTORE_BUSY.includes(j.status)&&!statusDesignRechecking(j)&&statusJobTime(j)>at)
   ||statusEpoch(lab.last_deployed)>at;
@@ -327,7 +330,7 @@ function saveChipState(lab,ctx={},now){
  ctx=ctx||{};
  const base={key:'none',dot:'none',text:'Not saved yet',panel:'first',detail:'',code:'',job:null,load:null,count:0,at:'',also:null,also2:null,saveDisabled:false,loadDisabled:false};
  if(!lab)return base;
- const load=loadState(lab,ctx,now),bound=!!lab.git_binding,jobs=statusSaveJobs(lab,ctx),captures=statusCaptureSaves(lab,ctx),saveAt=captures[0]?statusJobTime(captures[0]):0;
+ const load=loadState(lab,ctx,now),bound=!!lab.git_binding,jobs=statusSaveJobs(lab,ctx),captures=statusCaptureSaves(lab,ctx),saveAt=captures[0]?statusSaveTime(captures[0]):0;
  const waiting=statusWaitingSaves(lab,ctx),count=new Set(waiting.map(j=>j.commit)).size,uploadFailed=waiting.find(j=>j.status==='push_pending');
  const live=load.key==='running'||load.key==='partial',loadAt=live?load.at:0;
  if(load.key==='loading')return {...base,key:'loading',dot:'busy',text:load.rechecking?'Checking devices…':load.total?`Loading… ${load.done} of ${load.total}`:'Loading…',panel:'loading',job:load.job,load,count,saveDisabled:true,loadDisabled:true};
@@ -360,7 +363,9 @@ function saveChipState(lab,ctx={},now){
 // Why a save cannot be made (the Can't save view, DESIGN.md 3.6). The cause is found in this order: a job that stopped on a device
 // (capture_incomplete), then lab.git_status.code when the status is not ready, else `other`; no message text is matched.
 // → {code, sentence, actions: [{action, label}], devices, job, detail}; the first action is the primary one. Codes: vm account busy diverged
-// (the sentence and actions differ by whether a save waits in the repository) device files settings other. `detail` is the raw text for Details.
+// (the sentence and actions differ by whether a save waits in the repository) device files settings devices other. `settings`: the save
+// location has to be set up again (the VM's record or checkout is gone or changed; Details shows the VM's own sentence, which says what to
+// do). `devices`: the selection of Save settings holds no device of the lab. `detail` is the raw text for Details.
 function saveProblem(lab,ctx={}){
  ctx=ctx||{};
  const bound=!!lab?.git_binding,status=bound?lab.git_status:null,unready=!!status&&status.checked!==false&&status.ready===false,jobs=statusSaveJobs(lab,ctx),newest=jobs[0]||null;
@@ -382,7 +387,8 @@ function saveProblem(lab,ctx={}){
  if(code==='busy')return make('busy','Someone is working in this repository on the VM.',[again,details]);
  if(code==='diverged')return waits?make('diverged','The online copy and this VM both have changes the other does not have. They have to be combined on the VM.',[details]):make('diverged','The online copy has changes this VM does not have.',[{action:'update',label:'Update from the repository'}]);
  if(code==='files')return make('files',`${folder?folder:'The top level'} holds files that were not saved by the manager.`,[{action:'place',label:'Choose another place'},details]);
- if(code==='settings')return make('settings','No device of this lab is selected for saving.',[{action:'settings',label:'Save settings'}]);
+ if(code==='settings')return make('settings','This lab’s save location has to be set up again.',[{action:'settings',label:'Save settings'},details]);
+ if(code==='devices')return make('devices','No device of this lab is selected for saving.',[{action:'settings',label:'Save settings'}]);
  return make('other','The save did not work.',[again,details]);
 }
 // The sentence of a waiting save (HEADER.md 4.3) from the job's stored summary {devices, added, removed, topology, map, first, removed_devices}

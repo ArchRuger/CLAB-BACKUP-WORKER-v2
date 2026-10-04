@@ -147,6 +147,8 @@ function render(){
  // switch from here: a lab change reaches them as a render with another current().
  if(typeof renderSaveHeader==='function')renderSaveHeader();
  if(typeof saveDrawerRender==='function')saveDrawerRender();
+ // Load (load.js): drops a review of a lab no longer on screen, toasts a load that succeeded, and holds the red Load while a save runs.
+ if(typeof loadRender==='function')loadRender();
  if(typeof renderNetworkDesign==='function')renderNetworkDesign();
  if(typeof renderHome==='function')renderHome();
  if(!lab){renderLabBanner();syncProxies();syncRoute();return;}
