@@ -1325,11 +1325,27 @@ def account_lookup(owner):
     return pwd.getpwnam(owner)
 
 
+MAX_LABEL = 100
+
+
+def folder_label(name, prefix):
+    """The label the helper GENERATES for a lab folder: `<checkout> / <folder>`, cut to the label limit instead of
+    refused. It keeps the end of the folder, which tells folders apart, behind `…`; the same input gives the same
+    label. A label is display text only: registrations are told apart by id, path and prefix, never by label (two
+    deep folders that differ only near their start may get the same label and still are two registrations)."""
+    name = ''.join(c for c in name if ord(c) >= 32 and ord(c) != 127)
+    label = name + (' / ' + prefix if prefix else '')
+    if len(label) <= MAX_LABEL: return label
+    if not prefix: return name[:MAX_LABEL - 1] + '…'
+    head = name[:40] + ' / …'
+    return head + prefix[-(MAX_LABEL - len(head)):]
+
+
 def account_binding(owner, path, remote, prefix, label, lookup=None):
     account = (lookup or account_lookup)(owner)
     if account.pw_uid == 0 or owner == 'clab-discovery': raise ValueError('Choose the ordinary VM account that owns and authenticates this Git checkout.')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}', remote): raise ValueError('Use a literal remote name.')
-    if not isinstance(label, str) or not label or len(label) > 100 or any(ord(c) < 32 for c in label): raise ValueError('Use a short repository label.')
+    if not isinstance(label, str) or not label or len(label) > MAX_LABEL or any(ord(c) < 32 for c in label): raise ValueError('Use a short repository label.')
     return {'id': uuid.uuid4().hex, 'label': label, 'owner': owner, 'uid': account.pw_uid, 'gid': account.pw_gid, 'home': account.pw_dir,
             'path': str(path), 'remote': remote, 'prefix': prefix, 'branch': '', 'push_url': '', 'revision': ''}
 
@@ -1356,7 +1372,7 @@ def plan_prefix(config, req, lookup=None):
     # repairable; only a new lab folder must not be a snapshot folder name.
     base_prefix(prefix)
     check_collision(config, source['path'], prefix, ignore=source if req.get('retire') is True else None)
-    label = req.get('label') or (Path(source['path']).name + (' / ' + prefix if prefix else ''))
+    label = req.get('label') or folder_label(Path(source['path']).name, prefix)   # a given label keeps its check
     binding = account_binding(source['owner'], source['path'], source['remote'], prefix, label, lookup)
     return None, binding
 
@@ -1377,7 +1393,7 @@ def plan_connect(config, req, lookup=None):
         if any(b['path'] == path for b in config['repositories']):
             raise ValueError('The VM folder for this repository name already holds another registered repository. Choose a repository with a different name.')
     check_collision(config, path, prefix)
-    label = repository_name(url) + (' / ' + prefix if prefix else '')
+    label = folder_label(repository_name(url), prefix)
     binding = account_binding(owner, path, remote, prefix, label, lookup)
     binding['_pending'] = True
     return None, binding, url

@@ -1953,3 +1953,37 @@ class CheckpointOnlyTests(unittest.TestCase):
         self.assertEqual(kept['status'], 'committed', kept)
         self.assertTrue(all(p.startswith('git-redesign/checkpoints/first/') for p in kept['changed_files']), kept['changed_files'])
         self.assertFalse((self.repo / 'git-redesign' / 'latest').exists()); self.assertEqual(self.blobs('git-redesign/latest'), '')
+
+
+@unittest.skipUnless(shutil.which('git'), 'Git executable required')
+class GeneratedLabelTests(unittest.TestCase):
+    """Refusal audit (G2): a deep folder is never refused for its label. The label the helper generates is cut to the
+    limit (the folder's end kept); a label a person gives keeps its check."""
+    setUp = HostGitTests.setUp
+    raw = HostGitTests.raw; account = HostGitPlacesTests.account
+    factory = HelperRedesignTests.factory; owner = HelperRedesignTests.owner; registry = HelperRedesignTests.registry
+    saved = HelperRedesignTests.saved; root = HelperRedesignTests.root; register = HelperRedesignTests.register
+
+    def test_a_deep_folder_registers_with_a_cut_label_that_keeps_its_end(self):
+        self.registry(self.root(label='clab-manager-scratch-checkout'))
+        rest = 'b' * 60 + '/week-07/bgp-route-reflector-lab'
+        first, second = 'a' + 'c' * 39 + '/' + rest, 'z' + 'c' * 39 + '/' + rest
+        self.assertGreater(len('repo / ' + first), host_git.MAX_LABEL)
+        one = self.register(first); two = self.register(second)
+        for result, prefix in ((one, first), (two, second)):
+            self.assertEqual(result['prefix'], prefix)
+            stored = next(b for b in self.saved().values() if b['prefix'] == prefix)['label']
+            self.assertLessEqual(len(stored), host_git.MAX_LABEL); self.assertTrue(stored.endswith('/week-07/bgp-route-reflector-lab'), stored)
+            self.assertTrue(stored.startswith('repo / …')); self.assertFalse(any(ord(c) < 32 for c in stored))
+        self.assertNotEqual(one['id'], two['id']); self.assertNotEqual(one['prefix'], two['prefix'])
+        self.assertEqual(one['label'], two['label'], 'the labels may be equal: registrations are told apart by id, path and prefix')
+        self.assertEqual(host_git.folder_label('repo', first), host_git.folder_label('repo', first), 'deterministic')
+        self.assertEqual(host_git.folder_label('repo', 'bgp'), 'repo / bgp', 'a short label is unchanged')
+        self.assertEqual(len(host_git.folder_label('r' * 150, '')), host_git.MAX_LABEL)
+
+    def test_a_label_a_person_gives_keeps_its_check(self):
+        self.registry(self.root())
+        with self.assertRaisesRegex(ValueError, '^Use a short repository label\\.$'): self.register('bgp', label='L' * 101)
+        self.assertEqual(sorted(self.saved()), [''])
+        script = (Path(__file__).resolve().parents[2] / 'deploy' / 'setup-git.sh').read_text()
+        self.assertIn("if len(label)>100 or any(ord(c)<32 for c in label): raise ValueError('Use a short repository label.')", script)
