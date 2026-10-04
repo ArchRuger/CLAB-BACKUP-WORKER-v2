@@ -179,12 +179,22 @@ def problem_codes():
     """HELPER_PROBLEMS and MANAGER_PROBLEMS of git_progress.py as {sentence: code}, read with ast (no import)."""
     rel = 'clab-backup-ui/app/git_progress.py'
     tree = ast.parse(source(rel), rel)
+    python_texts('clab-backup-ui/app/host_git.py'); helper = dict(CONSTANTS)   # names imported from the helper
     python_texts(rel)   # fills CONSTANTS for the names the tables use
+    CONSTANTS.update({k: v for k, v in helper.items() if k not in CONSTANTS})
+    for alias in (a for s_ in tree.body if isinstance(s_, ast.ImportFrom) for a in s_.names if a.asname):
+        if alias.name in helper: CONSTANTS[alias.asname] = helper[alias.name]
     codes = {}
+    def take(table):
+        for key, value in zip(table.keys, table.values):
+            codes[render(key)] = value.value
     for stmt in tree.body:
         if isinstance(stmt, ast.Assign) and getattr(stmt.targets[0], 'id', '') in ('HELPER_PROBLEMS', 'MANAGER_PROBLEMS'):
-            for key, value in zip(stmt.value.keys, stmt.value.values):
-                codes[render(key)] = value.value
+            take(stmt.value)
+        # HELPER_PROBLEMS.update({...}): the sentences of a placement the VM refuses
+        if (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call) and getattr(stmt.value.func, 'attr', '') == 'update'
+                and getattr(stmt.value.func.value, 'id', '') in ('HELPER_PROBLEMS', 'MANAGER_PROBLEMS') and isinstance(stmt.value.args[0], ast.Dict)):
+            take(stmt.value.args[0])
     return codes
 
 

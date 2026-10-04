@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the decided "New outcome" cells of sections A to D (outcomes_ad.py) into REFUSALS.md and rebuild its
+"""Write the decided "New outcome" cells of sections A to E (outcomes_ad.py) into REFUSALS.md and rebuild its
 section 9 (counts, the F rows, findings, new refusals). Rerunnable: it replaces the last cell of each decided row
 and everything from the line `## 9. New outcomes` to the end of the file; rows it has no decision for (section E)
 are left as they are. `{at}` in a decision becomes today's `path:line` of the row's text in its own file, found
@@ -7,7 +7,7 @@ by match_refusals.match(). Standard library only.
 
   python3 docs/git-redesign/tools/inventory/fill_outcomes.py [--check]
 
---check writes nothing and exits 1 when a row of A to D would stay `TBD` or a decision names no line.
+--check writes nothing; it fails when a row of A to E has no decision or a decision names no line.
 """
 import re
 import sys
@@ -31,8 +31,16 @@ def kind(cell):
     return next(k for k in KINDS if cell.startswith(k))
 
 
+CODES = None
+
+
 def cell_for(row):
+    global CODES
     text = OUT[row['id']]
+    if '{code}' in text:
+        # The chip code the manager gives this sentence when a placement is refused (`problem_code`, read from today's tables).
+        if CODES is None: CODES = m.problem_codes()
+        text = text.replace('{code}', m.problem_code(row['text'].strip('`').replace('\\|', '|'), CODES))
     if '{at}' in text:
         own = row['at'].strip('`').split(':')[0]
         lines = [x for x in row['lines'] if x.split(':')[0] == own] if row['status'] in ('same', 'moved') else []
@@ -60,12 +68,13 @@ def counts_table(decided):
 
 def main():
     check = '--check' in sys.argv[1:]
-    rows = {r['id']: r for r in m.match('ABCD')}
+    rows = {r['id']: r for r in m.match('ABCDE')}
     missing = [i for i in rows if i not in OUT]
     if missing: raise SystemExit('no decision for ' + ', '.join(missing))
     decided = [(rows[i], cell_for(rows[i])) for i in rows]
+    ad = [(r, c) for r, c in decided if r['section'] in 'ABCD']; e = [(r, c) for r, c in decided if r['section'] == 'E']
     if check:
-        print(counts_table(decided)); return
+        print(counts_table(ad)); print(counts_table(e)); return
     source = m.TABLE.read_text()
     cut = source.find('\n## 9. New outcomes')
     if cut != -1: source = source[:cut + 1]
@@ -80,7 +89,7 @@ def main():
             parts[8] = ' ' + cells[hit.group(1)] + ' '
             line = '|'.join(parts)
         out.append(line)
-    text = '\n'.join(out).rstrip('\n') + '\n\n' + SECTION9.replace('{COUNTS}', counts_table(decided)).strip('\n') + '\n'
+    text = '\n'.join(out).rstrip('\n') + '\n\n' + SECTION9.replace('{COUNTS}', counts_table(ad)).replace('{COUNTS_E}', counts_table(e)).replace('{COUNTS_ALL}', counts_table(decided)).strip('\n') + '\n'
     m.TABLE.write_text(text)
     print('wrote', len(decided), 'cells and section 9')
 
