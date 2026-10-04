@@ -409,6 +409,21 @@ class ExportRouteTests(DesignExportGitTestCase):
         with self.progress.changing('another-lab'):
             self.assertEqual(self.export(gen_id)[0].status_code, 200)
 
+    def test_route_409_while_a_design_apply_of_this_lab_is_read_back_after_a_restart(self):
+        # Review follow-up J4 (audit L-15): the read-back holds its own lab only; the export says why and waits for it.
+        gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)
+        with self.store.lock:
+            self.store.state.setdefault('design_jobs', []).append(dict(id='d' * 32, lab_id='another-lab', status='interrupted', rechecking=['r1']))
+            self.store.save()
+        self.assertEqual(self.export(gen_id)[0].status_code, 200, 'another lab being read back holds nothing here')
+        self.store.state['git_jobs'][-1]['status'] = 'dismissed'
+        with self.store.lock:
+            self.store.state['design_jobs'][-1]['lab_id'] = self.lab_id; self.store.save()
+        response, _ = self.export(gen_id)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("still reading this lab's devices back after a restart", response.json()['detail'])
+        self.assertEqual(len(self.store.state['git_jobs']), 1, 'nothing was queued')
+
     def test_route_409_no_binding(self):
         other = add_lab(self.app, name='unbound-lab')
         gen_id = write_generation(self.app, other, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)

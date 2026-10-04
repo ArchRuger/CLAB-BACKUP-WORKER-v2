@@ -563,6 +563,25 @@ test('a folder move reads as moved only once it committed; one that stopped or l
  assert.equal(context.gitSavedAs({...move,status:'synced',snapshot_path:'labs/x/latest'}),'Moved to labs/x');
  assert.equal(context.gitUploadLabel({...move,status:'export_pending'}),'Retry the move');assert.equal(context.gitUploadLabel({...move,status:'push_pending',commit:'c'}),'Upload now');
 });
+test('a folder move kept on the VM for saves kept with Keep snapshot only is uploaded through the review that names them (review follow-up J2)',async()=>{
+ const context=makeContext(),elements=new Map(),dialogs=new Map(),calls=[];
+ const element=()=>({onclick:null,innerHTML:'',listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},querySelectorAll:()=>[]});
+ context.$=id=>elements.get(id)||dialogs.get(id)||null;context.opTask=async(dialog,fn)=>fn();context.refresh=async()=>{};context.notify=()=>{};
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
+ context.json=async(endpoint,method,payload)=>{calls.push({endpoint,payload});return endpoint.endsWith('/compare')?{files:[],also_sends:1,also_sends_other_labs:1,also_sends_kept:[{lab:'other-lab',note:'OSPF <done>'}]}:{id:'m',lab_id:'lab',status:'queued',target:'move',created:'2026-10-04T12:00:00Z'};};
+ const move={id:'m',lab_id:'lab',target:'move',status:'committed',commit:'c'.repeat(40),snapshot_path:'bgp/latest',review_before_push:true,created:'2026-10-04T12:00:00Z'};
+ assert.equal(context.gitNeedsReview(move),true);assert.equal(context.gitUploadLabel(move),'Review and upload…');
+ assert.equal(context.gitNeedsReview({...move,review_before_push:false}),false,'a move with nothing kept to name still uploads at once');
+ assert.equal(context.gitNeedsReview({...move,reviewed:'2026-10-04T12:01:00Z'}),false);assert.equal(context.gitSaveSentence(move),'Moved to folder bgp');
+ context.state.git_jobs=[move];await context.gitSavesAction({dataset:{gitJobUpload:'m'}},'lab');
+ assert.deepEqual(calls.map(c=>c.endpoint),['/labs/lab/git/compare'],'the row leads to the review, never straight to the upload');
+ const review=dialogs.get('git-diff-dialog');
+ assert.equal(review.title,'Review before uploading');assert.match(review.html,/A folder move changes no configuration/);assert.match(review.html,/This move is on the lab VM only/);
+ assert.match(review.html,/Among them, kept with Keep snapshot only and not seen uploaded yet: other-lab \(OSPF &lt;done&gt;\)\./);
+ assert.doesNotMatch(review.html,/No differences/,'no file diff is shown for a move');
+ await elements.get('git-review-push').listeners.click();
+ assert.equal(calls[calls.length-1].endpoint,'/git/jobs/m/retry');assert.equal(JSON.stringify(calls[calls.length-1].payload),'{"push":true,"reviewed":true}');
+});
 test('a move an older release marked failed offers its retry in the job window',async()=>{
  const context=makeContext(),elements=new Map(),dialogs=new Map();
  const element=()=>({onclick:null,innerHTML:'',textContent:'',querySelectorAll:()=>[]});

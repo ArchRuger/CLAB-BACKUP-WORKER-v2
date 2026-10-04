@@ -1244,6 +1244,68 @@ class GitPlacesTests(GitProgressTests):
         refused = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True})
         self.assertEqual(refused.status_code, 409, refused.text); self.assertIn('other-lab', refused.text)
 
+    def test_a_folder_move_that_meets_a_kept_save_waits_on_the_vm_for_a_review_that_names_it(self):
+        # Review follow-up J2 (audit M-2): a save kept with Keep snapshot only, of this lab or another lab of the checkout,
+        # no longer holds the move, but the move's upload would carry its commit with nothing naming it. The move stays on
+        # the VM instead, and its upload goes through the review that names the kept saves.
+        other = self.sibling_lab()
+        theirs = self.kept(other['id'], 'd'*40, note='OSPF done')
+        mine = self.kept(self.lab['id'], 'e'*40, note='Before the move')
+        response = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+        self.assertEqual(response.status_code, 200, response.text)
+        job = response.json()['job']
+        self.progress.execute(job['id'])
+        outcome = self.client.get('/api/git/jobs/' + job['id']).json()
+        self.assertEqual(outcome['status'], 'committed', outcome); self.assertIs(outcome['review_before_push'], True)
+        for words in ('Moved on this VM, not uploaded', "other-lab ('OSPF done')", "('Before the move')", 'Review and upload'):
+            self.assertIn(words, outcome['message'])
+        self.assertTrue([r for r in self.sent if r['mode'] == 'move'])
+        self.assertFalse([r for r in self.sent if r['mode'] == 'push'], 'the kept commits were not uploaded unnamed')
+        refused = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True})
+        self.assertEqual(refused.status_code, 409, refused.text); self.assertIn('Review this folder move', refused.text)
+        self.assertFalse([r for r in self.sent if r['mode'] == 'push'])
+        answer = self.client.post(self.url + '/compare', json={'job_id': job['id']}).json()
+        name = self.store.lab(self.lab['id'])['name']
+        self.assertEqual(answer['also_sends_kept'], [dict(lab='other-lab', note='OSPF done'), dict(lab=name, note='Before the move')])
+        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (2, 1))
+        # The reviewed upload carries them; once the checkout's HEAD is verified on the remote they stop counting, so the
+        # next move is not held again: no move is stranded behind a kept save.
+        original = self.remote
+
+        def after_upload(host, request, stopping=None):
+            result = original(host, request, stopping)
+            if request['mode'] == 'push': result['synced_operations'] = [job['id']]
+            if request['mode'] == 'status' and any(r['mode'] == 'push' for r in self.sent): result['head'] = 'b'*40
+            return result
+
+        self.helper.side_effect = after_upload
+        uploaded = self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': True, 'reviewed': True})
+        self.assertEqual(uploaded.status_code, 200, uploaded.text)
+        self.progress.execute(job['id'])
+        outcome = self.client.get('/api/git/jobs/' + job['id']).json()
+        self.assertEqual(outcome['status'], 'synced', outcome); self.assertTrue(outcome['reviewed'])
+        for kept in (theirs, mine):
+            stored = self.progress.get_job(kept['id'])
+            self.assertTrue(stored['head_uploaded']); self.assertFalse(kept_on_vm(stored))
+        sent = len(self.sent)
+        again = self.client.post(self.url + '/destination', json=dict(prefix='eth', move_files=True))
+        self.assertEqual(again.status_code, 200, again.text)
+        self.progress.execute(again.json()['job']['id'])
+        self.assertEqual(self.client.get('/api/git/jobs/' + again.json()['job']['id']).json()['status'], 'synced')
+        self.assertTrue([r for r in self.sent[sent:] if r['mode'] == 'push'])
+
+    def test_a_folder_move_without_a_kept_save_still_uploads_at_once_without_a_review(self):
+        # A kept save of another checkout goes along with no upload of this one: the move keeps its confirmed upload.
+        other = self.sibling_lab()
+        elsewhere = self.kept(other['id'], 'd'*40, note='Elsewhere')
+        self.progress.update(elsewhere['id'], destination=dict(elsewhere['destination'], checkout='/home/ben/labs/other'))
+        response = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+        job = response.json()['job']
+        self.progress.execute(job['id'])
+        outcome = self.client.get('/api/git/jobs/' + job['id']).json()
+        self.assertEqual(outcome['status'], 'synced', outcome); self.assertFalse(outcome['review_before_push'])
+        self.assertEqual(next(r for r in self.sent if r['mode'] == 'push')['operation_id'], job['id'])
+
     def test_a_save_kept_with_keep_snapshot_only_is_counted_and_named_in_the_review_until_an_upload_carried_it(self):
         # Review follow-up G1 (audit M-2): a dismissed save is no longer pending, but its commit stays in the checkout
         # and the next upload from this repository sends it. The review says so instead of showing nothing.
@@ -1428,10 +1490,12 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual((answer['also_sends'], answer['also_sends_kept']), (0, []))
 
     def test_two_labs_whose_saves_both_lack_a_commit_never_hold_each_others_retry_back(self):
-        # Review follow-up G2 (audit M-2): an older release could leave one commit-less save per lab of a checkout.
+        # Review follow-up G2 (audit M-2): an older release could leave one commit-less save per lab of a checkout. Both sent
+        # their publication (the HEAD recorded right before it) and lost the answer, so either may hold a commit on the VM
+        # (`may_hold_commit`, review follow-up J3: a save that never reached the VM holds nothing back at all).
         other = self.sibling_lab()
-        theirs = self.stored_save(other['id'], '', status='export_pending', backup_job_id=self.capture(other['id'])['id'])
-        mine = self.stored_save(self.lab['id'], '', status='interrupted', backup_job_id=self.capture()['id'])
+        theirs = self.stored_save(other['id'], '', status='export_pending', backup_job_id=self.capture(other['id'])['id'], expected_head='a'*40)
+        mine = self.stored_save(self.lab['id'], '', status='interrupted', backup_job_id=self.capture()['id'], expected_head='a'*40)
         first = self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json={'push': True})
         self.assertEqual(first.status_code, 200, first.text)
         self.assertFalse(self.progress.get_job(mine['id'])['retry_push'], 'a retry without a commit only saves on the VM')
@@ -1456,6 +1520,92 @@ class GitPlacesTests(GitProgressTests):
             refused = self.client.post('/api/git/jobs/' + stalled['id'] + '/retry', json={'push': push})
             self.assertEqual(refused.status_code, 409, refused.text); self.assertIn('other-lab', refused.text)
         self.assertEqual(self.progress.get_job(stalled['id'])['status'], 'export_pending')
+
+    def unchanged_save_on(self, commit):
+        """This lab saves with no device change: the helper answers `unchanged` with the checkout's HEAD (host_git.publish)."""
+        self.nothing_new = True
+        mine = self.save_in(self.lab['id'], note='Nothing new').json()
+        outcome, _ = self.run_save(mine)
+        self.assertEqual((outcome['status'], outcome['commit'], outcome['changed_files']), ('review_pending', commit, []), outcome)
+        return self.client.post(self.url + '/compare', json={'job_id': mine['id']}).json()
+
+    def test_an_unchanged_save_that_reuses_another_labs_kept_commit_names_it_in_the_review(self):
+        # Review follow-up J1 (audit M-2): the other lab's kept save made the checkout's HEAD; this lab's save changed
+        # nothing and reuses that commit, so its review shows no difference of its own while the upload sends that commit.
+        other = self.sibling_lab()
+        self.kept(other['id'], 'b'*40, note='OSPF done')
+        answer = self.unchanged_save_on('b'*40)
+        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (1, 1))
+        self.assertEqual(answer['also_sends_kept'], [dict(lab='other-lab', note='OSPF done')])
+
+    def test_an_unchanged_save_that_reuses_this_labs_own_kept_commit_names_it_in_the_review(self):
+        name = self.store.lab(self.lab['id'])['name']
+        self.kept(self.lab['id'], 'b'*40, note='Before the break')
+        answer = self.unchanged_save_on('b'*40)
+        self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (1, 0))
+        self.assertEqual(answer['also_sends_kept'], [dict(lab=name, note='Before the break')])
+
+    def test_a_kept_save_that_only_reused_the_reviewed_saves_own_commit_is_not_counted(self):
+        # The save under review made the commit; a later save that changed nothing reused it and was kept: it holds nothing
+        # the review does not show already. A kept save with a commit of its own still counts.
+        other = self.sibling_lab()
+        self.kept(other['id'], 'c'*40, note='Nothing new', changed_files=[])
+        self.kept(other['id'], 'd'*40, note='OSPF done')
+        answer = self.review_of(self.lab['id'], 'c'*40)
+        self.assertEqual((answer['also_sends'], answer['also_sends_kept']), (1, [dict(lab='other-lab', note='OSPF done')]))
+
+    def test_a_save_of_another_lab_that_never_reached_the_vm_holds_nothing_back(self):
+        # Review follow-up J3 (audit M-2): a save interrupted by a restart during its capture, or left export_pending before
+        # its publication was sent (no commit, no expected HEAD, no publication attempt), holds no commit in the checkout:
+        # there is nothing to review and nothing an upload carries, so it neither refuses other labs nor counts.
+        other = self.sibling_lab()
+        self.stored_save(other['id'], '', status='interrupted', backup_job_id=self.capture(other['id'])['id'], changed_files=[])
+        self.stored_save(other['id'], '', status='export_pending', backup_job_id=self.capture(other['id'])['id'], changed_files=[])
+        mine = self.save_in(self.lab['id'], note='Mine').json()
+        outcome, _ = self.run_save(mine); self.assertEqual(outcome['status'], 'review_pending')
+        answer = self.client.post(self.url + '/compare', json={'job_id': mine['id']}).json()
+        self.assertNotIn('upload_blocked', answer); self.assertEqual((answer['also_sends'], answer['also_sends_kept']), (0, []))
+        outcome, _ = self.review_and_upload(mine); self.assertEqual(outcome['status'], 'synced')
+        moved = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+        self.assertEqual(moved.status_code, 200, moved.text)
+        self.progress.update(moved.json()['job']['id'], status='dismissed')
+
+    def test_a_save_of_another_lab_whose_answer_may_have_been_lost_after_the_vm_committed_still_holds_this_lab(self):
+        # The other direction of J3: a publication was sent (the design path's marker, or the expected HEAD a capture save
+        # records right before it), so the VM may hold its commit: M-2 stays closed.
+        other = self.sibling_lab()
+        for fields in (dict(published_attempt=True), dict(expected_head='a'*40)):
+            held = self.stored_save(other['id'], '', status='interrupted', changed_files=[], **fields)
+            refused = self.save_in(self.lab['id'], expect=409, note='Mine')
+            self.assertIn('other-lab', refused.text); self.assertIn('review and upload that save', refused.text)
+            moved = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+            self.assertEqual(moved.status_code, 409, moved.text); self.assertIn('other-lab', moved.text)
+            self.progress.update(held['id'], status='dismissed')
+        self.assertEqual([j['lab_id'] for j in self.store.state['git_jobs']], [other['id']] * 2, 'nothing of this lab was queued')
+
+    def test_a_labs_git_work_waits_while_a_design_apply_of_that_lab_is_read_back_after_a_restart(self):
+        # Review follow-up J4 (audit L-15): the read-back holds its own lab only, and the capture of a save would be
+        # refused by the Runner, ending the save failed. The route refuses it up front, saying why; other labs go on.
+        other = self.sibling_lab()
+        waiting = self.stored_save(self.lab['id'], 'c'*40, reviewed='2026-10-03T10:00:00+00:00')
+        with self.store.lock:
+            self.store.state.setdefault('design_jobs', []).append(dict(id='d'*32, lab_id=self.lab['id'], status='interrupted', rechecking=['r1']))
+            self.store.save()
+        before = copy.deepcopy(self.store.state['git_jobs'])
+        for response in (self.save_in(self.lab['id'], expect=409),
+                         self.client.post('/api/git/jobs/' + waiting['id'] + '/retry', json={'push': True}),
+                         self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))):
+            self.assertEqual(response.status_code, 409, response.text)
+            self.assertIn("still reading this lab's devices back after a restart", response.json()['detail'])
+        self.assertEqual(self.store.state['git_jobs'], before, 'nothing was queued or changed')
+        self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['binding_id'], 'bens-lab')
+        self.dispatch.assert_not_called()
+        self.progress.update(waiting['id'], status='dismissed')
+        theirs = self.save_in(other['id'], note='Other lab').json()
+        self.progress.update(theirs['id'], status='dismissed')
+        with self.store.lock:
+            self.store.state['design_jobs'][-1].pop('rechecking'); self.store.save()
+        self.save_in(self.lab['id'], note='Mine')
 
     def test_a_refused_folder_change_leaves_the_lab_on_its_existing_registration(self):
         self.faithful = True; self.registry = [dict(self.repo)]

@@ -24,7 +24,7 @@ from . import __version__
 from .discovery import PinnedHostKey, vm_password
 from .downloads import component, short_name, stored_file, stored_path, stored_restore_path, topology_names
 from .inventory import PLATFORMS
-from .lab_operations import operation_busy, scrub, GIT_BUSY
+from .lab_operations import design_rechecking, operation_busy, scrub, GIT_BUSY
 from .runner import now, trim_jobs
 from .textdiff import unified
 
@@ -253,11 +253,19 @@ def pending_progress(state, lab_id=None):
                for j in state.get('git_jobs', []))
 
 
+def may_hold_commit(job):
+    """Whether a save may have a commit in its VM checkout: one with a known commit, or one whose publication was sent and
+    whose answer may have been lost after the VM committed (`published_attempt`, or the HEAD a save records right before it
+    sends its publication, `expected_head`). A save that stopped before that (a capture a restart interrupted, an export
+    that never reached the VM) has none: nothing of it is on the VM to review or to go along with an upload."""
+    return bool(job.get('commit') or job.get('published_attempt') or 'expected_head' in job)
+
+
 def awaits_review(job):
-    """A save that holds, or may hold, a commit in the VM checkout that nobody reviewed: any pending save but a
-    folder move (no configuration change of its own) and one whose review is recorded. A save without a known
-    commit counts too: its answer may have been lost after the VM committed."""
-    return job_pending(job) and not job.get('reviewed') and job.get('target') not in ('move', 'update')
+    """A save that holds, or may hold (`may_hold_commit`), a commit in the VM checkout that nobody reviewed: any pending
+    save but a folder move (no configuration change of its own) and one whose review is recorded. A save without a known
+    commit counts while its answer may have been lost after the VM committed."""
+    return job_pending(job) and not job.get('reviewed') and job.get('target') not in ('move', 'update') and may_hold_commit(job)
 
 
 def kept_on_vm(job):
@@ -269,8 +277,7 @@ def kept_on_vm(job):
     question; the review counts it until an upload is verified to have carried it (`finish`), or to have put the
     checkout's HEAD on the remote (`settle_kept`: then nothing of it is left to go along)."""
     return (job.get('status') == 'dismissed' and not job.get('pushed') and job.get('target') != 'update'
-            and not job.get('head_uploaded')
-            and bool(job.get('commit') or job.get('published_attempt') or 'expected_head' in job))
+            and not job.get('head_uploaded') and may_hold_commit(job))
 
 
 def sibling_refusal(name, job, upload=False, reviewed=False):
@@ -589,6 +596,11 @@ class GitProgress:
         return copy.deepcopy(lab['git_binding'])
 
     def idle(self, lab_id=None):
+        # A network-design apply read back after a restart holds its own lab only, so `operation_busy` without a lab does not
+        # see it, and the Runner would refuse the capture of a save there: work of that lab waits here, saying why (L-15).
+        if lab_id and design_rechecking(self.store.state, lab_id):
+            raise HTTPException(409, "The manager is still reading this lab's devices back after a restart (a network design "
+                                     'was being applied to them). Try again once that check has finished.')
         if operation_busy(self.store.state) or any(j['status'] in ('queued', 'running') for j in self.store.state['jobs']):
             raise HTTPException(409, 'Wait for the active backup, Git save or lab operation to finish.')
         if self.store.reset_pending: raise HTTPException(409, 'Finish the storage reset first.')
@@ -656,6 +668,28 @@ class GitProgress:
             frozen = dict(remote=strip_credentials(bound.get('push_url', '')), branch=bound.get('branch', ''))
         repo = binding['repository']
         return frozen.get('branch') == repo.get('branch', '') and frozen.get('remote') == strip_credentials(repo.get('push_url', ''))
+
+    def kept_saves(self, job, binding):
+        """The saves kept with Keep snapshot only in the checkout `binding` points into (`kept_on_vm`, `made_in`) whose commit
+        an upload of `job` may carry along, oldest first: all but `job` itself and a kept save that changed nothing and only
+        reused the very commit `job` uploads (no changed file of its own: it holds nothing that `job`'s review does not
+        show). A kept save that made the commit `job` only reuses (`job` changed nothing, the helper answered with the
+        checkout's HEAD) is named: the review of `job` shows no difference of its own, while the upload sends that commit."""
+        return [j for j in self.store.state['git_jobs'] if j['id'] != job['id'] and kept_on_vm(j) and self.made_in(j, binding)
+                and not (j.get('commit') and j.get('commit') == job.get('commit') and not j.get('changed_files'))]
+
+    def kept_names(self, kept):
+        """Each kept save as the review names it: its lab (as the manager knows it now, else as the save froze it) and note."""
+        return [dict(lab=(self.store.lab(j['lab_id']) or {}).get('name') or j.get('lab_name') or '', note=str(j.get('note') or ''))
+                for j in kept]
+
+    def kept_refusal(self, kept):
+        """Why a folder move waits for its review: the saves kept with Keep snapshot only that its upload would send along."""
+        named = ', '.join(k['lab'] + (" ('" + k['note'] + "')" if k['note'] else '') for k in self.kept_names(kept))
+        return ('Its upload would also send ' + ('a save' if len(kept) == 1 else str(len(kept)) + ' saves') + ' kept with Keep '
+                'snapshot only that ' + ('was' if len(kept) == 1 else 'were') + ' not seen uploaded yet: ' + named + '. Open this '
+                'move under Progress › Recent saves and choose Review and upload…: the review names ' +
+                ('it' if len(kept) == 1 else 'them') + ' before anything is uploaded.')
 
     def settle_kept(self, job, commit):
         """Give the kept saves of this checkout that a verified upload did not name an end. The helper names
@@ -735,9 +769,16 @@ class GitProgress:
                         and not result.get('pushed')):
                     # The push would carry every commit below the move, so it waits while another lab of this
                     # checkout has a save that was never reviewed; the move stays on the VM, uploadable later.
-                    with self.store.lock: other, held = self.unreviewed_sibling(job['lab_id'])
+                    with self.store.lock:
+                        other, held = self.unreviewed_sibling(job['lab_id'])
+                        # A save kept with Keep snapshot only in this checkout no longer holds anything, but this push would
+                        # carry its commit with nothing naming it: the move waits for a review that names it (`kept_saves`).
+                        kept = [] if held or job.get('reviewed') else self.kept_saves(dict(job, commit=result['commit']), binding)
                     if held:
                         result = dict(result, message='Moved on this VM, not uploaded: ' + sibling_refusal(other['name'], held, upload=True))
+                    elif kept:
+                        self.update(job_id, review_before_push=True)
+                        result = dict(result, message='Moved on this VM, not uploaded. ' + self.kept_refusal(kept))
                     else:
                         self.update(job_id, status='pushing', commit=result['commit'], message='Pushing the moved folders.')
                         result = self.invoke({'mode': 'push', 'operation_id': job_id}, binding)
@@ -856,7 +897,7 @@ class GitProgress:
         if pushed: status = 'synced'
         elif result.get('status') == 'needs_attention': status = 'push_pending' if commit else 'export_pending'
         elif uploaded: status = 'unchanged'
-        elif job.get('review_before_push') and not job.get('retry_push'): status = 'review_pending'
+        elif job.get('review_before_push') and not job.get('retry_push') and job.get('target') != 'move': status = 'review_pending'
         else: status = 'committed'
         message = result.get('message') or ('Saved to Git.' if pushed else 'Saved on VM; not pushed.')
         if uploaded: message = 'Nothing changed since the last save, which was uploaded.'
@@ -1181,7 +1222,7 @@ class GitProgress:
                 """Everything that can refuse the change. It runs before the VM retires the lab's registration, never
                 after: a refusal then would leave the lab bound to a registration that no longer exists."""
                 with self.store.lock:
-                    self.idle(); self.guard_pending(lab_id); binding = self.binding(lab_id)
+                    self.idle(lab_id if data.move_files else None); self.guard_pending(lab_id); binding = self.binding(lab_id)
                     lab = self.store.lab(lab_id)
                     if binding['host_identity'] != host_identity(self.store.state.get('host', {})):
                         raise HTTPException(409, 'Reconnect the original VM before changing the folder.')
@@ -1295,7 +1336,7 @@ class GitProgress:
                 if previous:
                     if previous.get('request_digest') != request_digest: raise HTTPException(409, 'Request ID already belongs to a different save.')
                     return public_job(previous)
-                self.idle(); refuse_while_rebinding(lab_id); binding = self.binding(lab_id); self.guard_siblings(lab_id)
+                self.idle(lab_id); refuse_while_rebinding(lab_id); binding = self.binding(lab_id); self.guard_siblings(lab_id)
                 lab = self.store.lab(lab_id)
                 if binding['host_identity'] != host_identity(self.store.state.get('host', {})):
                     raise HTTPException(409, 'Reconnect the original VM before saving progress.')
@@ -1353,7 +1394,7 @@ class GitProgress:
                 if previous:
                     if previous.get('request_digest') != request_digest: raise HTTPException(409, 'Request ID already belongs to a different save.')
                     return public_job(previous)
-                self.idle(); refuse_while_rebinding(lab_id); binding = self.binding(lab_id); self.guard_siblings(lab_id)
+                self.idle(lab_id); refuse_while_rebinding(lab_id); binding = self.binding(lab_id); self.guard_siblings(lab_id)
                 lab = self.store.lab(lab_id)
                 if binding['host_identity'] != host_identity(self.store.state.get('host', {})):
                     raise HTTPException(409, 'Reconnect the original VM before exporting.')
@@ -1384,13 +1425,14 @@ class GitProgress:
         @app.post('/api/git/jobs/{job_id}/retry')
         def retry(job_id: str, data: Retry):
             with self.store.lock:
-                self.idle(); job = self.get_job(job_id); move = job.get('target') == 'move'
+                job = self.get_job(job_id); self.idle(job['lab_id']); move = job.get('target') == 'move'
                 # A folder move has no new save to start instead (its folder is the lab's own now), and its journal on
                 # the VM makes a retry idempotent: a move an older release marked failed stays retryable.
                 if job['status'] in ('dismissed', 'capture_incomplete') or (job['status'] == 'failed' and not move):
                     raise HTTPException(409, 'Start a new save for this capture outcome.')
                 if job['status'] == 'synced' or (job['status'] == 'unchanged' and job.get('pushed')): return public_job(job)
-                if digest(self.binding(job['lab_id'])) != job['binding_digest']: raise HTTPException(409, 'Repository settings changed. Reconnect the original destination.')
+                binding = self.binding(job['lab_id'])
+                if digest(binding) != job['binding_digest']: raise HTTPException(409, 'Repository settings changed. Reconnect the original destination.')
                 # Uploading a save needs its review: stated with this request, or recorded by an earlier
                 # one (an upload that failed after the review). A save without a commit has nothing to
                 # review yet, so its retry saves on the VM and then waits for the review. A folder move
@@ -1401,6 +1443,14 @@ class GitProgress:
                     elif not (data.reviewed or job.get('reviewed')):
                         raise HTTPException(409, 'Review the changes of this save before uploading it.')
                     elif not job.get('reviewed'): changes = dict(reviewed=now())
+                elif push and job.get('commit') and not job.get('reviewed'):
+                    # A folder move's upload sends the saves kept with Keep snapshot only in this checkout along: it goes
+                    # through the review that names them (stated with this request), and only while there are such saves.
+                    kept = [] if data.reviewed else self.kept_saves(job, binding)
+                    if data.reviewed: changes = dict(reviewed=now())
+                    elif kept:
+                        self.update(job_id, review_before_push=True)
+                        raise HTTPException(409, 'Review this folder move before uploading it. ' + self.kept_refusal(kept))
                 # The same review holds across the labs of one checkout: an upload, or a retry that commits, waits
                 # while another lab's save there is unreviewed. A refused upload keeps its review, so this save no
                 # longer holds the other lab back; a retry that only commits waits only for a save that has a commit,
@@ -1487,10 +1537,11 @@ class GitProgress:
                     binding = self.binding(lab_id)
                     if digest(binding) != job.get('binding_digest'): raise HTTPException(409, 'Reconnect the original repository to review this save.')
                     # What an upload of this save may carry along: every other save of this checkout still waiting on
-                    # the VM, this lab's and the other labs' (a save without a known commit may hold one too), and every
-                    # save of this checkout kept with Keep snapshot only that was not seen uploaded (`kept_on_vm`,
-                    # `made_in`: whichever lab made it, connected or not, under whatever binding), named, until an upload
-                    # settled it (`finish`, `settle_kept`). It can over-report (a kept save that never committed, or whose
+                    # the VM, this lab's and the other labs' (one without a known commit while it may hold one,
+                    # `may_hold_commit`), and every save of this checkout kept with Keep snapshot only that was not seen
+                    # uploaded (`kept_saves`: whichever lab made it, connected or not, under whatever binding, also the one
+                    # whose commit this save only reuses because it changed nothing), named, until an upload settled it
+                    # (`finish`, `settle_kept`). It can over-report (a kept save that never committed, or whose
                     # registration was retired since); it misses a save the manager no longer holds (a removed lab's) and
                     # one so old it froze no destination at all (saves froze none before 1.30.37), whose checkout only its
                     # lab's current binding can tell: while that lab is disconnected the save is in no checkout's count,
@@ -1500,17 +1551,18 @@ class GitProgress:
                     # (`made_in`). While another lab's save is unreviewed the upload waits.
                     labs = self.checkout_labs(lab_id)
                     waiting = [j for j in self.store.state['git_jobs'] if j['id'] != job['id'] and (j.get('lab_id') == lab_id or j.get('lab_id') in labs)
-                               and job_pending(j) and not j.get('pushed') and j.get('target') != 'update']
-                    kept = [j for j in self.store.state['git_jobs'] if j['id'] != job['id'] and j.get('commit') != job.get('commit')
-                            and kept_on_vm(j) and self.made_in(j, binding)]
-                    names = {j['lab_id']: (self.store.lab(j['lab_id']) or {}).get('name') or j.get('lab_name') or '' for j in kept}
+                               and job_pending(j) and not j.get('pushed') and j.get('target') != 'update' and may_hold_commit(j)]
+                    kept = self.kept_saves(job, binding)
                     other, held = self.unreviewed_sibling(lab_id)
-                result = call({'mode': 'compare', 'operation_id': data.job_id}, binding)
+                # A folder move changes no configuration: its review is about what its upload sends along. The helper's
+                # comparison reads the moved `latest` folder, which a lab that saved only checkpoints or a baseline has
+                # not, and a review that cannot open would keep a move held for it (`kept_saves`) from its upload.
+                result = {'files': []} if job.get('target') == 'move' else call({'mode': 'compare', 'operation_id': data.job_id}, binding)
                 # The helper pairs files by name; fold a suffix-renamed file (Junos `.set` to `.cfg`)
                 # back into one changed entry before it ever reaches a person.
                 answer = {'files': annotated_compare(result.get('files', [])), 'also_sends': len(waiting) + len(kept),
                           'also_sends_other_labs': sum(1 for j in waiting + kept if j.get('lab_id') != lab_id),
-                          'also_sends_kept': [dict(lab=names.get(j['lab_id'], ''), note=str(j.get('note') or '')) for j in kept]}
+                          'also_sends_kept': self.kept_names(kept)}
                 if held: answer['upload_blocked'] = sibling_refusal(other['name'], held, upload=True)
                 return answer
             if not re.fullmatch(r'[0-9a-f]{40,64}', data.commit): raise HTTPException(400, 'Choose a saved commit.')

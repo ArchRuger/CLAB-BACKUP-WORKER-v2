@@ -210,7 +210,9 @@ below it. So the review before every upload holds across them:
   whose answer was lost, which may hold a commit), this lab's **Save progress**, design exports,
   a retry that commits and a folder move with its files are refused. The message names that lab
   and its save: open it under *Progress*, review and upload it, then try again. Saves of the
-  waiting lab itself are not held up.
+  waiting lab itself are not held up. A save that never reached the VM (its capture was
+  interrupted by a manager restart, or its export stopped before anything was sent to the VM)
+  holds no commit there and holds nothing back.
 - **Keep snapshot only** on that save also lets this lab go ahead, but it is not the same as a
   review: its commit stays in the checkout on the VM and goes along with the next upload from the
   repository. The refusal says so.
@@ -226,7 +228,10 @@ below it. So the review before every upload holds across them:
   **Keep snapshot only** that may have a commit on the VM (one with a commit, or one whose answer
   was lost or refused after it was sent) is counted and named there too, as *not seen uploaded
   yet*: also when its lab was disconnected since or changed its device selection, because the save
-  remembers the checkout and VM it was made in. It stops being counted once an upload is verified to
+  remembers the checkout and VM it was made in, and also when the save under review changed
+  nothing (*No differences*) and only reuses that kept save's commit, which its upload then sends.
+  A kept save that itself changed nothing and only reuses the commit of the save under review is
+  not counted: it holds nothing that review does not show. It stops being counted once an upload is verified to
   have carried it, or once an upload from the same checkout, remote and branch is verified to have
   put the checkout's newest commit on the remote: everything on that branch is then on the remote,
   so nothing of the kept save is left to go along (a save whose publication the VM refused never
@@ -240,7 +245,13 @@ below it. So the review before every upload holds across them:
   current connection says where it belongs: while that lab is disconnected the save is not counted
   anywhere, and if the lab is connected to another repository since, it is counted there instead.
   Removing a lab from the manager forgets its saves, kept ones included.
-- A folder move that meets such a save is kept on the VM and uploaded later from *Recent saves*.
+- A folder move whose upload meets another lab's unreviewed save is kept on the VM and uploaded
+  later from *Recent saves*. One whose upload would send a save kept with **Keep snapshot only**
+  along (this lab's or another lab's, counted as above) is kept on the VM as well, with a message
+  that names those saves: its **Review and upload…** under *Recent saves* names them again before
+  anything is uploaded (a move changes no configuration, so the review shows no file differences),
+  and an upload without that review is refused. Once that upload is verified, the kept saves stop
+  being counted as above, so the next move uploads at once again.
 
 ## Everyday buttons
 
@@ -321,7 +332,10 @@ registration IDs and folder names.
   `latest/`, `baseline/` and `checkpoints/` file of the old folder is moved in one commit
   and pushed, and the move is recorded as a *Folder move* job with the same retry and push
   handling as a save. A folder move changes no configuration, so it is uploaded on that
-  confirmation (the dialog says so) and has no separate *Review before uploading* step. Earlier versions stay in Git history either way; a pending
+  confirmation (the dialog says so) and has no separate *Review before uploading* step, unless
+  its upload would also send another lab's unreviewed save or a save kept with **Keep snapshot
+  only**: then it stays on the VM and is uploaded later as described under
+  [Repository layout](#repository-layout). Earlier versions stay in Git history either way; a pending
   save has to finish or be dismissed first. Everything that can refuse the change (a pending
   save, a running job, a device selection that no longer matches the lab, another lab using
   that folder) is checked before the VM retires the old registration, so a refused change
@@ -439,7 +453,10 @@ flowchart TD
 | Manager restarted during a save | Open the recorded job and retry. The coordinator reconciles the recorded operation with the VM journal rather than silently recapturing. |
 | Git authentication expired | Repair Ben's Git login on the VM, then retry the existing push. Changing the VM SSH password does not repair Git credentials. |
 
-Active progress jobs prevent conflicting lab operations. Pending saves also block
+Active progress jobs prevent conflicting lab operations. While the manager reads back the
+devices of a lab after a restart in the middle of a network-design apply, that lab's **Save
+progress**, design exports, retries and folder moves with their files wait, and say so; other
+labs keep saving. Pending saves also block
 actions that would forget or redirect their context, including removing the lab,
 starting fresh, replacing the repository connection and changing the VM identity.
 Password rotation for the same VM/account is allowed so that access can be repaired.
