@@ -923,6 +923,30 @@ class GitStatusTests(SaveModelCase):
                     raised |= {a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)}
         self.assertGreater(len(raised), 80)
         self.assertEqual(sorted(raised - set(HELPER_PROBLEMS)), [], 'a helper sentence without a code')
+        # The same for what `register`, `register-prefix` and `connect` can answer when a lab or a lab state is placed (named
+        # constants included). Two sentences are deliberately without a code: the manager turns them into a question.
+        named = {t.id: n.value.value for n in tree.body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)
+                 for t in n.targets if isinstance(t, ast.Name)}
+        placing = {'checked_url', 'clone_url', 'repository_name', 'registry_owner', 'account_binding', 'plan_connect', 'plan_prefix', 'run_as_owner', 'registry_lock',
+                   'save_registration', 'connect', 'check_push_access', 'check_synchronized', 'check_waiting', 'ensure_identity', 'check_permission', 'check_owner',
+                   'register', 'unborn', 'start', 'written'}
+        answered = set()
+        for function in ast.walk(tree):
+            if not isinstance(function, ast.FunctionDef) or function.name not in placing: continue
+            for node in ast.walk(function):
+                if isinstance(node, ast.Call) and getattr(node.func, 'id', '') in ('ValueError', 'exclusive'):
+                    answered |= {a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)}
+                    answered |= {named[a.id] for a in node.args if isinstance(a, ast.Name) and a.id in named}
+        self.assertGreater(len(answered), 25)
+        self.assertEqual(sorted(answered - set(HELPER_PROBLEMS)), sorted(git_progress.NOT_A_STATUS), 'a placement sentence without a code')
+        for sentence in git_progress.NOT_A_STATUS: self.assertNotIn(sentence, git_progress.PROBLEM_CODES)
+        from app import host_git
+        for sentence, code in ((host_git.REMOTE_AHEAD, 'diverged'), (host_git.NOT_SYNCHRONIZED, 'diverged'), (host_git.NOT_MANAGER_SAVES, 'busy'),
+                               (host_git.SAVE_UNKNOWN, 'account'), (host_git.START_FAILED, 'other'), (host_git.START_PUSHED, 'other'),
+                               # Commits no manager save made: nothing to fast-forward, so never `diverged` (Update from the repository cannot help).
+                               ('The push would include commits created outside manager saves. Publish or resolve them as the repository owner first.', 'busy'),
+                               ('This unchanged save points to a commit created outside manager saves. Publish it as the repository owner first.', 'busy')):
+            self.assertEqual(problem_code(sentence), code, sentence)
         own = Path(git_progress.__file__).read_text(encoding='utf-8')
         for sentence in MANAGER_PROBLEMS: self.assertIn(sentence, own)
         self.assertEqual(set(HELPER_PROBLEMS.values()) | set(MANAGER_PROBLEMS.values()), {'vm', 'account', 'busy', 'diverged', 'files', 'settings', 'devices', 'other'})

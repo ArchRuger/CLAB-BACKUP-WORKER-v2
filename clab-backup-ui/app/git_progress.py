@@ -21,6 +21,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import __version__
+from .host_git import (EMPTY_REPOSITORY as HELPER_EMPTY, NOT_MANAGER_SAVES, NOT_SYNCHRONIZED, REMOTE_AHEAD, SAVE_UNKNOWN, SAVE_WAITS,
+                       START_FAILED, START_PUSHED)
 from . import git_places
 from .discovery import PinnedHostKey, vm_password
 from .downloads import component, short_name, stored_file, stored_path, stored_restore_path, topology_names
@@ -340,8 +342,8 @@ HELPER_PROBLEMS = {
     'The checkout changed during fetch.': 'busy',
     'The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.': 'diverged',
     'Local and remote history diverged or local commits are pending. Resolve them as the repository owner.': 'diverged',
-    'The push would include commits created outside manager saves. Publish or resolve them as the repository owner first.': 'diverged',
-    'This unchanged save points to a commit created outside manager saves. Publish it as the repository owner first.': 'diverged',
+    'The push would include commits created outside manager saves. Publish or resolve them as the repository owner first.': 'busy',   # commits no manager save made: nothing to fast-forward, someone works there
+    'This unchanged save points to a commit created outside manager saves. Publish it as the repository owner first.': 'busy',   # commits no manager save made: nothing to fast-forward, someone works there
     'The destination contains files outside its manager manifest; preserve or move them first.': 'files',
     'The destination is not an empty manager snapshot folder.': 'files',
     'Only ordinary, unlinked snapshot files are supported.': 'files',
@@ -400,6 +402,41 @@ HELPER_PROBLEMS = {
     'The Git response is too large to transfer. Select a smaller snapshot.': 'other',
     'The Git helper could not finish. Check installation and repository permissions as its owner.': 'other',
 }
+# What `register`, `register-prefix` and `connect` can answer when a lab is placed in a folder (git_place.py) or a lab state gets its
+# folder: the same codes, so a placement the VM refuses reads like a save it refuses. Two of the helper's sentences are deliberately
+# without a code (`NOT_A_STATUS`): the manager turns them into a question, they say nothing about the lab's save location.
+HELPER_PROBLEMS.update({
+    REMOTE_AHEAD: 'diverged',
+    NOT_SYNCHRONIZED: 'diverged',
+    NOT_MANAGER_SAVES: 'busy',
+    SAVE_UNKNOWN: 'account',   # the online copy could not be asked
+    START_FAILED: 'other',     # the sentence itself says to connect again
+    START_PUSHED: 'other',
+    'Choose a VM account that already owns a registered repository.': 'account',
+    'Choose the ordinary VM account that owns and authenticates this Git checkout.': 'account',
+    'Cloning failed. Check the URL and that the VM account is signed in to GitHub with access to this repository (gh auth login).': 'account',
+    'Git push preflight failed. Authenticate as the registered Linux owner and check remote write access. For GitHub use gh auth login and gh auth setup-git; your GitHub website password cannot authenticate a Git push. No commits were pushed.': 'account',
+    'GitHub CLI could not configure the Git credential helper for the VM account.': 'account',
+    'GitHub CLI is not installed on the VM. Install gh and sign in as the VM account (gh auth login), or run guided Git setup on the VM.': 'account',
+    'No VM account is set up for Git yet. Run guided Git setup on the VM once (bash deploy/setup-git.sh).': 'account',
+    'Several VM accounts own registered repositories. Run guided Git setup on the VM as the intended account instead.': 'account',
+    'The VM account is not signed in to GitHub. On the VM, run gh auth login --hostname github.com --git-protocol https --web as that account, then try again.': 'account',
+    'The checkout and .git must be owned by the registered account.': 'account',
+    'This VM account has no Git commit identity yet. Run guided Git setup on the VM once, or set user.name and user.email inside the checkout as that account.': 'account',
+    'Another Git registration for this checkout folder was saved meanwhile. Nothing was registered; choose the folder again.': 'busy',
+    'Another Git registration is being saved on the VM. Nothing was registered; retry in a moment.': 'busy',
+    'Configure exactly one HTTPS push URL.': 'other',
+    'Configure one HTTPS remote without embedded credentials, query or fragment.': 'other',
+    'Invalid Git remote URL.': 'other',
+    'Invalid connect option.': 'other',
+    'The VM folder for this repository name already holds another registered repository. Choose a repository with a different name.': 'other',
+    'The repository name cannot be used as a VM folder name.': 'other',
+    'Unexpected registration response.': 'other',
+    'Use a literal remote name.': 'other',
+    'Use a short repository label.': 'other',
+    'Use the GitHub repository clone URL: https://github.com/OWNER/REPOSITORY.git (Code > HTTPS). Page links such as /tree/main are not clone URLs.': 'other',
+})
+NOT_A_STATUS = (SAVE_WAITS, HELPER_EMPTY)
 # The manager's own sentences for the same calls (`remote_git`, `invoke`, `repositories`, the upload check).
 MANAGER_PROBLEMS = {
     'Connect the VM and verify its SSH host fingerprint first.': 'vm',
@@ -828,6 +865,14 @@ def folder_value(value):
     return value
 
 
+class HelperRefused(HTTPException):
+    """The 409 of a route whose call to the VM's Git helper was refused: `problem` is the helper's sentence (scrubbed; the
+    manager's own for a VM it cannot reach), `detail` what the page is shown. A plain HTTPException to FastAPI; the routes
+    that place a lab or a lab state record it as the lab's status first (`placement_refused`)."""
+    def __init__(self, problem, detail=None):
+        super().__init__(409, problem if detail is None else detail); self.problem = str(problem)
+
+
 class HelperProblem(ValueError):
     """What a call to the VM's Git helper answered instead of a result (`invoke`): the sentence is the helper's, or the
     manager's own for a VM it cannot reach. A plain ValueError to every caller; the save worker tells it apart from its
@@ -967,14 +1012,24 @@ class GitProgress:
         found = [j for j in self.store.state['git_jobs'] if j.get('commit') == head and j.get('target') != 'update' and self.made_in(j, binding)]
         return next((j for j in reversed(found) if not j.get('pushed') and (job_pending(j) or kept_on_vm(j))), found[-1] if found else None)
 
-    def seen_status(self, lab_id, status=None, problem=None):
-        """Remember what the helper's `status` (or a failed save, upload or update) said about a lab's save location."""
+    def placement_refused(self, lab_id, refusal):
+        """A placement (of the lab, or of a lab state) the VM refused for a cause outside the manager (PROMPT 6.5): the lab's
+        status carries why, with its code, so the page words it like a save the VM refuses. The code comes from the helper's
+        own sentence; the text kept is the one the route answers with (never the VM's plumbing words). The two answers the
+        manager turns into a question are not a status."""
+        problem = refusal.problem
+        if any(problem.startswith(sentence) for sentence in NOT_A_STATUS): return
+        self.seen_status(lab_id, problem=refusal.detail if isinstance(refusal.detail, str) else problem, code=problem_code(problem))
+
+    def seen_status(self, lab_id, status=None, problem=None, code=None):
+        """Remember what the helper's `status` (or a failed save, upload, update or placement) said about a lab's save
+        location. `code`: the code of the sentence the helper answered, when `problem` is the manager's rewording of it."""
         if not lab_id: return
         if problem is None:
             ready = bool((status or {}).get('ready')); problem = '' if ready else str((status or {}).get('problem') or 'The repository needs attention.')
         else: ready = False
         with self.store.lock: problem = scrub(str(problem), self.store.state)[:600]
-        self.statuses[lab_id] = dict(checked=now(), ready=ready, problem=problem, code=problem_code(problem) if problem else '')
+        self.statuses[lab_id] = dict(checked=now(), ready=ready, problem=problem, code=(code or problem_code(problem)) if problem else '')
 
     def git_status(self, lab_id):
         """`git_status` of a lab in /api/state: the last check (never made by the poll; `ready` is None until one was
@@ -1369,7 +1424,7 @@ class GitProgress:
     def catalog(self):
         """The helper's registrations for a route: a helper problem is the request's 409."""
         try: return self.repositories()
-        except ValueError as exc: raise HTTPException(409, str(exc))
+        except ValueError as exc: raise HelperRefused(str(exc))
 
     # Folders made or chosen through the manager, per checkout. Git has no empty folders, so without this
     # list a folder nothing was saved into yet would not be in the tree. They are plans, not directories:
@@ -1461,7 +1516,7 @@ class GitProgress:
 
     def call(self, request, binding=None):
         try: return self.invoke(request, binding)
-        except ValueError as exc: raise HTTPException(409, str(exc))
+        except ValueError as exc: raise HelperRefused(str(exc))
 
     def checkout_view(self, binding, fresh=False):
         """What the folder answers are decided from (git_places.py), for the checkout `binding` points into: its
@@ -1960,7 +2015,16 @@ class GitProgress:
                     raise HTTPException(500, 'Could not save the request. No work was submitted.')
             return self.schedule(job)
 
+        def records_refusal(route):
+            """A refusal of the VM inside this route becomes the lab's status before the 409 is answered."""
+            @functools.wraps(route)
+            def recorded(lab_id, *args, **kwargs):
+                try: return route(lab_id, *args, **kwargs)
+                except HelperRefused as exc: self.placement_refused(lab_id, exc); raise
+            return recorded
+
         @app.post('/api/labs/{lab_id}/git/state')
+        @records_refusal
         def save_state(lab_id: str, data: State):
             """Save as a lab state… (DESIGN.md 2.9): a normal save into a folder of its own, through a binding of its own.
             The lab's save location is not touched. An answer that needs a choice comes back as `{question}`, status 200."""

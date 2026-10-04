@@ -641,6 +641,12 @@ test('4.9 loading, error and the VM unreachable: the visible reason and the acti
  assert.match(html,/data-folder-primary="1"[^>]* disabled/);assert.match(foot(html),/id="folder-reason">The lab VM cannot be reached/);
  html=markup(context,chooserTree([ans('')],{files:[]}),{value:'lab'});
  assert.match(html,/Course-Labs is empty\. restore-square can save at the top level or in a new folder\./);assert.doesNotMatch(foot(html),/disabled/);
+ // A refusal whose cause the manager recorded reads like the chip: the sentence, the manager's own under Details, Try again, and
+ // Update from the repository when that is what clears it (integration seam 13).
+ html=markup(context,chooserTree(baseFolders()),{refused:'This checkout has commits that were not made by manager saves.',problem:{sentence:'Someone is working in this repository on the VM.',detail:'This checkout has commits that were not made by manager saves.',update:false}});
+ assert.match(html,/id="folder-refused">Someone is working in this repository on the VM\.<\/p><button [^>]*data-folder-action="again">Try again<\/button><\/div><details id="folder-refused-details"><summary>Details<\/summary><p class="save-note">This checkout has commits that were not made by manager saves\.<\/p><\/details>/);
+ html=markup(context,chooserTree(baseFolders()),{refused:'raw',problem:{sentence:'The online copy has changes this VM does not have.',detail:'raw',update:true}});
+ assert.match(html,/id="folder-refused">The online copy has changes this VM does not have\.<\/p><button [^>]*data-folder-action="update">Update from the repository<\/button><button [^>]*data-folder-action="again">Try again/);
  html=markup(context,chooserTree(baseFolders()),{refused:'The lab VM is busy.'});assert.match(html,/id="folder-refused">The lab VM is busy\.<\/p><button [^>]*data-folder-action="again">Try again/);
  html=markup(context,chooserTree(baseFolders()),{busy:true});assert.match(html,/Saving here…/);assert.match(html,/aria-busy="true"/);
 });

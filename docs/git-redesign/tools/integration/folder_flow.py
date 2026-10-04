@@ -340,6 +340,21 @@ def main():
     s.equal('D question 1, take: the other lab is disconnected from the folder', place_of(s, 'shared-a'), None)
     s.no_errors('D question 1, Use this folder anyway')
 
+    # ---- a placement the VM refuses for a cause outside the manager (PROMPT 6.5) reads like the chip, and Try again repeats it -----
+    choose('refused-then-fine')
+    s.switch(status_problem='operation')
+    with s.expect_status(409, r'/git/place$'):
+        press(s, '#folder-foot [data-folder-action="save"]')
+        expect(p.locator('#folder-refused')).to_be_visible(timeout=20000)
+    s.equal('D a placement the VM refuses: the cause in the chip\'s words', s.text('#folder-refused'), 'Someone is working in this repository on the VM.')
+    s.check('D a placement the VM refuses: Try again and Details, New folder… still enabled', s.visible('[data-folder-action="again"]') and s.visible('#folder-refused-details') and p.locator('.folder-chooser [data-folder-action="new"]').is_enabled())
+    s.shot('D-refused-by-the-vm')
+    s.switch(status_problem=None)
+    s.click('[data-folder-action="again"]')
+    saved_here(s, 'shared-b', 'Nested-Labs:refused-then-fine', 'D Try again after the cause is gone')
+    s.match('D after the placement the chip no longer says Can\'t save', s.chip(), r'^(Saved|Not saved|\d save)')
+    s.no_errors('D a placement the VM refuses')
+
     # ---- D: a large repository ------------------------------------------------------------------------------------------------------
     open_chooser(s)
     repository(s, BIG)

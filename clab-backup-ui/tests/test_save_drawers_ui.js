@@ -456,6 +456,13 @@ test('C5 Save here posts one place request with the folder of the answer in use,
  // a refusal is shown with Try again, which sends the same request again
  let fail=true;const r=chooserHarness({routes:{'POST /labs/lab/git/place':data=>{posts.push(data);if(fail)throw new Error('The VM could not be reached.');return {saved:true};}}});
  r.context.saveDrawerOpen('chooser',{mode:'location'});await settle();await r.act('select',{path:'BGP'});await r.act('save');assert.equal(r.sd.chooser.refused,'The VM could not be reached.');
+ assert.equal(r.sd.chooser.problem,null,'without a recorded cause the manager’s sentence is shown as it is');
+ // The manager recorded why the VM refused (lab.git_status, read again after the refusal): the chooser words it like the chip.
+ r.context.saveProblem=lab=>({sentence:'Someone is working in this repository on the VM.',actions:[{action:'again'},{action:'details'}]});
+ r.context.state.labs.find(l=>l.id==='lab').git_status={checked:'t',ready:false,problem:'The VM could not be reached.',code:'busy',waiting:0};
+ await r.act('again');assert.deepEqual(JSON.parse(JSON.stringify(r.sd.chooser.problem)),{sentence:'Someone is working in this repository on the VM.',detail:'The VM could not be reached.',update:false});
+ r.context.state.labs.find(l=>l.id==='lab').git_status={checked:'t',ready:false,problem:'x',code:'other',waiting:0};
+ await r.act('again');assert.equal(r.sd.chooser.problem,null,'a cause the page cannot word stays the manager’s sentence');
  fail=false;await r.act('again');assert.equal(r.dialog.open,false);
 });
 test('C6 question 3: Upload it, then move uploads first through gitReviewJob(job,{upload:true}) and posts the place only after the upload finished; a failed upload posts nothing; Move and keep posts pending "keep"',async()=>{

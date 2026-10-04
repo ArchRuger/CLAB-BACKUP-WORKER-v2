@@ -455,7 +455,7 @@ async function drwRepoAction(action){
 // expanded, ...); the extra keys below (model, places, seq, timer, ...) are this host's own. folderChooserEvent(type, event)
 // returns {action, ...}; every action is applied by drwChooserApply.
 function drwChooserNew(mode,options){
- return {mode,status:'loading',error:'',value:options.folder||'',selected:null,answer:null,checking:false,expanded:new Set(['']),focus:'',showAll:new Set(),treeOpen:false,newFolder:null,notice:'',refused:'',busy:false,
+ return {mode,status:'loading',error:'',value:options.folder||'',selected:null,answer:null,checking:false,expanded:new Set(['']),focus:'',showAll:new Set(),treeOpen:false,newFolder:null,notice:'',refused:'',problem:null,busy:false,
   question:options.question||null,pending:null,bring:true,unfinished:false,firstSave:false,name:'',showCancel:true,repositories:[],repository:options.repository||'',labName:'',repoName:'',
   model:null,places:null,context:null,seq:0,timer:0,pathTouched:false,parent:'',requestId:'',lastChoice:'',lastRequest:null,pendingJob:null,pendingReview:null,checkFailed:false,answerFor:null,
   then:typeof options.then==='function'?options.then:null};
@@ -559,7 +559,7 @@ async function drwChooserPlace(choice,pending,extra){
  const answer=c.answer||(c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(c.value):c.value))||null;
  const body={repository:c.repository,folder,choice:choice||'',pending:pending||'',move_files:!!(answer?.bring?.offered&&c.bring!==false),node_names:names,acknowledge:true,...(extra||{})};
  c.lastChoice=choice||'';c.lastRequest=()=>drwChooserPlace(choice,pending,extra);
- c.busy=true;c.refused='';drwSay('Saving here…');saveDrawerRender();
+ c.busy=true;c.refused='';c.problem=null;drwSay('Saving here…');saveDrawerRender();
  try{
   const result=await json('/labs/'+drwEnc(id)+'/git/place','POST',body);
   c.busy=false;
@@ -573,7 +573,28 @@ async function drwChooserPlace(choice,pending,extra){
   // The folder the manager placed the lab in (the one beside, for that answer), never the one that was asked about.
   const placed=result&&result.binding&&result.binding.repository?drwBare(result.binding.repository.prefix):folder;
   await drwChooserDone(result,`${drwLabName()} now saves to ${c.repoName||'the repository'} › ${placed||'top level'}.`);
- }catch(error){c.busy=false;c.refused=error.message||'The folder could not be set.';drwSay('');saveDrawerRender();}
+ }catch(error){await drwChooserRefused(c,error,'The folder could not be set.');}
+}
+// A refused placement reads like the chip (PROMPT 6.5): after the refusal the state is read again and, when the manager recorded a
+// cause the page can word (lab.git_status with a code other than `other`), the chooser shows saveProblem's sentence, the manager's
+// own sentence under Details and, for an online copy that is ahead with nothing waiting, Update from the repository. Otherwise the
+// manager's sentence as it is. Try again repeats the request either way.
+async function drwChooserRefused(c,error,fallback){
+ c.busy=false;c.refused=(error&&error.message)||fallback;c.problem=null;drwSay('');
+ if(typeof refresh==='function'){try{await refresh();}catch{/* the poll catches up */}}
+ const lab=drwLab(),git=lab&&lab.git_status;
+ if(git&&git.ready===false&&git.code&&git.code!=='other'&&typeof saveProblem==='function'){
+  const problem=saveProblem(lab,typeof state==='object'&&state?state:{});
+  c.problem={sentence:problem.sentence,detail:c.refused,update:!!lab.git_binding&&(problem.actions||[]).some(a=>a.action==='update')};
+ }
+ if(saveDrawer.chooser===c)saveDrawerRender();
+}
+async function drwChooserUpdate(){
+ const c=saveDrawer.chooser,id=saveDrawer.lab;if(!c||c.busy)return;
+ c.busy=true;saveDrawerRender();
+ try{const result=await json('/labs/'+drwEnc(id)+'/git/update','POST',{});c.busy=false;c.refused='';c.problem=null;if(typeof notify==='function')notify(result.message||'Repository is up to date.');if(c.lastRequest){await c.lastRequest();return;}}
+ catch(error){c.busy=false;c.refused=(error&&error.message)||'The repository could not be updated.';c.problem=null;}
+ saveDrawerRender();
 }
 async function drwChooserPending(){
  const c=saveDrawer.chooser,jobs=drwWaitingAnywhere(),job=jobs.find(j=>!j.lab_id||j.lab_id===saveDrawer.lab)||jobs[0]||null;
@@ -610,7 +631,7 @@ async function drwChooserState(choice){
   if(typeof notify==='function')notify(`State ${label} saved in ${folder||'the top level'}.`);
   if(typeof refresh==='function')await refresh();
   saveDrawerClose();
- }catch(error){c.busy=false;c.refused=error.message||'The state could not be saved.';drwSay('');saveDrawerRender();}
+ }catch(error){await drwChooserRefused(c,error,'The state could not be saved.');}
 }
 async function drwAddFolder(parent,name){
  const c=saveDrawer.chooser,id=saveDrawer.lab;
@@ -665,7 +686,8 @@ async function drwChooserApply(intent,event){
   case 'cancel':if(saveDrawer.back)saveDrawerBack();else saveDrawerClose();break;
   case 'use-another-name':{c.question=null;c.answer=null;saveDrawerRender();const input=drwEl('state-name');if(input&&typeof input.focus==='function'){input.focus();if(typeof input.select==='function')input.select();}break;}
   case 'retry':await drwLoadChooser();break;
-  case 'again':if(c.lastRequest){c.refused='';await c.lastRequest();}break;
+  case 'again':if(c.lastRequest){c.refused='';c.problem=null;await c.lastRequest();}break;
+  case 'update':await drwChooserUpdate();break;
   case 'vm':saveDrawerClose();if(typeof openVmDialog==='function')openVmDialog();break;
   case 'forget':await drwChooserForget(intent.path);break;
   case 'load':{const n=drwChooserNode(intent.path);drwStartLoad({type:'folder',commit:'',path:'/'+n.path,backup_job_id:'',repository:n.repository},n.name);break;}

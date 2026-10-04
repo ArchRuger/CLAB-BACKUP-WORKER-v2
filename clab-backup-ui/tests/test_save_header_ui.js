@@ -445,6 +445,12 @@ test('a question or a failure of the place request: the chooser takes over with 
  const h=harness({lab:freeLab(),routes:{'/git/places':()=>places,'/git/place':()=>({question})}});await h.open();await h.press('save-first');
  assert.equal(h.drawers[0].kind,'chooser');assert.deepEqual(JSON.parse(JSON.stringify(h.drawers[0].opts.question)),question);assert.equal(typeof h.drawers[0].opts.then,'function');
  assert.equal(h.posts().length,1,'no save before the place is settled');assert.equal(h.el('git-save-progress').disabled,false);assert.doesNotMatch(h.body.innerHTML,/already|lab named/,'the panel never shows a folder question of its own');
+ // A first save the VM refuses for a cause the manager recorded (lab.git_status of a lab without a save location, PROMPT 6.5): the
+ // cause in words, Try again, the chooser one click away, and the manager's own sentence under Details in place.
+ const v=harness({lab:freeLab({git_status:{checked:'t',ready:false,problem:'This checkout has commits that were not made by manager saves.',code:'busy',waiting:0}})});await v.open();
+ assert.equal(v.text('save-chip-text'),'Can’t save');assert.match(v.body.innerHTML,/id="save-cant-why">Someone is working in this repository on the VM\.</);
+ assert.deepEqual([...v.body.innerHTML.match(/<div class="save-row">(.*?)<\/div>/)[1].matchAll(/data-save-action="([\w-]+)"[^>]*>([^<]*)</g)].map(m=>m[1]+':'+m[2]),['again:Try again','place:Choose another place']);
+ assert.match(v.body.innerHTML,/<details id="save-cant-details"><summary>Details<\/summary><p class="save-note">This checkout has commits that were not made by manager saves\.<\/p><\/details>/);
  const f=harness({lab:freeLab(),routes:{'/git/places':()=>places,'/git/place':()=>Object.assign(new Error('Cannot reach the VM Git helper.'),{status:409})}});await f.open();await f.press('save-first');
  assert.equal(f.text('save-chip-text'),'Can’t save');assert.match(f.body.innerHTML,/id="save-cant-why">The save did not work\.</);assert.equal(f.el('git-save-progress').disabled,false);assert.equal(f.text('save-reason'),'');
  await f.press('save-cant-again');assert.equal(f.text('save-chip-text'),'Not saved yet','Try again returns to the first save');

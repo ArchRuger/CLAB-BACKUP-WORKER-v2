@@ -128,8 +128,12 @@ function saveViewUpload(cs,lab,job,failed){
 }
 function saveViewCant(cs,lab){
  const problem=typeof saveProblem==='function'?saveProblem(lab,saveCtx(lab)):{sentence:'The save did not work.',actions:[{action:'again',label:'Try again'}],job:null};
- const buttons=(problem.actions||[]).map((item,index)=>saveButton(item.action,item.label,'save-cant-'+item.action,{primary:index===0})).join('');
- return {title:'Can’t save',dot:'bad',name:'cant',job:problem.job?problem.job.id:'',html:`<p class="save-sub" id="save-cant-why">${saveEsc(problem.sentence)}</p><div class="save-row">${buttons}</div>${saveErrorMarkup(lab)}${saveTailMarkup(lab,cs,{panel:'cant'})}`};
+ // A lab without a save location (a placement the VM refused): Try again repeats the placement, the chooser stays one click
+ // away, and Details is the manager's own sentence in place (there is no save window and no settings to open yet).
+ const unbound=!lab.git_binding,actions=unbound?[...(problem.actions||[]).filter(item=>item.action!=='details'&&item.action!=='place'&&item.action!=='settings'&&item.action!=='update'),{action:'place',label:'Choose another place'}]:(problem.actions||[]);
+ const buttons=actions.map((item,index)=>saveButton(item.action,item.label,'save-cant-'+item.action,{primary:index===0})).join('');
+ const detail=unbound&&problem.detail?`<details id="save-cant-details"><summary>Details</summary><p class="save-note">${saveEsc(problem.detail)}</p></details>`:'';
+ return {title:'Can’t save',dot:'bad',name:'cant',job:problem.job?problem.job.id:'',html:`<p class="save-sub" id="save-cant-why">${saveEsc(problem.sentence)}</p><div class="save-row">${buttons}</div>${detail}${saveErrorMarkup(lab)}${saveTailMarkup(lab,cs,{panel:'cant'})}`};
 }
 // Whether the devices are still known to run the lab's latest save: no deploy, redeploy, destroy or design apply finished after it.
 function saveRunsLatest(cs,lab){
@@ -409,6 +413,8 @@ async function saveFirstPlace(kind){
  }catch(error){
   // A repository that could not be connected explains itself in the manager's own words under the field; any other
   // failure is the failed attempt the chip shows.
+  // The manager records why the VM refused (lab.git_status): read it now, so the panel names the cause.
+  if(typeof refresh==='function'){try{await refresh();}catch{/* the poll catches up */}}
   if(body.url)throw error;
   saveHeader.refusal={lab:id,message:String(error&&error.message||'The save did not work.'),at:new Date().toISOString()};return null;
  }finally{saveHeader.placing='';saveHeader.connecting=false;renderSaveHeader();}
@@ -464,7 +470,18 @@ async function saveAction(action,job,origin){
      const next=await json('/git/jobs/'+encodeURIComponent(job.id)+'/retry','POST',{push:false});
      if(typeof gitRememberJob==='function')gitRememberJob(next);if(typeof gitStartWatch==='function')gitStartWatch(next,{quiet:true});if(typeof refresh==='function')await refresh();break;
     }
-    if(!lab.git_binding){saveHeader.places.delete(lab.id);break;}
+    if(!lab.git_binding){
+     // The first save again: the address typed before when there was one, else the default place (looked up anew).
+     const first=saveHeader.first.lab===lab.id&&saveHeader.first.url?saveHeader.first:null;
+     if(first){await saveFirstPlace(first.question?'start':'connect');break;}
+     saveHeader.places.delete(lab.id);
+     // A refusal without a recorded cause returns to the first-save view; one the manager recorded (the VM refused the placement) is tried again.
+     const recorded=lab.git_status&&lab.git_status.ready===false&&lab.git_status.code&&lab.git_status.code!=='other';
+     if(recorded&&typeof api==='function'){const entry={status:'loading',data:null,message:''};saveHeader.places.set(lab.id,entry);
+      try{entry.data=await(await api('/labs/'+encodeURIComponent(lab.id)+'/git/places')).json();entry.status='ready';}catch(error){entry.status='failed';entry.message=String(error&&error.message||'');break;}
+      if(entry.data&&entry.data.default&&!entry.data.default.ask)await saveFirstPlace('save');}
+     break;
+    }
     if(job){await saveStart(lab.id);break;}
     // The repository was not ready, or the request was refused: read the status again; the save follows when it is ready.
     const context=typeof gitLoadContext==='function'?await gitLoadContext(lab.id,true):null,status=(context&&context.repository_status)||{};

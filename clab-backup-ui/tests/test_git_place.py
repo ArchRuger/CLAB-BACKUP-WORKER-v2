@@ -409,6 +409,33 @@ class PlaceTests(unittest.TestCase):
         self.assertIs(self.sent('connect')[-1]['initialize'], True)
         self.assertEqual(done['binding']['repository']['prefix'], 'ux-a')
 
+    def test_a_placement_the_vm_refuses_becomes_the_labs_status_and_a_placement_that_worked_clears_it(self):
+        # PROMPT 6.5, integration seam 13: the chip says why with the code of the helper's sentence, as for a refused save.
+        lab = self.lab('ux-a')
+        status = lambda: next(l for l in self.client.get('/api/state').json()['labs'] if l['id'] == lab['id'])['git_status']
+        self.assertIsNone(status()['ready'])
+        for sentence, code in ((host_git.NOT_MANAGER_SAVES, 'busy'), (host_git.REMOTE_AHEAD, 'diverged'), (host_git.NOT_SYNCHRONIZED, 'diverged'),
+                               (host_git.SAVE_UNKNOWN, 'account')):
+            self.vm.connect_error = sentence
+            refused = self.place(lab, 'ux-a', expect=409, url='https://github.com/ben/x')
+            self.assertEqual(refused['detail'], sentence)
+            seen = status()
+            self.assertEqual((seen['ready'], seen['code'], seen['problem']), (False, code, sentence))
+        # A sentence that carries the VM's plumbing words is reworded for the page, and its code is still the helper's.
+        self.vm.connect_error = 'Another Git registration is being saved on the VM. Nothing was registered; retry in a moment.'
+        refused = self.place(lab, 'ux-a', expect=409, url='https://github.com/ben/x')
+        seen = status()
+        self.assertEqual((seen['code'], seen['problem']), ('busy', refused['detail'])); self.assertNotIn('registration', seen['problem'].lower())
+        # A VM that cannot be reached.
+        self.vm.connect_error = ''
+        with patch('app.git_progress.remote_git', side_effect=OSError('no route')):
+            self.place(lab, 'ux-a', expect=409)
+        self.assertEqual((status()['ready'], status()['code']), (False, 'vm'))
+        # The empty repository is a question, never a status; a placement that worked forgets what was remembered.
+        self.placed(lab, 'ux-a')
+        seen = status()
+        self.assertEqual((seen['ready'], seen['code'], seen['problem']), (None, '', ''))
+
     def test_a_helper_refusal_to_connect_is_shown_in_its_own_words_and_the_acknowledgement_is_required(self):
         lab = self.lab('ux-a')
         refused = self.place(lab, 'ux-a', expect=400, url='https://github.com/ben/x', acknowledge=False)

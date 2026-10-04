@@ -837,13 +837,20 @@ class GitProgressTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/git/jobs/'+again['id']+'/retry', json={'push': True}).status_code, 409)
 
     def test_a_commit_uploaded_through_another_binding_does_not_make_a_save_unchanged(self):
+        # "Another binding" is one that uploads elsewhere: another push URL, another branch or another checkout. A save of
+        # another lab of the same checkout, push URL and branch is the same upload (DESIGN.md 3.1, 3.4: labs share one
+        # checkout and a save is matched by the checkout it was made in), and tests/test_git_save_model.py pins that case.
         first, _ = self.save(); self.run_save(first); self.review_and_upload(first)
-        with self.store.lock:
-            next(j for j in self.store.state['git_jobs'] if j['id'] == first['id'])['binding_digest'] = 'another-binding'
-            self.store.save()
+        stored = next(j for j in self.store.state['git_jobs'] if j['id'] == first['id'])
         self.nothing_new = True
-        again, _ = self.save(); outcome, _ = self.run_save(again)
-        self.assertEqual(outcome['status'], 'review_pending'); self.assertFalse(outcome['pushed'])
+        for change in (dict(remote='https://github.com/someone/else.git'), dict(branch='other-branch'), dict(checkout='/home/ben/another-checkout')):
+            with self.store.lock:
+                kept = copy.deepcopy(stored['destination']); stored['binding_digest'] = 'another-binding'; stored['destination'].update(change)
+                self.store.save()
+            again, _ = self.save(); outcome, _ = self.run_save(again)
+            self.assertEqual(outcome['status'], 'review_pending', change); self.assertFalse(outcome['pushed'])
+            with self.store.lock:
+                stored['destination'] = kept; self.store.state['git_jobs'] = [j for j in self.store.state['git_jobs'] if j['id'] != again['id']]; self.store.save()
 
     def test_the_review_is_mandatory_even_for_a_saved_opt_out_and_an_old_page(self):
         # A binding saved before the review became mandatory says False; a page loaded before the

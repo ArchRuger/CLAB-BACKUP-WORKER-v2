@@ -265,6 +265,7 @@ async function gitPlacesShow(container,labId,bindingId,options={}){
 //   view.bring         the tick box of the bring-along line (default true);  view.unfinished a save has no commit yet
 //   view.firstSave     true in the first-save panel (an answer with same_name then asks the same-name question)
 //   view.busy          a place/state request runs;  view.refused  the manager's sentence for a refusal (Try again)
+//   view.problem       null | {sentence, detail, update}: the refusal's cause in the chip's words (saveProblem), set by the host
 //   view.name          state mode: the name field;  view.showCancel false hides Cancel
 // folderChooserEvent(type, event) -> null (not for the chooser) or one of:
 //   {action:'select', path}  {action:'toggle', path}  {action:'focus', path}  {action:'typed', value, echo}
@@ -547,7 +548,10 @@ function folderChooserMarkup(model,view){
   parts.push(`<p class="save-note" id="folder-answer-note"${notes.length?'':' hidden'}>${esc(notes.join(' '))}</p>`);
   if(forgettable)parts.push(`<div class="save-row"><button type="button" class="button ghost small" data-folder-action="forget" data-folder-path="${esc(String(answer.path??answer.folder??''))}">Remove from the list</button></div>`);
   if(bring&&bring.offered&&!unfinished)parts.push(`<label class="checkbox-label" id="folder-move"><input type="checkbox" data-folder-bring${view.bring===false?'':' checked'}> Bring this lab’s saved files along</label>`);
-  if(view.refused)parts.push(`<div class="save-row"><p class="form-error" role="alert" id="folder-refused">${esc(view.refused)}</p><button type="button" class="button secondary small" data-folder-action="again">Try again</button></div>`);
+  // A refusal: the cause in the chip's words when the manager recorded one (view.problem: {sentence, detail, update}), else the
+  // manager's own sentence. Try again repeats the request; Details holds the manager's sentence.
+  const problem=view.refused&&view.problem&&view.problem.sentence?view.problem:null;
+  if(view.refused)parts.push(`<div class="save-row"><p class="form-error" role="alert" id="folder-refused">${esc(problem?problem.sentence:view.refused)}</p>${problem&&problem.update?'<button type="button" class="button secondary small" data-folder-action="update">Update from the repository</button>':''}<button type="button" class="button secondary small" data-folder-action="again">Try again</button></div>${problem&&problem.detail?`<details id="folder-refused-details"><summary>Details</summary><p class="save-note">${esc(problem.detail)}</p></details>`:''}`);
   const blocked=status==='loading'||status==='unreachable';
   const buttons=info.buttons.map(button=>folderButtonMarkup(blocked&&button.primary?{...button,disabled:true}:button,view)).join('');
   parts.push(`<div class="save-settings-foot" id="folder-foot">${view.showCancel===false?'':'<button type="button" class="button ghost small" data-folder-action="cancel">Cancel</button>'}${buttons}${blocked?`<span class="form-help" id="folder-reason">${esc(reason)}</span>`:''}</div>`);

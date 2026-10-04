@@ -540,6 +540,27 @@ test('loadSourceName and loadState need no ctx fields to be present',()=>{
  assert.equal(c.loadSourceName({type:'folder',path:'bgp/latest'},{lab:bound},undefined,NOW),'an earlier save','the lab may ride in ctx.lab');
 });
 
+test('integration: the time of a save is when it read the devices, so an upload after a load does not end Running',()=>{
+ const load=rj('succeeded',30,loaded4);
+ // Saved 60 minutes ago, loaded 30 minutes ago, uploaded 5 minutes ago: `finished` moved with the upload, the capture did not.
+ const uploaded={...gj('synced',60),finished:ago(5)};
+ const s=chip(bound,{restore_jobs:[load],git_jobs:[uploaded]});assert.equal(s.key,'running');assert.equal(s.text,'Running ospf-up');
+ // A save made after the load ends it, whenever it is uploaded.
+ assert.equal(chip(bound,{restore_jobs:[load],git_jobs:[{...gj('synced',10),finished:ago(1)}]}).key,'saved');
+ // The newest save is the one created last, not the one whose upload ended last.
+ const older={...gj('synced',60,{note:'older'}),finished:ago(1)},newer={...gj('synced',20,{note:'newer'}),finished:ago(19)};
+ assert.equal(chip(bound,{git_jobs:[older,newer]}).job.note,'newer');
+});
+test('integration: a lab without a save location whose placement the VM refused says why (PROMPT 6.5)',()=>{
+ const c=makeContext(),refusedFor=code=>({...unbound,git_status:{checked:true,ready:false,problem:'raw sentence of the VM',code,waiting:0}});
+ let s=chip(refusedFor('busy'));assert.equal(s.key,'cant');assert.equal(s.code,'busy');assert.equal(s.panel,'cant');
+ let p=plain(c.saveProblem(refusedFor('busy'),{}));assert.equal(p.sentence,'Someone is working in this repository on the VM.');assert.equal(p.detail,'raw sentence of the VM');
+ p=plain(c.saveProblem(refusedFor('diverged'),{}));assert.equal(p.sentence,'The online copy has changes this VM does not have.');
+ p=plain(c.saveProblem(refusedFor('vm'),{}));assert.equal(p.sentence,'The lab VM could not be reached.');
+ // A refusal without a cause the page can word leaves the first-save panel with the manager's own sentence.
+ s=chip(refusedFor('other'));assert.equal(s.key,'none');assert.equal(s.panel,'first');
+ assert.equal(chip({...unbound,git_status:{checked:'',ready:null,problem:'',code:'',waiting:0}}).key,'none');
+});
 test('DESIGN.md 3.6: Can\'t save sentence and actions for each code',()=>{
  const c=makeContext(),problem=(lab,ctx={})=>plain(c.saveProblem(lab,ctx)),acts=p=>p.actions.map(a=>a.label).join(' | '),ids=p=>p.actions.map(a=>a.action).join(',');
  const st=(code,extra={})=>({...bound,git_status:{checked:true,ready:false,problem:'raw',code,waiting:0,...extra}});
@@ -569,6 +590,12 @@ test('DESIGN.md 3.6: Can\'t save sentence and actions for each code',()=>{
  assert.equal(p.code,'device');assert.equal(p.sentence,'ceos could not be read, so nothing was saved.');assert.equal(acts(p),'Try again | Save settings | Details');assert.equal(p.job.id,stopped.id);
  p=problem(lab,{git_jobs:[stopped],jobs:[backup([{name:'clab-bgp-ceos',status:'failed'},{name:'clab-bgp-xrv9k',status:'timeout'}])]});assert.equal(p.sentence,'ceos and xrv9k could not be read, so nothing was saved.');
  p=problem(lab,{git_jobs:[stopped],jobs:[]});assert.equal(p.sentence,'A device could not be read, so nothing was saved.');
+ // A save the manager stopped for its own reason (no device failed: the topology could not be saved with the capture, the capture
+ // does not hold the devices) shows the manager's sentence as it is, with Try again and Details: never the device sentence (seam 16).
+ const whole=gj('capture_incomplete',5,{backup_job_id:'bk',message:'The topology could not be saved with this capture. Try again.'});
+ p=problem(lab,{git_jobs:[whole],jobs:[backup([{name:'clab-bgp-ceos',status:'succeeded'},{name:'clab-bgp-cj',status:'succeeded'}])]});
+ assert.equal(p.code,'capture');assert.equal(p.sentence,'The topology could not be saved with this capture. Try again.');assert.equal(acts(p),'Try again | Details');assert.deepEqual(p.devices,[]);assert.equal(p.job.id,whole.id);
+ p=problem(lab,{git_jobs:[whole],jobs:[]});assert.equal(p.code,'device','a capture that is gone keeps the device sentence');
  p=problem(lab,{git_jobs:[stopped],jobs:[backup([{name:'clab-bgp-ceos',status:'failed'}])],refusal:{message:'No.',at:ago(1)}});assert.equal(p.code,'other','a refusal newer than the stopped job is the cause');assert.equal(p.detail,'No.');
  assert.equal(problem(st('vm'),{git_jobs:[stopped],jobs:[backup([{name:'clab-bgp-ceos',status:'failed'}])]}).code,'device','a job that stopped on a device is found first');
  assert.equal(problem(bound,{git_jobs:[gj('export_pending',2)]}).code,'other');

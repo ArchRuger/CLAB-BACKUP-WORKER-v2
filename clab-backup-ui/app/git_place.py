@@ -18,7 +18,7 @@ from fastapi import HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import git_places
-from .git_progress import (CHECKOUT_VIEW_SECONDS, _append_git_job, digest, host_identity, job_pending, kept_on_vm,
+from .git_progress import (CHECKOUT_VIEW_SECONDS, HelperRefused, _append_git_job, digest, host_identity, job_pending, kept_on_vm,
                            may_hold_commit, move_destination, repository_display_name, strip_credentials)
 from .inventory import PLATFORMS
 from .runner import now
@@ -256,7 +256,7 @@ class Placement:
             # A checkout of this repository the VM already holds (a top level it would not take, for one) is used as it is.
             known = [r for r in self.catalog() if same_remote(r.get('push_url'), url)]
             reg = next((r for r in known if r.get('prefix') == ''), None) or (known[0] if known else None)
-            if not reg: raise HTTPException(409, clean_text(text))
+            if not reg: raise HelperRefused(text, clean_text(text))
         if not isinstance(reg, dict) or not reg.get('id') or not isinstance(reg.get('path'), str): raise HTTPException(409, NO_ANSWER)
         return reg, None
 
@@ -283,7 +283,7 @@ class Placement:
         path = handle['repository']['path']
         regs = [r for r in self.catalog() if r['path'] == path]
         hits = [r for r in regs if git_places.colliding(folder, str(r.get('prefix') or ''))]
-        if not hits: raise HTTPException(409, clean_text(text))
+        if not hits: raise HelperRefused(text, clean_text(text))
         # Decided under the store lock; `changing` keeps every other connection change out until this request ends.
         with self.store.lock: used = self.in_use()
         if any(h['id'] in used for h in hits): return None, self.colliding_question(placed, handle, folder, hits)
@@ -513,7 +513,13 @@ class Placement:
 
         @app.post('/api/labs/{lab_id}/git/place')
         def place(lab_id: str, data: Place):
-            with progress.changing(lab_id): return self.place(lab_id, data)
+            with progress.changing(lab_id):
+                # A refusal of the VM is the lab's status before it is the answer (the chip then says why, like a refused save).
+                try: result = self.place(lab_id, data)
+                except HelperRefused as exc: progress.placement_refused(lab_id, exc); raise
+                # What was remembered described the folder the lab left (or a refusal that is over): the next check says anew.
+                if result.get('saved'): progress.statuses.pop(lab_id, None)
+                return result
 
         @app.post('/api/git/repositories/{binding_id}/folders/new')
         def new_folder(binding_id: str, data: NewFolder):

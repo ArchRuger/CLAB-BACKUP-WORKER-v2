@@ -339,7 +339,9 @@ function saveChipState(lab,ctx={},now){
  // A failed attempt: the newest job ended without a result, or the page holds a refusal.
  const newest=jobs[0]||null,stopped=newest&&(STATUS_SAVE_STOPPED.includes(newest.status)||(newest.status==='interrupted'&&!newest.commit))?newest:null;
  const refusal=ctx.refusal&&ctx.refusal.message?ctx.refusal:null,failedAt=Math.max(stopped?Math.max(1,statusJobTime(stopped)):0,refusal?statusEpoch(refusal.at)||Infinity:0);
- const status=bound?lab.git_status:null,unready=!!status&&status.checked!==false&&status.ready===false,attempt=failedAt>saveAt;
+ // The status the manager remembers for the lab. A lab without a save location has one only after a placement the VM refused
+ // (PROMPT 6.5): it counts when it carries a cause the page can word; any other refusal stays the first-save panel's own line.
+ const status=lab.git_status||null,unready=!!status&&status.checked!==false&&status.ready===false&&(bound||(!!status.code&&status.code!=='other')),attempt=failedAt>saveAt;
  const cant=()=>({key:'cant',dot:'bad',text:'Can’t save',panel:'cant',job:stopped,detail:String(refusal?.message||(attempt&&stopped?stopped.message:'')||status?.problem||''),code:refusal||(attempt&&stopped)?'':String(status?.code||'other')});
  const states=[];
  if(attempt&&(!live||failedAt>loadAt))states.push(cant());                                                                  // row 3
@@ -363,14 +365,19 @@ function saveChipState(lab,ctx={},now){
 // Why a save cannot be made (the Can't save view, DESIGN.md 3.6). The cause is found in this order: a job that stopped on a device
 // (capture_incomplete), then lab.git_status.code when the status is not ready, else `other`; no message text is matched.
 // → {code, sentence, actions: [{action, label}], devices, job, detail}; the first action is the primary one. Codes: vm account busy diverged
-// (the sentence and actions differ by whether a save waits in the repository) device files settings devices other. `settings`: the save
+// (the sentence and actions differ by whether a save waits in the repository) device capture files settings devices other. `capture`: the
+// manager stopped the save for its own reason and its sentence is shown as it is. `settings`: the save
 // location has to be set up again (the VM's record or checkout is gone or changed; Details shows the VM's own sentence, which says what to
 // do). `devices`: the selection of Save settings holds no device of the lab. `detail` is the raw text for Details.
 function saveProblem(lab,ctx={}){
  ctx=ctx||{};
- const bound=!!lab?.git_binding,status=bound?lab.git_status:null,unready=!!status&&status.checked!==false&&status.ready===false,jobs=statusSaveJobs(lab,ctx),newest=jobs[0]||null;
+ const bound=!!lab?.git_binding,status=lab?.git_status||null,unready=!!status&&status.checked!==false&&status.ready===false,jobs=statusSaveJobs(lab,ctx),newest=jobs[0]||null;
  const stopped=newest&&(STATUS_SAVE_STOPPED.includes(newest.status)||(newest.status==='interrupted'&&!newest.commit))?newest:null,refusal=ctx.refusal&&ctx.refusal.message?ctx.refusal:null;
- const device=!!stopped&&stopped.status==='capture_incomplete'&&!(refusal&&(statusEpoch(refusal.at)||Infinity)>statusJobTime(stopped));
+ const capture=!!stopped&&stopped.status==='capture_incomplete'&&!(refusal&&(statusEpoch(refusal.at)||Infinity)>statusJobTime(stopped));
+ // The device sentence only when the capture names a device that did not succeed, or the capture is gone. A save the manager
+ // stopped for its own reason (the topology could not be saved with the capture, the capture does not hold the devices) says so
+ // in the manager's own sentence.
+ const captured=capture?(ctx.jobs||[]).find(j=>j.id===stopped.backup_job_id):null,device=capture&&(!captured||((captured.nodes)||[]).some(n=>n.status!=='succeeded'));
  const repository=lab?.git_binding?.repository||{},host=statusHost(repository.push_url)||'the online repository',folder=String(repository.prefix||'').replace(/^\/+|\/+$/g,'');
  const again={action:'again',label:'Try again'},details={action:'details',label:'Details'},detail=String(refusal?.message||stopped?.message||status?.problem||'');
  const checkout=repository.path||'',waits=(+status?.waiting>0)||(!!checkout&&(ctx.git_jobs||[]).some(j=>j.commit&&!j.pushed&&STATUS_SAVE_WAITING.includes(j.status)&&(j.destination?.checkout||'')===checkout));
@@ -381,6 +388,7 @@ function saveProblem(lab,ctx={}){
   const devices=((backup&&backup.nodes)||[]).filter(n=>n.status!=='succeeded').map(n=>{const node=nodes.find(x=>x.name===n.name);return n.short_name||node?.short_name||statusDeviceName(node||{name:n.name});});
   return make('device',devices.length?`${list(devices)} could not be read, so nothing was saved.`:'A device could not be read, so nothing was saved.',[again,{action:'settings',label:'Save settings'},details],devices);
  }
+ if(capture)return make('capture',String(stopped.message||'The save did not work.'),[again,details]);
  const code=unready&&STATUS_PROBLEM_CODES.includes(status.code)?status.code:'other';
  if(code==='vm')return make('vm','The lab VM could not be reached.',[again,{action:'vm',label:'Check the VM connection…'}]);
  if(code==='account')return make('account',`The VM account cannot upload to ${host}.`,[again,details]);
