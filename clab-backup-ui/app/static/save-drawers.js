@@ -568,7 +568,9 @@ async function drwChooserPlace(choice,pending,extra){
    else{c.question=null;c.answer=q;c.answerFor=c.value;}
    saveDrawerRender();return;
   }
-  await drwChooserDone(result,`${drwLabName()} now saves to ${c.repoName||'the repository'} › ${folder||'top level'}.`);
+  // The folder the manager placed the lab in (the one beside, for that answer), never the one that was asked about.
+  const placed=result&&result.binding&&result.binding.repository?drwBare(result.binding.repository.prefix):folder;
+  await drwChooserDone(result,`${drwLabName()} now saves to ${c.repoName||'the repository'} › ${placed||'top level'}.`);
  }catch(error){c.busy=false;c.refused=error.message||'The folder could not be set.';drwSay('');saveDrawerRender();}
 }
 async function drwChooserPending(){

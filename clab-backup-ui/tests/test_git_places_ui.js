@@ -575,6 +575,9 @@ test('C13 a large repository: only open branches are drawn, a branch lists 200 f
  const rows=context.folderVisibleRows(context.folderChooserModel(tree),view());assert.equal(rows.length,201);
  html=markup(context,tree,{value:'',showAll:new Set([''])});assert.equal((html.match(/role="treeitem"/g)||[]).length,5001);assert.doesNotMatch(html,/Show all/);
  html=markup(context,tree,{value:'d4999',selected:'d4999'});assert.match(html,/data-folder="d4999"/);
+ // The manager's tree says so itself (`dirs_truncated`, without a `dirs` list): false means every folder is listed, whatever the file list.
+ html=markup(context,chooserTree([ans('')],{truncated:true,dirs_truncated:false}),{value:''});assert.doesNotMatch(html,/very large/);
+ html=markup(context,chooserTree([ans('')],{truncated:true,dirs_truncated:true}),{value:''});assert.match(html,/id="folder-tree-note">This repository is very large/);
  html=markup(context,chooserTree([ans('')],{dirs,truncated:true,dirs_truncated:true}),{value:''});assert.match(html,/id="folder-tree-note">This repository is very large and not every folder is listed\. Type the path of a folder that is not shown\.</);
  html=markup(context,chooserTree([ans('')],{truncated:true}),{value:''});assert.match(html,/not every folder is listed/);
  html=markup(context,chooserTree([ans('')],{dirs,truncated:true}),{value:''});assert.match(html,/id="folder-tree-note" hidden/);

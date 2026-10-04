@@ -469,6 +469,8 @@ class PlaceTests(unittest.TestCase):
         lab = self.lab('ux-a')
         tree = self.places(lab, self.repo['id'])['tree']
         self.assertTrue(tree['truncated']); self.assertEqual(len(tree['files']), 50)
+        # The file list is cut, the folders are not (the helper listed every directory): the chooser must not say a folder is missing.
+        self.assertIs(tree['dirs_truncated'], False); self.assertIn('zz/start', [a['folder'] for a in tree['folders']])
         self.assertNotIn('zz/start/latest/manifest.json', [f['path'] for f in tree['files']])
         answer = self.check(lab, 'zz/start')
         self.assertEqual((answer['kind'], answer['label']), ('state', 'Start'))

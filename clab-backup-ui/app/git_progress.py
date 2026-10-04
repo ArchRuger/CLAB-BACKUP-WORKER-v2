@@ -1482,6 +1482,9 @@ class GitProgress:
                         files=[f.get('path') for f in tree.get('files', []) if isinstance(f, dict) and isinstance(f.get('path'), str)],
                         sizes={f.get('path'): f.get('size', 0) for f in tree.get('files', []) if isinstance(f, dict) and isinstance(f.get('path'), str)},
                         dirs=tree.get('dirs') if isinstance(tree.get('dirs'), list) else None,
+                        # Whether a folder may be missing from the listing: the helper's own word when it lists the
+                        # directories (H5), else whether the file list was cut (a helper that lists none).
+                        dirs_truncated=bool(tree.get('dirs_truncated')) if isinstance(tree.get('dirs'), list) else bool(tree.get('truncated')),
                         truncated=bool(tree.get('truncated')), saved=tree.get('saved', {}), states=states)
             with self.view_lock: self.views[key] = seen
         with self.store.lock:
@@ -1493,7 +1496,7 @@ class GitProgress:
                        and j['binding'].get('repository', {}).get('path') == path and j['binding'].get('host_identity') == binding['host_identity']]
         registrations = [dict(id=r['id'], prefix=r.get('prefix', ''), revision=r.get('revision', ''), lab=labs.get(r['id'])) for r in seen['catalog']]
         return dict(registrations=registrations, files=seen['files'], sizes=seen['sizes'], dirs=seen['dirs'], states=seen['states'], planned=planned,
-                    pending_states=pending, truncated=seen['truncated'], head=seen['head'], repository=seen['repository'], saved=seen['saved'])
+                    pending_states=pending, truncated=seen['truncated'], dirs_truncated=seen['dirs_truncated'], head=seen['head'], repository=seen['repository'], saved=seen['saved'])
 
     def forget_views(self):
         """After anything that moved a checkout's HEAD or its registrations (a save, a move, an update, a placement)."""

@@ -234,7 +234,10 @@ class Placement:
         folders = [dict(a, bring=self.bring(own, counts, a['folder'], unfinished))
                    for a in git_places.folder_answers(dict(id=lab['id'], name=lab['name'], prefix=own), view)]
         sizes = view.get('sizes') or {}
-        return dict(repository=reg['id'], head=view.get('head', ''), truncated=bool(view.get('truncated')), saved=view.get('saved') or {},
+        # `truncated`: the file list was cut at the tree cap; `dirs_truncated`: a folder may be missing from `folders` too
+        # (the chooser then says so; with every directory listed it must not).
+        return dict(repository=reg['id'], head=view.get('head', ''), truncated=bool(view.get('truncated')), dirs_truncated=bool(view.get('dirs_truncated')),
+                    saved=view.get('saved') or {},
                     folders=folders, files=[dict(path=p, size=sizes.get(p, 0)) for p in view['files']],
                     own=None if own is None else dict(folder=own, files=counts.get(own, 0)))
 

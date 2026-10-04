@@ -44,6 +44,8 @@ class Session:
         self.page.on('console', self._console)
         self.page.on('pageerror', lambda error: self.errors.append('pageerror: ' + str(error)))
         self.page.on('response', self._response)
+        self.sent = []             # every request with a body the browser sent: "POST /api/… {…}"
+        self.page.on('request', lambda r: self.sent.append('%s %s %s' % (r.method, r.url.replace(self.base, ''), (r.post_data or '')[:400])) if r.method != 'GET' else None)
         os.makedirs(SHOTS, exist_ok=True)
 
     # ---- errors ----
@@ -106,7 +108,7 @@ class Session:
         self.page.reload()
         self.page.wait_for_selector('#lab-content:not([hidden])')
         expect(self.page.locator('#title')).to_have_text(name)
-        self.page.wait_for_function("document.getElementById('save-chip-text').textContent.length>0")
+        self.wait_js("document.getElementById('save-chip-text').textContent.length>0")
         self.record_toasts()
 
     def record_toasts(self):
@@ -115,9 +117,22 @@ class Session:
           notify=function(message){window.__toasts.push(String(message));return shown(message);};})()""")
         self._toast_mark = 0
 
+    def calls(self, pattern=''):
+        """The requests with a body the browser sent ("POST /api/labs/…/git/place {…}"), optionally filtered."""
+        return [c for c in self.sent if re.search(pattern, c)]
+
     def toasts(self):
         """The toasts since the last wait_toast (or since the page was opened)."""
         return self.page.evaluate('window.__toasts||[]')[self._toast_mark:]
+
+    def wait_js(self, expression, timeout=20000, what=''):
+        """Waits until `expression` is true in the page (polled from here: the page's CSP allows no evaluated string in a timer)."""
+        end = time.time() + timeout / 1000
+        while time.time() < end:
+            if self.page.evaluate(expression):
+                return True
+            self.page.wait_for_timeout(100)
+        raise AssertionError('timed out waiting for ' + (what or expression))
 
     def click(self, selector, count=True, **kwargs):
         locator = self.page.locator(selector) if isinstance(selector, str) else selector

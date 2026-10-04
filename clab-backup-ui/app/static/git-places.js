@@ -527,7 +527,7 @@ function folderChooserMarkup(model,view){
  if(status==='ready'&&model){
   const t=model.tree||{},empty=!(t.files||[]).length&&![...model.answers.keys()].some(Boolean)&&!model.root.dirs.length;
   if(empty)note=`${repo} is empty. ${lab} can save at the top level or in a new folder.`;
-  else if(t.dirs_truncated||(t.truncated&&!Array.isArray(t.dirs)))note='This repository is very large and not every folder is listed. Type the path of a folder that is not shown.';
+  else if(t.dirs_truncated===true||(t.dirs_truncated===undefined&&t.truncated&&!Array.isArray(t.dirs)))note='This repository is very large and not every folder is listed. Type the path of a folder that is not shown.';
  }
  const treeBlock=`${tree}<p class="save-note" id="folder-tree-note"${note?'':' hidden'}>${esc(note)}</p>`;
  if(mode==='state')parts.push(`<details data-folder-details${view.treeOpen?' open':''}><summary>Put it somewhere else</summary>${treeBlock}`);

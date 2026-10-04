@@ -8,6 +8,8 @@ import sys
 from common import Session, arguments, expect, wait_until
 
 EXPOSURE = 'Saved files can contain passwords or keys.'
+IDENTITY = ('Git commit identity is missing or invalid. As the registered Linux owner, run guided Git setup or set user.name and '
+            'user.email inside this checkout, then retry the original save.')
 
 
 def panel_text(s):
@@ -259,14 +261,16 @@ def main():
     # ---- A: Can't save, by cause (DESIGN.md 3.6) ------------------------------------------------------------------
     p.wait_for_timeout(5200)
     causes = [({'status_problem': 'staged'}, 'Someone is working in this repository on the VM.', ['Try again', 'Details']),
-              ({'status_problem': 'permission'}, 'The VM account cannot upload to github.com.', ['Try again', 'Details']),
+              # The fixture's own `permission` sentence is one the helper's `status` never answers (it belongs to `connect`), so the
+              # manager has no code for it; a sentence `status` really answers is used instead.
+              ({'status_problem': IDENTITY}, 'The VM account cannot upload to github.com.', ['Try again', 'Details']),
               ({'vm_unreachable': True}, 'The lab VM could not be reached.', ['Try again', 'Check the VM connection…']),
               ({'device_unreadable': ['xrv9k']}, 'xrv9k could not be read, so nothing was saved.', ['Try again', 'Save settings', 'Details'])]
     for switches, sentence, buttons in causes:
         s.action('reset')
         s.action('edit_device', device='ceos', add=['interface Loopback8%d' % (causes.index((switches, sentence, buttons)) + 1)], remove=[])
         s.switch_raw(switches)
-        key = list(switches)[0] + '=' + str(list(switches.values())[0])
+        key = list(switches)[0] + '=' + str(list(switches.values())[0])[:12]
         with s.expect_status(409, r'/api/labs/.+/git/(save|settings)'), s.expect_status(502, r'/api/'), s.expect_status(503, r'/api/'):
             s.click('#git-save-progress')
             s.wait_chip(r'^Can’t save$', timeout=40000)
@@ -275,7 +279,7 @@ def main():
             got = p.locator('#save-panel-body .save-row').first.locator('button').all_inner_texts()
             s.equal('A Can\'t save (%s): the actions' % key, got, buttons)
             s.check('A Can\'t save (%s): chip dot bad' % key, 'bad' in p.locator('#save-chip-dot').get_attribute('class'))
-            s.shot('A-cant-' + list(switches)[0] + '-' + str(list(switches.values())[0]).strip("[]'"))
+            s.shot('A-cant-%d' % causes.index((switches, sentence, buttons)))
             s.action('reset')
             s.click('#save-cant-again')
             s.wait_chip(r'^(1 save to upload|Saved .*)$', timeout=60000)

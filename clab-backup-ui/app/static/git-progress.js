@@ -205,7 +205,9 @@ function renderGitProgress(){
  const more=$('progress-more-button');if(more&&more.parentElement)more.parentElement.hidden=!binding;
  if($('git-problem')){$('git-problem').hidden=!problem;if($('git-problem-text'))$('git-problem-text').textContent=problem;}
  gitRenderLastRestore(lab);
- if(gitWatch&&gitWatch.lab_id!==lab.id&&!$('git-job-dialog')?.open){clearTimeout(gitWatchTimer);gitWatch=null;}
+ // A watch on another lab's save ends with the lab change, except the upload this page sent: it may go through the save of another
+ // lab of the repository (the one at the checkout's newest commit), and its end is this page's toast and chip.
+ if(gitWatch&&gitWatch.lab_id!==lab.id&&!gitWatch.keep&&!$('git-job-dialog')?.open){clearTimeout(gitWatchTimer);gitWatch=null;}
  if(active&&!gitWatch)gitStartWatch(active);
 }
 // The newest finished "Apply to running lab" of this lab stays one click away on the status card. A restore the manager
@@ -724,7 +726,7 @@ async function gitReviewJob(job,options={}){
  if(!review||!review.head||!review.upload_job)throw new Error('See what this upload sends before uploading.');
  try{
   const next=await json('/git/jobs/'+encodeURIComponent(review.upload_job)+'/retry','POST',{push:true,reviewed:true,head:review.head});
-  gitRememberJob(next);gitStartWatch(next,{quiet:true});await refresh();return next;
+  gitRememberJob(next);gitStartWatch(next,{quiet:true,keep:true});await refresh();return next;
  }catch(error){
   if(error&&error.status===409){
    gitReviews.answers.clear();gitReviews.loads.clear();
@@ -771,7 +773,11 @@ function gitDoneToast(job){
  return gitSaveSentence(job)+'.';
 }
 function gitStartWatch(job,options={}){
- if(gitWatch?.id===job.id)return;clearTimeout(gitWatchTimer);const watch={id:job.id,lab_id:job.lab_id,quiet:!!options.quiet};gitWatch=watch;
+ // A save already followed (the poll's own render follows an active save of the lab on screen) takes what this caller asks for:
+ // its end still reaches the header (quiet) and it survives a render for another lab (keep). Without this, a poll that lands
+ // between a click on Upload and its answer would swallow the upload's toast and leave the panel open.
+ if(gitWatch?.id===job.id){if(options.quiet)gitWatch.quiet=true;if(options.keep)gitWatch.keep=true;return;}
+ clearTimeout(gitWatchTimer);const watch={id:job.id,lab_id:job.lab_id,quiet:!!options.quiet,keep:!!options.keep};gitWatch=watch;
  const poll=async()=>{
   if(gitWatch!==watch)return;
   try{
