@@ -23,10 +23,10 @@ Branch `claude/git-save-load-redesign`, cut from `68f24d9`. Steps are those of P
 | Step | State |
 |---|---|
 | 1. Routing rules, agent definitions, baseline | Done: `e0481a7`. Baseline on 1.30.60: 2223 Python tests OK (2 skipped), 503 browser tests pass, `verify-release.py` and the link check pass. |
-| 2. Inventory, design round, Opus review | Inventory and design written (`489de1b`): [INVENTORY.md](INVENTORY.md), [DESIGN.md](DESIGN.md) and three part files under `design/`. The Opus review (risk reviewer on the folder and save model, UI reviewer on the load path and lost functionality) is running; findings and answers go to `REVIEW.md`. |
-| 3. The two reproduced defects of section 6.1 as their own commit | Not started |
-| 4. Folder model | Not started |
-| 5. Header control, save, load, lab states | Not started |
+| 2. Inventory, design round, Opus review | Done. [INVENTORY.md](INVENTORY.md), [DESIGN.md](DESIGN.md) with three part files under `design/`, and [REVIEW.md](REVIEW.md): 17 findings of the risk reviewer and 44 of the UI reviewer, each answered; DESIGN.md section 7 holds the rulings, and the part files are being revised to them. |
+| 3. The two reproduced defects of section 6.1 as their own commit | Merged as `bf02e6b` (slice S0, Opus specialist): the helper's collision rule H1, the setup scripts, the fixture's scripted helper and today's folder browser. Reproduced live on 1.30.60 before the fix ([LIVE-ENV.md](LIVE-ENV.md)). Independent review of the diff and the live check after the fix: in progress. |
+| 4. Folder model | In progress: S1 helper H2 to H7, S2 `git_places.py` (pure answers), then S3b `git_place.py` (routes). Prepared: `git_progress.py` route helpers are methods, `checkout_view()` (`1146391`). |
+| 5. Header control, save, load, lab states | In progress: S4 load backend (`restore.py`), S15 whole-lab gaps (`runner.py`), S12 fixture; S3a save model after S2 lands; the page slices S5 to S10 after the part files are revised. Briefs are in the session scratchpad; the slice table is DESIGN.md section 5. |
 | 6. Drawers, first save, Progress tab removal | Not started |
 | 7. Fixture pass, "try to get blocked" pass, live pass | Not started |
 | 8. Documentation, release, pull request | Not started |
