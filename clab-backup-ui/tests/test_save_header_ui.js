@@ -641,12 +641,16 @@ test('Q1440-11 one state, one name: an upload refused because both sides changed
 });
 test('B02 Try again after an upload the VM refused repeats the upload (through the review rule), never a new save; B04 without a repository Choose another place opens the address field; B05 the empty-repository question can be left',async()=>{
  const job=waiting({id:'w',status:'push_pending',reviewed:ago(3)});
- const lab=boundLab({git_status:{checked:true,ready:false,problem:'push failed',code:'account',waiting:1}});
+ const lab=boundLab({git_status:{checked:true,ready:false,problem:'Finish the existing Git operation before saving lab progress.',code:'busy',waiting:1}});
  const h=harness({lab,state:{git_jobs:[job]},routes:{'/git/compare':()=>review({upload_job:'w'}),'/retry':()=>({...job,status:'queued'}),'/git/save':()=>{throw new Error('a new save must not be started');},'/labs/lab/git':()=>({repository_status:{ready:true}})}});
  await h.open();assert.equal(h.text('save-panel-title-text'),'Can’t save');
  await h.press('save-also-show');await h.flush();h.render();h.mem().view=null;h.render();            // the person saw the failed upload's review
  await h.press('save-cant-again');
  assert.equal(h.posts().filter(c=>c.endpoint.endsWith('/git/save')).length,0);assert.deepEqual(h.posts().filter(c=>c.endpoint.endsWith('/retry')).map(c=>JSON.parse(JSON.stringify(c.payload))),[{push:true,reviewed:true,head:'head-1'}]);
+ // L2-4: when the account could not upload, the state is Upload failed (one view), and its Try again is the upload
+ const acc=harness({lab:boundLab({git_status:{checked:true,ready:false,problem:'push failed',code:'account',waiting:1}}),state:{git_jobs:[job]},routes:{'/git/compare':()=>review({upload_job:'w'}),'/retry':()=>({...job,status:'queued'})}});
+ await acc.open();assert.equal(acc.text('save-chip-text'),'Upload failed');assert.equal(acc.text('save-panel-title-text'),'Upload failed');
+ await acc.press('save-retry');assert.equal(acc.posts().filter(c=>c.endpoint.endsWith('/retry')).length,1);assert.equal(acc.posts().filter(c=>c.endpoint.endsWith('/git/save')).length,0);
  // a save the manager stopped is still retried as a save
  const stopped=waiting({id:'x',status:'export_pending',commit:''});
  const s2=harness({state:{git_jobs:[stopped,saved()]},routes:{'/retry':payload=>({...stopped,status:'queued',sent:payload})}});await s2.open();await s2.press('save-cant-again');

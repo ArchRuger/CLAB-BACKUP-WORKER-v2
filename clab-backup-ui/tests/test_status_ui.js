@@ -338,6 +338,9 @@ test('7.1 row 6 Can\'t save: a failed attempt newer than the capture save, or gi
  const refused=chip(bound,{git_jobs:[save],refusal:{message:'No.',at:ago(1)}});assert.equal(refused.key,'cant');assert.equal(refused.detail,'No.');
  const oldRefusal=chip(bound,{git_jobs:[save],refusal:{message:'No.',at:ago(90)}});assert.equal(oldRefusal.key,'saved');
  assert.equal(chip(bound,{git_jobs:[save],refusal:{message:'No.'}}).key,'cant','a refusal without a time is the newest event');
+ // L2-4: an upload the VM account could not make is Upload failed, one state with one name; the same code without a failed upload is Can't save.
+ {const failed=chip({...bound,git_status:{checked:true,ready:false,problem:'push failed',code:'account'}},{git_jobs:[gj('push_pending',10),save]});assert.equal(failed.key,'failed');assert.equal(failed.text,'Upload failed');
+  assert.equal(chip({...bound,git_status:{checked:true,ready:false,problem:'x',code:'diverged'}},{git_jobs:[gj('push_pending',10),save]}).key,'cant');}
  const withWaiting=chip({...bound,git_status:{checked:true,ready:false,code:'diverged'}},{git_jobs:[save,gj('review_pending',10)]});assert.equal(withWaiting.key,'cant');assert.equal(withWaiting.also.key,'waiting');
  const withFailed=chip({...bound,git_status:{checked:true,ready:false,code:'vm'}},{git_jobs:[gj('push_pending',10)]});assert.equal(withFailed.also.key,'failed');
  assert.equal(chip(unbound,{git_jobs:[save,gj('capture_incomplete',2)]}).key,'cant','a failed attempt needs no connection');

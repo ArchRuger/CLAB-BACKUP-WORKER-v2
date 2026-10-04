@@ -326,7 +326,10 @@ function saveChipState(lab,ctx={},now){
  const states=[];
  if(attempt&&(!live||failedAt>loadAt))states.push(cant());                                                                  // row 3
  if(live)states.push(load.key==='running'?{key:'running',dot:'info',text:'Running '+load.name,panel:'running',job:load.job,at:load.job.finished||load.job.created||''}:{key:'partial',dot:'warn',text:`Loaded ${load.loaded} of ${load.total}`,panel:'partial',job:load.job,at:load.job.finished||load.job.created||''});   // rows 4, 5
- if(!states.some(s=>s.key==='cant')&&(attempt||unready))states.push(cant());                                               // row 6
+ // An upload that failed because the VM account could not reach or use the online repository is one state with one name,
+ // Upload failed (PROMPT 5.3 step 5), not a second Can't save view beside it (live finding L2-4): its Try again repeats the upload.
+ const uploadOnly=!!uploadFailed&&!attempt&&unready&&status.code==='account';
+ if(!states.some(s=>s.key==='cant')&&(attempt||(unready&&!uploadOnly)))states.push(cant());                                               // row 6
  if(uploadFailed)states.push({key:'failed',dot:'bad',text:'Upload failed',panel:'failed',job:uploadFailed});                // row 7
  else if(count)states.push({key:'waiting',dot:'warn',text:plural(count,'save')+' to upload',panel:'upload',job:waiting[0]});   // row 8
  const shown=captures.find(j=>j.status!=='unchanged')||captures[0]||null;

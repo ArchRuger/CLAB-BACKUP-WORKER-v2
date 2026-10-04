@@ -87,6 +87,9 @@ def main():
     p.wait_for_timeout(4500)
     s.equal('T1-5 reopened, and after a poll: the branch is as the person left it', p.locator('[data-folder="BGP"]').get_attribute('aria-expanded'), after)
 
+    if args.width <= 480:
+        heights = [p.locator(sel).first.bounding_box()['height'] for sel in ['.folder-chooser [data-folder-action="new"]', '#folder-foot [data-folder-action="cancel"]', '#save-drawer-close']]
+        s.check('Q390-09, L2-8 New folder…, Cancel and the close button are at least 40 px high on a phone', all(h >= 39.5 for h in heights), heights)
     # Q1280-04: Save here pressed right after typing (within the 250 ms before the check is even sent) is not lost
     del s.sent[:]
     p.locator('#folder-path').fill('quick-click')
