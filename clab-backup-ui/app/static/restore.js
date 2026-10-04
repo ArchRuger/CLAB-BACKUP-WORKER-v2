@@ -49,7 +49,7 @@ const restoreReasons = [
  ['SSH probe failed', 'The device did not answer over SSH.'],
  ['This saved configuration has no restore data for this node', 'This state was saved before this kind of device could be loaded. Save the lab again to get a loadable state.'],
  ['The saved restore data for this node is not usable', 'The saved configuration for this device is incomplete or damaged, so it was not applied.'],
- ['Another change is waiting for confirmation on this node', 'Someone else\'s configuration change is waiting for confirmation on this device. Try again when it has finished.']];
+ ['Another change is waiting for confirmation on this node', 'Someone else’s configuration change is waiting for confirmation on this device. Try again when it has finished.']];
 // One device's progress, step by step, derived from the job document alone (target.stage and target.timeline, epoch
 // seconds), so a closed and reopened dialog or a reloaded page rebuilds exactly the same list. Devices run side by
 // side and settle in any order; each row stands on its own. Every step says in words what it is at, never by colour alone.

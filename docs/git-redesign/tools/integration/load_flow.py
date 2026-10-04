@@ -103,7 +103,7 @@ def main():
     boxes.nth(1).uncheck()
     s.click('#load-diff', count=False)
     expect(p.locator('#save-drawer')).to_be_visible()
-    s.equal('E differences drawer: title', s.text('#save-drawer-title'), "What's different")
+    s.equal('E differences drawer: title', s.text('#save-drawer-title'), 'What’s different')
     s.equal('E differences drawer: exactly one Load button on screen, naming the count', visible_load_buttons(s), ['Load on 3 devices'])
     s.check('E differences drawer: one Back', p.locator('#save-drawer button:visible', has_text=re.compile('^Back$')).count() == 1)
     s.check('E differences drawer: the differences of the ticked devices', p.locator('#save-drawer-content .save-heading').count() >= 1)

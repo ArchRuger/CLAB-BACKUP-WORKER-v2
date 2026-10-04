@@ -528,7 +528,7 @@ def scenario_load(s):
     with s.state('See what’s different', '5.4 step 3'):
         s.click('#load-diff')
         expect(p.locator('#save-drawer')).to_be_visible(timeout=10000)
-        s.equal('title', s.text('#save-drawer-title'), "What's different")
+        s.equal('title', s.text('#save-drawer-title'), 'What’s different')
         s.check('the differences of the ticked devices', p.locator('#save-drawer-content .save-heading').count() >= 1)
         s.check('one Load button, naming the count', p.locator('#load-diff-run').inner_text().startswith('Load on '), p.locator('#load-diff-run').inner_text())
     s.click('#load-diff-back', count=False)

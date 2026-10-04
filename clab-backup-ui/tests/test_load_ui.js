@@ -133,8 +133,8 @@ test('the confirmation: every preflight row kind gives its text, tick box and re
  assert.match(li('r7'),/checked>.*<span class="save-end">1 line differs<\/span>/);
  assert.match(li('r5'),/checked>.*<span class="save-end">Ready to load<\/span>/);
  assert.match(li('vjunos'),/^<li class="off"><label><input [^>]* disabled><span>vjunos <small>Junos<\/small><span class="save-why">The device did not answer over SSH\.<\/span><\/span><\/label><span class="save-end">Not reachable<\/span>/);
- assert.match(li('evo'),/class="off".* disabled>.*<span class="save-why">Someone else&#39;s configuration change is waiting for confirmation on this device\. Try again when it has finished\.<\/span>.*<span class="save-end">Blocked<\/span>/);
- assert.match(li('r6'),/class="off".* disabled>.*<span class="save-why">Add login credentials for this device first\.<\/span><\/span><\/label><button type="button" class="button ghost small" id="load-fix-\d" data-load-action="credentials">Credentials…<\/button><span class="save-end">Can&#39;t load<\/span>/,'the action that clears the reason is a button beside it (review D3), outside the label');
+ assert.match(li('evo'),/class="off".* disabled>.*<span class="save-why">Someone else’s configuration change is waiting for confirmation on this device\. Try again when it has finished\.<\/span>.*<span class="save-end">Blocked<\/span>/);
+ assert.match(li('r6'),/class="off".* disabled>.*<span class="save-why">Add login credentials for this device first\.<\/span><\/span><\/label><button type="button" class="button ghost small" id="load-fix-\d" data-load-action="credentials">Credentials…<\/button><span class="save-end">Can’t load<\/span>/,'the action that clears the reason is a button beside it (review D3), outside the label');
  assert.match(li('gone'),/class="off".* disabled>.*<span class="save-end">Not in this lab<\/span>/);
  assert.match(li('odd'),/&lt;b&gt;strange&lt;\/b&gt;/,'reasons are escaped');assert.doesNotMatch(html,/<b>strange/);
  assert.doesNotMatch(html,/value="clab-BGP-host"/,'a device without a restore format has no row');
@@ -311,7 +311,7 @@ test('L4: the differences drawer says what its button does, shows ticked devices
  const p=confirmPage(targets);
  await p.c.loadChoose('lab',{type:'folder',path:'/BGP/latest'},'ospf-up');
  let d=p.c.loadDifferentMarkup();
- assert.equal(d.title,'What\'s different');
+ assert.equal(d.title,'What’s different');
  assert.match(d.meta,/^Ospf-up compared with what the devices run now · saved 2 days ago · c{10}$/);
  assert.match(d.html,/^<div class="save-row"><button type="button" class="button danger" id="load-diff-run" data-load-action="diff-run">Load on 4 devices<\/button><button[^>]*data-load-action="diff-back">Back<\/button><span class="caption" id="load-diff-reason" hidden><\/span><\/div>/);
  assert.equal((d.html.match(/<h3 class="save-heading">/g)||[]).length,3,'the device that already matches has no differences');
@@ -339,7 +339,7 @@ test('without the drawer script the differences show inside the panel, and Back 
  const p=page({drawer:false,routes:e=>e.endsWith('/preflight')?preflight(fourTargets()):{}});
  await p.c.loadChoose('lab',{type:'folder',path:'/BGP/latest'},'ospf-up');
  await p.click('data-load-action="diff"');
- assert.match(p.body(),/^<p class="save-state" tabindex="-1" data-panel-focus>What&#39;s different<\/p>/);
+ assert.match(p.body(),/^<p class="save-state" tabindex="-1" data-panel-focus>What’s different<\/p>/);
  await p.click('data-load-action="diff-back"');
  assert.match(p.body(),/Load ospf-up\?/);
 });
@@ -593,11 +593,11 @@ test('no save location: the places request, then the states of the default repos
 test('no repository on the VM: "There is nothing to load yet" with Save…, and no foot; a lab with saves but no lab states, and an empty repository',async()=>{
  const p=page({lab:makeLab({git_binding:null}),gets:()=>({repositories:[],default:null})});
  await p.open();
- assert.match(p.body(),/^<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot none" aria-hidden="true"><\/span>There is nothing to load yet<\/p><p class="save-sub">No repository is connected to this lab VM\. Save this lab once to connect one, or ask your instructor for the course repository's address\.<\/p><div class="save-row"><button type="button" class="button primary" id="load-save" data-load-action="save">Save…<\/button><\/div>$/);
+ assert.match(p.body(),/^<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot none" aria-hidden="true"><\/span>There is nothing to load yet<\/p><p class="save-sub">No repository is connected to this lab VM\. Save this lab once to connect one, or ask your instructor for the course repository’s address\.<\/p><div class="save-row"><button type="button" class="button primary" id="load-save" data-load-action="save">Save…<\/button><\/div>$/);
  assert.doesNotMatch(p.body(),/All versions|Browse the repository/);
  await p.click('data-load-action="save"');assert.deepEqual(p.shown,['status']);assert.equal(p.els['load-panel'].hidden,true);
  const q=page({gets:()=>rowAnswer([])});await q.open();
- assert.match(q.body(),/Nothing is saved in this repository yet\. Save this lab, or ask your instructor for the course's lab states\./);
+ assert.match(q.body(),/Nothing is saved in this repository yet\. Save this lab, or ask your instructor for the course’s lab states\./);
  const r=page({gets:()=>rowAnswer([stateRow('BGP/latest','latest')])});await r.open();
  assert.doesNotMatch(r.body(),/no saves of its own|Lab states/);
 });

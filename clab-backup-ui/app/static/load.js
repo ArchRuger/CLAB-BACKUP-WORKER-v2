@@ -171,7 +171,7 @@ function loadListMarkup(model){
   html+=`<h3 class="save-heading">Lab states</h3><ul class="save-list">${model.states.map((it,i)=>row(it,model.saves.length+i)).join('')}</ul>`;
   if(model.more)html+=`<p class="save-note">${esc(model.more)} more in All versions</p>`;
  }
- if(!model.saves.length&&!model.states.length)html+='<p class="save-sub">Nothing is saved in this repository yet. Save this lab, or ask your instructor for the course\'s lab states.</p>';
+ if(!model.saves.length&&!model.states.length)html+='<p class="save-sub">Nothing is saved in this repository yet. Save this lab, or ask your instructor for the course’s lab states.</p>';
  if(!model.own)html+=`<p class="save-note">From ${esc(model.repoName||'the repository')}.</p>`;
  return html+loadFootMarkup();
 }
@@ -231,7 +231,7 @@ function loadConfirmRows(r,lab){
   const reason=String(t.reason||'');
   if(reason.startsWith('No running node in this lab matches'))return {...base,text:'Not in this lab'};
   const parts=loadReason(reason||'Not eligible');
-  const kind=t.reachable===false?'Not reachable':t.reachable===true?'Blocked':'Can\'t load';
+  const kind=t.reachable===false?'Not reachable':t.reachable===true?'Blocked':'Can’t load';
   return {...base,text:kind,why:parts.text,action:parts.action||'',actionLabel:parts.label||''};
  });
  if(!r.retry){
@@ -317,7 +317,7 @@ async function loadSubmit(){
 // saved → running now differences of the ticked devices. No request. With no review (cleared meanwhile) the html is empty.
 function loadDifferentMarkup(review){
  const r=review||loadReview;
- if(!r||!r.review)return {title:'What\'s different',meta:'',html:''};
+ if(!r||!r.review)return {title:'What’s different',meta:'',html:''};
  const source=r.review.source||{},targets=r.review.targets||[],rows=loadConfirmRows(r,loadLab(r.labId));
  const ticked=rows.filter(x=>x.eligible&&r.chosen.has(x.name)),count=ticked.length,saving=loadSaveRunning(r.labId);
  const reason=saving&&rows.some(x=>x.eligible)?'A save is running.':(rows.some(x=>x.eligible)&&loadBusy(r.labId))||(count?'':'Tick at least one device.');
@@ -327,7 +327,7 @@ function loadDifferentMarkup(review){
  const shown=ticked.map(x=>targets.find(t=>String(t.name)===x.name)).filter(t=>t&&!(t.diff&&t.diff.identical)&&t.matches_saved!==true);
  html+=shown.map(t=>`<h3 class="save-heading">${loadDeviceLabel(t.name,t.short_name,t.platform)}</h3>${typeof restoreDiffBody==='function'?restoreDiffBody(t):''}`).join('');
  if(!shown.length)html+=`<p class="save-note">${count?'The ticked devices already run '+esc(r.name)+'.':'No device is ticked.'}</p>`;
- return {title:'What\'s different',meta,html};
+ return {title:'What’s different',meta,html};
 }
 // Back from the differences: the panel shows the same confirmation (same ticks, same request id), only for the review of the lab on screen.
 function loadDifferentBack(){
@@ -505,7 +505,7 @@ function loadViewMarkup(){
  }
  if(v.kind==='different'&&loadReview){const d=loadDifferentMarkup(loadReview);return `<p class="save-state" tabindex="-1" data-panel-focus>${esc(d.title)}</p><p class="save-note">${esc(d.meta)}</p>${d.html}`;}
  if(v.kind==='notrunning')return loadNotRunningMarkup();
- if(v.kind==='nothing')return '<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot none" aria-hidden="true"></span>There is nothing to load yet</p><p class="save-sub">No repository is connected to this lab VM. Save this lab once to connect one, or ask your instructor for the course repository\'s address.</p><div class="save-row"><button type="button" class="button primary" id="load-save" data-load-action="save">Save…</button></div>';
+ if(v.kind==='nothing')return '<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot none" aria-hidden="true"></span>There is nothing to load yet</p><p class="save-sub">No repository is connected to this lab VM. Save this lab once to connect one, or ask your instructor for the course repository’s address.</p><div class="save-row"><button type="button" class="button primary" id="load-save" data-load-action="save">Save…</button></div>';
  if(v.kind==='error')return `<h2 class="sr-only" tabindex="-1" data-panel-focus>Load a saved state</h2><p class="save-sub">The saved states could not be read from the lab VM.</p><p class="form-error" role="alert">${esc(v.message||'')}</p><div class="save-row"><button type="button" class="button ghost small" id="load-reload" data-load-action="reload">Try again</button></div>${loadFootMarkup()}`;
  if(v.kind==='reading')return '<h2 class="sr-only" tabindex="-1" data-panel-focus>Load a saved state</h2><p class="save-sub">Reading the saved states…</p>'+loadFootMarkup();
  if(v.kind==='list')return loadListMarkup(loadListModel(lab,loadStates.get(lab.id)));

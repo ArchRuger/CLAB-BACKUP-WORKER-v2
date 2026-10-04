@@ -552,10 +552,10 @@ test('New folder… inside a saved state: the folder is made in the lab folder a
 });
 test('the different kind: the drawer is the shell of load.js\'s view (its title, meta and markup with its own buttons); the drawer submits nothing itself',async()=>{
  const events=[];
- const view=review=>({title:'What\'s different',meta:review.name+' compared with what the devices run now',html:`<div class="save-row"><button type="button" class="button danger" data-load-action="diff-run">Load on 3 devices</button></div><p>${escapeHtml(review.name)}</p>`});
+ const view=review=>({title:'What’s different',meta:review.name+' compared with what the devices run now',html:`<div class="save-row"><button type="button" class="button danger" data-load-action="diff-run">Load on 3 devices</button></div><p>${escapeHtml(review.name)}</p>`});
  const g=harness({extras:{loadDifferentMarkup:view,loadSubmit:async()=>{events.push('submit');}}});
  g.context.saveDrawerOpen('different',{review:{name:'Start'},onBack:()=>events.push('back'),onClose:()=>events.push('close')});
- assert.equal(g.title(),'What\'s different');assert.match(g.content(),/<p>Start<\/p>/);assert.match(g.content(),/data-load-action="diff-run"[^>]*>Load on 3 devices/);
+ assert.equal(g.title(),'What’s different');assert.match(g.content(),/<p>Start<\/p>/);assert.match(g.content(),/data-load-action="diff-run"[^>]*>Load on 3 devices/);
  assert.equal(g.actions(),'','the buttons are load.js\'s own, inside its markup; the drawer adds none');
  assert.doesNotMatch(fs.readFileSync(path.join(__dirname,'..','app','static','save-drawers.js'),'utf8').split('\n').filter(line=>!/^\s*\/\//.test(line)).join('\n'),/loadSubmit\(/,'only load.js submits a load');
  g.context.saveDrawerBack();assert.deepEqual(events,['back']);assert.equal(g.dialog.open,false);

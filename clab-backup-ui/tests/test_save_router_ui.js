@@ -129,6 +129,14 @@ test('no page script calls an old folder route, and gitReviewJob is the only sen
  // The first save and every saved request stop before an upload: `push: true` on the save route asks for the review, never uploads.
  assert.match(progress,/function gitNeedsReview\(job\)/);
 });
+test('D4-1 one apostrophe on the save and load surfaces: the curly one, as the chip has it (Can’t save); no word with a straight apostrophe in their text',()=>{
+ for(const name of ['load.js','restore.js','git-progress.js','git-places.js','save-header.js','save-drawers.js']){
+  const lines=read(name).split('\n').filter(line=>!/^\s*\/\//.test(line)).map(line=>line.replace(/\s\/\/ .*$/,''));
+  const found=lines.flatMap(line=>[...line.matchAll(/[A-Za-z]\\?'(?:s|t|re|ll|ve|d)\b[^']{0,24}/g)].map(m=>m[0]));
+  assert.deepEqual(found,[],name+' has a straight apostrophe in a word');
+ }
+ assert.match(read('load.js'),/'Can’t load'/);assert.match(read('load.js'),/title:'What’s different'/);
+});
 test('Use a different repository…: either choice opens the folder chooser for that repository; nothing is sent before Save here (never PUT …/git)',async()=>{
  const p=page('#lab=a&view=topology'),context=p.context,sent=[];
  const el=id=>context.document.getElementById(id);

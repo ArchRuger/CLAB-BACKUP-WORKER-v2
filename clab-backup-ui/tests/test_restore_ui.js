@@ -122,7 +122,7 @@ test('restore words: preflight reasons, result sentence and titles are the stude
  same(c.restoreReasonParts('SSH probe failed: OSError'),{text:'The device did not answer over SSH.',action:'',label:''});
  same(c.restoreReasonParts('Something new'),{text:'Something new',action:'',label:''});
  assert.equal(c.restoreReasonLabel('The saved restore data for this node is not usable'),'The saved configuration for this device is incomplete or damaged, so it was not applied.');
- assert.equal(c.restoreReasonLabel('Another change is waiting for confirmation on this node'),'Someone else\'s configuration change is waiting for confirmation on this device. Try again when it has finished.');
+ assert.equal(c.restoreReasonLabel('Another change is waiting for confirmation on this node'),'Someone else’s configuration change is waiting for confirmation on this device. Try again when it has finished.');
  assert.equal(c.restoreReasonLabel('Something new'),'Something new');
  // rollback_expected and uncertain now count as "needs attention" (neither is a verified outcome);
  // rolled_back (checked, self-undone) counts as "not changed".

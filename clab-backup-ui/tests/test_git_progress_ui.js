@@ -454,7 +454,7 @@ test('E3: a save\'s frozen destination is shown in the job window as repository 
   destination:{repository:'Course-Labs',branch:'main',path:'Gtel-100G-G8032/Working/latest',checkout:'/home/ben/labs/bgp'}};
  const html=context.gitJobMarkup(job);
  assert.match(html,/Saving to<\/span><code>Course-Labs<\/code>.*<code>main<\/code>.*<code>Gtel-100G-G8032\/Working\/latest<\/code>/s);
- assert.match(html,/waiting for your review/);
+ assert.match(html,/not uploaded yet/);assert.doesNotMatch(html,/waiting for your review/);
  assert.match(html,/<dt>Destination<\/dt><dd>Course-Labs · main · Gtel-100G-G8032\/Working\/latest<\/dd>/);
  assert.match(html,/<dt>Checkout<\/dt><dd class="mono">\/home\/ben\/labs\/bgp<\/dd>/);
  assert.match(html,/<dt>Label<\/dt><dd>OSPF up<\/dd>/,'the label row is named Label, not Note');

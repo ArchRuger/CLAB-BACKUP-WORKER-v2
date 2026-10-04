@@ -619,6 +619,22 @@ test('Q390-07 a disconnected lab that has earlier saves: the chip keeps Saved, a
  const own=harness({lab:freeLab(),state:{git_jobs:[saved()]},routes:{'/git/places':()=>({repositories:[{id:'r',name:'Course'}],default:{repository:'r',folder:'restore-square',answer:{kind:'own-before',exists:true}}})}});await own.open();
  assert.match(own.body.innerHTML,/Your saves continue in Course, in the folder restore-square\./);
 });
+test('Q1440-11 one state, one name: an upload refused because both sides changed opens on the chip’s Can’t save, with the failed upload behind Show; Q390-12 a view that offers Save settings does not offer it twice',async()=>{
+ const job=waiting({id:'w',status:'push_pending',reviewed:ago(3)});
+ const lab=boundLab({git_status:{checked:true,ready:false,problem:'The remote branch advanced or diverged.',code:'diverged',waiting:1}});
+ const h=harness({lab,state:{git_jobs:[job]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w',also_sends:[]})}});
+ assert.equal(h.context.saveFinished(job),true);h.render();await h.flush();h.render();
+ assert.equal(h.text('save-chip-text'),'Can’t save');assert.equal(h.text('save-panel-title-text'),'Can’t save','the panel names the state as the chip does');
+ assert.match(h.body.innerHTML,/Also: the last upload failed\. <button[^>]*data-save-action="show-also"/);
+ await h.press('save-also-show');assert.equal(h.text('save-panel-title-text'),'Upload failed','asked for, it is shown and stays');h.render();assert.equal(h.text('save-panel-title-text'),'Upload failed');
+ // any other failed upload keeps its own name
+ const plain=harness({state:{git_jobs:[job]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w',also_sends:[]})}});
+ assert.equal(plain.context.saveFinished(job),true);plain.render();assert.equal(plain.text('save-chip-text'),'Upload failed');assert.equal(plain.text('save-panel-title-text'),'Upload failed');
+ // Q390-12
+ const none=harness({lab:boundLab({git_status:{checked:true,ready:false,problem:'No device of this lab is selected for saving.',code:'devices',waiting:0}}),state:{git_jobs:[saved()]}});await none.open();
+ assert.equal(none.text('save-panel-title-text'),'Can’t save');assert.equal((none.body.innerHTML.match(/>Save settings<\/button>/g)||[]).length,1);
+ const rest=harness({state:{git_jobs:[saved()]}});await rest.open();assert.equal((rest.body.innerHTML.match(/>Save settings<\/button>/g)||[]).length,1);
+});
 test('Q390-05 a name being typed is never posted by the poll: a change fired by the rebuild of the panel is ignored, the caret stays where it is, Enter and a real change commit',async()=>{
  const job=saved({note:'abcdefgh'});
  const h=harness({state:{git_jobs:[job]},routes:{'/name':payload=>({...job,note:payload.note})}});await h.open();
@@ -644,7 +660,11 @@ test('Q390-01 the view asked for with Show stays: the end of the upload that arr
  const h=harness({lab,state:{git_jobs:[job]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w',also_sends:[]})}});
  // The upload failed: the panel is on Upload failed, the poll already turned the chip to Can't save with its Also line.
  await h.open();h.mem().view={lab:'lab',panel:'failed',job:'w'};h.render();await h.flush();h.render();
- assert.equal(h.text('save-panel-title-text'),'Upload failed');assert.match(h.body.innerHTML,/Also: saving is not possible right now\./);
+ // (Before Q1440-11 the panel stayed on Upload failed here and Show led to the Can't save view; the state now has one name.)
+ assert.equal(h.text('save-panel-title-text'),'Can’t save');assert.match(h.body.innerHTML,/Also: the last upload failed\./);
+ // A view asked for with Show, here the running load's or any other, is kept the same way: ask for the failed upload and back.
+ await h.press('save-also-show');assert.equal(h.text('save-panel-title-text'),'Upload failed');
+ assert.equal(h.context.saveFinished({...job}),false);h.render();assert.equal(h.text('save-panel-title-text'),'Upload failed','the end of the upload does not replace a view the person asked for');
  await h.press('save-also-show');assert.equal(h.text('save-panel-title-text'),'Can’t save');
  // The watch of the upload answers only now.
  assert.equal(h.context.saveFinished(job),false);h.render();
@@ -655,7 +675,8 @@ test('Q390-01 the view asked for with Show stays: the end of the upload that arr
  // Closing the panel forgets the asked view; a result that arrives while no view was asked for opens on itself as before.
  const g=harness({lab,state:{git_jobs:[job]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w',also_sends:[]})}});
  await g.open();assert.equal(g.text('save-panel-title-text'),'Can’t save');
- assert.equal(g.context.saveFinished(job),true);g.render();assert.equal(g.text('save-panel-title-text'),'Upload failed');
+ assert.equal(g.context.saveFinished(job),true);g.render();assert.equal(g.text('save-panel-title-text'),'Can’t save','both sides changed: the one name (Q1440-11)');
+ g.state.labs[0]={...lab,git_status:{checked:true,ready:true,problem:'',code:'',waiting:1}};g.render();assert.equal(g.text('save-panel-title-text'),'Upload failed','any other failed upload opens on itself');
  g.chip._menuClose(false);assert.equal(g.mem().view,null);
 });
 

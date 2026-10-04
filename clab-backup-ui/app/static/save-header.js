@@ -126,7 +126,7 @@ function saveTailMarkup(lab,cs,options={}){
  const place=bound&&options.place!==false?`<p class="save-kv" id="save-place"><span>Saves to:</span> ${saveEsc(savePlaceWords(lab))} ${saveButton('place','Change…','save-change',{disabled:!!options.busy})}</p>`:'';
  const when=last?saveLongTime(last.at,saveClock):'';
  const loaded=last&&last.job?`<p class="save-kv" id="save-last-load"><span>Last load:</span> ${saveEsc(last.name+(last.changed===false?', nothing changed':when?', '+when:''))} ${saveButton('load-details','Details','save-load-details')}</p>`:'';
- const foot=bound?saveButton('versions','All versions','save-all')+saveButton('lab-state','Save as a lab state…','save-as-state')+saveButton('settings','Save settings','save-settings'):saveButton('lab-state','Save as a lab state…','save-as-state');
+ const foot=bound?saveButton('versions','All versions','save-all')+saveButton('lab-state','Save as a lab state…','save-as-state')+(options.settings===false?'':saveButton('settings','Save settings','save-settings')):saveButton('lab-state','Save as a lab state…','save-as-state');
  return `${place}${loaded}${saveAlsoMarkup(cs,options.panel)}<div class="save-foot">${foot}</div>`;
 }
 // ---- The views. Each returns {title, dot, name, html, job, needs}; `job` is the id of the job its actions are about. ----
@@ -151,7 +151,7 @@ function saveViewCant(cs,lab){
  // Both sides have changes: what the repository's owner runs on the VM, as code, each on its own line.
  const commands=(problem.commands||[]).length?`<p class="save-note" id="save-cant-how">The repository’s owner runs these on the lab VM, then Try again uploads the waiting saves:</p><pre class="git-setup-command" id="save-cant-commands" tabindex="0">${problem.commands.map(saveEsc).join('\n')}</pre>`:'';
  const detail=unbound&&problem.detail?`<details id="save-cant-details"><summary>Details</summary><p class="save-note">${saveEsc(problem.detail)}</p></details>`:'';
- return {title:'Can’t save',dot:'bad',name:'cant',job:problem.job?problem.job.id:'',html:`<p class="save-sub" id="save-cant-why">${saveEsc(problem.sentence)}</p>${commands}<div class="save-row">${buttons}</div>${detail}${saveErrorMarkup(lab)}${saveTailMarkup(lab,cs,{panel:'cant'})}`};
+ return {title:'Can’t save',dot:'bad',name:'cant',job:problem.job?problem.job.id:'',html:`<p class="save-sub" id="save-cant-why">${saveEsc(problem.sentence)}</p>${commands}<div class="save-row">${buttons}</div>${detail}${saveErrorMarkup(lab)}${saveTailMarkup(lab,cs,{panel:'cant',settings:!actions.some(item=>item.action==='settings')})}`};
 }
 // Whether the devices are still known to run the lab's latest save: no deploy, redeploy, destroy or design apply finished after it.
 function saveRunsLatest(cs,lab){
@@ -240,6 +240,9 @@ function saveWantedView(cs,lab){
  if(cs.key==='loading'||cs.key==='saving')return null;
  if(want.panel==='upload'||want.panel==='failed'){
   const job=saveJobById(want.job);if(!job||!job.commit||job.pushed||!['committed','review_pending','push_pending','interrupted'].includes(job.status))return null;
+  // One state, one name (DESIGN.md 7.1: Can't save comes before Upload failed): an upload refused because both sides changed is
+  // the chip's Can't save, with the failed upload behind its Also line, unless the person asked for that view with Show.
+  if(!want.asked&&job.status==='push_pending'&&cs.key==='cant'&&cs.code==='diverged')return null;
   return {panel:job.status==='push_pending'?'failed':'upload',job};
  }
  const holds=[cs,cs.also,cs.also2].some(s=>s&&s.panel===want.panel);
