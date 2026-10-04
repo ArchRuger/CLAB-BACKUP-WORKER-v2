@@ -436,7 +436,11 @@ function folderChooserMarkup(model,view){
  const mode=view.mode||'location',status=view.status||(model?'ready':'loading'),lab=view.labName||'This lab',busy=!!view.busy;
  let repo=view.repoName||'Repository';
  const chosen=model?folderClean(view.value):'';
- const answer=view.answer&&typeof view.answer==='object'?view.answer:(model&&model.answers.get(chosen))||null;
+ // By its address a repository is not known yet: nothing the tree of another repository knows is said about the folder.
+ const byAddress=mode==='location'&&!!view.address&&typeof view.address==='object',typedAddress=byAddress&&!!String(view.address.value||'').trim();
+ // A lab state without a name has no folder yet: no claim about where it goes, and Save state is off with the reason.
+ const nameless=mode==='state'&&!String(view.name||'').trim();
+ const answer=nameless?null:view.answer&&typeof view.answer==='object'?view.answer:(!byAddress&&model&&model.answers.get(chosen))||null;
  if(model&&mode!=='browse'&&status==='ready'){
   const target=answer&&answer.folder!==undefined&&answer.folder!==null?String(answer.folder):chosen;
   if(view.selected===undefined||view.selected===null)view={...view,selected:model.nodes.has(target)?target:null};
@@ -462,7 +466,7 @@ function folderChooserMarkup(model,view){
  const shown=answer&&answer.folder!==undefined&&answer.folder!==null?String(answer.folder):folderClean(view.value);
  if(mode!=='browse'){
   parts.push(`<label for="folder-path">Folder</label><input id="folder-path" maxlength="500" autocomplete="off" spellcheck="false" aria-describedby="folder-result folder-answer" value="${esc(view.value??'')}">`);
-  parts.push(`<p class="git-destination-line" id="folder-result"><span>${mode==='state'?'The state is saved in':'Saves go to'}</span><code>${esc(repo)}</code><span aria-hidden="true">›</span><code>${esc(shown||'top level')}</code></p>`);
+  if(!nameless&&(!byAddress||typedAddress))parts.push(`<p class="git-destination-line" id="folder-result"><span>${mode==='state'?'The state is saved in':'Saves go to'}</span><code>${esc(repo)}</code><span aria-hidden="true">›</span><code>${esc(shown||'top level')}</code></p>`);
  }
  // The tree area: every state of 4.9.
  let tree='',reason='',tools='';
@@ -470,7 +474,7 @@ function folderChooserMarkup(model,view){
   // No tree before the repository is connected: the folder is typed, and any question comes back with buttons.
   parts.push('<p class="save-note" id="folder-tree-note">The folders of this repository are listed once it is connected.</p>');
   const info=folderAnswerView(answer,{...view,mode,labName:lab,repoName:repo});
-  if(!answer&&!view.question&&!view.pending)info.buttons=[{label:'Connect and save here',action:'save',primary:true}];
+  if(!answer&&!view.question&&!view.pending)info.buttons=[{label:'Save here',action:'save',primary:true,disabled:!typedAddress}];
   parts.push(`<p class="folder-answer" id="folder-answer" role="status" aria-live="polite">${esc([view.notice||'',info.sentence].filter(Boolean).join(' '))}</p>`);
   parts.push(`<p class="save-note" id="folder-answer-note"${info.note?'':' hidden'}>${esc(info.note||'')}</p>`);
   parts.push(folderRefusedMarkup(view));
@@ -498,7 +502,7 @@ function folderChooserMarkup(model,view){
  if(mode==='browse'&&status==='ready'&&model)parts.push(folderListingMarkup(model,view.selected));
  if(mode!=='browse'){
   // The sentence, its note and its questions. The live region holds only the sentence; buttons are in the foot.
-  const checking=!answer&&!view.question&&!view.pending&&(!!view.checking||status==='ready');
+  const checking=!nameless&&!answer&&!view.question&&!view.pending&&(!!view.checking||status==='ready');
   const info=folderAnswerView(answer,{...view,mode,labName:lab,repoName:repo});
   const sentence=[view.notice||'',checking?'Checking…':info.sentence].filter(Boolean).join(' ');
   parts.push(`<p class="folder-answer" id="folder-answer" role="status" aria-live="polite">${esc(sentence)}</p>`);
@@ -509,7 +513,7 @@ function folderChooserMarkup(model,view){
   if(forgettable)parts.push(`<div class="save-row"><button type="button" class="button ghost small" data-folder-action="forget" data-folder-path="${esc(String(answer.path??answer.folder??''))}">Remove from the list</button></div>`);
   if(bring&&bring.offered&&!unfinished)parts.push(`<label class="checkbox-label" id="folder-move"><input type="checkbox" data-folder-bring${view.bring===false?'':' checked'}> Bring this lab’s saved files along</label>`);
   parts.push(folderRefusedMarkup(view));
-  const blocked=status==='loading'||status==='unreachable';
+  const blocked=status==='loading'||status==='unreachable'||nameless;if(nameless&&!reason)reason='Give the lab state a name.';
   const buttons=info.buttons.map(button=>folderButtonMarkup(blocked&&button.primary?{...button,disabled:true}:button,view)).join('');
   parts.push(`<div class="save-settings-foot" id="folder-foot">${view.showCancel===false?'':'<button type="button" class="button ghost small" data-folder-action="cancel">Cancel</button>'}${buttons}${blocked?`<span class="form-help" id="folder-reason">${esc(reason)}</span>`:''}</div>`);
   parts.push(mode==='state'?`<p class="save-note">Reads every included device now. Saved files can contain passwords or keys. Where ${esc(lab)} normally saves does not change.</p>`:'<p class="save-note">Saved files can contain passwords or keys.</p>');

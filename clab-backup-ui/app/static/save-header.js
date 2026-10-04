@@ -16,6 +16,8 @@
 const saveHeader={refusal:null,placing:'',connecting:false,opened:new Map(),last:new Map(),naming:'',view:null,places:new Map(),first:{lab:'',url:'',question:null},typed:null,reviewErrors:new Map(),reviewing:new Set(),uploading:'',sent:'',keeping:'',renaming:'',error:null,shown:{lab:'',view:'',job:''},watched:'',seen:new Map()};
 let saveClock;   // the `now` of the render in progress (tests pass one; the page uses the real time)
 const SAVE_EXPOSURE='Saved files can contain passwords or keys.';
+const SAVE_NO_DEVICE='This lab has no device whose configuration can be saved.';
+const SAVE_ADMIN_TEXT='On the VM, run this as your normal account (no sudo). It sets up the checkout and Git login. Then click Check again.';
 const SAVE_URL_ERROR='Paste the HTTPS address, for example https://github.com/you/your-lab-repo.';
 const SAVE_BUSY_REPOSITORY='Someone is working in this repository on the VM.';
 const SAVE_MISSING='This part of the page did not load. Reload the page and try again.';
@@ -182,13 +184,18 @@ function saveFirstTitle(cs,now){if(cs.key==='saved'){const when=saveLongTime(cs.
 function saveViewFirst(cs,lab,now){
  const title=saveFirstTitle(cs,now),placing=saveHeader.placing===lab.id,busy=saveBusyReason(lab),held=placing||saveSubmitting(lab);
  const why=!held&&busy?`<p class="save-note" id="save-first-why">${saveEsc(busy+' Save is available when it finishes.')}</p>`:'',blocked=held||!!busy;
- const note=`<p class="save-note">${SAVE_EXPOSURE}</p>`,options={primary:true,disabled:blocked,describedby:why?'save-first-why':''};
+ const note=`<p class="save-note">${SAVE_EXPOSURE}</p>`;
+ // A lab whose devices are all of a kind the manager cannot save has nothing to save: Save is off, with the reason (the manager
+ // would refuse the save). Unknown while the list of supported kinds has not arrived.
+ const kinds=saveState().platforms,nothing=!lab.git_binding&&!!kinds&&typeof kinds==='object'&&Array.isArray(lab.nodes)&&lab.nodes.length>0&&!lab.nodes.some(node=>node&&kinds[node.platform]);
+ const none=nothing?`<p class="save-sub" id="save-first-none">${SAVE_NO_DEVICE}</p>`:'';
+ const options={primary:true,disabled:blocked||nothing,describedby:nothing?'save-first-none':why?'save-first-why':''};
  const view=(html,more={})=>({title:placing?(saveHeader.connecting?'Connecting…':'Saving…'):title,dot:placing?'busy':cs.dot||'none',name:'first',job:'',html,...more});
  if(lab.git_binding){
   // Connected, nothing saved yet: the ordinary save, the place stated.
   const repo=lab.git_binding.repository||{},folder=saveFolder(repo.prefix),devices=(lab.git_binding.node_names||[]).length;
   const sentence=`Your first save goes to ${saveRepoName(repo)}, ${folder?'in the folder '+folder:'at its top level'}.`;
-  return view(`<p class="save-sub" id="save-first-place">${saveEsc(sentence)}</p><div class="save-row">${devices?saveButton('first-save','Save','save-first',options):''}${saveButton('place','Change…','save-first-place-other',{disabled:held})}</div>${devices?'':'<p class="save-sub" id="save-first-none">This lab has no device whose configuration can be saved.</p>'}${why}${note}${saveErrorMarkup(lab)}${saveTailMarkup(lab,cs,{place:false,panel:'first'})}`);
+  return view(`<p class="save-sub" id="save-first-place">${saveEsc(sentence)}</p><div class="save-row">${devices?saveButton('first-save','Save','save-first',options):''}${saveButton('place','Change…','save-first-place-other',{disabled:held})}</div>${devices?'':`<p class="save-sub" id="save-first-none">${SAVE_NO_DEVICE}</p>`}${why}${note}${saveErrorMarkup(lab)}${saveTailMarkup(lab,cs,{place:false,panel:'first'})}`);
  }
  const tail=saveTailMarkup(lab,cs,{panel:'first'}),entry=saveHeader.places.get(lab.id);
  if(Array.isArray(lab.nodes)&&!lab.nodes.length)return view(`<p class="save-sub" id="save-first-none">This lab has no device whose configuration can be saved.</p>${tail}`);
@@ -202,7 +209,9 @@ function saveViewFirst(cs,lab,now){
   const lead=placing&&saveHeader.connecting?'<p class="save-sub" id="save-first-wait" role="status">This can take a minute.</p>':'<p class="save-sub">Your saves go to a repository on GitHub. Paste its address; ask your instructor if you do not have one.</p>';
   const row=question?`<p class="save-sub" id="save-first-empty">${saveEsc(name)} is empty. The manager adds a README.md file to start it.</p><div class="save-row">${saveButton('first-start','Start the repository','save-first-start',options)}</div>`
    :`<p class="save-note">The lab VM’s own GitHub login is used. You are never asked for a password or a token here.</p><div class="save-row">${saveButton('first-connect','Save','save-first',options)}</div>`;
-  return view(`${lead}${field}${row}${why}<p class="save-note">${SAVE_EXPOSURE} They go into a folder named ${saveEsc(lab.name||'')}.</p>${saveErrorMarkup(lab)}${tail}`);
+  // The administrator's way (a checkout set up on the VM in a terminal), folded; Check again reads the VM's repositories anew.
+  const admin=question?'':`<details id="save-first-admin"><summary>Administrator setup (terminal)</summary><p class="save-note">${saveEsc(SAVE_ADMIN_TEXT)}</p><pre class="git-setup-command" id="save-first-admin-command">bash deploy/setup-git.sh</pre><div class="save-row">${saveButton('first-check','Check again','save-first-check',{disabled:held})}</div></details>`;
+  return view(`${lead}${field}${row}${none}${why}<p class="save-note">${SAVE_EXPOSURE} They go into a folder named ${saveEsc(lab.name||'')}.</p>${saveErrorMarkup(lab)}${admin}${tail}`);
  }
  const repository=repositories.find(r=>r.id===chosen.repository)||{},repoName=repository.name||saveRepoName(repository),answer=chosen.answer||{},folder=saveFolder(chosen.folder);
  // Where uploads of the offered repository go (its address without credentials, and its branch).
@@ -210,11 +219,13 @@ function saveViewFirst(cs,lab,now){
  if(chosen.ask){
   // The folder named after the lab holds saves of a lab with the same name: asked once, and the suggested button replaces nobody's saves.
   const beside=saveFolder(chosen.beside);
-  return view(`<p class="save-sub" id="save-first-place">This repository already holds saves of a lab named ${saveEsc(lab.name||folder)}.</p><div class="save-row">${beside?saveButton('first-save','Save in '+beside,'save-first',options):''}${saveButton('first-continue','Continue there','save-first-continue',{primary:!beside,disabled:blocked,describedby:options.describedby})}${beside?'':saveButton('place','Choose another place','save-first-place-other',{disabled:held})}${saveButton('connect-url','Connect by URL…','save-first-url',{disabled:held})}</div>${uploads}${why}${note}${saveErrorMarkup(lab)}${tail}`);
+  return view(`<p class="save-sub" id="save-first-place">This repository already holds saves of a lab named ${saveEsc(lab.name||folder)}.</p><div class="save-row">${beside?saveButton('first-save','Save in '+beside,'save-first',options):''}${saveButton('first-continue','Continue there','save-first-continue',{primary:!beside,disabled:blocked,describedby:options.describedby})}${beside?'':saveButton('place','Choose another place','save-first-place-other',{disabled:held})}${saveButton('connect-url','Connect by URL…','save-first-url',{disabled:held})}</div>${uploads}${none}${why}${note}${saveErrorMarkup(lab)}${tail}`);
  }
+ // A lab that saved before and was disconnected has saves (the chip says so, truly): its next save is not a first one.
+ const before=typeof statusCaptureSaves==='function'&&statusCaptureSaves(lab,saveCtx(lab)).length>0,where=!folder?'at its top level':answer.exists===false?'in a folder named '+folder:'in the folder '+folder;
  const sentence=answer.kind==='own-before'?`Your saves continue in ${repoName}, ${folder?'in the folder '+folder:'at its top level'}.`
-  :`Your first save goes to ${repoName}, ${!folder?'at its top level':answer.exists===false?'in a folder named '+folder:'in the folder '+folder}.`;
- return view(`<p class="save-sub" id="save-first-place">${saveEsc(sentence)}</p><div class="save-row">${saveButton('first-save','Save','save-first',options)}${saveButton('place','Choose another place','save-first-place-other',{disabled:held})}${saveButton('connect-url','Connect by URL…','save-first-url',{disabled:held})}</div>${uploads}${why}${note}${saveErrorMarkup(lab)}${tail}`);
+  :before?`This lab has no save location now. Your next save goes to ${repoName}, ${where}.`:`Your first save goes to ${repoName}, ${where}.`;
+ return view(`<p class="save-sub" id="save-first-place">${saveEsc(sentence)}</p><div class="save-row">${saveButton('first-save','Save','save-first',options)}${saveButton('place','Choose another place','save-first-place-other',{disabled:held})}${saveButton('connect-url','Connect by URL…','save-first-url',{disabled:held})}</div>${uploads}${none}${why}${note}${saveErrorMarkup(lab)}${tail}`);
 }
 // Loading, Running and Partial are load.js's view; `shown` is the chip state it is drawn for (the chip's own, or the load behind an Also line).
 function saveViewLoad(shown,lab,cs){
@@ -256,14 +267,20 @@ function savePanelView(cs,lab,now){
 function savePanelMarkup(el,key,build){
  if(!el||el._listKey===key)return false;
  const a=typeof document!=='undefined'&&document?document.activeElement:null,inside=!!a&&!!a.id&&typeof el.contains==='function'&&el.contains(a);
- const typed=inside&&a.dataset&&a.dataset.dirty==='1'?{value:a.value,start:a.selectionStart,end:a.selectionEnd}:null,id=inside?a.id:'';
- el.innerHTML=build();el._listKey=key;
+ const typed=inside&&a.dataset&&a.dataset.dirty==='1'?{value:a.value}:null,id=inside?a.id:'';
+ // The caret of the focused field is kept whether or not its text was changed (a caret put in the middle of a name stays there).
+ let caret=null;if(inside&&'value' in a){try{if(typeof a.selectionStart==='number')caret={start:a.selectionStart,end:a.selectionEnd};}catch{}}
+ // A browser fires `change` on a field with uncommitted text when the field is removed: that is the poll, not the person
+ // (savePanelChange ignores it; a name is committed with Enter or when the field really loses focus).
+ saveHeader.rebuilding=true;
+ try{el.innerHTML=build();}finally{saveHeader.rebuilding=false;}
+ el._listKey=key;
  if(id){
   const next=saveEl(id);
   if(next&&typeof next.focus==='function'&&!next.disabled){
    if(typed&&'value' in next){next.value=typed.value;if(next.dataset)next.dataset.dirty='1';}
    next.focus({preventScroll:true});
-   if(typed&&typeof next.setSelectionRange==='function'){try{next.setSelectionRange(typed.start,typed.end);}catch{}}
+   if(caret&&typeof next.setSelectionRange==='function'){try{next.setSelectionRange(caret.start,caret.end);}catch{}}
   }else{const title=saveEl('save-panel-title');if(title&&typeof title.focus==='function')title.focus({preventScroll:true});}
  }
  return true;
@@ -453,7 +470,10 @@ async function saveRename(job,value){
  try{
   const next=await json('/git/jobs/'+encodeURIComponent(job.id)+'/name','POST',{note});
   if(typeof gitRememberJob==='function')gitRememberJob(next);
-  saveHeader.typed=null;const now=saveEl('save-name');if(now){now.value=String(next.note||'');if(now.dataset)now.dataset.dirty='';}
+  saveHeader.typed=null;const now=saveEl('save-name');
+  if(now){let at=null;try{if(typeof now.selectionStart==='number')at=[now.selectionStart,now.selectionEnd];}catch{}
+   now.value=String(next.note||'');if(now.dataset)now.dataset.dirty='';
+   if(at&&typeof now.setSelectionRange==='function'){try{now.setSelectionRange(at[0],at[1]);}catch{}}}
   saveSay('Renamed.');return next;
  }catch(error){saveHeader.error=lab?{lab:lab.id,text:String(error&&error.message||'The name could not be changed.')}:null;return null;}
  finally{saveHeader.renaming='';const now=saveEl('save-name');if(now)now.readOnly=false;renderSaveHeader();}
@@ -547,6 +567,7 @@ async function saveAction(action,job,origin){
     if(!last||!last.job||typeof restoreShowJob!=='function')throw new Error(SAVE_MISSING);
     saveClosePanel(true);await restoreShowJob(last.job.id);return;
    }
+   case 'first-check':if(lab){saveHeader.places.delete(lab.id);saveHeader.first={lab:'',url:'',question:null};}break;
    case 'first-save':if(lab&&lab.git_binding){await saveStart(lab.id);break;}await saveFirstPlace('save');break;
    case 'first-continue':await saveFirstPlace('continue');break;
    case 'first-connect':await saveFirstPlace('connect');break;
@@ -579,7 +600,11 @@ function savePanelClick(event){
 }
 function savePanelChange(event){
  const target=event&&event.target;if(!target)return;
- if(target.id==='save-name'){saveRename(savePanelJob(),target.value);return;}
+ if(target.id==='save-name'){
+  // Only the person commits a name: a `change` that the rebuild of the panel caused (the field was removed) is not one.
+  if(saveHeader.rebuilding||target.isConnected===false)return;
+  saveRename(savePanelJob(),target.value);return;
+ }
  if(target.id==='save-keep'&&target.checked)saveAction('keep',savePanelJob(),'panel');
 }
 function savePanelInput(event){

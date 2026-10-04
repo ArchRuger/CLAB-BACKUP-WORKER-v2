@@ -22,7 +22,7 @@ function harness(options={}){
  const attr=(text,name)=>{const m=text.match(new RegExp(' '+name+'="([^"]*)"'));return m?m[1].replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'").replace(/&amp;/g,'&'):null;};
  // The panel body: setting innerHTML replaces its controls, as a browser does (the old nodes are gone, focus falls to nothing).
  const body=make('save-panel-body',{_html:'',writes:0});
- Object.defineProperty(body,'innerHTML',{get(){return this._html;},set(html){
+ Object.defineProperty(body,'innerHTML',{configurable:true,get(){return this._html;},set(html){
   this._html=html;this.writes++;if(document.activeElement&&children.get(document.activeElement.id)===document.activeElement)document.activeElement=document.body;children.clear();
   for(const m of html.matchAll(/<(button|input|p|label|div)\b([^>]*)>/g)){const id=attr(m[2],'id');if(!id)continue;
    children.set(id,make(id,{tag:m[1],disabled:/ disabled\b/.test(m[2]),readOnly:/ readonly\b/.test(m[2]),hidden:/ hidden\b/.test(m[2]),checked:/ checked\b/.test(m[2]),type:attr(m[2],'type')||'',value:attr(m[2],'value')||'',dataset:{...(attr(m[2],'data-save-action')?{saveAction:attr(m[2],'data-save-action')}:{}),...(attr(m[2],'data-dirty')?{dirty:attr(m[2],'data-dirty')}:{})}}));}
@@ -590,6 +590,53 @@ test('S11-12 both sides changed while saves wait: Try again uploads a reviewed w
  const u=harness({lab,state:{git_jobs:[waiting({id:'w2',status:'review_pending'})]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w2',also_sends:[]})}});
  await u.open();await u.press('save-cant-upload-again');await u.flush();u.render();
  assert.equal(u.posts().filter(c=>c.endpoint.endsWith('/retry')).length,0,'a save the person has not reviewed is never uploaded from here');assert.equal(u.text('save-panel-title-text'),'Not uploaded yet');
+});
+test('P2-3 a lab without a save location whose devices are all of an unsupported kind: the first Save is off with the reason; one supported device is enough',async()=>{
+ const places={'/git/places':()=>({repositories:[{id:'r',name:'Course',remote:'https://github.com/me/course.git',branch:'main'}],default:{repository:'r',folder:'restore-square',answer:{kind:'free',exists:false}}})};
+ const lab=freeLab({nodes:[{name:'h1',platform:'linux'},{name:'h2',platform:''}]});
+ const h=harness({lab,state:{platforms:{eos:{label:'EOS'}}},routes:places});await h.open();
+ assert.equal(h.el('save-first').disabled,true);assert.match(h.body.innerHTML,/<p class="save-sub" id="save-first-none">This lab has no device whose configuration can be saved\.<\/p>/);
+ assert.match(h.body.innerHTML,/id="save-first"[^>]*disabled[^>]*aria-describedby="save-first-none"/);
+ const ok=harness({lab:freeLab({nodes:[{name:'h1',platform:'linux'},{name:'r1',platform:'eos'}]}),state:{platforms:{eos:{label:'EOS'}}},routes:places});await ok.open();
+ assert.equal(ok.el('save-first').disabled,false);assert.doesNotMatch(ok.body.innerHTML,/save-first-none/);
+});
+test('P2-4 a VM without a repository: the administrator’s setup is folded under the address field, and Check again reads the repositories anew',async()=>{
+ let repositories=[];
+ const h=harness({lab:freeLab(),routes:{'/git/places':()=>({repositories,default:repositories.length?{repository:'r',folder:'restore-square',answer:{kind:'free',exists:false}}:null})}});await h.open();
+ assert.match(h.body.innerHTML,/<details id="save-first-admin"><summary>Administrator setup \(terminal\)<\/summary>/);assert.doesNotMatch(h.body.innerHTML,/<details id="save-first-admin" open/,'folded');
+ assert.match(h.body.innerHTML,/On the VM, run this as your normal account \(no sudo\)\. It sets up the checkout and Git login\. Then click Check again\./);assert.match(h.body.innerHTML,/<pre class="git-setup-command" id="save-first-admin-command">bash deploy\/setup-git\.sh<\/pre>/);
+ const asked=h.calls.filter(c=>c.endpoint.endsWith('/git/places')).length;
+ repositories=[{id:'r',name:'Course',remote:'https://github.com/me/course.git',branch:'main'}];
+ await h.press('save-first-check');await h.flush();h.render();
+ assert.equal(h.calls.filter(c=>c.endpoint.endsWith('/git/places')).length,asked+1);assert.match(h.body.innerHTML,/Your first save goes to Course, in a folder named restore-square\./);assert.equal(h.el('save-url'),null);
+});
+test('Q390-07 a disconnected lab that has earlier saves: the chip keeps Saved, and the view says the lab has no save location now and where the next save goes',async()=>{
+ const places={'/git/places':()=>({repositories:[{id:'r',name:'Course',remote:'https://github.com/me/course.git',branch:'main'}],default:{repository:'r',folder:'restore-square',answer:{kind:'free',exists:false}}})};
+ const h=harness({lab:freeLab(),state:{git_jobs:[saved()]},routes:places});await h.open();
+ assert.match(h.text('save-chip-text'),/^Saved /);
+ assert.match(h.body.innerHTML,/<p class="save-sub" id="save-first-place">This lab has no save location now\. Your next save goes to Course, in a folder named restore-square\.<\/p>/);assert.doesNotMatch(h.body.innerHTML,/Your first save/);
+ const fresh=harness({lab:freeLab(),routes:places});await fresh.open();assert.match(fresh.body.innerHTML,/Your first save goes to Course, in a folder named restore-square\./);
+ const own=harness({lab:freeLab(),state:{git_jobs:[saved()]},routes:{'/git/places':()=>({repositories:[{id:'r',name:'Course'}],default:{repository:'r',folder:'restore-square',answer:{kind:'own-before',exists:true}}})}});await own.open();
+ assert.match(own.body.innerHTML,/Your saves continue in Course, in the folder restore-square\./);
+});
+test('Q390-05 a name being typed is never posted by the poll: a change fired by the rebuild of the panel is ignored, the caret stays where it is, Enter and a real change commit',async()=>{
+ const job=saved({note:'abcdefgh'});
+ const h=harness({state:{git_jobs:[job]},routes:{'/name':payload=>({...job,note:payload.note})}});await h.open();
+ const field=h.el('save-name');field.focus();field.value='abcdXefgh';field.selectionStart=5;field.selectionEnd=5;field.isConnected=true;
+ h.panel.listeners.input({target:field});
+ // The poll rebuilds the panel (something in it changed); the browser fires `change` on the removed field while it does.
+ const write=Object.getOwnPropertyDescriptor(h.body,'innerHTML');
+ Object.defineProperty(h.body,'innerHTML',{configurable:true,get:write.get,set(html){field.isConnected=false;h.panel.listeners.change({target:field});write.set.call(this,html);}});
+ h.state.git_jobs=[{...job,finished:ago(40)}];h.body._listKey='stale';h.render();await h.flush();
+ assert.equal(h.posts().filter(c=>c.endpoint.endsWith('/name')).length,0,'the poll never posts a rename');
+ const now=h.el('save-name');assert.notEqual(now,field);assert.equal(now.value,'abcdXefgh','the typed text is kept');assert.deepEqual(now.selection,[5,5],'and the caret');assert.equal(h.document.activeElement,now);
+ // A change that arrives late for the removed field (asynchronously) is ignored too.
+ h.panel.listeners.change({target:field});await h.flush();assert.equal(h.posts().filter(c=>c.endpoint.endsWith('/name')).length,0);
+ // A field that was not edited keeps its caret across a rebuild as well.
+ now.dataset.dirty='';now.selectionStart=3;now.selectionEnd=3;h.body._listKey='stale2';h.render();assert.deepEqual(h.el('save-name').selection,[3,3]);
+ // The person commits: a real change (the field lost focus, it is still in the page) or Enter.
+ const live=h.el('save-name');live.value='Named by hand';live.isConnected=true;h.panel.listeners.change({target:live});await h.flush();
+ assert.deepEqual(h.posts().filter(c=>c.endpoint.endsWith('/name')).map(c=>c.payload.note),['Named by hand']);
 });
 test('Q390-01 the view asked for with Show stays: the end of the upload that arrives after the click does not flip the panel back; it ends when the panel closes or its state ends',async()=>{
  const job=waiting({id:'w',status:'push_pending',reviewed:ago(3)});

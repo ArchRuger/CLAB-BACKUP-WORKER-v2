@@ -416,7 +416,8 @@ ${waiting?`<p class="save-note" id="save-settings-waiting">${waiting===1?'1 save
 <dl class="kv"><dt>Uploads go to</dt><dd id="git-advanced-push-url">${repo.push_url?`Verified push destination: <code>${esc(repo.push_url)}</code>`:'—'}</dd><dt>Branch</dt><dd id="git-advanced-branch">${esc(repo.branch||'—')}</dd><dt>VM account</dt><dd id="git-advanced-owner">${esc(repo.owner||'—')}</dd><dt>Checkout path</dt><dd id="git-advanced-path" class="mono">${esc(repo.path||'—')}</dd><dt>Status</dt><dd id="git-advanced-status">${esc(state_)}</dd></dl>
 <p id="git-advanced-account" class="caption">${esc(`Git runs on the VM as ${repo.owner||'the registered account'} with the login configured there. This app never asks for a Git password.`)}</p>${update}</details>
 <p class="form-error" role="alert" id="save-settings-error">${esc(view.error||'')}</p>
-<div class="save-settings-foot"><button type="button" class="link-button" data-git-repo-action="unlink">Disconnect this lab…</button><button type="button" class="button primary" data-save-action="save-settings">Save settings</button></div></div>`;
+<p class="save-note" id="save-settings-exposure">Saved files can contain passwords or keys.</p>
+<div class="save-settings-foot"><button type="button" class="link-button" data-git-repo-action="unlink">Disconnect this lab…</button><button type="button" class="button primary" data-save-action="save-settings"${supported.length?'':' disabled aria-describedby="save-settings-none"'}>Save settings</button></div>${supported.length?'':'<p class="save-note" id="save-settings-none">This lab has no device whose configuration can be saved, so there is nothing to choose.</p>'}</div>`;
 }
 function drwSettingsView(d){
  const title='Save settings',meta=`Where ${drwLabName()} saves, and which devices each save includes.`;
@@ -550,7 +551,7 @@ async function drwChooserCheck(folder){
   c.answerFor=c.value;
  }catch(error){if(seq!==c.seq||request!==saveDrawer.request)return;c.checkFailed=true;c.answer=null;c.notice='';}
  c.checking=false;c.checkingFor=null;
- if(!drwChooserHeld())saveDrawerRender();
+ if(!drwChooserHeld()){saveDrawerRender();if(c.answer&&(['lab','state'].includes(String(c.answer.kind||''))||c.answer.adjusted))drwChooserReveal();}
 }
 // The check asked 250 ms after the last keystroke. It is dropped when the field no longer shows that folder (a name typed while
 // the chooser was still loading: the loaded chooser puts the name under the lab's folder and asks for that one itself), so an
@@ -568,7 +569,7 @@ function drwChooserSelect(path){
  drwSay(path?'Folder '+path+' selected':'Top level selected');saveDrawerRender();
 }
 function drwChooserTyped(intent){
- const c=saveDrawer.chooser;c.value=intent.echo!==undefined?intent.echo:intent.value;c.selected=null;c.pathTouched=true;c.question=null;c.answer=null;c.answerFor=null;c.requestId='';c.checkFailed=false;c.held=null;
+ const c=saveDrawer.chooser;c.value=intent.echo!==undefined?intent.echo:intent.value;c.selected=null;c.pathTouched=true;c.question=null;c.answer=null;c.answerFor=null;c.requestId='';c.checkFailed=false;c.held=null;c.notice='';
  const clean=typeof folderClean==='function'?folderClean(c.value):c.value;
  if(c.address){saveDrawerRender();return;}   // nothing to ask before the repository is connected
  if(c.mode==='state')c.parent=drwDir(clean);
@@ -616,7 +617,7 @@ async function drwChooserPlace(choice,pending,extra){
    if(q.kind==='pending'){c.question=null;c.pending={count:q.count||1,summary:''};await drwChooserPending();}
    else if(q.kind==='empty'||q.kind==='same-name')c.question=q;
    else{c.question=null;c.answer=q;c.answerFor=c.value;}
-   saveDrawerRender();return;
+   saveDrawerRender();drwChooserReveal();return;
   }
   // The folder the manager placed the lab in (the one beside, for that answer), never the one that was asked about.
   const placed=result&&result.binding&&result.binding.repository?drwBare(result.binding.repository.prefix):folder;
@@ -636,7 +637,7 @@ async function drwChooserRefused(c,error,fallback){
   const problem=saveProblem(lab,typeof state==='object'&&state?state:{});
   c.problem={sentence:problem.sentence,detail:c.refused,update:!!lab.git_binding&&(problem.actions||[]).some(a=>a.action==='update')};
  }
- if(saveDrawer.chooser===c)saveDrawerRender();
+ if(saveDrawer.chooser===c){saveDrawerRender();drwChooserReveal();}
 }
 async function drwChooserUpdate(){
  const c=saveDrawer.chooser,id=saveDrawer.lab;if(!c||c.busy)return;
@@ -690,13 +691,15 @@ async function drwAddFolder(parent,name){
  try{
   const result=await json('/git/repositories/'+drwEnc(c.repository)+'/folders/new','POST',{lab_id:id,parent,name});
   const folder=String(result.folder??drwJoin(parent,name));
+  const above=result.adjusted==='above-state'||(c.answer&&c.answer.adjusted==='above-state');   // the folder the person was in is part of a saved state
   c.newFolder=null;c.answer=result.answer||null;c.value=folder;c.selected=folder;c.answerFor=folder;
   // Inside a saved state a new folder is made in the lab folder above it, and the chooser says so (PROMPT 6.2).
-  c.notice=result.existed?`${folder} already exists. It is selected.`:result.adjusted==='above-state'?`${drwJoin(parent,name)} would be inside a saved state, so the new folder is ${folder}, in the lab folder above it.`:'';
+  c.notice=result.existed?`${folder} already exists. It is selected.`:above?`A saved state holds no other folders, so the new folder is ${folder}, in the lab folder above it.`:'';
   if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,folder);
   saveDrawerRender();
   // The field is gone: focus goes to the folder it made (the selected row of the tree), never to nothing.
   drwChooserFocus('[role="treeitem"][aria-selected="true"]')||drwChooserFocus('#folder-path');
+  if(c.notice)drwChooserReveal();   // said, and it stays until the next action
  }catch(error){c.refused=error.message||'The folder could not be added.';saveDrawerRender();}
 }
 // Focus a control of the chooser after a change that removed the focused one. → whether it was found.
@@ -704,6 +707,15 @@ function drwChooserFocus(selector){
  const content=drwEl('save-drawer-content'),el=content&&typeof content.querySelector==='function'?content.querySelector(selector):null;
  if(!el||typeof el.focus!=='function')return false;
  el.focus();if(typeof el.scrollIntoView==='function')el.scrollIntoView({block:'nearest'});return true;
+}
+// A question, a refusal or a sentence about where a folder went arrived: its sentence and its buttons are brought into view (in a
+// short window the tree pushes them below the fold) and the sentence is announced. Called after the render that shows them.
+function drwChooserReveal(){
+ const content=drwEl('save-drawer-content');if(!content||typeof content.querySelector!=='function')return false;
+ const line=content.querySelector('#folder-refused')||content.querySelector('#folder-answer'),foot=content.querySelector('#folder-foot');
+ const text=line?String(line.textContent||'').trim():'';if(!text)return false;
+ for(const el of [line,foot])if(el&&typeof el.scrollIntoView==='function')el.scrollIntoView({block:'nearest'});
+ drwSay(text);return true;
 }
 async function drwChooserForget(path){
  const c=saveDrawer.chooser;
@@ -719,7 +731,9 @@ async function drwChooserApply(intent,event){
  switch(intent.action){
   case 'select':drwChooserSelect(intent.path);break;
   case 'toggle':if(typeof gitToggleFolder==='function')gitToggleFolder(c.expanded,intent.path);else if(c.expanded.has(intent.path))c.expanded.delete(intent.path);else c.expanded.add(intent.path);saveDrawerRender();break;
-  case 'focus':c.focus=intent.path;saveDrawerRender();break;
+  // An arrow key in the tree: the roving tabindex moves AND the focus goes to that row (the render rebuilds the tree, so the
+  // row is focused after it; Enter then selects the row the person sees focused, not the one that had focus before).
+  case 'focus':c.focus=intent.path;saveDrawerRender();drwChooserFocus('[role="treeitem"][data-folder="'+String(intent.path).replace(/["\\]/g,'\\$&')+'"]');break;
   case 'typed':drwChooserTyped(intent);break;
   case 'name':drwChooserName(intent);break;
   case 'address-on':{c.address={value:''};c.answer=null;c.question=null;c.pending=null;c.refused='';c.problem=null;c.selected=null;c.newFolder=null;if(!c.pathTouched)c.value=c.defaultFolder||c.value;saveDrawerRender();drwChooserFocus('#folder-url');break;}

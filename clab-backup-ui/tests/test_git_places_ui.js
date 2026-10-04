@@ -788,7 +788,20 @@ test('S11-5, S11-9 Connect by URL… in the chooser: an address field instead of
  assert.match(html,/<label for="folder-url">Repository address \(HTTPS\)<\/label><input id="folder-url" value="https:\/\/github\.com\/me\/New\.git"/);
  assert.match(html,/data-folder-action="address-off">Use a repository on this VM</);assert.doesNotMatch(html,/id="folder-tree"|data-folder-action="new"/);
  assert.match(html,/<code>New<\/code><span aria-hidden="true">›<\/span><code>my-lab<\/code>/);
- assert.match(html,/<button type="button" class="button primary" data-folder-action="save" data-folder-primary="1">Connect and save here<\/button>/);
+ assert.match(html,/<button type="button" class="button primary" data-folder-action="save" data-folder-primary="1">Save here<\/button>/);
+ // Q1280-07 / Q1440-05: before an address is typed nothing is said about the folder (no result line, no sentence taken from the
+ // tree of the lab's present repository) and the one button, Save here, is off.
+ {const empty=markup(context,chooserTree(baseFolders()),{mode:'location',address:{value:''},value:'BGP',repositories:[{id:'reg',name:'Course'}]});
+  assert.doesNotMatch(empty,/id="folder-result"/);assert.doesNotMatch(empty,/already saves here|Keep saving here/);assert.equal(liveRegion(empty),'');
+  assert.match(empty,/<button type="button" class="button primary" data-folder-action="save" data-folder-primary="1" disabled>Save here<\/button>/);
+  const typed=markup(context,chooserTree(baseFolders()),{mode:'location',address:{value:'https://github.com/me/New.git'},value:'BGP',repositories:[{id:'reg',name:'Course'}]});
+  assert.match(typed,/id="folder-result"><span>Saves go to<\/span><code>New<\/code>/);assert.doesNotMatch(typed,/already saves here|Keep saving here/);}
+ // Q1440-03: a lab state without a name: no claim where it goes, Save state off with the reason; with a name both return.
+ {const none=markup(context,chooserTree(baseFolders()),{mode:'state',name:'',value:'BGP',status:'ready'});
+  assert.doesNotMatch(none,/id="folder-result"/);assert.equal(liveRegion(none),'');
+  assert.match(none,/data-folder-action="save" data-folder-primary="1" disabled>Save state<\/button><span class="form-help" id="folder-reason">Give the lab state a name\.<\/span>/);
+  const named=markup(context,chooserTree(baseFolders()),{mode:'state',name:'start',value:'BGP/start',status:'ready',answer:ans('BGP/start',{kind:'free'})});
+  assert.match(named,/id="folder-result"><span>The state is saved in<\/span>/);assert.match(named,/data-folder-primary="1">Save state<\/button>/);assert.doesNotMatch(named,/Give the lab state a name/);}
  assert.match(html,/Saved files can contain passwords or keys\./);assert.doesNotMatch(html,/Checking…/);
  html=markup(context,chooserTree(baseFolders()),{address:{value:'https://github.com/me/New.git'},value:'x',question:{kind:'empty',name:'New'}});
  assert.match(html,/New is empty\. The manager adds a README\.md file to start it\./);assert.match(html,/data-folder-action="initialize"[^>]*>Start the repository</);

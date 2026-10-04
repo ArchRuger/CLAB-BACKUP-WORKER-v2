@@ -315,6 +315,11 @@ test('D10 Save settings: the F15 controls, one Git details fold with the git-adv
  assert.equal(g.title(),'Save settings');assert.match(g.meta(),/Where restore-square saves, and which devices each save includes\./);
  for(const text of ['Save location','Change folder…','Use a different repository…','Connect by URL…','Devices included in every save','Git details','Refresh status','Update from the repository','Disconnect this lab…','Save settings'])assert.ok(html.includes(text),text);
  assert.match(html,/data-git-repo-action="switch"/);assert.match(html,/data-git-repo-action="connect"/);assert.match(html,/data-git-repo-action="unlink"/);assert.match(html,/data-save-action="folder"/);
+ // P2-2: the view sends acknowledge with the device selection, so it carries the same sentence as every placing view. P2-5: with
+ // no device the manager can save there is nothing to choose, and the button says so instead of posting.
+ assert.match(html,/<p class="save-note" id="save-settings-exposure">Saved files can contain passwords or keys\.<\/p>\s*<div class="save-settings-foot">/);assert.match(html,/data-save-action="save-settings">Save settings<\/button>/);
+ const bare=g.context.saveSettingsMarkup('lab',{...settingsContext(),supported_nodes:[]},{repositories:[]},{});
+ assert.match(bare,/data-save-action="save-settings" disabled aria-describedby="save-settings-none">Save settings<\/button>/);assert.match(bare,/id="save-settings-none">This lab has no device whose configuration can be saved, so there is nothing to choose\.<\/p>/);
  assert.match(html,/<code>Course-Labs<\/code><span aria-hidden="true">›<\/span><code>restore-square<\/code>/);
  assert.match(html,/<input type="checkbox" name="git-node" value="ceos" checked>/);assert.match(html,/<legend class="sr-only">Devices included in every save<\/legend>/);
  for(const id of ['git-advanced-push-url','git-advanced-branch','git-advanced-owner','git-advanced-path','git-advanced-status','git-advanced-account'])assert.ok(html.includes('id="'+id+'"'),id);
@@ -423,7 +428,11 @@ test('D14 the chooser kinds write folderChooserMarkup(model, view) into the draw
  const view=g.seen.at(-1).view;assert.equal(view.status,'ready');assert.equal(view.value,'restore-square','it starts in the lab\'s own folder');assert.equal(view.labName,'restore-square');assert.equal(view.repoName,'Course-Labs');
  const inside=node('li',{parent:node('div',{cls:'folder-chooser',parent:g.dialog.__root})});
  await g.click(inside);assert.deepEqual(forwarded,['click']);assert.equal(g.sd.chooser.selected,'BGP');assert.equal(g.sd.chooser.value,'BGP');assert.match(g.content(),/value="BGP"/);
+ // Q390-04: the arrow key moves the focus itself to the row, not only the roving tabindex.
+ const content=g.context.$('save-drawer-content'),asked=[],row={focused:0,focus(){this.focused++;},scrollIntoView(){}};
+ const find=content.querySelector;content.querySelector=selector=>{asked.push(selector);return selector.startsWith('[role="treeitem"]')?row:find?find.call(content,selector):null;};
  g.fire('keydown',{key:'ArrowDown',target:inside});await settle();assert.deepEqual(forwarded,['click','keydown']);assert.equal(g.sd.chooser.focus,'BGP');
+ assert.deepEqual(asked.slice(-1),['[role="treeitem"][data-folder="BGP"]']);assert.equal(row.focused,1,'the row the arrow moved to has the focus');content.querySelector=find;
  // an event outside the chooser is not forwarded
  await g.click(node('p',{parent:g.dialog.__root}));assert.equal(forwarded.length,2);
  assert.deepEqual(Object.keys(g.dialog.listeners).sort(),['cancel','change','click','close','input','keydown','toggle']);
@@ -537,7 +546,7 @@ test('New folder… inside a saved state: the folder is made in the lab folder a
   :{folder:data.parent+'/'+data.name,existed:false,adjusted:'',answer:{kind:'free',folder:data.parent+'/'+data.name,exists:false}}}});
  g.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
  await g.act('new-folder',{parent:'BGP/start/latest'});await g.act('new-add',{value:'extra'});
- assert.equal(g.sd.chooser.value,'BGP/start/extra');assert.equal(g.seen.at(-1).view.notice,'BGP/start/latest/extra would be inside a saved state, so the new folder is BGP/start/extra, in the lab folder above it.');
+ assert.equal(g.sd.chooser.value,'BGP/start/extra');assert.equal(g.seen.at(-1).view.notice,'A saved state holds no other folders, so the new folder is BGP/start/extra, in the lab folder above it.');
  await g.act('new-folder',{parent:'BGP'});await g.act('new-add',{value:'plain'});
  assert.equal(g.sd.chooser.value,'BGP/plain');assert.equal(g.seen.at(-1).view.notice,'');
 });
@@ -583,6 +592,30 @@ test('S11-15 Save as a lab state always sends the folder its Folder field shows:
  k.context.saveDrawerOpen('state',{});await settle();await k.act('name',{value:'final',echo:'final'});await k.act('typed',{value:'',echo:''});k.timers.at(-1)();await settle();
  assert.equal(k.seen.at(-1).view.value,'','the field is empty because the person emptied it');await k.act('save');
  assert.equal(posts.at(-1).folder,'','then, and only then, the top level');assert.equal(posts.at(-1).name,'final');
+});
+test('Q1280-05, Q1440-07 a question, a refusal and the sentence about a new folder are brought into view and announced; the new-folder sentence stays until the next action',async()=>{
+ const g=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>data.folder==='shared'?{kind:'lab',folder:'shared',typed:'shared',exists:true,lab:{id:'o',name:'ospf'},beside:'shared/restore-square'}:{kind:'free',folder:data.folder,typed:data.folder,exists:false,adjusted:data.folder==='BGP/start'?'above-state':''},
+  'POST /git/repositories/b/folders/new':data=>({folder:'BGP/start/extra',existed:false,adjusted:'',answer:{kind:'free',folder:'BGP/start/extra',typed:'BGP/start/extra',exists:false}}),
+  'POST /labs/lab/git/place':()=>{throw Object.assign(new Error('The VM refused the folder.'),{status:409});}}});
+ const content=g.context.$('save-drawer-content'),scrolled=[],lines={'#folder-answer':{textContent:'ospf saves here too.',scrollIntoView(){scrolled.push('answer');}},'#folder-foot':{textContent:'',scrollIntoView(){scrolled.push('foot');}}};
+ content.querySelector=selector=>lines[selector]||null;
+ const said=()=>g.context.$('save-drawer-status').textContent;
+ g.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
+ await g.act('typed',{value:'shared',echo:'shared'});for(const timer of [...g.timers])if(typeof timer==='function')timer();await settle();
+ assert.deepEqual(scrolled,['answer','foot'],'the question and its buttons are scrolled into view');assert.equal(said(),'ospf saves here too.','and announced');
+ // a plain answer moves nothing
+ scrolled.length=0;await g.act('typed',{value:'plain',echo:'plain'});for(const timer of [...g.timers])if(typeof timer==='function')timer();await settle();assert.deepEqual(scrolled,[]);
+ // New folder… from a folder that is part of a saved state: the sentence is set, announced, and stays over a poll's render
+ await g.act('typed',{value:'BGP/start',echo:'BGP/start'});for(const timer of [...g.timers])if(typeof timer==='function')timer();await settle();
+ lines['#folder-answer'].textContent='A saved state holds no other folders, so the new folder is BGP/start/extra, in the lab folder above it.';
+ await g.act('new-folder',{parent:'BGP/start'});await g.act('new-add',{value:'extra'});
+ assert.equal(g.seen.at(-1).view.notice,'A saved state holds no other folders, so the new folder is BGP/start/extra, in the lab folder above it.');assert.match(said(),/^A saved state holds no other folders/);
+ g.context.saveDrawerRender();assert.match(g.seen.at(-1).view.notice,/^A saved state holds no other folders/,'it stays');
+ await g.act('typed',{value:'else',echo:'else'});assert.equal(g.seen.at(-1).view.notice,'','until the next action');
+ // a refusal
+ for(const timer of [...g.timers])if(typeof timer==='function')timer();await settle();
+ lines['#folder-refused']={textContent:'The VM refused the folder.',scrollIntoView(){scrolled.push('refused');}};scrolled.length=0;
+ await g.act('save');await settle();assert.deepEqual(scrolled,['refused','foot']);assert.equal(said(),'The VM refused the folder.');
 });
 test('Q1280-04 a click on Save here or Save state before the answer for the shown folder arrived is held, not lost: the button says Checking the folder…, the request follows the answer; a question is shown instead; a new value drops it',async()=>{
  // The check answers only when the test lets it (a real VM is slower than a click).
