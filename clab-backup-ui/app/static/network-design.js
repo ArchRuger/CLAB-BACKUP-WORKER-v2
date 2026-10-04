@@ -2059,6 +2059,10 @@ function designReviewDialogClosed(){
  if(lab&&designReviewKnown.labId===lab.id&&designReviewKnown.status==='running')designReviewStartWatch(lab.id,designReviewKnown.jobId,true);
 }
 // Reopens the dialog on a past (or still-running) job's progress step, from the plan card's "Show".
+// Also the lab banner's "View progress" while a restart's read-back is under way, from any tab: #design-apply-dialog sits at page
+// level in index.html (after </main>, like the restore job dialog), never inside #advanced-view or the closed Network design
+// <details>. A modal opened inside a display:none ancestor shows nothing and leaves the page inert, and Back or a tab change would
+// hide an open one. Keep it there; designSuspend lets the watch run while the dialog is open on another tab.
 function designApplyShowJob(jobId){
  const lab=current();if(!lab||!$('design-apply-dialog'))return;
  const job=((typeof state!=='undefined'&&state.design_jobs)||[]).find(j=>j.id===jobId)||null;

@@ -348,13 +348,21 @@ test('L-10 follow-up: a device the restart caught while applying never reads as 
   assert.equal(steps[4].text,'Reading back after the restart');
  }
  assert.doesNotMatch(c.restoreTargetRow(readBack,20,true,10),/Armed/);
- // Times never span the outage: the caught step (entered at `connecting`, 2) ends at the restart (10), not at the read-back's first stamp (12).
- assert.equal(plain(c.restoreStageSteps(readBack,20,true,10))[2].elapsed,'8 s');
+ // Audit V2: `restartedAt` is when the NEW manager process started, not when the old one stopped, so when the step the restart caught
+ // stopped is unknown: it shows no time (the manager's downtime must never read as "Validate: 9 min 58 s"). The read-back row counts from
+ // the restart, whatever its own stamp (12) says.
+ assert.equal(plain(c.restoreStageSteps(readBack,20,true,10))[2].elapsed,'','the caught step has no time');
+ assert.equal(plain(c.restoreStageSteps(readBack,20,true,10))[4].elapsed,'10 s','the read-back counts from the restart (10 → 20), not its first stamp (12)');
+ assert.doesNotMatch(c.restoreTargetRow(readBack,20,true,10),/restore-stage--stopped">(?:(?!<\/li>).)*restore-stage-time/s,'no time is rendered on the step the restart caught');
+ // The downtime itself: a run stamped at 2 and a new manager at 600 must not show ten minutes on the caught step.
+ assert.equal(plain(c.restoreStageSteps({...readBack,timeline:{...readBack.timeline,verifying:605}},610,true,600))[2].elapsed,'');
  // The read-back found the job's own change armed and confirms it, although the restart came before the manager recorded the arm.
  const unrecorded=plain(c.restoreStageSteps({...readBack,stage:'confirming',timeline:{...readBack.timeline,confirming:15}},20,true,10));
  assert.deepEqual(unrecorded.map(s=>s.state),['done','done','stopped','unreached','done','current','waiting']);
  assert.equal(unrecorded[3].text,'Not recorded before the restart','"Not reached" would deny what the read-back just found');
  assert.equal(unrecorded[5].text,'Confirming');
+ assert.equal(unrecorded[2].elapsed,'','the caught step has no time');
+ assert.equal(unrecorded[4].elapsed,'5 s','the read-back row is measured from the restart (10) to its confirming stamp (15), not from the run\'s own stamp');
 });
 test('L-10 follow-up: a device the restart caught while confirming shows the read-back on its own row; the Confirm step stays interrupted',()=>{
  const c=ctx(),plain=v=>JSON.parse(JSON.stringify(v));
@@ -365,7 +373,7 @@ test('L-10 follow-up: a device the restart caught while confirming shows the rea
   assert.deepEqual(steps.map(s=>s.state),['done','done','done','done','current','stopped','waiting'],'stage '+stage);
   assert.equal(steps[3].text,'Armed');assert.equal(steps[4].text,'Reading back after the restart');
   assert.equal(steps[5].text,'Interrupted by the restart','not "Confirming" before the read-back has started');
-  assert.equal(steps[5].elapsed,'1 s','the caught step ends at the restart (5 → 6)');
+  assert.equal(steps[5].elapsed,'','when the restart caught the step is not known: no time (audit V2)');
   assert.equal(steps[4].elapsed,'14 s','the read-back counts from the restart (6 → 20), not from the run\'s own stamp');
  }
  // Restart at 4.5: the same stamps, the confirming one is newer, so the read-back itself is confirming.

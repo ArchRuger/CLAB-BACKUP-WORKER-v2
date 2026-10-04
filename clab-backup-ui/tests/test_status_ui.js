@@ -83,7 +83,7 @@ test('a device explains itself in one sentence and says whether the CLI can open
  const booting=c.deviceState({name:'R2',ssh_ready:false,login_configured:true,nos_login:{status:'booting'}});
  assert.equal(booting.label,'Starting');assert.equal(booting.cli,false);assert.match(booting.detail,/R2 is still starting\. SSH opens automatically/);
  // The disabled Open CLI reason points at the refresh control, both the rail-wide one and this device's own.
- assert.match(booting.detail,/Use Test logins \(above\) or this device's Test login to check again now\./);
+ assert.match(booting.detail,/Use Test logins \(above\) or this device's Test login \(in its panel, under Advanced\) to check again now\./);
  const failed=c.deviceState({name:'R3',ssh_ready:false,login_configured:true,nos_login:{status:'failed'}});
  assert.equal(failed.label,'Needs attention');assert.match(failed.detail,/R3 is running, but SSH login failed/);assert.equal(failed.next,'Check credentials');assert.equal(failed.pill,'danger');
  const down=c.deviceState({name:'R4',ssh_ready:false,available:false,nos_login:{status:'unavailable'}});

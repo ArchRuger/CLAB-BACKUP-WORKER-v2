@@ -234,7 +234,7 @@ function renderLabBanner(){
   }
   spec={tone:ls.pill==='warn'?'warn':'danger',icon:'alert',text:ls.detail,detail:job.message||'',identity:'job.'+job.id,actions};
  }
- else if(ps&&ps.problem)spec={tone:'warn',icon:'alert',text:'Saving to Git is not possible right now.',detail:ps.problem,actions:{'banner-save-details':{label:'Save location settings',run:()=>{if(typeof gitOpenRepository==='function')gitOpenRepository();}}}};
+ else if(ps&&ps.problem)spec={tone:'warn',icon:'alert',text:'Saving to Git is not possible right now.',detail:ps.problem,identity:'git-problem.'+ps.problem,actions:{'banner-save-details':{label:'Save location settings',run:()=>{if(typeof gitOpenRepository==='function')gitOpenRepository();}}}};
  else if(ps&&['attention','failed','interrupted'].includes(ps.key)){
   const actions={};
   if(ps.key==='attention')actions['banner-retry-save']={label:'Retry',run:()=>{if(typeof gitPushPending==='function'&&typeof opTask==='function')opTask(null,()=>gitPushPending(lab.id));}};

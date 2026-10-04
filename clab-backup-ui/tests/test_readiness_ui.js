@@ -201,3 +201,20 @@ test('L-10 follow-up: a restore reading devices back after a restart is shown as
  paint({design_jobs:[{id:'d1',lab_id:'lab',status:'interrupted',message:'Read back afterwards.'}]});
  assert.equal(get('lab-banner').hidden,true,'read back: nothing is held');assert.equal(get('worker-state').hidden,true);
 });
+
+// Audit V3 (the M-14 pattern on the Git-problem banner): its headline is fixed and only the detail varies with the problem, so
+// the x on problem A must not hide a later, different problem B of the same lab; the same problem stays closed across polls.
+test('V3: closing the Git-problem banner hides that problem only; a different problem of the lab is shown again',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id),closed=new Set();
+ h.context.noticeDismissed=key=>closed.has(key);h.context.dismissNotice=key=>{closed.add(key);return true;};
+ const lab={id:'lab',name:'L',nodes:[],profiles:[],defaults:{},deployment:{status:'Running'},nos_readiness:{status:'idle'},git_binding:{repository:{push_url:'https://github.com/x/y.git'}}};
+ const paint=problem=>vm.runInContext(`state=${JSON.stringify({labs:[lab],jobs:[],platforms:{}})};activeId='lab';var gitContexts=new Map([['lab',{repository_status:{problem:${JSON.stringify(problem)}}}]]);renderLabBanner();`,h.context);
+ paint('The push URL rejected the VM account.');
+ assert.equal(get('lab-banner').hidden,false);assert.equal(get('lab-banner-text').textContent,'Saving to Git is not possible right now.');
+ assert.equal(get('lab-banner-detail-text').textContent,'The push URL rejected the VM account.');
+ get('lab-banner-close').onclick();assert.equal(get('lab-banner').hidden,true,'the student closed problem A');
+ paint('The push URL rejected the VM account.');assert.equal(get('lab-banner').hidden,true,'the same problem stays closed across the next poll');
+ paint('The repository is no longer reachable.');
+ assert.equal(get('lab-banner').hidden,false,'a different Git problem is a new notice');
+ assert.equal(get('lab-banner-detail-text').textContent,'The repository is no longer reachable.');
+});

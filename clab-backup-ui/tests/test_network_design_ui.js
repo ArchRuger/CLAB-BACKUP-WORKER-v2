@@ -586,6 +586,30 @@ test('designApplyShowJob follows a job that is being read back after a restart u
  assert.equal(timers.length,0,'settled: following stops');
  assert.equal(polls,2);
 });
+// Audit V1: the banner's "View progress" (and the plan card's Show) call designApplyShowJob from any tab. showModal() inside a
+// display:none ancestor shows nothing and leaves the page inert, so the dialog sits at page level (after </main>, like the restore job
+// dialog) and the modal opens over the tab the student is on: no tab switch, no history entry, and Back or a tab change while it is
+// open can never hide it (review V1-back).
+test('designApplyShowJob opens the modal over the current tab without switching tabs (banner action from Topology)',()=>{
+ const job={id:'d1',lab_id:'lab1',status:'failed',targets:[]};
+ const calls=[],dialog={close(){},showModal(){calls.push(['showModal']);}};
+ const c=ctx({state:{labs:[{id:'lab1'}],design_jobs:[job]},current:()=>({id:'lab1'}),
+  $:id=>id==='design-apply-dialog'?dialog:id==='experimental-design'?{open:false}:null,
+  showTab:name=>calls.push(['showTab',name]),syncRoute:push=>calls.push(['syncRoute',push])});
+ vm.runInContext("var tab='topology'",c);
+ c.designApplyShowJob('d1');
+ assert.deepEqual(calls,[['showModal']],'the banner action stays on the tab it was clicked on');
+ calls.length=0;vm.runInContext("tab='advanced'",c);
+ c.designApplyShowJob('d1');
+ assert.deepEqual(calls,[['showModal']],'the plan card\'s Show works the same way');
+});
+test('V1: #design-apply-dialog is not inside the Advanced tab or the closed Network design details, so its modal is always visible',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ const at=html.indexOf('<dialog id="design-apply-dialog"');
+ assert.ok(at>0,'the dialog exists');
+ assert.ok(at>html.indexOf('</main>'),'it is after </main>: no hidden tab panel or <details> is its ancestor');
+ assert.match(html.slice(at,at+200),/data-lab-dialog/,'it still closes when the page moves to another lab');
+});
 // Risk-review finding: designApplyDisabledReason ignored view.summary.stale (the same flag designStateOf
 // already reads for "Plan is older than the design"), so a stale plan could be offered for applying.
 test('designApplyDisabledReason: a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not',()=>{
