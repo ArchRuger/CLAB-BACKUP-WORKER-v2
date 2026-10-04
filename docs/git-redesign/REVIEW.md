@@ -146,3 +146,22 @@ as one follow-up commit (S1b).
 | 8 | optional | A branch of another name created between the check and the push leaves the README beside it. | The remote is listed again after the push and must hold exactly the one ref. |
 | 9 | optional | `check-ref-format --branch` expands `@{-N}`; `start()` wrote before the ownership check. | `check-ref-format refs/heads/<branch>`; the ownership check runs first. |
 | 10 | should-fix | Missing tests (the re-registration case, sibling and unverified journals in H7, the fetch path of `outgoing`, the real wiring of `initialize`, a tag-only remote). | Added in the follow-up. |
+
+## 5. Second review of the helper (the follow-up S1b)
+
+The risk reviewer read the follow-up commit `4e9f586` and the helper as a whole again. Confirmed: for a
+first registration `register(None)` does exactly what the setup script's inline steps did, so the two
+are equivalent by construction; an unborn clone is finished from the clone's own branch only and refuses
+before any fetch when the folder holds other files; `approved` is the push's own rule; the three
+`truncated` flags are always present; a failure after the start push is finished by a retry that pushes
+nothing. Verdict: not ready for the live pass until row 1 lands. All rows went back to the author as one
+more commit (S1c).
+
+| # | Severity | Finding | Answer |
+|---|---|---|---|
+| 1 | must-fix | The waiting-save check measures "reachable" from the checkout's current HEAD: after `git switch other` a re-registration with other settings finds nothing waiting and strands the saves on the registered branch. | Reachability is tested from the retiring registration's own branch. |
+| 2 | should-fix | The lock is released after the check; a manager save can commit under the old revision before root saves the new one. | The check runs last in `register()` and the checkout's lock is held until it returns. |
+| 3 | should-fix | Journals already uploaded are counted, so a registration that ever saved must ask a remote that may be gone, and a repair is refused for ever. | Uploaded journals are skipped. |
+| 4 | should-fix | With many large checkpoints of its own, a lab's `latest` can lose its summary to the budget. | The lab's own rows are budgeted latest, starting point, checkpoints. |
+| 5 | should-fix | The commit subjects of `history` are not filtered. | They pass the same display filter. |
+| 6 to 12 | optional | The default label counting as a changed setting; the ownership check after a folder was made; details of the unborn clone, of `outgoing`, of the filter and of the check's cost; a stale test message. | Done where small; listed in the commit. |
