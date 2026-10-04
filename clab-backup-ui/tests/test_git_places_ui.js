@@ -808,3 +808,45 @@ test('the old folder browser keeps working for the Progress tab beside the choos
  for(const name of ['gitFolderChoice','gitCanCreateIn','gitPlacesMarkup','gitPlacesShow','gitFolderPath','gitFolderName','gitDestinationPreview','gitNewFolderRefusal','gitFolderTag','gitPathChips','gitTreeModel','gitApplySource','gitSize','gitAncestors','gitDefaultExpanded','gitToggleFolder','gitRevealFolder','gitKeepExpanded','folderChooserMarkup','folderChooserEvent','folderClean','folderKey','folderChooserModel'])assert.equal(typeof context[name],'function',name);
  assert.equal(typeof vm.runInContext('gitPlacesState',context).expanded.has,'function');
 });
+// ---- S11 step 1 ----
+test('S11-13 a typed path whose part names a file of the repository: the part got -2 and the sentence names the file',()=>{
+ const context=makeContext();
+ let html=markup(context,chooserTree(baseFolders()),{value:'README.md/x',answer:ans('README.md-2/x',{typed:'README.md/x',adjusted:'past-file',exists:false})});
+ assert.match(html,/id="folder-answer"[^>]*>README\.md is a file in the repository, so restore-square saves in README\.md-2\/x\.<\/p>/);
+ assert.match(html,/<code>README\.md-2\/x<\/code>/,'the result line shows the folder that is used');assert.match(html,/data-folder-action="save"[^>]*>Save here</);
+ html=markup(context,chooserTree(baseFolders()),{value:'a/notes.txt',answer:ans('a/notes.txt-2',{typed:'a/notes.txt',adjusted:'past-file',exists:false})});
+ assert.match(html,/>a\/notes\.txt is a file in the repository, so restore-square saves in a\/notes\.txt-2\.</);
+});
+test('S11-7 the chooser says where uploads of the selected repository go: its address without credentials, and its branch',()=>{
+ const context=makeContext();vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
+ const repositories=[{id:'a',name:'Course-Labs',remote:'https://github.com/ben/BENS-BGP-LAB.git',branch:'main'},{id:'b',name:'Other',remote:'https://github.com/x/<y>.git',branch:'dev'}];
+ let html=markup(context,chooserTree(baseFolders()),{repositories,repository:'a'});
+ assert.match(html,/<\/select><p class="save-note" id="folder-uploads">Uploads go to github\.com\/ben\/BENS-BGP-LAB, branch main\.<\/p>/);
+ html=markup(context,chooserTree(baseFolders()),{repositories,repository:'b'});
+ assert.match(html,/id="folder-uploads">Uploads go to github\.com\/x\/&lt;y&gt;, branch dev\.</,'escaped text, never markup');
+ html=markup(context,chooserTree(baseFolders()),{repositories:[repositories[0]],repository:'a'});
+ assert.doesNotMatch(html,/<select id="folder-repo"/);assert.match(html,/id="folder-uploads"/,'one repository: no select, the line stays');
+ assert.doesNotMatch(markup(context,chooserTree(baseFolders()),{repositories:[{id:'a',name:'n'}],repository:'a'}),/folder-uploads/,'no address known: no line');
+ assert.equal(context.saveUploadsText('https://token@github.com/o/r.git','main'),'Uploads go to github.com/o/r, branch main.');assert.equal(context.saveUploadsText('',''),'');
+});
+test('S11-5, S11-9 Connect by URL… in the chooser: an address field instead of the repository, no tree before it is connected, one button, questions as buttons',()=>{
+ const context=makeContext();
+ let html=markup(context,chooserTree(baseFolders()),{});
+ assert.match(html,/<button type="button" class="button ghost small" data-folder-action="address-on">Connect by URL…<\/button>/);
+ assert.doesNotMatch(markup(context,chooserTree(baseFolders()),{mode:'state',name:'x'}),/address-on/,'only where a lab is placed');
+ html=markup(context,chooserTree(baseFolders()),{address:{value:'https://github.com/me/New.git'},value:'my-lab',repositories:[{id:'a',name:'A'}]});
+ assert.match(html,/<label for="folder-url">Repository address \(HTTPS\)<\/label><input id="folder-url" value="https:\/\/github\.com\/me\/New\.git"/);
+ assert.match(html,/data-folder-action="address-off">Use a repository on this VM</);assert.doesNotMatch(html,/id="folder-tree"|data-folder-action="new"/);
+ assert.match(html,/<code>New<\/code><span aria-hidden="true">›<\/span><code>my-lab<\/code>/);
+ assert.match(html,/<button type="button" class="button primary" data-folder-action="save" data-folder-primary="1">Connect and save here<\/button>/);
+ assert.match(html,/Saved files can contain passwords or keys\./);assert.doesNotMatch(html,/Checking…/);
+ html=markup(context,chooserTree(baseFolders()),{address:{value:'https://github.com/me/New.git'},value:'x',question:{kind:'empty',name:'New'}});
+ assert.match(html,/New is empty\. The manager adds a README\.md file to start it\./);assert.match(html,/data-folder-action="initialize"[^>]*>Start the repository</);
+ html=markup(context,chooserTree(baseFolders()),{address:{value:'https://github.com/me/New.git'},value:'x',answer:ans('x',{kind:'lab',lab:{id:'o',name:'Other'},beside:'x/restore-square'})});
+ assert.match(html,/Other saves here too\./);assert.match(html,/data-folder-choice="beside"[^>]*>Save in x\/restore-square</);
+ html=markup(context,chooserTree(baseFolders()),{address:{value:'nope'},value:'x',refused:'Paste the HTTPS address, for example https://github.com/you/your-lab-repo.'});
+ assert.match(html,/id="folder-refused">Paste the HTTPS address/);
+ // the events
+ const el=(id,value)=>({target:{id,value}});
+ assert.deepEqual(JSON.parse(JSON.stringify(context.folderChooserEvent('input',el('folder-url','https://x/y')))),{action:'url',value:'https://x/y'});
+});

@@ -154,15 +154,16 @@ const opReviewCopy={
  revise:{title:n=>`Save the changes to ${n}?`,body:()=>'Replaces the topology file and the map layout on the VM. A copy of the previous version is kept in the lab folder. Only possible while the lab is not deployed.',confirm:'Save changes',quiet:true},
  clone:{title:(n,v)=>`Download ${v?.options?.project||'this lab'}?`,body:v=>`Downloads ${v.options?.url||'the repository'} into the VM's lab folder as ${v.options?.project||'a new folder'}. Existing folders are never overwritten.`,confirm:'Download',hideName:true},
 };
-// The last-save line of a disruptive confirmation: when the student last saved progress, in red when
-// never or when a lab operation ran after the last save.
+// The last-save line of a disruptive confirmation: when the lab was last saved (the newest save that read the devices), in red when
+// never, when a lab operation or a load ran after it, and what still waits for upload. From the header chip's status functions.
 function opSaveLine(lab,value){
- if(!lab||!opDisruptive.includes(value.action)||typeof progressState!=='function')return '';
- const ps=progressState(lab,state.git_jobs||[]);
- const never=!lab.git_binding||!ps.at;
+ if(!lab||!opDisruptive.includes(value.action)||typeof saveChipState!=='function'||typeof statusCaptureSaves!=='function')return '';
+ const cs=saveChipState(lab,state),save=statusCaptureSaves(lab,state)[0]||null,at=save?save.created||save.finished||'':'';
+ const never=!save||!at;
  const lastOp=(state.operations||[]).filter(j=>j.lab_id===lab.id&&j.finished).sort((a,b)=>String(b.finished).localeCompare(String(a.finished)))[0];
- const stale=!never&&lastOp&&new Date(ps.at)<new Date(lastOp.finished);
- const text=never?(lab.git_binding?'Never saved.':'Never saved — this lab has no save location yet.'):`Last saved ${opWhen(ps.at)} to Git.`;
+ const stale=!never&&((lastOp&&new Date(at)<new Date(lastOp.finished))||!!cs.load);
+ const waiting=cs.count?` ${cs.count===1?'1 save is':cs.count+' saves are'} not uploaded yet.`:'';
+ const text=never?(lab.git_binding?'Never saved.':'Never saved — this lab has no save location yet.'):`Last saved ${opWhen(at)}.${cs.load?' A saved state was loaded since.':''}${waiting}`;
  return `<p class="op-save-line${never||stale?' danger':''}">${esc(text)}</p>`;
 }
 // One sentence per image of a reviewed topology, from the manager's answer (POST /api/operations/image-check):

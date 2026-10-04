@@ -593,6 +593,11 @@ class PlaceTests(unittest.TestCase):
         answer = self.places(lab)
         self.assertEqual([r['name'] for r in answer['repositories']], ['Archtop-Lab', 'Zeta'])
         self.assertEqual(answer['repositories'][0]['id'], self.repo['id'], 'the top-level record is the handle')
+        # Where uploads of each repository go, for the chooser's line under the Repository select: the address without
+        # credentials and the branch, and nothing else of the VM's record.
+        self.assertEqual([(r['remote'], r['branch']) for r in answer['repositories']],
+                         [('https://github.com/ben/Archtop-Lab.git', 'main'), ('https://github.com/ben/Zeta.git', 'main')])
+        self.assertEqual(set(answer['repositories'][0]), {'id', 'name', 'remote', 'branch', 'path', 'current'})
         self.assertEqual(answer['default']['repository'], self.repo['id'], 'the first by name')
         self.assertEqual({r['binding_id'] for r in self.sent('browse')}, {self.repo['id']})
         self.assertEqual(answer['default']['answer']['bring']['offered'], False)

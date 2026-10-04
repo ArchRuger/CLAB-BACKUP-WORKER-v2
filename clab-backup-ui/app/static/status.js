@@ -178,6 +178,12 @@ function savedVersionName(folder){
  return name&&name===name.toLowerCase()?name.charAt(0).toUpperCase()+name.slice(1):name;
 }
 
+// Where uploads of a repository go, for the place being chosen: `Uploads go to github.com/owner/repository, branch main.` from the
+// repository's address without credentials (the manager strips them) and its branch. '' when the address is not known.
+function saveUploadsText(remote,branch){
+ const text=String(remote||'').trim().replace(/^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]+@)?/i,'').replace(/^[^@/]+@([^:/]+):/,'$1/').replace(/\.git$/,'').replace(/\/+$/,'');
+ return text?`Uploads go to ${text}${branch?', branch '+branch:''}.`:'';
+}
 // ---- The save chip and the load state (DESIGN.md 7.1) -------------------------------------------------------------------------
 // saveChipState and loadState are the only code that decides a chip state, a count or a name; the header, its panels, the
 // drawers and the home card all read them. Every function here is pure over the /api/state document.
@@ -299,11 +305,15 @@ function loadSourceName(source,ctx,lab,now,depth=0){
 // 'loading': a restore job of the lab is active (done = devices with a final word). 'running' / 'partial': the newest effective load L is newer than
 // the newest capture save S and no deploy, redeploy, destroy or design apply of the lab finished after it (a succeeded load is running; any other
 // is partial, `loaded` counting verified devices only). `last` is the newest effective load whether or not something ended it:
-// {job, name, at, loaded, total, key} or null. `undo` is about `job` and says why not when its automatic backup is no longer kept.
+// {job, name, at, loaded, total, key} or null. `recent` is the lab's newest finished load of any kind, {job, name, at, changed}: a load
+// that changed no device is no chip state, but its job window must stay one click away (the panel's Last load line reads it).
+// `undo` is about `job` and says why not when its automatic backup is no longer kept.
 function loadState(lab,ctx={},now){
  ctx=ctx||{};
- const none={key:'',job:null,name:'',loaded:0,total:0,done:0,at:0,rechecking:false,last:null,undo:{available:false,reason:''}};if(!lab)return none;
+ const empty={key:'',job:null,name:'',loaded:0,total:0,done:0,at:0,rechecking:false,last:null,recent:null,undo:{available:false,reason:''}};if(!lab)return empty;
  const mine=j=>!!j&&j.lab_id===lab.id,restores=(ctx.restore_jobs||[]).filter(mine);
+ const newest=restores.filter(j=>!statusRestoreActive(j)).sort((a,b)=>statusJobTime(b)-statusJobTime(a))[0]||null;
+ const recent=newest?{job:newest,name:loadSourceName(newest.source,ctx,lab,now),at:statusJobTime(newest),changed:statusLoadEffective(newest)}:null,none={...empty,recent};
  const effective=restores.filter(statusLoadEffective).sort((a,b)=>statusJobTime(b)-statusJobTime(a))[0]||null,at=effective?statusJobTime(effective):0,effectiveCounts=loadCounts(effective);
  const last=effective?{job:effective,name:loadSourceName(effective.source,ctx,lab,now),at,loaded:effectiveCounts.loaded,total:effectiveCounts.total,key:effective.status==='succeeded'?'running':'partial'}:null;
  const active=restores.filter(statusRestoreActive).sort((a,b)=>statusJobTime(b)-statusJobTime(a))[0];
@@ -364,7 +374,8 @@ function saveChipState(lab,ctx={},now){
 }
 // Why a save cannot be made (the Can't save view, DESIGN.md 3.6). The cause is found in this order: a job that stopped on a device
 // (capture_incomplete), then lab.git_status.code when the status is not ready, else `other`; no message text is matched.
-// → {code, sentence, actions: [{action, label}], devices, job, detail}; the first action is the primary one. Codes: vm account busy diverged
+// → {code, sentence, actions: [{action, label}], devices, commands, job, detail}; the first action is the primary one. `commands`: what the
+// repository's owner runs on the VM when both sides have changes (the manager never merges); Try again then uploads the waiting saves. Codes: vm account busy diverged
 // (the sentence and actions differ by whether a save waits in the repository) device capture files settings devices other. `capture`: the
 // manager stopped the save for its own reason and its sentence is shown as it is. `settings`: the save
 // location has to be set up again (the VM's record or checkout is gone or changed; Details shows the VM's own sentence, which says what to
@@ -382,7 +393,7 @@ function saveProblem(lab,ctx={}){
  const again={action:'again',label:'Try again'},details={action:'details',label:'Details'},detail=String(refusal?.message||stopped?.message||status?.problem||'');
  const checkout=repository.path||'',waits=(+status?.waiting>0)||(!!checkout&&(ctx.git_jobs||[]).some(j=>j.commit&&!j.pushed&&STATUS_SAVE_WAITING.includes(j.status)&&(j.destination?.checkout||'')===checkout));
  const list=names=>names.length<2?(names[0]||''):names.slice(0,-1).join(', ')+' and '+names[names.length-1];
- const make=(code,sentence,actions,devices=[])=>({code,sentence,actions,devices,job:stopped,detail});
+ const make=(code,sentence,actions,devices=[],commands=[])=>({code,sentence,actions,devices,commands,job:stopped,detail});
  if(device){
   const backup=(ctx.jobs||[]).find(j=>j.id===stopped.backup_job_id),nodes=lab?.nodes||[];
   const devices=((backup&&backup.nodes)||[]).filter(n=>n.status!=='succeeded').map(n=>{const node=nodes.find(x=>x.name===n.name);return n.short_name||node?.short_name||statusDeviceName(node||{name:n.name});});
@@ -393,7 +404,7 @@ function saveProblem(lab,ctx={}){
  if(code==='vm')return make('vm','The lab VM could not be reached.',[again,{action:'vm',label:'Check the VM connection…'}]);
  if(code==='account')return make('account',`The VM account cannot upload to ${host}.`,[again,details]);
  if(code==='busy')return make('busy','Someone is working in this repository on the VM.',[again,details]);
- if(code==='diverged')return waits?make('diverged','The online copy and this VM both have changes the other does not have. They have to be combined on the VM.',[details]):make('diverged','The online copy has changes this VM does not have.',[{action:'update',label:'Update from the repository'}]);
+ if(code==='diverged')return waits?make('diverged','The online copy and this VM both have changes the other does not have. They have to be combined on the VM.',[{action:'upload-again',label:'Try again'},details],[],checkout?[`git -C ${checkout} pull --no-rebase`,`git -C ${checkout} push`]:[]):make('diverged','The online copy has changes this VM does not have.',[{action:'update',label:'Update from the repository'}]);
  if(code==='files')return make('files',`${folder?folder:'The top level'} holds files that were not saved by the manager.`,[{action:'place',label:'Choose another place'},details]);
  if(code==='settings')return make('settings','This lab’s save location has to be set up again.',[{action:'settings',label:'Save settings'},details]);
  if(code==='devices')return make('devices','No device of this lab is selected for saving.',[{action:'settings',label:'Save settings'}]);

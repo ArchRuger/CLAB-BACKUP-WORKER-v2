@@ -188,6 +188,16 @@ function gitSaveReason(binding,active){
  if(binding&&typeof busy==='function'&&busy())return 'A backup or lab operation is running. Save progress is available when it finishes';
  return '';
 }
+// A save already running when the page loads (or started elsewhere) is followed to its end, once per job, so its result reaches the
+// header (saveFinished: the panel on the result, the Nothing changed and Uploaded toasts). A watch on another lab's save ends with the
+// lab change, except the upload this page sent: it may go through the save of another lab of the repository (the one at the checkout's
+// newest commit), and its end is this page's toast and chip. Called by renderSaveHeader on every render; `lab` is the lab on screen.
+function gitResumeWatch(lab){
+ if(!lab){clearTimeout(gitWatchTimer);gitWatch=null;return;}
+ if(gitWatch&&gitWatch.lab_id!==lab.id&&!gitWatch.keep&&!$('git-job-dialog')?.open){clearTimeout(gitWatchTimer);gitWatch=null;}
+ const active=(state.git_jobs||[]).find(job=>job.lab_id===lab.id&&gitActiveStates.has(job.status));
+ if(active&&!gitWatch)gitStartWatch(active,{quiet:true});
+}
 function renderGitProgress(){
  const bar=$('git-progress-bar');if(!bar)return;
  const lab=current();bar.hidden=!lab;if(!lab){clearTimeout(gitWatchTimer);gitWatch=null;return;}
@@ -484,12 +494,15 @@ async function gitForgetFolder(id,path,tree){
  await json('/git/repositories/'+encodeURIComponent(tree.repository.id)+'/folders','DELETE',{prefix:path});
  gitPlacesState.selected=path.split('/').slice(0,-1).join('/');gitPlacesState.open=true;await gitShowRepository(true);notify('Folder '+path+' removed from the list. Nothing in the repository changed.');
 }
+// Use a different repository…: the repositories of the VM this lab does not save to, and one by its address. Either choice opens
+// the folder chooser for that repository (the place route, with its questions as buttons); nothing changes before Save here.
 async function gitSwitchRepository(id){
- const [context,catalog]=await Promise.all([gitLoadContext(id,true),(await api('/git/repositories')).json()]);
- const binding=context.binding,repositories=(catalog.repositories||[]).filter(value=>value.id!==binding?.binding_id);
- const dialog=opDialog('git-switch-dialog','Use a different repository',`<p>Pick another repository already available on this lab VM, or connect a new one by its GitHub address. Nothing already saved is deleted.</p>${repositories.length?`<label for="git-switch-id">Repositories on this VM</label><select id="git-switch-id">${repositories.map(value=>`<option value="${esc(value.id)}">${esc(gitRepoName(value))} › ${esc(value.prefix||'(top level)')}</option>`).join('')}</select><div class="dialog-actions"><button class="button secondary" id="git-switch-choose">Choose this repository</button></div>`:'<p class="form-help">No other repository is set up on this VM yet.</p>'}<h3>Connect a repository by URL</h3><p class="form-help">For a repository that is not on this VM yet. You need its HTTPS URL (GitHub › Code › HTTPS); the VM's existing GitHub login is used.</p><div class="dialog-actions"><button class="button primary" id="git-switch-connect">Connect by URL…</button></div>`);
- $('git-switch-choose')?.addEventListener('click',()=>opTask(dialog,async()=>{gitPendingSelection=$('git-switch-id').value;gitPlacesState.open=true;dialog.close();await gitShowRepository(true);notify('Choose the folder, then tick the devices under Save settings.');$('git-save-settings')?.scrollIntoView?.({block:'start',behavior:'smooth'});}));
- $('git-switch-connect').onclick=()=>{dialog.close();opTask(null,()=>gitConnectByUrl(id));};
+ const places=await(await api('/labs/'+encodeURIComponent(id)+'/git/places')).json();
+ const repositories=(places.repositories||[]).filter(value=>!value.current);
+ const chooser=options=>{if(typeof saveDrawerOpen!=='function')throw new Error('This part of the page did not load. Reload the page and try again.');saveDrawerOpen('chooser',{mode:'location',opener:$('save-chip'),...options});};
+ const dialog=opDialog('git-switch-dialog','Use a different repository',`<p>Pick another repository already available on this lab VM, or connect a new one by its GitHub address. Nothing already saved is deleted.</p>${repositories.length?`<label for="git-switch-id">Repositories on this VM</label><select id="git-switch-id">${repositories.map(value=>`<option value="${esc(value.id)}">${esc(value.name||gitRepoName(value))}</option>`).join('')}</select><div class="dialog-actions"><button class="button secondary" id="git-switch-choose">Choose this repository</button></div>`:'<p class="form-help">No other repository is set up on this VM yet.</p>'}<h3>Connect a repository by URL</h3><p class="form-help">For a repository that is not on this VM yet. You need its HTTPS URL (GitHub › Code › HTTPS); the VM's existing GitHub login is used.</p><div class="dialog-actions"><button class="button primary" id="git-switch-connect">Connect by URL…</button></div>`);
+ $('git-switch-choose')?.addEventListener('click',()=>opTask(dialog,async()=>{const repository=$('git-switch-id').value;dialog.close();chooser({repository});}));
+ $('git-switch-connect').onclick=()=>opTask(dialog,async()=>{dialog.close();chooser({address:true});});
 }
 function gitSuggestedFolder(name){return String(name||'lab').replace(/[^A-Za-z0-9_.-]+/g,'-').replace(/^[^A-Za-z0-9_]+/,'').replace(/-+$/,'').slice(0,60)||'lab';}
 async function gitConnectByUrl(id,options={}){

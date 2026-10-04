@@ -533,8 +533,10 @@ test('D1: the Load button is disabled only while a load of the lab runs; a row c
  p.c.state.git_jobs=[{id:'g',lab_id:'lab',status:'capturing',target:'latest'}];
  await p.open();await p.click('data-load-row="0"');
  assert.equal(p.calls.length,0,'no preflight during a save');
- assert.match(p.body(),/<span class="save-dot bad" aria-hidden="true"><\/span>Final cannot be loaded right now\.<\/p><p class="save-sub">A save is running\.<\/p><div class="save-row"><button[^>]*data-load-action="again">Try again<\/button><button[^>]*data-load-action="back">Back<\/button><\/div>/);
- p.c.state.git_jobs=[];
+ // A wait, never a failed load: the reason, and Try again disabled with it until the manager is free (S11 item 14).
+ assert.match(p.body(),/<span class="save-dot busy" aria-hidden="true"><\/span>Final can be loaded in a moment\.<\/p><p class="save-sub" id="load-wait-why">A save is running\.<\/p><div class="save-row"><button[^>]*data-load-action="again" disabled[^>]*>Try again<\/button><button[^>]*data-load-action="back">Back<\/button><span class="caption" id="load-wait-note">Available when it finishes\.<\/span><\/div>/);
+ p.c.state.git_jobs=[];p.c.loadRender();   // the poll: Try again becomes available when the save has ended
+ assert.doesNotMatch(p.body(),/data-load-action="again" disabled/);
  await p.click('data-load-action="again"');
  assert.equal(p.calls.length,1,'Try again runs the preflight once the save ended');
  // A preflight the server refuses shows the manager's sentence.
@@ -630,4 +632,32 @@ test('loadOpen always lands on the list; a page without the Load panel sends no 
  const q=page({globals:{openPanel:()=>false}});q.els['load-button']._menuOpen=undefined;
  assert.equal(await q.c.loadChoose('lab',{type:'folder',path:'/x'},'X'),false);
  assert.equal(q.calls.length,0);assert.equal(vm.runInContext('loadReview',q.c),null);
+});
+test('S11-14 while the manager is still busy after a load (its check backup), Undo this load, Try … again and the red Load wait with the reason; a 409 is a wait with Try again, never a failed load',async()=>{
+ let hold='A backup is running.';
+ const job=partialJob({}),globals={busyReason:()=>hold};
+ const p=page({state:{restore_jobs:[job],jobs:[{id:'pre9',status:'succeeded',source:'restore-pre',progress_id:'job9'}]},globals,routes:()=>preflight(fourTargets())});
+ const lab=p.c.state.labs[0],cs=p.c.saveChipState(lab,p.c.state);
+ let view=p.c.loadChipView(cs,lab);
+ assert.match(view.html,/id="load-retry"[^>]* disabled>/);assert.match(view.html,/id="load-undo"[^>]* disabled>/);
+ assert.match(view.html,/<p class="save-note" id="load-hold">A backup is running\. Available when it finishes\.<\/p>/);
+ assert.doesNotMatch(view.html,/id="load-details"[^>]* disabled/,'Details stays');
+ const busyKey=view.key;hold='';view=p.c.loadChipView(cs,lab);
+ assert.doesNotMatch(view.html,/disabled|load-hold/);assert.notEqual(view.key,busyKey,'the view is rebuilt when the manager is free');
+ // A row chosen while the manager is busy sends no preflight and waits.
+ hold='A backup is running.';
+ await p.c.loadChoose('lab',{type:'folder',path:'/course/final/latest'},'Final');
+ assert.equal(p.calls.length,0);assert.match(p.body(),/Final can be loaded in a moment\.<\/p><p class="save-sub" id="load-wait-why">A backup is running\.<\/p>/);assert.match(p.body(),/data-load-action="again" disabled/);
+ hold='';p.c.loadRender();assert.doesNotMatch(p.body(),/data-load-action="again" disabled/);
+ await p.click('data-load-action="again"');assert.equal(p.calls.length,1);assert.match(p.body(),/id="load-run"/);
+ // In a confirmation the red Load is held with the same reason.
+ const run=p.els['load-run']=element('load-run'),why=p.els['load-run-reason']=element('load-run-reason');
+ hold='A lab operation is running.';p.c.loadRender();
+ assert.equal(run.disabled,true);assert.equal(why.textContent,'A lab operation is running.');assert.equal(why.hidden,false);
+ hold='';p.c.loadRender();assert.equal(run.disabled,false);
+ // A 409 that still arrives (the page did not know yet) is worded as a wait.
+ const q=page({routes:()=>{throw Object.assign(new Error('Wait for the active backup, Git save, restore or lab operation to finish.'),{status:409});}});
+ await q.c.loadChoose('lab',{type:'folder',path:'/course/final/latest'},'Final');
+ assert.match(q.body(),/<span class="save-dot busy" aria-hidden="true"><\/span>Final can be loaded in a moment\.<\/p><p class="save-sub" id="load-wait-why">Wait for the active backup, Git save, restore or lab operation to finish\.<\/p><div class="save-row"><button[^>]*data-load-action="again"[^>]*>Try again</);
+ assert.doesNotMatch(q.body(),/cannot be loaded|was not loaded/);
 });

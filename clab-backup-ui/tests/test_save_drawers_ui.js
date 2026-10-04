@@ -333,9 +333,9 @@ test('D10 Save settings: no repository on the VM, no save location, a list failu
  assert.match(g.content(),/This lab has no topology file in the manager, so saves hold device configurations only\./);assert.match(g.content(),/Update topology file…/);assert.match(g.content(),/<p class="banner warn">The VM account cannot upload to github\.com\.<\/p>/);
  g=settingsHarness({context:settingsContext({binding:{...binding,repository:{...binding.repository,prefix:'latest/'}}}),extras:{gitLegacyDestinationNotice:()=>'legacy sentence'}});g.context.saveDrawerOpen('settings',{});await settle();assert.match(g.content(),/legacy sentence/);
 });
-test('D11 a waiting save disables nothing: Save settings is enabled and sends the PUT at once; the line says the save stays part of the next upload; Update from the repository gives way to Upload…',async()=>{
+test('D11 a waiting save disables nothing: Save settings is enabled and sends the device selection at once (through the place route, never PUT …/git); the line says the save stays part of the next upload; Update from the repository gives way to Upload…',async()=>{
  const waiting=ownJob('j3','Waiting'),puts=[];
- const g=settingsHarness({jobs:[waiting],lab:{git_status:{checked:true,ready:true,problem:'',waiting:1}},routes:{'PUT /labs/lab/git':data=>{puts.push(data);return {};}}});
+ const g=settingsHarness({jobs:[waiting],lab:{git_status:{checked:true,ready:true,problem:'',waiting:1}},routes:{'POST /labs/lab/git/place':data=>{puts.push(data);return {saved:true,binding:{},job:null};},'PUT /labs/lab/git':()=>{throw new Error('the old route must not be called');}}});
  g.context.saveDrawerOpen('settings',{});await settle();
  const html=g.content();assert.match(html,/1 save is waiting for upload\. It was made with the devices chosen before and stays part of the next upload\./);
  assert.doesNotMatch(html,/disabled/);assert.doesNotMatch(html,/Keep it on the VM only/);assert.doesNotMatch(html,/data-git-repo-action="update"/);assert.match(html,/Saves are waiting for upload in this repository\. Upload them before updating from the repository\./);assert.match(html,/data-save-action="upload-waiting"/);
@@ -343,7 +343,7 @@ test('D11 a waiting save disables nothing: Save settings is enabled and sends th
  g.fire('change',{target:node('input',{name:'git-node',value:'xrv9k',checked:false,parent:g.dialog.__root})});
  g.context.saveDrawerRender();assert.match(g.content(),/<input type="checkbox" name="git-node" value="xrv9k" >/);assert.match(g.content(),/xrv9k is no longer included\. Its saved file is removed with the next save; older versions keep it\./);
  await g.click(g.button('save-settings'));
- assert.deepEqual(JSON.parse(JSON.stringify(puts)),[{binding_id:'b',node_names:['ceos']}]);assert.deepEqual(g.notices,['Save settings updated.']);
+ assert.equal(puts.length,1);assert.deepEqual(JSON.parse(JSON.stringify(puts[0].node_names)),['ceos']);assert.equal(puts[0].repository,'b');assert.equal(puts[0].move_files,false);assert.equal(puts[0].choice,'');assert.equal(puts[0].acknowledge,true);assert.equal(typeof puts[0].folder,'string','the lab’s own folder: nothing moves');assert.deepEqual(g.notices,['Save settings updated.']);
  // every device unticked is an error under the list, not a disabled button
  g.fire('change',{target:node('input',{name:'git-node',value:'ceos',checked:false,parent:g.dialog.__root})});g.fire('change',{target:node('input',{name:'git-node',value:'xrv9k',checked:false,parent:g.dialog.__root})});await g.click(g.button('save-settings'));
  assert.match(g.content(),/<p class="form-error" role="alert" id="save-settings-error">Choose at least one device to include\.<\/p>/);assert.equal(puts.length,1);
@@ -558,4 +558,44 @@ test('the head and the content are written without inline styles or handlers; ev
  await openVersions({jobs:[ownJob('j3',attack)],list:states({states:[{...states().states[0],name:attack,path:attack}]})});
  await h.click(node('button',{cls:'save-item',data:{saveRow:'job:j3'},parent:h.dialog.__root}));
  const html=h.content();assert.doesNotMatch(html,/<img|style=|onclick=|onerror=\"/);assert.doesNotMatch(source,/style=|\.style\./);
+});
+// ---- S11 step 1: the gaps closed before the Progress tab goes ----
+test('S11-15 Save as a lab state always sends the folder its Folder field shows: the default <the lab\'s folder>/<name>, never an empty folder by omission; an emptied field is the top level',async()=>{
+ const posts=[];
+ const g=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>({kind:'free',folder:data.folder,typed:data.folder,exists:false}),'POST /labs/lab/git/state':data=>{posts.push(data);return {id:'s1',lab_id:'lab',status:'queued'};}},extras:{gitRequestId:()=>'r'.repeat(32)}});
+ g.context.saveDrawerOpen('state',{});await settle();const c=g.sd.chooser;
+ await g.act('name',{value:'start',echo:'start'});
+ await g.act('save');assert.equal(posts.length,0,'nothing is sent before the manager answered for the folder shown');
+ g.timers.at(-1)();await settle();await g.act('save');
+ assert.equal(posts.length,1);assert.equal(posts[0].folder,'restore-square/start','the default case carries the non-empty default');assert.equal(posts[0].name,'start');
+ const k=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>({kind:'free',folder:data.folder,typed:data.folder,exists:true}),'POST /labs/lab/git/state':data=>{posts.push(data);return {id:'s2',lab_id:'lab',status:'queued'};}},extras:{gitRequestId:()=>'q'.repeat(32)}});
+ k.context.saveDrawerOpen('state',{});await settle();await k.act('name',{value:'final',echo:'final'});await k.act('typed',{value:'',echo:''});k.timers.at(-1)();await settle();
+ assert.equal(k.seen.at(-1).view.value,'','the field is empty because the person emptied it');await k.act('save');
+ assert.equal(posts.at(-1).folder,'','then, and only then, the top level');assert.equal(posts.at(-1).name,'final');
+});
+test('S11-9 a repository by its address goes through the chooser and the place route with url: never POST …/git/connect; an empty repository is asked about and started on request',async()=>{
+ const posts=[];let empty=true;
+ const g=chooserHarness({routes:{'POST /labs/lab/git/place':data=>{posts.push(data);if(empty&&!data.initialize)return {question:{kind:'empty',name:'New-Empty'}};return {saved:true,binding:{repository:{path:'/home/me/New-Empty',prefix:'restore-square'}},job:null};},
+  'POST /labs/lab/git/connect':()=>{throw new Error('the old route must not be called');}},extras:{saveStartBody:body=>({...body,initialize:true}),gitRepoName:repo=>String(repo.path||'').split('/').pop()}});
+ g.context.saveDrawerOpen('chooser',{mode:'location',address:true});await settle();const c=g.sd.chooser;
+ assert.deepEqual(JSON.parse(JSON.stringify(c.address)),{value:''});assert.equal(g.seen.at(-1).view.address.value,'');
+ await g.act('save');assert.equal(posts.length,0);assert.match(c.refused,/Paste the HTTPS address/,'an address is needed before anything is sent');
+ await g.act('url',{value:'https://github.com/me/New-Empty.git'});assert.equal(c.refused,'');
+ await g.act('typed',{value:'my lab',echo:'my-lab'});assert.equal(g.requests.filter(r=>/places\/check$/.test(r.url)).length,0,'nothing is asked about a folder before the repository is connected');
+ await g.act('save');
+ assert.deepEqual(JSON.parse(JSON.stringify(posts[0])),{url:'https://github.com/me/New-Empty.git',folder:'my-lab',choice:'',pending:'',move_files:false,node_names:['ceos','xrv9k'],acknowledge:true});
+ assert.equal(c.question.kind,'empty','the empty repository is a question with a button, never a raw refusal');assert.equal(g.dialog.open,true);
+ await g.act('initialize');assert.equal(posts[1].url,'https://github.com/me/New-Empty.git');assert.equal(posts[1].initialize,true);assert.equal(posts[1].repository,undefined);
+ assert.equal(g.dialog.open,false);assert.deepEqual(g.notices,['restore-square now saves to New-Empty › restore-square.']);
+ // Back to a repository of the VM.
+ const k=chooserHarness({});k.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
+ await k.act('address-on');assert.ok(k.sd.chooser.address);await k.act('address-off');assert.equal(k.sd.chooser.address,null);
+});
+test('S11-4, S11-9 Save settings: Connect by URL… opens the chooser\'s address field with Back to the settings; saving the devices never sends PUT …/git',async()=>{
+ const g=settingsHarness({routes:{'GET /labs/lab/git/places':places()},extras:{...chooserStubs([]),gitRunAction(){throw new Error('the old connect dialog must not open');}}});
+ g.context.saveDrawerOpen('settings',{});await settle();
+ await g.click(node('button',{data:{gitRepoAction:'connect'},parent:g.dialog.__root}));await settle();
+ assert.equal(g.sd.kind,'chooser');assert.ok(g.sd.chooser.address,'the address field');assert.equal(g.sd.back.kind,'settings');
+ const source=require('node:fs').readFileSync(require('node:path').join(__dirname,'../app/static/save-drawers.js'),'utf8');
+ assert.doesNotMatch(source,/'\/git','PUT'|\/git\/connect|\/git\/destination/);
 });

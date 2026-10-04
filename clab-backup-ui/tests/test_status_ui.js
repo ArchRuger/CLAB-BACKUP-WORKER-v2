@@ -569,9 +569,11 @@ test('DESIGN.md 3.6: Can\'t save sentence and actions for each code',()=>{
  assert.equal(problem({...st('account'),git_binding:{repository:{}}}).sentence,'The VM account cannot upload to the online repository.');
  p=problem(st('busy'));assert.equal(p.sentence,'Someone is working in this repository on the VM.');assert.equal(acts(p),'Try again | Details');
  p=problem(st('diverged'));assert.equal(p.sentence,'The online copy has changes this VM does not have.');assert.equal(acts(p),'Update from the repository');assert.equal(ids(p),'update');
- p=problem(st('diverged',{waiting:1}));assert.equal(p.sentence,'The online copy and this VM both have changes the other does not have. They have to be combined on the VM.');assert.equal(acts(p),'Details','no Update while a save waits');
+ p=problem(st('diverged',{waiting:1}));assert.equal(p.sentence,'The online copy and this VM both have changes the other does not have. They have to be combined on the VM.');assert.equal(acts(p),'Try again | Details','no Update while a save waits; Try again uploads the waiting saves once the owner has combined both sides');assert.equal(ids(p),'upload-again,details');
+ assert.deepEqual(p.commands,['git -C /srv/repo pull --no-rebase','git -C /srv/repo push'],'what the repository’s owner runs on the VM, with the lab’s checkout path');
+ assert.deepEqual(problem(st('diverged')).commands,[]);assert.deepEqual(problem(st('busy')).commands,[]);
  const waitingJob=gj('review_pending',5,{destination:{checkout:'/srv/repo'}});
- assert.equal(problem(st('diverged'),{git_jobs:[waitingJob]}).actions[0].action,'details','a waiting save of any lab in the lab\'s checkout');
+ assert.equal(problem(st('diverged'),{git_jobs:[waitingJob]}).actions[0].action,'upload-again','a waiting save of any lab in the lab\'s checkout');
  assert.equal(problem(st('diverged'),{git_jobs:[{...waitingJob,destination:{checkout:'/srv/other'}}]}).actions[0].action,'update');
  assert.equal(problem(st('diverged'),{git_jobs:[{...waitingJob,pushed:true}]}).actions[0].action,'update');
  p=problem(st('files'));assert.equal(p.sentence,'bgp holds files that were not saved by the manager.');assert.equal(acts(p),'Choose another place | Details');
@@ -673,4 +675,15 @@ test('the restore words that LOAD.md 10 rewords, and the whole file stays pure',
  const source=fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8');
  assert.doesNotMatch(source.replace(/\/\/.*$/gm,''),/\b(document\.|window\.|localStorage|sessionStorage|addEventListener|location\.|history\.)/,'status.js touches no DOM, no listener and no storage');
  assert.doesNotMatch(source,/\bstyle=|\.innerHTML/);
+});
+test('S11-3 (C-025) loadState.recent is the lab’s newest finished load, also one that changed no device; the chip does not change for it',()=>{
+ const c=makeContext(),ls=(lab,ctx)=>c.loadState(lab,ctx,NOW);
+ assert.equal(plain(ls(bound,{})).recent,null);
+ const none=rj('failed',5,[tg('r1','failed')]),effective=rj('succeeded',30,loaded4);
+ let s=ls(bound,{restore_jobs:[none]});assert.equal(s.key,'');assert.equal(s.last,null);assert.equal(s.recent.job.id,none.id);assert.equal(s.recent.changed,false);assert.equal(s.recent.name,'ospf-up');
+ s=ls(bound,{restore_jobs:[effective,none]});assert.equal(s.key,'running','an older effective load still describes the devices');assert.equal(s.recent.job.id,none.id);assert.equal(s.last.job.id,effective.id);
+ s=ls(bound,{restore_jobs:[effective]});assert.equal(s.recent.job.id,effective.id);assert.equal(s.recent.changed,true);
+ const active={...rj('applying',0,[tg('r1','pending')]),finished:''};
+ s=ls(bound,{restore_jobs:[active,none]});assert.equal(s.key,'loading');assert.equal(s.recent.job.id,none.id,'a running load is not a finished one');
+ assert.equal(chip(bound,{restore_jobs:[none],git_jobs:[gj('synced',60)]}).key,'saved');
 });

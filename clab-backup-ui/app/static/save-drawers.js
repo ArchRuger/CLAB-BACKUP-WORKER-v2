@@ -438,7 +438,9 @@ async function drwSettingsAction(action){
   d.error='';d.notice='';
   if(!binding)return;
   if(!ticks.length){d.error='Choose at least one device to include.';saveDrawerRender();return;}
-  await json('/labs/'+drwEnc(id)+'/git','PUT',{binding_id:binding.binding_id,node_names:ticks});
+  // The devices of every save: the lab is placed again in the folder it has, with the new selection (the place route; nothing moves).
+  const placed=await json('/labs/'+drwEnc(id)+'/git/place','POST',{repository:binding.binding_id,folder:drwBare(binding.repository?.prefix),choice:'',pending:'',move_files:false,node_names:ticks,acknowledge:true});
+  if(!placed||!placed.saved)throw new Error('The devices could not be saved. Open Change folder… and choose the folder again.');
   saveDrawer.draft=null;if(typeof refresh==='function')await refresh();
   await drwLoadSettings(true);d.notice='Save settings updated.';drwSay('Save settings updated.');if(typeof notify==='function')notify('Save settings updated.');saveDrawerRender();
  }
@@ -447,6 +449,9 @@ async function drwSettingsAction(action){
 async function drwRepoAction(action){
  const id=drwLabId();
  if(action==='refresh'){await saveDrawerRefresh(true);return;}
+ // A repository by its address goes through the chooser and the place route, like the first save's address field: its questions
+ // come back as buttons and an empty repository is started on request.
+ if(action==='connect'){saveDrawerOpen('chooser',{mode:'location',address:true,back:saveDrawer.kind==='settings'?{kind:'settings',options:{restore:true}}:null});return;}
  saveDrawerClose();
  if(typeof gitRunAction==='function')await gitRunAction(action,id);
 }
@@ -458,9 +463,13 @@ function drwChooserNew(mode,options){
  return {mode,status:'loading',error:'',value:options.folder||'',selected:null,answer:null,checking:false,expanded:new Set(['']),focus:'',showAll:new Set(),treeOpen:false,newFolder:null,notice:'',refused:'',problem:null,busy:false,
   question:options.question||null,pending:null,bring:true,unfinished:false,firstSave:false,name:'',showCancel:true,repositories:[],repository:options.repository||'',labName:'',repoName:'',
   model:null,places:null,context:null,seq:0,timer:0,pathTouched:false,parent:'',requestId:'',lastChoice:'',lastRequest:null,pendingJob:null,pendingReview:null,checkFailed:false,answerFor:null,
+  address:options.address?{value:typeof options.address==='string'?options.address:''}:null,defaultFolder:'',
   then:typeof options.then==='function'?options.then:null};
 }
+// The folder a request names: the manager's answer for what the field shows (nothing is sent before it arrived, unless the check
+// itself failed); for a repository given by its address, the field's own text corrected (the manager answers for it when it connects).
 function drwChooserFolder(c){
+ if(c.address)return c.answer&&typeof c.answer.folder==='string'?c.answer.folder:(typeof folderClean==='function'?folderClean(c.value):c.value);
  const answer=c.answer||(c.model&&c.model.answers&&typeof folderClean==='function'?c.model.answers.get(folderClean(c.value)):null);
  if(answer&&answer.folder!==undefined&&answer.folder!==null)return String(answer.folder);
  return c.checkFailed?(typeof folderClean==='function'?folderClean(c.value):c.value):null;
@@ -485,19 +494,19 @@ async function drwLoadChooser(){
   const listed=places.repositories||[],pick=wanted||(listed.find(r=>r.current)||{}).id||places.default?.repository||context?.binding?.binding_id||(listed[0]||{}).id||'';
   if(!places.tree&&pick){places=await get(pick);if(request!==saveDrawer.request)return;}
   c.context=context;c.places=places;c.repository=pick;
-  c.repositories=(places.repositories||[]).map(r=>({id:r.id,name:r.name||(typeof gitRepoName==='function'?gitRepoName(r):r.id)}));
+  c.repositories=(places.repositories||[]).map(r=>({id:r.id,name:r.name||(typeof gitRepoName==='function'?gitRepoName(r):r.id),remote:r.remote||'',branch:r.branch||''}));
   const found=c.repositories.find(r=>r.id===c.repository);c.repoName=found?found.name:'';
   c.model=typeof folderChooserModel==='function'&&places.tree?folderChooserModel(places.tree):null;
   const own=c.model&&typeof folderOwnPath==='function'?folderOwnPath(c.model):'';
   const base=context?.binding?own||String(context.binding.repository?.prefix||'').replace(/\/$/,''):places.default?.folder||'';
-  c.parent=base;
+  c.parent=base;c.defaultFolder=places.default?.folder||base;
   if(c.mode==='state')c.value=drwJoin(base,typeof folderClean==='function'?folderClean(c.name):c.name);
   else if(!c.pathTouched&&!c.value)c.value=base;
   c.expanded=c.model&&typeof folderDefaultExpanded==='function'?folderDefaultExpanded(c.model):new Set(['']);
   if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,drwDir(c.value));
   c.answer=!c.model&&!context?.binding&&c.value===(places.default?.folder||'')?places.default?.answer||null:null;
   c.status='ready';
-  if(c.mode!=='browse'&&!(c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(c.value):c.value))&&!c.answer)drwChooserCheck(c.value);
+  if(c.mode!=='browse'&&!c.address&&!(c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(c.value):c.value))&&!c.answer)drwChooserCheck(c.value);
   drwSay('');
  }catch(error){if(request!==saveDrawer.request)return;c.status=error instanceof TypeError?'unreachable':'error';c.error=c.status==='error'?error.message||'':'';}
  saveDrawerRender();
@@ -526,6 +535,7 @@ function drwChooserSelect(path){
 function drwChooserTyped(intent){
  const c=saveDrawer.chooser;c.value=intent.echo!==undefined?intent.echo:intent.value;c.selected=null;c.pathTouched=true;c.question=null;c.answer=null;c.answerFor=null;c.requestId='';c.checkFailed=false;
  const clean=typeof folderClean==='function'?folderClean(c.value):c.value;
+ if(c.address){saveDrawerRender();return;}   // nothing to ask before the repository is connected
  if(c.mode==='state')c.parent=drwDir(clean);
  if(typeof gitRevealFolder==='function'&&c.model)gitRevealFolder(c.expanded,drwDir(clean));
  drwChooserDebounce(clean);saveDrawerRender();
@@ -556,8 +566,11 @@ async function drwChooserPlace(choice,pending,extra){
  const c=saveDrawer.chooser,id=saveDrawer.lab;if(c.busy)return;
  const folder=drwChooserFolder(c);if(folder===null)return;
  const names=c.context?.binding?.node_names||(c.context?.supported_nodes||[]).map(n=>n.name);
- const answer=c.answer||(c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(c.value):c.value))||null;
- const body={repository:c.repository,folder,choice:choice||'',pending:pending||'',move_files:!!(answer?.bring?.offered&&c.bring!==false),node_names:names,acknowledge:true,...(extra||{})};
+ const answer=c.answer||(!c.address&&c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(c.value):c.value))||null;
+ // A repository of the VM by its id, or one the VM does not have yet by its address (connected at its top level, then the lab is placed).
+ const url=c.address?String(c.address.value||'').trim():'';
+ if(c.address&&!/^https:\/\/[^\s/]+\/\S+/.test(url)){c.refused='Paste the HTTPS address, for example https://github.com/you/your-lab-repo.';c.problem=null;c.lastRequest=()=>drwChooserPlace(choice,pending,extra);saveDrawerRender();return;}
+ const body={...(c.address?{url}:{repository:c.repository}),folder,choice:choice||'',pending:pending||'',move_files:!!(answer?.bring?.offered&&c.bring!==false),node_names:names,acknowledge:true,...(extra||{})};
  c.lastChoice=choice||'';c.lastRequest=()=>drwChooserPlace(choice,pending,extra);
  c.busy=true;c.refused='';c.problem=null;drwSay('Saving here…');saveDrawerRender();
  try{
@@ -572,7 +585,8 @@ async function drwChooserPlace(choice,pending,extra){
   }
   // The folder the manager placed the lab in (the one beside, for that answer), never the one that was asked about.
   const placed=result&&result.binding&&result.binding.repository?drwBare(result.binding.repository.prefix):folder;
-  await drwChooserDone(result,`${drwLabName()} now saves to ${c.repoName||'the repository'} › ${placed||'top level'}.`);
+  const where=c.address&&result&&result.binding&&typeof gitRepoName==='function'?gitRepoName(result.binding.repository):c.repoName;
+  await drwChooserDone(result,`${drwLabName()} now saves to ${where||'the repository'} › ${placed||'top level'}.`);
  }catch(error){await drwChooserRefused(c,error,'The folder could not be set.');}
 }
 // A refused placement reads like the chip (PROMPT 6.5): after the refusal the state is read again and, when the manager recorded a
@@ -616,6 +630,8 @@ async function drwChooserUploadThenMove(){
 }
 async function drwChooserState(choice){
  const c=saveDrawer.chooser,id=saveDrawer.lab;if(c.busy)return;
+ // The folder the Folder field shows: the default <the lab's folder>/<the state's folder name>, what the person chose or typed, or
+ // the top level when the person emptied the field (the line under it says so). Never an empty folder by omission.
  const folder=drwChooserFolder(c),name=typeof folderClean==='function'?folderClean(c.name):c.name;
  if(!name||folder===null)return;
  if(!c.requestId)c.requestId=typeof gitRequestId==='function'?gitRequestId():'0'.repeat(32);
@@ -669,6 +685,9 @@ async function drwChooserApply(intent,event){
   case 'focus':c.focus=intent.path;saveDrawerRender();break;
   case 'typed':drwChooserTyped(intent);break;
   case 'name':drwChooserName(intent);break;
+  case 'address-on':{c.address={value:''};c.answer=null;c.question=null;c.pending=null;c.refused='';c.problem=null;c.selected=null;c.newFolder=null;if(!c.pathTouched)c.value=c.defaultFolder||c.value;saveDrawerRender();drwChooserFocus('#folder-url');break;}
+  case 'address-off':{c.address=null;c.answer=null;c.question=null;c.refused='';c.problem=null;saveDrawerRender();if(c.status==='ready')drwChooserCheck(typeof folderClean==='function'?folderClean(c.value):c.value);drwChooserFocus('[data-folder-action="address-on"]');break;}
+  case 'url':if(c.address){c.address={value:String(intent.value??'')};c.answer=null;c.question=null;c.refused='';c.problem=null;saveDrawerRender();}break;
   case 'repository':c.repository=intent.value;c.value='';c.pathTouched=false;c.answer=null;await drwLoadChooser();break;
   case 'bring':c.bring=!!intent.value;saveDrawerRender();break;
   case 'tree-open':c.treeOpen=!!intent.value;break;

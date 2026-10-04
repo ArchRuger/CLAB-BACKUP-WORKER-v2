@@ -36,6 +36,10 @@ function loadJobActive(job){if(typeof statusRestoreActive==='function')return st
 function loadEffective(job){if(typeof statusLoadEffective==='function')return statusLoadEffective(job);return !!job&&!loadJobActive(job)&&(job.targets||[]).some(t=>LOAD_REPLACED.includes(t.status)||t.status==='uncertain'||t.stage==='uncertain');}
 function loadRestoreActive(labId){return (loadState_().restore_jobs||[]).some(j=>j.lab_id===labId&&loadJobActive(j));}
 function loadSaveRunning(labId){const busy=typeof STATUS_GIT_BUSY!=='undefined'?STATUS_GIT_BUSY:LOAD_GIT_BUSY;return (loadState_().git_jobs||[]).some(j=>j.lab_id===labId&&busy.includes(j.status));}
+// What holds the manager right now ('' when nothing does), as app.js's busyReason words it: right after a load ends its check backup
+// still runs for a few seconds, and a preflight or a submit sent then is answered 409. A control that would send one is disabled
+// with this reason until the manager is free.
+function loadBusy(labId){return typeof busyReason==='function'?String(busyReason(labId)||''):'';}
 function loadRequestId(){if(typeof restoreRequestId==='function')return restoreRequestId();const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);return Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');}
 function loadMinutes(value){return Math.min(60,Math.max(2,parseInt(value,10)||LOAD_MINUTES));}
 // The /api/state document plus the saved-states rows this page holds for the lab (loadSourceName names a lab state by them).
@@ -190,14 +194,16 @@ async function loadChoose(labId,source,name,options){
  const r={labId,source:loadSource(source),name:String(name||'')||'a saved state',headline:String(options.headline||''),undo:options.undo||null,retry:!!nodes,nodes,
   review:null,chosen:new Set(),minutes:LOAD_MINUTES,requestId:loadRequestId(),seq:++loadSeq,phase:'checking',error:'',drawer:false,keep:false,sending:false,args:[labId,source,name,options]};
  loadReview=r;
- // The server refuses a preflight while a save of the lab runs (guard_idle); none is sent.
- if(loadSaveRunning(labId)){r.phase='refused';r.error='A save is running.';loadShowReview();return false;}
+ // The server refuses a preflight while a save of the lab runs, or anything else holds the manager (guard_idle); none is sent.
+ // That is a wait, never a failed load: the view says what runs and Try again is available when it has finished.
+ const hold=loadSaveRunning(labId)?'A save is running.':loadBusy(labId);
+ if(hold){r.phase='refused';r.wait=true;r.error=hold;loadShowReview();return false;}
  // No preflight for a review the page cannot show (no Load panel): nothing is asked of the devices that nobody sees.
  if(!loadShowReview()){loadReview=null;return false;}
  loadAnnounce(`Checking ${r.name} against your devices…`);
  let answer;
  try{answer=await json('/labs/'+encodeURIComponent(labId)+'/restore/preflight','POST',nodes?{source:r.source,node_names:nodes}:{source:r.source});}
- catch(error){if(loadReview!==r)return false;r.phase='refused';r.error=String(error&&error.message||'');loadShowReview();return false;}
+ catch(error){if(loadReview!==r)return false;r.phase='refused';r.wait=!!error&&error.status===409;r.error=String(error&&error.message||'');loadShowReview();return false;}
  // An answer for a review that was cleared or replaced meanwhile, or for a lab no longer on screen, renders nothing.
  if(loadReview!==r||r.labId!==loadOnScreen())return false;
  r.review=answer&&typeof answer==='object'?answer:{};r.phase='confirm';
@@ -239,6 +245,7 @@ function loadRunReason(r,rows){
  rows=rows||loadConfirmRows(r,loadLab(r.labId));
  if(!rows.some(x=>x.eligible))return '';
  if(loadSaveRunning(r.labId))return 'A save is running.';
+ const hold=loadBusy(r.labId);if(hold)return hold;
  if(!rows.some(x=>x.eligible&&r.chosen.has(x.name)))return 'Tick at least one device.';
  return '';
 }
@@ -265,7 +272,14 @@ function loadConfirmMarkup(r,lab){
  return html;
 }
 function loadCheckingMarkup(r){return `<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot busy" aria-hidden="true"></span>Checking ${esc(r.name)} against your devices…</p><div class="save-row"><button type="button" class="button ghost small" id="load-cancel" data-load-action="cancel">Cancel</button></div>`;}
-function loadRefusedMarkup(r){return `<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot bad" aria-hidden="true"></span>${esc(loadCap(r.name))} cannot be loaded right now.</p><p class="save-sub">${esc(r.error||'')}</p><div class="save-row"><button type="button" class="button primary" id="load-again" data-load-action="again">Try again</button><button type="button" class="button ghost small" id="load-back" data-load-action="back">Back</button></div>`;}
+function loadRefusedMarkup(r){
+ // The manager was busy (another backup, save, load or lab operation): a wait with Try again, never a failed load.
+ if(r.wait){
+  const hold=loadSaveRunning(r.labId)?'A save is running.':loadBusy(r.labId);
+  return `<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot busy" aria-hidden="true"></span>${esc(loadCap(r.name))} can be loaded in a moment.</p><p class="save-sub" id="load-wait-why">${esc(hold||r.error||'')}</p><div class="save-row"><button type="button" class="button primary" id="load-again" data-load-action="again"${hold?' disabled':''} aria-describedby="load-wait-why">Try again</button><button type="button" class="button ghost small" id="load-back" data-load-action="back">Back</button>${hold?'<span class="caption" id="load-wait-note">Available when it finishes.</span>':''}</div>`;
+ }
+ return `<p class="save-state" tabindex="-1" data-panel-focus><span class="save-dot bad" aria-hidden="true"></span>${esc(loadCap(r.name))} cannot be loaded right now.</p><p class="save-sub">${esc(r.error||'')}</p><div class="save-row"><button type="button" class="button primary" id="load-again" data-load-action="again">Try again</button><button type="button" class="button ghost small" id="load-back" data-load-action="back">Back</button></div>`;
+}
 // The poll switches only the red button's disabled state and its reason; the confirmation itself is not rebuilt, so the ticks, an open
 // Options and the focus stay.
 function loadSyncRun(){
@@ -306,7 +320,7 @@ function loadDifferentMarkup(review){
  if(!r||!r.review)return {title:'What\'s different',meta:'',html:''};
  const source=r.review.source||{},targets=r.review.targets||[],rows=loadConfirmRows(r,loadLab(r.labId));
  const ticked=rows.filter(x=>x.eligible&&r.chosen.has(x.name)),count=ticked.length,saving=loadSaveRunning(r.labId);
- const reason=saving&&rows.some(x=>x.eligible)?'A save is running.':count?'':'Tick at least one device.';
+ const reason=saving&&rows.some(x=>x.eligible)?'A save is running.':(rows.some(x=>x.eligible)&&loadBusy(r.labId))||(count?'':'Tick at least one device.');
  const meta=[loadCap(r.name)+' compared with what the devices run now',source.captured_at?'saved '+loadWhen(source.captured_at):'',source.commit?String(source.commit).slice(0,10):''].filter(Boolean).join(' · ');
  let html=`<div class="save-row"><button type="button" class="button danger" id="load-diff-run" data-load-action="diff-run"${reason||r.sending?' disabled':''}>Load on ${esc(loadDevices(count))}</button><button type="button" class="button ghost small" id="load-diff-back" data-load-action="diff-back">Back</button><span class="caption" id="load-diff-reason"${reason?'':' hidden'}>${esc(reason)}</span></div>`;
  if(r.error)html+=`<p class="form-error" role="alert">${esc(r.error)}</p>`;
@@ -362,10 +376,12 @@ function loadPartialSentence(job){
 }
 function loadRetryNodes(job){return ((job&&job.targets)||[]).filter(t=>LOAD_RETRY.includes(t.status));}
 function loadRetryLabel(job){const nodes=loadRetryNodes(job);return !nodes.length?'':nodes.length===1?`Try ${nodes[0].short_name||nodes[0].name} again`:`Try ${nodes.length} devices again`;}
-function loadUndoMarkup(job,undo,cls){
+// `hold`: what holds the manager (loadBusy); Undo this load then waits, with the reason beside it.
+function loadUndoMarkup(job,undo,cls,hold){
  if(!job||!job.pre_backup_job_id||!undo)return {button:'',note:''};
- return {button:`<button type="button" class="${cls}" id="load-undo" data-load-action="undo" data-load-job="${esc(job.id)}"${undo.available?'':' disabled'}>Undo this load</button>`,note:!undo.available&&undo.reason?`<p class="save-note">${esc(undo.reason)}</p>`:''};
+ return {button:`<button type="button" class="${cls}" id="load-undo" data-load-action="undo" data-load-job="${esc(job.id)}"${undo.available&&!hold?'':' disabled'}>Undo this load</button>`,note:!undo.available&&undo.reason?`<p class="save-note">${esc(undo.reason)}</p>`:''};
 }
+function loadHoldNote(hold){return hold?`<p class="save-note" id="load-hold">${esc(hold)} Available when it finishes.</p>`:'';}
 // The chip panel's view for the states Loading, Running and Partial, called by save-header.js (savePanelView). → {title, dot, key, html}:
 // `title` goes into the panel title, `dot` is the save-dot modifier, `key` changes only when what the body shows changes (no time in it),
 // `html` is the body. null for any other state. cs is saveChipState's answer; its `load` (loadState's answer) is used when present.
@@ -377,13 +393,14 @@ function loadChipView(cs,lab){
  if(!['loading','running','partial'].includes(view))return null;
  const job=loadFresh(ls.job||(cs&&cs.job));if(!job)return null;
  const words=(job.targets||[]).map(t=>typeof loadDeviceWord==='function'?loadDeviceWord(t,job).text:t.status).join(',');
- const key=['load',view,job.id,job.status,words,ls.undo&&ls.undo.available?'u':'',loadPaused===job.id?'p':''].join('|');
+ const hold=view==='loading'?'':loadBusy(lab.id);
+ const key=['load',view,job.id,job.status,words,ls.undo&&ls.undo.available?'u':'',loadPaused===job.id?'p':'',hold].join('|');
  if(view==='loading'){
   if(loadJobActive(job))loadWatch(job);
   const rechecking=job.status==='interrupted'&&job.rechecking===true;
   return {title:rechecking?'Checking devices…':`Loading ${ls.name}…`,dot:'busy',key,html:loadJobMarkup(job)};
  }
- const undo=loadUndoMarkup(job,ls.undo,view==='running'?'button ghost small':'button ghost small');
+ const undo=loadUndoMarkup(job,ls.undo,'button ghost small',hold);undo.note+=loadHoldNote(hold&&(undo.button||loadRetryLabel(job))?hold:'');
  const details=`<button type="button" class="button ghost small" id="load-details" data-load-action="details" data-load-job="${esc(job.id)}">${view==='running'?'What changed':'Details'}</button>`;
  if(view==='running'){
   const m=(job.targets||[]).length,names=new Set((job.targets||[]).map(t=>t.name)),labDevices=loadLabDevices(lab),all=labDevices.length>0&&labDevices.every(n=>names.has(n.name));
@@ -395,7 +412,7 @@ function loadChipView(cs,lab){
   return {title:`Running ${ls.name}`,dot:'info',key,html};
  }
  const retry=loadRetryLabel(job);
- const html=`<p class="save-sub">${esc(loadPartialSentence(job))}</p>${loadRowsMarkup(job)}<div class="save-row">${retry?`<button type="button" class="button primary" id="load-retry" data-load-action="retry" data-load-job="${esc(job.id)}">${esc(retry)}</button>`:''}${undo.button}${details}</div>${undo.note}`;
+ const html=`<p class="save-sub">${esc(loadPartialSentence(job))}</p>${loadRowsMarkup(job)}<div class="save-row">${retry?`<button type="button" class="button primary" id="load-retry" data-load-action="retry" data-load-job="${esc(job.id)}"${hold?' disabled':''}>${esc(retry)}</button>`:''}${undo.button}${details}</div>${undo.note}`;
  return {title:`Loaded on ${ls.loaded} of ${ls.total} devices`,dot:'warn',key,html};
 }
 // A load that changed nothing (not an effective load) is no chip state; when the chip panel showed it as it ended, the Load panel shows it.
@@ -472,7 +489,10 @@ function loadRender(){
   if(loadJobActive(job)){loadSeenActive.add(job.id);continue;}
   if(loadSeenActive.has(job.id)){loadSeenActive.delete(job.id);loadToast(loadFresh(job));}
  }
- if(loadView.kind==='review'&&loadPanelOpen())loadSyncRun();
+ if(loadView.kind==='review'&&loadPanelOpen()){
+  // A wait repaints when the manager is free (Try again becomes available); a confirmation only switches its red button.
+  if(loadReview&&loadReview.phase==='refused'&&loadReview.wait)loadPaint(false);else loadSyncRun();
+ }
 }
 
 // ---- one dispatcher for every control of this file ----------------------------------------------------------------------------------

@@ -353,7 +353,7 @@ test('Can’t save shows one sentence and exactly the actions of its row',async(
   [{code:'account'},[],'The VM account cannot upload to github.com.',['again:Try again','details:Details']],
   [{code:'busy'},[],'Someone is working in this repository on the VM.',['again:Try again','details:Details']],
   [{code:'diverged'},[],'The online copy has changes this VM does not have.',['update:Update from the repository']],
-  [{code:'diverged'},[waiting({id:'o',lab_id:'other',lab_name:'ospf'})],'The online copy and this VM both have changes the other does not have. They have to be combined on the VM.',['details:Details']],
+  [{code:'diverged'},[waiting({id:'o',lab_id:'other',lab_name:'ospf'})],'The online copy and this VM both have changes the other does not have. They have to be combined on the VM.',['upload-again:Try again','details:Details']],
   [{code:'files'},[],'bgp holds files that were not saved by the manager.',['place:Choose another place','details:Details']],
   [{code:'settings'},[],'This lab’s save location has to be set up again.',['settings:Save settings','details:Details']],
   [{code:'devices'},[],'No device of this lab is selected for saving.',['settings:Save settings']],
@@ -364,6 +364,9 @@ test('Can’t save shows one sentence and exactly the actions of its row',async(
   assert.ok(h.body.innerHTML.includes('<p class="save-sub" id="save-cant-why">'+esc(sentence)+'</p>'),status.code+': '+sentence);
   const row=h.body.innerHTML.match(/<div class="save-row">(.*?)<\/div>/)[1];
   assert.deepEqual([...row.matchAll(/data-save-action="([\w-]+)"[^>]*>([^<]*)</g)].map(m=>m[1]+':'+m[2]),actions,status.code);
+  // Both sides changed: what the repository's owner runs on the VM, as code with the lab's checkout path, each command on its own line.
+  if(jobs.length)assert.match(h.body.innerHTML,/<p class="save-note" id="save-cant-how">The repository’s owner runs these on the lab VM, then Try again uploads the waiting saves:<\/p><pre class="git-setup-command" id="save-cant-commands" tabindex="0">git -C [^\n<]+ pull --no-rebase\ngit -C [^\n<]+ push<\/pre><div class="save-row">/);
+  else assert.equal(h.el('save-cant-commands'),null);
   assert.match(row,/^<button type="button" class="button primary"/,'the first action is the primary one');assert.doesNotMatch(h.body.innerHTML,/raw helper text/,'the raw message is only under Details');
   checkMarkup(h.body.innerHTML,'cant '+status.code);
  }
@@ -433,7 +436,7 @@ test('a folder that holds saves of a lab with the same name is asked about once:
  const places={repositories:[{id:'reg',name:'Course',path:CHECKOUT}],default:{repository:'reg',folder:'restore-square',answer:{kind:'state',folder:'restore-square',exists:true},ask:true,beside:'restore-square-2'}};
  const make=()=>harness({lab:freeLab(),routes:{'/git/places':()=>places,'/git/place':()=>({saved:true,binding,job:null}),'/git/save':payload=>({id:payload.request_id,lab_id:'lab',status:'queued',created:ago(0)})}});
  let h=make();await h.open();
- assert.match(h.body.innerHTML,/<p class="save-sub" id="save-first-place">This repository already holds saves of a lab named restore-square\.<\/p><div class="save-row"><button type="button" class="button primary" id="save-first" data-save-action="first-save">Save in restore-square-2<\/button><button type="button" class="button ghost small" id="save-first-continue" data-save-action="first-continue">Continue there<\/button><\/div>/);
+ assert.match(h.body.innerHTML,/<p class="save-sub" id="save-first-place">This repository already holds saves of a lab named restore-square\.<\/p><div class="save-row"><button type="button" class="button primary" id="save-first" data-save-action="first-save">Save in restore-square-2<\/button><button type="button" class="button ghost small" id="save-first-continue" data-save-action="first-continue">Continue there<\/button><button type="button" class="button ghost small" id="save-first-url" data-save-action="connect-url">Connect by URL…<\/button><\/div>/);
  checkMarkup(h.body.innerHTML,'first, same name');
  await h.press('save-first');assert.deepEqual(JSON.parse(JSON.stringify(h.posts()[0].payload)),{repository:'reg',folder:'restore-square-2',choice:'',pending:'',move_files:false,acknowledge:true});
  h=make();await h.open();await h.press('save-first-continue');
@@ -507,4 +510,59 @@ test('save-header.js loads alone, without any other script, and renders nothing 
  const source=read('save-header.js');
  assert.doesNotMatch(source,/\b(window|document|location|history)\.addEventListener|localStorage|sessionStorage/,'no global listener and no storage outside shell.js');
  assert.doesNotMatch(source.replace(/\.prefix\b/g,''),/\bregistration|\bprefix\b|\boverlap/i,'the words the design retires are in no sentence of this file');
+});
+// ---- S11 step 1: the gaps closed before the Progress tab goes ----
+test('S11-1 (C-001) the header’s Save is wired by this file: without any Progress tab markup a click starts a save, and a disabled Save starts nothing',async()=>{
+ const h=harness({state:{git_jobs:[saved()]},routes:{'/git/save':payload=>({id:payload.request_id,lab_id:'lab',status:'queued',target:'latest',created:ago(0)})}});
+ assert.equal(h.el('git-progress-bar'),null,'the page of this test has no tab markup');
+ const button=h.el('git-save-progress');assert.equal(typeof button.onclick,'function');
+ h.render();await button.onclick();await h.flush();
+ const sent=h.posts().filter(c=>c.endpoint.endsWith('/git/save'));assert.equal(sent.length,1);assert.equal(sent[0].payload.note,'');assert.equal(sent[0].payload.target,'latest');
+ button.disabled=true;await button.onclick();await h.flush();assert.equal(h.posts().filter(c=>c.endpoint.endsWith('/git/save')).length,1);
+ // A lab without a save location: Save opens the first-save view and sends nothing.
+ const f=harness({lab:freeLab(),routes:{'/git/places':()=>({repositories:[],default:null})}});f.render();await f.el('git-save-progress').onclick();await f.flush();
+ assert.equal(f.panel.hidden,false);assert.equal(f.posts().length,0);
+});
+test('S11-2 a save already running when the page loads is followed once, so its end reaches the header (the toast, the panel)',async()=>{
+ const running=waiting({id:'run',status:'capturing',commit:''});
+ const started=[],h=harness({state:{git_jobs:[running]}});
+ const real=h.context.gitStartWatch;h.context.gitStartWatch=(job,options)=>{started.push([job.id,!!(options&&options.quiet)]);};
+ h.render();h.render();h.render();
+ assert.deepEqual(started.slice(0,1),[['run',true]],'followed quietly: the result is the chip panel’s');
+ // With the real watch a second render starts nothing new.
+ const g=harness({state:{git_jobs:[running]}});g.render();const first=vm.runInContext('gitWatch',g.context);g.render();
+ assert.equal(first.id,'run');assert.equal(vm.runInContext('gitWatch',g.context),first,'once per job');assert.equal(first.quiet,true);
+ // Home (no lab on screen) ends the watch.
+ g.context.activeId='';g.context.renderSaveHeader(NOW);assert.equal(vm.runInContext('gitWatch',g.context),null);
+});
+test('S11-3 (C-025) Last load falls back to the lab’s newest finished load: one that changed no device reads "nothing changed" and its Details opens its job window',async()=>{
+ const none={id:'r0',lab_id:'lab',status:'failed',created:ago(11),finished:ago(10),source:{type:'folder',path:'course/start/latest'},targets:[{name:'a',status:'failed'}]};
+ const h=harness({state:{git_jobs:[saved()],restore_jobs:[none]}});const shown=[];h.context.restoreShowJob=async id=>shown.push(id);
+ await h.open();
+ assert.equal(h.text('save-chip-text'),'Saved 21 min ago','the chip’s own precedence does not change');
+ assert.match(h.body.innerHTML,/<p class="save-kv" id="save-last-load"><span>Last load:<\/span> Start, nothing changed <button[^>]*id="save-load-details" data-save-action="load-details">Details<\/button><\/p>/);
+ await h.press('save-load-details');assert.deepEqual(shown,['r0']);
+ // A newer load that changed nothing is the one the line names; the older effective one stays in the chip when it still runs.
+ const effective={id:'r1',lab_id:'lab',status:'succeeded',created:ago(125),finished:ago(120),source:{type:'folder',path:'course/final/latest'},targets:[{name:'a',status:'verified'}]};
+ h.state.restore_jobs=[effective,none];await h.open();assert.match(h.body.innerHTML,/Last load:<\/span> Start, nothing changed /);
+ h.state.restore_jobs=[effective];await h.open();assert.match(h.body.innerHTML,/Last load:<\/span> Final, 2 hours ago /);
+});
+test('S11-5, S11-7 the first-save view offers Connect by URL… (the chooser’s address field, the save follows) and says where uploads go',async()=>{
+ const places={repositories:[{id:'reg',name:'Course',remote:'https://github.com/me/course.git',branch:'main',path:CHECKOUT,current:false}],default:{repository:'reg',folder:'restore-square',answer:{kind:'free',folder:'restore-square',exists:false},ask:false,beside:''}};
+ const h=harness({lab:freeLab(),routes:{'/git/places':()=>places}});await h.open();
+ assert.match(h.body.innerHTML,/id="save-first-place-other" data-save-action="place">Choose another place<\/button><button type="button" class="button ghost small" id="save-first-url" data-save-action="connect-url">Connect by URL…<\/button><\/div><p class="save-note" id="save-first-uploads">Uploads go to github\.com\/me\/course, branch main\.<\/p>/);
+ await h.press('save-first-url');
+ const drawer=h.drawers.at(-1);assert.equal(drawer.kind,'chooser');assert.equal(drawer.opts.mode,'location');assert.equal(drawer.opts.address,true);assert.equal(drawer.opts.folder,'restore-square');assert.equal(typeof drawer.opts.then,'function','the first save continues after the placement');
+ assert.equal(h.posts().length,0);assert.equal(h.dialogs.length,0,'no dialog of the old connect route');
+});
+test('S11-12 both sides changed while saves wait: Try again uploads a reviewed waiting save through gitReviewJob with a fresh review; one not reviewed yet is shown first',async()=>{
+ const job=waiting({id:'w',status:'push_pending',reviewed:ago(3)});
+ const lab=boundLab({git_status:{checked:true,ready:false,problem:'The remote branch advanced or diverged.',code:'diverged',waiting:1}});
+ const h=harness({lab,state:{git_jobs:[job]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w',also_sends:[]}),'/retry':payload=>({...job,status:'queued',sent:payload})}});
+ await h.open();assert.equal(h.text('save-chip-text'),'Can’t save');assert.match(h.body.innerHTML,/id="save-cant-commands"[^>]*>git -C \/[^\n]+ pull --no-rebase\ngit -C \/[^\n]+ push<\/pre>/);
+ await h.press('save-cant-upload-again');
+ const retry=h.posts().filter(c=>c.endpoint.endsWith('/retry'));assert.equal(retry.length,1);assert.deepEqual(JSON.parse(JSON.stringify(retry[0].payload)),{push:true,reviewed:true,head:'h1'});
+ const u=harness({lab,state:{git_jobs:[waiting({id:'w2',status:'review_pending'})]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w2',also_sends:[]})}});
+ await u.open();await u.press('save-cant-upload-again');await u.flush();u.render();
+ assert.equal(u.posts().filter(c=>c.endpoint.endsWith('/retry')).length,0,'a save the person has not reviewed is never uploaded from here');assert.equal(u.text('save-panel-title-text'),'Not uploaded yet');
 });

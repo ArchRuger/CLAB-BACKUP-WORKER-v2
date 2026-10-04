@@ -193,8 +193,9 @@ class Placement:
             mine = next((r for r in regs if r['id'] == binding.get('binding_id')), None) if path == here else None
             pick = mine or next((r for r in regs if r.get('prefix') == ''), None) or regs[0]
             named = pick if pick.get('push_url') else next((r for r in regs if r.get('push_url')), pick)
+            # `remote` and `branch`: where uploads of this repository go, for the place being chosen (both are public on a binding).
             rows.append(dict(id=pick['id'], name=repository_display_name(named), remote=strip_credentials(named.get('push_url', '')),
-                             path=path, current=path == here, reg=pick))
+                             branch=str(named.get('branch') or ''), path=path, current=path == here, reg=pick))
         return rows
 
     def history(self, lab_id, before):
@@ -491,7 +492,7 @@ class Placement:
             lab = self.lab(lab_id); before = self.host()
             catalog = self.catalog()
             rows = self.checkouts(catalog, lab, before)
-            out = dict(repositories=[{k: r[k] for k in ('id', 'name', 'remote', 'path', 'current')} for r in sorted(rows, key=lambda r: (r['name'].lower(), r['path']))],
+            out = dict(repositories=[{k: r[k] for k in ('id', 'name', 'remote', 'branch', 'path', 'current')} for r in sorted(rows, key=lambda r: (r['name'].lower(), r['path']))],
                        default=self.default(lab, rows, before) if rows else None)
             if repository:
                 reg = next((r for r in catalog if r['id'] == repository), None)

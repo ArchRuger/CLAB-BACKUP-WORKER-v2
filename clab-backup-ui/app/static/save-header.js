@@ -106,10 +106,11 @@ function saveAlsoMarkup(cs,panel){
 }
 // The lines and the foot that end every view. A lab without a save location has no "Saves to:" line and only Save as a lab state….
 function saveTailMarkup(lab,cs,options={}){
- const bound=!!lab.git_binding,ctx=saveCtx(lab),last=options.load===false?null:(typeof loadState==='function'?loadState(lab,ctx,saveClock):null)?.last||null;
+ // Last load: the lab's newest finished load, also one that changed no device (its job window has no other way in once its banner is gone).
+ const bound=!!lab.git_binding,ctx=saveCtx(lab),last=options.load===false?null:(typeof loadState==='function'?loadState(lab,ctx,saveClock):null)?.recent||null;
  const place=bound&&options.place!==false?`<p class="save-kv" id="save-place"><span>Saves to:</span> ${saveEsc(savePlaceWords(lab))} ${saveButton('place','Change…','save-change',{disabled:!!options.busy})}</p>`:'';
  const when=last?saveLongTime(last.at,saveClock):'';
- const loaded=last&&last.job?`<p class="save-kv" id="save-last-load"><span>Last load:</span> ${saveEsc(last.name+(when?', '+when:''))} ${saveButton('load-details','Details','save-load-details')}</p>`:'';
+ const loaded=last&&last.job?`<p class="save-kv" id="save-last-load"><span>Last load:</span> ${saveEsc(last.name+(last.changed===false?', nothing changed':when?', '+when:''))} ${saveButton('load-details','Details','save-load-details')}</p>`:'';
  const foot=bound?saveButton('versions','All versions','save-all')+saveButton('lab-state','Save as a lab state…','save-as-state')+saveButton('settings','Save settings','save-settings'):saveButton('lab-state','Save as a lab state…','save-as-state');
  return `${place}${loaded}${saveAlsoMarkup(cs,options.panel)}<div class="save-foot">${foot}</div>`;
 }
@@ -132,8 +133,10 @@ function saveViewCant(cs,lab){
  // away, and Details is the manager's own sentence in place (there is no save window and no settings to open yet).
  const unbound=!lab.git_binding,actions=unbound?[...(problem.actions||[]).filter(item=>item.action!=='details'&&item.action!=='place'&&item.action!=='settings'&&item.action!=='update'),{action:'place',label:'Choose another place'}]:(problem.actions||[]);
  const buttons=actions.map((item,index)=>saveButton(item.action,item.label,'save-cant-'+item.action,{primary:index===0})).join('');
+ // Both sides have changes: what the repository's owner runs on the VM, as code, each on its own line.
+ const commands=(problem.commands||[]).length?`<p class="save-note" id="save-cant-how">The repository’s owner runs these on the lab VM, then Try again uploads the waiting saves:</p><pre class="git-setup-command" id="save-cant-commands" tabindex="0">${problem.commands.map(saveEsc).join('\n')}</pre>`:'';
  const detail=unbound&&problem.detail?`<details id="save-cant-details"><summary>Details</summary><p class="save-note">${saveEsc(problem.detail)}</p></details>`:'';
- return {title:'Can’t save',dot:'bad',name:'cant',job:problem.job?problem.job.id:'',html:`<p class="save-sub" id="save-cant-why">${saveEsc(problem.sentence)}</p><div class="save-row">${buttons}</div>${detail}${saveErrorMarkup(lab)}${saveTailMarkup(lab,cs,{panel:'cant'})}`};
+ return {title:'Can’t save',dot:'bad',name:'cant',job:problem.job?problem.job.id:'',html:`<p class="save-sub" id="save-cant-why">${saveEsc(problem.sentence)}</p>${commands}<div class="save-row">${buttons}</div>${detail}${saveErrorMarkup(lab)}${saveTailMarkup(lab,cs,{panel:'cant'})}`};
 }
 // Whether the devices are still known to run the lab's latest save: no deploy, redeploy, destroy or design apply finished after it.
 function saveRunsLatest(cs,lab){
@@ -189,14 +192,16 @@ function saveViewFirst(cs,lab,now){
   return view(`${lead}${field}${row}${why}<p class="save-note">${SAVE_EXPOSURE} They go into a folder named ${saveEsc(lab.name||'')}.</p>${saveErrorMarkup(lab)}${tail}`);
  }
  const repository=repositories.find(r=>r.id===chosen.repository)||{},repoName=repository.name||saveRepoName(repository),answer=chosen.answer||{},folder=saveFolder(chosen.folder);
+ // Where uploads of the offered repository go (its address without credentials, and its branch).
+ const goes=typeof saveUploadsText==='function'?saveUploadsText(repository.remote,repository.branch):'',uploads=goes?`<p class="save-note" id="save-first-uploads">${saveEsc(goes)}</p>`:'';
  if(chosen.ask){
   // The folder named after the lab holds saves of a lab with the same name: asked once, and the suggested button replaces nobody's saves.
   const beside=saveFolder(chosen.beside);
-  return view(`<p class="save-sub" id="save-first-place">This repository already holds saves of a lab named ${saveEsc(lab.name||folder)}.</p><div class="save-row">${beside?saveButton('first-save','Save in '+beside,'save-first',options):''}${saveButton('first-continue','Continue there','save-first-continue',{primary:!beside,disabled:blocked,describedby:options.describedby})}${beside?'':saveButton('place','Choose another place','save-first-place-other',{disabled:held})}</div>${why}${note}${saveErrorMarkup(lab)}${tail}`);
+  return view(`<p class="save-sub" id="save-first-place">This repository already holds saves of a lab named ${saveEsc(lab.name||folder)}.</p><div class="save-row">${beside?saveButton('first-save','Save in '+beside,'save-first',options):''}${saveButton('first-continue','Continue there','save-first-continue',{primary:!beside,disabled:blocked,describedby:options.describedby})}${beside?'':saveButton('place','Choose another place','save-first-place-other',{disabled:held})}${saveButton('connect-url','Connect by URL…','save-first-url',{disabled:held})}</div>${uploads}${why}${note}${saveErrorMarkup(lab)}${tail}`);
  }
  const sentence=answer.kind==='own-before'?`Your saves continue in ${repoName}, ${folder?'in the folder '+folder:'at its top level'}.`
   :`Your first save goes to ${repoName}, ${!folder?'at its top level':answer.exists===false?'in a folder named '+folder:'in the folder '+folder}.`;
- return view(`<p class="save-sub" id="save-first-place">${saveEsc(sentence)}</p><div class="save-row">${saveButton('first-save','Save','save-first',options)}${saveButton('place','Choose another place','save-first-place-other',{disabled:held})}</div>${why}${note}${saveErrorMarkup(lab)}${tail}`);
+ return view(`<p class="save-sub" id="save-first-place">${saveEsc(sentence)}</p><div class="save-row">${saveButton('first-save','Save','save-first',options)}${saveButton('place','Choose another place','save-first-place-other',{disabled:held})}${saveButton('connect-url','Connect by URL…','save-first-url',{disabled:held})}</div>${uploads}${why}${note}${saveErrorMarkup(lab)}${tail}`);
 }
 // Loading, Running and Partial are load.js's view; `shown` is the chip state it is drawn for (the chip's own, or the load behind an Also line).
 function saveViewLoad(shown,lab,cs){
@@ -279,7 +284,9 @@ function saveLoadReview(job){
 // Called by render() on every poll and by this file after each action.
 function renderSaveHeader(now){
  const chip=saveEl('save-chip');if(!chip||typeof saveChipState!=='function')return;
- const lab=saveLab();if(!lab)return;
+ const lab=saveLab();
+ if(typeof gitResumeWatch==='function')gitResumeWatch(lab);
+ if(!lab)return;
  if(saveHeader.shown.lab!==lab.id){saveHeader.shown={lab:lab.id,view:'',job:''};saveHeader.view=null;saveHeader.naming='';saveHeader.typed=null;saveHeader.error=null;}
  const cs=saveChipState(lab,saveCtx(lab),now),submitting=saveSubmitting(lab)&&cs.key!=='loading'&&cs.key!=='saving';
  const text=submitting?'Saving…':cs.text,dot='save-dot '+(submitting?'busy':cs.dot||'none');
@@ -489,17 +496,33 @@ async function saveAction(action,job,origin){
     if(!status.problem&&status.ready!==false)await saveStart(lab.id);
     break;
    }
+   case 'upload-again':{
+    // The upload of the waiting saves again (after the repository's owner combined both sides on the VM). A save whose review the
+    // person has not seen yet is shown first; one that was reviewed and failed to upload goes up with a fresh review of what it sends.
+    const waiting=lab&&typeof statusWaitingSaves==='function'?statusWaitingSaves(lab,saveCtx(lab)):[],target=waiting.find(j=>j.status==='push_pending')||waiting[0]||null;
+    if(!target||typeof gitReviewJob!=='function'||typeof gitReviewData!=='function')throw new Error(SAVE_MISSING);
+    if(!target.reviewed){saveHeader.view={lab:lab.id,panel:target.status==='push_pending'?'failed':'upload',job:target.id};break;}
+    saveHeader.uploading=target.id;renderSaveHeader();
+    try{await gitReviewData(target,{fresh:true});const next=await gitReviewJob(target,{upload:true});saveHeader.sent=next&&next.id||'';}finally{saveHeader.uploading='';}
+    break;
+   }
    case 'vm':saveClosePanel(true);if(typeof openVmDialog==='function')openVmDialog();return;
    case 'update':if(!lab||typeof gitUpdateRemote!=='function')throw new Error(SAVE_MISSING);saveClosePanel(true);await gitUpdateRemote(lab.id);return;
    case 'settings':saveOpenDrawer('settings');return;
    case 'versions':saveOpenDrawer('versions');return;
    case 'lab-state':{const places=lab?saveHeader.places.get(lab.id):null,chosen=places&&places.data?places.data.default:null;saveOpenDrawer('state',chosen&&!lab.git_binding?{repository:chosen.repository}:{});return;}
+   case 'connect-url':{
+    // Another repository by its address, before the first save: the chooser's address field; the first save follows the placement.
+    if(!lab)return;
+    const places=saveHeader.places.get(lab.id),chosen=places&&places.data?places.data.default:null,id=lab.id;
+    saveOpenDrawer('chooser',{mode:'location',address:true,folder:chosen?chosen.folder:'',then:lab.git_binding?null:()=>saveStart(id)});return;
+   }
    case 'place':{
     if(lab&&!lab.git_binding){const places=saveHeader.places.get(lab.id),chosen=places&&places.data?places.data.default:null,id=lab.id;saveOpenDrawer('chooser',{mode:'location',repository:chosen?chosen.repository:'',folder:chosen?chosen.folder:'',path:chosen?chosen.folder:'',then:()=>saveStart(id)});return;}
     saveOpenDrawer('chooser',{mode:'location'});return;
    }
    case 'load-details':{
-    const last=lab&&typeof loadState==='function'?loadState(lab,saveCtx(lab)).last:null;
+    const last=lab&&typeof loadState==='function'?loadState(lab,saveCtx(lab)).recent:null;
     if(!last||!last.job||typeof restoreShowJob!=='function')throw new Error(SAVE_MISSING);
     saveClosePanel(true);await restoreShowJob(last.job.id);return;
    }
@@ -556,6 +579,15 @@ function savePanelClosed(){
  const body=saveEl('save-panel-body');if(body)body._listKey=undefined;
  renderSaveHeader();
 }
+// The header's Save: a lab with a save location is saved at once, one without gets the first-save view (gitSaveProgress). A failure
+// the chip panel does not show itself goes where every header action's failure goes (opTask: the lab banner).
+function saveClick(){
+ const button=saveEl('git-save-progress');if(button&&button.disabled)return null;
+ if(typeof gitSaveProgress!=='function')return null;
+ if(typeof opTask==='function')return opTask(null,()=>gitSaveProgress());
+ return Promise.resolve(gitSaveProgress()).catch(error=>saveShowError(null,String(error&&error.message||'That did not work. Try again.')));
+}
+if(typeof $==='function'&&$('git-save-progress'))$('git-save-progress').onclick=saveClick;
 if(typeof $==='function'&&$('save-chip')&&$('save-panel')&&typeof $('save-panel').addEventListener==='function'){
  const panel=$('save-panel');
  panel.addEventListener('click',savePanelClick);panel.addEventListener('change',savePanelChange);panel.addEventListener('input',savePanelInput);panel.addEventListener('keydown',savePanelKey);

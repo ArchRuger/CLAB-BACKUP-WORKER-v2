@@ -252,7 +252,9 @@ async function gitPlacesShow(container,labId,bindingId,options={}){
 //
 // folderChooserMarkup(model, view) -> html. `model` = folderChooserModel(tree) (null while loading).
 //   view.mode          'location' | 'state' | 'browse'
-//   view.labName, view.repoName, view.repositories [{id,name}], view.repository   (the select shows only with 2 or more)
+//   view.labName, view.repoName, view.repositories [{id,name,remote,branch}], view.repository   (the select shows only with 2 or more;
+//                      the line under it says where uploads of the selected repository go)
+//   view.address       null | {value}: location mode asks for the HTTPS address of a repository the VM does not have yet
 //   view.status        'loading' | 'ready' | 'error' | 'unreachable';  view.error the manager's sentence
 //   view.value         the text of the path field (echo: folderEcho);  view.selected the picked path or null
 //   view.answer        the answer for the typed path from POST .../places/check, else null (the tree's own answer
@@ -275,6 +277,8 @@ async function gitPlacesShow(container,labId,bindingId,options={}){
 //   'keep': post pending 'keep'; the string 'upload' is never sent)
 //   {action:'save'}  {action:'keep'} (close, nothing is sent)  {action:'cancel'}  {action:'bring', value}
 //   {action:'repository', value}  {action:'name', value, echo}  {action:'use-another-name'}  {action:'initialize'}
+//   {action:'address-on'}  {action:'address-off'}  {action:'url', value}  (a repository by its address: view.address = {value})
+//   {action:'update'} (Update from the repository, offered in a refusal it clears)
 //   {action:'retry'} (load the folders again)  {action:'again'} (send the refused request again)  {action:'vm'}
 //   {action:'forget', path}  {action:'show-all', path}  {action:'tree-open', value}  {action:'load', path}  {action:'view', path}
 // Enter in the path or name field returns the action of the primary button; a handled key calls preventDefault.
@@ -456,6 +460,11 @@ function folderAnswerView(answer,view){
  if(!answer)return out;
  const typed=String(answer.typed??''),folder=String(answer.folder??''),beside=String(answer.beside??''),sentences=[];
  if(answer.adjusted==='above-state')sentences.push(`${typed} is part of a saved state, so ${lab} saves in ${folder||'the top level'}, the lab folder above it.`);
+ else if(answer.adjusted==='past-file'){
+  // A part of the typed path names a file of the repository: that part got -2 (the manager's past_files), and the sentence names it.
+  const asked=folderClean(typed).split('/'),used=folder.split('/'),at=asked.findIndex((part,index)=>part!==used[index]);
+  sentences.push(`${at<0?typed:asked.slice(0,at+1).join('/')} is a file in the repository, so ${lab} saves in ${folder}.`);
+ }
  else if(answer.adjusted==='beside-files')sentences.push(`${typed} holds a folder named latest that the manager did not save, so ${lab} saves in ${folder}.`);
  const other=answer.lab&&answer.lab.name?String(answer.lab.name):'';
  if(mode==='state'){
@@ -480,7 +489,7 @@ function folderAnswerView(answer,view){
    else{out.note=`If you replace it, the next save of ${lab} replaces its files. The older contents stay in the Git history.`;out.buttons=[aside,{label:'Replace it',choice:'take'}];}
    break;}
   default:
-   if(answer.adjusted==='above-state'||answer.adjusted==='beside-files')break;
+   if(answer.adjusted==='above-state'||answer.adjusted==='beside-files'||answer.adjusted==='past-file')break;
    if(folder==='')sentences.push(`${lab} will save at the top level of ${repo}.`);
    else if(answer.exists===false)sentences.push(`${folder} is new. It appears in the repository with the first save.`);
  }
@@ -490,14 +499,21 @@ function folderAnswerView(answer,view){
  }
  out.sentence=sentences.join(' ');return out;
 }
+// A refusal: the cause in the chip's words when the manager recorded one (view.problem: {sentence, detail, update}), else the
+// manager's own sentence. Try again repeats the request; Details holds the manager's sentence.
+function folderRefusedMarkup(view){
+ const problem=view.refused&&view.problem&&view.problem.sentence?view.problem:null;
+ return view.refused?`<div class="save-row"><p class="form-error" role="alert" id="folder-refused">${esc(problem?problem.sentence:view.refused)}</p>${problem&&problem.update?'<button type="button" class="button secondary small" data-folder-action="update">Update from the repository</button>':''}<button type="button" class="button secondary small" data-folder-action="again">Try again</button></div>${problem&&problem.detail?`<details id="folder-refused-details"><summary>Details</summary><p class="save-note">${esc(problem.detail)}</p></details>`:''}`:'';
+}
 function folderButtonMarkup(button,view){
- const busy=!!view.busy,label=busy&&button.primary&&(button.action==='save'||button.choice!==undefined||button.pending!==undefined)?(view.mode==='state'?'Saving…':'Saving here…'):button.label;
+ const busy=!!view.busy,label=busy&&button.primary&&(button.action==='save'||button.choice!==undefined||button.pending!==undefined)?(view.mode==='state'?'Saving…':view.connecting?'Connecting… this can take a minute':'Saving here…'):button.label;
  const data=button.pending!==undefined?`data-folder-pending="${esc(button.pending)}"`:button.choice!==undefined?`data-folder-choice="${esc(button.choice)}"`:`data-folder-action="${esc(button.action)}"`;
  return `<button type="button" class="button ${button.primary?'primary':'secondary'}" ${data}${button.primary?' data-folder-primary="1"':''}${busy||button.disabled?' disabled':''}>${esc(label)}</button>`;
 }
 function folderChooserMarkup(model,view){
  view=view||{};
- const mode=view.mode||'location',status=view.status||(model?'ready':'loading'),repo=view.repoName||'Repository',lab=view.labName||'This lab',busy=!!view.busy;
+ const mode=view.mode||'location',status=view.status||(model?'ready':'loading'),lab=view.labName||'This lab',busy=!!view.busy;
+ let repo=view.repoName||'Repository';
  const chosen=model?folderClean(view.value):'';
  const answer=view.answer&&typeof view.answer==='object'?view.answer:(model&&model.answers.get(chosen))||null;
  if(model&&mode!=='browse'&&status==='ready'){
@@ -510,7 +526,18 @@ function folderChooserMarkup(model,view){
   parts.push(`<label for="state-name">Name</label><input id="state-name" maxlength="100" autocomplete="off" spellcheck="false" placeholder="start" value="${esc(view.name||'')}"><div class="save-row folder-names" role="group" aria-label="Common names">${['start','broken','final'].map(name=>`<button type="button" class="pill neutral" data-state-name="${name}" aria-pressed="${view.name===name?'true':'false'}">${name}</button>`).join('')}</div>`);
  }
  const repos=Array.isArray(view.repositories)?view.repositories:[];
- if(repos.length>1&&mode!=='browse')parts.push(`<label for="folder-repo">Repository</label><select id="folder-repo"${busy?' disabled':''}>${repos.map(item=>`<option value="${esc(item.id)}"${String(item.id)===String(view.repository)?' selected':''}>${esc(item.name||item.id)}</option>`).join('')}</select>`);
+ // The repository: one on the VM (the select shows with two or more), or one the VM does not have yet, by its address
+ // (view.address: {value}). An address is connected and the lab placed in one request, like the first save's address field.
+ const address=mode==='location'&&view.address&&typeof view.address==='object'?view.address:null;
+ if(address){
+  parts.push(`<label for="folder-url">Repository address (HTTPS)</label><input id="folder-url" value="${esc(address.value||'')}" placeholder="https://github.com/you/your-lab-repo" autocomplete="off" spellcheck="false" inputmode="url"${busy?' readonly':''}><p class="save-note">The lab VM’s own GitHub login is used. You are never asked for a password or a token here.</p>${repos.length?'<div class="save-row"><button type="button" class="button ghost small" data-folder-action="address-off">Use a repository on this VM</button></div>':''}`);
+  repo=String(address.value||'').trim().replace(/\/+$/,'').replace(/\.git$/,'').split('/').pop()||'the repository';
+ }else if(mode!=='browse'){
+  if(repos.length>1)parts.push(`<label for="folder-repo">Repository</label><select id="folder-repo"${busy?' disabled':''}>${repos.map(item=>`<option value="${esc(item.id)}"${String(item.id)===String(view.repository)?' selected':''}>${esc(item.name||item.id)}</option>`).join('')}</select>`);
+  const chosenRepo=repos.find(item=>String(item.id)===String(view.repository)),uploads=chosenRepo&&typeof saveUploadsText==='function'?saveUploadsText(chosenRepo.remote,chosenRepo.branch):'';
+  if(uploads)parts.push(`<p class="save-note" id="folder-uploads">${esc(uploads)}</p>`);
+  if(mode==='location')parts.push('<div class="save-row"><button type="button" class="button ghost small" data-folder-action="address-on">Connect by URL…</button></div>');
+ }
  const shown=answer&&answer.folder!==undefined&&answer.folder!==null?String(answer.folder):folderClean(view.value);
  if(mode!=='browse'){
   parts.push(`<label for="folder-path">Folder</label><input id="folder-path" maxlength="500" autocomplete="off" spellcheck="false" aria-describedby="folder-result folder-answer" value="${esc(view.value??'')}">`);
@@ -518,6 +545,18 @@ function folderChooserMarkup(model,view){
  }
  // The tree area: every state of 4.9.
  let tree='',reason='',tools='';
+ if(address){
+  // No tree before the repository is connected: the folder is typed, and any question comes back with buttons.
+  parts.push('<p class="save-note" id="folder-tree-note">The folders of this repository are listed once it is connected.</p>');
+  const info=folderAnswerView(answer,{...view,mode,labName:lab,repoName:repo});
+  if(!answer&&!view.question&&!view.pending)info.buttons=[{label:'Connect and save here',action:'save',primary:true}];
+  parts.push(`<p class="folder-answer" id="folder-answer" role="status" aria-live="polite">${esc([view.notice||'',info.sentence].filter(Boolean).join(' '))}</p>`);
+  parts.push(`<p class="save-note" id="folder-answer-note"${info.note?'':' hidden'}>${esc(info.note||'')}</p>`);
+  parts.push(folderRefusedMarkup(view));
+  parts.push(`<div class="save-settings-foot" id="folder-foot">${view.showCancel===false?'':'<button type="button" class="button ghost small" data-folder-action="cancel">Cancel</button>'}${info.buttons.map(button=>folderButtonMarkup(button,{...view,connecting:true})).join('')}</div>`);
+  parts.push('<p class="save-note">Saved files can contain passwords or keys.</p></div>');
+  return parts.join('');
+ }
  if(status==='loading')reason='The folders are still loading.';
  if(status==='unreachable')reason='The lab VM cannot be reached, so its folders cannot be shown.';
  if(status==='loading')tree='<p role="status" class="git-empty-folder">Loading folders…</p>';
@@ -548,10 +587,7 @@ function folderChooserMarkup(model,view){
   parts.push(`<p class="save-note" id="folder-answer-note"${notes.length?'':' hidden'}>${esc(notes.join(' '))}</p>`);
   if(forgettable)parts.push(`<div class="save-row"><button type="button" class="button ghost small" data-folder-action="forget" data-folder-path="${esc(String(answer.path??answer.folder??''))}">Remove from the list</button></div>`);
   if(bring&&bring.offered&&!unfinished)parts.push(`<label class="checkbox-label" id="folder-move"><input type="checkbox" data-folder-bring${view.bring===false?'':' checked'}> Bring this lab’s saved files along</label>`);
-  // A refusal: the cause in the chip's words when the manager recorded one (view.problem: {sentence, detail, update}), else the
-  // manager's own sentence. Try again repeats the request; Details holds the manager's sentence.
-  const problem=view.refused&&view.problem&&view.problem.sentence?view.problem:null;
-  if(view.refused)parts.push(`<div class="save-row"><p class="form-error" role="alert" id="folder-refused">${esc(problem?problem.sentence:view.refused)}</p>${problem&&problem.update?'<button type="button" class="button secondary small" data-folder-action="update">Update from the repository</button>':''}<button type="button" class="button secondary small" data-folder-action="again">Try again</button></div>${problem&&problem.detail?`<details id="folder-refused-details"><summary>Details</summary><p class="save-note">${esc(problem.detail)}</p></details>`:''}`);
+  parts.push(folderRefusedMarkup(view));
   const blocked=status==='loading'||status==='unreachable';
   const buttons=info.buttons.map(button=>folderButtonMarkup(blocked&&button.primary?{...button,disabled:true}:button,view)).join('');
   parts.push(`<div class="save-settings-foot" id="folder-foot">${view.showCancel===false?'':'<button type="button" class="button ghost small" data-folder-action="cancel">Cancel</button>'}${buttons}${blocked?`<span class="form-help" id="folder-reason">${esc(reason)}</span>`:''}</div>`);
@@ -594,6 +630,7 @@ function folderChooserEvent(type,event){
  if(type==='input'){
   const id=event.target&&event.target.id,value=String(event.target&&event.target.value!==undefined?event.target.value:'');
   if(id==='folder-path')return {action:'typed',value,echo:folderEcho(value)};
+  if(id==='folder-url')return {action:'url',value};
   if(id==='folder-new')return {action:'new-input',value,echo:folderEcho(value)};
   if(id==='state-name')return {action:'name',value,echo:folderEcho(value.replace(/\//g,'-'))};
   return null;
@@ -615,7 +652,7 @@ function folderChooserEvent(type,event){
    if(key==='Escape'){stop();if(typeof event.stopPropagation==='function')event.stopPropagation();return {action:'new-cancel'};}
    return null;
   }
-  if(id==='folder-path'||id==='state-name'){
+  if(id==='folder-path'||id==='state-name'||id==='folder-url'){
    if(key!=='Enter')return null;
    const root=folderRoot(event),primary=root&&typeof root.querySelector==='function'?root.querySelector('[data-folder-primary]'):null;
    stop();
