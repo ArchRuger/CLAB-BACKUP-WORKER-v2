@@ -49,7 +49,7 @@ test('the context menu leads with Open CLI, shows the state instead of the addre
  assert.equal(list[3].body,'Restart device…');assert.match(list[3].attrs,/class="danger"/);assert.doesNotMatch(list[3].attrs,/disabled/,'the one destructive per-device action, red, enabled for a deployed device');
  assert.match(html,/<div class="context-node-name">R2<span class="pill warn">Starting<\/span><\/div>/,'the header carries the state pill');
  assert.doesNotMatch(html,/\d+\.\d+\.\d+\.\d+|:22/,'the management address stays in the device panel');
- assert.match(list[0].attrs,/disabled title="R2 is still starting/);assert.match(list[0].body,/<small>R2 is still starting\. SSH opens automatically when it answers\. Use Test logins \(above\) or this device&#39;s Test login to check again now\.<\/small>/);
+ assert.match(list[0].attrs,/disabled title="R2 is still starting/);assert.match(list[0].body,/<small>R2 is still starting\. SSH opens automatically when it answers\. Use Test logins \(above\) or this device&#39;s Test login \(in its panel, under Advanced\) to check again now\.<\/small>/);
  assert.match(list[0].body,/Open CLI <span class="external" aria-hidden="true">↗<\/span>/);
  assert.match(list[1].attrs,/disabled/);assert.match(list[1].body,/<small>Packet capture isn’t set up on this VM yet — see Tools › Packet capture\.<\/small>/);
  assert.doesNotMatch(list[2].attrs,/disabled/,'a Ready device can be backed up');assert.doesNotMatch(list[2].body,/<small>/);
@@ -100,7 +100,7 @@ test('renderMapState swaps state classes and labels on the drawn devices without
  assert.deepEqual(states,{r1:['state-ready'],r2:['state-starting'],r3:['state-attention'],r4:['state-unavailable'],r5:['state-credentials'],ghost:['state-neutral']});
  assert.equal(map.innerHTML,'<svg-before/>','the markup is never rebuilt for a state change');
  assert.equal(nodes[0].getAttribute('aria-label'),'R1');assert.equal(nodes[0].title.textContent,'R1 — click to open, right-click for more actions');
- assert.equal(nodes[1].getAttribute('aria-label'),'R2 · Starting');assert.equal(nodes[1].title.textContent,"R2 · Starting. R2 is still starting. SSH opens automatically when it answers. Use Test logins (above) or this device's Test login to check again now.");
+ assert.equal(nodes[1].getAttribute('aria-label'),'R2 · Starting');assert.equal(nodes[1].title.textContent,"R2 · Starting. R2 is still starting. SSH opens automatically when it answers. Use Test logins (above) or this device's Test login (in its panel, under Advanced) to check again now.");
  assert.equal(nodes[2].getAttribute('aria-label'),'R3 · Needs attention');
  assert.equal(h.context.renderMapState(),0,'a second pass with the same state changes nothing');
  h.context.state.labs[0].nodes[1].ssh_ready=true;h.context.state.labs[0].nodes[1].nos_login.status='ready';
