@@ -147,3 +147,55 @@ Tokens: `--warn:#8f5200`; `--line-strong:#74879a` (control borders, field border
 2. shell.js + test_shell_ui.js; index.html full shell (all five panels' static markup incl. Progress siblings, Tools two tiers, Advanced panels, drawer with static Advanced, banner with static children, menus, SVG sprite, skeleton); app.js `render()/showTab()/renderLabBanner()/renderHome` hooks; home.js. Gate: `node --test tests/*.js`, `node --check`, id diff, Playwright 12 s console-error watch with a menu and the drawer open.
 3. In parallel, file-disjoint: (a) devices/drawer/map (app.js, topology.js, topology-render.js); (b) Progress tab (git-progress.js, git-places.js, restore.js); (c) operations/management/capture/pages (operations.js, management.js, capture.js, workspace/terminal/grafana/debug js+html, vm-connection.html, capture-setup.html).
 4. Integration fix pass, tests, docs, release 1.29.0, browser + live-lab validation, report.
+
+## K. Amendment of 2026-10-04: saving and loading move into the lab header (release 1.31.0)
+
+The Git save and load redesign replaces sections D, H and J6 and the save parts of A, B and J for the
+manager UI. Its design is [`docs/git-redesign/DESIGN.md`](../git-redesign/DESIGN.md) (sections 2 to 4 and 7
+bind; the part files under `docs/git-redesign/design/` hold the wording tables), the owner's decisions D1 to
+D11 are in [`docs/git-redesign/PROMPT.md`](../git-redesign/PROMPT.md) section 1, and the map from every
+capability of the removed tab to its new home is
+[`docs/git-redesign/inventory/CAPABILITIES.md`](../git-redesign/inventory/CAPABILITIES.md). Where this section
+and an earlier one disagree, this one wins. Everything else in this addendum still binds: plain scripts, no
+framework, no build step, no CDN, no inline styles on `/`, `esc()` on every interpolation, `setMarkup` for
+lists that re-render on the poll, new `window`/`location`/`history`/`localStorage`/document listeners in
+`shell.js`, and zero functional regression.
+
+1. **Tabs (replaces A.2 and J3 for the tab list).** `PANELS` is `topology, devices, tools, advanced`. The
+   Progress tab, `#tab-progress` and `#progress-view` are gone and must not come back (pinned by
+   `tests/test_save_router_ui.js`). `TAB_ALIAS` keeps every legacy name and maps `git` and `progress` to the
+   first tab; `SAVE_ROUTES` opens the save surface an old address meant: `view=progress` and `view=git` the
+   chip panel, `view=save-location` and `view=save-settings` Save settings, `view=saved-versions` and
+   `view=versions` All versions. The panel opens once, after the first render of that lab, never again on a
+   poll, and the address is rewritten to the tab that is shown.
+2. **The header control (replaces the split button and its menu of A.15, H.1, H.2 and J4).** In the lab
+   header, on every tab: the chip `#save-chip` (with `#save-chip-dot`, `#save-chip-text`), **Save**
+   `#git-save-progress`, **Load** `#load-button`, then Lab actions. The chip opens `#save-panel`
+   (`#save-panel-title`, `#save-panel-body`), Load opens `#load-panel` (`#load-panel-body`); one drawer
+   `#save-drawer` (`-back`, `-title`, `-close`, `-meta`, `-actions`, `-content`, `-status`) shows What changed,
+   All versions, Save settings, the folder chooser, Save as a lab state and the differences of a load.
+   `#save-reason` says why Save or Load is off; `#save-live` is the polite live region. These ids are
+   load-bearing (J2). The header, the panels' frames and the drawer's frame are static markup; only their
+   bodies are rendered.
+3. **Scripts (adds to J1).** Order in `index.html`: … `diff-view.js`, `git-progress.js`, `save-header.js`,
+   `git-places.js`, `save-drawers.js`, `load.js`, `restore.js` … Classic scripts share one global scope:
+   a top-level name declared in two files breaks the page, and `tests/test_page_load_ui.js` loads every
+   script of the page in one context to catch it.
+4. **One status function (replaces J5's `progressState` and H.5, H.11).** `saveChipState(lab, ctx, now)` in
+   `status.js` decides the chip, the panel's view, the Home card's saved line and the last-save sentence of
+   the lifecycle confirmations; it calls `loadState()` for loads and `saveProblem()` for *Can't save*.
+   `progressState` and `progressSummary` are gone. Nothing else derives a save or load state.
+5. **Saving (replaces J6).** Save starts at once with nothing typed; the save is named from what changed and
+   can be renamed (D2). The panel of a waiting save says in one sentence what changed, with **Upload**,
+   **Not now** and **See changes** (D3); `gitReviewJob` is the only sender of `{push: true, reviewed: true,
+   head}` and the manager refuses an upload without the reviewed head. The first save is one button with the
+   place named above it (D5). **Keep as a checkpoint** works on a save that exists (D6).
+6. **Loading (replaces D's restore review).** **Load** lists the lab's own saves and the repository's lab
+   states; the confirmation lists every device with what differs; the red **Load** is the acknowledgement
+   (D4: `#restore-ack` is gone) and `loadSubmit` is the only sender of `acknowledge: true` to a restore route;
+   **Undo this load** loads the backup taken before the load (D7). The job window keeps its vocabulary.
+7. **Folders (replaces D's folder browser and H.4, H.10).** Any folder may be chosen (D8); the chooser is a
+   drawer kind; a situation that needs a decision is one question with buttons, never a refusal; **New
+   folder…** is never disabled. No page script calls the old folder routes (`PUT …/git`, `…/git/connect`,
+   `…/git/destination`, `…/repositories/{id}/folders`, `…/repositories/{id}/tree`), pinned by the same test.
+8. **Worker line (replaces A.10 for saves and loads).** `Saving…` and `Loading…`.
