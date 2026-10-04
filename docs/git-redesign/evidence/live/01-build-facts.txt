@@ -1,0 +1,9 @@
+$ api version
+1.30.60
+git-redesign 63d53e20db83464392ebfd4712bba5e3 {'booting': 4, 'failed': 0, 'ready': 0, 'status': 'booting', 'total': 4} {'checked': '', 'code': '', 'problem': '', 'ready': None, 'waiting': 0}
+git-redesign-b 123f0029993941a38b29f729d3071ba6 {'booting': 2, 'failed': 0, 'ready': 0, 'status': 'booting', 'total': 2} {'checked': '', 'code': '', 'problem': '', 'ready': None, 'waiting': 0}
+$ cmp helper
+IDENTICAL
+$ container files vs worktree
+compared
+2578f22

@@ -1,0 +1,31 @@
+[19:09:13] A5 part 1 on git-redesign-b: online copy ahead, nothing waiting; chip Saved just now; waiting []
+[19:09:14] gh api PUT l2-online/a5-online-1.txt -> 0 bad4529cfa
+[19:09:14] VM: ## main...origin/main [ahead 18] ; the VM knows nothing yet: e2f4dc4 ceos1 changed
+[19:09:20] after Save: chip '1 save to upload' panel 'Not uploaded yet' / '1 device changed since your last save: ceos2. 1 line added, 1 removed.'
+[19:09:26] after Upload: chip 'Saved just now'; clicks 2 (Save, Upload); toast ['Uploaded to github.com.']
+PASS A5 Save then Upload ends Saved with nothing done by hand
+  [GitHub after A5 part 1]
+      8b9365e1e9 ceos2 changed
+      bad4529cfa L2 A5 online change 1 (outside the lab folders)
+      e2f4dc44c2 ceos1 changed
+      5a3bad9354 ceos1 changed
+  [VM checkout VM after A5 part 1]
+      8b9365e ceos2 changed
+      bad4529 L2 A5 online change 1 (outside the lab folders)
+      e2f4dc4 ceos1 changed
+      5a3bad9 ceos1 changed
+      ## main...origin/main [ahead 20]
+[19:09:27] VM log shows the online file merged first: 8b9365e bad4529 | ceos2 changed // bad4529 e2f4dc4 | L2 A5 online change 1 (outside the lab folders) // e2f4dc4 5a3bad9 | ceos1 changed // 5a3bad9 29b222f | ceos1 changed
+[19:09:27] files at the VM: a5-online-1.txt
+[19:09:27] lab events (git): [('19:09:24', 'git.progress', 'Git save stage completed; see its saved operation status.'), ('19:09:19', 'git.progress', 'Git save stage completed; see its saved operation status.'), ('19:09:18', 'git.update', 'The VM copy of the repository was brought up to date with the online copy before a save.'), ('19:09:16', 'git.commit', 'Configuration changes committed'), ('19:09:16', 'git.start', 'Recording successful configurations in Git'), ('19:08:40', 'git.progress', 'Git save stage completed; see its saved operation status.'), ('19:07:24', 'git.progress', 'Git save stage completed; see its saved operation status.'), ('19:07:23', 'git.unchanged', 'Configurations unchanged; no commit needed')]
+[19:09:27] job: {"message": "Saved to Git.", "note": "ceos2 changed", "pushed": true, "status": "synced"}
+[19:09:29] Advanced > logs mentions the update: False
+[19:09:29] log lines: []
+PASS A5 part 1: no console, page or request errors
+
+=== A5 part 1: 2 checks, 0 failed
+PASS A5 Save then Upload ends Saved with nothing done by hand
+PASS A5 part 1: no console, page or request errors
+None
+
+2 checks, 0 failed

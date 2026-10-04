@@ -1,0 +1,8 @@
+XRv9k SSH gave no banner for more than 10 minutes after the manager rebuild (TCP accepted, connections stay CLOSE-WAIT, console shows only telnet negotiation, no prompt): the guest is wedged. Native restart as documented in LIVE-ENV 3:
+$ sudo containerlab restart -t git-redesign.clab.yaml -n xrv9k
+19:00:40
+19:00:40 INFO Parsing & checking topology file=git-redesign.clab.yaml
+19:00:44 INFO Restored link node=xrv9k interface=eth1
+19:00:44 INFO Restored link node=xrv9k interface=eth2
+exit 0
+19:00:44

@@ -1,0 +1,191 @@
+[19:09:42] A5 hard case on git-redesign-b; chip Saved just now
+[19:09:49] kept waiting with Not now: chip '1 save to upload'; VM 852bbcd ceos1 changed
+[19:09:50] gh api PUT l2-online/a5-online-2.txt -> 0 06feb522c0
+[19:09:53] chip 'Can’t save'; panel title 'Upload failed'
+[19:09:53] PANEL TEXT: 'Your save is safe on the lab VM, but it could not be uploaded to github.com. |  | To: clab-scratch-git-redesign › git-redesign-b |  | Checking what this upload sends… |  | Try again | See changes | Details |  | Saves to: clab-scratch-git-redesign › git-redesign-b Change… |  | Also: saving is not possible right now. Show |  | All versions | Save as a lab state… | Save settings'
+[19:09:53] commands shown: ''
+[19:09:53] buttons: ['Try again', 'See changes', 'Details', 'Change…', 'Show', 'All versions', 'Save as a lab state…', 'Save settings']
+FAIL A5 the panel shows the sentence about both sides :: Your save is safe on the lab VM, but it could not be uploaded to github.com.
+
+To: clab-scratch-git-redesign › git-redesign-b
+
+Checking what this upload sends…
+
+Try again
+See changes
+Details
+
+Saves to:
+FAIL A5 the panel shows the checkout path in the commands
+[19:09:53] git_status {'checked': '2026-10-04T19:09:52.183714+00:00', 'ready': False, 'problem': 'The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.', 'code': 'diverged', 'waiting': 1}
+[19:09:53] commands are not plain git -C lines; not run: []
+  [VM checkout VM after the owner commands]
+      852bbcd ceos1 changed
+      8b9365e ceos2 changed
+      bad4529 L2 A5 online change 1 (outside the lab folders)
+      e2f4dc4 ceos1 changed
+      ## main...origin/main [ahead 21]
+[19:09:53] Try again button: save-retry 'Try again'
+[19:09:57] after Try again: chip 'Can’t save'; toasts []; clicks 1
+[19:09:58] jobs: [('synced', '', True), ('synced', 'ceos2 changed', True), ('push_pending', 'ceos1 changed', False)]
+[19:09:58] waiting: 1; git_status {'checked': '2026-10-04T19:09:56.034760+00:00', 'ready': False, 'problem': 'The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.', 'code': 'diverged', 'waiting': 1}
+  [GitHub after Try again]
+      06feb522c0 L2 A5 online change 2 (outside the lab folders)
+      8b9365e1e9 ceos2 changed
+      bad4529cfa L2 A5 online change 1 (outside the lab folders)
+      e2f4dc44c2 ceos1 changed
+  [VM checkout VM after Try again]
+      852bbcd ceos1 changed
+      8b9365e ceos2 changed
+      bad4529 L2 A5 online change 1 (outside the lab folders)
+      e2f4dc4 ceos1 changed
+      ## main...origin/main [ahead 21]
+FAIL A5 every waiting save ends uploaded :: ('Can’t save', 1)
+PASS A5 hard case: no console, page or request errors
+
+=== A5 hard case: 4 checks, 3 failed
+FAIL A5 the panel shows the sentence about both sides :: Your save is safe on the lab VM, but it could not be uploaded to github.com.
+
+To: clab-scratch-git-redesign › git-redesign-b
+
+Checking what this upload sends…
+
+Try again
+See changes
+Details
+
+Saves to:
+FAIL A5 the panel shows the checkout path in the commands
+FAIL A5 every waiting save ends uploaded :: ('Can’t save', 1)
+PASS A5 hard case: no console, page or request errors
+None
+
+4 checks, 3 failed
+  FAIL A5 the panel shows the sentence about both sides :: Your save is safe on the lab VM, but it could not be uploaded to github.com.
+
+To: clab-scratch-git-redesign › git-redesign-b
+
+Checking what this upload sends…
+
+Try again
+See changes
+Details
+
+Saves to:
+  FAIL A5 the panel shows the checkout path in the commands ::
+  FAIL A5 every waiting save ends uploaded :: ('Can’t save', 1)
+[19:10:25] commands read from the panel: 'git -C /home/archtop/labs/clab-scratch-git-redesign pull --no-rebase\ngit -C /home/archtop/labs/clab-scratch-git-redesign push'
+[19:10:26] ran as archtop: $ git -C /home/archtop/labs/clab-scratch-git-redesign pull --no-rebase -> exit 0 | t | 1 + |  1 file changed, 1 insertion(+) |  create mode 100644 l2-online/a5-online-2.txt | From https://github.com/ArchRuger/clab-scratch-git-redesign |    735b254..06feb52  main       -> origin/main
+[19:10:27] ran as archtop: $ git -C /home/archtop/labs/clab-scratch-git-redesign push -> exit 0 | To https://github.com/ArchRuger/clab-scratch-git-redesign.git |    06feb52..496ec2e  main -> main
+  [VM checkout VM after the two commands]
+      496ec2e Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      06feb52 L2 A5 online change 2 (outside the lab folders)
+      852bbcd ceos1 changed
+      8b9365e ceos2 changed
+      ## main...origin/main
+[19:10:27] chip before pressing anything: 'Can’t save'; git_status {'checked': '2026-10-04T19:09:56.034760+00:00', 'ready': False, 'problem': 'The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.', 'code': 'diverged', 'waiting': 1}
+Traceback (most recent call last):
+  File "/tmp/a5_recover.py", line 14, in <module>
+    s.say('pressing %s %r' % (btn.get_attribute('id'), btn.inner_text()))
+                              ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/sync_api/_generated.py", line 19470, in get_attribute
+    self._sync(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_locator.py", line 469, in get_attribute
+    return await self._frame.get_attribute(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_frame.py", line 758, in get_attribute
+    return await self._channel.send(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 76, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 632, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TimeoutError: Locator.get_attribute: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("#save-cant-again, #save-retry").first
+
+[19:11:25] Try again button ids: ['save-cant-upload-again:Try again', 'save-cant-details:Details', 'save-change:Change…', 'save-also-show:Show', 'save-all:All versions', 'save-as-state:Save as a lab state…', 'save-settings:Save settings']
+Traceback (most recent call last):
+  File "/tmp/a5_try.py", line 10, in <module>
+    s.wait_chip(r'^(Saved .*|Upload failed|\d saves? to upload)$', timeout=60000)
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/integration/common.py", line 159, in wait_chip
+    expect(self.page.locator('#save-chip-text')).to_have_text(re.compile(pattern), timeout=timeout)
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/sync_api/_generated.py", line 23008, in to_have_text
+    self._sync(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_assertions.py", line 648, in to_have_text
+    await self._expect_impl(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_assertions.py", line 128, in _expect_impl
+    _record_soft_or_raise(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_assertions.py", line 60, in _record_soft_or_raise
+    raise error
+AssertionError: Locator expected to have text 're.compile('^(Saved .*|Upload failed|\\d saves? to upload)$')'
+Actual value: Can’t save
+Call log:
+  - Expect "to_have_text" locator("#save-chip-text") with timeout 60000ms
+  - waiting for locator("#save-chip-text")
+    123 × locator resolved to <span id="save-chip-text">Can’t save</span>
+        - unexpected value "Can’t save"
+
+Aria snapshot:
+- text: Can’t save
+[19:13:26] before: chip 'Can’t save' jobs [('synced', True), ('synced', True), ('push_pending', False)]
+[19:13:35] Save with no device change: chip 'Upload failed'; toasts []; panel open True
+[19:13:35] panel: 'Nothing changed since your last save, which is not uploaded yet. This upload also sends 1 other save: ceos1 changed (git-redesign-b). |  | To: clab-scratch-git-redesign › git-redesign-b |  | Upload | Not now | See changes | Details |  | Saved files can contain passwords or keys. |  | Saves to: clab-scratch-git-redesign › git-redesign-b Change… |  | Also: the last upload failed. Show |  | All versi'
+[19:13:36] jobs [('synced', 'ceos2 changed', True, 'Saved to Git.'), ('push_pending', 'ceos1 changed', False, 'The remote branch advanced or diverged. Resolve the branch before push'), ('review_pending', '', False, 'No configuration changes.')]
+[19:13:36] git_status {'checked': '2026-10-04T19:13:31.836770+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 2}
+  [VM checkout VM]
+      496ec2e Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      06feb52 L2 A5 online change 2 (outside the lab folders)
+      852bbcd ceos1 changed
+      8b9365e ceos2 changed
+      ## main...origin/main
+  [GitHub GitHub]
+      496ec2edc0 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      06feb522c0 L2 A5 online change 2 (outside the lab folders)
+      852bbcd782 ceos1 changed
+      8b9365e1e9 ceos2 changed
+
+0 checks, 0 failed
+Traceback (most recent call last):
+  File "/tmp/a5_upl.py", line 6, in <module>
+    s.click('#save-upload'); p.wait_for_timeout(7000)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/integration/common.py", line 143, in click
+    locator.click(**kwargs)
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/sync_api/_generated.py", line 18032, in click
+    self._sync(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_locator.py", line 165, in click
+    return await self._frame._click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_frame.py", line 594, in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 76, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 632, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("#save-upload")
+
+[19:14:40] Try again (save-retry) now that the owner has pushed and a no-change save exists
+[19:14:48] chip 'Saved just now'; toasts ['Uploaded to github.com.']; clicks 1
+[19:14:48] jobs [('synced', 'ceos2 changed', True, 'Saved to Git.'), ('synced', 'ceos1 changed', True, 'Saved commit is included in the verified remote history.'), ('synced', '', True, 'Saved to Git.')]
+[19:14:49] waiting 0 git_status {'checked': '2026-10-04T19:14:41.504694+00:00', 'ready': True, 'problem': '', 'code': '', 'waiting': 0}
+  [GitHub GitHub]
+      496ec2edc0 Merge branch 'main' of https://github.com/ArchRuger/clab-scratch-git-redesign
+      06feb522c0 L2 A5 online change 2 (outside the lab folders)
+      852bbcd782 ceos1 changed
+      8b9365e1e9 ceos2 changed
+
+0 checks, 0 failed

@@ -1,0 +1,162 @@
+[19:04:41] A3 on git-redesign-b (folder git-redesign-b); chip Saved 1 min ago; VM HEAD 9562adea
+PASS A3 Not now closes the panel; the chip reads 1 save to upload
+PASS A3 Not now: nothing on GitHub yet
+  [GitHub after Not now (the new commit is only on the VM)]
+      9562adeac7 ceos2 changed, map changed
+      4c3a7172fc Map changed
+      a5abd9474d ceos1 changed, map changed
+      1ff020a091 First save
+[19:04:50] VM HEAD now 55c0cbab: 55c0cba ceos1 changed
+[19:04:50] panel from the chip: 'Not uploaded yet' / '1 device changed since your last save: ceos1. 1 line added, 1 removed.'
+[19:04:54] uploaded later from the chip: Saved just now; clicks (Save, Not now, chip, Upload) = 4
+  [GitHub after the later upload]
+      55c0cbab3a ceos1 changed
+      9562adeac7 ceos2 changed, map changed
+      4c3a7172fc Map changed
+      a5abd9474d ceos1 changed, map changed
+PASS A3 unchanged save: the toast, no commit, the panel stays closed
+[19:05:04] unchanged save: toast shown, VM HEAD unchanged 55c0cbab; chip Saved just now
+[19:05:26] automatic name in the field: 'ceos1 changed'
+PASS A3 rename: manager shows it, the GitHub commit subject is unchanged
+[19:05:33] Keep as a checkpoint: sentence 'Checkpoint l2-named-save kept. It is not uploaded yet.'; clicks 2
+  [GitHub after the checkpoint upload]
+      29b222f2a0 l2 named save
+      5408305045 ceos1 changed
+      55c0cbab3a ceos1 changed
+      9562adeac7 ceos2 changed, map changed
+[19:05:39] checkpoint folders on GitHub: ['git-redesign-b/checkpoints/l2-named-save']
+PASS A3 the checkpoint folder exists on GitHub
+PASS A3 latest/ still holds the device file of that save (same blob)
+[19:05:45] latest/ ceos1.cfg blob before 3d3508c7d1
+[19:05:47] All versions groups: ['YOUR SAVES', 'CHECKPOINTS', 'STARTING POINT', 'LAB STATES']
+[19:05:47] rows: ['l2 named save | just now', 'ceos1 changed | 1 minute ago', 'ceos2 changed, map changed | 2 minutes ago', 'Map changed | 3 minutes ago', 'ceos1 changed, map changed | 4 minutes ago', 'l2-named-save | just now', 'B | 3 hours ago', 'Broken | 3 hours ago']
+[19:05:47] opening the older row #5: l2-named-save | just now
+Traceback (most recent call last):
+  File "/home/archtop/projects/clab-wt/l2-live/docs/git-redesign/tools/live/l2_a3.py", line 79, in <module>
+    expect(p.locator('[data-save-action="checkpoint"]').first).to_be_enabled(timeout=10000)
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/sync_api/_generated.py", line 23378, in to_be_enabled
+    self._sync(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_assertions.py", line 807, in to_be_enabled
+    await self._expect_impl(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_assertions.py", line 128, in _expect_impl
+    _record_soft_or_raise(
+  File "/home/archtop/pw-venv/lib/python3.12/site-packages/playwright/_impl/_assertions.py", line 60, in _record_soft_or_raise
+    raise error
+AssertionError: Locator expected to be enabled
+Actual value: None
+Error: element(s) not found
+Call log:
+  - Expect "to_be_enabled" locator("[data-save-action=\"checkpoint\"]").first with timeout 10000ms
+  - waiting for locator("[data-save-action=\"checkpoint\"]").first
+
+Aria snapshot:
+- banner:
+  - link "Containerlab Node Manager":
+    - /url: /
+  - navigation "Breadcrumb":
+    - button "My labs"
+    - strong: git-redesign-b
+    - group
+  - button "Manager"
+- main:
+  - heading "git-redesign-b" [level=1]
+  - paragraph: Running 2 of 2 devices ready
+  - button "Saved just now"
+  - button "Save"
+  - button "Load"
+  - button "Lab actions"
+  - status: Uploading… Uploading to github.com. You can keep working.
+  - tablist "Lab views":
+    - tab "Topology" [selected]
+    - tab "Devices"
+    - tab "Tools"
+    - tab "Advanced"
+  - tabpanel "Topology":
+    - group "Lab map":
+      - button "Capture ceos1:eth1 to ceos2:eth1": eth1 eth1
+      - button "ceos1"
+      - button "ceos2"
+    - toolbar "Map tools":
+      - button "Fit"
+      - button "Zoom in": +
+      - button "Zoom out": −
+      - button "Expand"
+      - button "Edit map"
+      - button "More"
+    - status: 2 devices · 1 link
+    - paragraph: Click a device to open it. Click a link to capture its traffic. Right-click for more actions.
+    - complementary "Devices Test logins":
+      - heading "Devices Test logins" [level=2]:
+        - text: Devices
+        - button "Test logins"
+      - text: Tests the SSH login of every device again. A successful test makes Open CLI available.
+      - list "Devices":
+        - listitem:
+          - button "ceos1"
+          - text: EOS Ready
+          - button "Open CLI"
+        - listitem:
+          - button "ceos2"
+          - text: EOS Ready
+          - button "Open CLI"
+- dialog "All versions":
+  - heading "All versions" [level=2]
+  - button "Close"
+  - paragraph: Everything saved for git-redesign-b. Choose one to load it.
+  - heading "Your saves" [level=3]
+  - list:
+    - listitem:
+      - button "l2 named save just now"
+    - listitem:
+      - button "ceos1 changed 1 minute ago"
+    - listitem:
+      - button "ceos2 changed, map changed 2 minutes ago"
+    - listitem:
+      - button "Map changed 3 minutes ago"
+    - listitem:
+      - button "ceos1 changed, map changed 4 minutes ago"
+  - button "Show older saves"
+  - heading "Checkpoints" [level=3]
+  - list:
+    - listitem:
+      - button "l2-named-save just now" [expanded]
+      - paragraph: Checkpoint · 2 devices
+      - paragraph:
+        - code: clab-scratch-git-redesign
+        - code: git-redesign-b/checkpoints/l2-named-save
+        - text: · commit
+        - code: 29b222f
+      - button "Load this state…"
+      - button "See what’s different"
+      - button "View files"
+      - button "Download ZIP"
+  - heading "Starting point" [level=3]
+  - paragraph: No starting point yet.
+  - button "Choose a backup as starting point…"
+  - heading "Lab states" [level=3]
+  - button "Save as a lab state…"
+  - list:
+    - listitem:
+      - button "B 3 hours ago"
+    - listitem:
+      - button "Broken 3 hours ago"
+    - listitem:
+      - button "Final 3 hours ago"
+    - listitem:
+      - button "L1-moved-b 3 hours ago"
+    - listitem:
+      - button "Solution 3 hours ago"
+    - listitem:
+      - button "Start · git-redesign 3 hours ago"
+    - listitem:
+      - button "Start · reference 3 hours ago"
+    - listitem:
+      - button "Start · Top level 3 hours ago"
+  - group: Other labs in this repository (3)
+  - group: Save activity (2)
+  - button "Full history…"
+  - button "Browse the repository…"
+  - status
