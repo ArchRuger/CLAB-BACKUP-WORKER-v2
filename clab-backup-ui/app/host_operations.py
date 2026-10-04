@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.30.60'
+VERSION = '1.31.0'
 LIMIT = 1024 * 1024
 # `containerlab inspect --all` runs a Docker inspection per container: several labs or a busy daemon take
 # well over the short bound of the other commands. The same bounds as discovery's copy of this command

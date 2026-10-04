@@ -4,6 +4,87 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.31.0
+
+The Git save and load redesign. Saving and loading move out of the Progress tab into the lab header, a save is the
+whole lab, a lab can save into any folder of a repository, and a course's lab states (start, broken, final) are
+saved and loaded like any other save. The owner's goals, the eleven owner decisions (D1 to D11), the design, the
+reviews, the two acceptance inventories and the evidence are in [`docs/git-redesign/`](git-redesign/README.md);
+the guides are [GIT-PROGRESS.md](GIT-PROGRESS.md), [GIT-SETUP.md](GIT-SETUP.md) and the new
+[COURSE-STATES.md](COURSE-STATES.md).
+
+**What an installer or engineer must know**
+
+- **The VM Git helper changed** (`host_git.py`), so the upgrade must refresh it as usual (`deploy/install.sh`, or
+  `setup-git.sh --refresh`); the launcher refuses a mixed tree. Existing registrations, legacy `…/latest`
+  registrations, schema 1 snapshots and saves waiting for upload keep working; nothing stored is rewritten.
+- **The Progress tab is gone.** Old addresses (`view=progress`, `view=git`) open the lab's first tab with the save
+  chip's panel open. Every capability of the tab has a home in the header; the map is
+  [`docs/git-redesign/inventory/CAPABILITIES.md`](git-redesign/inventory/CAPABILITIES.md).
+- **An upload must name what was reviewed.** `POST /api/git/jobs/{id}/retry` with `push` now needs the `head` the
+  review returned and answers 409 without it. `deploy/scaffold-lab.py` goes through the review itself: it prints
+  what the upload also sends and no longer sets a declined save aside (the save stays waiting in the header).
+- **Lab folders may overlap.** `setup-git.sh --prefix` no longer refuses a folder inside, above or beside another
+  registered folder; the only collision left is a folder inside another lab's `latest`, `baseline` or `checkpoints`.
+  Re-registering a folder with other settings is refused while a save made there still waits for upload.
+
+**Saving (G1, G4)**
+
+- **The header control.** Every lab tab shows a chip with the state of the lab's saves (`Saved 21 min ago`,
+  `1 save to upload`, `Can’t save`, `Running Start`, …), **Save** and **Load**. One function (`saveChipState`)
+  decides the chip, its panel, the Home card's line and the last-save sentence of the lifecycle confirmations.
+- **Save is two clicks.** Save starts at once with nothing typed; the save is named from what changed (`ceos and
+  xrv9k changed`) and can be renamed. The panel then says in one sentence what changed, with **Upload**, **Not
+  now** and **See changes**. Nothing is uploaded without **Upload**; there is no opt-out and no setting.
+- **A save is the whole lab**: the topology file, the map and one configuration per included device, in one commit.
+  The map a person changed in the manager is the one saved; a capture that could not write the topology stops
+  the save instead of deleting the file from `latest`.
+- **One upload carries every waiting save of the repository**, whichever lab made it, and names each before the
+  click (Git uploads a branch, not a save). Another lab's waiting save no longer stops a save. An upload is
+  bound to the commit the person was shown: a save that lands in between sends the person back to the sentence.
+- **The first save is one button**: the panel names the repository and a folder named after the lab; **Choose
+  another place** opens the chooser; a repository can be connected by its address there, and a brand-new empty
+  repository is started with **Start the repository**.
+- **Keep as a checkpoint** works on a save that already exists, without reading a device, and never changes
+  `latest` (a new helper option, `checkpoint_only`).
+- **A save first brings the VM copy up to date** with the online repository when nothing waits for upload there
+  (a fast-forward with the helper's existing update), so a file added on GitHub or a save from another VM no
+  longer ends in a rejected upload. When a save waited while the online copy changed, the panel shows the two
+  commands the repository's owner runs on the VM, verified live, and **Try again**.
+
+**Any folder, never blocked (G2)**
+
+- **The overlap rule is gone.** The two defects the owner reproduced (a first save into a repository registered
+  only at its top level was refused; **New folder…** was greyed out with a contradicting text) are fixed, and the
+  rule behind them is replaced by the one that is true: two labs collide only when one folder lies inside the
+  other's saved-state folders.
+- **One answer per folder.** The tree's marks, the line under a typed path and the question all come from one
+  function (`git_places.py`). A path is corrected, never refused (unsafe characters, a part of a saved state, a
+  file of that name). Three situations ask one question with buttons: another lab saves in the very folder; the
+  folder holds a saved state; a save of the lab still waits for upload. **New folder…** is never disabled.
+- **A folder change keeps every save uploadable**: each save carries the place it was made for, registrations are
+  not retired by a folder change, and a move of the saved files waits for **Upload** like a save.
+
+**Lab states and loading (G3)**
+
+- **Save as a lab state…** writes the lab's current state into another folder (`BGP/start`) without changing where
+  the lab saves: this is how a course author makes Start, Broken and Final.
+- **Load** replaces *Apply to running lab*: the lab's own saves and checkpoints and the repository's lab states,
+  a confirmation that lists every device with what differs, the red **Load** as the acknowledgement, the result
+  per device in the service's own words, **Undo this load** (the backup taken before the load) and **Try again**
+  for a device that was not loaded. Loading works before the first save. The restore service, its preflight, its
+  drivers and its timed recovery are unchanged; Load never changes the topology.
+
+**Tests, tools and evidence**
+
+- New test files: `test_git_places.py`, `test_git_place.py`, `test_git_save_model.py`, `test_git_whole_lab.py`,
+  `test_save_header_ui.js`, `test_save_drawers_ui.js`, `test_load_ui.js`, `test_save_router_ui.js`,
+  `test_page_load_ui.js` (every page script in one context, as a browser loads them).
+- The fixture manager's scripted Git helper answers like the real one and has a self-check
+  (`docs/git-redesign/tools/fixture/`); the browser scripts and the evidence pass are in
+  `docs/git-redesign/tools/integration/`.
+- Validation is in [VALIDATION.md](../clab-backup-ui/VALIDATION.md): what is unit, fixture, CI and live evidence.
+
 ## Changes in 1.30.60
 
 The fixes for the whole-codebase audit of 2026-10-03: 62 findings (60 distinct defects), none rated critical or high.
