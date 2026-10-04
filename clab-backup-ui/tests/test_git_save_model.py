@@ -1198,6 +1198,24 @@ class LabStateTests(SaveModelCase):
         outcome, _ = self.run_job(replaced)
         self.assertEqual((outcome['status'], outcome['summary']['devices'], outcome['summary']['first']), ('review_pending', ['r1'], False))
 
+
+    def test_a_name_typed_in_lower_case_is_stored_and_listed_by_the_one_naming_rule(self):
+        # The page says "State Mine saved in …" and the Load panel must list the same word: the manifest's mark is what
+        # every list names the state by, so the rule (state_name: first letter upper-cased when all lower case) is applied
+        # before the name is stored. A name with its own capitals stays as typed.
+        self.upload(self.saved(note='My latest'))
+        job = self.state(folder='mine', name='mine')
+        self.assertEqual((job['note'], job['destination']['path']), ('Mine', 'mine/latest'))
+        self.assertEqual(self.progress.checkout_view(self.store.lab(self.lab['id'])['git_binding'])['pending_states'], [dict(prefix='mine', name='Mine')])
+        outcome, _ = self.run_job(job)
+        published = [r for r in self.sent if r['mode'] == 'publish'][-1]
+        self.assertEqual((published['snapshot']['manifest']['state'], published['message']), ('Mine', 'Mine'))
+        rows = {row['path']: row['name'] for row in self.progress.states(self.lab['id'])['states']}
+        self.assertEqual(rows['mine/latest'], 'Mine')
+        self.upload(outcome)
+        mixed = self.state(folder='ospf', name='day 2 OSPF')
+        self.assertEqual(mixed['note'], 'day 2 OSPF')
+
     def test_a_lab_state_never_goes_into_a_labs_own_folder(self):
         other = self.second_lab()
         for folder, expected in (('', 'Start'), ('sibling', 'sibling/Start')):

@@ -2030,6 +2030,9 @@ class GitProgress:
             The lab's save location is not touched. An answer that needs a choice comes back as `{question}`, status 200."""
             name = note_value(data.name)
             if not name: raise HTTPException(400, 'Give the lab state a name.')
+            # One naming rule everywhere (git_places.state_name): a name typed all in lower case is listed with its first
+            # letter upper-cased, as the page words it when the state is saved; a name with its own capitals stays as typed.
+            if name == name.lower(): name = name[0].upper() + name[1:]
             if data.choice not in ('', 'take'): raise HTTPException(400, 'Choose Replace it or another name.')
             request_digest = digest(dict(lab_id=lab_id, **data.model_dump()))
 

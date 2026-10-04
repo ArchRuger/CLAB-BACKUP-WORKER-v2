@@ -30,19 +30,25 @@ def save_and_wait(s, pattern='to upload'):
 
 def main():
     args = arguments(__doc__)
-    s = Session(args.base, args.headed)
+    s = Session(args.base, args.headed, args.viewport)
     p = s.page
     lab = s.lab_id('restore-square')
 
     # ---- A: the header on every lab tab -------------------------------------------------------------------------
     s.open_lab('restore-square')
-    for tab in ['topology', 'devices', 'progress', 'tools', 'advanced']:
+    for tab in ['topology', 'devices', 'tools', 'advanced']:
         s.click('#tab-' + tab, count=False)
         boxes = [p.locator(sel).bounding_box() for sel in ['#save-chip', '#git-save-progress', '#load-button', '#lab-actions-button']]
         s.check('A header on the %s tab: chip, Save, Load, Lab actions visible' % tab, all(boxes))
-        s.check('A header on the %s tab: the four controls share one row at 1440' % tab, all(boxes) and len({round(b['y'] + b['height'] / 2) for b in boxes}) == 1,
-                [b and (b['y'], b['height']) for b in boxes])
-        s.check('A header on the %s tab: order chip, Save, Load, Lab actions' % tab, all(boxes) and [b['x'] for b in boxes] == sorted(b['x'] for b in boxes))
+        if args.width >= 1200:
+            s.check('A header on the %s tab: the four controls share one row at 1440' % tab, all(boxes) and len({round(b['y'] + b['height'] / 2) for b in boxes}) == 1,
+                    [b and (b['y'], b['height']) for b in boxes])
+            s.check('A header on the %s tab: order chip, Save, Load, Lab actions' % tab, all(boxes) and [b['x'] for b in boxes] == sorted(b['x'] for b in boxes))
+        else:
+            # A narrow screen wraps the row: every control stays inside the screen, none overlaps another, reading order is kept.
+            s.check('A header on the %s tab: the four controls are inside the screen and do not overlap' % tab, all(boxes) and all(b['x'] >= 0 and b['x'] + b['width'] <= args.width for b in boxes)
+                    and all(a['x'] + a['width'] <= b['x'] or a['y'] + a['height'] <= b['y'] for a, b in zip(boxes, boxes[1:])), [b and (b['x'], b['y'], b['width']) for b in boxes])
+            s.check('A header on the %s tab: order chip, Save, Load, Lab actions' % tab, all(boxes) and [(b['y'], b['x']) for b in boxes] == sorted((b['y'], b['x']) for b in boxes))
     s.click('#tab-topology', count=False)
     s.match('A chip Saved', s.chip(), r'^Saved (\d+ (min|h) ago|just now|yesterday)$')
     s.check('A chip dot of Saved is ok', 'ok' in p.locator('#save-chip-dot').get_attribute('class'))

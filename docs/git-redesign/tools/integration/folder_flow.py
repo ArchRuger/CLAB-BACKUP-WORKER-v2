@@ -105,7 +105,7 @@ def upload_waiting(s):
 
 def main():
     args = arguments(__doc__)
-    s = Session(args.base, args.headed)
+    s = Session(args.base, args.headed, args.viewport)
     p = s.page
     s.switch(capture_seconds=1)
 
@@ -342,14 +342,16 @@ def main():
 
     # ---- a placement the VM refuses for a cause outside the manager (PROMPT 6.5) reads like the chip, and Try again repeats it -----
     choose('refused-then-fine')
-    s.switch(status_problem='operation')
+    # The VM refuses a new folder while the online copy is ahead (host_git register(): the fixture's `remote_ahead`). A Git
+    # operation left open on the VM no longer refuses a placement in the fixture, as it does not on a real VM.
+    s.switch(remote_ahead=True)
     with s.expect_status(409, r'/git/place$'):
         press(s, '#folder-foot [data-folder-action="save"]')
         expect(p.locator('#folder-refused')).to_be_visible(timeout=20000)
-    s.equal('D a placement the VM refuses: the cause in the chip\'s words', s.text('#folder-refused'), 'Someone is working in this repository on the VM.')
-    s.check('D a placement the VM refuses: Try again and Details, New folder… still enabled', s.visible('[data-folder-action="again"]') and s.visible('#folder-refused-details') and p.locator('.folder-chooser [data-folder-action="new"]').is_enabled())
+    s.equal('D a placement the VM refuses: the cause in the chip\'s words', s.text('#folder-refused'), 'The online copy has changes this VM does not have.')
+    s.check('D a placement the VM refuses: Update from the repository, Try again and Details, New folder… still enabled', s.visible('[data-folder-action="update"]') and s.visible('[data-folder-action="again"]') and s.visible('#folder-refused-details') and p.locator('.folder-chooser [data-folder-action="new"]').is_enabled())
     s.shot('D-refused-by-the-vm')
-    s.switch(status_problem=None)
+    s.switch(remote_ahead=None)
     s.click('[data-folder-action="again"]')
     saved_here(s, 'shared-b', 'Nested-Labs:refused-then-fine', 'D Try again after the cause is gone')
     s.match('D after the placement the chip no longer says Can\'t save', s.chip(), r'^(Saved|Not saved|\d save)')

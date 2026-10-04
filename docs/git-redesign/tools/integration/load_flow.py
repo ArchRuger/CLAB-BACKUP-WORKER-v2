@@ -21,6 +21,11 @@ def chip_body(s):
 
 def open_list(s):
     p = s.page
+    # On a narrow screen a long chip text takes a row of its own, and its open panel then lies over Save and Load: a person
+    # closes it first (Escape or a tap outside). On a wide screen Load is beside it and opening Load closes the other panel.
+    if p.viewport_size['width'] < 700 and s.visible('#save-panel'):
+        p.keyboard.press('Escape')
+        expect(p.locator('#save-panel')).to_be_hidden()
     s.click('#load-button')
     expect(p.locator('#load-panel-body .save-list').first).to_be_visible(timeout=20000)
 
@@ -58,7 +63,7 @@ def visible_load_buttons(s):
 
 def main():
     args = arguments(__doc__)
-    s = Session(args.base, args.headed)
+    s = Session(args.base, args.headed, args.viewport)
     p = s.page
     s.switch(capture_seconds=1, restore_capture_seconds=1)
     lab = s.lab_id('restore-square')
@@ -90,11 +95,11 @@ def main():
     s.check('E confirmation: one row per device with its difference count', re.match(r'^\d+ lines? differs?$', rows.get('ceos', '')) and re.match(r'^\d+ lines? differs?$', rows.get('xrv9k', '')) and rows.get('cjunosevolved') == 'Already matches' and rows.get('vjunos-switch') == 'Already matches', rows)
     boxes = p.locator('#load-panel-body input[name="load-node"]')
     s.check('E confirmation: real tick boxes, all ticked', boxes.count() == 4 and all(boxes.nth(i).is_checked() for i in range(4)))
-    s.equal('E confirmation: Load, Cancel, See what\'s different', p.locator('#load-panel-body .save-row').last.locator('button').all_inner_texts(), ['Load', 'Cancel', "See what's different"])
+    s.equal('E confirmation: Load, Cancel, See what\'s different', p.locator('#load-panel-body .save-row').last.locator('button').all_inner_texts(), ['Load', 'Cancel', "See what’s different"])
     s.check('E confirmation: the red Load is the danger button', 'danger' in p.locator('#load-run').get_attribute('class'))
     s.shot('E-confirmation')
 
-    # See what's different: load.js's view in the drawer, exactly one Load button on screen, Back returns to the same confirmation
+    # See what’s different: load.js's view in the drawer, exactly one Load button on screen, Back returns to the same confirmation
     boxes.nth(1).uncheck()
     s.click('#load-diff', count=False)
     expect(p.locator('#save-drawer')).to_be_visible()

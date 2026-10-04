@@ -24,7 +24,11 @@ def arguments(description=''):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('--base', default='http://127.0.0.1:8161')
     parser.add_argument('--headed', action='store_true')
-    return parser.parse_args()
+    parser.add_argument('--width', type=int, default=1440)
+    parser.add_argument('--height', type=int, default=900)
+    args = parser.parse_args()
+    args.viewport = (args.width, args.height)
+    return args
 
 
 class Session:

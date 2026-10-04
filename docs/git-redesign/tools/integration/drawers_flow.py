@@ -4,7 +4,7 @@ friction budget this script owns (PROMPT 9.5). Needs a fresh fixture. Fixture ev
 import re
 import sys
 
-from common import Session, arguments, expect, wait_until
+from common import Session, arguments, dump, expect, wait_until
 
 
 def content(s):
@@ -21,7 +21,7 @@ def open_row(s, name):
 
 def main():
     args = arguments(__doc__)
-    s = Session(args.base, args.headed)
+    s = Session(args.base, args.headed, args.viewport)
     p = s.page
     s.switch(capture_seconds=1, restore_capture_seconds=1)
     s.open_lab('restore-square')
@@ -164,7 +164,7 @@ def main():
     p.keyboard.press('Escape') if s.visible('#save-panel') else None
     s.click('#load-button', count=False)
     expect(p.locator('#load-panel-body .save-list').first).to_be_visible(timeout=20000)
-    s.check('F the new state is listed under Lab states as Mine', 'Mine' in p.locator('#load-panel-body .save-list').nth(1).inner_text())
+    s.check('F the new state is listed under Lab states as Mine', 'Mine' in p.locator('#load-panel-body .save-list').nth(1).inner_text(), p.locator('#load-panel-body').inner_text()[:900] + ' || ' + dump(p.evaluate("fetch('/api/labs/'+activeId+'/restore/states').then(r=>r.text()).catch(e=>String(e))"))[:1500])
     p.keyboard.press('Escape')
     # one click with a one-click name: chip, Save as a lab state…, final, Replace it
     s.reset_counts()
