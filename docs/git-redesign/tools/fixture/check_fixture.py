@@ -825,8 +825,9 @@ def causes():
     rows = [x for x in r3['also_sends'] if 'commit' in x]
     check('a commit the manager does not hold (made by hand on the VM) is named in the review by its subject and its paths (H6), not by a lab', len(rows) == 1 and rows[0]['name'] == 'Edited by hand' and rows[0]['files'] == ['by-hand.txt'], json.dumps(r3['also_sends'])[:300])
     code, answer = upload(third, r3['head'])
-    check('...and the upload of a save on top of it is refused as made up of commits created outside manager saves (code diverged)', code == 200 and answer['status'] == 'push_pending' and 'outside manager saves' in answer['message']
-          and lab_state('restore-square')['git_status']['code'] == 'diverged', f'{code} {str(answer)[:300]}')
+    # Commits nobody made through the manager read as someone working in the repository (`busy`): an update could not help (DESIGN.md 3.6).
+    check('...and the upload of a save on top of it is refused as made up of commits created outside manager saves (code busy)', code == 200 and answer['status'] == 'push_pending' and 'outside manager saves' in answer['message']
+          and lab_state('restore-square')['git_status']['code'] == 'busy', f'{code} {str(answer)[:300]} {lab_state("restore-square")["git_status"]}')
     helper_compare = helper('reg-bgp', mode='compare', operation_id=third['id'])
     out = helper_compare['outgoing']
     check('the helper\'s compare answers `outgoing` OLDEST FIRST with {commit, operation_id, subject, files, approved} and outgoing_truncated', helper_compare['outgoing_truncated'] is False and len(out) >= 3
