@@ -61,7 +61,9 @@ class InstallerLock:
     a file (and takes over one an unprivileged account owns, so that account cannot remove it
     or squat the name again), but never one somebody holds. After every flock the path is
     checked to still name the locked file, so a swap between open and flock cannot leave two
-    installers each holding "the" lock.
+    installers each holding "the" lock. A held lock whose file belongs to neither the running account nor
+    root is reported as Busy without the file's text (any account can write anything into it), naming the
+    owner and the removal command.
     """
 
     def __init__(self, path=None):
@@ -78,10 +80,20 @@ class InstallerLock:
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                holder = _read_holder(fd)
+                owner = _owner_uid(fd)
+                if owner in (os.geteuid(), 0):
+                    holder = _read_holder(fd)
+                    os.close(fd)
+                    raise Busy('Another Containerlab Node Manager installer run is active'
+                               + (f' ({holder})' if holder else '') + '. Wait for it to finish, then try again.')
                 os.close(fd)
-                raise Busy('Another Containerlab Node Manager installer run is active'
-                           + (f' ({holder})' if holder else '') + '. Wait for it to finish, then try again.')
+                # Any account can create this file in the sticky directory, write anything into it and hold the
+                # flock: what it says is not evidence of an installer run, so it is not repeated here.
+                name = _user_name(owner)
+                raise Busy(f'The installer lock {self.path} is held, but the file belongs to {name}, not to this account or '
+                           f'root, so it cannot be confirmed as an installer run and its content is not shown. If {name} '
+                           f'is running the installer, wait for it to finish; if not, an administrator can remove the '
+                           f'file with: sudo rm -f {self.path}')
             except BaseException:
                 os.close(fd)
                 raise
@@ -200,6 +212,24 @@ def _read_holder(fd):
         return sanitize.clean_line(os.read(fd, 200).decode('utf-8', 'replace').strip(), 120)
     except OSError:
         return ''
+
+
+def _owner_uid(fd):
+    """The uid that owns the open lock file; None when it cannot be told (then it is not trusted)."""
+    try:
+        return os.fstat(fd).st_uid
+    except OSError:
+        return None
+
+
+def _user_name(uid):
+    if uid is None:
+        return 'an unknown account'
+    try:
+        import pwd
+        return sanitize.clean_line(pwd.getpwuid(uid).pw_name, 40)
+    except (ImportError, KeyError, TypeError, OverflowError):
+        return f'uid {uid}'
 
 
 def _account():

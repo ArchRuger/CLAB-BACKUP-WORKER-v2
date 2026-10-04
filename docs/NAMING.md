@@ -104,8 +104,11 @@ On your build box, once per lab:
    the tool tries to point the lab back at `work` and says what happened: either "rebound to
    `<lab-slug>/work`", or that the lab still saves to `reference/<state>` (a save that is still pending
    refuses the folder change). In that case finish that save under Progress › Recent saves, then run
-   `scaffold-lab.py init <lab-slug>` again before the student saves. The tool talks to the manager
-   directly and ignores `http_proxy`.
+   `scaffold-lab.py init <lab-slug>` again before the student saves. If the manager stops answering
+   (a restart mid-request, a reset or a timeout), the tool exits with "Cannot reach the manager" and the
+   same account of where the lab saves; when the lost answer belonged to a folder change it says the lab
+   **may** still save to `reference/<state>`, because the change may have happened. The tool talks to the
+   manager directly and ignores `http_proxy`.
 
 The student then applies `reference/start` to begin, works in `work`, applies `reference/solution`
 to check, and applies `reference/broken-01` to practise recovery — all without a reboot and

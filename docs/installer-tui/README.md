@@ -37,6 +37,15 @@ delete from the sticky directory; it never replaces a lock that is held. `/run/l
 boot, so on a VM with several accounts the name can still be planted before the first run after a boot: the
 result is a refusal with the removal command, never a half-run installer.
 
+A held lock is reported with the holder line the file contains (pid, account, start time) only when the file
+belongs to the running account or to root. A file that belongs to another account is not trusted: any account
+can create the name, write any text into it and hold the `flock`, so the installer names the owner (from the
+open descriptor), says the holder cannot be confirmed as an installer run, does not repeat the file's text,
+and prints the same `sudo rm -f <path>` for the case that nobody is installing. The residual: such a held lock
+still blocks every installer run until it is removed or its holder exits, because the exclusion cannot be told
+from a real installer run of that other account; an administrator (or that account) removes the file, and
+removing the file while a real run still holds it lets a second run start, so the owner is worth asking first.
+
 ## Code
 
 | Module | Needs Textual | Role |

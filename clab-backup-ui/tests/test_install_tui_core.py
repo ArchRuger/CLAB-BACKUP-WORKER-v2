@@ -475,6 +475,51 @@ class InstallerLockTests(IsolatedCase):
         finally:
             lock.release()
 
+    def hold_with_text(self, text):
+        """The lock held by this process (as any account could hold a file it planted), with `text` in it."""
+        self.path.write_text(text)
+        fd = os.open(self.path, os.O_RDWR)
+        self.addCleanup(os.close, fd)
+        core.fcntl.flock(fd, core.fcntl.LOCK_EX | core.fcntl.LOCK_NB)
+
+    def test_busy_lock_in_a_file_of_another_account_names_its_owner_and_does_not_echo_its_content(self):
+        # Any account can create the file in the sticky directory, write anything into it and hold the flock:
+        # the text is not evidence of an installer run, and the person needs the way out.
+        planted = 'pid 4242, account root, started 03:00:00 (the operator says: wait forever)'
+        self.hold_with_text(planted)
+        with patch.object(core, '_owner_uid', return_value=4242), patch.object(core, '_user_name', return_value='mallory'), \
+                self.assertRaises(core.Busy) as caught:
+            core.InstallerLock(self.path).acquire()
+        text = str(caught.exception)
+        self.assertIn('mallory', text)
+        self.assertIn(str(self.path), text)
+        self.assertIn(f'sudo rm -f {self.path}', text)
+        self.assertIn('not to this account or root', text)
+        self.assertNotIn('operator', text)
+        self.assertNotIn('pid 4242', text)
+        self.assertNotIn('Wait for it to finish, then try again', text)   # not stated as fact
+
+    def test_busy_lock_in_a_file_of_this_account_or_root_still_shows_the_holder_line(self):
+        self.hold_with_text('pid 77, account somebody, started 01:02:03\n')
+        for owner in (os.geteuid(), 0):
+            with self.subTest(owner=owner):
+                with patch.object(core, '_owner_uid', return_value=owner), self.assertRaises(core.Busy) as caught:
+                    core.InstallerLock(self.path).acquire()
+                self.assertIn('pid 77, account somebody', str(caught.exception))
+                self.assertIn('Wait for it to finish, then try again', str(caught.exception))
+                self.assertNotIn('sudo rm', str(caught.exception))
+
+    def test_busy_lock_owner_check_also_applies_to_a_privileged_run(self):
+        self.hold_with_text('whatever the other account wrote')
+        with patch.object(core, 'running_as_root', return_value=True), patch.object(core, '_owner_uid', return_value=4242), \
+                patch.object(core, '_user_name', return_value='mallory'), self.assertRaises(core.Busy) as caught:
+            core.InstallerLock(self.path).acquire()
+        self.assertIn('mallory', str(caught.exception))
+        self.assertNotIn('whatever', str(caught.exception))
+
+    def test_user_name_falls_back_to_the_uid_for_an_account_without_a_name(self):
+        self.assertEqual(core._user_name(2 ** 31 - 5), 'uid %d' % (2 ** 31 - 5))
+
     def test_default_path_is_a_fixed_name_and_not_apts_lock(self):
         path = core.default_lock_path()
         self.assertEqual(path.name, 'clab-node-manager-installer.lock')

@@ -20,6 +20,7 @@ repository in the manager (Progress -> Save location -> Connect by URL). See doc
 and deploy/lab-template/README.md.
 """
 import argparse
+import http.client
 import json
 import re
 import sys
@@ -36,6 +37,11 @@ GIT_ACTIVE = {'queued', 'capturing', 'exporting', 'pushing'}
 GIT_REVIEWABLE = {'review_pending', 'committed', 'unchanged'}   # saved on the VM, upload not done yet
 
 
+class ManagerLost(SystemExit):
+    """The manager gave no answer (down, restarting, reset or too slow). For a request that changes something
+    this is not a refusal: the change may or may not have happened."""
+
+
 def api(manager, path, method='GET', body=None):
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(manager.rstrip('/') + '/api' + path, data=data, method=method,
@@ -50,8 +56,10 @@ def api(manager, path, method='GET', body=None):
         except Exception:
             detail = ''
         return error.code, {'detail': detail}
-    except urllib.error.URLError as error:
-        sys.exit('Cannot reach the manager at %s (%s). Is it running?' % (manager, error))
+    except (OSError, http.client.HTTPException) as error:
+        # urllib wraps only the connect: RemoteDisconnected (the manager restarts mid-request), a read timeout and
+        # a reset raised while the answer is read come out as they are. HTTPError is caught above (it is an OSError).
+        raise ManagerLost('Cannot reach the manager at %s (%s). Is it running?' % (manager, error or type(error).__name__))
 
 
 def die(message):
@@ -174,19 +182,26 @@ def cmd_init(args):
     print('  python3 deploy/scaffold-lab.py snapshot %s %s' % (args.slug, states[0] if states else '<state>'))
 
 
+def say_where_it_saves(args, reference, reason, unsure):
+    """Stop with `reason` and the way out when the lab is not known to be back on the work folder. `unsure` is for
+    a folder change that was under way or whose answer was lost: it may or may not have happened."""
+    if unsure:
+        sys.exit('%s The lab MAY STILL SAVE TO %s. Check where it saves under Progress > Save location (finish or '
+                 'set aside any pending save under Progress > Recent saves first), then run: '
+                 'scaffold-lab.py init %s' % (reason, reference, args.slug))
+    sys.exit('%s The lab STILL SAVES TO %s. Finish or set aside that save under Progress > Recent saves, '
+             'then run: scaffold-lab.py init %s' % (reason, reference, args.slug))
+
+
 def rebind_or_say(args, lab, reference, work, reason, unsure=False):
     """A snapshot stopped after the lab was bound to `reference`: try to rebind it to `work`, then stop with
     `reason` and the truth about where the lab saves now (a save still pending refuses the folder change).
-    `unsure` is for a stop while the move to `reference` was itself under way: it may not have happened."""
+    `unsure` is for a stop while the move to `reference` was itself under way: it may not have happened.
+    A rebind whose answer was lost is unsure too: the lab may already be back on `work`."""
     try:
         bind_to(args.manager, lab['id'], work)
-    except SystemExit:
-        if unsure:
-            sys.exit('%s The lab MAY STILL SAVE TO %s. Check where it saves under Progress > Save location (finish or '
-                     'set aside any pending save under Progress > Recent saves first), then run: '
-                     'scaffold-lab.py init %s' % (reason, reference, args.slug))
-        sys.exit('%s The lab STILL SAVES TO %s. Finish or set aside that save under Progress > Recent saves, '
-                 'then run: scaffold-lab.py init %s' % (reason, reference, args.slug))
+    except SystemExit as stop:
+        say_where_it_saves(args, reference, reason, unsure or isinstance(stop, ManagerLost))
     sys.exit('%s The lab is rebound to %s.' % (reason, work))
 
 
@@ -205,6 +220,9 @@ def cmd_snapshot(args):
         # Ctrl+C while the destination change is under way: the manager may already have pointed the lab at the
         # reference folder, so the same handling as every later stop (a refused or failed bind still just stops).
         rebind_or_say(args, lab, reference, work, 'scaffold-lab: stopped.', unsure=True)
+    except ManagerLost as lost:
+        # The answer to the destination change was lost: the lab may already be on the reference folder.
+        rebind_or_say(args, lab, reference, work, lost.code, unsure=True)
     try:
         final = save_progress(args.manager, lab['id'])   # capture the running config into it
         status, where = final.get('status'), ''
@@ -230,7 +248,11 @@ def cmd_snapshot(args):
         die('the snapshot into %s is not finished: %s (%s). The lab STILL SAVES TO %s. Finish or set aside that '
             'save under Progress > Recent saves, then run: scaffold-lab.py init %s'
             % (reference, status, final.get('message', ''), reference, args.slug))
-    bind_to(args.manager, lab['id'], work)               # rebind so the student keeps saving in work
+    try:
+        bind_to(args.manager, lab['id'], work)           # rebind so the student keeps saving in work
+    except SystemExit as stop:
+        say_where_it_saves(args, reference, '%s The snapshot into %s itself is finished (%s).'
+                           % (stop.code, reference, where or status), isinstance(stop, ManagerLost))
     if not where:
         die('the snapshot into %s did not finish cleanly: %s (%s). The lab is rebound to %s.'
             % (reference, status, final.get('message', ''), work))
