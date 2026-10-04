@@ -24,6 +24,28 @@ bash "$HOME/projects/clab-manager/deploy/install.sh" --plain      # the plain nu
 
 `--git` and `--advanced` keep their meaning in both modes.
 
+## The installer lock
+
+One mutating installer run per VM, plain or full-screen, from any account: an advisory `flock` on
+`/run/lock/clab-node-manager-installer.lock` (`/tmp` when `/run/lock` is not writable), shared by both
+installers through `installer_tui/core.py`. The directory is world-writable, so the lock never follows a
+symlink and refuses a file that is not a regular file or cannot be opened: the installer then changes
+nothing and prints the exact `sudo rm -f <path>` that clears it. Code that runs with root privileges (the
+lock is taken by the unprivileged installer, which refuses to run as root) removes such a file itself and
+replaces a lock file owned by an unprivileged account with a root-owned one, which that account cannot
+delete from the sticky directory; it never replaces a lock that is held. `/run/lock` is cleared at every
+boot, so on a VM with several accounts the name can still be planted before the first run after a boot: the
+result is a refusal with the removal command, never a half-run installer.
+
+A held lock is reported with the holder line the file contains (pid, account, start time) only when the file
+belongs to the running account or to root. A file that belongs to another account is not trusted: any account
+can create the name, write any text into it and hold the `flock`, so the installer names the owner (from the
+open descriptor), says the holder cannot be confirmed as an installer run, does not repeat the file's text,
+and prints the same `sudo rm -f <path>` for the case that nobody is installing. The residual: such a held lock
+still blocks every installer run until it is removed or its holder exits, because the exclusion cannot be told
+from a real installer run of that other account; an administrator (or that account) removes the file, and
+removing the file while a real run still holds it lets a second run start, so the owner is worth asking first.
+
 ## Code
 
 | Module | Needs Textual | Role |

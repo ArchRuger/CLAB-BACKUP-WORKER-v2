@@ -10,11 +10,14 @@ The provisioning driver contract (every platform module provides it; :mod:`desig
 ``render_desired(client, candidate, **options) -> str``
     The candidate alone as the device renders it on an empty base, in the same text form; nothing is
     committed (EOS: a throwaway session on ``rollback clean-config``).
-``stage(client, candidate, removals, name, confirm_minutes, arm, **options) -> dict``
+``stage(client, candidate, removals, name, confirm_minutes, arm, accept=None, **options) -> dict``
     One transaction: open the session ``name``, enter the removal lines, merge the candidate, read the
     would-be configuration and the device's own diff; with ``arm`` False the session is aborted (a review),
-    with ``arm`` True the timed recovery is armed (``commit timer``). Returns ``{'before', 'would_be',
-    'diff', 'no_op', 'armed', 'handle'}``; raises :class:`restore_shell.RestoreError` when the node refused
+    with ``arm`` True the timed recovery is armed (``commit timer``). Before anything is armed (and only when
+    arming a change), ``accept(would_be)`` is asked whether that would-be text is the reviewed one; False
+    aborts the transaction with :data:`NOT_REVIEWED`, so an unreviewed change never runs for the confirmation
+    window (audit L-14); ``accept`` never raises. Returns ``{'before', 'would_be', 'diff', 'no_op', 'armed', 'handle'}``; raises
+    :class:`restore_shell.RestoreError` when the node refused or the would-be configuration was not accepted
     (nothing armed) and :class:`restore_shell.SessionLost` when the session died inside the transaction.
 ``confirm(client, handle, **options) -> dict``, ``pending(client, **options)``, ``cleanup(client, **options)``,
 ``persist``: as the restore drivers, on a *fresh* connection; ``cleanup`` aborts only this driver's own
@@ -36,6 +39,8 @@ NAME = re.compile(r'^clabdsg-[0-9a-f]{8}$')
 # A row of the session table in state "pending" under this driver's own name shape.
 ORPHAN = re.compile(r'(?m)^[*\s]\s*(clabdsg-[0-9a-f]{8})\s+pending\b')
 HEADER = re.compile(r'^! Command: show session-configuration')
+# Every driver raises this when `accept` refuses the would-be configuration: fixed words, never device text.
+NOT_REVIEWED = 'The configuration the device would run differs from the reviewed one; nothing was applied.'
 
 
 def session_name():
@@ -77,7 +82,10 @@ def render_desired_shell(shell, candidate, enable_password=''):
     if REJECTED_LINE.search(opened):
         raise RestoreError('The node did not open a configuration session to render the generated configuration.')
     try:
-        shell.run('rollback clean-config', LOAD_TIMEOUT)
+        # Without the reset the session is still a copy of the running configuration: "desired" would be a merge.
+        reset = shell.run('rollback clean-config', LOAD_TIMEOUT)
+        if REJECTED_LINE.search(reset):
+            raise RestoreError('The node did not empty the configuration session to render the generated configuration.')
         clean = shell.run('show session-config', LOAD_TIMEOUT)
         _paste(shell, candidate)
         rendered = shell.run('show session-config', LOAD_TIMEOUT)
@@ -86,7 +94,7 @@ def render_desired_shell(shell, candidate, enable_password=''):
         _abort(shell)
 
 
-def stage_shell(shell, candidate, removals, name, confirm_minutes=5, arm=False, enable_password=''):
+def stage_shell(shell, candidate, removals, name, confirm_minutes=5, arm=False, enable_password='', accept=None):
     """The merge transaction on an already-open EosShell (see the module docstring)."""
     if not NAME.match(name or ''):
         raise RestoreError('The design session name is not usable.')
@@ -109,6 +117,8 @@ def stage_shell(shell, candidate, removals, name, confirm_minutes=5, arm=False, 
         if not arm or no_op:
             _abort(shell)
             return {'before': before, 'would_be': would_be, 'diff': diff, 'no_op': no_op, 'armed': False, 'handle': {'session': name}}
+        if accept is not None and not accept(would_be):
+            raise RestoreError(NOT_REVIEWED)
         # EOS has no lock: a concurrent commit between `before` and now would be reverted by ours.
         again = shell.run('show running-config', LOAD_TIMEOUT)
         if _comparable(again) != _comparable(before):
@@ -182,8 +192,8 @@ def render_desired(client, candidate, **kw):
     return _with_shell(client, lambda shell, **o: render_desired_shell(shell, candidate, o.get('enable_password', '')), **kw)
 
 
-def stage(client, candidate, removals, name, confirm_minutes=5, arm=False, **kw):
-    return _with_shell(client, lambda shell, **o: stage_shell(shell, candidate, removals, name, confirm_minutes, arm, o.get('enable_password', '')), **kw)
+def stage(client, candidate, removals, name, confirm_minutes=5, arm=False, accept=None, **kw):
+    return _with_shell(client, lambda shell, **o: stage_shell(shell, candidate, removals, name, confirm_minutes, arm, o.get('enable_password', ''), accept), **kw)
 
 
 def confirm(client, handle, **kw):

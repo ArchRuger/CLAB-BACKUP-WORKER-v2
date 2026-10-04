@@ -55,10 +55,11 @@ live:
 | Removals (§3) | `default <line>` for negated lines, `no <line>` otherwise, inside the parent block, children first | `delete <path>` at the highest created ancestor | `no <line>` from a per-statement table, children first; `shutdown` is never re-applied |
 | Merge | `copy terminal: session-config` + Ctrl-D (merges; verified) | `load merge terminal` + Ctrl-D | the candidate entered line by line (`restore_iosxr._paste`) |
 | Would-be configuration (ownership source) | `show session-config` (verified: running-config form, device defaults included) | `show \| display set` inside the candidate | `show configuration merge` (verified: running-config form with the usual header) |
-| Desired set (the candidate alone, device-rendered) *(review M1)* | a throwaway session: `rollback clean-config`, paste, `show session-config`, `abort`; desired = that − the clean base (verified: the clean base is readable) | `configure private` + `load override terminal` + `show \| display set` + `rollback 0` (verified on vJunos-switch) | a plain `configure`, the lines, `show configuration` (the target buffer holds exactly them; verified), `abort` |
+| Desired set (the candidate alone, device-rendered) *(review M1)* | a throwaway session: `rollback clean-config`, paste, `show session-config`, `abort`; desired = that − the clean base (verified: the clean base is readable). The reset is checked: a `% ` line in its answer (without the reset the session is still a copy of running, so the render would be a merge) raises before anything is read or pasted, the session is aborted, and the device's review ends refused (`device_refused`) without a rendered configuration *(audit L-11)* | `configure private` + `load override terminal` + `show \| display set` + `rollback 0` (verified on vJunos-switch) | a plain `configure`, the lines, `show configuration` (the target buffer holds exactly them; verified), `abort` |
 | Display diff | `show session-config diffs` | `show \| compare` | the target buffer (`show configuration`) for additions; removals from §3 (`show configuration changes diff` shows a merge as a full replacement and misleads; verified) *(review S7)* |
 | Validate | any `% ` line while loading rejects | `commit check` **only at apply time**, never in a preview (it confirms anybody's pending change) *(review S5)* | any non-warning `% ` line while entering rejects |
 | No-op | `would_be == before` and no removals: nothing is armed *(review S7)* | same | same |
+| Reviewed? (apply only) | the would-be text goes to the service's `accept` before arming; refused → `abort`, nothing armed *(audit L-14)* | the same before `commit check`; refused → `rollback 0` | the same before `commit confirmed`; refused → `abort`, nothing held |
 | Arm | `commit timer HH:MM:SS` | `commit confirmed <min> comment <name>` | `commit confirmed minutes <N>` on the kept session; armed evidence: `Client: commit-confirm` in `show configuration sessions detail` from the fresh connection *(review M6)* |
 | Ours? | `Session with pending commit timer: <name>` | commit entry 0 comment = name and `rollback pending` | `Client: commit-confirm` and this process holds the arming session |
 | Confirm (fresh connection first) | `configure session <name> commit`, then `write memory` (it also saves the student's other unsaved changes: said in the review) | `commit check` (confirms; the shared candidate untouched) | `commit` on the held session |
@@ -138,7 +139,10 @@ conflict is never resolved by the whole-configuration replacement.
   store update** as the device's `applied`/`verified` outcome, both in the settle path and in the restart
   recheck; nothing is written to the ledger for `rolled_back`, `failed` or `unchanged`;
 - an `uncertain` device keeps a *pending* ledger entry (the persisted `added`) that blocks the next review
-  of that device until a read-back resolves it (present → owned; absent → dropped);
+  of that device until a read-back resolves it (present → owned; absent → dropped). The read-back is taken
+  only when nothing waits for confirmation on the device: while a timer runs (this manager's own trial left
+  `uncertain`, or anybody's) the running configuration is the would-be one, so the entry is kept until the
+  device has decided;
 - a stale owned container kept because a manual child sits under it is its own reported state
   (`kept_manual`), not a verification failure.
 
@@ -164,11 +168,25 @@ idempotent by `request_id`. Flow, mirroring `restore.py`:
    arming, and the pre-arm steps are bounded *(review O1)*): reconnect, take `before` again and compare its
    digest with the review's (drift refuses the device: "the configuration changed since you reviewed it"),
    stage removals and candidate, read `would_be`, check `added`/`removed` against the review's, persist the
-   pre-arm ledger fields, arm (or record a no-op without arming);
+   pre-arm ledger fields, arm (or record a no-op without arming). The check happens inside the transaction:
+   the driver hands the would-be text to the service's `accept` before `commit timer` / `commit check` /
+   `commit confirmed`, and a digest unlike the review's aborts the session unarmed (`drifted`: "the
+   configuration the device would run differs from the reviewed one"), so an unreviewed change never runs for
+   the confirmation window;
 4. settle as the restore does: fresh connection, confirm only under our name, read back, `rolled_back` only
    when the `before` snapshot is read back, otherwise `uncertain`; IOS XR confirms on the held session; a
    manager restart marks in-flight devices `interrupted` and rechecks them at start (stages `connecting`,
-   `applying`, `confirming`);
+   `applying`, `confirming`) on a thread of its own, never the single apply worker; the job records the devices
+   still to read back (`rechecking`), which holds that lab only (no review or apply of it meanwhile, other labs
+   stay free) and survives another restart; `operation_busy` reads `rechecking` for the named lab only, so
+   backups, restores, Git saves, imports and device and topology edits of that lab wait too, and
+   `LabOperations.guard` asks `design_rechecking` for the lab it names, so Deploy, Destroy, Restart device and
+   the other lab operations, map and lab-setting saves of that lab are refused (a device the manager restarted
+   itself would decide the read-back's `rolled_back` or `uncertain`); *Start fresh* and a change of the VM
+   connection (also the setup seed's prefill) wait while any job has `rechecking`, with the words a restore's
+   read-back gives there; checks that name no lab (background discovery, a lab operation that names no lab
+   such as creating one) are not held; a read-back that
+   fails inside the manager records the device `uncertain` with a pending ledger entry, never "not changed";
 5. verification: semantic read-back (every `desired` statement present, every stale statement and every
    removed ancestor gone, ordered objects in order), the ledger written with the outcome (§3), then
    control-plane evidence where the plan expects it (OSPF neighbours, BGP sessions, IS-IS adjacencies as
@@ -258,11 +276,14 @@ Rules and fixes that came out of the runs in `evidence/live-apply-*.md`; each ha
 - **IOS XR negations.** `show configuration merge` never prints `no shutdown` or `no management enable`: a port's
   `shutdown` that vanishes under an interface the design configures is an expected change, and a typed
   negation in the desired set (the target buffer echoes it) is verified as the absence of its positive form,
-  both in the read-back and in the recovery loop's "matches the reviewed result" test.
+  in the read-back, in the recovery loop's "matches the reviewed result" test and in the next review's
+  read-back of a pending ledger entry.
 - **IOS XR held session.** The driver's client entry point keeps the arming connection in its own `_HELD`
   table under the design's session name and returns `held: True`; the service closes every other connection
   and never that one. After a manager restart nobody can confirm the trial: the recheck keeps the persisted
   deadline and waits for the device's own timer before reading the node back, instead of one immediate pass.
+  That wait (up to the 30-minute maximum) runs off the apply worker: an apply queued behind it would make the
+  Runner refuse every backup and restore on every lab.
 - **IOS XR refuses a BGP AS change in one commit** ("BGP is still in process of unconfiguration for instance
   default"): the apply fails cleanly with the device's own `!!%` reasons appended (`show configuration failed`,
   reasons only, never the statements); the identity change is two applies (drop the module, then add it with
@@ -289,7 +310,9 @@ Three must-fix and six should-fix findings, all applied and pinned:
   device does not have yet", "something it removes is still in use", else "the device refused the commit on
   semantic grounds"), never the device's text;
 - a pending ledger entry (an `uncertain` outcome) is settled by the next review's read-back (`_resolve_pending`:
-  desired present → the added statements become owned; absent → dropped), so a device is never blocked for good;
+  desired present → the added statements become owned; absent → dropped; asked only once no change waits for
+  confirmation on the device, and with IOS XR typed negations judged as the absence of their positive form), so a
+  device is never blocked for good;
 - a plan is applied only while it is the plan of the lab's current design and topology (`_current_plan` at review
   and at submit: intent revision and topology digest), and the page disables *Apply* for a stale plan;
 - a change armed without the review's confirmation of what was staged (a lost session, a restart before the arming

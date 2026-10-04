@@ -50,7 +50,7 @@ GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.30.59 — guided setup
+Containerlab Node Manager 1.30.60 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -129,7 +129,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The installer ends with `Manager 1.30.59: running; HTTP and version checks passed.`
+The installer ends with `Manager 1.30.60: running; HTTP and version checks passed.`
 and the local address, then exits to the shell (exit code 0); it does not loop back
 to the Setup menu after a successful path. A failed or cancelled step keeps
 today's behaviour instead: completed work stays in place, the affected phase's
@@ -190,6 +190,54 @@ rebuild:
 ```bash
 sudo bash "$HOME/projects/clab-manager/deploy/recreate-manager.sh"
 ```
+
+## Opening the manager by a name
+
+The manager has no login, so it refuses any request whose address-bar name an
+outside DNS server could control: otherwise a web page on such a name could
+re-point it at the VM (DNS rebinding) and act through a student's browser. It
+answers without any setting to:
+
+- an IPv4 address, for example `http://192.0.2.10:8081` (an IPv6 address such as
+  `http://[fd00::10]:8081` passes the name check too, but the manager listens on IPv4
+  only unless `UI_BIND` in the same settings file below is set to an IPv6 address such
+  as `::`, so on a default installation that address is refused at the socket);
+- `localhost`;
+- a single-label name such as `http://clab-vm:8081` (answered on your own
+  network; an internet DNS server cannot answer the bare name, but see the
+  search-suffix residual below);
+- a `.local` name such as `http://clab-vm.local:8081` (mDNS on your own network,
+  never an internet DNS server).
+
+Any other name, for example `manager.example.edu` or the name of a reverse proxy
+in front of the manager, shows *This manager does not answer to the name in the
+address bar* until it is listed in `clab-backup-ui/.env` (an installation that
+runs a prepared release image with `deploy/compose.image.yml` reads
+`deploy/image.env` instead, and the setting goes there):
+
+```text
+UI_ALLOWED_HOSTS=manager.example.edu,clab-vm.lab.example
+```
+
+Names are separated by commas, case does not matter and a port is ignored;
+write names only (no `http://`, no wildcards). Then reload the manager with
+`recreate-manager.sh` as above; it picks the right settings file for either
+installation. `X-Forwarded-Host` is never trusted: a reverse
+proxy must pass the name the browser used as the `Host` header, and that name is
+the one to list.
+
+What the default does not cover: single-label and `.local` names are answered
+by LLMNR, NetBIOS or mDNS on the network the *browser* is on, which need not be
+the VM's network (for example café or home Wi-Fi with a VPN or SSH tunnel to the
+VM). A single-label name can also be answered by DNS: the operating system's
+resolver appends the DNS search suffixes it was given (by DHCP or a VPN) and asks
+its configured DNS server for `name.<suffix>`, so whoever controls a name under
+such a suffix, or the DNS server of a hostile network the browser is on, can
+answer it. Another machine or server that answers such a name can do so first with
+its own page and then with the manager's address, and the manager cannot tell
+that page from its own. Where students reach the manager from networks you do not control,
+prefer a protected path to it (an authenticated reverse proxy whose name is
+listed above) over exposing the manager's port to them directly.
 
 ## Git setup and recovery
 
@@ -276,7 +324,9 @@ including the `~/.vscode-server` ownership fix.
 
 The final terminal checks verify the local manager. On your workstation:
 
-1. Open `http://VM_ADDRESS:8081` (or the configured port). The VM connection
+1. Open `http://VM_ADDRESS:8081` (or the configured port), using the VM's IP
+   address; a DNS name works only as described in
+   [Opening the manager by a name](#opening-the-manager-by-a-name). The VM connection
    dialog opens on its own when no connection exists: use `clab-discovery` and the
    password created during setup. After the first successful connection saves its
    fingerprint, reopen **Manager ▾ › VM connection…** and compare it with the VM
@@ -376,8 +426,16 @@ this needs no extra password) and retries the VM prerequisites phase as soon as
 the lock clears, or after 900 seconds, whichever comes first. It optionally pauses
 the `apt-daily` / `apt-daily-upgrade` **timers** for the wait — only preventing a
 *future* scheduled run from starting, never touching the `unattended-upgrades`
-*service*, never killing a process and never deleting a lock file — and always
-restores exactly the timers it paused, including when you cancel with Ctrl+C.
+*service*, never killing a process and never deleting a lock file. It starts
+exactly the timers it paused again when the lock is released, when the wait times
+out, when you cancel with Ctrl+C, when the terminal hangs up (a dropped SSH
+session) or when the process is terminated. A single Ctrl+C, hangup or terminate
+is covered; a signal repeated without pause (a held-down Ctrl+C) can still cut the
+restore short. It cannot cover a kill that no program can catch (`SIGKILL`, which
+includes the kernel's out-of-memory kill), `SIGQUIT` (which the wait does not
+handle), a crash or power loss of the VM, or a `systemctl start` that itself
+fails: a timer left stopped that way is only stopped, not disabled, and starts
+again at the next boot.
 Before showing the menu again, it re-checks the lock: if it is already free, the
 step just retries. The printed command also works standalone, from any terminal on
 the VM:
@@ -388,7 +446,7 @@ sudo python3 "$HOME/projects/clab-manager/deploy/apt_lock.py" --show   # who hol
 ```
 
 It exits 0 once released, 1 on a timeout (`--timeout SECONDS`, default 900), and
-130 on Ctrl+C.
+130 when cancelled (Ctrl+C, hangup or terminate).
 
 **After a snapshot rollback.** Rolling a VM back to a snapshot taken shortly after the
 Ubuntu installation restores a system whose own `unattended-upgrades` run has not
@@ -398,6 +456,17 @@ Ubuntu lets the running upgrade finish before it shuts down), then start the ins
 again. Every step the installer completed is kept, as with choice 3. The installer and
 `apt_lock.py` only give that advice: neither restarts the VM, stops the service, kills
 the process or deletes a lock file.
+
+## One installer at a time
+
+A VM runs one changing installer at a time, plain or full-screen, from any account: a second one
+stops and says another installer run is active. The lock is the file
+`/run/lock/clab-node-manager-installer.lock` (`/tmp` when `/run/lock` is not writable), which the
+installer never follows as a symbolic link. If something other than a regular file occupies that
+name, or it cannot be opened, the installer changes nothing and prints the exact
+`sudo rm -f <path>` command that clears it; run that and start the installer again. It is not
+APT's lock (see [Recovering from a package lock](#recovering-from-a-package-lock)).
+Details: [installer lock](installer-tui/README.md#the-installer-lock).
 
 ## lazydocker
 

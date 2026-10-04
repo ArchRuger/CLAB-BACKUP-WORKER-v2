@@ -13,7 +13,10 @@ Related: [GIT-PROGRESS.md](GIT-PROGRESS.md) (save locations and *Apply to runnin
 
 *Apply to running lab* maps a saved state to a running node by **exact node name and platform**,
 and the node name the manager stores is the full container name, `clab-<labname>-<node>`. So the
-identity of every saved state is `clab-<labname>-<node>` per node. Two rules follow:
+identity of every saved state is `clab-<labname>-<node>` per node. (That is containerlab's default
+`prefix`; a topology that sets `prefix: __lab-name` has containers named `<labname>-<node>` and
+one that sets `prefix: ""` has the bare node name, and the manager stores whichever name
+containerlab gives.) Two rules follow:
 
 1. **Ship the exact topology.** Build your saved states on the same topology file the student
    deploys — same containerlab `name:` and same node names. If your build box uses
@@ -97,9 +100,15 @@ On your build box, once per lab:
 5. Each `snapshot` lists the files it saved and asks before it uploads, because the manager uploads a
    save only after a review; `--yes` states that review for scripted use. Answering no keeps the state
    on the lab VM only (it goes up with the next upload of the repository). Either way the lab is
-   pointed back at `work`. If an upload fails, the tool stops and says that the lab still saves to
-   `reference/<state>`: finish that save under Progress › Recent saves, then run
-   `scaffold-lab.py init <lab-slug>` again before the student saves.
+   pointed back at `work`. If the save cannot start, times out, cannot be set aside or the upload fails,
+   the tool tries to point the lab back at `work` and says what happened: either "rebound to
+   `<lab-slug>/work`", or that the lab still saves to `reference/<state>` (a save that is still pending
+   refuses the folder change). In that case finish that save under Progress › Recent saves, then run
+   `scaffold-lab.py init <lab-slug>` again before the student saves. If the manager stops answering
+   (a restart mid-request, a reset or a timeout), the tool exits with "Cannot reach the manager" and the
+   same account of where the lab saves; when the lost answer belonged to a folder change it says the lab
+   **may** still save to `reference/<state>`, because the change may have happened. The tool talks to the
+   manager directly and ignores `http_proxy`.
 
 The student then applies `reference/start` to begin, works in `work`, applies `reference/solution`
 to check, and applies `reference/broken-01` to practise recovery — all without a reboot and

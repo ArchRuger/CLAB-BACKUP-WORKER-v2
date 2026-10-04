@@ -51,6 +51,9 @@ PUBLIC_GENERATION = ('id', 'lab_id', 'created', 'started', 'finished', 'status',
                      'modules', 'families', 'nodes', 'blocked', 'notes', 'warnings', 'errors', 'artifacts',
                      'compatibility', 'ledger', 'renumbering', 'collision_fixes', 'overlaps', 'duration',
                      'plan_digest', 'passes', 'label')
+# What a design export's manifest named every lab before a loop variable stopped overwriting the lab name: kept so a
+# save bound to such a manifest still publishes the bytes it was bound to (frozen metadata is never relabelled).
+LEGACY_LAB_NAME = 'mapping.json'
 NO_TOPOLOGY = ('This lab has no topology file in the manager, so nothing can be designed for it. Add the '
                'topology under Advanced › Update topology file… first.')
 MODULE_FEATURES = {'ospf': ('ospfv2',), 'bgp': ('bgp',), 'isis': ('isis',), 'eigrp': ('eigrp',), 'ripv2': ('ripv2',),
@@ -335,9 +338,10 @@ class NetworkDesign:
         try:
             if not self.update(lab_id, generation_id, status='running', started=now(), message='Generating the plan'): return
             result = self._generate(snapshot, stop)
-            if not self._finish(lab_id, generation_id, snapshot['intent'].get('revision', ''), result): return
-            self.store.event('design.generated', 'Plan generation finished: ' + str(result['status']), lab_id=lab_id, job_id=generation_id,
-                             level='info' if result['status'] == 'succeeded' else 'error')
+            status = self._finish(lab_id, generation_id, snapshot['intent'].get('revision', ''), result)
+            if not status: return
+            self.store.event('design.generated', 'Plan generation finished: ' + str(status), lab_id=lab_id, job_id=generation_id,
+                             level='info' if status == 'succeeded' else 'error')
         except Exception:
             message = 'Plan generation failed inside the manager. Check the manager log and generate again.'
             self.update(lab_id, generation_id, status='failed', finished=now(), message=message, errors=[message], duration=round(time.monotonic() - started, 2))
@@ -347,7 +351,12 @@ class NetworkDesign:
     def _finish(self, lab_id, generation_id, revision, result):
         """Record the outcome and, for a successful plan, write its allocations into the intent's ledger, in one
         locked step (so a Renumber cannot slip in between and be undone). The ledger is written only when the
-        design is still the one the plan was made from. Returns False when the record is gone."""
+        design is still the one the plan was made from. Returns the recorded status, or None when the record is gone.
+
+        A plan is reported generated only once that is saved: when the save fails, the record and the ledger go back to
+        what was saved, the record says failed and the plan's files are removed (a failed save leaves the state file as
+        it was, so nothing on disk names them). Any other outcome keeps the background-job rule: memory is right and
+        the next save persists it."""
         with self.store.lock:
             lab = self.store.lab(lab_id)
             generation = next((g for g in (lab or {}).get('network_generations') or [] if g['id'] == generation_id), None)
@@ -355,14 +364,27 @@ class NetworkDesign:
                 # The lab (or the record) went away while the plan was being made: its files go too.
                 shutil.rmtree(self.root / lab_id / generation_id, ignore_errors=True)
                 if lab is None: shutil.rmtree(self.root / lab_id, ignore_errors=True)
-                return False
-            generation.update(result)
+                return None
+            before = copy.deepcopy(generation)
             intent = lab.get('network_design')
+            allocations = copy.deepcopy(intent.get('allocations')) if intent and 'allocations' in intent else None
+            generation.update(result)
             if result.get('status') == 'succeeded' and intent and intent.get('revision') == revision and intent.get('allocations') != result.get('ledger'):
                 intent['allocations'] = copy.deepcopy(result.get('ledger') or {})
             try: self.store.save()
-            except OSError: pass
-            return True
+            except OSError:
+                if result.get('status') != 'succeeded': return generation['status']
+                message = 'The plan was generated but could not be saved (check free space on the manager storage). Generate it again.'
+                generation.clear(); generation.update(before, status='failed', finished=result.get('finished') or now(), message=message, errors=[message],
+                                                      duration=result.get('duration'))
+                if intent is not None:
+                    if allocations is None: intent.pop('allocations', None)
+                    else: intent['allocations'] = allocations
+                shutil.rmtree(self.root / lab_id / generation_id, ignore_errors=True)
+                self.store.event('design.unsaved', 'Plan generated but its record could not be saved; reported failed and its files removed', lab_id=lab_id, job_id=generation_id, level='error')
+                try: self.store.save()
+                except OSError: pass
+            return generation['status']
 
     def _run_engine(self, topology, stop):
         self.work.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -403,6 +425,10 @@ class NetworkDesign:
             run = self._run_engine(built['topology'], stop); passes = 1; workdirs.append(run.get('workdir'))
             if run['ok']:
                 collisions = adapter.collisions(run['transformed'], built['link_keys'], pinned)
+                vlans = [c for c in collisions if c.get('vlan')]
+                if vlans:   # the engine gives a VLAN link its VLAN's subnet whatever is pinned on it: no second pass can move it
+                    return dict(common, status='failed', finished=now(), passes=passes, message='A VLAN subnet overlaps a fixed link prefix. Give the VLAN or that link a different prefix, or clear the allocation ledger.',
+                                errors=[c['key'] + ' (' + c['family'] + ', VLAN ' + c['vlan'] + ') collides with ' + c['with'] for c in vlans[:20]], duration=round(time.monotonic() - started, 2))
                 if collisions and not stop.is_set():
                     fixes = adapter.fix_collisions(run['transformed'], built['link_keys'], pinned, intent.get('addressing') or {}, avoid=[n for _, n in management])
                     unfixed = [c['key'] for c in collisions if c['family'] not in (fixes.get(c['key']) or {})]
@@ -465,11 +491,15 @@ class NetworkDesign:
                 _write(node_dir / ('%02d-%s' % (index, module)), text_)
         return folder
 
-    def design_snapshot(self, lab, generation, lab_name=None):
+    def design_snapshot(self, lab, generation, lab_name=None, bound=None):
         """The reviewed export set of one plan for the student's Git save (`git_progress`, kind `design`): the intent,
         the plan, the netlab topology, the endpoint mapping and every generated file, base64 like a capture, with a
         manifest that names them generated artifacts. Never a backup: no node rows, no restore artifact, so the
-        restore lists such a version as view and download only."""
+        restore lists such a version as view and download only.
+
+        `bound` is the digest a pending save recorded when it was created. A save bound by a manager whose manifest
+        named every lab LEGACY_LAB_NAME gets those exact bytes back, so it completes as it was bound instead of failing
+        as changed; any other digest gets the current form (and the caller's changed-plan guard)."""
         if generation.get('status') != 'succeeded': raise ValueError('Only a generated plan can be exported.')
         folder = self.folder(lab['id'], generation['id'])
         files, rows, total = {}, [], 0
@@ -490,10 +520,10 @@ class NetworkDesign:
         name = lab_name if lab_name is not None else lab.get('name', '')   # the job's frozen name: a renamed lab does not change a pending export
         document = {'containerlab_node_manager': {'type': 'network-intent', 'exported': stamp, 'lab': name, 'generation': generation['id']}, **intent}
         put('network-intent.yml', yaml.safe_dump(document, sort_keys=False, allow_unicode=True).encode(), kind='intent')
-        for name, kind in (('plan.json', 'plan'), ('topology.yml', 'topology'), ('mapping.json', 'mapping')):
-            try: raw = (folder / name).read_bytes()
+        for fname, kind in (('plan.json', 'plan'), ('topology.yml', 'topology'), ('mapping.json', 'mapping')):
+            try: raw = (folder / fname).read_bytes()
             except OSError: raise ValueError('A file of this plan is missing; generate the plan again.')
-            put(name, raw, kind=kind)
+            put(fname, raw, kind=kind)
         for node, entries in sorted((generation.get('artifacts') or {}).items()):
             if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,199}', node): raise ValueError('A device name of this plan cannot be exported.')
             for index, entry in enumerate(entries):
@@ -508,7 +538,11 @@ class NetworkDesign:
                     'topology_digest': generation.get('topology_digest', ''), 'engine_version': generation.get('engine_version', ''),
                     'generated_at': generation.get('finished') or generation.get('created', ''), 'modules': list(generation.get('modules') or []),
                     'devices': sorted({r['device'] for r in rows if r.get('device')}), 'node_names': [], 'restore_capable_nodes': 0, 'files': rows}
-        return {'manifest': manifest, 'files': files}
+        snapshot = {'manifest': manifest, 'files': files}
+        if bound and digest(snapshot) != bound:
+            legacy = {'manifest': dict(manifest, lab_name=LEGACY_LAB_NAME), 'files': files}
+            if digest(legacy) == bound: return legacy
+        return snapshot
 
     def forget_lab(self, lab_id):
         """Remove a removed lab's generated plans (plain-text copies of its intent and configuration)."""

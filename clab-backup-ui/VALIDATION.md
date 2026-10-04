@@ -1,3 +1,71 @@
+# Whole-codebase audit fixes (AUDIT-2026-10-03) — 1.30.60
+
+What was actually run, on dev1 (isolated development VM), 2026-10-03 and 2026-10-04, branch
+`worker-a/audit-fixes-2026-10-03`. The audit record and the per-finding disposition are in
+`docs/technical-audit/WHOLE-CODEBASE-AUDIT-2026-10-03.md`. **No VM deployment and no live-device validation was done
+for this release**: dev1 still runs 1.30.59, and every device, helper, Docker and capture fact below rests on unit
+tests with fakes, the fixture manager, or reading the code.
+
+## How the work was done
+
+- Audit (static): 14 reviewers (7 Sonnet 5.5, 7 Opus 5.5) and 14 Opus 5.5 verifiers on `main` at `938bb5d`; 62 findings
+  survived, 1 was refuted.
+- Fixes: four waves of file-disjoint packages in isolated Git worktrees (51, 30, 10 and 19 agents; implementers
+  Sonnet 5.5 or Opus 5.5 by risk, every reviewer Opus 5.5; routes read from the agent transcripts for waves 1 and 2).
+  Each fix was written test-first, and an independent reviewer put the pre-fix code back to confirm the regression
+  test fails without the fix, with up to two repair rounds. The lead integrated each wave by squash merge and applied
+  the cross-package pieces.
+
+## Static and unit
+
+- Baseline on `938bb5d` (1.30.59): Python 2016 OK (2 skipped), Node 427 pass.
+- On the final code before the marker move (`a7a218d` plus one test-expectation commit): Python `unittest discover`
+  → 2223 tests OK (2 skipped); `node --test tests/*.js` → 503 pass, 0 fail; `node --check` on every
+  `app/static/*.js`; system-Python `test_install_*.py` 319 OK (1 skipped) and the fifteen deploy-script test files of
+  the CI stdlib stage; `verify-release.py` OK; `check_links.py` 252 files, 0 problems; `git diff --check` clean;
+  `bash -n deploy/*.sh` and `sh -n deploy/clab-manager-gateway` clean; `node build.mjs --check` (132 files) OK.
+  New test files `test_gateway_whitelist.py` and `test_terminal_ui.js` are registered in `release-check.yml`; every
+  test file except the opt-in `test_eos_ssh.py` is named there.
+- The Textual installer stage (`test_install_tui_app.py`, `INSTALLER_TUI_REQUIRED=1`, a venv from the hashed lock)
+  was reproduced locally by the CI package's agent and by a reviewer (118 OK); not rerun by the lead.
+- After `set-release.py 1.30.60`: `verify-release.py` OK (source and documentation at 1.30.60); release-consistency
+  tests OK; full Python 2223 OK (2 skipped); Node 503 pass; `node build.mjs --check` OK; link check 0 problems.
+
+## Whole-branch verification (on `a98a2b0`, before the last fix wave)
+
+- Five Opus review lenses (security boundary, state and concurrency, device transactions, UI contract, tests/CI/docs)
+  and a closure check of all 62 findings: 41 closed, 20 closed with a stated residual, 1 partial (M-2). They found
+  two major defects (a kept save's commit reused by an unchanged save was not named in the upload review; the design
+  read-back banner opened a dialog inside a hidden panel) and about twenty minor ones. The last wave fixed both majors
+  and most minors; each package of that wave was reviewed, **but the whole-branch lenses and the closure check were
+  not rerun on the final code**.
+- A raw-socket probe of the Host check on a real uvicorn (scratch data, loopback): missing, repeated, malformed,
+  userinfo, trailing-dot, non-ASCII and outside-DNS Hosts refused; WebSocket upgrades with a foreign Host refused.
+
+## Fixture browser (Playwright, `docs/redesign/tools/fixture_manager.py`, fresh data), on `a98a2b0`
+
+- `verify_after.py` 98/98 at three viewports; `check_ui001`, `002a`, `002b`, `003`, `003b`, `004` and the other
+  passing `check_ui*` tools; `check_design_ui.py` 29/29; `check_design_poll_retry.py` 9/9; `uiux_email_checks.py`,
+  `post_save_checks.py` 21/21, `check_lab_builder_yaml.py` 38/39 (1 skipped by the tool).
+- Five tools failed identically on `938bb5d` (stale expectations); the last wave repaired them and its agent ran each
+  to its end on the fixture. They were not rerun on the final integrated code.
+- Manual probes (some states mocked with `page.route` or a fault-injecting fixture wrapper): Host refusal page and
+  WebSocket refusal, a second different failure showing after the first notice was closed, *Try again*, Test login
+  wording, the Save progress label dialog and review with exactly one `{push:true, reviewed:true}`, earlier-plan file
+  views, the plan-load failure card. **Not checked in a browser**: the fixed design read-back banner (unit-tested
+  only), the restart read-back states, a real apply.
+
+## Not run
+
+- CI: the first run on PR #69 (`861362c`) failed in `test_install_manager.py`: the suite pinned the simulated account
+  to uid 1000, which matched this VM but not the runner's 1001, so the lock's new owner check (L-40) took the
+  foreign-owner branch. The test now simulates the real non-root uid; see the pull request for the run on that commit.
+- The capture smoke test (`deploy/capture/smoke.py`) runs only in CI; it is what proves the pinned viewer hashes and
+  the per-session VNC password against the real image.
+- No dev1 upgrade, no helper refresh, no health check, no live restore, design apply, Test login or capture session
+  on 1.30.60. The acceptance lab was rebuilt on 2026-10-04 without its XRv9k node (ptx1, sw1, ceos1, host1) on the
+  1.30.59 manager; that is lab housekeeping, not validation of this release.
+
 # Ui/Ux Changes email (UIUX-EMAIL-2026-10-03) — 1.30.59
 
 What was actually run, on dev1 (isolated development VM), 2026-10-03, branch `worker-a/uiux-email-2026-10-03`.

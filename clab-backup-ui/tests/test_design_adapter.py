@@ -389,6 +389,18 @@ topology:
         self.assertEqual(built['link_keys'], [K3, K1], 'bundles are emitted after the plain links, in key order')
         self.assertIn(K2, built['mapping'])
 
+    def test_a_member_that_is_a_bundle_or_is_claimed_twice_is_refused_never_dropped(self):
+        # Audit 2026-10-03 L-17: validation refuses these; a design stored before that check never plans with the links silently missing.
+        nodes = parse_definition(self.TWO.encode())['nodes']
+        K1, K2, K3 = 'r1:eth1--r2:ge-0/0/0', 'r1:eth2--r2:ge-0/0/1', 'r1:eth3--r2:ge-0/0/2'
+        for links, fragment in (({K1: {'lag': {'members': [K2]}}, K2: {'lag': {'members': [K1]}}}, 'carries an aggregation of its own'),
+                                ({K1: {'lag': {'members': [K2]}}, K2: {'lag': {'members': [K3]}}}, 'carries an aggregation of its own'),
+                                ({K1: {'lag': {'members': [K3]}}, K2: {'lag': {'members': [K3]}}}, 'member of two aggregations')):
+            intent = dict(di.empty_intent(), modules=['lag'], links=links)
+            with self.assertRaises(da.AdapterError) as caught:
+                da.build(self.TWO, nodes, intent, profile_for)
+            self.assertIn(fragment, str(caught.exception))
+
 
 class BuildLedgerAndOverridesTests(DesignAdapterTestCase):
     def setUp(self):
@@ -611,6 +623,66 @@ class VlanSegmentOverlapTests(DesignAdapterTestCase):
         self.assertEqual(da.overlaps(other), [{'family': 'ipv4', 'a': 'link 1', 'b': 'link 2'}], 'two VLANs on one subnet still overlap')
         plain = {'links': [dict(red, linkindex=1), {'prefix': {'ipv4': '172.16.0.0/24'}, 'linkindex': 2}], 'nodes': {}}
         self.assertEqual(len(da.overlaps(plain)), 1, 'a plain link on the VLAN subnet overlaps it')
+
+    def test_a_trunk_whose_native_vlan_is_red_is_part_of_the_red_segment(self):
+        # The pinned engine copies the VLAN prefix onto access and native links alike (netsim vlan.py set_link_vlan_prefix).
+        transformed = {'links': [{'prefix': {'ipv4': '172.16.0.0/24'}, 'vlan': {'access': 'red'}, 'linkindex': 1},
+                                 {'prefix': {'ipv4': '172.16.0.0/24'}, 'vlan': {'native': 'red', 'trunk': {'red': {}, 'blue': {}}}, 'linkindex': 2}], 'nodes': {}}
+        self.assertEqual(da.overlaps(transformed), [])
+
+    def test_one_vlan_name_on_two_different_subnets_still_overlaps(self):
+        transformed = {'links': [{'prefix': {'ipv4': '172.16.0.0/24'}, 'vlan': {'access': 'red'}, 'linkindex': 1},
+                                 {'prefix': {'ipv4': '172.16.0.0/25'}, 'vlan': {'access': 'red'}, 'linkindex': 2}], 'nodes': {}}
+        self.assertEqual(da.overlaps(transformed), [{'family': 'ipv4', 'a': 'link 1', 'b': 'link 2'}])
+
+
+class VlanSegmentCollisionTests(DesignAdapterTestCase):
+    """Audit 2026-10-03 M-7: the engine gives every access (and native) link of a VLAN the VLAN's subnet and
+    overwrites any prefix pinned on such a link, so two hosts on one VLAN are one segment, not a collision, and a
+    VLAN link's prefix can never be moved by a pin."""
+    RED = {'ipv4': '172.16.0.0/24', 'ipv6': '2001:db8:2::/64'}
+    POOLS = {'lan': {'ipv4': '172.16.0.0/16', 'prefix': 24}, 'p2p': {'ipv4': '10.1.0.0/16', 'prefix': 31}, 'loopback': {'ipv4': '10.0.0.0/24'}}
+
+    def test_two_access_links_of_one_vlan_are_not_a_collision(self):
+        transformed = {'links': [{'prefix': dict(self.RED), 'vlan': {'access': 'red'}}, {'prefix': dict(self.RED), 'vlan': {'access': 'red'}},
+                                 {'prefix': {'ipv4': '10.1.0.0/31'}}]}
+        keys = ['h1:eth1--sw:eth1', 'h2:eth1--sw:eth2', 'r2:ge-0/0/0--sw:eth3']
+        self.assertEqual(da.collisions(transformed, keys, {}), [])
+        self.assertEqual(da.fix_collisions(transformed, keys, {}, self.POOLS), {})
+
+    def test_an_access_port_and_a_trunk_with_that_native_vlan_are_not_a_collision(self):
+        transformed = {'links': [{'prefix': dict(self.RED), 'vlan': {'access': 'red'}},
+                                 {'prefix': dict(self.RED), 'vlan': {'native': 'red', 'trunk': {'red': {}, 'blue': {}}}}]}
+        self.assertEqual(da.collisions(transformed, ['k1', 'k2'], {}), [])
+
+    def test_a_vlan_given_only_on_one_link_end_is_still_its_segment(self):
+        transformed = {'links': [{'prefix': dict(self.RED), 'interfaces': [{'node': 'h1'}, {'node': 'sw', 'vlan': {'access': 'red'}}]},
+                                 {'prefix': dict(self.RED), 'interfaces': [{'node': 'h2'}, {'node': 'sw', 'vlan': {'access': 'red'}}]}]}
+        self.assertEqual(da.collisions(transformed, ['k1', 'k2'], {}), [])
+        self.assertEqual(da.overlaps(transformed), [])
+
+    def test_two_vlans_on_one_subnet_still_collide(self):
+        transformed = {'links': [{'prefix': {'ipv4': '172.16.0.0/24'}, 'vlan': {'access': 'red'}}, {'prefix': {'ipv4': '172.16.0.0/24'}, 'vlan': {'access': 'blue'}}]}
+        found = da.collisions(transformed, ['k1', 'k2'], {})
+        self.assertEqual(found, [{'key': 'k2', 'family': 'ipv4', 'prefix': '172.16.0.0/24', 'with': 'k1', 'vlan': 'blue'}])
+        self.assertEqual(da.fix_collisions(transformed, ['k1', 'k2'], {}, self.POOLS), {}, 'the engine owns a VLAN link prefix: no pin can move it')
+
+    def test_a_plain_link_on_a_vlan_subnet_is_the_one_that_moves(self):
+        # k1 sorts first, so before the fix the VLAN link k2 was reported and given a pin the engine then overwrote.
+        transformed = {'links': [{'prefix': {'ipv4': '172.16.0.0/30'}}, {'prefix': {'ipv4': '172.16.0.0/24'}, 'vlan': {'access': 'red'}}]}
+        found = da.collisions(transformed, ['k1', 'k2'], {})
+        self.assertEqual(found, [{'key': 'k1', 'family': 'ipv4', 'prefix': '172.16.0.0/30', 'with': 'k2'}])
+        fixed = da.fix_collisions(transformed, ['k1', 'k2'], {}, {'lan': {'ipv4': '172.16.0.0/16'}})
+        self.assertEqual(list(fixed), ['k1'])
+        self.assertFalse(ipaddress.ip_network(fixed['k1']['ipv4']).overlaps(ipaddress.ip_network('172.16.0.0/24')))
+
+    def test_a_vlan_subnet_over_a_pinned_prefix_is_reported_on_every_vlan_link_and_never_fixed(self):
+        transformed = {'links': [{'prefix': {'ipv4': '172.16.0.0/30'}}, {'prefix': {'ipv4': '172.16.0.0/24'}, 'vlan': {'access': 'red'}},
+                                 {'prefix': {'ipv4': '172.16.0.0/24'}, 'vlan': {'access': 'red'}}]}
+        pinned = {'links': {'k1': {'ipv4': '172.16.0.0/30'}}}
+        found = da.collisions(transformed, ['k1', 'k2', 'k3'], pinned)
+        self.assertEqual([(f['key'], f['with'], f.get('vlan')) for f in found], [('k2', 'k1', 'red'), ('k3', 'k1', 'red')])
+        self.assertEqual(da.fix_collisions(transformed, ['k1', 'k2', 'k3'], pinned, self.POOLS), {})
 
 
 class PlanSummaryTests(DesignAdapterTestCase):

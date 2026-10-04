@@ -22,6 +22,7 @@ import re
 import secrets
 import time
 
+from .design_eos import NOT_REVIEWED   # the driver contract's words for a refused would-be configuration
 from .restore_junos import (CHECK_OK, COMMIT_FAILED, COMMIT_OK, COMMIT_TIMEOUT, CONF, LOAD_ERROR, LOAD_TIMEOUT, OPER,
                             JunosShell, capture_shell, foreign_edits, leave_config, pending_commit, reach_cli, unchanged)
 from .restore_junos import confirm_shell as _restore_confirm_shell
@@ -120,8 +121,9 @@ def render_desired_shell(shell, candidate):
         _abort(shell)
 
 
-def stage_shell(shell, candidate, removals, name, confirm_minutes=5, arm=False):
-    """The merge transaction on an already-open JunosShell (see the module docstring)."""
+def stage_shell(shell, candidate, removals, name, confirm_minutes=5, arm=False, accept=None):
+    """The merge transaction on an already-open JunosShell (see the module docstring); `accept` as in
+    :mod:`design_eos`: asked before `commit check`, so a refused would-be configuration is rolled back unarmed."""
     if not NAME.match(name or ''):
         raise RestoreError('The design session name is not usable.')
     reach_cli(shell)
@@ -144,6 +146,8 @@ def stage_shell(shell, candidate, removals, name, confirm_minutes=5, arm=False):
         if not arm or no_op:
             _abort(shell)
             return {'before': before, 'would_be': would_be, 'diff': diff, 'no_op': no_op, 'armed': False, 'handle': {'session': name}, 'hierarchy': hierarchy}
+        if accept is not None and not accept(would_be):
+            raise RestoreError(NOT_REVIEWED)
         check = shell.run('commit check', COMMIT_TIMEOUT)
         if CHECK_OK not in check:
             raise RestoreError('The node failed the configuration check for the generated configuration; nothing was applied.' + _check_reasons(check))
@@ -196,8 +200,8 @@ def render_desired(client, candidate, **kw):
     return _with_shell(client, lambda shell: render_desired_shell(shell, candidate))
 
 
-def stage(client, candidate, removals, name, confirm_minutes=5, arm=False, **kw):
-    return _with_shell(client, lambda shell: stage_shell(shell, candidate, removals, name, confirm_minutes, arm))
+def stage(client, candidate, removals, name, confirm_minutes=5, arm=False, accept=None, **kw):
+    return _with_shell(client, lambda shell: stage_shell(shell, candidate, removals, name, confirm_minutes, arm, accept))
 
 
 def confirm(client, handle, **kw):

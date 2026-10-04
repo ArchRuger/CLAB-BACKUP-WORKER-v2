@@ -203,6 +203,56 @@ whole `latest/`, `baseline/` and `checkpoints/` layout nests under it, for examp
 manager connects to its own subfolder registration, so saving one lab never rewrites
 another lab's folder.
 
+The labs of one repository still share one branch on the VM, and an upload sends every commit
+below it. So the review before every upload holds across them:
+
+- While another lab of the repository has a save waiting on the VM without a review (or a save
+  whose answer was lost, which may hold a commit), this lab's **Save progress**, design exports,
+  a retry that commits and a folder move with its files are refused. The message names that lab
+  and its save: open it under *Progress*, review and upload it, then try again. Saves of the
+  waiting lab itself are not held up. A save that never reached the VM (its capture was
+  interrupted by a manager restart, or its export stopped before anything was sent to the VM)
+  holds no commit there and holds nothing back.
+- **Keep snapshot only** on that save also lets this lab go ahead, but it is not the same as a
+  review: its commit stays in the checkout on the VM and goes along with the next upload from the
+  repository. The refusal says so.
+- An upload waits the same way. Saves that an older release already stacked on top of each other
+  stay recoverable: a refused upload keeps your review, so after each lab's waiting save was
+  reviewed once, either upload goes through and settles both (the other lab's save then reads
+  *Saved to Git* as well). A retry of a save that has no commit yet only saves on the VM, so it
+  waits only for another lab's save that has a commit: two labs whose saves both lack one (an
+  older release could leave that) do not hold each other back; the first retry reaches its review
+  and the uploads then follow the rule above.
+- **Review before uploading** counts every other save of the repository that the upload may carry
+  along, this lab's and other labs', and says how many belong to other labs. A save kept with
+  **Keep snapshot only** that may have a commit on the VM (one with a commit, or one whose answer
+  was lost or refused after it was sent) is counted and named there too, as *not seen uploaded
+  yet*: also when its lab was disconnected since or changed its device selection, because the save
+  remembers the checkout and VM it was made in, and also when the save under review changed
+  nothing (*No differences*) and only reuses that kept save's commit, which its upload then sends.
+  A kept save that itself changed nothing and only reuses the commit of the save under review is
+  not counted: it holds nothing that review does not show. It stops being counted once an upload is verified to
+  have carried it, or once an upload from the same checkout, remote and branch is verified to have
+  put the checkout's newest commit on the remote: everything on that branch is then on the remote,
+  so nothing of the kept save is left to go along (a save whose publication the VM refused never
+  made a commit, and the VM names only commits it verified, so this is how such a save stops
+  counting). The save itself stays kept; it is not shown as uploaded. The count can be too high (a
+  kept save that never reached a commit, while no such upload happened yet, or one an earlier upload
+  carried before the manager tracked that). It is never too low for a save that remembers its
+  checkout and its VM, as long as the manager still reaches that VM through the same connection
+  (address, port, account and host key). A save that remembers its checkout but not its VM is taken
+  to be on its lab's current VM. A save made before 1.30.37 remembers neither, so only its lab's
+  current connection says where it belongs: while that lab is disconnected the save is not counted
+  anywhere, and if the lab is connected to another repository since, it is counted there instead.
+  Removing a lab from the manager forgets its saves, kept ones included.
+- A folder move whose upload meets another lab's unreviewed save is kept on the VM and uploaded
+  later from *Recent saves*. One whose upload would send a save kept with **Keep snapshot only**
+  along (this lab's or another lab's, counted as above) is kept on the VM as well, with a message
+  that names those saves: its **Review and upload…** under *Recent saves* names them again before
+  anything is uploaded (a move changes no configuration, so the review shows no file differences),
+  and an upload without that review is refused. Once that upload is verified, the kept saves stop
+  being counted as above, so the next move uploads at once again.
+
 ## Everyday buttons
 
 The lab header carries **Save progress** with a small menu (Create checkpoint…, Save on
@@ -217,6 +267,16 @@ saves*, the save window and the commit history. A cancelled or interrupted save 
 label ready to offer again the next time you save; it is only forgotten once the save is actually
 created. A save made before this label was required (or the checkpoint/baseline dialogs, which ask
 for the same label under **What changed?**) falls back to its plain status sentence and date.
+
+When the answer to a save is lost on the way back (a network interruption), saving again with
+the same label and options within ten minutes returns that same save instead of reading the
+devices twice. Once the page shows that save as finished, or after ten minutes, a new save
+always reads the devices afresh: an old save is never reported as *Saved to Git just now*.
+
+The review shows a real line-by-line diff of each changed file. A file longer than 20 000
+lines is compared over its first 20 000 lines only, and a line longer than 4 000 characters is
+shown shortened; the review then says so in the file, and never calls a file that was cut
+short *Identical*. Check such a file with **Open the full saved version** before uploading.
 
 | Action | Result |
 |---|---|
@@ -240,7 +300,7 @@ Gtel-100G-G8032/Working/latest`), frozen at the moment the save is captured — 
 different folder afterwards never rewrites an earlier save's own destination line. Beside it is one
 of four plain states: *saved on this VM*, *waiting for your review*, *uploaded to `<remote>`* or
 *verified on remote* (a save whose commit was carried along by a later upload of the same
-folder). The Details under a save keep the exact checkout path on the VM and the commit.
+folder, or of another lab of the same repository). The Details under a save keep the exact checkout path on the VM and the commit.
 
 <a id="where-this-lab-lives"></a>
 
@@ -272,8 +332,23 @@ registration IDs and folder names.
   `latest/`, `baseline/` and `checkpoints/` file of the old folder is moved in one commit
   and pushed, and the move is recorded as a *Folder move* job with the same retry and push
   handling as a save. A folder move changes no configuration, so it is uploaded on that
-  confirmation (the dialog says so) and has no separate *Review before uploading* step. Earlier versions stay in Git history either way; a pending
-  save has to finish or be dismissed first.
+  confirmation (the dialog says so) and has no separate *Review before uploading* step, unless
+  its upload would also send another lab's unreviewed save or a save kept with **Keep snapshot
+  only**: then it stays on the VM and is uploaded later as described under
+  [Repository layout](#repository-layout). Earlier versions stay in Git history either way; a pending
+  save has to finish or be dismissed first. Everything that can refuse the change (a pending
+  save, a running job, a device selection that no longer matches the lab, another lab using
+  that folder) is checked before the VM retires the old registration, so a refused change
+  leaves the lab saving where it did; once the VM made the change the lab follows it, also
+  when the answer was lost (if the check after it was lost too, choosing the same folder again
+  completes the change; the VM connection must still be the one the lab was connected through).
+  While a lab's repository connection is being changed (this folder change, *Save settings* or a
+  connection by URL), that lab's **Save progress** and design exports wait, and so does every other
+  connection change (*Disconnect* included): they answer *Try again in a moment*. Other labs keep
+  saving. A move that stops before its commit (for example on staged
+  changes) or loses its answer reads *Moving the saved files did not finish — retry it* and
+  is retried from its save window (**Retry the move**); it is only worded as moved once it
+  committed.
 - **New folder…** creates a folder beside the existing ones. It accepts a whole nested
   path such as `Week-04/BGP/Final-State`, so a deep destination like
   `CCNP-SP/Labs/Week-04/BGP/Final-State` is created in one step; the dialog shows the
@@ -342,7 +417,7 @@ not implemented by registering two Linux owners.
 | Immutable captured configurations | Manager `backups/<lab-id>/history/<backup-job-id>`; included in a complete data archive. |
 | Exported configurations and local Git commits | Ben's registered checkout; back it up independently until all intended commits are pushed. |
 | Git credentials | Ben's external credential configuration; provision it again when rebuilding a VM. |
-| Host registration | `/etc/clab-manager/git.json`, written by guided setup and by the manager's folder and connect actions through the helper; retain the root-owned registration when backing up the VM. |
+| Host registration | `/etc/clab-manager/git.json`, written by guided setup and by the manager's folder and connect actions through the helper, each under the lock `git.json.lock` beside it and merged into the file as it is then, so writers running at the same time keep each other's registrations; retain the root-owned registration when backing up the VM. |
 | Host journal and transfer snapshots | `<checkout>/.git/clab-manager/`; retain these with the complete checkout for interrupted-save recovery. |
 
 Back up the whole manager data directory, the registered checkout and its helper
@@ -378,7 +453,10 @@ flowchart TD
 | Manager restarted during a save | Open the recorded job and retry. The coordinator reconciles the recorded operation with the VM journal rather than silently recapturing. |
 | Git authentication expired | Repair Ben's Git login on the VM, then retry the existing push. Changing the VM SSH password does not repair Git credentials. |
 
-Active progress jobs prevent conflicting lab operations. Pending saves also block
+Active progress jobs prevent conflicting lab operations. While the manager reads back the
+devices of a lab after a restart in the middle of a network-design apply, that lab's **Save
+progress**, design exports, retries and folder moves with their files wait, and say so; other
+labs keep saving. Pending saves also block
 actions that would forget or redirect their context, including removing the lab,
 starting fresh, replacing the repository connection and changing the VM identity.
 Password rotation for the same VM/account is allowed so that access can be repaired.
@@ -386,7 +464,8 @@ Password rotation for the same VM/account is allowed so that access can be repai
 To stop pursuing a pending export, choose **Keep snapshot only** and confirm the
 explicit dismissal. It retains the captured backup and any existing Git commit,
 then permits disconnect/removal. This does not unpublish a remote commit or undo
-files already saved to the checkout. A later **Start fresh** still deletes manager
+files already saved to the checkout; a kept commit that was not uploaded goes along
+with the next upload from that checkout, and the review before it names the save. A later **Start fresh** still deletes manager
 backup files after its normal confirmation; Ben's checkout and Git remote remain
 outside manager storage.
 

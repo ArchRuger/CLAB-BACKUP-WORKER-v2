@@ -114,7 +114,7 @@ function mapRenderBar(){
  $('map-undo').disabled=!steady||mapHistory.index<=0;$('map-redo').disabled=!steady||mapHistory.index>=mapHistory.entries.length-1;
  $('map-drawio').disabled=!ready;$('map-drawio').title=mapDirty()?'The export is made from the saved map: save first.':'';
 }
-function mapProblem(message){mapPaused=true;$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem').hidden=false;mapRenderBar();}
+function mapProblem(message){mapPaused=true;$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem').hidden=false;$('map-problem-download').focus();mapRenderBar();}
 function mapDownload(){const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([mapCurrent||mapDoc.annotations],{type:'application/json'}));link.download=mapFileName(mapDoc.name);document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
 async function mapSave(){
  if(!mapDoc||mapSaving||mapPaused||!mapDirty())return false;

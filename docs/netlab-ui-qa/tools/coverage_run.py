@@ -53,6 +53,16 @@ LIVE_APPLY_NOTE = ('needs real devices behind the review: the fixture has no SSH
                     'check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py')
 
 
+# "The design view has loaded" for wait_for_function. The state line is blank, not "Loading…", while the first GET
+# .../design is in flight after a reload or a deep link, so a wait for "no Loading text" returns before the design
+# arrived (designState.view still null) and the assertions after it raced the request. designLoad() sets labId first
+# and loading until the view or an error is in; an outage the page reports (designState.error) also ends the wait.
+# loading ends before the form is drawn when the newest generation succeeded: designLoad() then awaits the plan GET
+# (planLoading, set synchronously and cleared in a finally) and only afterwards calls designRenderAll(), so the DOM
+# is read only once that request has ended too.
+DESIGN_LOADED = '() => typeof designState !== "undefined" && designState.labId !== "" && !designState.loading && !designState.planLoading && (designState.view !== null || !!designState.error)'
+
+
 def reload_design(page):
     """Reload the page on the Network design view: the route is now #view=advanced and the Experimental
     <details> starts closed on every load, so reopen it (that is also what loads the design)."""
@@ -210,7 +220,7 @@ def part1(page, r, base, lab):
     page.wait_for_selector('#tools-view:not([hidden])', timeout=15000)
     no_shortcut = page.locator('#tools-design').count() == 0 and page.locator('#tab-design').count() == 0
     open_design(page)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
     run.check('ND-NAV-003', no_shortcut and page.locator('#design-view').is_visible(),
                'no #tools-design card and no Design tab; Advanced > Experimental > Network design opens #design-view',
                'a Design tab or Tools shortcut still exists, or the Experimental entry did not open #design-view')
@@ -218,13 +228,13 @@ def part1(page, r, base, lab):
     # --- NAV-002: old hash deep link (fresh load) lands on Advanced with Experimental open ----------------
     page.goto(base + '/#lab=' + lab['id'] + '&view=design')
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
     ok = (page.locator('#design-view').is_visible() and page.locator('#tab-advanced[aria-selected="true"]').count() == 1
           and page.locator('#experimental-design[open]').count() == 1 and page.locator('#design-experimental-banner').is_visible())
     m2 = run.mark()
     reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
     reload_hit = bool(run.hit(m2, r'/api/labs/[^/]+/design$'))
     run.check('ND-NAV-002', ok and reload_hit,
                'a fresh load and a reload of the old #lab=<id>&view=design link both land on #design-view inside Advanced (Experimental open, warning visible, route rewritten to view=advanced) and fetch GET .../design',
@@ -293,8 +303,17 @@ def part1(page, r, base, lab):
     box_ospf.dispatch_event('change')
     run.check('ND-STATE-002', 'Unsaved changes' in run.text('#design-state'), 'ticking OSPF marks the state "Unsaved changes"',
                'state did not read Unsaved changes after an edit')
-    run.check('ND-GUIDED-003', page.locator('#design-modules input[name="design-module"]').count() >= 17,
-               '17 module checkboxes rendered (DESIGN_MODULE_LABELS)', 'fewer than 17 module checkboxes found')
+    # The count comes from the data the page is built from: GET .../design `modules` is the capability data's
+    # authoring list (design_intent.AUTHORING_MODULES); retired modules (EIGRP, RIP, VXLAN, EVPN) are not
+    # offered, so a fixed number goes stale with every retirement.
+    _, modules_view = api_call(base, '/api/labs/' + lab['id'] + '/design', 'GET', None)
+    offered = list(modules_view.get('modules') or [])
+    retired = set(modules_view.get('retired') or {})
+    boxes = [b.get_attribute('value') for b in page.locator('#design-modules input[name="design-module"]').all()]
+    run.check('ND-GUIDED-003', bool(offered) and not retired.intersection(offered) and sorted(boxes) == sorted(offered),
+               '%d module checkboxes rendered, exactly the modules GET .../design offers (%s); retired modules (%s) are not among them'
+               % (len(boxes), ', '.join(offered), ', '.join(sorted(retired)) or 'none'),
+               'the rendered module checkboxes %r did not match the modules the design view offers %r (retired: %r)' % (boxes, offered, sorted(retired)))
 
     # --- GUIDED-004: OSPF settings toggle ---------------------------------------------------------------
     run.check('ND-GUIDED-004', page.locator('#design-ospf-settings').is_visible() and page.locator('#design-ospf-area').input_value() == '0.0.0.0',
@@ -772,7 +791,7 @@ def part1(page, r, base, lab):
     status, view = api_call(base, '/api/labs/' + lab_id + '/design', 'PUT', {'intent': intent, 'revision': ''})
     reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
     held_revision = page.evaluate('designState.view.intent.revision')
     # A real second, independent session changes the design (bypassing this page's JS state).
     other_intent = dict(intent); other_intent['label'] = 'changed-by-another-session'
@@ -811,7 +830,7 @@ def part1(page, r, base, lab):
     # --- ERROR-009: invalid JSON in the Advanced editor (client-only) -------------------------------------------
     reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
     page.click('#design-advanced-details summary') if not page.locator('#design-advanced-details').get_attribute('open') else None
     page.fill('#design-advanced', '{not valid json')
     page.locator('#design-advanced').dispatch_event('change')
@@ -881,7 +900,7 @@ def part1(page, r, base, lab):
     page.wait_for_timeout(300)
     reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
     draft_restored = page.locator('input[name="design-module"][value="vlan"]').is_checked()
     run.check('ND-SAVE-003', draft_restored, 'an unsaved draft (VLAN module ticked, not saved) survived a reload and is restored (matching revision)',
                'the unsaved draft was not restored after reload')
@@ -920,7 +939,7 @@ def part1(page, r, base, lab):
     page.unroute(re.compile(r'/api/labs/[^/]+/design$'), fake_engine_unavailable)
     reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
 
     # --- GUIDED-017: focus guard (a focused text field is not overwritten by a background poll/re-render) --------
     page.locator('input[name="design-module"][value="ospf"]').check()
@@ -1008,7 +1027,7 @@ def part2(page, r, base, lab, ospf_lab):
     lab_id = lab['id']
     page.goto(base + '/#lab=' + lab_id + '&view=design')
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
     page.wait_for_function('() => document.querySelectorAll("#design-devices tr").length >= 12', timeout=15000)
 
     # --- GUIDED-008/019/020 continued: Backup-Worker's default role is "host" ------------------------------
@@ -1079,7 +1098,7 @@ def part2(page, r, base, lab, ospf_lab):
     page.wait_for_timeout(300)
     open_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
 
     # --- EXPORT-002..008: Export plan to Git, end to end through the fixture's FakeGit ------------------------
     reason_before = page.get_attribute('#design-export-git', 'title') or ''
@@ -1155,7 +1174,7 @@ def part2_apply(page, r, base, lab):
     lab_id = lab['id']
     page.goto(base + '/#lab=' + lab_id + '&view=design')
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
 
     apply_reason = page.get_attribute('#design-apply', 'title') or ''
     apply_disabled = page.locator('#design-apply').get_attribute('disabled') is not None
@@ -1293,7 +1312,7 @@ def part_a11y_narrow(page, r, base, ospf_lab):
     run = Run(page, r)
     page.goto(base + '/#lab=' + ospf_lab['id'] + '&view=design')
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-    page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+    page.wait_for_function(DESIGN_LOADED, timeout=15000)
     page.click('#design-more-button')
     page.wait_for_timeout(200)
     menu_reasons = page.evaluate("""() => Array.from(document.querySelectorAll('#design-more-menu [role="menuitem"]')).map(b => ({
@@ -1337,7 +1356,7 @@ def part3_interrupted(port, data_dir, r):
             page = browser.new_page(viewport={'width': 1366, 'height': 768})
             page.goto(base + '/#lab=' + lab['id'] + '&view=design')
             page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
-            page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
+            page.wait_for_function(DESIGN_LOADED, timeout=15000)
             box = page.locator('input[name="design-module"][value="bgp"]')
             if not box.is_checked():
                 box.check(); box.dispatch_event('change')

@@ -192,10 +192,12 @@ class LaunchRequest(BaseModel):
 
 
 def expected_container(lab, node):
+    # Imported here, not at module level: the capture session image ships this module without
+    # discovery.py or its dependencies, and only the manager's Captures calls this function.
+    from .discovery import container_name
     short = node.get('definition_node') or node.get('short_name')
     if lab.get('deployment_name') and short:
-        prefix = lab.get('container_prefix', 'clab')
-        return f'{prefix}-{lab["deployment_name"]}-{short}' if prefix else short
+        return container_name(lab.get('container_prefix', 'clab'), lab['deployment_name'], short)
     return node.get('container_name') or node['name']
 
 

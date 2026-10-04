@@ -134,3 +134,87 @@ test('U-09: the device panel says in words why Restart device… or Back up conf
  h.context.captureStatusLine=()=>'Packet capture is not set up on this VM.';assert.equal(h.context.nodeActionNotes(n),'Packet capture is not set up on this VM.');
  assert.match(vm.runInContext('nodeActions({name:"clab-x-r1",short_name:"r1",ssh_ready:true})',h.context),/aria-label="Details for r1"/,'Details is named after the device, not its container (U-19)');
 });
+
+// Audit M-11 follow-up: the readiness monitor skips a lab with no deployment_name, so the drawer must not promise an automatic check there.
+test('M-11: the device drawer promises an automatic login check only for a lab the readiness monitor watches',()=>{
+ const h=appHarness(),auto=/checked automatically/,hand=/Test login \(under Advanced\) checks the saved credentials now\./;
+ const linked=vm.runInContext(`detailsLoginHelp({deployment_name:'clab-x'},{name:'r1',nos_login:{status:'booting'}})`,h.context);
+ assert.match(linked,auto);assert.match(linked,hand);
+ for(const [lab,node] of [[{deployment_name:''},{name:'r1',nos_login:{status:'unmonitored'}}],[{},{name:'r1'}],[{deployment_name:'clab-x'},{name:'r1',nos_login:{status:'unmonitored'}}]]){
+  const text=h.context.detailsLoginHelp(lab,node);
+  assert.doesNotMatch(text,auto,JSON.stringify([lab,node]));assert.equal(text,'Test login (under Advanced) checks the saved credentials now.');
+ }
+ assert.match(h.context.detailsLoginHelp({deployment_name:'clab-x'},{name:'r1'}),auto,'an older payload without nos_login keeps the sentence for a linked lab');
+});
+test('M-11: the open drawer of an inventory-import lab shows the stored message without the automatic-check sentence',()=>{
+ const h=appHarness();
+ const n={name:'r1',short_name:'R1',address:'10.0.0.1',port:22,platform:'arista_ceos',enabled:true,readiness:'Ready',nos_login:{status:'unmonitored',message:'SSH readiness is only monitored for labs linked to a VM deployment.'}};
+ const lab={id:'lab-a',name:'Imported',nodes:[n],profiles:[],defaults:{}};
+ vm.runInContext(`state.labs=[${JSON.stringify(lab)}];activeId='lab-a';detailName='r1';healthState={lab:'lab-a',nodes:[{name:'r1',ssh:${JSON.stringify(n.nos_login)}}]};`,h.context);
+ h.document.getElementById('details-dialog').open=true;
+ h.context.renderDetails();
+ const html=h.document.getElementById('details-status-raw-body').innerHTML;
+ assert.match(html,/<p>SSH readiness is only monitored for labs linked to a VM deployment\.<\/p>/,'the drawer still shows the message it stored');
+ assert.doesNotMatch(html,/checked automatically/);assert.match(html,/Test login \(under Advanced\) checks the saved credentials now\./);
+ lab.deployment_name='clab-x';n.nos_login={status:'booting',message:'Container is running.'};
+ vm.runInContext(`state.labs=[${JSON.stringify(lab)}];healthState={lab:'lab-a',nodes:[{name:'r1',ssh:${JSON.stringify(n.nos_login)}}]};`,h.context);h.context.renderDetails();
+ assert.match(h.document.getElementById('details-status-raw-body').innerHTML,/checked automatically until they accept a login/);
+});
+
+test('adding a lab by files survives blocked sessionStorage in the fallback branch without the router',async()=>{
+ const blocked={getItem(){throw new Error('SecurityError');},setItem(){throw new Error('SecurityError');},removeItem(){throw new Error('SecurityError');}};
+ const h=managementHarness({labs:[],discovery:{configured:true,connected:true,host:{enabled:true}}});
+ h.context.sessionStorage=blocked;h.context.FormData=class{};h.context.notify=()=>{};
+ h.context.api=async()=>({json:async()=>({id:'made'})});
+ let running;h.context.withForm=(form,fn)=>{running=fn();};
+ const setup=h.element('setup-form');
+ setup.onsubmit({preventDefault(){},currentTarget:{},target:{}});await running;
+ assert.equal(h.context.activeId,'made','the new lab is open although the id could not be stored');
+});
+
+// L-10 follow-up: after a restart an interrupted job that still reads devices back holds the lab (409); the page says so.
+test('L-10 follow-up: a restore reading devices back after a restart is shown as running work in the banner and the worker line',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id);
+ const lab={id:'lab',name:'L',nodes:[],profiles:[],defaults:{},deployment:{status:'Running'},nos_readiness:{status:'idle'}};
+ const job=extra=>({id:'rs-r',lab_id:'lab',status:'interrupted',created:'2026-09-16T11:30:00Z',finished:'2026-09-16T11:31:00Z',message:'Manager restarted during a restore. It is checking the devices that were being changed.',...extra});
+ const paint=s=>vm.runInContext(`state=${JSON.stringify({labs:[lab],jobs:[],platforms:{},...s})};activeId='lab';renderLabBanner();renderWorkerState();`,h.context);
+ paint({restore_jobs:[job({rechecking:true})]});
+ assert.equal(get('lab-banner').hidden,false);assert.equal(get('lab-banner-text').textContent,'Checking the devices after a manager restart…');
+ assert.equal(get('lab-banner').className,'banner info','work in progress, not an error');
+ assert.equal(get('lab-banner-detail-text').textContent,job({}).message);
+ assert.equal(get('banner-restore').hidden,false);assert.equal(get('banner-restore').textContent,'View progress');
+ assert.equal(get('banner-dismiss').hidden,true,'running work is never dismissed');
+ assert.equal(get('worker-state').textContent,'Checking devices after a restart…');assert.equal(get('worker-state').hidden,false);
+ // Read back, or stored by an older manager without the field: the finished job it was, with Dismiss and Details.
+ for(const done of [job({rechecking:false}),job({})]){
+  paint({restore_jobs:[done]});
+  assert.equal(get('lab-banner-text').textContent,'Replacing configuration did not finish.');assert.equal(get('banner-dismiss').hidden,false);
+  assert.equal(get('worker-state').hidden,true);
+ }
+ paint({restore_jobs:[{id:'r1',lab_id:'lab',status:'applying',message:'Applying.'}]});
+ assert.equal(get('lab-banner-text').textContent,'Replacing configuration…','a running restore keeps its words');assert.equal(get('worker-state').textContent,'Replacing configuration…');
+ // A design apply's read-back (its `rechecking` lists the devices) holds its lab the same way.
+ paint({design_jobs:[{id:'d1',lab_id:'lab',status:'interrupted',rechecking:['r1'],message:'Manager restarted while the design was being applied.'}]});
+ assert.equal(get('lab-banner-text').textContent,'Checking the devices after a manager restart…');
+ assert.equal(get('banner-output').hidden,false);assert.equal(get('banner-output').textContent,'View progress');assert.equal(get('banner-restore').hidden,true);
+ assert.equal(get('worker-state').textContent,'Checking devices after a restart…');
+ paint({design_jobs:[{id:'d1',lab_id:'lab',status:'interrupted',message:'Read back afterwards.'}]});
+ assert.equal(get('lab-banner').hidden,true,'read back: nothing is held');assert.equal(get('worker-state').hidden,true);
+});
+
+// Audit V3 (the M-14 pattern on the Git-problem banner): its headline is fixed and only the detail varies with the problem, so
+// the x on problem A must not hide a later, different problem B of the same lab; the same problem stays closed across polls.
+test('V3: closing the Git-problem banner hides that problem only; a different problem of the lab is shown again',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id),closed=new Set();
+ h.context.noticeDismissed=key=>closed.has(key);h.context.dismissNotice=key=>{closed.add(key);return true;};
+ const lab={id:'lab',name:'L',nodes:[],profiles:[],defaults:{},deployment:{status:'Running'},nos_readiness:{status:'idle'},git_binding:{repository:{push_url:'https://github.com/x/y.git'}}};
+ const paint=problem=>vm.runInContext(`state=${JSON.stringify({labs:[lab],jobs:[],platforms:{}})};activeId='lab';var gitContexts=new Map([['lab',{repository_status:{problem:${JSON.stringify(problem)}}}]]);renderLabBanner();`,h.context);
+ paint('The push URL rejected the VM account.');
+ assert.equal(get('lab-banner').hidden,false);assert.equal(get('lab-banner-text').textContent,'Saving to Git is not possible right now.');
+ assert.equal(get('lab-banner-detail-text').textContent,'The push URL rejected the VM account.');
+ get('lab-banner-close').onclick();assert.equal(get('lab-banner').hidden,true,'the student closed problem A');
+ paint('The push URL rejected the VM account.');assert.equal(get('lab-banner').hidden,true,'the same problem stays closed across the next poll');
+ paint('The repository is no longer reachable.');
+ assert.equal(get('lab-banner').hidden,false,'a different Git problem is a new notice');
+ assert.equal(get('lab-banner-detail-text').textContent,'The repository is no longer reachable.');
+});

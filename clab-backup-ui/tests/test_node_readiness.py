@@ -2,6 +2,7 @@
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+import socket
 import tempfile
 import threading
 import time
@@ -107,6 +108,21 @@ class ReadinessTests(unittest.TestCase):
         text = self.client.get('/api/logs?lab_id=lab').text
         self.assertIn('automatic NOS login test started', text)
         self.assertIn('NOS accepted SSH login', text)
+
+    def test_a_manual_login_that_found_the_cli_silent_is_probed_and_corrected_by_the_monitor(self):
+        # M-11: Test login stores 'booting' (not 'reachable') while the CLI is silent, so the monitor,
+        # which skips only 'reachable' nodes, keeps asking and replaces it with the real answer.
+        from app.node_services import BOOTING_MESSAGE
+        services = self.app.state.node_services
+        services.checks[('lab', 'clab-demo-r1')] = {'status': 'booting', 'at': 'then', 'message': BOOTING_MESSAGE}
+        with patch.object(self.app.state.runner.pool, 'submit'):
+            self.assertEqual(self.public()['nodes'][0]['nos_login']['status'], 'booting')
+            self.assertFalse(self.public()['nodes'][0]['ssh_ready'])
+            self.answers = {'clab-demo-r1': 'reachable'}
+            self.monitor.scan()
+        self.assertIn('clab-demo-r1', [p[0] for p in self.probes])
+        self.assertEqual(services.checks[('lab', 'clab-demo-r1')]['status'], 'reachable')
+        self.assertTrue(self.public()['nodes'][0]['ssh_ready'])
 
     def test_a_restarted_node_must_answer_again_and_the_login_test_repeats_once(self):
         self.answers = {n['name']: 'reachable' for n in self.lab['nodes']}
@@ -353,7 +369,7 @@ class ReadinessTests(unittest.TestCase):
             if item['name'] == 'clab-demo-r2':
                 raise ValueError('nope')
 
-        with patch('app.node_services.connect', side_effect=fake_connect):
+        with patch('app.node_services.connect', side_effect=fake_connect), patch('app.node_services.cli_answers', return_value=True):
             result = self.client.post('/api/labs/lab/ssh-check-all', json={})
             self.assertEqual(result.status_code, 200, result.text)
             self.assertEqual(result.json()['started'], 2)
@@ -384,14 +400,115 @@ class Stream:
         pass
 
 
+class FakeTransport:
+    """What the check's deadline closes: closing it ends a wait inside a stalled exec or read (as paramiko's does)."""
+    def __init__(self):
+        self.closed = threading.Event()
+
+    def close(self):
+        self.closed.set()
+
+
 class FakeClient:
     def __init__(self, output=None, error=None):
-        self.output = output; self.error = error; self.commands = []
+        self.output = output; self.error = error; self.commands = []; self.transport = FakeTransport()
+
+    def get_transport(self):
+        return self.transport
 
     def exec_command(self, command, timeout=None):
         self.commands.append((command, timeout))
         if self.error: raise self.error
         return Stream(), Stream(self.output), Stream()
+
+
+class HungExecClient(FakeClient):
+    """The SSH server accepted the session but never answers the exec request (paramiko waits for that reply without a
+    timeout): only closing the transport ends the wait. Gives up by itself after `limit` so a missing deadline fails the
+    test instead of hanging it."""
+    def __init__(self, limit=3):
+        super().__init__(); self.limit = limit
+
+    def exec_command(self, command, timeout=None):
+        self.commands.append((command, timeout))
+        self.transport.closed.wait(self.limit)
+        raise paramiko.SSHException('Channel closed.')
+
+
+class TrickleStream(Stream):
+    """stdout of a command whose output never ends: one byte at a time, each well inside the per-read timeout, until the
+    transport closes (then what arrived so far is returned, as paramiko's buffered read does) or `limit` passes."""
+    def __init__(self, transport, data, limit=3):
+        super().__init__(data); self.transport = transport; self.limit = limit
+
+    def read(self, size):
+        received = b''; ends = time.monotonic() + self.limit
+        while len(received) < size and time.monotonic() < ends and not self.transport.closed.wait(0.02):
+            received += self.data[len(received) % len(self.data):][:1]
+        return received
+
+
+class TrickleClient(FakeClient):
+    def __init__(self, data=b'Arista cEOSLab\n', limit=3):
+        super().__init__(); self.data = data; self.limit = limit
+
+    def exec_command(self, command, timeout=None):
+        self.commands.append((command, timeout))
+        return Stream(), TrickleStream(self.transport, self.data, self.limit), Stream()
+
+
+class LoopbackServer(paramiko.ServerInterface):
+    """A real paramiko SSH server on a socket pair: 'answer' runs the command, 'hang' never answers the exec request,
+    'trickle' accepts it and then sends one byte at a time without ever finishing (each for at most `limit` seconds)."""
+    key = None
+
+    def __init__(self, mode, output=b'Arista cEOSLab\nSoftware image version: 4.35.0F\n', limit=3):
+        self.mode = mode; self.output = output; self.limit = limit; self.done = threading.Event()
+
+    def get_allowed_auths(self, username):
+        return 'password'
+
+    def check_auth_password(self, username, password):
+        return paramiko.AUTH_SUCCESSFUL
+
+    def check_channel_request(self, kind, chanid):
+        return paramiko.OPEN_SUCCEEDED
+
+    def check_channel_exec_request(self, channel, command):
+        if self.mode == 'hang':
+            self.done.wait(self.limit)      # blocks the server's transport thread: no reply to the exec request
+            return False
+        threading.Thread(target=self.respond, args=(channel,), daemon=True).start()
+        return True
+
+    def respond(self, channel):
+        # paramiko sends the exec reply only after check_channel_exec_request returns; output and a close sent before it
+        # would race the reply (the client then sees "Channel closed."), so this waits for it to leave first.
+        time.sleep(0.2)
+        try:
+            if self.mode == 'answer':
+                channel.sendall(self.output); channel.send_exit_status(0); channel.close(); return
+            ends = time.monotonic() + self.limit
+            while time.monotonic() < ends and not self.done.wait(0.05) and not channel.closed:
+                channel.send(b'.')
+            channel.close()
+        except Exception:
+            pass
+
+    def client(self):
+        """An authenticated paramiko.SSHClient talking to this server; the caller closes it and calls stop()."""
+        if LoopbackServer.key is None: LoopbackServer.key = paramiko.RSAKey.generate(2048)
+        near, far = socket.socketpair()
+        self.transport = paramiko.Transport(far)
+        self.transport.add_server_key(LoopbackServer.key)
+        self.transport.start_server(event=threading.Event(), server=self)
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect('loopback', sock=near, username='admin', password='admin', allow_agent=False, look_for_keys=False, timeout=5)
+        return client
+
+    def stop(self):
+        self.done.set(); self.transport.close()
 
 
 class ProbeTests(unittest.TestCase):
@@ -443,6 +560,68 @@ class ProbeTests(unittest.TestCase):
             self.assertEqual(monitor.ssh_probe({'platform': ''}, {'username': 'admin', 'password': 'wrong'}), 'failed')
         with patch('app.node_readiness.connect', side_effect=OSError('unreachable')):
             self.assertEqual(monitor.ssh_probe({'platform': ''}, {'username': 'admin', 'password': ''}), 'booting')
+
+    def test_a_node_without_a_platform_is_ready_when_its_cli_answers_even_by_rejecting_the_shell_command(self):
+        # N2 (M-11 follow-up): a NOS kind outside the supported four (cisco_iol or cisco_xrd from discovery, another
+        # ansible_network_os from an inventory) is stored with platform ''. Its CLI rejects `echo`, and that rejection is
+        # still an answering CLI: before the fix it read as a CLI error, so the node stayed 'booting' for good.
+        probe = lambda client, platform='': self.make_monitor(client).ssh_probe({'platform': platform}, {'username': 'admin', 'password': 'x'})
+        with patch('app.node_readiness.connect'):
+            for output in (b'readiness-check\n', b"           ^\n% Invalid input detected at '^' marker.\n\nrouter#",
+                           b'                    ^\nunknown command.\n', b'error: unknown command: echo\n', b'% Unrecognized command found at \'^\' position.\n'):
+                self.assertEqual(probe(FakeClient(output)), 'reachable', output)
+            # Still never ready without a real answer: nothing, a timeout, a refused exec or a NOS that says it is still starting.
+            for output, error in ((b'', None), (b'  \n', None), (b'% System is not yet ready. Please try again later.\n', None),
+                                  (b'Waiting for editing of configuration\n', None), (b'error: could not connect to agent\n', None),
+                                  (None, TimeoutError('slow')), (None, paramiko.SSHException('Channel closed.'))):
+                self.assertEqual(probe(FakeClient(output, error)), 'booting', output or error)
+            # A supported platform keeps its rule: show version must really succeed, a CLI error is not an answer.
+            for output in (b"% Invalid input detected at '^' marker.\n", b'error: unknown command\n', b'% System is not yet ready\n'):
+                self.assertEqual(probe(FakeClient(output), 'arista_ceos'), 'booting', output)
+
+    def test_a_hung_exec_request_ends_at_the_deadline_and_closes_the_transport(self):
+        # N3 (M-11 follow-up): paramiko waits for the exec request's reply with no timeout of its own; without one deadline
+        # on the whole check a device that accepts the session but never answers held Test login (its node key and an
+        # SSH client slot) for as long as it stayed silent.
+        client = HungExecClient()
+        started = time.monotonic()
+        self.assertFalse(cli_answers(client, timeout=0.3))
+        self.assertLess(time.monotonic() - started, 1.5, 'the check ends at its deadline, not when the device gives up')
+        self.assertTrue(client.transport.closed.is_set())
+        with patch('app.node_readiness.connect'), patch('app.node_services.CLI_TIMEOUT', 0.3):
+            started = time.monotonic()
+            self.assertEqual(self.make_monitor(HungExecClient()).ssh_probe({'platform': 'arista_ceos'}, {'username': 'admin', 'password': 'x'}), 'booting')
+            self.assertLess(time.monotonic() - started, 1.5, 'the stated CLI_TIMEOUT bounds the monitor probe too')
+
+    def test_output_that_keeps_trickling_is_not_an_answer_once_the_deadline_passes(self):
+        # Each byte arrives well inside the per-read timeout, so only an overall deadline stops the read.
+        for platform, data in (('arista_ceos', b'Arista cEOSLab\n'), ('', b'readiness-check\n')):
+            client = TrickleClient(data)
+            started = time.monotonic()
+            with patch('app.node_readiness.connect'), patch('app.node_services.CLI_TIMEOUT', 0.3):
+                status = self.make_monitor(client).ssh_probe({'platform': platform}, {'username': 'admin', 'password': 'x'})
+            self.assertEqual(status, 'booting', platform or 'no platform')
+            self.assertLess(time.monotonic() - started, 1.5, platform or 'no platform')
+            self.assertTrue(client.transport.closed.is_set())
+
+    def test_an_answer_inside_the_deadline_counts_and_leaves_the_transport_open(self):
+        client = FakeClient(b'Arista cEOSLab\nSoftware image version: 4.35.0F\n')
+        self.assertTrue(cli_answers(client, timeout=0.3))
+        time.sleep(0.5)
+        self.assertFalse(client.transport.closed.is_set(), 'the deadline is cancelled once the check has its answer')
+
+    def test_real_paramiko_answer_hung_exec_and_endless_output_against_the_deadline(self):
+        # The same three cases against a real paramiko server on a socket pair: proves that closing the transport really
+        # ends paramiko's own waits (the exec reply and a buffered read), not only the fakes above.
+        for mode, expected in (('answer', True), ('hang', False), ('trickle', False)):
+            server = LoopbackServer(mode, limit=4)
+            client = server.client()
+            try:
+                started = time.monotonic()
+                self.assertEqual(cli_answers(client, timeout=1), expected, mode)
+                self.assertLess(time.monotonic() - started, 2.5, mode)
+            finally:
+                client.close(); server.stop()
 
     def test_job_environment_starts_every_ansible_run_without_recorded_host_keys(self):
         with tempfile.TemporaryDirectory() as tmp:

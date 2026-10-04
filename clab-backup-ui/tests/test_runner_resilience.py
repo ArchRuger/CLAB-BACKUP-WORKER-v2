@@ -120,6 +120,25 @@ class RunnerResilienceTests(unittest.TestCase):
         self.assertEqual(durable.state['jobs'], [])
         self.assertEqual(durable.state['labs'][0]['next_run'], 123)
 
+    # L-21 (audit 2026-10-03): a login test (the manual Test NOS login or the automatic one after a boot or
+    # redeploy) backs nothing up, so it never moves the scheduled backup clock; a full backup still does.
+    def test_login_test_keeps_the_scheduled_backup_clock(self):
+        for source in ('manual', 'automatic'):
+            with patch('app.runner.node_available', return_value=True), patch.object(self.runner.pool, 'submit'):
+                job = self.runner.submit(self.lab['id'], 'test', source=source)
+            self.assertEqual(self.lab['next_run'], 123)
+            self.assertEqual(Store(self.tmp.name).state['labs'][0]['next_run'], 123)
+            self.current(job).update(status='succeeded')
+        with patch('app.runner.time.time', return_value=1000.0): self.queue()
+        self.assertEqual(self.lab['next_run'], 1000.0 + 5*60)
+
+    def test_login_test_queue_write_failure_keeps_the_scheduled_backup_clock(self):
+        with patch('app.runner.node_available', return_value=True), patch.object(self.runner.pool, 'submit'), \
+             patch.object(self.store, 'save', side_effect=OSError('Queue write failed')):
+            with self.assertRaises(OSError): self.runner.submit(self.lab['id'], 'test')
+        self.assertEqual(self.store.state['jobs'], [])
+        self.assertEqual(self.lab['next_run'], 123)
+
     # B-001: 'jobs' is bounded like 'operations' already is, and never drops a queued/running entry.
     def test_trim_jobs_caps_newest_first_storage_but_keeps_protected_older_entries(self):
         jobs = [dict(id=str(i), status='succeeded') for i in range(5)]

@@ -29,8 +29,8 @@ import yaml
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.git_progress import job_destination, host_identity
-from app.network_design import NetworkDesign
+from app.git_progress import job_destination, host_identity, digest as gp_digest
+from app.network_design import NetworkDesign, digest as nd_digest
 
 INTENT = {'schema': 1, 'revision': 'rev1', 'modules': ['ospf', 'bgp'], 'nodes': {}}
 
@@ -241,6 +241,39 @@ class DesignSnapshotTests(DesignExportGitTestCase):
         self.assertEqual(document['containerlab_node_manager']['exported'], generation['created'])
         self.assertEqual(document['modules'], INTENT['modules'])
 
+    def test_manifest_names_the_lab_or_the_jobs_frozen_name(self):
+        # The manifest's lab_name labels the commit and names the version download; a loop over the plan's files once
+        # overwrote it, so every export said 'mapping.json'.
+        gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n!\n')]}, intent=INTENT)
+        lab = self.store.lab(self.lab_id); generation = self.generation(gen_id)
+        self.assertEqual(self.designs.design_snapshot(lab, generation)['manifest']['lab_name'], 'design-export-lab')
+        frozen = self.designs.design_snapshot(lab, generation, lab_name='renamed-since')
+        self.assertEqual(frozen['manifest']['lab_name'], 'renamed-since')
+        document = yaml.safe_load(base64.b64decode(frozen['files']['network-intent.yml']))
+        self.assertEqual(document['containerlab_node_manager']['lab'], 'renamed-since')
+
+    def test_a_save_bound_before_the_lab_name_fix_gets_its_bound_bytes_back(self):
+        # A pending export whose digest was recorded by a manager before the fix (lab_name 'mapping.json') must publish
+        # exactly what it was bound to, not fail as "changed": `bound` selects that form only when it is the bound one.
+        gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n!\n')]}, intent=INTENT)
+        lab = self.store.lab(self.lab_id); generation = self.generation(gen_id)
+        current = self.designs.design_snapshot(lab, generation, lab_name=lab['name'])
+        before_fix = copy.deepcopy(current); before_fix['manifest']['lab_name'] = 'mapping.json'
+        old_digest = nd_digest(before_fix)
+        legacy = self.designs.design_snapshot(lab, generation, lab_name=lab['name'], bound=old_digest)
+        self.assertEqual(legacy, before_fix)
+        self.assertEqual(self.designs.design_snapshot(lab, generation, lab_name=lab['name'], bound=nd_digest(current)), current)
+        self.assertEqual(self.designs.design_snapshot(lab, generation, lab_name=lab['name'], bound='0' * 64), current,
+                         'any other digest gets the current form, so the changed-plan guard still refuses it')
+
+    def test_execute_publishes_the_lab_name_in_the_manifest(self):
+        gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)
+        response, _ = self.export(gen_id, checkpoint='day-1', push=False)
+        job_id = response.json()['id']
+        self.progress.execute(job_id)
+        self.assertEqual(self.snapshots[job_id]['manifest']['lab_name'], 'design-export-lab')
+        self.assertEqual(self.client.get('/api/git/jobs/' + job_id).json()['status'], 'committed')
+
     def test_snapshot_refuses_non_succeeded(self):
         gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n')]},
                                   status='running', intent=INTENT)
@@ -364,6 +397,33 @@ class ExportRouteTests(DesignExportGitTestCase):
         response, _ = self.export(gen_id)
         self.assertEqual(response.status_code, 409, response.text)
 
+    def test_route_409_while_a_repository_connection_is_being_changed(self):
+        # Review follow-up G4 (audit M-3): an export made while a folder change rewrites the binding could never be retried.
+        gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)
+        with self.progress.changing(self.lab_id):
+            response, _ = self.export(gen_id)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn('Try again in a moment', response.json()['detail'])
+        self.assertEqual(self.store.state['git_jobs'], [])
+        # Only a change of this lab's connection holds its exports (review issue G4-a).
+        with self.progress.changing('another-lab'):
+            self.assertEqual(self.export(gen_id)[0].status_code, 200)
+
+    def test_route_409_while_a_design_apply_of_this_lab_is_read_back_after_a_restart(self):
+        # Review follow-up J4 (audit L-15): the read-back holds its own lab only; the export says why and waits for it.
+        gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)
+        with self.store.lock:
+            self.store.state.setdefault('design_jobs', []).append(dict(id='d' * 32, lab_id='another-lab', status='interrupted', rechecking=['r1']))
+            self.store.save()
+        self.assertEqual(self.export(gen_id)[0].status_code, 200, 'another lab being read back holds nothing here')
+        self.store.state['git_jobs'][-1]['status'] = 'dismissed'
+        with self.store.lock:
+            self.store.state['design_jobs'][-1]['lab_id'] = self.lab_id; self.store.save()
+        response, _ = self.export(gen_id)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("still reading this lab's devices back after a restart", response.json()['detail'])
+        self.assertEqual(len(self.store.state['git_jobs']), 1, 'nothing was queued')
+
     def test_route_409_no_binding(self):
         other = add_lab(self.app, name='unbound-lab')
         gen_id = write_generation(self.app, other, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)
@@ -455,6 +515,46 @@ class ExecuteTests(DesignExportGitTestCase):
         self.assertIn('changed since this export was started', job['message'])
         self.assertFalse(any(r['mode'] == 'publish' for r in self.sent), self.sent)
         self.assertFalse(any(r['mode'] == 'status' for r in self.sent), self.sent)
+
+    def test_a_save_queued_before_the_lab_name_fix_publishes_what_it_was_bound_to(self):
+        # A design export queued (or left unpublished) by a manager whose manifest named every lab 'mapping.json' has its
+        # digest over that form. After the upgrade it must publish exactly those bytes, not fail as "changed".
+        gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)
+        response, _ = self.export(gen_id, checkpoint='day-1', push=False)
+        job_id = response.json()['id']
+        lab = self.store.lab(self.lab_id); generation = self.generation(gen_id)
+        before_fix = self.designs.design_snapshot(lab, generation, lab_name=lab['name'])
+        before_fix['manifest']['lab_name'] = 'mapping.json'
+        with self.store.lock:
+            job = next(j for j in self.store.state['git_jobs'] if j['id'] == job_id)
+            job['snapshot_digest'] = gp_digest(before_fix)   # what the pre-fix manager recorded at creation
+            self.store.save()
+        self.progress.execute(job_id)
+
+        job = self.client.get('/api/git/jobs/' + job_id).json()
+        self.assertEqual(job['status'], 'committed', job)
+        self.assertEqual(self.snapshots[job_id], before_fix, 'the published set is the bound one, byte for byte')
+        self.assertEqual(self.snapshots[job_id]['manifest']['lab_name'], 'mapping.json', 'frozen metadata is never relabelled')
+
+    def test_a_save_being_written_before_the_lab_name_fix_reconciles_with_what_it_was_bound_to(self):
+        gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)
+        response, _ = self.export(gen_id, checkpoint='day-1', push=False)
+        job_id = response.json()['id']
+        lab = self.store.lab(self.lab_id); generation = self.generation(gen_id)
+        before_fix = self.designs.design_snapshot(lab, generation, lab_name=lab['name'])
+        before_fix['manifest']['lab_name'] = 'mapping.json'
+        with self.store.lock:
+            job = next(j for j in self.store.state['git_jobs'] if j['id'] == job_id)
+            # What the pre-fix manager left when its publish answer was lost: the bound digest, the head and the attempt.
+            job.update(snapshot_digest=gp_digest(before_fix), expected_head='a' * 40, published_attempt=True,
+                       status='export_pending', retry=True)
+            self.store.save()
+        self.progress.execute(job_id)
+
+        job = self.client.get('/api/git/jobs/' + job_id).json()
+        self.assertEqual(job['status'], 'committed', job)
+        self.assertEqual(self.snapshots[job_id], before_fix, 'the replayed publication is the bound one, byte for byte')
+        self.assertFalse(any(r['mode'] == 'status' for r in self.sent), 'the recorded head is reused, not re-read')
 
 
 # --- 4. public_job -----------------------------------------------------------------------------------

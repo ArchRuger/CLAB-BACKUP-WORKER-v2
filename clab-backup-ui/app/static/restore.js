@@ -4,6 +4,15 @@
 // the chosen node names; the manager owns the SSH, the per-platform replace-and-confirm mechanism
 // and the redaction. Every label here is the student's; the backend's own words stay under Details.
 const restoreActiveJob = new Set(['queued', 'preflight', 'backing_up', 'applying', 'confirming', 'verifying']);
+// After a manager restart a job reads 'interrupted' while the manager still reads back the devices it was changing; until it has,
+// the job holds the lab (the manager's `rechecking: true`; an older manager never sends it) and is followed like a running job.
+// A device of such a job is still read back while it is 'interrupted' with no final step; one interrupted before it was changed has one.
+const restoreRecheckWords = { job: 'Checking the devices after a manager restart…', target: 'Reading back after the restart…', step: 'Reading back after the restart' };
+function restoreJobRechecking(job) { return !!job && job.status === 'interrupted' && job.rechecking === true; }
+function restoreJobActive(job) { return !!job && (restoreActiveJob.has(job.status) || restoreJobRechecking(job)); }
+// When the manager last restarted under this job: the restart path stamps the job's `finished` (an ISO time); timelines are epoch seconds.
+function restoreRestartedAt(job) { const ms = Date.parse(job && job.finished); return Number.isFinite(ms) ? ms / 1000 : null; }
+function restoreTargetRechecking(job, t) { return restoreJobRechecking(job) && t.status === 'interrupted' && !!t.timeline && t.timeline.settled == null; }
 const restoreJobLabels = {
  queued: 'Waiting to start', preflight: 'Checking the devices…', backing_up: 'Backing up current configurations…',
  applying: 'Applying the saved configuration…', confirming: 'Checking that the devices answer…', verifying: 'Verifying the result…',
@@ -72,6 +81,7 @@ function restoreBadge(status, labels) {
   : ['failed', 'preflight_failed', 'rolled_back'].includes(status) ? 'bad' : 'warn';
  return `<span class="badge ${cls}">${esc(labels[status] || status)}</span>`;
 }
+function restoreRecheckBadge(text) { return `<span class="badge running">${esc(text)}</span>`; }
 // The student-facing name of an exact snapshot path: without its wire-form leading slash, without a
 // trailing /latest (the legacy parent convenience), and in words for the repository root (sent as '/'
 // on the wire, '' once the leading slash is stripped).
@@ -104,7 +114,7 @@ function restoreWhen(value) {
 // What the change did, counted from the per-device outcomes.
 function restoreResultSentence(job) {
  const targets = job.targets || [];
- if (restoreActiveJob.has(job.status) || !targets.length) return '';
+ if (restoreJobActive(job) || !targets.length) return '';
  const replaced = targets.filter(t => restoreReplacedTarget.has(t.status)).length;
  const attention = targets.filter(t => restoreAttentionTarget.has(t.status)).length;
  // A device that undid the change was changed for a while: it is not "not changed".
@@ -119,6 +129,7 @@ function restoreResultSentence(job) {
 }
 function restoreJobTitle(job) {
  if (restoreActiveJob.has(job.status)) return 'Applying saved configuration';
+ if (restoreJobRechecking(job)) return 'Checking the devices after a manager restart';
  if (job.status === 'succeeded') return 'Configuration replaced';
  if (job.status === 'partial' || job.status === 'needs_attention') return 'Configuration replaced — needs attention';
  if (job.status === 'interrupted') return 'Configuration change interrupted';
@@ -224,9 +235,18 @@ function restoreTargetOutcome(t) {
 }
 // The steps of one device: [{label, state, text, elapsed}]. state is done, current, waiting, stopped, unreached, or
 // outcome-good / outcome-warn / outcome-bad / outcome-skip on the last step. null for a job stored before stages existed.
-function restoreStageSteps(t, now) {
+// `rechecking` (restoreTargetRechecking): the manager reads this device back after a restart, so it has no final outcome yet
+// and the read-back is the step that runs (or a later one the read-back moved on to); an unfinished step the restart caught says so.
+// `restartedAt` (restoreRestartedAt: the job's `finished`, which the restart path sets, as epoch seconds) tells the stamps of the
+// run itself from the read-back's: the read-back enters the same stages (verifying, confirming) and a stage is stamped once, so only
+// a stamp newer than the restart proves the read-back got there. Without it every stamp counts as the run's own.
+// It is when the NEW manager process started (restore.py's startup sets it), not when the old one stopped: the step the restart
+// caught shows no time (when it stopped is not known, and the downtime is not its duration) and the read-back row is measured
+// from the restart; a later step the read-back itself stamped (Confirm) counts from that stamp.
+function restoreStageSteps(t, now, rechecking, restartedAt) {
  if (!t || !t.stage) return null;
- const timeline = t.timeline || {}, at = restoreStageAt[t.stage], outcome = restoreTargetOutcome(t);
+ const timeline = t.timeline || {}, at = restoreStageAt[t.stage];
+ const recheck = !!rechecking && t.status === 'interrupted' && timeline.settled == null, outcome = recheck ? null : restoreTargetOutcome(t);
  const replaced = outcome && ['verified', 'applied', 'applied_unverified', 'verify_mismatch'].includes(t.status);
  let reached = at ? at[0] : 0;
  restoreSteps.forEach((step, i) => { if (i < 6 && timeline[step.start] != null) reached = Math.max(reached, i); });
@@ -239,6 +259,32 @@ function restoreStageSteps(t, now) {
   const end = running ? now : timeline[restoreSteps[i].end] ?? endOf(i);
   return end != null ? restoreDuration(end - startOf(i)) : '';
  };
+ if (recheck) {
+  // The last step the run itself entered before the restart; verifying and confirming only count once it was armed.
+  const ownStamp = i => startOf(i) != null && !(restartedAt != null && startOf(i) > restartedAt);
+  let caught = 0;
+  for (let i = 0; i <= (startOf(3) != null ? 5 : 3); i++) if (ownStamp(i)) caught = i;
+  // Armed (row 3) is finished by definition and the backup once it says so; the other steps the restart cut short.
+  const caughtDone = caught === 3 || (caught === 1 && timeline.backed_up != null);
+  const readBack = 4, confirmingNow = t.stage === 'confirming' && restartedAt != null && startOf(5) != null && startOf(5) > restartedAt;
+  const current = confirmingNow ? 5 : readBack;
+  // Times never span the outage: the step the restart caught has none, and the read-back row counts from the restart (a row whose
+  // stamp is newer than the restart, Confirm, counts from that stamp). Without a restart time the row falls back to its own stamps.
+  const runningFor = i => restartedAt != null && i === readBack ? restoreDuration(now - restartedAt) : elapsed(i, true);
+  const readBackDone = () => restartedAt != null && startOf(5) != null ? restoreDuration(startOf(5) - restartedAt) : elapsed(readBack, false);
+  return restoreSteps.map((step, i) => {
+   const row = { label: step.label, state: 'waiting', text: 'Waiting', elapsed: '' };
+   if (i === current) Object.assign(row, { state: 'current', elapsed: runningFor(i),
+    text: (i === 5 ? at && at[2] : '') || restoreRecheckWords.step + (i === readBack && t.attempts > 1 ? ' (attempt ' + t.attempts + ')' : '') });
+   else if (i === 3 && startOf(3) != null) Object.assign(row, { state: 'done', text: t.no_op ? 'Armed — no change needed' : 'Armed', elapsed: elapsed(i, false) });
+   else if (i === readBack) Object.assign(row, { state: 'done', text: 'Done', elapsed: readBackDone() });   // the read-back's pass, now confirming
+   else if (i < caught || (i === caught && caughtDone)) Object.assign(row, { state: 'done', text: 'Done', elapsed: elapsed(i, false) });
+   else if (i === caught) Object.assign(row, { state: 'stopped', text: 'Interrupted by the restart' });
+   // A read-back that confirms found the job's own change armed, although the restart came before the manager recorded it.
+   else if (i < current) Object.assign(row, { state: 'unreached', text: i === 3 && confirmingNow ? 'Not recorded before the restart' : 'Not reached' });
+   return row;
+  });
+ }
  return restoreSteps.map((step, i) => {
   const row = { label: step.label, state: 'waiting', text: 'Waiting', elapsed: '' };
   if (i === 6) {
@@ -261,8 +307,8 @@ function restoreStageSteps(t, now) {
   return row;
  });
 }
-function restoreStageList(t, now) {
- const steps = restoreStageSteps(t, now);
+function restoreStageList(t, now, rechecking, restartedAt) {
+ const steps = restoreStageSteps(t, now, rechecking, restartedAt);
  if (!steps) return '';
  return `<ol class="restore-stage-list" aria-label="${esc('Progress of ' + (t.short_name || t.name))}">${steps.map(s =>
   `<li class="restore-stage restore-stage--${esc(s.state)}"><span class="restore-stage-glyph" aria-hidden="true"></span><span class="restore-stage-name">${esc(s.label)}</span> <span class="restore-stage-text">${esc(s.text)}</span>${s.elapsed ? ` <span class="restore-stage-time">${esc(s.elapsed)}</span>` : ''}</li>`).join('')}</ol>`;
@@ -308,14 +354,15 @@ async function restoreShowJob(id, known) {
  dialog.onclose = () => { restoreDialogJob = ''; if (restoreWatch === id) restoreStopWatch(); };
  dialog.querySelector('[data-op-close]').onclick = () => dialog.close();
  restoreRenderJob(job);
- if (restoreActiveJob.has(job.status)) restoreStartWatch(job);
+ if (restoreJobActive(job)) restoreStartWatch(job);
 }
-// One device's row in the job dialog; pulled out so it renders the same way in tests as in the dialog.
-function restoreTargetRow(t, now) {
+// One device's row in the job dialog; pulled out so it renders the same way in tests as in the dialog. `rechecking`: the
+// manager is reading this device back after a restart (restoreTargetRechecking), so it is not yet a device to check by hand.
+function restoreTargetRow(t, now, rechecking, restartedAt) {
  const platform = restorePlatformLabel(t.platform);
- return `<div class="restore-target-row">${restoreBadge(t.status, restoreTargetLabels)}
+ return `<div class="restore-target-row">${rechecking ? restoreRecheckBadge(restoreRecheckWords.target) : restoreBadge(t.status, restoreTargetLabels)}
   <strong>${esc(t.short_name || t.name)}</strong>${platform ? ` <span class="caption">${esc(platform)}</span>` : ''}
-  ${restoreStageList(t, Number.isFinite(now) ? now : restoreJobNow({ targets: [t] }))}
+  ${restoreStageList(t, Number.isFinite(now) ? now : restoreJobNow({ targets: [t] }), rechecking, restartedAt)}
   ${t.status === 'verify_mismatch' && (t.missing_statements || t.extra_statements)
    ? `<p class="form-help">${esc(t.missing_statements || 0)} expected configuration lines are missing and ${esc(t.extra_statements || 0)} unexpected lines remain.</p>` : ''}
   ${t.status === 'rollback_expected' ? '<p class="form-help">The change was not confirmed in time. The device is set to undo it by itself; the manager has not checked that yet.</p>' : ''}
@@ -331,15 +378,18 @@ function restoreRenderJob(job) {
  restoreLastJob = job;
  const heading = $('restore-job-dialog').querySelector('h2'); if (heading) heading.textContent = restoreJobTitle(job);
  const backupLink = (id, label) => id ? `<dt>${label}</dt><dd><button type="button" class="link-button mono" data-restore-backup="${esc(id)}">${esc(id.slice(0, 12))}</button></dd>` : '';
- $('restore-job-detail').innerHTML = `<div class="git-job-summary">${restoreBadge(job.status, restoreJobLabels)}<p>${esc(restoreResultSentence(job))}</p></div>
-  ${restoreProgressLine(job)}<div class="restore-targets-status">${(job.targets || []).map(t => restoreTargetRow(t, restoreJobNow(job))).join('')}</div>
+ const rechecking = restoreJobRechecking(job);
+ $('restore-job-detail').innerHTML = `<div class="git-job-summary">${rechecking ? restoreRecheckBadge(restoreRecheckWords.job) : restoreBadge(job.status, restoreJobLabels)}<p>${esc(restoreResultSentence(job))}</p></div>
+  ${restoreProgressLine(job)}<div class="restore-targets-status">${(job.targets || []).map(t => restoreTargetRow(t, restoreJobNow(job), restoreTargetRechecking(job, t), restoreRestartedAt(job))).join('')}</div>
   <details class="restore-job-details"><summary>Details</summary><dl class="health-grid">
    ${backupLink(job.pre_backup_job_id, 'Backup taken before the change')}${backupLink(job.post_backup_job_id, 'Backup taken after the change')}
    <dt>Automatic undo window</dt><dd>${esc(job.confirm_minutes || 5)} minutes</dd>
    <dt>Status</dt><dd>${esc(job.status || '')}</dd><dt>Message</dt><dd>${esc(job.message || '')}</dd></dl></details>
-  ${restoreActiveJob.has(job.status) ? (restorePaused
+  ${restoreJobActive(job) ? (restorePaused
    ? '<p class="form-help" role="status">Status updates paused. <button type="button" class="link-button" id="restore-resume">Refresh</button></p>'
-   : '<p class="form-help" role="status">You can close this window. The change keeps running in the background; its result is shown in the lab header and under Advanced › Action logs.</p>') : ''}`;
+   : rechecking
+    ? '<p class="form-help" role="status">You can close this window. The manager keeps reading the devices back. Backups and configuration changes on this lab, and Git saves and lab operations on every lab, cannot be started until it has finished; start them again afterwards. The result is shown in the lab header and under Advanced › Action logs.</p>'
+    : '<p class="form-help" role="status">You can close this window. The change keeps running in the background; its result is shown in the lab header and under Advanced › Action logs.</p>') : ''}`;
  for (const button of $('restore-job-detail').querySelectorAll('[data-restore-backup]')) button.onclick = () => {
   $('restore-job-dialog').close();
   if (typeof showTab === 'function') showTab('backups');
@@ -357,7 +407,7 @@ function restoreStartWatch(job) {
    const value = await (await api('/restore/jobs/' + encodeURIComponent(job.id))).json();
    if (restoreWatch !== job.id) return;
    restoreRenderJob(value);
-   if (restoreActiveJob.has(value.status)) restoreWatchTimer = setTimeout(poll, 1500);
+   if (restoreJobActive(value)) restoreWatchTimer = setTimeout(poll, 1500);
    else { restoreStopWatch(); await refresh(); }
   } catch (error) { restoreStopWatch(); restorePaused = true; if (restoreLastJob && restoreLastJob.id === job.id) restoreRenderJob(restoreLastJob); }
  };

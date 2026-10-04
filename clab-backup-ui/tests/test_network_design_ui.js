@@ -551,6 +551,65 @@ test('designApplyDisabledReason: no plan, not linked, a running job, and the rea
  assert.match(c.designApplyDisabledReason(lab,view,[{lab_id:'lab1',status:'applying'}]),/already running/);
  assert.match(c.designApplyDisabledReason(lab,{...view,engine:{available:false,diagnostic:'netlab missing'}},[]),/netlab missing/);
 });
+// Audit L-15 follow-up: after a manager restart the server's public design job is `interrupted` with a non-empty
+// `rechecking` (the devices still being read back); the page treats it as active, words it like the restore's, and keeps polling.
+test('a design apply job read back after a restart is active: worded, refused for a new apply, no time on the last line',()=>{
+ const c=ctx();
+ const job={id:'d1',lab_id:'lab1',status:'interrupted',rechecking:['r1'],message:'Manager restarted while the design was being applied.',targets:[]};
+ assert.equal(c.designApplyJobActive(job),true);
+ for(const idle of [{status:'interrupted'},{status:'interrupted',rechecking:[]},{status:'interrupted',rechecking:true},{status:'failed',rechecking:['r1']},null])
+  assert.equal(c.designApplyJobActive(idle),false,JSON.stringify(idle));
+ assert.equal(c.designApplyJobActive({status:'applying'}),true);
+ assert.match(c.designApplyProgressMarkup(job),/Checking the devices after a manager restart…/);
+ assert.doesNotMatch(c.designApplyProgressMarkup(job),/>Interrupted/);
+ assert.match(c.designApplyProgressMarkup({...job,rechecking:undefined}),/Interrupted/,'once the read-back is done the job is plainly interrupted');
+ const now=Date.now();
+ const line=c.designApplyLastLineMarkup({...job,finished:new Date(now-120000).toISOString()},now);
+ assert.match(line,/Checking the devices after a manager restart…/);assert.doesNotMatch(line,/ago|·/);
+ const lab={id:'lab1',deployment:{status:'Running'}},view={generations:[{id:'g',status:'succeeded'}]};
+ assert.match(c.designApplyDisabledReason(lab,view,[job]),/still being read back/);
+ assert.equal(c.designApplyDisabledReason(lab,view,[{...job,lab_id:'other'}]),'','another lab\'s read-back does not hold this one');
+});
+test('designApplyShowJob follows a job that is being read back after a restart until it settles',async()=>{
+ const timers=[];let polls=0;
+ const job={id:'d1',lab_id:'lab1',status:'interrupted',rechecking:['r1'],targets:[]};
+ const dialog={showModal(){},close(){}};
+ const c=ctx({state:{labs:[{id:'lab1'}],design_jobs:[job]},current:()=>({id:'lab1'}),
+  $:id=>id==='design-apply-dialog'?dialog:null,
+  setTimeout:fn=>{timers.push(fn);return timers.length;},
+  api:async()=>{polls++;return {json:async()=>polls<2?{...job}:{...job,status:'failed',rechecking:undefined}};}});
+ c.designApplyShowJob('d1');
+ assert.equal(timers.length,1,'the watch starts for a rechecking job');
+ await timers.shift()();
+ assert.equal(timers.length,1,'still rechecking: polled again');
+ await timers.shift()();
+ assert.equal(timers.length,0,'settled: following stops');
+ assert.equal(polls,2);
+});
+// Audit V1: the banner's "View progress" (and the plan card's Show) call designApplyShowJob from any tab. showModal() inside a
+// display:none ancestor shows nothing and leaves the page inert, so the dialog sits at page level (after </main>, like the restore job
+// dialog) and the modal opens over the tab the student is on: no tab switch, no history entry, and Back or a tab change while it is
+// open can never hide it (review V1-back).
+test('designApplyShowJob opens the modal over the current tab without switching tabs (banner action from Topology)',()=>{
+ const job={id:'d1',lab_id:'lab1',status:'failed',targets:[]};
+ const calls=[],dialog={close(){},showModal(){calls.push(['showModal']);}};
+ const c=ctx({state:{labs:[{id:'lab1'}],design_jobs:[job]},current:()=>({id:'lab1'}),
+  $:id=>id==='design-apply-dialog'?dialog:id==='experimental-design'?{open:false}:null,
+  showTab:name=>calls.push(['showTab',name]),syncRoute:push=>calls.push(['syncRoute',push])});
+ vm.runInContext("var tab='topology'",c);
+ c.designApplyShowJob('d1');
+ assert.deepEqual(calls,[['showModal']],'the banner action stays on the tab it was clicked on');
+ calls.length=0;vm.runInContext("tab='advanced'",c);
+ c.designApplyShowJob('d1');
+ assert.deepEqual(calls,[['showModal']],'the plan card\'s Show works the same way');
+});
+test('V1: #design-apply-dialog is not inside the Advanced tab or the closed Network design details, so its modal is always visible',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ const at=html.indexOf('<dialog id="design-apply-dialog"');
+ assert.ok(at>0,'the dialog exists');
+ assert.ok(at>html.indexOf('</main>'),'it is after </main>: no hidden tab panel or <details> is its ancestor');
+ assert.match(html.slice(at,at+200),/data-lab-dialog/,'it still closes when the page moves to another lab');
+});
 // Risk-review finding: designApplyDisabledReason ignored view.summary.stale (the same flag designStateOf
 // already reads for "Plan is older than the design"), so a stale plan could be offered for applying.
 test('designApplyDisabledReason: a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not',()=>{
@@ -1412,4 +1471,166 @@ test('8c: an IPv4-only design leaves blank IPv6 pools out, so the "remove the pr
  assert.equal(on.addressing.loopback.ipv6,'','IPv6 on: a blank pool is still sent so the server names it');
  const kept=JSON.parse(JSON.stringify(c.designIntentFromForm({ipv4:true,ipv6:false,pools:{...blank,loopback:{ipv4:'10.255.0.0/24',ipv6:'2001:db8:ff::/48'}},modules:[],devices:[]},null)));
  assert.equal(kept.addressing.loopback.ipv6,'2001:db8:ff::/48','a typed prefix is never dropped silently (the server explains the conflict)');
+});
+
+// --- audit 2026-10-03 frontend-editor/a: M-16, L-35, L-36 ----------------------------------------------
+test('M-16: View on a file of an earlier plan opens that plan\'s file, labelled from that plan, not the newest plan\'s',async()=>{
+ const {el}=summaryEls();const paths=[],dialogs=[],notes=[];
+ const c=ctx({$:el,setMarkup:(e,h)=>{if(e)e.innerHTML=h;},current:()=>({id:'lab-a',name:'A'}),notify:m=>notes.push(m),
+  api:async p=>{paths.push(p);return {json:async()=>({plan:null}),text:async()=>'config of '+p};},
+  opDialog:(id,title,body)=>{dialogs.push({id,title,body});return {querySelectorAll:()=>[]};}});
+ stateOf(c).labId='lab-a';
+ stateOf(c).view={intent:{schema:1,revision:'r'},problems:[],nodes:{},generations:[
+  {id:'g1',status:'succeeded',artifacts:{r1:[{module:'ospf',size:10}]}},
+  {id:'g2',status:'succeeded',artifacts:{r1:[{module:'bgp',size:10}]}}]};
+ stateOf(c).viewing='g1';
+ // The row remembers the plan it was drawn for, so a later change of the shown plan cannot redirect it.
+ c.designRenderFiles(stateOf(c).view);
+ const markup=el('design-files-body').innerHTML;
+ assert.match(markup,/data-design-view-file="r1"/);assert.match(markup,/data-design-view-generation="g1"/);assert.doesNotMatch(markup,/data-design-view-generation="g2"/);
+ await c.designViewFile('r1',0,'g1');
+ assert.equal(paths.length,1);assert.match(paths[0],/\/design\/generations\/g1\/artifacts\/r1\/0$/,'the URL names the plan the row was rendered for');
+ assert.equal(dialogs[0].title,'ospf · r1','the title and module label come from that plan');
+ // The same button after the student went back to the newest plan in the meantime still means g1.
+ stateOf(c).viewing=null;paths.length=0;await c.designViewFile('r1',0,'g1');
+ assert.match(paths[0],/\/g1\//);
+ // Without an id (an older caller) the plan being shown wins, never blindly the newest.
+ stateOf(c).viewing='g1';paths.length=0;dialogs.length=0;await c.designViewFile('r1',0);
+ assert.match(paths[0],/\/g1\//);assert.equal(dialogs[0].title,'ospf · r1');
+ assert.equal(notes.length,0);
+});
+test('M-16: the Files list click handler passes the plan id of the row to designViewFile',()=>{
+ assert.match(source,/designViewFile\(b\.dataset\.designViewFile,Number\(b\.dataset\.designViewIndex\),b\.dataset\.designViewGeneration\)/);
+});
+
+function applyFollowHarness(opts){
+ opts=opts||{};
+ const {els,el}=summaryEls();const timers=[],calls=[];let fail=opts.fail!==false;let jobStatus=opts.status||'applying';let refreshes=0;
+ const c=ctx({$:el,setMarkup:(e,h)=>{if(e)e.innerHTML=h;},current:()=>({id:'lab-a',name:'A'}),
+  setTimeout:(fn,ms)=>{const n=timers.length;timers.push({fn:async()=>{timers[n]=null;return fn();},ms});return timers.length;},clearTimeout:id=>{if(!opts.keepTimers&&id&&timers[id-1])timers[id-1]=null;},
+  api:async p=>{calls.push(p);if(opts.hold&&/\/design\/apply\/jobs\//.test(p))await opts.hold();if(fail)throw new Error('HTTP 500');return {json:async()=>({id:'j1',lab_id:'lab-a',status:jobStatus,targets:[]})};},
+  refresh:async()=>{refreshes++;}});
+ c.state.design_jobs=[{id:'j1',lab_id:'lab-a',status:'applying',created:'2026-10-03T10:00:00Z'}];
+ vm.runInContext("designApplyState.labId='lab-a';designApplyState.jobId='j1';designApplyState.step='progress';designApplyState.job={id:'j1',lab_id:'lab-a',status:'applying',targets:[]}",c);
+ const last=()=>{for(let i=timers.length-1;i>=0;i--)if(timers[i])return timers[i];return null;};
+ return {c,els,el,timers,calls,last,setFail:v=>{fail=v;},setStatus:s=>{jobStatus=s;},refreshes:()=>refreshes};
+}
+test('L-35: one failed poll does not freeze the Apply dialog: it is retried, said so, and a recovered poll continues',async()=>{
+ const h=applyFollowHarness();
+ h.c.designApplyStartWatch('j1');
+ await h.last().fn();
+ const body=h.el('design-apply-progress-body').innerHTML;
+ assert.match(body,/attempt 1 of 5/);assert.match(body,/HTTP 500/);assert.match(body,/role="alert"/);
+ assert.ok(h.last(),'another poll is scheduled');assert.equal(h.last().ms,2000);
+ h.setFail(false);h.setStatus('done');
+ await h.last().fn();
+ assert.doesNotMatch(h.el('design-apply-progress-body').innerHTML,/attempt|no longer being followed/,'a recovered poll clears the line');
+ assert.ok(h.refreshes()>=1,'a finished job refreshes the state');
+});
+test('L-35: after the bounded retries the dialog says following stopped and offers Check again, which really polls again',async()=>{
+ const h=applyFollowHarness();
+ h.c.designApplyStartWatch('j1');
+ for(let i=0;i<5;i++)await h.last().fn();
+ assert.match(h.el('design-apply-progress-body').innerHTML,/attempt 5 of 5/);
+ await h.last().fn();
+ const body=h.el('design-apply-progress-body').innerHTML;
+ assert.match(body,/no longer being followed/i);assert.match(body,/data-design-apply-follow-retry/);assert.match(body,/Check again/);
+ assert.equal(h.last(),null,'no endless polling behind the student\'s back');
+ assert.ok(h.refreshes()>=1,'giving up still refreshes the state (the plan card\'s Last apply line)');
+ const before=h.calls.length;
+ h.setFail(false);h.setStatus('applying');
+ h.c.designApplyFollowRetry();
+ assert.ok(h.last(),'Check again restarts the watch');
+ await h.last().fn();
+ assert.equal(h.calls.length,before+1,'and polls');
+ assert.doesNotMatch(h.el('design-apply-progress-body').innerHTML,/no longer being followed|data-design-apply-follow-retry/);
+});
+test('L-35: a closed dialog does not retry a failing poll',async()=>{
+ // The guard under test is the one in the catch: a request already in flight when the dialog closes
+ // and then fails must neither schedule another poll nor write an "attempt" line.
+ let rejectRequest;const pending=new Promise((_,rej)=>{rejectRequest=rej;});
+ const h=applyFollowHarness({fail:false,hold:()=>pending});
+ h.c.designApplyStartWatch('j1');
+ const first=h.timers[0];assert.ok(first,'the first poll is scheduled');
+ const running=first.fn();                              // the poll starts: its request is now pending
+ assert.equal(h.calls.length,1,'the request is in flight');
+ h.c.designApplyStopWatch();                            // the dialog closes while it is pending
+ const timersBefore=h.timers.length;
+ rejectRequest(new Error('HTTP 500'));
+ await running;
+ assert.equal(h.timers.length,timersBefore,'no new timer is scheduled by the failed in-flight poll');
+ assert.equal(h.last(),null);
+ assert.doesNotMatch(h.el('design-apply-progress-body').innerHTML,/attempt/,'and no attempt line is written for a closed dialog');
+ assert.equal(h.calls.length,1,'and nothing polls again');
+});
+test('L-35: closing the dialog before the first poll sends no request, even if the timer cannot be cancelled (the guard at the top of the poll)',async()=>{
+ const h=applyFollowHarness({keepTimers:true});
+ h.c.designApplyStartWatch('j1');
+ const t=h.timers[0];assert.ok(t,'the first poll is scheduled');
+ h.c.designApplyStopWatch();
+ await t.fn();                                          // the timer fires anyway
+ assert.equal(h.calls.length,0,'a closed dialog sends no poll');
+ assert.equal(h.last(),null,'and schedules nothing');
+});
+test('L-35: giving up also reloads the ownership list, so it is not left stale until a later successful poll',async()=>{
+ const h=applyFollowHarness();
+ h.c.designApplyStartWatch('j1');
+ for(let i=0;i<6;i++)await h.last().fn();
+ assert.match(h.el('design-apply-progress-body').innerHTML,/no longer being followed/i);
+ assert.ok(h.calls.some(p=>/\/labs\/lab-a\/design\/ownership$/.test(p)),'the ownership list is requested when following gives up');
+});
+test('L-35: the give-up line does not claim the apply is still running (after a manager restart it is "interrupted"), and points at Check again and Last apply',async()=>{
+ const h=applyFollowHarness();
+ h.c.designApplyStartWatch('j1');
+ for(let i=0;i<6;i++)await h.last().fn();
+ const body=h.el('design-apply-progress-body').innerHTML;
+ assert.doesNotMatch(body,/keeps running|still running/i);
+ assert.match(body,/real state is on the manager/i);assert.match(body,/Check again/);assert.match(body,/Last apply line under Generated plan/);assert.doesNotMatch(body,/plan card/i);
+});
+
+test('L-36: a failed plan fetch for a succeeded plan is worded as a failure with Try again, never as "Generate a plan"',async()=>{
+ const {el}=summaryEls();let fail=true;let answer={plan:{devices:[{name:'r1'}],links:[]}};const paths=[];
+ const c=ctx({$:el,setMarkup:(e,h)=>{if(e)e.innerHTML=h;},current:()=>({id:'lab-a',name:'A'}),
+  api:async p=>{paths.push(p);if(fail)throw new Error('HTTP 500');return {json:async()=>answer};}});
+ stateOf(c).labId='lab-a';
+ const view={intent:{schema:1,revision:'r'},problems:[],nodes:{},generations:[{id:'g',status:'succeeded',finished:'2026-10-03T10:00:00Z',artifacts:{}}]};
+ stateOf(c).view=view;
+ await c.designLoadPlan('lab-a','g');
+ c.designRenderPlanCard(view);
+ let body=el('design-plan-body').innerHTML;
+ assert.doesNotMatch(body,/Generate a plan/);assert.match(body,/could not be loaded/i);assert.match(body,/HTTP 500/);
+ assert.match(body,/data-design-plan-retry/);assert.match(body,/Try again/);
+ assert.match(body,/kept on the manager/i,'a failed fetch keeps its wording: the plan exists, the request failed');
+ // A 200 answer without a plan (the manager could not read plan.json) is the same failure.
+ fail=false;answer={plan:null};
+ await c.designLoadPlan('lab-a','g');c.designRenderPlanCard(view);
+ body=el('design-plan-body').innerHTML;assert.doesNotMatch(body,/Generate a plan/);assert.match(body,/data-design-plan-retry/);
+ // ...but an unreadable file is not promised to be recoverable: no "kept on the manager", Try again plus generating again.
+ assert.doesNotMatch(body,/kept on the manager/i);assert.match(body,/could not read/i);assert.match(body,/generate the plan again/i);
+ // An earlier plan opened through History > View: generating again would make a different plan, so only Try again is offered.
+ const two={intent:{schema:1,revision:'r'},problems:[],nodes:{},generations:[{id:'g0',status:'succeeded',finished:'2026-10-03T09:00:00Z',artifacts:{}},{id:'g',status:'succeeded',finished:'2026-10-03T10:00:00Z',artifacts:{}}]};
+ stateOf(c).view=two;stateOf(c).viewing='g0';
+ await c.designLoadPlan('lab-a','g0');c.designRenderPlanCard(two);
+ body=el('design-plan-body').innerHTML;assert.match(body,/could not read/i);assert.match(body,/data-design-plan-retry/);assert.doesNotMatch(body,/generate the plan again/i);
+ stateOf(c).viewing='';stateOf(c).view=view;
+ await c.designLoadPlan('lab-a','g');
+ // Try again fetches the shown plan again and draws it.
+ answer={plan:{devices:[{name:'r1'}],links:[]}};paths.length=0;
+ await c.designPlanRetry();
+ assert.equal(paths.length,1);assert.match(paths[0],/\/design\/generations\/g$/);
+ body=el('design-plan-body').innerHTML;assert.doesNotMatch(body,/data-design-plan-retry|could not be loaded/);assert.match(body,/r1/);
+ // A plan that does not exist (nothing generated yet, or a failed one) keeps its old hint.
+ const none={intent:{schema:1},problems:[],nodes:{},generations:[]};stateOf(c).view=none;stateOf(c).plan=null;stateOf(c).planError='';
+ c.designRenderPlanCard(none);assert.match(el('design-plan-body').innerHTML,/Generate a plan to see it here/);
+});
+test('L-36: History > View of a plan whose fetch fails shows the failure for that plan, and a late answer for another plan is ignored',async()=>{
+ const {el}=summaryEls();
+ const c=ctx({$:el,setMarkup:(e,h)=>{if(e)e.innerHTML=h;},current:()=>({id:'lab-a',name:'A'}),api:async()=>{throw new Error('HTTP 502');}});
+ stateOf(c).labId='lab-a';
+ stateOf(c).view={intent:{schema:1,revision:'r'},problems:[],nodes:{},generations:[{id:'g1',status:'succeeded',finished:'2026-10-03T10:00:00Z'},{id:'g2',status:'succeeded',finished:'2026-10-03T11:00:00Z'}]};
+ await c.designViewGeneration('g1');
+ assert.match(el('design-plan-body').innerHTML,/could not be loaded/i);
+ stateOf(c).planError='';
+ await c.designLoadPlan('lab-a','g2');
+ assert.equal(stateOf(c).planError,'','the answer for a plan that is not shown does not touch the shown plan\'s state');
 });

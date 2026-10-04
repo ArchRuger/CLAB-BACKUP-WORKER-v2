@@ -23,7 +23,7 @@ check backup after stay one backup job each, covering every node.
 | Restore artifact | `show configuration` (hierarchical), `.jcfg`, format `junos-hierarchical`: a second capture | `show running-config`, `.eoscfg`, format `eos-running-config`: the backup's own text, one capture | `show running-config`, `.xrcfg`, format `iosxr-running-config`: the backup's own text, one capture |
 | Replacement | `configure exclusive`, `load override terminal` | `configure session <token>`, `rollback clean-config`, `copy terminal: session-config` | `configure exclusive`, the saved configuration entered into the (empty) target configuration, then `commit replace …` |
 | Review diff | `show \| compare` | `show session-config diffs` | `show configuration changes diff` (`show commit changes diff` is a merge preview and misleads) |
-| Validation | `commit check` | the session commit itself; any `% ` line during the load rejects the candidate | per line while entering; any `% ` line that is not a warning rejects the candidate; the commit itself |
+| Validation | `commit check` | the session commit itself; any `% ` line answering the session reset (`rollback clean-config`) or during the load aborts the session before anything is committed | per line while entering; any `% ` line that is not a warning rejects the candidate; the commit itself |
 | Timed recovery | `commit confirmed <minutes> comment <token>` | `commit timer HH:MM:SS` | `commit replace confirmed minutes <N>`: replacement and timer in one native command |
 | Confirmation | from a fresh connection: `commit check` (confirms without committing the shared candidate), then `rollback pending` must be gone | from a fresh connection: `configure session <token> commit` | **only the CLI session that armed the change can confirm it** (proven three ways). The driver keeps that session, the service proves management with a fresh connection, and only then `commit` is sent on the kept session |
 | Persistence | the commit is persistent | `write memory` after the confirmation (EOS does not autosave on commit); reported per node as saved / not saved | the commit is persistent |
@@ -56,7 +56,8 @@ no change and the node is still `verified`), `verify_mismatch`
 (replaced, but differences remain: counted and sampled with secrets masked), `applied_unverified`
 (replaced, the follow-up capture did not run), `failed` (not changed: the driver refused or the node
 rejected the candidate and the candidate was discarded, or the node could not be reached before
-anything was sent), `rolled_back` (the change was not confirmed and the manager **read the previous
+anything was sent, or the job stopped before it reached the node, for example because the safety backup could
+not run), `rolled_back` (the change was not confirmed and the manager **read the previous
 configuration back**), `uncertain` (the manager could not establish what is active), `ineligible`,
 `interrupted`. `rollback_expected` exists only on jobs stored by releases before 1.30.27.
 
@@ -77,7 +78,37 @@ The manager keeps trying to reconnect and confirm for the whole recovery window 
 Junos was seen rolling back 35 s late). It confirms a pending change only when the node shows it
 under this job's token; "something is pending" proves nothing about whose it is. After a manager
 restart the same read-back runs for every node that was mid-change; nothing is re-applied, and the
-job then states what was found.
+job then states what was found. Until every such node has been read back the job stays `interrupted`
+but keeps the guard of a running restore (`restore_holds_lab` inside `operation_busy`), because the
+node may still run a change the device is about to undo. What the guard covers is refused, not
+queued: with 409, or with 400 for backups and backup login checks (`runner.submit` raises and the jobs
+route answers 400), and it has to be started again afterwards.
+
+- **On that lab** (the checks that name the lab): backups and backup login checks, another restore and
+  its review, a network-design apply, *Remove lab*, replacing the device list, editing a device, adding
+  credentials, the backup schedule, importing a drawing, registering the lab's topology files again
+  (`POST /api/lab-definitions` with its lab id), and *Sync from VM* or matching the lab to a deployment.
+- **On every lab** (the checks that name no lab): lab operations (`LabOperations.guard`: previewing and
+  confirming deploy, destroy, restart, file actions and the rest, and saving the map, the layout or the
+  lab's settings such as favourite or hidden), every Git action that changes something (`GitProgress.idle`:
+  save progress, retry, dismiss, connecting, moving or unlinking a save location, exporting a design
+  plan), adding a new lab by its topology files (`POST /api/lab-definitions` without a lab id), importing
+  a lab found on the VM, changing the VM connection and *Start fresh*. A VM setup seed waits for a later
+  discovery cycle.
+- **Not held**: backups and design applies of other labs (their own checks look at running restores
+  only), and anything that only reads.
+- **Accepted, but started later**: a restore of another lab. The restore service runs one job at a time
+  and schedules the read-back first, so the new job waits as `queued` until every node has been read
+  back. While it waits it is a queued restore like any other: it holds every backup and every
+  design apply on every lab.
+
+The readiness monitor leaves the lab's devices alone meanwhile. The page shows the job as work in
+progress, not as a finished *Interrupted* job: its public view carries `rechecking: true` (computed
+from the stored job, never stored itself; a job of an older manager has no such field and reads as not
+rechecking), so the lab header says *Checking devices*, the banner *Checking the devices after a manager
+restart…* and the job dialog keeps following it. If the manager is stopped or
+restarted again before a node was read back, that node is not counted as checked: the next start
+reads it back, and only then is the job finished.
 
 ## Desired-state comparison and its exclusions
 

@@ -345,6 +345,30 @@ class RestoreServiceTests(unittest.TestCase):
         self.assertLessEqual(sum(len(h['lines']) for h in diff['hunks']), DIFF_MAX_LINES)
         self.assertEqual(diff['added'], DIFF_MAX_LINES * 2)                 # the counts still describe the whole diff
 
+    def test_a_configuration_past_the_diff_helpers_own_cap_is_counted_only_in_the_part_shown(self):
+        # textdiff compares at most its line cap of each text; its counts then cover only that part and it says so
+        # with `counts_partial`, which the review passes on so the page words them "in the part shown" (audit L-7).
+        from app.restore import review_diff
+        cap = 20000   # textdiff.unified's default max_lines
+        saved = [f'set interfaces ge-0/0/{i} description d{i}' for i in range(cap + 50)]
+        early = saved[:5] + ['set interfaces ge-0/0/5 description changed'] + saved[6:]
+        diff = review_diff('\n'.join(saved), '\n'.join(early), False, 'Final')
+        self.assertTrue(diff['truncated'])
+        self.assertIs(diff.get('counts_partial'), True)
+        self.assertEqual((diff['added'], diff['removed']), (1, 1))
+        # Only past the cap: no line can be shown, and the reason says so instead of blaming spacing or layout.
+        late = saved[:cap + 10] + ['set interfaces ge-0/0/9999 description changed'] + saved[cap + 11:]
+        diff = review_diff('\n'.join(saved), '\n'.join(late), False, 'Final')
+        self.assertFalse(diff['identical'])
+        self.assertEqual(diff['hunks'], [])
+        self.assertIs(diff.get('counts_partial'), True)
+        self.assertNotIn('spacing or layout', diff['reason'])
+        self.assertIn('too long', diff['reason'])
+        # The review's own cut after counting (DIFF_MAX_LINES) leaves the counts whole: no flag.
+        short = review_diff('set a 1\n', 'set a 1\n' + ''.join(f'set b {i}\n' for i in range(500)), False, 'Final')
+        self.assertTrue(short['truncated'])
+        self.assertNotIn('counts_partial', short)
+
     def test_the_review_still_answers_when_the_diff_cannot_be_built(self):
         with patch('app.restore._unified', side_effect=RuntimeError('no diff helper')), \
                 patch('app.restore.junos.capture', return_value=DESIRED_SET + 'set snmp location LAB\n'):
@@ -624,6 +648,144 @@ class RestoreServiceTests(unittest.TestCase):
         message = job['targets'][0]['message']
         self.assertEqual(message, 'Pre-restore backup failed for this node (the device rejected the login); it was not changed.')
         self.assertNotIn('hunter2', str(job))
+
+    def assert_every_node_settled(self, job):
+        self.assertEqual(job['progress'], {'settled': len(job['targets']), 'total': len(job['targets'])})
+        for target in job['targets']:
+            self.assertIn('settled', target['timeline'], target['name'])
+            self.assertNotIn(target['stage'], ('queued', 'backing_up', 'backed_up', 'checking'), target['name'])
+
+    def test_a_pre_restore_backup_that_cannot_start_settles_every_node_as_not_changed(self):
+        # The job used to finish 'failed' while each node kept 'Backing up…' and a step whose time kept growing.
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        with patch.object(self.runner, 'submit', side_effect=ValueError('Another backup is running.')), \
+                patch('app.restore.junos.apply_candidate') as apply:
+            self.svc.execute(job['id'])
+        result = self.svc.get_job(job['id'])
+        self.assertEqual(result['status'], 'failed')
+        self.assertTrue(result['finished'])
+        self.assertEqual({(t['status'], t['stage']) for t in result['targets']}, {('failed', 'failed')})
+        self.assertTrue(all(t['message'].startswith('Configuration was not changed') for t in result['targets']))
+        self.assert_every_node_settled(result)
+        apply.assert_not_called()
+
+    def test_a_pre_restore_backup_that_never_completes_settles_every_node_as_not_changed(self):
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        with patch.object(self.svc, '_wait_backup', return_value=None), patch('app.restore.junos.apply_candidate') as apply:
+            self.svc.execute(job['id'])
+        result = self.svc.get_job(job['id'])
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual({(t['status'], t['stage']) for t in result['targets']}, {('failed', 'failed')})
+        self.assert_every_node_settled(result)
+        apply.assert_not_called()
+
+    def test_a_restore_that_cannot_start_settles_its_waiting_nodes_as_not_changed(self):
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        self.store.state['discovery']['checked_epoch'] = 0       # discovery went stale between submit and start
+        self.store.save()
+        self.svc.execute(job['id'])
+        result = self.svc.get_job(job['id'])
+        self.assertEqual(result['status'], 'preflight_failed')
+        self.assertEqual({(t['status'], t['stage']) for t in result['targets']}, {('failed', 'failed')})
+        self.assert_every_node_settled(result)
+        self.assertEqual(self.runner.calls, [])
+
+    def test_an_internal_error_in_the_follow_up_check_leaves_replaced_nodes_unverified_not_checking(self):
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        with self.fake_apply(), self.pending_ours(), \
+                patch('app.restore.junos.confirm', return_value={'confirmed': True, 'had_pending_rollback': True}), \
+                patch('app.restore.junos.capture', return_value=DESIRED_SET), \
+                patch.object(self.svc, '_verify', side_effect=RuntimeError('boom')):
+            self.svc.execute(job['id'])
+        result = self.svc.get_job(job['id'])
+        self.assertEqual(result['status'], 'needs_attention')
+        self.assertEqual({(t['status'], t['stage']) for t in result['targets']}, {('applied_unverified', 'replaced')})
+        self.assertTrue(all('checked' in t['timeline'] for t in result['targets']))
+        self.assert_every_node_settled(result)
+        self.assertNotIn('boom', str(result))
+
+    def test_an_internal_error_never_calls_a_node_that_may_hold_an_armed_change_failed(self):
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        with self.store.lock:
+            targets = self.svc.get_job(job['id'])['targets']
+            targets[0].update(status='confirming', stage='armed', _handle={})     # a node task left mid-change
+            targets[1].update(status='verified', stage='replaced')                 # already has its outcome
+            targets[1]['timeline']['settled'] = time.time()
+            self.svc.get_job(job['id'])['progress']['settled'] = 1
+        with patch.object(self.svc, 'update', side_effect=[RuntimeError('boom'), None]):   # the job crashes at its start
+            self.svc.execute(job['id'])
+        result = self.svc.get_job(job['id'])
+        by_name = {t['name']: t for t in result['targets']}
+        self.assertEqual((by_name['PTX1']['status'], by_name['PTX1']['stage']), ('uncertain', 'uncertain'))
+        self.assertEqual((by_name['SW1']['status'], by_name['SW1']['stage']), ('verified', 'replaced'))
+        self.assert_every_node_settled(result)
+
+    # --- review follow-up K1: a restore that ends on an error never stays busy because the disk is full ----------
+
+    def assert_ended_not_busy(self, job_id, status):
+        from app.lab_operations import RESTORE_BUSY, operation_busy
+        result = self.svc.get_job(job_id)
+        self.assertEqual(result['status'], status, result['message'])
+        self.assertNotIn(result['status'], RESTORE_BUSY)
+        self.assertTrue(result['finished'])
+        self.assertFalse(operation_busy(self.store.state), 'a finished restore holds no lab')
+        self.assertFalse(operation_busy(self.store.state, 'lab1'))
+        self.assert_every_node_settled(result)
+
+    def test_a_restore_that_fails_while_the_disk_is_full_ends_terminal_in_memory(self):
+        # The status write of the error handler used to roll back to the busy status it replaced when its save failed:
+        # until a restart every backup, restore, Git save and lab operation on every lab was refused.
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        self.store.state['discovery']['checked_epoch'] = 0       # the restore stops on a _Fail at its preflight
+        self.store.save()
+        save, full = self.store.save, []
+        settle = self.svc._settle_unfinished
+
+        def saving():
+            if full:
+                raise OSError(28, 'No space left on device')
+            save()
+
+        def disk_full_from_here(job_id):
+            full.append(True)
+            settle(job_id)
+        with patch.object(self.store, 'save', side_effect=saving), \
+                patch.object(self.svc, '_settle_unfinished', side_effect=disk_full_from_here):
+            try:
+                self.svc.execute(job['id'])
+            except OSError:
+                pass   # the pool would swallow it; what counts is the job it leaves behind
+        self.assertTrue(full, 'the save failed only once the restore had ended')
+        self.assert_ended_not_busy(job['id'], 'preflight_failed')
+
+    def test_a_restore_that_crashes_on_a_full_disk_ends_needing_attention_not_queued(self):
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        with patch.object(self.store, 'save', side_effect=OSError(28, 'No space left on device')), \
+                patch('app.restore.junos.apply_candidate') as apply:
+            self.svc.execute(job['id'])       # its very first status write fails
+        self.assert_ended_not_busy(job['id'], 'needs_attention')
+        self.assertEqual({(t['status'], t['stage']) for t in self.svc.get_job(job['id'])['targets']}, {('failed', 'failed')})
+        apply.assert_not_called()
+
+    def test_a_restore_whose_final_save_fails_keeps_its_outcome_and_holds_nothing(self):
+        # _finalize sets the outcome in memory before its save fails; the error handler must neither roll it back to a
+        # busy status nor replace the per-node verdict with "Restore interrupted".
+        save, full = self.store.save, []
+        finalize = self.svc._finalize
+
+        def saving():
+            if full:
+                raise OSError(28, 'No space left on device')
+            save()
+
+        def disk_full_from_here(*args, **kwargs):
+            full.append(True)
+            return finalize(*args, **kwargs)
+        with patch.object(self.store, 'save', side_effect=saving), patch.object(self.svc, '_finalize', side_effect=disk_full_from_here):
+            result = self.run_execute()
+        self.assertTrue(full)
+        self.assert_ended_not_busy(result['id'], 'succeeded')
+        self.assertTrue(result['message'].startswith('All 2 node(s) restored and verified'), result['message'])
 
     def test_verify_mismatch_when_stale_remains(self):
         self.runner.post_config = DESIRED_SET + 'set interfaces lo0 unit 0 family inet address 10.9.9.9/32\n'
@@ -1091,6 +1253,233 @@ class RestoreServiceTests(unittest.TestCase):
         self.assertIn('could not check the device', result['targets'][0]['message'])
         self.assertEqual(result['status'], 'needs_attention')
         apply.assert_not_called(); confirm.assert_not_called()
+
+    # --- AUDIT-2026-10-03 M-5, L-9, L-10: the restart recheck is never cut short ------------------
+
+    def test_a_shutdown_during_the_restart_recheck_never_reports_the_node_as_checked(self):
+        # M-5: the held IOS XR session is gone after a restart, so the recheck waits out the undo window; the
+        # manager is stopped again meanwhile. Nothing was read back, so the job must not be finalized
+        # ("Checked after a manager restart. No node was restored ...") and the next start reads it back.
+        job_id, again = self._restarted_mid_change()
+        for target in again.get_job(job_id)['targets']:
+            target['_deadline'] = time.time() + 3600     # the undo window is still running
+        again.recovery_grace = 3600
+
+        def unreachable_then_shutdown(*_args, **_kwargs):
+            again.stopping.set()
+            raise OSError('management is down')
+        with patch('app.restore.junos.pending', side_effect=unreachable_then_shutdown), \
+                patch('app.restore.junos.confirm') as confirm, patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            again._recheck_interrupted(job_id, 'PTX1')
+        stopped = again.get_job(job_id)
+        self.assertEqual(stopped['status'], 'interrupted')
+        self.assertFalse(stopped['message'].startswith('Checked'))
+        self.assertEqual(stopped['targets'][0]['status'], 'interrupted')
+        self.assertNotIn('settled', stopped['targets'][0].get('timeline', {}))
+        self.assertIn('PTX1', stopped['_candidates'])                       # still needed by the next recheck
+        self.assertEqual(again.rechecks[job_id], 1)                          # not counted as looked at
+        confirm.assert_not_called()
+        # The next start reads the node back and only then finishes the job.
+        third = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        third.retry_interval = third.recovery_grace = 0
+        self.assertEqual(third.unchecked, [(job_id, 'PTX1')])
+        third.rechecks[job_id] = 1
+        with patch('app.restore.junos.pending', return_value=False), patch('app.restore.junos.confirm') as confirm, \
+                patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            third._recheck_interrupted(job_id, 'PTX1')
+        finished = third.get_job(job_id)
+        self.assertEqual(finished['targets'][0]['status'], 'verified')
+        self.assertEqual(finished['status'], 'succeeded')
+        self.assertTrue(finished['message'].startswith('Checked after a manager restart.'))
+        confirm.assert_not_called()
+
+    def test_a_recheck_that_starts_after_the_shutdown_touches_no_device_and_finalizes_nothing(self):
+        # M-5, the queued variant: the next item of an endpoint group runs after the stop was requested.
+        job_id, again = self._restarted_mid_change()
+        again.stopping.set()
+        with patch('app.restore.junos.pending') as pending, patch('app.restore.junos.capture') as capture, \
+                patch.object(again, '_open') as opened:
+            again._recheck_interrupted(job_id, 'PTX1')
+        opened.assert_not_called(); pending.assert_not_called(); capture.assert_not_called()
+        self.assertEqual(again.get_job(job_id)['status'], 'interrupted')
+        self.assertEqual(again.get_job(job_id)['targets'][0]['status'], 'interrupted')
+        self.assertEqual(again.rechecks[job_id], 1)
+
+    def test_a_second_restart_before_the_recheck_settled_reads_the_node_back_again(self):
+        # L-9: the process dies (or restarts) while the first recheck still waits on the node. The job and the
+        # target are 'interrupted' now, outside RESTORE_BUSY and IN_FLIGHT, and must still be rechecked.
+        job_id, again = self._restarted_mid_change()
+        self.store.save()
+        third = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        third.retry_interval = third.recovery_grace = 0
+        self.assertEqual(third.unchecked, [(job_id, 'PTX1')])
+        restarted = third.get_job(job_id)
+        self.assertEqual(restarted['status'], 'interrupted')
+        self.assertIn('checking what is active on it now', restarted['targets'][0]['message'])
+        third.rechecks[job_id] = 1
+        with patch('app.restore.junos.pending', return_value='clabmgr-1a2b3c4d'), \
+                patch('app.restore.junos.confirm', return_value={'confirmed': True}) as confirm, \
+                patch('app.restore.junos.apply_candidate') as apply, patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            third._recheck_interrupted(job_id, 'PTX1')
+        finished = third.get_job(job_id)
+        self.assertEqual(finished['targets'][0]['status'], 'verified')
+        self.assertEqual(confirm.call_args.args[1]['token'], 'clabmgr-1a2b3c4d')   # only under the job's own token
+        apply.assert_not_called()
+        self.assertEqual(finished['status'], 'succeeded')
+        self.assertNotIn('_candidates', finished)
+        # Once settled, a later start leaves the job alone.
+        self.assertEqual(RestoreService(self.store, self.runner, self.git, connector=fake_connect).unchecked, [])
+
+    def test_a_restart_rechecks_only_the_nodes_whose_change_was_never_read_back(self):
+        # L-9 variants: a multi-node job where one node settled before the second restart; a node interrupted before
+        # it was changed; a job stopped before it ran; and a job an older release left stuck (no stages, no flag).
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        self.svc.update(job['id'], status='applying')
+        for target in self.store.state['restore_jobs'][-1]['targets']:
+            target.update(status='confirming', _token='clabmgr-' + target['name'].lower(), _handle={})
+        self.store.save()
+        again = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        again.retry_interval = again.recovery_grace = 0
+        again.rechecks[job['id']] = 2
+        for target in again.get_job(job['id'])['targets']:
+            target['_deadline'] = 1
+        with patch('app.restore.junos.pending', return_value=False), patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            again._recheck_interrupted(job['id'], 'SW1')               # SW1 is read back, then the manager dies
+        self.assertEqual(again.get_job(job['id'])['status'], 'interrupted')
+        stuck = dict(copy.deepcopy(self.store.state['restore_jobs'][-1]), id='legacy', request_id='legacy', status='interrupted')
+        for target in stuck['targets']:
+            target.pop('timeline', None); target.pop('stage', None); target.pop('_recheck', None)   # older releases had none
+            target.update(status='interrupted', _token='clabmgr-0legacy0' if target['name'] == 'PTX1' else None)
+        never_ran = dict(copy.deepcopy(stuck), id='stopped', request_id='stopped', status='interrupted',
+                         targets=[dict(t, status='pending', _token=None) for t in stuck['targets']])
+        self.store.state['restore_jobs'] += [stuck, never_ran]
+        self.store.save()
+        third = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        self.assertEqual(sorted(third.unchecked), sorted([(job['id'], 'PTX1'), ('legacy', 'PTX1')]))
+        statuses = {t['name']: t['status'] for t in third.get_job(job['id'])['targets']}
+        self.assertEqual(statuses, {'PTX1': 'interrupted', 'SW1': 'verified'})
+        self.assertEqual(third.get_job('stopped')['targets'][0]['status'], 'pending')
+
+    def test_a_death_after_the_last_node_was_read_back_is_finalized_at_the_next_start(self):
+        # Review follow-up K2 (L-9): the read-back writes the node's outcome, then its post-restart status, then the job.
+        # A process that dies after the first write left a job 'interrupted' for good: no node awaited a read-back, so no
+        # start looked at it again (stale "is checking" wording, the saved candidates kept).
+        job_id, again = self._restarted_mid_change()
+        with patch('app.restore.junos.pending', return_value=False), patch('app.restore.junos.capture', return_value=DESIRED_SET), \
+                patch.object(again, 'update_target'), patch.object(again, '_finalize'):    # the process dies after the outcome
+            again._recheck_interrupted(job_id, 'PTX1')
+        died = again.get_job(job_id)
+        self.assertEqual(died['status'], 'interrupted')
+        self.assertIn('settled', died['targets'][0]['timeline'])
+        # A job an older release left 'interrupted' with every node settled (no restart mark) is history: never relabelled.
+        older = dict(copy.deepcopy(died), id='older', request_id='older')
+        for target in older['targets']:
+            target.pop('_recheck', None)
+        self.store.state['restore_jobs'].append(older)
+        self.store.save()
+        third = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        self.assertEqual(third.unchecked, [])                                 # nothing is read back again
+        finished = third.get_job(job_id)
+        self.assertEqual(finished['status'], 'succeeded', finished['message'])
+        self.assertEqual(finished['targets'][0]['status'], 'verified', 'the post-restart status is written with the outcome')
+        self.assertTrue(finished['message'].startswith('Checked after a manager restart.'))
+        self.assertNotIn('_candidates', finished)
+        self.assertEqual((third.get_job('older')['status'], third.get_job('older')['message']), ('interrupted', older['message']))
+        from app.lab_operations import operation_busy
+        self.assertFalse(operation_busy(self.store.state, 'lab1'))
+
+    def test_the_lab_stays_busy_until_the_restart_recheck_has_read_every_node_back(self):
+        # L-10: between the restart and the read-back the node may still run an unconfirmed change, so backups,
+        # Git saves, lab operations, Remove lab and another restore must wait, on this lab only.
+        from fastapi import HTTPException
+        from app.lab_operations import operation_busy
+        job_id, again = self._restarted_mid_change()
+        self.assertTrue(operation_busy(self.store.state, 'lab1'))
+        self.assertTrue(operation_busy(self.store.state))
+        self.assertFalse(operation_busy(self.store.state, 'another-lab'))
+        self.assertFalse(operation_busy(self.store.state, 'lab1', progress_id=job_id))
+        with self.assertRaises(HTTPException) as refused:
+            again.guard_idle('lab1')
+        self.assertEqual(refused.exception.status_code, 409)
+        with patch('app.restore.junos.pending', return_value=False), patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            again._recheck_interrupted(job_id, 'PTX1')
+        self.assertEqual(again.get_job(job_id)['status'], 'succeeded')
+        self.assertFalse(operation_busy(self.store.state, 'lab1'))
+        again.guard_idle('lab1')
+        # A job left 'interrupted' with nothing to read back (every node settled, or none was changed) holds nothing.
+        self.store.state['restore_jobs'].append(dict(id='old', lab_id='lab1', status='interrupted', targets=[
+            {'name': 'PTX1', 'status': 'interrupted', 'stage': 'failed', 'timeline': {'settled': 1}},
+            {'name': 'SW1', 'status': 'pending'}]))
+        self.assertFalse(operation_busy(self.store.state, 'lab1'))
+
+    def test_the_public_job_says_while_the_restart_recheck_holds_the_lab(self):
+        # Review follow-up of L-10: the page must see the hold, or it shows a finished "Interrupted" job and an idle lab
+        # while every action answers 409. One public boolean, computed the way operation_busy decides; no private key.
+        from app.restore import public_job
+        job_id, again = self._restarted_mid_change()
+        public = public_job(again.get_job(job_id))
+        self.assertEqual((public['status'], public['rechecking']), ('interrupted', True))
+        self.assertFalse(any(key.startswith('_') for target in public['targets'] for key in target))
+        self.assertNotIn('clabmgr-', str(public))
+        with patch('app.restore.junos.pending', return_value=False), patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            again._recheck_interrupted(job_id, 'PTX1')
+        self.assertIs(public_job(again.get_job(job_id))['rechecking'], False, 'read back: the job no longer holds the lab')
+        # Interrupted with nothing left to read back, a job that runs (it says so by its status) and a job an older
+        # manager stored: none of them is rechecking.
+        settled = dict(id='old', lab_id='lab1', status='interrupted', targets=[
+            {'name': 'PTX1', 'status': 'interrupted', 'stage': 'failed', 'timeline': {'settled': 1}}])
+        legacy = dict(id='legacy', lab_id='lab1', status='interrupted', targets=[{'name': 'PTX1', 'status': 'interrupted'}])
+        running = dict(id='run', lab_id='lab1', status='applying', targets=[{'name': 'PTX1', 'status': 'applying', '_token': 't'}])
+        for job in (settled, legacy, running):
+            self.assertIs(public_job(job)['rechecking'], False, job['id'])
+
+    def test_remove_lab_is_refused_while_the_restart_recheck_is_pending(self):
+        from app.main import create_app
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            app = create_app(folder)
+            store = app.state.store
+            with store.lock:
+                store.state['labs'].append(dict(self.lab, id='labX', name='busy-lab'))
+                store.state.setdefault('restore_jobs', []).append(dict(id='r1', lab_id='labX', status='interrupted', targets=[
+                    {'name': 'PTX1', 'status': 'interrupted', 'stage': 'verifying', '_token': 'clabmgr-1a2b3c4d',
+                     'timeline': {'queued': 1, 'verifying': 2}}]))
+                store.save()
+            client = TestClient(app, base_url='http://testserver')
+            response = client.request('DELETE', '/api/labs/labX', json={'name': 'busy-lab'},
+                                      headers={'Origin': 'http://testserver'})
+            self.assertEqual(response.status_code, 409, response.text)
+            self.assertTrue(any(l['id'] == 'labX' for l in store.state['labs']))
+
+    def test_a_recheck_whose_job_disappeared_does_not_end_the_other_rechecks_of_its_group(self):
+        # L-10 (b): the job is dropped while its node is read back. Recording the outcome fails with 404; that must not
+        # escape the recheck and skip the next job's node behind the same endpoint.
+        job = self.svc.submit('lab1', self.source(), ['PTX1'], 5, uuid.uuid4().hex)
+        self.svc.update(job['id'], status='applying')
+        first = self.store.state['restore_jobs'][-1]
+        first['targets'][0].update(status='confirming', _token='clabmgr-1a2b3c4d', _handle={'token': 'clabmgr-1a2b3c4d'})
+        second = dict(copy.deepcopy(first), id=uuid.uuid4().hex, request_id=uuid.uuid4().hex)
+        self.store.state['restore_jobs'].append(second)
+        self.store.save()
+        again = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        again.retry_interval = again.recovery_grace = 0
+        self.assertEqual(again.unchecked, [(first['id'], 'PTX1'), (second['id'], 'PTX1')])
+        for item in again.unchecked:
+            again.rechecks[item[0]] = 1
+        settle = again._settle
+
+        def removed_meanwhile(*args, **kwargs):
+            with self.store.lock:
+                if any(j['id'] == first['id'] for j in self.store.state['restore_jobs']):
+                    self.store.state['restore_jobs'] = [j for j in self.store.state['restore_jobs'] if j['id'] != first['id']]
+                    return 'uncertain', {'why': 'connectivity: OSError'}
+            return settle(*args, **kwargs)
+        with patch.object(again, '_settle', side_effect=removed_meanwhile), \
+                patch('app.restore.junos.pending', return_value=False), patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            again._recheck_all(list(again.unchecked))
+        self.assertEqual(again.get_job(second['id'])['targets'][0]['status'], 'verified')
+        self.assertEqual(again.get_job(second['id'])['status'], 'succeeded')
+        self.assertEqual(again.rechecks[first['id']], 0)
 
     def test_a_shutdown_inside_the_undo_window_leaves_the_node_in_flight_for_the_restart_recheck(self):
         self.svc.retry_interval, self.svc.recovery_grace = 0, 3600

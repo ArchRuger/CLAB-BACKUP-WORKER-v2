@@ -637,6 +637,22 @@ class LinkModuleSettingsAdvancedTests(DesignIntentTestCase):
         elsewhere = dict(di.empty_intent(), modules=['vlan'], vlans={'red': {'id': 100, 'members': ['x']}})
         self.assertError(di.validate(elsewhere, schema=self.schema), 'vlans.red.members', 'not accepted')
 
+    def test_a_lag_member_that_carries_its_own_bundle_or_belongs_to_two_is_refused(self):
+        # Audit 2026-10-03 L-17: such links used to pass and then vanish from the plan without a word.
+        K2 = 'a:eth2--b:eth2'; K3 = 'a:eth3--b:eth3'; links = [self.K, K2, K3]
+        cycle = dict(di.empty_intent(), modules=['lag'], links={self.K: {'lag': {'members': [K2]}}, K2: {'lag': {'members': [self.K]}}})
+        errs = di.validate(cycle, schema=self.schema, lab_links=links)
+        self.assertError(errs, 'links.' + self.K + '.lag.members', 'carries an aggregation of its own: ' + K2)
+        self.assertError(errs, 'links.' + K2 + '.lag.members', 'carries an aggregation of its own: ' + self.K)
+        chain = dict(di.empty_intent(), modules=['lag'], links={self.K: {'lag': {'members': [K2]}}, K2: {'lag': {'members': [K3]}}})
+        errs = di.validate(chain, schema=self.schema, lab_links=links)
+        self.assertError(errs, 'links.' + self.K + '.lag.members', 'carries an aggregation of its own: ' + K2)
+        self.assertFalse([e for e in errs if e['path'] == 'links.' + K2 + '.lag.members'], errs)
+        twice = dict(di.empty_intent(), modules=['lag'], links={self.K: {'lag': {'members': [K3]}}, K2: {'lag': {'members': [K3]}}})
+        errs = di.validate(twice, schema=self.schema, lab_links=links)
+        self.assertError(errs, 'links.' + K2 + '.lag.members', 'already a member of the aggregation carried by ' + self.K)
+        self.assertFalse([e for e in errs if e['path'] == 'links.' + self.K + '.lag.members'], errs)
+
     def test_isis_area_default_origination_and_redistribution_forms(self):
         ok = dict(di.empty_intent(), modules=['isis', 'bgp', 'ospf'], isis={'area': '49.0001'}, bgp={'as': 65000},
                   nodes={'a': {'bgp': {'originate': ['0.0.0.0/0', '::/0'], 'import': {'ospf': True}}}})
@@ -947,6 +963,22 @@ class ThirdPassRegressionTests(DesignIntentTestCase):
         self.assertError(di.validate(intent, management=mgmt), 'links.' + key + '.endpoints.a.ipv4', 'management')
         intent = dict(di.empty_intent(), nodes={'a': {'loopback': {'ipv4': '172.20.0.1/16'}}})
         self.assertError(di.validate(intent, management=mgmt), 'nodes.a.loopback.ipv4', 'management')
+
+
+class MalformedShapeTests(DesignIntentTestCase):
+    """A malformed document is a problem list, never an exception (the routes would answer 500 without one)."""
+
+    def test_families_that_are_not_a_mapping_are_one_problem_whatever_the_pools(self):
+        for families in ('x', None, 1, True, [], ['ipv4']):
+            with self.subTest(families=families):
+                errs = di.validate(dict(di.empty_intent(), families=families))   # the default pools carry valid prefixes
+                self.assertOnlyError(errs, 'families', 'Enable IPv4, IPv6 or both')
+
+    def test_device_modules_with_unhashable_entries_are_one_problem(self):
+        for modules in ([['ospf']], [{}], [[]], ['ospf', ['bgp']]):
+            with self.subTest(modules=modules):
+                errs = di.validate(dict(di.empty_intent(), modules=['ospf'], nodes={'r1': {'modules': modules}}))
+                self.assertOnlyError(errs, 'nodes.r1.modules', 'supported list')
 
 
 @unittest.skipUnless(shutil.which('netlab'), 'netlab is not on PATH for this test run')

@@ -47,7 +47,8 @@ JOB_CAP = 200
 REVIEW_TTL = 600
 SAMPLE = 40
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'generation_id', 'created', 'started', 'finished', 'status', 'message',
-              'confirm_minutes', 'pre_backup_job_id', 'post_backup_job_id', 'targets', 'progress', 'takeover')
+              'confirm_minutes', 'pre_backup_job_id', 'post_backup_job_id', 'targets', 'progress', 'takeover',
+              'rechecking')   # device names still read back after a restart (public in `targets` already); popped once none is left
 NOT_AVAILABLE = 'Applying to this kind of device is not available yet; its generated files are preview and download only.'
 
 # The device review runs as an in-memory job (docs/uiux-email-2026-10-03/DESIGN-CONTRACT.md): POST .../review checks
@@ -156,16 +157,55 @@ class DesignApply:
                             target.update(status='interrupted', message='Interrupted while this device was being changed; reading it back.')
                         elif target.get('status') in ('pending', 'backing_up'):
                             target.update(status='interrupted', message='Interrupted before this device was changed.', stage='failed')
+                elif job.get('status') == 'interrupted' and job.get('rechecking'):
+                    # The manager stopped during an earlier restart's read-back: read the rest back now.
+                    self.unchecked.extend((job['id'], name) for name in job['rechecking'])
+            # The job holds its lab until each device is read back (audit L-15): guard_idle refuses its design applies,
+            # `operation_busy` asked with the lab its backups, restores, imports, Git saves and device and topology edits,
+            # LabOperations.guard its lab operations and map and setting saves (`design_rechecking`). Start fresh and a VM
+            # connection change wait for any such job; other labs and checks that name no lab stay free.
+            for job_id in dict.fromkeys(job_id for job_id, _ in self.unchecked):
+                job = self.get_job(job_id); job['rechecking'] = list(dict.fromkeys(n for j, n in self.unchecked if j == job_id))
             store.save()
 
     def start(self):
         pending, self.unchecked = self.unchecked, []
-        if pending:
-            def recheck_all():
-                for job_id, name in pending: self._recheck(job_id, name)
-                for job_id in dict.fromkeys(job_id for job_id, _ in pending): self._summarize_interrupted(job_id)
-            try: self.pool.submit(recheck_all)
-            except RuntimeError: pass
+        if not pending: return
+        def recheck_all():
+            for job_id, name in pending:
+                if self.stopping.is_set(): return   # the job keeps `rechecking`: the next start reads the rest back
+                try: self._recheck(job_id, name)
+                except Exception as exc:
+                    with self.store.lock:
+                        job = next((j for j in self.store.state.get('design_jobs', []) if j['id'] == job_id), None)
+                        target = copy.deepcopy(next((t for t in (job or {}).get('targets', []) if t['name'] == name), None))
+                    lab_id = job['lab_id'] if job else ''
+                    self.event('design.apply.node', 'The read-back after the restart failed inside the manager: ' + type(exc).__name__, lab_id, job_id, name, level='error')
+                    if self.stopping.is_set(): return   # still `interrupted` and listed: the next start reads it back
+                    # The trial may have been confirmed before the restart: never "not changed". Unknown, with a
+                    # pending ledger entry the next review settles, like every other unknown outcome.
+                    if target is not None and target.get('status') == 'interrupted':
+                        try: self._record_uncertain(job_id, lab_id, name, target, 'the read-back failed inside the manager')
+                        except Exception: pass
+                if self.stopping.is_set(): return
+                self._rechecked(job_id, name)
+            for job_id in dict.fromkeys(job_id for job_id, _ in pending): self._summarize_interrupted(job_id)
+        # Its own thread, never the single apply worker: an IOS XR trial nobody can confirm any more is waited out at
+        # the device's timer (up to 30 minutes), and an apply queued behind that wait would make the Runner refuse every
+        # backup and restore on every lab (audit L-15).
+        try: threading.Thread(target=recheck_all, name='design-recheck', daemon=True).start()
+        except RuntimeError: pass
+
+    def _rechecked(self, job_id, name):
+        """Device `name` of an interrupted job is read back: once none is left, the job no longer holds its lab."""
+        with self.store.lock:
+            job = next((j for j in self.store.state.get('design_jobs', []) if j['id'] == job_id), None)
+            if job is None: return
+            left = [n for n in job.get('rechecking') or [] if n != name]
+            if left: job['rechecking'] = left
+            else: job.pop('rechecking', None)
+            try: self.store.save()
+            except OSError: pass
 
     def _summarize_interrupted(self, job_id):
         """After the restart's read-back: say per device what the interrupted apply came to (the status stays `interrupted`)."""
@@ -219,6 +259,10 @@ class DesignApply:
 
     def guard_idle(self, lab_id):
         state = self.store.state
+        # The read-back after a restart holds only its own lab: it needs no backup, so other labs stay free (audit L-15).
+        # Checked first so the student reads why: `operation_busy` below refuses the same lab for it, in general words.
+        if any(j.get('rechecking') and j.get('lab_id') == lab_id for j in state.get('design_jobs', [])):
+            raise HTTPException(409, 'After a restart the manager is reading back devices of this lab that were being changed; wait for it to finish.')
         if operation_busy(state, lab_id) or any(j['status'] in ('queued', 'running') for j in state['jobs']):
             raise HTTPException(409, 'Wait for the active backup, Git save, restore, lab operation or design apply to finish.')
         # The Runner refuses every other backup while a design apply or a restore runs on any lab: an apply queued now
@@ -504,10 +548,13 @@ class DesignApply:
         client = self._open(node, creds)
         try:
             mark('checking_pending')
-            if entry.get('pending'):
-                owned, anc = self._resolve_pending(lab['id'], kind, row['name'], entry, driver, client, opts)
+            # Asked before any read-back: while a change waits for confirmation (this manager's own trial left
+            # `uncertain` with its timer still running, or anybody's) the running configuration is the would-be
+            # one, so a pending ledger entry is settled only once the device has decided (audit L-13).
             pending = driver.pending(client, **opts)
             if pending: return {'reachable': True, 'ready': False, 'reason': 'Another change is waiting for confirmation on this device.'}
+            if entry.get('pending'):
+                owned, anc = self._resolve_pending(lab['id'], kind, row['name'], entry, driver, client, opts)
             mark('rendering')
             clean, rendered = driver.render_desired(client, candidate, **opts)
             desired = own.statements(kind, rendered) - own.statements(kind, clean)
@@ -560,7 +607,8 @@ class DesignApply:
         after = own.statements(kind, driver.snapshot(client, **opts))
         owned = set(entry.get('statements') or []); anc = set(entry.get('ancestors') or [])
         desired = set(pend.get('desired') or [])
-        present = bool(desired) and desired <= after
+        shown, hidden = own.split_negations(kind, desired)   # IOS XR typed negations: the same test as the settle loop and verify()
+        present = bool(desired) and shown <= after and not (hidden & after)
         if present:
             owned |= set(pend.get('added') or []) & after; anc |= set(pend.get('ancestors') or [])
         owned &= after
@@ -718,10 +766,20 @@ class DesignApply:
             if digest_of(own.statements(kind, before_text)) != target['_before_digest']:
                 self.stage_target(job_id, name, 'drifted', status='drifted', message='The configuration changed since you reviewed it; this device was not changed. Review again.'); return
             self.stage_target(job_id, name, 'applying', message='Staging the removals and the generated configuration; the device undoes them by itself unless the manager confirms.')
+            refused = []
+            def accept(text):
+                """Asked by the driver inside the transaction before it arms anything: is this the reviewed would-be
+                configuration? A change made after the drift snapshot is aborted unarmed (PROVISIONING §4 step 3, audit L-14)."""
+                try: same = digest_of(own.statements(kind, text)) == target['_would_be_digest']
+                except Exception: same = False
+                if not same: refused.append(True)
+                return same
             try:
-                result = driver.stage(client, target['_candidate'], target['_removals'], session, confirm_minutes, arm=True, **opts)
+                result = driver.stage(client, target['_candidate'], target['_removals'], session, confirm_minutes, arm=True, accept=accept, **opts)
             except SessionLost as exc: result, lost = None, self._scrubbed(exc)
             except RestoreError as exc:
+                if refused:
+                    self.stage_target(job_id, name, 'drifted', status='drifted', message='The configuration the device would run differs from the reviewed one, so this device was not changed. Review again.'); return
                 self.stage_target(job_id, name, 'failed', status='failed', message='Configuration was not changed: ' + self._scrubbed(exc)); return
         finally:
             # An IOS XR trial is confirmed only from the session that armed it: the driver keeps that connection
@@ -730,7 +788,8 @@ class DesignApply:
         if result is not None and not result['armed']:
             self.stage_target(job_id, name, 'no_op', status='no_op', message='Already matches the plan; nothing to change.'); return
         if result is not None and digest_of(own.statements(kind, result['would_be'])) != target['_would_be_digest']:
-            # The device rendered something else than at review time: the timer runs; do not confirm.
+            # The drivers refuse this before arming (`accept`); kept for a driver that armed without asking: the device
+            # rendered something else than at review time, the timer runs; do not confirm.
             self.stage_target(job_id, name, 'confirming', status='confirming', _armed=True, _deadline=time.time() + confirm_minutes * 60, _mismatch=True,
                               message='The staged configuration differs from the reviewed one; the change is left to the device\'s own timer.')
         elif result is not None:
@@ -844,7 +903,7 @@ class DesignApply:
             job = next((j for j in self.store.state.get('design_jobs', []) if j['id'] == job_id), None)
             lab = copy.deepcopy(self.store.lab(job['lab_id'])) if job else None
             target = copy.deepcopy(next((t for t in (job or {}).get('targets', []) if t['name'] == name), None))
-        if not job or not lab or not target: return
+        if not job or not lab or not target or target.get('status') != 'interrupted': return   # settled already (a restart during the read-back)
         node = next((n for n in lab['nodes'] if (n.get('definition_node') or n.get('short_name') or n['name']) == name), None)
         if not node or (node.get('kind') or '') not in DRIVERS: self._record_uncertain(job_id, lab['id'], name, target, 'the device or its driver is gone'); return
         # One pass once the device's own timer has decided: a trial nobody can confirm any more (IOS XR after a

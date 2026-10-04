@@ -2,7 +2,9 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import signal
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -166,6 +168,265 @@ class WaitForReleaseTests(unittest.TestCase):
                                            pause_timers=True, runner=runner)
         self.assertFalse(ok)
         self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+
+
+    def test_pause_timers_restores_when_interrupted_while_stopping_them(self):
+        started = []
+        stops = []
+
+        def runner(args, **kwargs):
+            if args[1] == 'is-active':
+                return subprocess.CompletedProcess(args, 0, stdout='active\n')
+            if args[1] == 'stop':
+                stops.append(args[2])
+                if len(stops) == 2:
+                    raise KeyboardInterrupt   # a hangup between the first and second stop
+            if args[1] == 'start':
+                started.append(args[2])
+            return subprocess.CompletedProcess(args, 0, stdout='')
+
+        holder = [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+        with patch.object(apt_lock, 'holders', return_value=holder):
+            ok = apt_lock.wait_for_release(timeout_seconds=300, poll_seconds=1, report=lambda *_: None,
+                                           pause_timers=True, runner=runner)
+        self.assertFalse(ok)
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+
+
+    def test_a_signal_while_the_timers_are_restored_does_not_leave_one_stopped(self):
+        started = []
+
+        def runner(args, **kwargs):
+            if args[1] == 'is-active':
+                return subprocess.CompletedProcess(args, 0, stdout='active\n')
+            if args[1] == 'start':
+                if not started:
+                    os.kill(os.getpid(), signal.SIGTERM)   # a hangup arrives as the first timer is started
+                started.append(args[2])
+            return subprocess.CompletedProcess(args, 0, stdout='')
+
+        holder = [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+        previous = signal.signal(signal.SIGTERM, apt_lock._hangup_as_interrupt)
+        self.addCleanup(signal.signal, signal.SIGHUP, signal.getsignal(signal.SIGHUP))
+        self.addCleanup(signal.signal, signal.SIGTERM, previous)
+        with patch.object(apt_lock, 'holders', side_effect=[holder, []]), patch.object(apt_lock.time, 'sleep'):
+            try:
+                apt_lock.wait_for_release(timeout_seconds=300, poll_seconds=1, report=lambda *_: None,
+                                          pause_timers=True, runner=runner)
+            except KeyboardInterrupt:
+                pass   # the held signal is delivered once every timer is back
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+
+
+    def timer_runner(self, started, on_start=None):
+        def runner(args, **kwargs):
+            if args[1] == 'is-active':
+                return subprocess.CompletedProcess(args, 0, stdout='active\n')
+            if args[1] == 'start':
+                started.append(args[2])
+                if on_start is not None:
+                    on_start(len(started))
+            return subprocess.CompletedProcess(args, 0, stdout='')
+        return runner
+
+    def test_a_signal_just_before_the_block_still_restores_every_timer(self):
+        # A handler that runs between the end of the wait and the return of pthread_sigmask(SIG_BLOCK)
+        # raises KeyboardInterrupt there (CPython also checks pending signals inside the call itself).
+        started = []
+        real = signal.pthread_sigmask
+        calls = []
+
+        def interrupted_block(how, mask):
+            calls.append(how)
+            if how == signal.SIG_BLOCK and calls.count(signal.SIG_BLOCK) == 1:
+                raise KeyboardInterrupt
+            return real(how, mask)
+
+        holder = [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+        with patch.object(apt_lock, 'holders', side_effect=[holder, []]), patch.object(apt_lock.time, 'sleep'), \
+                patch.object(apt_lock.signal, 'pthread_sigmask', side_effect=interrupted_block):
+            with self.assertRaises(KeyboardInterrupt):   # the interruption is not swallowed: it follows the restore
+                apt_lock.wait_for_release(timeout_seconds=300, poll_seconds=1, report=lambda *_: None,
+                                          pause_timers=True, runner=self.timer_runner(started))
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+        self.assertNotIn(signal.SIGTERM, real(signal.SIG_BLOCK, []))   # and the mask is left as it was found
+
+    def test_a_signal_before_the_block_after_a_timeout_still_restores_every_timer(self):
+        started = []
+        real = signal.pthread_sigmask
+        blocks = []
+
+        def interrupted_block(how, mask):
+            if how == signal.SIG_BLOCK:
+                blocks.append(how)
+                if len(blocks) == 1:
+                    raise KeyboardInterrupt
+            return real(how, mask)
+
+        holder = [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+        with patch.object(apt_lock, 'holders', return_value=holder), \
+                patch.object(apt_lock.signal, 'pthread_sigmask', side_effect=interrupted_block):
+            with self.assertRaises(KeyboardInterrupt):
+                apt_lock.wait_for_release(timeout_seconds=0, poll_seconds=1, report=lambda *_: None,
+                                          pause_timers=True, runner=self.timer_runner(started))
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+
+    def test_a_signal_during_the_first_timer_start_does_not_skip_the_rest(self):
+        # The interrupted systemctl may not have started its timer (subprocess.run kills it): try it again.
+        started = []
+
+        def interrupt_first(count):
+            if count == 1:
+                raise KeyboardInterrupt
+
+        holder = [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+        with patch.object(apt_lock, 'holders', side_effect=[holder, []]), patch.object(apt_lock.time, 'sleep'):
+            with self.assertRaises(KeyboardInterrupt):
+                apt_lock.wait_for_release(timeout_seconds=300, poll_seconds=1, report=lambda *_: None,
+                                          pause_timers=True, runner=self.timer_runner(started, interrupt_first))
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily.timer', 'apt-daily-upgrade.timer'])
+
+    def test_a_signal_during_the_second_timer_start_still_starts_it(self):
+        started = []
+
+        def interrupt_second(count):
+            if count == 2:
+                raise KeyboardInterrupt
+
+        holder = [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+        with patch.object(apt_lock, 'holders', side_effect=[holder, []]), patch.object(apt_lock.time, 'sleep'):
+            with self.assertRaises(KeyboardInterrupt):
+                apt_lock.wait_for_release(timeout_seconds=300, poll_seconds=1, report=lambda *_: None,
+                                          pause_timers=True, runner=self.timer_runner(started, interrupt_second))
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer', 'apt-daily-upgrade.timer'])
+
+    HOLDER = [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+
+    def wait_and_expect_interruption(self, started, **patches):
+        with patch.object(apt_lock, 'holders', side_effect=[self.HOLDER, []]), patch.object(apt_lock.time, 'sleep'):
+            with self.assertRaises(KeyboardInterrupt):   # never swallowed: it follows the restore
+                apt_lock.wait_for_release(timeout_seconds=300, poll_seconds=1, report=lambda *_: None,
+                                          pause_timers=True, runner=self.timer_runner(started))
+
+    def test_a_signal_before_the_first_guarded_line_of_the_restore_still_starts_every_timer(self):
+        # Setup that runs before the block (here the hasattr call) is not covered by the block's own handler:
+        # the interruption is caught around the restore and the restore is run again.
+        started = []
+        fired = []
+
+        def interrupt_once(obj, name):
+            if not fired:
+                fired.append(1)
+                raise KeyboardInterrupt
+            return hasattr(obj, name)
+
+        with patch.object(apt_lock, 'hasattr', interrupt_once, create=True):
+            self.wait_and_expect_interruption(started)
+        self.assertEqual(fired, [1])
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+
+    def test_a_real_sigint_at_the_entry_of_the_restore_still_starts_every_timer(self):
+        # A pending SIGINT is handled at the callee's first bytecode, before any try inside it can apply.
+        started = []
+        code = apt_lock._restore_timers.__code__
+
+        def hook(frame, event, arg):
+            if event == 'call' and frame.f_code is code:
+                sys.setprofile(None)
+                os.kill(os.getpid(), signal.SIGINT)
+
+        previous = signal.signal(signal.SIGINT, signal.default_int_handler)
+        self.addCleanup(signal.signal, signal.SIGINT, previous)
+        self.addCleanup(sys.setprofile, None)
+        sys.setprofile(hook)
+        self.wait_and_expect_interruption(started)
+        sys.setprofile(None)
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+
+    def test_a_signal_delivered_as_the_held_signals_are_released_does_not_start_the_timers_twice(self):
+        # The interruption surfaces after every timer was started: it is re-raised, not a reason to restore again.
+        started = []
+        real = signal.pthread_sigmask
+
+        def interrupted_unblock(how, mask):
+            result = real(how, mask)
+            if how == signal.SIG_UNBLOCK:
+                raise KeyboardInterrupt
+            return result
+
+        with patch.object(apt_lock.signal, 'pthread_sigmask', side_effect=interrupted_unblock):
+            self.wait_and_expect_interruption(started)
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+        self.assertNotIn(signal.SIGINT, real(signal.SIG_BLOCK, []))
+
+    def test_the_retry_of_a_timer_start_is_bounded_to_three_attempts(self):
+        # Wording contract: not "never skips". A start interrupted every time is given up after three attempts,
+        # the next timer still gets its start, and the interruption is raised afterwards.
+        started = []
+
+        def interrupt_first_timer(count):
+            if started[-1] == 'apt-daily.timer':
+                raise KeyboardInterrupt
+
+        with self.assertRaises(KeyboardInterrupt):
+            apt_lock.start_timers(['apt-daily.timer', 'apt-daily-upgrade.timer'],
+                                  runner=self.timer_runner(started, interrupt_first_timer))
+        self.assertEqual(started, ['apt-daily.timer'] * 3 + ['apt-daily-upgrade.timer'])
+
+
+DRIVER = '''
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('apt_lock', sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+m.holders = lambda *a, **k: [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+sys.exit(m.main(['--wait', '--pause-timers', '--timeout', '120']))
+'''
+FAKE_SYSTEMCTL = '''#!/bin/sh
+echo "$1 $2" >> "$SYSTEMCTL_LOG"
+[ "$1" = is-active ] && echo active
+exit 0
+'''
+
+
+class SignalTests(unittest.TestCase):
+    """The real command, ended the way an SSH hangup or a plain `kill` ends it: the timers come back."""
+
+    def run_and_signal(self, signum):
+        with tempfile.TemporaryDirectory() as root:
+            bin_dir = Path(root) / 'bin'
+            bin_dir.mkdir()
+            fake = bin_dir / 'systemctl'
+            fake.write_text(FAKE_SYSTEMCTL)
+            fake.chmod(0o755)
+            log = Path(root) / 'calls.log'
+            env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ['PATH'], SYSTEMCTL_LOG=str(log))
+            child = subprocess.Popen([sys.executable, '-u', '-c', DRIVER, str(Path(apt_lock.__file__))], env=env,
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            try:
+                for line in child.stdout:
+                    if line.startswith('Waiting for pid'):
+                        break
+                child.send_signal(signum)
+                output, _ = child.communicate(timeout=20)
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                    child.communicate()
+            calls = log.read_text().split('\n') if log.exists() else []
+            return child.returncode, output, [call for call in calls if call.startswith(('stop', 'start'))]
+
+    def test_sigterm_restores_the_paused_timers(self):
+        code, output, calls = self.run_and_signal(signal.SIGTERM)
+        self.assertEqual(calls, ['stop apt-daily.timer', 'stop apt-daily-upgrade.timer',
+                                 'start apt-daily.timer', 'start apt-daily-upgrade.timer'], output)
+        self.assertEqual(code, 130, output)
+
+    def test_sighup_restores_the_paused_timers(self):
+        code, output, calls = self.run_and_signal(signal.SIGHUP)
+        self.assertEqual(calls, ['stop apt-daily.timer', 'stop apt-daily-upgrade.timer',
+                                 'start apt-daily.timer', 'start apt-daily-upgrade.timer'], output)
+        self.assertEqual(code, 130, output)
 
 
 class FormatDurationTests(unittest.TestCase):

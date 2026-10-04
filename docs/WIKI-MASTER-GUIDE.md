@@ -718,7 +718,11 @@ curl -fsS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:8081/
 
 Expect the release number and **HTTP 200**. Optional `UI_BIND` and `UI_PORT` settings belong
 in `clab-backup-ui/.env`; retain that file across source-folder upgrades and use
-your chosen port in browser and health checks.
+your chosen port in browser and health checks. To open the manager by a DNS name
+(for example `manager.example.edu` or a reverse proxy's name), also add the optional
+`UI_ALLOWED_HOSTS=<names>` line there: the manager refuses any name outside DNS could
+control that is not listed (an IP address, `localhost`, single-label and `.local` names
+need nothing). See [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name).
 
 An image-only build needs the final build context argument:
 
@@ -774,7 +778,10 @@ Do not add `-p 8081:8081`: Docker ignores published ports in host mode.
 Your workstation's `127.0.0.1` is your workstation, so use the **VM's reachable
 IP** in the browser. If the VM sits behind hypervisor NAT, configure a hypervisor
 forward from your chosen workstation/host port to **VM port 8081**, or use a
-reachable bridged VM address. This is separate from Docker port publishing.
+reachable bridged VM address. This is separate from Docker port publishing. Whatever
+address the browser uses is what the manager checks: an IP address always works, but a
+DNS name (for example the hypervisor host's or a reverse proxy's) is refused until it is
+listed in `UI_ALLOWED_HOSTS`; see [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name).
 
 If a VM firewall is active, permit TCP 8081 from the intended workstation/network.
 For example, after substituting the actual workstation address on an existing UFW setup:
@@ -888,8 +895,11 @@ and VM sync. Use the canonical Containerlab kind in new topology YAML:
 | Juniper vJunos-switch | `juniper_vjunosswitch` | `vr-vjunosswitch`, `vjunosswitch` |
 
 Both use the existing Junos SSH driver, as cJunosEvolved does. **Test login now**
-(device panel) and the automatic login check run `show version`; a configuration
-backup captures
+(device panel) and the automatic login check run `show version`; **Test login now** reports
+*Login OK* only when the CLI answered, and *Starting* (with its own message) when the login
+was accepted but the CLI is still silent. In a lab linked to a VM deployment the readiness
+monitor replaces it with a real answer; for an inventory import (no VM deployment, not
+monitored) the result stays until the next *Test login*. A configuration backup captures
 `show configuration | display set | no-more`. Internal saved configurations use
 `.set`; Git manifests identify them as `junos-display-set`. Individual backup
 downloads use the device prefix `vQFX_*.cfg` or `vJunos-switch_*.cfg`; the `.cfg`
@@ -1158,7 +1168,7 @@ data snapshot. A plain `docker restart` does not install a newly built image.
 Install the new source's helpers with `sudo bash "$HOME/projects/clab-manager/deploy/setup-discovery.sh"` and
 `sudo bash "$HOME/projects/clab-manager/deploy/setup-operations.sh" --lab-root /etc/containerlab`. Verify both
 helpers against the new release as in Part 9. Load the matching image, retain
-`deploy/image.env` with your bind/port settings, and change its `MANAGER_IMAGE`.
+`deploy/image.env` with your bind/port settings (and `UI_ALLOWED_HOSTS` if you open the manager by a DNS name), and change its `MANAGER_IMAGE`.
 If Git repositories are already registered, also run
 `sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --refresh` from the matching source before
 recreating the container. This preserves the registered repository bindings.
@@ -1230,7 +1240,11 @@ manager backups; it does not delete the engineer's Git checkout or remote.
 Back up that checkout independently.
 
 Start fresh is not part of a normal upgrade. If interrupted by disk/permission
-problems, fix the cause and retry or restart; the reset journal resumes the operation.
+problems, fix the cause first. Then **retry Start fresh**: a reset that had already prepared its
+journal is finished, and a journal whose own write failed (for example on a full disk) is cleared and
+the reset runs again from the beginning, because nothing had been changed yet. **Restarting the
+manager** also finishes a prepared journal, but it only clears a journal whose write failed: the
+labs, credentials and backups stay exactly as they were, and you must choose Start fresh again.
 
 ## Rebuilding an entire VM
 
@@ -1399,7 +1413,7 @@ For fingerprint changes, password recovery, key migration and helper repair, use
 | Commands unavailable or operations helper error | Enable/repair setup-operations and include the lab's trusted root. The helper tests the installed Containerlab command support. Older Containerlab versions may lack some commands. |
 | Path outside trusted roots | Run setup-operations with `--lab-root /actual/project/root`. Use the parent directory containing your lab projects, not filesystem root. |
 | Cannot browse a symlink path | Use a real directory path. Helpers deliberately refuse symlink components. |
-| Save fails / Start fresh cannot finish | Check free disk space and data ownership. Repair permissions, then retry Start fresh or restart; its journal resumes the reset. |
+| Save fails / Start fresh cannot finish | Check free disk space and data ownership. Repair permissions, then retry Start fresh: a prepared journal finishes the reset, an unfinished one is cleared and the reset runs again from the beginning. A restart finishes a prepared journal but only clears an unfinished one and keeps the data, so choose Start fresh again afterwards. |
 | Deployed lab missing | Run `sudo containerlab inspect --all --format json` on the same VM and check VM connection is enabled. Choose Refresh lab list; choose Stop hiding on any hidden lab. |
 
 
@@ -1491,6 +1505,11 @@ sudo docker compose --env-file deploy/image.env -f deploy/compose.image.yml \
   up -d --no-build --pull never
 sudo docker compose --env-file deploy/image.env -f deploy/compose.image.yml ps
 ```
+
+To open the manager by a DNS name rather than its IP address, add an optional
+`UI_ALLOWED_HOSTS=<names>` line (comma-separated, names only) to `deploy/image.env` and
+recreate the container with the `up -d` command above; any other name outside DNS could
+control is refused. See [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name).
 
 This Compose file has no build section and uses only the prepared local image.
 For image-only installations use these same env-file/Compose arguments for

@@ -50,7 +50,7 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Add to / Remove from favourites | Sorts the lab first under *All labs* on Home; *Recent labs* is ordered by the last successful deploy or redeploy this manager ran, and nothing else (visits, saves and favourites do not reorder it). |
 | Hide from Home / Show on Home | Takes the lab's card off Home (both tabs) and nothing else: the lab stays in My labs with its devices, backups, backup history, saved progress and Git binding; nothing on the VM changes, a running lab keeps running, and the background discovery never puts the card back by itself. Home says how many labs are hidden. Two ways back: **Choose a file on the lab VM…** › the lab's topology › *Add to My labs without starting* or *Deploy lab* (the same lab, not a second workspace), or **Manager ▾ › Labs found on the VM…** › *Hidden from Home* › **Show on Home**. This is not *Remove from this manager* (Advanced › Danger zone), which forgets the workspace. |
 | Edit map | Move devices and notes, add text, boxes, circles, lines and groups, style, undo and redo, save and export the map as JSON or draw.io; never changes devices, links or the topology file (see *The map and its editor*). |
-| Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the lab is running. |
+| Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the file is deployed, also when it is deployed under another lab name (found by its topology path). |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
 | Upload a file from this computer… (Home › Deploy, and the link in the topology browser) | For a topology file that is on your computer: the browser reads it, the manager checks that it is a topology it can read, you see the text and where it will be written, **Create file on the VM…** runs as a reviewed operation, and **Deploy or add this lab…** continues as for any file on the VM. Only that one file is uploaded (up to 1 MiB); files it refers to must be on the VM. A copied lab's saved map (`<topology>.annotations.json`, up to 1 MiB) can be added at the same time so devices keep their positions; it travels through the same review and is written beside the topology under its own name regardless of what the file on your computer was called, with a notice when that name differs and, if a map file is already there, a "Replaces the existing map file" notice in the review. |
 | Build a lab visually… / Open in Lab Builder… | Opens the [lab builder](LAB-BUILDER.md): draw devices and links, then save the lab folder to the VM through a review. *Open in Lab Builder…* opens an existing topology file; saving again is only possible while the lab is not deployed and keeps a copy of the previous version. Opened from the topology file dialog, the builder's **← My labs** link and the browser Back button return to that same dialog (read fresh from the VM); opening it directly from the Build card returns to My labs as usual. |
@@ -171,6 +171,15 @@ persist in **Operation history…** (Manager ▾ or Lab actions ▾ › Advanced
 inspection before retrying. Lifecycle commands can interrupt CLI sessions. Manager
 backups/import changes are blocked during an active lab operation.
 
+Before it plans a command on an existing topology file (the lifecycle commands, *Restart
+device*, delete and save again), the helper asks containerlab what is deployed
+(`containerlab inspect --all`) so the review names the right containers. It waits for that
+answer up to 25 seconds and reads at most 4 MiB. The same inspection runs again when you
+confirm, so either step can stop. If containerlab does not answer in time (or fails) it stops
+with *Could not inspect deployed labs before the operation*; an answer over 4 MiB, or one the
+helper cannot read, stops it with that helper's own error instead. Nothing is changed, and
+the command can be reviewed again.
+
 A lab that already runs on the VM but is not in My labs is listed under **Manager ▾ › Labs
 found on the VM…** (Home itself carries no such list, except the short *Already running on the
 VM* list of the first-run page while My labs is empty). **Add to My labs** reads the lab's
@@ -258,7 +267,20 @@ confirm the change; on IOS XR only the CLI session that armed the change can con
 so the manager keeps that session open and confirms on it once the reconnect has proved
 management survived. EOS also saves the confirmed change to startup, since it does not do
 that on commit; IOS XR persists a confirmed change immediately. The manager then captures
-the node again and compares it to the saved state. Live restore is supported for Junos
+the node again and compares it to the saved state. If the manager restarts during a restore,
+it reads back every device that was being changed and never applies the change again. Until it
+has, the lab reads *Checking devices* and the manager refuses (409, or 400 for backups and login
+checks; nothing is queued, so start it again afterwards) backups, restores, design applies, device,
+credential and topology-file edits and *Remove lab* on that lab, and lab operations, map and
+lab-setting saves, Git saves and adding a lab on every lab. A restore of another lab is accepted but
+starts only once the read-back has finished (the exact list is in
+[the restore notes](multi-platform-restore/README.md#outcomes-the-manager-reports-per-node)).
+The read-back of a network-design apply after a restart holds only its own lab: backups, restores,
+design applies, lab operations (Restart device included), map and lab-setting saves of that lab are
+refused, other labs stay free, and
+*Start fresh* and a change of the VM connection wait for it
+([network design](NETWORK-DESIGN.md#applying-a-plan-to-devices)).
+Live restore is supported for Junos
 (`juniper_cjunosevolved`, `juniper_vjunosswitch`), Arista EOS (`arista_ceos`) and Cisco
 IOS XR (`cisco_xrv9k`). This uses the manager's direct SSH path to the node and is
 separate from Containerlab's Save configurations command. See

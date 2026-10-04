@@ -164,7 +164,7 @@ if($('manager-vm-labs'))$('manager-vm-labs').onclick=()=>{if(!$('vm-labs-dialog'
 $('discovered-labs').onclick=e=>{const b=e.target.closest('[data-setup-name]');if(b)importDiscovered(b.dataset.setupName);};
 $('setup-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
  const result=await(await api('/lab-definitions',{method:'POST',body:new FormData(e.target)})).json();
- $('setup-dialog').close();$('setup-form').reset();await refresh();if(typeof selectLab==='function')selectLab(result.id);else{activeId=result.id;sessionStorage.setItem('activeLab',activeId);}notify('Lab added. Device addresses fill in automatically while the lab is running.');
+ $('setup-dialog').close();$('setup-form').reset();await refresh();if(typeof selectLab==='function')selectLab(result.id);else{activeId=result.id;try{sessionStorage.setItem('activeLab',activeId);}catch{/* blocked site data: the open lab is carried by activeId */}}notify('Lab added. Device addresses fill in automatically while the lab is running.');
 });};
 // VM setup can leave a one-time seed that the manager turns into a prefilled connection
 // (bootstrap_*): the password is kept server-side, only whether one is saved reaches here.
@@ -238,7 +238,7 @@ $('remove-lab-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,as
  const id=$('remove-lab-id').value, exclude=$('remove-lab-exclude').checked;
  await json('/labs/'+encodeURIComponent(id),'DELETE',{name:$('remove-lab-confirm-name').value,prevent_reimport:exclude});
  $('remove-lab-dialog').close();
- if(activeId===id){if(typeof goHome==='function')goHome();else{activeId='';sessionStorage.removeItem('activeLab');if($('details-dialog').open)$('details-dialog').close();}}
+ if(activeId===id){if(typeof goHome==='function')goHome();else{activeId='';try{sessionStorage.removeItem('activeLab');}catch{/* blocked site data */}if($('details-dialog').open)$('details-dialog').close();}}
  await refresh();
  notify(exclude?'Lab removed. You can add it back from Manager ▾ › Labs found on the VM….':'Lab removed. It can be offered for import again after confirmation.');
 });};
@@ -281,7 +281,7 @@ async function importDiscovered(name){
 $('auto-import-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
  const preview=importPreview;if(!preview)throw new Error('Preview the lab again before importing.');
  const lab=await json('/discovery/import','POST',{name:preview.name,token:preview.token});
- $('auto-import-dialog').close();if($('vm-labs-dialog')&&$('vm-labs-dialog').open)$('vm-labs-dialog').close();await refresh();if(typeof selectLab==='function')selectLab(lab.id);else{activeId=lab.id;sessionStorage.setItem('activeLab',activeId);}notify('Lab added from the VM files.');
+ $('auto-import-dialog').close();if($('vm-labs-dialog')&&$('vm-labs-dialog').open)$('vm-labs-dialog').close();await refresh();if(typeof selectLab==='function')selectLab(lab.id);else{activeId=lab.id;try{sessionStorage.setItem('activeLab',activeId);}catch{/* blocked site data: the open lab is carried by activeId */}}notify('Lab added from the VM files.');
 });};
 $('setup-auto-import').onclick=()=>importDiscovered($('setup-deployed-name').value);
 
@@ -291,7 +291,7 @@ $('manager-settings').onclick=()=>{
  $('manager-reset-cancel').onclick=()=>dialog.close();$('manager-reset-confirm').oninput=()=>{$('manager-reset').disabled=$('manager-reset-confirm').value!=='RESET';};
  $('manager-reset').onclick=()=>opTask(dialog,async()=>{
   await json('/manager/reset','POST',{confirmation:$('manager-reset-confirm').value});
-  if(typeof goHome==='function')goHome();else{activeId='';sessionStorage.removeItem('activeLab');}importPreview=null;opCaps=null;
+  if(typeof goHome==='function')goHome();else{activeId='';try{sessionStorage.removeItem('activeLab');}catch{/* blocked site data */}}importPreview=null;opCaps=null;
   document.querySelectorAll('dialog[open]').forEach(d=>d.close());
   await refresh();notify('Manager data cleared. The VM connection is kept; labs on the VM can be added again.');
  });

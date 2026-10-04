@@ -11,7 +11,7 @@ python_args=()
 for option in "$@"; do
   case "$option" in
     --purge) python_args+=(--purge);;
-    --dry-run) python_args+=(--dry-run);;
+    --dry-run) python_args+=(--dry-run); recreate=false;;   # "change nothing" includes the manager container
     --no-recreate) recreate=false;;
     *) echo 'Options: --purge (delete the archived configuration and lab maps instead of moving them), --dry-run (report only, change nothing), --no-recreate (leave the manager container alone; start-manager.sh recreates it itself).' >&2; exit 64;;
   esac

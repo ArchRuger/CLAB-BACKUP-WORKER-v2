@@ -399,11 +399,11 @@ def _check_modules(intent, errors):
     return modules
 
 
-def _check_pools(intent, errors, management):
+def _check_pools(intent, errors, management, families):
+    """`families` is validate()'s checked mapping (the default after a malformed one was reported), never the raw field."""
     pools = intent.get('addressing', {})
     if not isinstance(pools, dict) or len(pools) > 12:
         errors.append({'path': 'addressing', 'message': 'Address pools must be a set of named pools'}); return {}
-    families = intent.get('families', {})
     networks = []
     for name, pool in pools.items():
         here = 'addressing.' + str(name)
@@ -486,6 +486,24 @@ def _lag_members(body, here, errors, link_key, link_keys):
         elif link_keys is not None and member not in link_keys: errors.append({'path': path, 'message': 'No link with this key in the lab: ' + member})
         elif pair and link_nodes(member) != pair: errors.append({'path': path, 'message': 'A member link must join the same two devices: ' + member})
     return body
+
+
+def _lag_bundles(links, errors):
+    """Across links: a member link is not itself a bundle (no cycle, no chain) and belongs to one bundle only. The
+    adapter emits a member only inside its bundle, so either case would leave ports out of the plan."""
+    bundles = {}
+    for key, link in links.items():
+        lag = link.get('lag') if isinstance(link, dict) else None
+        members = lag.get('members') if isinstance(lag, dict) else None
+        if isinstance(members, list): bundles[key] = [m for m in members if isinstance(m, str)]
+    claimed = {}
+    for key, members in bundles.items():
+        path = 'links.' + str(key) + '.lag.members'
+        for member in dict.fromkeys(members):
+            if member == key: continue
+            if member in bundles: errors.append({'path': path, 'message': 'A member link cannot be a bundle; this one carries an aggregation of its own: ' + member})
+            elif member in claimed: errors.append({'path': path, 'message': 'This link is already a member of the aggregation carried by ' + claimed[member] + ': ' + member})
+            else: claimed[member] = key
 
 
 def _module_settings(container, path, modules, level, errors, checker, schema, allow_unlisted=False, vrf_names=(), link_key='', link_keys=None):
@@ -592,7 +610,7 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
     if not isinstance(families, dict) or set(families) - {'ipv4', 'ipv6'} or not any(families.get(f) for f in ('ipv4', 'ipv6')) or not all(isinstance(v, bool) for v in families.values()):
         errors.append({'path': 'families', 'message': 'Enable IPv4, IPv6 or both'}); families = {'ipv4': True, 'ipv6': True}
     modules = _check_modules(intent, errors)
-    pools = _check_pools(intent, errors, list(management))
+    pools = _check_pools(intent, errors, list(management), families)
     checker = SchemaChecker(named_types(schema), management)
     _module_settings(intent, '', modules, 'global', errors, checker, schema)
     _check_named_objects(intent, 'vlans', errors, schema, checker, (1, 4094))
@@ -621,11 +639,13 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
         for key in node:
             if key not in NODE_KEYS: errors.append({'path': here + '.' + str(key), 'message': 'Unknown device setting'})
         if 'role' in node and node['role'] not in ROLES: errors.append({'path': here + '.role', 'message': 'Choose router, host or exclude'})
+        own = None   # a device's checked list replaces the design's (netlab's rule); a reported one checks against the design's
         if 'modules' in node:
             extra = node['modules']
             if not isinstance(extra, list) or any(m not in MODULES for m in extra) or len(set(extra)) != len(extra):
                 errors.append({'path': here + '.modules', 'message': 'Device modules come from the supported list'})
-        node_modules = set(node['modules']) if isinstance(node.get('modules'), list) else set(modules)   # a device's list replaces the design's (netlab's rule)
+            else: own = set(extra)
+        node_modules = set(modules) if own is None else own
         loop = node.get('loopback')
         if loop is not None:
             if loop is False: pass
@@ -721,6 +741,7 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
                 if outside_management(str(address.ip), family, ehere + '.' + family) and '/' in str(value): outside_management(str(address.network), family, ehere + '.' + family)
             _module_settings(endpoint, ehere, modules, 'interface', errors, checker, schema, allow_unlisted=False, vrf_names=vrf_names)
             _vlan_references(endpoint.get('vlan'), ehere + '.vlan', vlan_names, errors)
+    _lag_bundles(links, errors)
     interfaces = intent.get('interfaces', {})
     if not isinstance(interfaces, dict) or len(interfaces) > MAX_LINKS: errors.append({'path': 'interfaces', 'message': 'Interface overrides are a mapping of link keys'})
     else:

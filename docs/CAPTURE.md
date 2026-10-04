@@ -73,7 +73,16 @@ configured to capture from arbitrary remote Edgeshark hosts.
   available under **Your capture sessions** until idle expiry.
 - **End session** deletes its container and temporary files, with confirmation.
 - Maximum **4 concurrent sessions**, **15 minutes idle** without viewer polling,
-  and **2 hours total lifetime**. Cleanup normally sweeps every 15 seconds.
+  and **2 hours total lifetime**. Cleanup normally sweeps every 15 seconds; a
+  container Docker refuses to remove is retried on the next sweep without
+  holding up the others. An open viewer of a stopped desktop does not count as
+  activity, so that session's slot frees after the idle time.
+- Quitting Wireshark (or Wireshark ending on its own) restarts it in the same
+  desktop, and files already saved under `/pcaps` stay. If the desktop container
+  itself stops (Docker restart, the whole container killed), its tmpfs-backed
+  `/pcaps` is normally gone with it: the viewer says the desktop stopped and keeps
+  **Download saved captures** as the check, which reports the loss or hands over
+  whatever is still there.
 - Each session has 1 GiB RAM, 1.5 CPU quota, 256 PIDs, 256 MiB `/pcaps`, 256 MiB
   `/tmp` and 64 MiB `/config`. Use Wireshark capture limits/ring buffers for busy
   interfaces; temporary storage can fill before the lifetime limit.
@@ -118,6 +127,13 @@ traffic.
 HTTP/WebSocket relay. `app/capture_service.py` runs separately and creates only
 fixed-image, labelled Wireshark containers. `static/capture-session.js` embeds the
 noVNC RFB module supplied by the pinned image, without VS Code or CDN dependencies.
+That module runs as the manager's own JavaScript, so the service and the manager
+relay `core/rfb.js` and the modules it imports only when each one's SHA-256 matches
+`VIEWER_ASSETS` in `app/capture_sessions.py`, the pinned image's own bytes; a desktop
+that serves anything else (a changed or compromised container) gets the viewer
+refused instead of run. The viewer stops waiting at that refusal and asks for a new
+capture; only a desktop that is still starting, or a capture service that cannot be
+reached for a moment, keeps it polling before it offers **Reconnect viewer**.
 
 `/pcaps` is a tmpfs-backed anonymous Docker volume (256 MiB, owned by the desktop
 user, labelled, removed with the container and swept at service start) rather than a
@@ -137,13 +153,26 @@ the VM itself, never directly from the LAN. The manager
 never receives that socket, privileged mode or new host-gateway commands. API
 clients cannot specify images, commands, mounts, networks, ports or service URLs.
 Wireshark containers have no host mounts or Docker socket. The browser receives
-only noVNC JavaScript, the desktop stream and its own capture-folder download;
-upstream file-manager and terminal endpoints are not exposed.
+only noVNC JavaScript, the desktop stream, its own desktop's password and its own
+capture-folder download; upstream file-manager and terminal endpoints are not exposed.
+
+All desktops share the `clab-manager-capture` network with each other and with
+Edgeshark, and the pinned Wireshark runs Lua, so a student can run programs inside
+their own desktop. So each desktop's VNC server demands a random password created for that
+session (`VNC_PASSWORD`), which only the service creates and only the owning browser is given (through the manager's same-origin relay, which does not store or log it), and
+its raw VNC port 5900 stays closed (`VNC_LISTENING_PORT=-1`): a program in one desktop
+reaches another desktop's web port, but not its screen, files or session. It can
+still reach Edgeshark's capture and discovery services, which stream and list any
+interface on the VM just as the *Everything on the VM* scope does, and the manager's
+own port when it listens on all addresses.
 
 The manager still has no user login. Cookie isolation is not account-based
 multi-user authorization. Retain the trusted management-network boundary or use
 an authenticated HTTPS reverse proxy. The proxy must support WebSocket upgrades
-for `/api/capture/sessions/*/websockify`. Do not expose Docker or ports 5001/5801.
+for `/api/capture/sessions/*/websockify`. The proxy's public name must be listed in
+`UI_ALLOWED_HOSTS` and passed to the manager as the `Host` header; see
+[Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name). Do not
+expose Docker or ports 5001/5801.
 No additional browser-facing port or iframe is needed.
 
 Manager and service both re-discover and validate selected identity/interfaces
@@ -152,10 +181,15 @@ stale selections but does not claim Packetflix itself validates PID/start-time
 identity or eliminates the final discovery-to-capture race.
 
 The image is digest-pinned. Changes must preserve `PACKETFLIX_LINK`, `/core/rfb.js`,
-`/vendor/` modules and `/websockify`, and pass unit and Docker smoke tests. Keep
-the pin in `capture_service.py` and `setup-capture.sh` identical. Upstream resolves
-the latest plugin at build time; consuming a fixed built image avoids installation
-variation. Security updates still require deliberate review and a new pin. See
+`/vendor/` modules, `/websockify` and the `VNC_PASSWORD`/`VNC_LISTENING_PORT` settings,
+and pass unit and Docker smoke tests. Keep the pin in `capture_service.py` and
+`setup-capture.sh` identical, and replace `VIEWER_IMAGE` and `VIEWER_ASSETS` in
+`capture_sessions.py` with the new image's list: copy its `/opt/noVNC` out without
+running it and print the list with
+`python3 "$HOME/projects/clab-manager/deploy/capture/viewer_assets.py" <folder>` (the
+tool's docstring has the commands). The smoke test fetches every listed module from
+the real image. Upstream resolves the latest plugin at build time; consuming a fixed
+built image avoids installation variation. Security updates still require deliberate review and a new pin. See
 `deploy/CAPTURE-THIRD-PARTY-NOTICES.md`.
 
 ## Health, troubleshooting and removal
@@ -170,12 +204,20 @@ bash "$HOME/projects/clab-manager/deploy/check-install.sh"
 The health checker verifies discovery, service authentication and availability of
 the pinned image without starting capture. It cannot prove live packets arrived.
 If the desktop starts slowly, reconnect after initialization. If Wireshark exits,
-download saved files, end the old session and create another. A capture outage
-does not disable backups, topology, SSH or lab operations.
+it restarts in the same desktop; reconnect the viewer. If the viewer reports that
+the desktop stopped, click **Download saved captures** first: Docker normally discards
+the tmpfs-backed `/pcaps` with a stopped desktop, and the download then says the files
+were lost, but anything still there is handed over. Then end the old session and
+create another. A capture outage does not disable backups, topology, SSH or lab operations.
 
 The browser console logs `noVNC requires a secure context (TLS)` on every viewer
-load over plain HTTP; it is harmless here because the desktop stream uses VNC
-security type None inside the VM. A viewer that disconnects immediately while the
+load over plain HTTP: noVNC reports that the page is not served over HTTPS. It does
+not mean the desktop is open. Every desktop sets its own per-session VNC password
+(`VNC_PASSWORD`), which only the session service creates and only the owning browser is given (through the manager's same-origin relay, which does not store or log it), and
+`deploy/capture/smoke.py` checks that a desktop offers only VNC password
+authentication. Over plain HTTP the stream, like every other manager page, is not
+encrypted on its way to the browser; use an authenticated HTTPS reverse proxy (above)
+where that matters. A viewer that disconnects immediately while the
 sessions log shows `websockify ... 403` means the service could not complete the
 websockify handshake (a session service built before 1.21.1 omitted the `binary`
 subprotocol): rebuild the stack with the setup command above.

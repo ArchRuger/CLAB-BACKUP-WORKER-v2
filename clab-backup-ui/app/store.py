@@ -33,10 +33,15 @@ class Store:
     @staticmethod
     def atomic(path, content):
         tmp = path.with_name(path.name+'.tmp')
-        with open(tmp, 'wb') as f:
-            os.chmod(tmp, 0o600)
-            f.write(content)
-        os.replace(tmp, path)
+        try:
+            with open(tmp, 'wb') as f:
+                os.chmod(tmp, 0o600)
+                f.write(content)
+            os.replace(tmp, path)
+        except BaseException:
+            # A failed write (full disk) must not leave its half-written temporary file behind.
+            tmp.unlink(missing_ok=True)
+            raise
     def save(self):
         with self.lock:
             self.atomic(self.path, self.cipher.encrypt(json.dumps(self.state).encode()))
@@ -56,15 +61,19 @@ class Store:
             for child in path.iterdir(): self.checked_tree(child)
 
     def finish_reset(self):
-        """Resume a durable reset journal before any worker writes new state."""
+        """Resume a durable reset journal before any worker writes new state; True when one was applied."""
         stage = self.root/'.reset-pending'
-        if not stage.exists(): return
+        if not stage.exists(): return False
         self.checked_tree(stage)
         prepared = stage/'new-state.enc'
         if not prepared.exists():
-            # A failure creating the journal cannot have moved managed files yet.
-            if any(stage.iterdir()): raise OSError('Incomplete reset journal needs attention.')
-            stage.rmdir(); return
+            # A failure creating the journal cannot have moved managed files yet: the only entry it can
+            # leave is the journal's own temporary file (a write cut off before atomic() could remove it).
+            partial = stage/'new-state.enc.tmp'
+            entries = list(stage.iterdir())
+            if entries == [partial] and partial.is_file(): partial.unlink()
+            elif entries: raise OSError('Incomplete reset journal needs attention.')
+            stage.rmdir(); return False
         payload = prepared.read_bytes()
         fresh = json.loads(self.cipher.decrypt(payload))
         current = json.loads(self.cipher.decrypt(self.path.read_bytes())) if self.path.exists() else {}
@@ -84,11 +93,12 @@ class Store:
             else: child.unlink()
         prepared.unlink()
         stage.rmdir()
+        return True
 
     def reset(self):
         with self.lock:
-            if self.reset_pending:
-                self.finish_reset(); return
+            # A journal that was never prepared is cleared and the reset then runs from the start.
+            if self.reset_pending and self.finish_reset(): return
             for name in ('backups', 'network-design', 'events.jsonl', 'events.jsonl.1', 'events.jsonl.2', 'events.jsonl.3', 'ui.token'):
                 self.checked_tree(self.root/name)
             host = copy.deepcopy(self.state.get('host', {}))

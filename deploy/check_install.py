@@ -79,7 +79,9 @@ class Context:
         self.host = {}
         self.trusted_helpers = {'inspect': False, 'operate': False, 'git': False}
         self.manual = [
-            'From the workstation: open the manager using the VM LAN address and configured port.',
+            'From the workstation: open the manager using the VM LAN address and configured port. '
+            'A DNS name (other than a single-label or .local name) is refused until it is listed in '
+            'UI_ALLOWED_HOSTS in clab-backup-ui/.env (deploy/image.env for a prepared release image).',
             'WinSCP: authenticate as the normal VM user, upload and download a small file; '
             'for administrative SFTP test the intended destination.',
             'Devices: verify a real login and configuration capture on the intended NOS nodes.',

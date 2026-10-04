@@ -204,6 +204,21 @@ class ReleaseConsistencyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'already contains'):
             set_release.set_release(self.root, '9.9.9')
 
+    def test_set_release_writes_nothing_when_any_marker_is_missing(self):
+        docs_fixture(self.root, self.version)
+        names = list(release.FIELDS)
+        broken = {names[-1]: 'no release marker here\n', names[len(names) // 2]: 'nor here\n'}
+        for name, text in broken.items():
+            (self.root / name).write_text(text, encoding='utf-8')
+        before = {path.relative_to(self.root): path.read_bytes() for path in self.root.rglob('*') if path.is_file()}
+        with self.assertRaises(ValueError) as error:
+            set_release.set_release(self.root, '9.9.9')
+        for name in broken:
+            self.assertIn(name, str(error.exception), 'every file without its marker is listed, not only the first')
+        self.assertIn('nothing was changed', str(error.exception))
+        after = {path.relative_to(self.root): path.read_bytes() for path in self.root.rglob('*') if path.is_file()}
+        self.assertEqual(after, before, 'a half-moved tree is the failure: no file may be written when one marker is missing')
+
 
 if __name__ == '__main__':
     unittest.main()

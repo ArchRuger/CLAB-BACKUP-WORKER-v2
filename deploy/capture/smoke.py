@@ -1,7 +1,8 @@
 """Live acceptance on an otherwise empty Linux Docker host (CI).
 
 Starts only this optional stack and a capture session, generates loopback UDP,
-checks noVNC's RFB greeting and real capture bytes, and removes its own resources.
+checks noVNC's RFB greeting, the per-session VNC password challenge, the pinned
+viewer modules and real capture bytes, and removes its own resources.
 Run with the application's Python dependencies installed. Never use a production
 capture stack: the preflight refuses any existing clab-manager-capture project.
 """
@@ -23,6 +24,7 @@ from websockets.asyncio.client import connect
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'clab-backup-ui'))
 from app.capture_service import IMAGE, LABEL  # noqa: E402
+from app.capture_sessions import VIEWER_ASSETS  # noqa: E402
 
 
 def command(*args, **kwargs):
@@ -83,16 +85,30 @@ def main():
         result = client.post('/sessions', json={'target': target, 'interfaces': ['lo'], 'request_id': secrets.token_hex(32)}).raise_for_status().json()
         sid = result['id']
         eventually(lambda: client.get('/sessions/' + sid + '/assets/core/rfb.js').raise_for_status().content)
+        # The service relays a module only when it is the pinned image's own bytes.
+        for path in VIEWER_ASSETS:
+            client.get('/sessions/' + sid + '/assets/' + path).raise_for_status()
+        assert len(client.get('/sessions/' + sid).raise_for_status().json()['viewer_password']) == 8
 
         async def greeting():
             async with connect('ws://127.0.0.1:5801/sessions/' + sid + '/websockify',
                                additional_headers=headers, proxy=None) as ws:
                 message = await asyncio.wait_for(ws.recv(), timeout=15)
                 assert message.startswith(b'RFB 003.'), 'No real noVNC RFB greeting'
+                # Desktops share one network: each demands its own session's VNC password.
+                await ws.send(b'RFB 003.008\n')
+                types = b''
+                while not types or len(types) < 1 + types[0]:
+                    types += await asyncio.wait_for(ws.recv(), timeout=15)
+                assert list(types[1:1 + types[0]]) == [2], 'The desktop must offer only VNC password authentication'
         asyncio.run(greeting())
         names = command('docker', 'ps', '--format', '{{.Names}}', '--filter', 'label=' + LABEL,
                         capture_output=True, text=True).stdout.splitlines()
         name = next(n for n in names if n.endswith(sid))
+        # The raw VNC port stays closed; the web port answering proves the probe itself works.
+        probe = ['docker', 'exec', name, 'nc', '-w3', '-z', '127.0.0.1']
+        assert subprocess.run(probe + ['5800'], capture_output=True).returncode == 0, 'Port probe unavailable'
+        assert subprocess.run(probe + ['5900'], capture_output=True).returncode != 0, 'Raw VNC port 5900 is open'
 
         # Nothing saved yet: the download must say so instead of handing over an empty archive.
         assert client.get('/sessions/' + sid + '/download').status_code == 409, 'Empty /pcaps must not download'

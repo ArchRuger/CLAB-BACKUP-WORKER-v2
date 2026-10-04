@@ -32,16 +32,41 @@ RESTORE_BUSY = ('queued', 'preflight', 'backing_up', 'applying', 'confirming', '
 DESIGN_APPLY_BUSY = ('queued', 'preflight', 'backing_up', 'applying', 'confirming', 'verifying')
 
 
+def restore_awaits_recheck(target):
+    """A restore target a manager restart caught mid-change and nobody has read back yet: 'interrupted' with the
+    token its change was armed under (or the restart's own mark) and no final outcome. A target interrupted before
+    it was changed carries neither; jobs stored before stages existed have no timeline."""
+    return (isinstance(target, dict) and target.get('status') == 'interrupted' and
+            bool(target.get('_token') or target.get('_recheck')) and 'settled' not in (target.get('timeline') or {}))
+
+
+def restore_holds_lab(job):
+    """A restore holds its lab while it runs and, after a restart, until every node it was changing has been read
+    back: such a node may still run an unconfirmed change that the device is about to undo."""
+    return job.get('status') in RESTORE_BUSY or (job.get('status') == 'interrupted' and
+                                                 any(restore_awaits_recheck(t) for t in job.get('targets') or []))
+
+
+def design_rechecking(state, lab_id=None):
+    """A network-design apply whose devices are still being read back after a manager restart (`rechecking`): of this lab,
+    or of any lab when none is named. `operation_busy` holds only the lab it is asked about with it; a caller that acts
+    on one lab but asks `operation_busy` without one asks this as well."""
+    return any(j.get('rechecking') and (not lab_id or j.get('lab_id') == lab_id) for j in state.get('design_jobs', []))
+
+
 def operation_busy(state, lab_id=None, progress_id=None):
     return (any(j['status'] in BUSY and (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
                 for j in state.get('operations', [])) or
             any(j['status'] in DESIGN_APPLY_BUSY and j.get('id') != progress_id and
                 (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
                 for j in state.get('design_jobs', [])) or
+            # The read-back after a restart (`rechecking`, up to the device's own timer) holds its own lab only:
+            # a check that names no lab (background discovery, Git's idle check) is not held by it (audit L-15).
+            bool(lab_id and design_rechecking(state, lab_id)) or
             any(j['status'] in GIT_BUSY and j.get('id') != progress_id and
                 (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
                 for j in state.get('git_jobs', [])) or
-            any(j['status'] in RESTORE_BUSY and j.get('id') != progress_id and
+            any(restore_holds_lab(j) and j.get('id') != progress_id and
                 (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
                 for j in state.get('restore_jobs', [])) or
             # Removing the lines the retired telemetry feature added holds the lab while it configures its devices.
@@ -336,7 +361,10 @@ class LabOperations:
         with self.store.lock: return copy.deepcopy(self.store.state.get('host', {}))
 
     def guard(self, lab_id=''):
-        if self.active or operation_busy(self.store.state): raise HTTPException(409, 'Wait for the current lab operation to finish.')
+        # operation_busy without a lab holds every lab for the others' work; a design apply's read-back after a restart
+        # holds only its own lab, so a named lab asks for it too (a Restart device under it would decide its outcome).
+        if self.active or operation_busy(self.store.state) or (lab_id and design_rechecking(self.store.state, lab_id)):
+            raise HTTPException(409, 'Wait for the current lab operation to finish.')
         if any(j['status'] in BUSY and (not lab_id or j['lab_id'] == lab_id) for j in self.store.state['jobs']):
             raise HTTPException(409, 'Wait for the lab backup or login job to finish.')
 
@@ -833,7 +861,11 @@ class LabOperations:
                 # Publish complete lines so split credential values cannot leak mid-chunk.
                 text = window.text().rpartition('\n')[0]
                 with self.store.lock: clean = scrub(text, self.store.state)
-                update(output=clean); last_save = time.monotonic()
+                # A storage error must not cut off the running operation: the job keeps the text in memory
+                # and the next publication (or the final save) writes it.
+                try: update(output=clean)
+                except OSError: pass
+                last_save = time.monotonic()
         with self.store.lock:
             job = next((j for j in self.store.state['operations'] if j['id'] == ident), {})
             restart_key = (job.get('lab_id'), job.get('node')) if job.get('action') == 'restart-node' and job.get('node') else None
@@ -853,7 +885,8 @@ class LabOperations:
             for key in lab_keys: self.readiness.forget(key)
         try:
             invalidate_readiness()
-            update(status='running', started=stamp(), message='Executing on the VM')
+            try: update(status='running', started=stamp(), message='Executing on the VM')
+            except OSError: raise ValueError("The manager could not save the operation record, so nothing was run on the VM. Check the manager's disk and try again.") from None
             result = remote(host, req, output, self.stopping)
             invalidate_readiness()   # before the job turns terminal: no window in which an old proof reads as Ready
             add('', True); text = window.text()
@@ -874,8 +907,6 @@ class LabOperations:
                 if exited: succeeded = False; message = exited
             finished = stamp()
             if succeeded: self.record_deployment(ident, finished)
-            update(status='succeeded' if succeeded else 'failed', exit_code=result.get('exit_code'),
-                   finished=finished, output=clean, result=result, message=message)
         except Exception as exc:
             message = str(exc) if type(exc) is ValueError else 'SSH connection or operation failed. Inspect the VM before retrying.'
             add('', True); text = window.text()
@@ -884,6 +915,13 @@ class LabOperations:
                 update(status='interrupted' if self.stopping.is_set() else 'failed', finished=stamp(), output=clean, message=message)
             except OSError:
                 pass  # update retained the terminal state in memory; restart reconciles disk.
+        else:
+            # Outside the try of the remote call: the operation ran, so a storage error here is not an SSH failure.
+            try:
+                update(status='succeeded' if succeeded else 'failed', exit_code=result.get('exit_code'),
+                       finished=finished, output=clean, result=result, message=message)
+            except OSError:
+                pass  # update retained the outcome in memory; restart reconciles disk.
         finally:
             try:
                 invalidate_readiness()

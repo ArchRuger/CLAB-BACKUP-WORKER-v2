@@ -326,12 +326,14 @@ class Runner:
             self.store.state['jobs']=trim_jobs_per_lab(self.store.state['jobs'],JOB_CAP,
                 lambda j:j['status'] in ('queued','running') or j['id'] in still_needed)
             old_next_run = lab.get('next_run')
-            if node_names is None:
+            # Only a full backup restarts the schedule; a login test (manual or after a boot) backs nothing up.
+            restarts_schedule = operation == 'backup' and node_names is None
+            if restarts_schedule:
                 lab['next_run']=time.time()+lab['interval']*60 if lab['interval'] else None
             try: self.store.save()
             except OSError:
                 self.store.state['jobs'].remove(job)
-                if node_names is None: lab['next_run'] = old_next_run
+                if restarts_schedule: lab['next_run'] = old_next_run
                 raise
             try: self.store.event('job.queued',f'{source} {operation}: {len(nodes)} nodes queued',lab_id=lab_id,job_id=job['id'])
             except OSError: pass  # A log failure must not orphan a durable capture request.

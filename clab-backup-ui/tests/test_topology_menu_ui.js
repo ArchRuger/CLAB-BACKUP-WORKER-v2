@@ -49,7 +49,7 @@ test('the context menu leads with Open CLI, shows the state instead of the addre
  assert.equal(list[3].body,'Restart device…');assert.match(list[3].attrs,/class="danger"/);assert.doesNotMatch(list[3].attrs,/disabled/,'the one destructive per-device action, red, enabled for a deployed device');
  assert.match(html,/<div class="context-node-name">R2<span class="pill warn">Starting<\/span><\/div>/,'the header carries the state pill');
  assert.doesNotMatch(html,/\d+\.\d+\.\d+\.\d+|:22/,'the management address stays in the device panel');
- assert.match(list[0].attrs,/disabled title="R2 is still starting/);assert.match(list[0].body,/<small>R2 is still starting\. SSH opens automatically when it answers\. Use Test logins \(above\) or this device&#39;s Test login to check again now\.<\/small>/);
+ assert.match(list[0].attrs,/disabled title="R2 is still starting/);assert.match(list[0].body,/<small>R2 is still starting\. SSH opens automatically when it answers\. Use Test logins \(above\) or this device&#39;s Test login \(in its panel, under Advanced\) to check again now\.<\/small>/);
  assert.match(list[0].body,/Open CLI <span class="external" aria-hidden="true">↗<\/span>/);
  assert.match(list[1].attrs,/disabled/);assert.match(list[1].body,/<small>Packet capture isn’t set up on this VM yet — see Tools › Packet capture\.<\/small>/);
  assert.doesNotMatch(list[2].attrs,/disabled/,'a Ready device can be backed up');assert.doesNotMatch(list[2].body,/<small>/);
@@ -100,7 +100,7 @@ test('renderMapState swaps state classes and labels on the drawn devices without
  assert.deepEqual(states,{r1:['state-ready'],r2:['state-starting'],r3:['state-attention'],r4:['state-unavailable'],r5:['state-credentials'],ghost:['state-neutral']});
  assert.equal(map.innerHTML,'<svg-before/>','the markup is never rebuilt for a state change');
  assert.equal(nodes[0].getAttribute('aria-label'),'R1');assert.equal(nodes[0].title.textContent,'R1 — click to open, right-click for more actions');
- assert.equal(nodes[1].getAttribute('aria-label'),'R2 · Starting');assert.equal(nodes[1].title.textContent,"R2 · Starting. R2 is still starting. SSH opens automatically when it answers. Use Test logins (above) or this device's Test login to check again now.");
+ assert.equal(nodes[1].getAttribute('aria-label'),'R2 · Starting');assert.equal(nodes[1].title.textContent,"R2 · Starting. R2 is still starting. SSH opens automatically when it answers. Use Test logins (above) or this device's Test login (in its panel, under Advanced) to check again now.");
  assert.equal(nodes[2].getAttribute('aria-label'),'R3 · Needs attention');
  assert.equal(h.context.renderMapState(),0,'a second pass with the same state changes nothing');
  h.context.state.labs[0].nodes[1].ssh_ready=true;h.context.state.labs[0].nodes[1].nos_login.status='ready';
@@ -218,4 +218,19 @@ test('Restart device in the menu follows the shared eligibility and its reason; 
  m.context.state.labs[0].nodes[2].nos_login={status:'restarting'};m.context.labStateOf=()=>({key:'running'});m.context.renderMapState();
  assert.deepEqual(cls(nodes[2]),['state-working']);assert.equal(nodes[2].getAttribute('aria-label'),'R3 · Restarting');
  assert.match(nodes[2].title.textContent,/R3 · Restarting\. R3 is restarting on the VM\./);
+});
+
+test('a map fetched while the Topology panel is hidden is not measured or cached, so the next visit renders and measures it (L-30)',async()=>{
+ const drawing={schema:3,has_links_source:true,skipped_links:0,nodes:[{id:'a',inventory_name:'r1',label:'R1',x:0,y:0}],links:[],decorations:[],settings:{}};
+ const h=harness({lab:lab(),drawing});const $=h.$;
+ let measured=0;h.context.measureTopology=()=>{measured++;return [0,0,100,50];};
+ $('topology-view').hidden=true;
+ await h.context.refreshMap(true);
+ assert.equal(measured,0,'a display:none SVG has no layout: getBBox() would answer an empty box');
+ assert.equal($('topology-map').innerHTML,'','nothing is drawn into a panel nobody can see');
+ $('topology-view').hidden=false;
+ await h.context.refreshMap();
+ assert.equal(measured,1,'showTab() calls refreshMap() on the next visit, which now measures the visible map');
+ assert.equal($('topology-map').innerHTML,'<g data-nodes="1"></g>');assert.equal($('topology-map').attrs.viewBox,'0 0 100 50');
+ await h.context.refreshMap();assert.equal(measured,1,'once measured, an unchanged drawing is still not re-rendered');
 });

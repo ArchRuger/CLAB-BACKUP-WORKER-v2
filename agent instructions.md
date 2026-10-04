@@ -1,3 +1,46 @@
+# Whole-codebase audit fixes (AUDIT-2026-10-03) — 1.30.60
+
+Read `docs/technical-audit/WHOLE-CODEBASE-AUDIT-2026-10-03.md` (findings, then "Disposition" at its end) and the
+1.30.60 sections of `docs/CHANGELOG.md` and `clab-backup-ui/VALIDATION.md`. Nothing of this release was deployed or
+checked live; the first deployment must refresh the helpers and should run the live checks listed under "Open".
+What the next agent must preserve:
+(1) `allowed_hosts.HostCheck` is the outermost ASGI layer (added last in `create_app`); IP literals, `localhost`,
+single-label and `.local` Hosts pass, anything else only through `UI_ALLOWED_HOSTS`, which both compose files pass in;
+the default keeps `testserver` working for every TestClient suite. (2) Save progress: `awaits_review` /
+`may_hold_commit` / `unreviewed_sibling` / `guard_siblings` keep one lab's upload from carrying a sibling's unreviewed
+commit; `kept_on_vm`, `kept_saves`, `made_in`, `same_branch` and `settle_kept` count and name saves kept with *Keep
+snapshot only* until an upload of the checkout's head settled them (private `head_uploaded`, `host_identity`); a move
+that would carry a kept save stays on the VM with `review_before_push`; `destination()` validates before
+`register-prefix` retires, `rebind()` cannot refuse, and `one_binding_change` / the per-lab rebinding marker cover
+Disconnect, saves and exports. `host_git.save_registration` writes the registry under `registry_lock` and
+`deploy/setup-git.sh` calls it. (3) `lab_operations.restore_holds_lab` and `design_rechecking` are how a read-back
+after a restart holds its lab; `operation_busy` asks both, `LabOperations.guard(lab_id)`, `GitProgress.idle(lab_id)`,
+Start fresh and the VM-connection change ask `design_rechecking` too. The public restore job carries `rechecking:
+true`, the public design job its `rechecking` list; `status.js`, `app.js`, `restore.js` and `network-design.js` treat
+both as active. (4) Restore: `_recheck_interrupted` never finalises on `stopping`; `__init__` requeues interrupted jobs
+with a target that `restore_awaits_recheck` and finalises one with nothing left to read back; `_settle_unfinished`
+gives every node an outcome and never calls an in-flight node failed; the terminal status survives a failed save.
+(5) Design apply: `accept` is offered the would-be configuration before anything is armed on all three drivers;
+`_resolve_pending` uses `split_negations`; the read-back runs on its own thread. (6) `node_services.login_result` is
+the one CLI check for Test login, Test logins and the monitor; `reachable` only after a real answer; one overall
+deadline. (7) Capture: `VIEWER_ASSETS` pins the image's noVNC modules (regenerate with `deploy/capture/viewer_assets.py`
+when the image pin moves); each desktop has its own `VNC_PASSWORD`, passed only through the owner's status answer.
+(8) `test_gateway_whitelist.py` pins the forced command; CI pins Node 24 before the first Node step.
+
+Open (recorded, not fixed): the whole-branch lenses and closure check were not rerun after the last fix wave, and the
+fixed design read-back banner was never opened in a real browser. No live evidence exists for the EOS reset check on a
+healthy cEOS, the pinned viewer hashes outside CI, the helpers' new lock and delete refusal, or Test login against real
+devices. Minor review notes left as they are: `status.js` `STATUS_DESIGN_RECHECK_DETAIL` and three guide sentences
+understate or mis-word what the design read-back refuses (lab operations, Start fresh and a VM-connection change are
+refused, not queued); the New folder dialog's move checkbox still promises an immediate upload; `compare` returns no
+files for any folder move; `kept_saves` can miss a kept save when both it and the reviewed save are unchanged saves
+of an untracked commit; a restore whose final save fails logs `restore.failed` although the job succeeded; a restore
+on another lab queued behind a restore read-back makes backups refuse on every lab (predates this release);
+`node_readiness.py` re-imports names it no longer uses; the installer lock can still be held by another local account
+through a read-only flock; `scaffold-lab.py` words an empty-message connection error as `()`; the `.local` wording in
+INSTALL.md does not mention search-suffix expansion; `docs/redesign/parity/git-places-restore.md` row 10 quotes the old
+move help. Jobs an earlier release finalised wrongly under M-5 are not repaired (history only).
+
 # Ui/Ux Changes email (UIUX-EMAIL-2026-10-03) — 1.30.59
 
 Read `docs/uiux-email-2026-10-03/PICKUP.md` and `MATRIX.md` first. What the next agent must preserve:

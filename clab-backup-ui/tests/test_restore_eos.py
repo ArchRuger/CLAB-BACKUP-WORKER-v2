@@ -17,7 +17,7 @@ from app.restore_eos import (EosShell, apply_shell, confirm_shell, capture_shell
 class FakeDevice:
     def __init__(self, mode='unpriv', enable_password=None, pending_session=None,
                  load_error=False, commit_timer_ok=True, commit_confirm_ok=True,
-                 write_memory_ok=True,
+                 write_memory_ok=True, clean_config_error='',
                  diff_text='--- system:/running-config\n+++ session:/x-session-config\n+hostname NEW\n',
                  running_config='! Command: show running-config\n! device: ceos\n!\nhostname ceos\n!\nend\n',
                  hostname='ceos', orphans=()):
@@ -30,6 +30,7 @@ class FakeDevice:
         self.commit_timer_ok = commit_timer_ok
         self.commit_confirm_ok = commit_confirm_ok
         self.write_memory_ok = write_memory_ok
+        self.clean_config_error = clean_config_error
         self.diff_text = diff_text
         self.running_config = running_config
         self.hostname = hostname
@@ -116,7 +117,7 @@ class FakeDevice:
             self.mode = 'session'
             return self.frame(line)
         if line == 'rollback clean-config':
-            return self.frame(line)
+            return self.frame(line, self.clean_config_error)
         if line == 'copy terminal: session-config':
             self.terminal = True
             self.loaded = ''
@@ -268,6 +269,20 @@ class RestoreEosDriverTests(unittest.TestCase):
         with self.assertRaises(RestoreError):
             apply_shell(shell_for(device), wrong)
         self.assertEqual(device.commands, [])
+
+    def test_apply_refused_session_reset_aborts_before_anything_is_loaded(self):
+        # Without the reset the session is still a copy of the running configuration and the paste would merge.
+        for error in ('% Invalid input', '% Error: could not roll back the session'):
+            with self.subTest(error=error):
+                device = FakeDevice(clean_config_error=error)
+                with self.assertRaises(RestoreError) as refused:
+                    apply_shell(shell_for(device), CANDIDATE)
+                self.assertNotIn(error, str(refused.exception))
+                self.assertIn('abort', device.commands)
+                self.assertNotIn('copy terminal: session-config', device.commands)
+                self.assertFalse(any(c.startswith('commit timer') for c in device.commands))
+                self.assertEqual(device.loaded, '')
+                self.assertIsNone(device.pending_session)
 
     def test_apply_refuses_foreign_pending_timer(self):
         device = FakeDevice(pending_session='someone-elses-session')

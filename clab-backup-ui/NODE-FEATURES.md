@@ -35,10 +35,25 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
   when the node is excluded from scheduled backups, and does not reset the lab
   schedule. The single backup queue still allows one job at a time.
 - **Details** offers latest and historical successful configuration downloads,
-  **Test login** (authenticates over SSH and asks for `show version`; its
-  timestamped result is a last check, not a continuous reachability guarantee) and
+  **Test login** (authenticates over SSH and asks for `show version`, or a harmless shell
+  command for a device with no NOS platform; its timestamped result is a last check, not a
+  continuous reachability guarantee. A device with a NOS platform must really answer `show version`.
+  A device without one (a Linux host, or a network OS of a kind the manager does not back up) counts as
+  answering when its CLI says anything but a not-ready reply, even an error for the shell command it does
+  not know. The CLI must have answered completely within 25 seconds of being asked, or the check ends
+  there and counts as no answer; the readiness monitor's own check follows the same rules. A login
+  that is accepted while the CLI is still starting
+  shows the *Starting* login-result badge with its own message, never *Login OK*. In a lab
+  linked to a VM deployment the device reads *Starting* too, the readiness monitor keeps asking
+  and replaces the result with the real answer. A lab with no VM deployment (an inventory
+  import) is not monitored: only the login result reads *Starting* and it stays until the next
+  **Test login** (its message says so), while the device itself stays available for SSH
+  whenever a login is configured) and
   **Edit connection…** (short name used in backup file names, address, port, NOS,
-  profile, *Include in backups*).
+  profile, *Include in backups*). Every field is checked before anything changes or is
+  logged, so a rejected edit leaves the device as it was; if the manager's state file cannot
+  be written the edit answers an error (HTTP 500), nothing was changed, and it can be
+  repeated once storage is healthy.
 
 **Test logins**, beside the Devices heading on both the topology rail and the Devices
 tab, repeats **Test login** for every device of the lab at once instead of one at a
@@ -121,7 +136,9 @@ short-lived, single-use terminal ticket and checks the WebSocket origin. Device
 SSH credentials are looked up in encrypted manager storage. Closing the terminal
 tab or restarting the manager ends the connection.
 
-Only session open/close and login-check results enter action logs. Keystrokes,
+Only session open/close and login-check results enter action logs (a close is logged only
+for a session whose open was logged; a ticket that is refused or a login that fails before
+the shell starts leaves neither). Keystrokes,
 terminal output, and credentials are not recorded there. SSH host keys retain the
 existing trusted-lab policy (unknown keys are accepted). Use this on your trusted
 lab network. Use HTTPS/WSS when accessed over an untrusted network; a proxy must

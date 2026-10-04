@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Relative Markdown link and anchor check over tracked .md files (stdlib only)."""
 import os, re, subprocess, sys, urllib.parse
-root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip()
+here = os.path.dirname(os.path.abspath(__file__))
+root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True, cwd=here).strip()
 files = subprocess.check_output(['git', 'ls-files', '*.md'], text=True, cwd=root).splitlines()
 LINK = re.compile(r'(?<!\!)\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)|!\[[^\]]*\]\(([^)\s]+)\)')
 def slug(h):

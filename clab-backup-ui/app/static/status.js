@@ -13,7 +13,26 @@ const STATUS_OPERATION_FAILED=['failed','interrupted'];
 const STATUS_GIT_BUSY=['queued','capturing','exporting','pushing'];
 const STATUS_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
 const STATUS_RESTORE_FAILED=['failed','preflight_failed','interrupted'];
-const STATUS_BADGE_LABELS={reachable:'Login OK',unreachable:'Login failed',succeeded:'Succeeded',failed:'Failed',interrupted:'Interrupted',partial:'Partly succeeded',queued:'Queued',running:'Running',Ready:'Ready'};
+// Finished, but the lab-level state needs a human look: a device whose state could not be established
+// (needs_attention, which also covers a run that stopped on an unexpected error, so the wording does not claim it finished) or only some devices replaced (partial). Not "did not finish", so they get their own headline.
+const STATUS_RESTORE_ATTENTION=['needs_attention','partial'];
+const STATUS_RESTORE_ATTENTION_DETAIL={needs_attention:'Replacing configuration needs a check on some devices.',partial:'Replacing configuration finished on some devices only.'};
+// After a manager restart an interrupted job may still be reading back the devices it was changing (a device can run a change
+// it is about to undo by itself), and until then the manager refuses work on the lab (409; 400 for backups): it queues nothing,
+// so the student starts it again afterwards. A restore's public job says so with `rechecking: true` (restore.public_job). A
+// design apply's public job carries the list of devices still being read back under `rechecking` (design_apply.public_job) and no
+// such key otherwise.
+// Older managers send neither: not rechecking. A restore's read-back holds backups and configuration changes of its lab and
+// Git saves and lab operations of every lab; a design apply's holds its own lab only (lab_operations.operation_busy).
+const STATUS_RECHECK_LABEL='Checking devices';
+const STATUS_RESTORE_RECHECK_DETAIL='The manager restarted while it was replacing configuration and is reading back the devices it was changing. Backups and configuration changes on this lab, and Git saves and lab operations on every lab, cannot be started until it has finished.';
+const STATUS_DESIGN_RECHECK_DETAIL='The manager restarted while it was applying a network design and is reading back the devices it was changing. Backups and configuration changes on this lab cannot be started until it has finished.';
+function statusRestoreRechecking(job){return job?.status==='interrupted'&&job.rechecking===true;}
+function statusRestoreActive(job){return STATUS_RESTORE_BUSY.includes(job?.status)||statusRestoreRechecking(job);}
+function statusDesignRechecking(job){return job?.status==='interrupted'&&Array.isArray(job.rechecking)&&job.rechecking.length>0;}
+// `booting` is a Test login whose SSH login was accepted while the CLI has not answered yet: the device panel's "Starting";
+// `checking` is a Test login or Test logins still running (node_services stores it meanwhile): the device panel's "Testing login…".
+const STATUS_BADGE_LABELS={reachable:'Login OK',unreachable:'Login failed',booting:'Starting',checking:'Testing login…',succeeded:'Succeeded',failed:'Failed',interrupted:'Interrupted',partial:'Partly succeeded',queued:'Queued',running:'Running',Ready:'Ready'};
 function plural(count,word,pluralWord){const n=Number(count)||0;return n+' '+(n===1?word:(pluralWord||word+'s'));}
 // Restart device names its one device when the job is at hand ("Restarting ceos"); the table's word otherwise.
 function operationLabel(action,job){if(action==='restart-node'&&job?.node_label)return 'Restarting '+job.node_label;return STATUS_OPERATION_LABELS[action]||'Lab operation';}
@@ -44,10 +63,11 @@ function relativeTime(value,now){
 function labActivity(lab,ctx={}){
  const mine=job=>job&&job.lab_id===lab?.id;
  const operation=(ctx.operations||[]).find(j=>STATUS_OPERATION_BUSY.includes(j.status)&&mine(j));
- const restore=(ctx.restore_jobs||[]).find(j=>STATUS_RESTORE_BUSY.includes(j.status)&&mine(j));
+ const restore=(ctx.restore_jobs||[]).find(j=>STATUS_RESTORE_BUSY.includes(j.status)&&mine(j))||(ctx.restore_jobs||[]).find(j=>statusRestoreRechecking(j)&&mine(j));
+ const design=(ctx.design_jobs||[]).find(j=>statusDesignRechecking(j)&&mine(j));
  const save=(ctx.git_jobs||[]).find(j=>STATUS_GIT_BUSY.includes(j.status)&&mine(j));
  const backup=(ctx.jobs||[]).find(j=>STATUS_OPERATION_BUSY.includes(j.status)&&mine(j));
- return {operation,restore,save,backup};
+ return {operation,restore,design,save,backup};
 }
 // The newest finished operation or restore job of the lab, when it ended badly and the student has
 // not dismissed it (ctx.dismissed is a Set of job ids). A later job that finished cleanly clears it,
@@ -56,7 +76,7 @@ function labFailure(lab,ctx={}){
  const dismissed=ctx.dismissed,isDismissed=id=>!!dismissed&&(typeof dismissed.has==='function'?dismissed.has(id):Array.isArray(dismissed)&&dismissed.includes(id));
  const done=[];
  for(const j of ctx.operations||[])if(j.lab_id===lab?.id&&!STATUS_OPERATION_BUSY.includes(j.status))done.push({job:j,failed:STATUS_OPERATION_FAILED.includes(j.status),label:operationLabel(j.action)});
- for(const j of ctx.restore_jobs||[])if(j.lab_id===lab?.id&&!STATUS_RESTORE_BUSY.includes(j.status))done.push({job:j,failed:STATUS_RESTORE_FAILED.includes(j.status),label:'Replacing configuration'});
+ for(const j of ctx.restore_jobs||[])if(j.lab_id===lab?.id&&!statusRestoreActive(j))done.push({job:j,failed:STATUS_RESTORE_FAILED.includes(j.status)||STATUS_RESTORE_ATTENTION.includes(j.status),label:'Replacing configuration',...(STATUS_RESTORE_ATTENTION.includes(j.status)?{detail:STATUS_RESTORE_ATTENTION_DETAIL[j.status],pill:'warn'}:{})});
  const newest=done.sort((a,b)=>statusJobTime(b.job)-statusJobTime(a.job))[0];
  return newest&&newest.failed&&!isDismissed(newest.job.id)?newest:null;
 }
@@ -70,9 +90,11 @@ function labState(lab,ctx={}){
  const readyText=`${ready} of ${total} devices ready`+(credentials?` · ${credentials} ${credentials===1?'needs':'need'} login credentials`:'')+(notRunning?` · ${notRunning} not running`:'');
  const activity=labActivity(lab,ctx);
  if(activity.operation)return {key:'working',label:operationLabel(activity.operation.action,activity.operation),detail:activity.operation.message||'Running on the lab VM.',ready,total,pill:'busy',job:activity.operation};
+ if(activity.restore&&statusRestoreRechecking(activity.restore))return {key:'working',label:STATUS_RECHECK_LABEL,detail:STATUS_RESTORE_RECHECK_DETAIL,ready,total,pill:'busy',job:activity.restore};
  if(activity.restore)return {key:'working',label:'Replacing configuration',detail:activity.restore.message||'Applying a saved configuration.',ready,total,pill:'busy',job:activity.restore};
+ if(activity.design)return {key:'working',label:STATUS_RECHECK_LABEL,detail:STATUS_DESIGN_RECHECK_DETAIL,ready,total,pill:'busy',job:activity.design};
  const failure=labFailure(lab,ctx);
- if(failure)return {key:'attention',label:'Needs attention',detail:`${failure.label} did not finish.`,ready,total,pill:'danger',job:failure.job};
+ if(failure)return {key:'attention',label:'Needs attention',detail:failure.detail||`${failure.label} did not finish.`,ready,total,pill:failure.pill||'danger',job:failure.job};
  const status=lab.deployment?.status||'Unlinked';
  if(status==='Unlinked')return {key:'unlinked',label:'Not matched to a running lab',detail:'The manager cannot tell which lab on the VM this is.',ready,total,pill:'neutral'};
  if(status==='Unknown')return {key:'unknown',label:'Status unknown',detail:ctx.discovery?.configured===false?'Connect the lab VM to see whether this lab is running.':'The lab VM cannot be reached right now, so this status may be out of date.',ready,total,pill:'neutral'};
@@ -98,7 +120,7 @@ function deviceState(node){
  // A refresh (Test logins, or this device's own Test login) is answering right now; only a
  // real answer ever marks a device ready, so this is never optimistic.
  if(login==='checking')return {key:'testing',label:'Testing login…',detail:`Testing the SSH login of ${name} again.`,next:'',cli:false,pill:'busy'};
- if(login==='booting')return {key:'starting',label:'Starting',detail:`${name} is still starting. SSH opens automatically when it answers. Use Test logins (above) or this device's Test login to check again now.`,next:'',cli:false,pill:'warn'};
+ if(login==='booting')return {key:'starting',label:'Starting',detail:`${name} is still starting. SSH opens automatically when it answers. Use Test logins (above) or this device's Test login (in its panel, under Advanced) to check again now.`,next:'',cli:false,pill:'warn'};
  if(login==='failed')return {key:'attention',label:'Needs attention',detail:`${name} is running, but SSH login failed with the saved credentials.`,next:'Check credentials',cli:false,pill:'danger'};
  if(statusNeedsCredentials(node))return {key:'credentials',label:'Needs credentials',detail:`Add login credentials to open the CLI of ${name}. Add them under Devices, then use Test logins to check again.`,next:'Add credentials',cli:false,pill:'warn'};
  if(!node.platform||node.readiness==='Choose NOS')return {key:'credentials',label:'Choose network OS',detail:`Tell the manager which network OS ${name} runs.`,next:'Edit connection',cli:false,pill:'warn'};

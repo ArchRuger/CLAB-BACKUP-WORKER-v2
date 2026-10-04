@@ -14,7 +14,9 @@ old Compose project `clab-manager-telemetry`, stops and removes them, removes th
 when nothing else uses them, moves the feature's files (`/srv/containerlab-node-manager/telemetry`
 and the generated lab-map dashboards under `/srv/containerlab-node-manager/data/telemetry`) into a
 timestamped `telemetry-retired-<UTC stamp>/` archive the operator may delete (`--purge` deletes
-instead), and removes every `TELEMETRY_*` line from `clab-backup-ui/.env`. It is idempotent and
+instead), and removes every `TELEMETRY_*` line from `clab-backup-ui/.env`. `--dry-run` only reports
+what it would do: it changes nothing, and it never recreates the manager container either (a real
+run recreates it unless `--no-recreate` is given). It is idempotent and
 does nothing on a VM that never had the stack. The health check's new "Retired telemetry stack"
 row PASSes once no labelled container or volume, no `TELEMETRY_*` key and neither feature folder
 remains.

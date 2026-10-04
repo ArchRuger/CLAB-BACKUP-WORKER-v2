@@ -1,6 +1,14 @@
 """Orchestration tests for deploy/scaffold-lab.py (the manager API is mocked)."""
+import http.client
 import importlib.util
+import io
+import json
+import os
+import threading
 import unittest
+import urllib.error
+import urllib.request
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
@@ -54,6 +62,7 @@ class ScaffoldLabTests(unittest.TestCase):
                 return 200, dict(self.job)
             raise AssertionError(path)
 
+        self.real_api, self.fake_api = scaffold.api, fake_api
         patch.object(scaffold, 'api', fake_api).start()
         self.addCleanup(patch.stopall)
 
@@ -111,6 +120,207 @@ class ScaffoldLabTests(unittest.TestCase):
         self.assertIn('init bgp-core', str(stop.exception))
         self.assertEqual(self.destinations(), ['bgp-core/reference/broken-01'])   # no rebind was attempted
 
+    def test_snapshot_whose_save_cannot_start_rebinds_to_work(self):
+        # The manager is busy (409) as the save starts: the lab was already pointed at the reference folder.
+        real = scaffold.api
+
+        def busy(manager, path, method='GET', body=None):
+            if path.endswith('/git/save'):
+                self.calls.append((method, path, body))
+                return 409, {'detail': 'Another operation is running.'}
+            return real(manager, path, method, body)
+        real = scaffold.api
+        patch.object(scaffold, 'api', busy).start()
+        with self.assertRaises(SystemExit) as stop:
+            scaffold.cmd_snapshot(args(slug='bgp-core', state='broken-01', yes=True))
+        self.assertEqual(self.destinations(), ['bgp-core/reference/broken-01', 'bgp-core/work'])
+        self.assertIn('save failed to start', str(stop.exception))
+        self.assertIn('rebound to bgp-core/work', str(stop.exception))
+
+    def test_snapshot_whose_poll_times_out_says_where_the_lab_saves_when_the_rebind_is_refused(self):
+        # A save still pending refuses the folder change (the faithful fake), so the lab stays on the reference
+        # folder; the person must be told, with the way out.
+        def stuck(manager, job_id, timeout=300):
+            self.job['status'] = 'push_pending'
+            scaffold.die('timed out waiting for Git job %s.' % job_id)
+        patch.object(scaffold, 'poll_git', stuck).start()
+        with self.assertRaises(SystemExit) as stop:
+            scaffold.cmd_snapshot(args(slug='bgp-core', state='broken-01', yes=True))
+        text = str(stop.exception)
+        self.assertIn('timed out waiting for Git job', text)
+        self.assertIn('STILL SAVES TO bgp-core/reference/broken-01', text)
+        self.assertIn('init bgp-core', text)
+
+    def test_snapshot_stopped_at_the_question_with_ctrl_c_or_end_of_input_says_where_the_lab_saves(self):
+        # The save waits for the review, so it blocks the folder change back: the person must be told.
+        for interruption in (KeyboardInterrupt(), EOFError()):
+            with self.subTest(interruption=type(interruption).__name__):
+                self.calls.clear()
+                self.job = None
+                with patch.object(scaffold.sys.stdin, 'isatty', return_value=True), \
+                        patch('builtins.input', side_effect=interruption), patch('builtins.print'), \
+                        self.assertRaises(SystemExit) as stop:
+                    scaffold.cmd_snapshot(args(slug='bgp-core', state='broken-01'))
+                text = str(stop.exception)
+                self.assertIn('stopped', text)
+                self.assertIn('STILL SAVES TO bgp-core/reference/broken-01', text)
+                self.assertIn('init bgp-core', text)
+                self.assertFalse(any(path.endswith('/retry') for path in self.paths()))   # nothing was uploaded
+
+    def interrupted_bind(self, refuse_rebind):
+        # The destination change to the reference folder returns a job; Ctrl+C arrives while it is polled.
+        inner = scaffold.api
+        polls = []
+
+        def api(manager, path, method='GET', body=None):
+            if path.endswith('/git/destination') and body['prefix'].endswith('/reference/broken-01'):
+                self.calls.append((method, path, body))
+                return 200, {'binding': {}, 'job': {'id': 'bind1'}}
+            if path.endswith('/git/destination') and refuse_rebind:
+                self.calls.append((method, path, body))
+                return 409, {'detail': 'Finish pending Git saves, or choose Keep snapshot only, before changing this lab.'}
+            return inner(manager, path, method, body)
+
+        def poll(manager, job_id, timeout=300):
+            polls.append(job_id)
+            raise KeyboardInterrupt
+
+        patch.object(scaffold, 'api', api).start()
+        patch.object(scaffold, 'poll_git', poll).start()
+        with self.assertRaises(SystemExit) as stop:
+            scaffold.cmd_snapshot(args(slug='bgp-core', state='broken-01', yes=True))
+        self.assertEqual(polls, ['bind1'])
+        self.assertFalse(any(path.endswith('/git/save') for path in self.paths()))   # nothing was captured
+        return str(stop.exception)
+
+    def test_snapshot_stopped_with_ctrl_c_while_the_lab_is_pointed_at_the_reference_folder_rebinds(self):
+        text = self.interrupted_bind(refuse_rebind=False)
+        self.assertIn('stopped', text)
+        self.assertIn('rebound to bgp-core/work', text)
+        self.assertEqual(self.destinations(), ['bgp-core/reference/broken-01', 'bgp-core/work'])
+
+    def test_snapshot_stopped_with_ctrl_c_while_pointing_at_the_reference_says_where_the_lab_may_save(self):
+        text = self.interrupted_bind(refuse_rebind=True)
+        self.assertIn('stopped', text)
+        self.assertIn('MAY STILL SAVE TO bgp-core/reference/broken-01', text)
+        self.assertIn('init bgp-core', text)
+
+    def test_snapshot_whose_dismiss_fails_reports_the_binding_and_rebinds_when_it_can(self):
+        real = scaffold.api
+
+        def refuse_dismiss(manager, path, method='GET', body=None):
+            if path.endswith('/dismiss'):
+                self.calls.append((method, path, body))
+                return 500, {'detail': 'boom'}
+            return real(manager, path, method, body)
+        patch.object(scaffold, 'api', refuse_dismiss).start()
+        with patch.object(scaffold.sys.stdin, 'isatty', return_value=True), patch('builtins.input', return_value='n'), \
+                patch('builtins.print'), self.assertRaises(SystemExit) as stop:
+            scaffold.cmd_snapshot(args(slug='bgp-core', state='broken-01'))
+        text = str(stop.exception)
+        self.assertIn('could not set the save aside', text)
+        self.assertIn('STILL SAVES TO bgp-core/reference/broken-01', text)   # the save is still pending, so the rebind is refused
+
+    def over_http(self, lose):
+        """Run the real api() against the faithful fake: `lose(method, path, body, n)` says how request n ends,
+        None for a normal answer, 'before' when the connection breaks before the manager acted, 'after' when the
+        manager acted and the answer was lost (RemoteDisconnected, as when it restarts mid-request)."""
+        seen = []
+        broken = http.client.RemoteDisconnected('Remote end closed connection without response')
+
+        class Answer(io.BytesIO):
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        class Transport:
+            def open(transport, request, timeout=None):
+                path = request.full_url.split('/api', 1)[1]
+                body = json.loads(request.data) if request.data else None
+                seen.append((request.get_method(), path, body))
+                how = lose(request.get_method(), path, body, len(seen))
+                if how == 'before':
+                    raise broken
+                status, reply = self.fake_api('http://m', path, request.get_method(), body)
+                if how == 'after':
+                    raise broken
+                if status != 200:
+                    raise urllib.error.HTTPError(request.full_url, status, 'x', {}, io.BytesIO(json.dumps(reply).encode()))
+                return Answer(json.dumps(reply).encode())
+        patch.object(scaffold, 'api', self.real_api).start()
+        patch.object(scaffold, 'DIRECT', Transport()).start()
+        return seen
+
+    def snapshot_text(self):
+        with self.assertRaises(SystemExit) as stop:
+            scaffold.cmd_snapshot(args(slug='bgp-core', state='broken-01', yes=True))
+        return str(stop.exception)
+
+    def test_api_turns_an_error_raised_while_the_answer_is_read_into_a_clean_exit(self):
+        # urllib wraps only the connect: these come out of http.client's getresponse() as they are.
+        for error in (http.client.RemoteDisconnected('Remote end closed connection without response'),
+                      TimeoutError('timed out'), ConnectionResetError(104, 'Connection reset by peer'),
+                      http.client.IncompleteRead(b'x'), urllib.error.URLError('refused')):
+            with self.subTest(error=type(error).__name__):
+                class Transport:
+                    def open(transport, request, timeout=None, error=error):
+                        raise error
+                patch.object(scaffold, 'DIRECT', Transport()).start()
+                with self.assertRaises(SystemExit) as stop:
+                    self.real_api('http://m', '/state')
+                self.assertTrue(str(stop.exception).startswith('Cannot reach the manager at http://m ('), str(stop.exception))
+                self.assertIn('Is it running?', str(stop.exception))
+
+    def test_snapshot_whose_save_answer_is_lost_before_the_manager_acted_rebinds_to_work(self):
+        self.over_http(lambda method, path, body, n: 'before' if path.endswith('/git/save') else None)
+        text = self.snapshot_text()
+        self.assertIn('Cannot reach the manager', text)
+        self.assertIn('rebound to bgp-core/work', text)
+        self.assertEqual(self.destinations(), ['bgp-core/reference/broken-01', 'bgp-core/work'])
+
+    def test_snapshot_whose_save_answer_is_lost_after_the_manager_acted_says_where_the_lab_saves(self):
+        # The save started and now waits for its review, so the folder change back is refused.
+        self.over_http(lambda method, path, body, n: 'after' if path.endswith('/git/save') else None)
+        text = self.snapshot_text()
+        self.assertIn('Cannot reach the manager', text)
+        self.assertIn('STILL SAVES TO bgp-core/reference/broken-01', text)
+        self.assertIn('init bgp-core', text)
+
+    def test_snapshot_whose_bind_answer_is_lost_rebinds_when_the_manager_is_back(self):
+        self.over_http(lambda method, path, body, n: 'after' if n == 2 and path.endswith('/git/destination') else None)
+        text = self.snapshot_text()
+        self.assertIn('rebound to bgp-core/work', text)
+        self.assertEqual(self.destinations(), ['bgp-core/reference/broken-01', 'bgp-core/work'])
+        self.assertFalse(any(path.endswith('/git/save') for path in self.paths()))   # nothing was captured
+
+    def test_snapshot_whose_bind_answer_is_lost_while_the_manager_stays_away_says_the_lab_may_still_save_there(self):
+        seen = self.over_http(lambda method, path, body, n: 'after' if path.endswith('/git/destination') else None)
+        text = self.snapshot_text()
+        self.assertIn('Cannot reach the manager', text)
+        self.assertIn('MAY STILL SAVE TO bgp-core/reference/broken-01', text)
+        self.assertIn('init bgp-core', text)
+        self.assertEqual([body['prefix'] for method, path, body in seen if path.endswith('/git/destination')],
+                         ['bgp-core/reference/broken-01', 'bgp-core/work'])      # the rebind was tried
+
+    def test_snapshot_whose_rebind_answer_is_lost_does_not_claim_the_lab_still_saves_there(self):
+        # The rebind may have been done: the stop after a failed save must not state the opposite as a fact.
+        self.over_http(lambda method, path, body, n: 'before' if path.endswith('/git/save') else (
+            'after' if path.endswith('/git/destination') and body['prefix'].endswith('/work') else None))
+        text = self.snapshot_text()
+        self.assertIn('MAY STILL SAVE TO bgp-core/reference/broken-01', text)
+        self.assertNotIn('STILL SAVES TO', text)
+
+    def test_snapshot_whose_final_rebind_answer_is_lost_says_where_the_lab_saves_and_that_the_save_is_done(self):
+        self.over_http(lambda method, path, body, n: 'after' if path.endswith('/git/destination') and body['prefix'].endswith('/work') else None)
+        text = self.snapshot_text()
+        self.assertIn('Cannot reach the manager', text)
+        self.assertIn('MAY STILL SAVE TO bgp-core/reference/broken-01', text)
+        self.assertIn('uploaded', text)
+
     def test_rejects_unsafe_names(self):
         with self.assertRaises(SystemExit):
             scaffold.cmd_init(args(slug='BGP Core', states='start'))
@@ -144,6 +354,43 @@ class ScaffoldLabTests(unittest.TestCase):
             raise AssertionError(path)
         patch.object(scaffold, 'api', existing).start()
         scaffold.cmd_init(args(slug='bgp-core', states='start'))  # must not raise
+
+
+class ApiProxyTests(unittest.TestCase):
+    """api() reaches the manager directly: an exported http_proxy never gets the loopback request."""
+
+    def serve(self, reply):
+        hits = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                body = json.dumps(reply).encode()
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+        server = HTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return server, hits
+
+    def test_loopback_manager_url_ignores_the_proxy_environment(self):
+        manager, manager_hits = self.serve({'labs': []})
+        proxy, proxy_hits = self.serve({'proxy': 'answered'})
+        # no_proxy is emptied too: a shell that exports no_proxy=127.0.0.1 would bypass the proxy by itself
+        # and the test would prove nothing.
+        env = {'http_proxy': 'http://127.0.0.1:%d' % proxy.server_port, 'HTTP_PROXY': 'http://127.0.0.1:%d' % proxy.server_port,
+               'no_proxy': '', 'NO_PROXY': ''}
+        with patch.dict(os.environ, env), patch.object(urllib.request, '_opener', None):
+            status, body = scaffold.api('http://127.0.0.1:%d' % manager.server_port, '/state')
+        self.assertEqual((status, body), (200, {'labs': []}))
+        self.assertEqual(proxy_hits, [])
+        self.assertEqual(manager_hits, ['/api/state'])
 
 
 if __name__ == '__main__':

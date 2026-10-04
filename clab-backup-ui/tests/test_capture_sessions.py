@@ -1,11 +1,15 @@
 """Session service policy, Docker contract, cleanup and browser ownership."""
 import asyncio
 import copy
+import hashlib
 import importlib.util
 import re
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -19,7 +23,8 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from app.capture_service import IMAGE, LABEL, IDLE_SECONDS, LIFETIME_SECONDS, Sessions, create_app, tar_has_regular_file
-from app.capture_sessions import BrowserSessions
+from app import capture_sessions
+from app.capture_sessions import ASSET, BrowserSessions
 from test_capture import fixture
 
 
@@ -48,9 +53,22 @@ def directory_only_archive():
     return stream.getvalue()
 
 
+class BrokenArchive(httpx.SyncByteStream):
+    """An archive reply whose stream breaks after the status line, as when Docker restarts mid-download."""
+    def __init__(self):
+        self.closed=False
+
+    def __iter__(self):
+        raise httpx.ReadError('PRIVATE socket reset')
+        yield b''
+
+    def close(self):self.closed=True
+
+
 class DockerFixture:
     def __init__(self):
         self.calls=[];self.containers={};self.volumes=[];self.fail='';self.archive=b''
+        self.running=True;self.archive_error=None;self.archive_stream=None
 
     def handle(self, request):
         path=request.url.path;self.calls.append(request)
@@ -70,8 +88,12 @@ class DockerFixture:
         if request.method=='DELETE':
             self.containers.pop(name,None);return httpx.Response(204)
         if parts[-1]=='start':return httpx.Response(204)
-        if parts[-1]=='json':return httpx.Response(200,json={'State':{'Running':True},'NetworkSettings':{'Networks':{'clab-manager-capture':{'IPAddress':'172.30.0.7'}}}})
-        if parts[-1]=='archive':return httpx.Response(200,content=self.archive)
+        if name not in self.containers:return httpx.Response(404,json={'message':'PRIVATE no such container'})
+        if parts[-1]=='json':return httpx.Response(200,json={'State':{'Running':self.running},'NetworkSettings':{'Networks':{'clab-manager-capture':{'IPAddress':'172.30.0.7'}}}})
+        if parts[-1]=='archive':
+            if self.archive_error:raise self.archive_error
+            if self.archive_stream:return httpx.Response(200,stream=self.archive_stream)
+            return httpx.Response(200,content=self.archive)
         raise AssertionError((request.method,path))
 
 
@@ -204,6 +226,67 @@ class CaptureSessionTests(unittest.TestCase):
         for path in ('index.html','app/ui.js','vendor/../config.js','core/evil.html'):
             self.assertEqual(self.client.get('/sessions/'+sid+'/assets/'+path,headers=self.headers).status_code,404)
 
+    def test_desktop_stays_up_when_wireshark_exits_so_saved_files_survive(self):
+        # The pinned image stops its container when the app exits unless KEEP_APP_RUNNING=1,
+        # and moby's local volume driver unmounts a tmpfs-backed volume when its last container stops,
+        # so a later archive read of /pcaps is expected to come back empty (not verified live here).
+        self.start();env=next(iter(self.docker.containers.values()))['Env']
+        self.assertIn('KEEP_APP_RUNNING=1',env);self.assertNotIn('KEEP_APP_RUNNING=0',env)
+
+    def test_download_from_a_stopped_desktop_says_the_files_were_lost_not_never_saved(self):
+        sid=self.start();self.docker.archive=directory_only_archive();self.docker.running=False
+        response=self.client.get('/sessions/'+sid+'/download',headers=self.headers)
+        self.assertEqual(response.status_code,409);detail=response.json()['detail']
+        self.assertIn('lost',detail);self.assertNotIn('No saved captures yet',detail);self.assertNotIn('Save As',detail)
+
+    def test_a_stopped_desktop_whose_files_survived_still_downloads_them(self):
+        # AUDIT-2026-10-03 M-12 review: the loss is only reported when the archive really is empty, so a
+        # Docker that keeps the volume's files hands them over instead of telling the student they are gone.
+        stream=io.BytesIO()
+        with tarfile.open(fileobj=stream,mode='w') as archive:
+            data=b'\x0a\x0d\x0d\x0a'+b'fixture packet data'
+            entry=tarfile.TarInfo('pcaps/kept.pcapng');entry.size=len(data);archive.addfile(entry,io.BytesIO(data))
+        sid=self.start();self.docker.archive=stream.getvalue();self.docker.running=False
+        response=self.client.get('/sessions/'+sid+'/download',headers=self.headers)
+        self.assertEqual(response.status_code,200);self.assertEqual(response.content,stream.getvalue())
+
+    def test_status_of_a_stopped_desktop_does_not_keep_its_slot_alive(self):
+        sid=self.start();row=self.sessions.rows[sid];row['seen']-=60;before=row['seen']
+        self.docker.running=False
+        response=self.client.get('/sessions/'+sid,headers=self.headers)
+        self.assertEqual(response.json()['running'],False);self.assertEqual(row['seen'],before)
+        row['seen']-=IDLE_SECONDS;self.sessions.reap();self.assertNotIn(sid,self.sessions.rows)
+        # A running desktop's status poll is still the viewer heartbeat.
+        self.docker.running=True;sid=self.start();row=self.sessions.rows[sid];row['seen']-=60;before=row['seen']
+        self.assertEqual(self.client.get('/sessions/'+sid,headers=self.headers).json()['running'],True)
+        self.assertGreater(row['seen'],before)
+
+    def test_one_stuck_removal_does_not_block_other_cleanup_starts_or_listing(self):
+        expired=self.start();self.sessions.rows[expired]['created']-=LIFETIME_SECONDS+1
+        stuck='clab-capture-'+self.sessions.label+'-'+'f'*64;self.sessions.pending.add(stuck);self.docker.fail=stuck
+        self.sessions.reap()
+        self.assertNotIn(expired,self.sessions.rows);self.assertFalse(self.docker.containers);self.assertEqual(self.sessions.pending,{stuck})
+        self.assertEqual(self.client.get('/sessions',headers=self.headers).status_code,200)
+        sid=self.start({**self.data,'request_id':'1'*64})
+        # An expired session whose removal fails stays counted and is retried on the next sweep.
+        self.sessions.rows[sid]['created']-=LIFETIME_SECONDS+1;self.docker.fail=self.sessions.rows[sid]['container']
+        self.sessions.reap();self.assertIn(sid,self.sessions.rows)
+        self.docker.fail='';self.sessions.reap()
+        self.assertNotIn(sid,self.sessions.rows);self.assertFalse(self.sessions.pending);self.assertFalse(self.docker.containers)
+
+    def test_download_maps_docker_transport_errors_and_a_removed_container(self):
+        sid=self.start();self.docker.archive_error=httpx.ConnectError('PRIVATE socket gone')
+        response=self.client.get('/sessions/'+sid+'/download',headers=self.headers)
+        self.assertEqual(response.status_code,503);self.assertNotIn('PRIVATE',response.text)
+        # The reply started, then the stream broke: the upstream response is closed, not leaked.
+        self.docker.archive_error=None;self.docker.archive_stream=BrokenArchive()
+        response=self.client.get('/sessions/'+sid+'/download',headers=self.headers)
+        self.assertEqual(response.status_code,503);self.assertNotIn('PRIVATE',response.text);self.assertTrue(self.docker.archive_stream.closed)
+        # A container removed outside the service is a gone session, not a hint to save in /pcaps.
+        self.docker.archive_stream=None;self.docker.containers.clear()
+        response=self.client.get('/sessions/'+sid+'/download',headers=self.headers)
+        self.assertEqual(response.status_code,404);self.assertNotIn('/pcaps',response.json()['detail'])
+
     def test_desktop_relay_negotiates_the_binary_subprotocol_websockify_requires(self):
         sid=self.start();seen={}
         def connect(url,**kwargs):
@@ -223,6 +306,65 @@ class CaptureSessionTests(unittest.TestCase):
         with self.assertRaises(WebSocketDisconnect):
             with self.client.websocket_connect('/sessions/'+sid+'/websockify',headers={**self.headers,'X-Capture-Owner':'d'*64}):pass
 
+    def test_each_desktop_demands_its_own_vnc_password_and_opens_no_raw_vnc_port(self):
+        # Desktops share one Docker network: without a password a process in one desktop could
+        # drive another's VNC server directly, bypassing the owner check entirely.
+        first=self.start();second=self.start({**self.data,'request_id':'1'*64})
+        envs={sid:self.docker.containers[self.sessions.rows[sid]['container']]['Env'] for sid in (first,second)}
+        passwords={}
+        for sid,env in envs.items():
+            self.assertIn('VNC_LISTENING_PORT=-1',env)
+            password,=[e.split('=',1)[1] for e in env if e.startswith('VNC_PASSWORD=')]
+            self.assertRegex(password,r'^[A-Za-z0-9]{8}$');passwords[sid]=password
+        self.assertNotEqual(passwords[first],passwords[second])
+        # Only the owner's status answer carries it; listings and start replies never do.
+        self.assertEqual(self.client.get('/sessions/'+first,headers=self.headers).json()['viewer_password'],passwords[first])
+        self.assertEqual(self.client.get('/sessions/'+first,headers={**self.headers,'X-Capture-Owner':'d'*64}).status_code,404)
+        for response in (self.client.get('/sessions',headers=self.headers),self.client.post('/sessions',headers=self.headers,json=self.data)):
+            for password in passwords.values():self.assertNotIn(password,response.text)
+
+    def test_viewer_modules_must_be_the_pinned_images_own_bytes(self):
+        sid=self.start();served={'body':b'export default class RFB {}','paths':[]}
+        def handler(request):
+            served['paths'].append(request.url.path);return httpx.Response(200,content=served['body'])
+        real=httpx.AsyncClient
+        with patch('app.capture_service.httpx.AsyncClient',lambda **kw:real(transport=httpx.MockTransport(handler),**kw)):
+            # A desktop serving anything but the pinned image's module is refused, never relayed as JavaScript.
+            response=self.client.get('/sessions/'+sid+'/assets/core/rfb.js',headers=self.headers)
+            self.assertEqual(response.status_code,502);self.assertNotIn('javascript',response.headers['content-type'])
+            self.assertNotIn('class RFB',response.text)
+            # A module name outside the pinned client is never even requested from the desktop.
+            served['paths'].clear()
+            self.assertEqual(self.client.get('/sessions/'+sid+'/assets/core/evil.js',headers=self.headers).status_code,404)
+            self.assertEqual(served['paths'],[])
+            with patch.dict(capture_sessions.VIEWER_ASSETS,{'core/rfb.js':hashlib.sha256(served['body']).hexdigest()}):
+                response=self.client.get('/sessions/'+sid+'/assets/core/rfb.js',headers=self.headers)
+            self.assertEqual(response.status_code,200);self.assertEqual(response.content,served['body'])
+            self.assertIn('text/javascript',response.headers['content-type'])
+        self.assertEqual(served['paths'],['/core/rfb.js'])
+
+    def test_viewer_module_list_belongs_to_the_pinned_image(self):
+        # A new pin must come with that image's module hashes (deploy/capture/viewer_assets.py).
+        self.assertTrue(IMAGE.endswith('@'+capture_sessions.VIEWER_IMAGE))
+        self.assertIn('core/rfb.js',capture_sessions.VIEWER_ASSETS)
+        for path,digest in capture_sessions.VIEWER_ASSETS.items():
+            self.assertTrue(ASSET.fullmatch(path),path);self.assertRegex(digest,r'^[0-9a-f]{64}$')
+
+    def test_viewer_module_list_tool_follows_every_relative_import(self):
+        path=Path(__file__).resolve().parents[2]/'deploy/capture/viewer_assets.py'
+        spec=importlib.util.spec_from_file_location('viewer_assets',path)
+        tool=importlib.util.module_from_spec(spec);spec.loader.exec_module(tool)
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            files={'core/rfb.js':'import X from "./util/a.js";\nimport {\n b,\n c\n} from \'../vendor/z/b.js\';\n',
+                   'core/util/a.js':"export * from './c.js';\n",'core/util/c.js':'export const c = 1;\n',
+                   'vendor/z/b.js':'export const b = 2;\n','core/unused.js':'export {};\n'}
+            for name,text in files.items():
+                (root/name).parent.mkdir(parents=True,exist_ok=True);(root/name).write_text(text)
+            found=tool.modules(root)
+        self.assertEqual(set(found),{'core/rfb.js','core/util/a.js','core/util/c.js','vendor/z/b.js'})
+        self.assertEqual(found['vendor/z/b.js'],hashlib.sha256(files['vendor/z/b.js'].encode()).hexdigest())
+
     def test_service_health_requires_credentials_and_image(self):
         self.assertEqual(self.client.get('/health').status_code,403)
         self.assertTrue(self.client.get('/health',headers=self.headers).json()['ready'])
@@ -231,6 +373,30 @@ class CaptureSessionTests(unittest.TestCase):
 
 
 class CaptureSetupTests(unittest.TestCase):
+    def test_session_service_image_imports_from_only_the_files_its_dockerfile_copies(self):
+        # The service image holds the four modules on the Dockerfile's COPY line and the packages of its
+        # pip line, not the manager's; a manager-only import kills browser Wireshark at the next setup.
+        root=Path(__file__).resolve().parents[2];dockerfile=(root/'deploy/capture/Dockerfile').read_text()
+        copied=next(line.split()[1:-1] for line in dockerfile.splitlines() if line.startswith('COPY '))
+        self.assertIn('clab-backup-ui/app/capture_service.py',copied)
+        allowed={line[1:] for line in (root/'deploy/capture/Dockerfile.dockerignore').read_text().splitlines() if line.startswith('!clab-backup-ui/app/')}
+        self.assertEqual(set(copied)-allowed,set())
+        blocked=['paramiko','yaml','cryptography','ansible','multipart','python_multipart','netlab']
+        probe=('import importlib.abc,sys\n'
+               'class Block(importlib.abc.MetaPathFinder):\n'
+               ' def find_spec(self,name,path=None,target=None):\n'
+               '  if name.split(".")[0] in %r:raise ModuleNotFoundError("not in the image: "+name)\n'
+               'sys.meta_path.insert(0,Block())\n'
+               'import app.capture_service\n'
+               'print(sorted(m for m in sys.modules if m.startswith("app.")))\n') % (blocked,)
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp)/'app').mkdir()
+            for name in copied:(Path(tmp)/'app'/Path(name).name).write_bytes((root/name).read_bytes())
+            env={k:v for k,v in os.environ.items() if k not in ('PYTHONPATH','PYTHONHOME','PYTHONSTARTUP')}
+            result=subprocess.run([sys.executable,'-c',probe],cwd=tmp,env=env,capture_output=True,text=True,timeout=60)
+        self.assertEqual(result.returncode,0,result.stderr[-2000:])
+        self.assertIn("'app.capture_service'",result.stdout)
+
     def test_setup_pulls_the_same_fixed_image_that_sessions_launch(self):
         text=(Path(__file__).resolve().parents[2]/'deploy/setup-capture.sh').read_text()
         self.assertIn("image='"+IMAGE+"'",text)

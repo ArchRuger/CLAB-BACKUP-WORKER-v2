@@ -3,6 +3,7 @@ import asyncio
 import copy
 import io
 import json
+import re
 import secrets
 import threading
 import time
@@ -13,13 +14,76 @@ import paramiko
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from .runner import effective_credentials, now
+from .runner import CLI_ERROR, effective_credentials, now
 from .discovery import node_available
 
 BULK_CHECK_WORKERS = 4     # ssh-check-all never opens more SSH sessions than this at once
 CHECKING_MESSAGE = 'Testing the SSH login…'
-REACHABLE_MESSAGE = 'SSH authentication succeeded'
+REACHABLE_MESSAGE = 'SSH login accepted and the CLI answered'
+# The login was accepted but the CLI gave no real answer yet (a NOS accepts SSH while its CLI still starts).
+# Never ready. In a lab linked to a VM deployment the readiness monitor asks again by itself and replaces this
+# result with a real one; a lab with no deployment_name (an inventory import) is not scanned, so nothing
+# re-checks and its words promise nothing but a manual Test login.
+BOOTING_MESSAGE = 'SSH login accepted, but the CLI has not answered yet. The device is still starting; the manager keeps checking.'
+BOOTING_UNMONITORED_MESSAGE = 'SSH login accepted, but the CLI has not answered yet. The device is still starting; Test login again in a moment.'
 FAILED_MESSAGE = 'SSH login failed. Check credentials, address, port, and NOS readiness.'
+CLI_COMMAND = 'show version'
+# A node with no NOS platform (a plain Linux image, generic SSH profile or the
+# image-based defaults in inventory.py) has no NOS CLI to answer `show version`;
+# a real, harmless shell command still proves the SSH login answers a real command,
+# without faking readiness for a host that was never a NOS in the first place.
+GENERIC_CLI_COMMAND = 'echo readiness-check'
+CLI_TIMEOUT = 25      # seconds for the whole CLI check: the exec request, the command and all of its output
+# The replies that mean "the CLI is still starting": the not-ready answers of runner.CLI_ERROR and cEOS's early-boot
+# agent error. For a node without a NOS platform only these (or no answer) keep it booting; a CLI that rejects the
+# generic command ("% Invalid input", "error: unknown command") is a CLI that answered.
+CLI_NOT_READY = re.compile(r'(?im)System is not yet ready|Waiting for editing of configuration|could not connect to agent')
+
+
+def cli_answers(client, command=CLI_COMMAND, timeout=None, refused=CLI_ERROR):
+    """True when the CLI returns a real answer to `command` over an exec channel before one deadline.
+
+    SSH can accept a login while the CLI is still starting (cEOS agents, Junos
+    daemons); an empty reply, or one that matches `refused` (by default any CLI error
+    or not-ready reply: show version must really succeed), keeps the node in booting.
+    The deadline (CLI_TIMEOUT unless given) bounds the whole check: paramiko waits for
+    the exec request's reply with no timeout of its own and keeps reading while output
+    trickles in, so a timer closes the transport when it passes (which ends either
+    wait), and an answer that was not complete by then is no answer.
+    """
+    timeout = CLI_TIMEOUT if timeout is None else timeout
+    expired = threading.Event()
+    def expire(transport):
+        expired.set()
+        if transport is not None: transport.close()
+    timer = None
+    try:
+        timer = threading.Timer(timeout, expire, (client.get_transport(),)); timer.daemon = True; timer.start()
+        stdin, stdout, _ = client.exec_command(command, timeout=timeout)
+        stdin.close()
+        output = stdout.read(65536).decode('utf-8', 'replace')
+    except Exception:
+        return False
+    finally:
+        if timer is not None: timer.cancel()
+    if expired.is_set(): return False
+    return bool(output.strip()) and not refused.search(output)
+
+
+def node_cli_command(node):
+    return CLI_COMMAND if node.get('platform') else GENERIC_CLI_COMMAND
+
+
+def node_cli_answers(client, node):
+    """The one CLI check of Test login, Test logins and the readiness monitor's probe.
+
+    A node with a NOS platform must really answer show version. A node without one is
+    asked the generic shell command: a Linux shell runs it, and a NOS kind outside the
+    supported ones (stored with platform '', for example cisco_iol from discovery) rejects
+    it, which still proves an answering CLI; for it only no answer, the deadline or a
+    not-ready reply (CLI_NOT_READY) keeps the node booting.
+    """
+    return cli_answers(client, node_cli_command(node), refused=CLI_ERROR if node.get('platform') else CLI_NOT_READY)
 
 
 class NodeRequest(BaseModel):
@@ -116,7 +180,28 @@ class NodeServices:
             targets.append((node['name'], copy.deepcopy(node), copy.deepcopy(creds)))
         return targets, skipped
 
-    def run_bulk_check(self, lab_id, name, node, creds):
+    def monitored(self, lab_id):
+        """True when the lab is linked to a VM deployment, the only labs ReadinessMonitor.scan() re-checks."""
+        with self.store.lock:
+            lab = self.store.lab(lab_id)
+            return bool(lab and lab.get('deployment_name'))
+
+    def login_result(self, client, node, creds, monitored=False):
+        """The stored outcome of one Test login, shared by the per-node route and Test logins so the two
+        always agree: 'reachable' only when the CLI answered a real command after the login (node_cli_answers,
+        the check the readiness monitor's probe makes), 'booting' when the login was accepted but the CLI is
+        silent, still starting or past CLI_TIMEOUT, 'failed' when the login itself did not work. A booting
+        result promises a re-check only when `monitored` (the lab is linked to a VM deployment). Never raises."""
+        try:
+            connect(client, node, creds)
+            answered = node_cli_answers(client, node)
+        except Exception:
+            return {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
+        if answered:
+            return {'status': 'reachable', 'at': now(), 'message': REACHABLE_MESSAGE}
+        return {'status': 'booting', 'at': now(), 'message': BOOTING_MESSAGE if monitored else BOOTING_UNMONITORED_MESSAGE}
+
+    def run_bulk_check(self, lab_id, name, node, creds, monitored=False):
         """One node's login test from ssh-check-all's bounded pool; stores exactly what
         the per-node route stores, and never raises (one node's failure never stops the rest)."""
         key = (lab_id, name)
@@ -132,10 +217,7 @@ class NodeServices:
                 result = {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
             else:
                 try:
-                    connect(client, node, creds)
-                    result = {'status': 'reachable', 'at': now(), 'message': REACHABLE_MESSAGE}
-                except Exception:
-                    result = {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
+                    result = self.login_result(client, node, creds, monitored)
                 finally:
                     self.release(client)
         finally:
@@ -145,14 +227,14 @@ class NodeServices:
             self.checks[key] = result
         self.store.event('ssh.check', result['message'], lab_id=lab_id, node=name)
 
-    def run_bulk_checks(self, lab_id, targets):
+    def run_bulk_checks(self, lab_id, targets, monitored=False):
         """Run every target through the bounded pool (never more than BULK_CHECK_WORKERS
         SSH sessions from this call at once), then clear the lab-wide debounce flag."""
         futures = []
         try:
             for name, node, creds in targets:
                 try:
-                    futures.append(self.bulk_pool.submit(self.run_bulk_check, lab_id, name, node, creds))
+                    futures.append(self.bulk_pool.submit(self.run_bulk_check, lab_id, name, node, creds, monitored))
                 except RuntimeError:
                     break   # the pool is closing; the remaining nodes are simply not probed
             for future in futures:
@@ -195,10 +277,7 @@ class NodeServices:
                 client = self.reserve()
                 self.checking.add(key)
             try:
-                connect(client, node, creds)
-                result = {'status': 'reachable', 'at': now(), 'message': REACHABLE_MESSAGE}
-            except Exception:
-                result = {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
+                result = self.login_result(client, node, creds, self.monitored(lab_id))
             finally:
                 self.release(client)
                 with self.lock:
@@ -227,7 +306,7 @@ class NodeServices:
                 return {'started': 0, 'skipped': skipped, 'at': at}
             # Started in the background: the route answers at once, and the browser's
             # existing 4 s poll picks up each node's result from /api/state as it lands.
-            threading.Thread(target=self.run_bulk_checks, args=(lab_id, targets), daemon=True).start()
+            threading.Thread(target=self.run_bulk_checks, args=(lab_id, targets, bool(lab.get('deployment_name'))), daemon=True).start()
             return {'started': len(targets), 'skipped': skipped, 'at': at}
 
         @app.post('/api/labs/{lab_id}/terminal-ticket')
@@ -253,6 +332,7 @@ class NodeServices:
             await ws.accept()
             client = None
             channel = None
+            opened = False      # terminal.close is only audited for a session whose terminal.open was
             lab_id = name = ''
             try:
                 message = await asyncio.wait_for(ws.receive_text(), 5)
@@ -273,6 +353,7 @@ class NodeServices:
                 channel = await asyncio.to_thread(client.invoke_shell, term='xterm-256color', width=100, height=30)
                 channel.settimeout(5)
                 self.store.event('terminal.open', 'Interactive SSH session opened', lab_id=lab_id, node=name)
+                opened = True
                 await ws.send_json({'type': 'status', 'message': 'Connected'})
                 started = last_input = time.monotonic()
                 while not channel.closed:
@@ -321,6 +402,7 @@ class NodeServices:
                     channel.close()
                 if client is not None:
                     self.release(client)
+                if opened:
                     self.store.event('terminal.close', 'Interactive SSH session closed', lab_id=lab_id, node=name)
                 try:
                     await ws.close()

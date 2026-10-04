@@ -7,6 +7,9 @@ Coordination: https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2/issues/64
 
 ## 1. CI (`.github/workflows/release-check.yml`)
 
+Applied (whole-codebase audit finding M-17): both snippets below are in the workflow as written, the
+Textual stage right after "Install application test dependencies". They stay here as the rationale.
+
 **a. Stdlib stage** "Check release and helper regression tests" — append after the
 `test_install_manager.py` line (system `python3`, no Textual needed):
 
@@ -59,7 +62,7 @@ provisioned account; fixture helpers) and `tools/snapshots.py` (evidence renderi
   front end: stdlib bootstrap/core/engine/probes/sanitize, Textual app/theme, hashed
   `requirements.lock`)".
 - **`docs/REPOSITORY-MAINTENANCE.md`** CI item 2: name `test_install_tui_core.py`; add the Textual
-  stage from 1b.
+  stage from 1b. (Done: its CI section lists both.)
 - **`CLAUDE.md`** routing row "Installer, health check, engineer access": add
   `docs/installer-tui/` (README, PARITY, PICKUP) and the three test files; note under Commands that
   `test_install_tui_app.py` needs the TUI venv.

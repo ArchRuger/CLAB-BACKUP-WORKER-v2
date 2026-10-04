@@ -82,7 +82,8 @@ h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
 h.root_file(pathlib.Path(h.GIT))
 registry=h.load_registry() if h.REGISTRY.exists() else {'repositories':[]}
 if sys.argv[1]=='true':
-    if not h.REGISTRY.exists(): h.atomic_json(h.REGISTRY,registry)
+    with h.registry_lock():
+        if not h.REGISTRY.exists(): h.atomic_json(h.REGISTRY,{'repositories':[]})
     print('Git helper refreshed; all registered repositories retained.')
     sys.exit(0)
 owner,repo,remote,prefix,label=sys.argv[2:]
@@ -135,8 +136,8 @@ try:
     result=json.loads(raw)
     if 'error' in result: raise ValueError(result['error'])
     binding=result['binding']
-    registry['repositories']=[b for b in registry['repositories'] if b['id']!=binding['id']]+[binding]
-    h.atomic_json(h.REGISTRY,registry)
+    # The manager may have saved a registration while the child ran: merge into git.json as it is now, under its lock.
+    h.save_registration(binding)
     print('Registered '+binding['label']+' on '+binding['branch']+'. Binding ID: '+binding['id'])
 except (ValueError, KeyError) as error:
     sys.exit(str(error))

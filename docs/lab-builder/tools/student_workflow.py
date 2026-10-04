@@ -109,12 +109,15 @@ def run(p):
     pg.click('#builder-save'); pg.wait_for_selector('#op-confirm', timeout=15000)
     review = pg.inner_text('#operation-review')
     check('the save review names the lab folder and shows the YAML', f'/srv/containerlab-node-manager/projects/{LAB}' in review and f'name: {LAB}' in pg.inner_text('#op-review-yaml')); shot('06-save-review')
-    pg.click('#op-confirm'); pg.wait_for_selector('#op-open-published', timeout=args.job_timeout)
-    check('the save succeeds and offers to deploy or add the lab', 'succeeded' in pg.inner_text('#op-job-banner')); shot('07-saved')
+    # The builder's own save result offers the next step itself (opRenderPublished): "Add to My labs without
+    # starting" and "Deploy now", not the generic Topology file dialog.
+    pg.click('#op-confirm'); pg.wait_for_selector('#op-published-add', timeout=args.job_timeout)
+    check('the save succeeds and offers to deploy or add the lab', 'succeeded' in pg.inner_text('#op-job-banner') and pg.locator('#op-published-deploy').is_visible() and 'Add to My labs without starting' in pg.inner_text('#op-published-add')); shot('07-saved')
     check('status says the lab is saved on the VM', 'Saved on the VM' in pg.inner_text('#builder-status'))
-    pg.click('#op-open-published'); pg.wait_for_selector('#op-deploy-project', timeout=15000)
-    check('the saved file opens in the normal Topology file dialog', f'{LAB}.clab.yml' in pg.input_value('#op-edit-path')); shot('08-topology-file')
-    pg.click('#op-deploy-project'); pg.wait_for_selector('#op-confirm', timeout=20000); check('Deploy lab asks for the usual review', 'Start' in pg.inner_text('#operation-review h2')); pg.click('#op-confirm')
+    check('the result names the saved topology file and says it is not running', f'{LAB}.clab.yml' in pg.inner_text('#operation-output #op-job-result') and 'not running' in pg.inner_text('#operation-output #op-job-result'), pg.inner_text('#operation-output #op-job-result')[:200])
+    pg.click('#op-published-add'); pg.wait_for_selector('#op-published-status', timeout=20000)
+    check('Add to My labs without starting adds the lab and says nothing was started', LAB in pg.inner_text('#op-published-status') and 'not running' in pg.inner_text('#op-published-status'), pg.inner_text('#op-published-status')); shot('08-added')
+    pg.click('#op-published-deploy'); pg.wait_for_selector('#op-confirm', timeout=20000); check('Deploy now asks for the usual review', 'Start' in pg.inner_text('#operation-review h2')); pg.click('#op-confirm')
     ended = wait_job('Start lab'); shot('09-deployed'); check('the deploy job succeeds', 'succeeded' in ended, ended)
     pg.goto(args.base + '/'); pg.wait_for_timeout(2500)
     labs = pg.evaluate("state.labs.map(l => ({name: l.name, path: l.vm_project_path, nodes: l.nodes.length}))"); mine = next((l for l in labs if l['name'] == LAB), None)
@@ -157,8 +160,8 @@ def run(p):
     for attempt in range(6):  # 'Wait for the current lab operation' while discovery is still refreshing
         pg.click('#op-confirm'); pg.wait_for_timeout(2500)
         if not pg.locator('#operation-review').evaluate('d => d.open'): break
-    pg.wait_for_selector('#op-open-published', timeout=args.job_timeout)
-    check('the revision is saved and a recovery copy is reported', 'succeeded' in pg.inner_text('#op-job-banner') and 'Saved on the VM' in pg.inner_text('#builder-status'))
+    pg.wait_for_selector('#op-published-status', timeout=args.job_timeout)  # the lab is already in My labs: the result offers Deploy now / Go to My labs
+    check('the revision is saved and a recovery copy is reported', 'succeeded' in pg.inner_text('#op-job-banner') and 'Saved on the VM' in pg.inner_text('#builder-status') and 'A recovery copy of the previous version was kept at' in pg.inner_text('#operation-output #op-job-result'), pg.inner_text('#operation-output #op-job-result')[:300])
     pg.click('#operation-output [data-op-close]')
 
     # 6. Opening an existing topology from the Deploy dialog

@@ -44,7 +44,7 @@ class HostOperationTests(unittest.TestCase):
         self.path = self.root/'training.clab.yaml'; self.path.write_bytes(YAML)
         self.rows = {'training': [dict(name='clab-training-r1', lab_name='training', state='running', container_id='original', absLabPath=str(self.path))]}
         self.missing = set(); self.calls = []; self.node_flag = True   # node_flag: the installed restart has --node
-        def run(argv):
+        def run(argv, **bounds):
             self.calls.append(argv)
             if '--help' in argv: return (1, '') if argv[1] in self.missing else (0, '--name --cleanup --graceful help' + (' --node' if argv[1] == 'restart' and self.node_flag else ''))
             if argv[1:2] == ['inspect']: return 0, json.dumps(self.rows)
@@ -211,6 +211,40 @@ class HostOperationTests(unittest.TestCase):
         self.rows={};req=self.request('delete');req['digest']=self.host.plan(req)['digest']
         result=self.host.execute(req,lambda _:None)
         self.assertFalse(self.path.exists());self.assertEqual(Path(result['recovery_path']).read_bytes(),YAML)
+
+    def test_delete_is_refused_while_the_topology_runs_under_another_lab_name(self):
+        # AUDIT-2026-10-03 L-2: deployed with --name (or the YAML's name edited and redeployed on the VM), the running
+        # lab is not listed under the requested name; it is found by its topology path, as revise already does.
+        for key in ('absLabPath','labPath'):
+            self.rows={'renamed':[{'name':'clab-renamed-r1','lab_name':'renamed','state':'running','container_id':'x',key:str(self.path)}]}
+            with self.assertRaisesRegex(ValueError,'Destroy',msg=key):self.host.plan(self.request('delete'))
+        # The run re-plans, so a deployment that appears under another name after the review is caught before anything is removed.
+        self.rows={};req=self.request('delete');req['digest']=self.host.plan(req)['digest']
+        self.rows={'renamed':[dict(name='clab-renamed-r1',lab_name='renamed',state='running',container_id='x',absLabPath=str(self.path))]}
+        with self.assertRaisesRegex(ValueError,'Destroy'):self.host.execute(req,lambda _:None)
+        self.assertEqual(self.path.read_bytes(),YAML)
+        # Another lab running from another file does not block this delete.
+        self.rows={'other':[dict(name='clab-other-r1',lab_name='other',state='running',container_id='y',absLabPath=str(self.root/'other.clab.yml'))]}
+        req=self.request('delete');req['digest']=self.host.plan(req)['digest'];self.host.execute(req,lambda _:None)
+        self.assertFalse(self.path.exists())
+
+    def test_pre_operation_inspection_has_the_discovery_helpers_bounds(self):
+        # AUDIT-2026-10-03 L-3: the same `containerlab inspect --all` gets 25 s and 4 MiB in discovery (host_files);
+        # the inspection before every lifecycle, delete and revise review used to stop at 15 s and 1 MiB.
+        from app import host_files
+        rows=[dict(name='clab-training-r%d'%i,lab_name='training',state='running',container_id='c%d'%i,absLabPath=str(self.path),labels={'pad':'x'*2000}) for i in range(800)]
+        listing=self.root/'listing.json';listing.write_text(json.dumps({'training':rows}))
+        self.assertGreater(listing.stat().st_size,1024*1024)
+        clab=self.root/'containerlab';clab.write_text('#!'+sys.executable+'\nimport sys\nsys.stdout.write(open('+repr(str(listing))+').read())\n');clab.chmod(0o755)
+        waits=[];real_timer=host_operations.threading.Timer
+        def timer(interval,function):waits.append(interval);return real_timer(interval,function)
+        host=HostOperations(dict(clab=str(clab),roots=[str(self.root)],projects=str(self.root)))
+        with patch.object(host_operations.threading,'Timer',side_effect=timer):groups=host.deployed()
+        self.assertEqual(len(groups['training']),800);self.assertEqual(waits,[host_files.INSPECT_TIMEOUT])
+        self.assertEqual((host_operations.INSPECT_TIMEOUT,host_operations.INSPECT_LIMIT),(host_files.INSPECT_TIMEOUT,host_files.COMMAND_LIMIT))
+        # Every other command keeps the short bound.
+        self.assertEqual(capture([sys.executable,'-c','print(1)'])[0],0)
+        with self.assertRaisesRegex(ValueError,'exceeded 1 MiB'):capture([sys.executable,'-c','import sys; sys.stdout.write("x"*(1024*1024+1))'])
 
     def test_create_never_overwrites_and_limits_reads(self):
         req={**self.request('create',text=YAML.decode()),'path':str(self.root/'new.yaml')};req['digest']=self.host.plan(req)['digest']
@@ -602,7 +636,7 @@ class ImageModeTests(unittest.TestCase):
         self.calls = []; self.probes = []
         self.listing = 'n24l/ceos:4.35.0F\nghcr.io/srl-labs/network-multitool:latest\n<none>:<none>\nbad image name:x\nn24l/cisco_xrv9k:24.3.1\n'
         self.answers = {}
-        def run(argv):
+        def run(argv, **bounds):
             self.calls.append(argv)
             if argv[:3] == [str(self.docker), 'image', 'ls']: return 0, self.listing
             return 1, ''
@@ -952,6 +986,20 @@ class OperationAPITests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'operation'):self.app.state.runner.submit(self.lab_id,'backup')
             del self.store.lab(self.lab_id)['telemetry_retired']['removing'];self.assertFalse(operation_busy(self.store.state,self.lab_id))
 
+    def test_a_restore_awaiting_its_restart_recheck_holds_the_lab(self):
+        # AUDIT-2026-10-03 L-10: after a restart the job is 'interrupted' while a node may still run its unconfirmed change.
+        from app.lab_operations import operation_busy
+        target={'name':'r1','status':'interrupted','stage':'verifying','_token':'clabmgr-1a2b3c4d','timeline':{'queued':1}}
+        with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
+            preview=self.preview();self.store.state['restore_jobs']=[{'id':'rj','lab_id':self.lab_id,'status':'interrupted','targets':[target]}]
+            self.assertTrue(operation_busy(self.store.state,self.lab_id));self.assertFalse(operation_busy(self.store.state,'another-lab'))
+            self.assertEqual(self.confirm(preview['token']).status_code,409);submit.assert_not_called()
+            with self.assertRaisesRegex(ValueError,'operation'):self.app.state.runner.submit(self.lab_id,'backup')
+            target.update(status='rolled_back',stage='rolled_back',timeline={'queued':1,'settled':2})   # read back: the lab is free
+            self.assertFalse(operation_busy(self.store.state,self.lab_id))
+            target.update(status='interrupted',timeline={'queued':1,'settled':2})                      # interrupted before it was changed
+            self.assertFalse(operation_busy(self.store.state,self.lab_id))
+
     def test_restart_device_resolves_one_node_binds_the_review_and_shows_the_device_restarting(self):
         with self.fixture() as remote,patch.object(self.service,'refresh'),patch.object(self.app.state.operations.pool,'submit') as submit:
             lab=self.store.lab(self.lab_id);node=lab['nodes'][0]['name'];self.assertEqual(node,'clab-training-r1')
@@ -1277,6 +1325,37 @@ class OperationAPITests(unittest.TestCase):
         self.assertTrue(owned); self.assertTrue(all(owned), 'the operations list is read under the store lock')
         finished = [e for e in self.store.events() if e['action'] == 'lab.operation' and e['message'].startswith('Lab operation finished')]
         self.assertEqual([e['lab_id'] for e in finished], [''])
+
+    def test_a_storage_error_is_never_reported_as_an_ssh_failure(self):
+        # AUDIT-2026-10-03 L-6: the job's own saves shared the try of the remote call, so a failed save after a deploy that
+        # ran became 'failed' with 'SSH connection or operation failed', and a failed output save aborted the running deploy.
+        def run(fail):
+            ran = []
+            with self.fixture() as remote, patch.object(self.service, 'refresh'), patch.object(self.app.state.operations.pool, 'submit') as submit:
+                def helper(host, req, *args):
+                    ran.append(req['action']); args[0]('first line\n'); args[0]('second line\n'); return dict(exit_code=0)
+                remote.side_effect = (lambda inner: lambda host, req, *a: helper(host, req, *a) if req['mode'] == 'run' else inner(host, req, *a))(remote.side_effect)
+                job = self.confirm(self.preview()['token']).json(); args = submit.call_args.args; save = self.store.save; failed = []
+                def flaky():
+                    stored = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
+                    if not failed and fail(stored): failed.append(dict(stored)); raise OSError('disk fixture')
+                    save()
+                with patch.object(self.store, 'save', side_effect=flaky), patch.object(lab_operations, 'time', SimpleNamespace(monotonic=iter(range(1000, 10 ** 6)).__next__, sleep=lambda _: None)):
+                    args[0](*args[1:])
+                self.assertEqual(len(failed), 1, 'the fixture failed one save')
+            return next(j for j in self.store.state['operations'] if j['id'] == job['id']), ran
+        # The final save after a deploy that ran: the job stays succeeded, and it is the deployment it was.
+        job, ran = run(lambda stored: stored['status'] == 'succeeded')
+        self.assertEqual(ran, ['deploy']); self.assertEqual((job['status'], job['message'], job['exit_code']), ('succeeded', 'Operation completed', 0))
+        self.assertEqual(self.store.lab(self.lab_id)['last_deployed'], job['finished'])
+        self.assertNotIn('failed', [j.get('status') for j in Store(self.tmp.name).state['operations']], 'no failed record reaches the disk')
+        # A save of the output while the helper runs: the deploy is not cut off and its output is complete.
+        job, ran = run(lambda stored: stored['status'] == 'running' and stored.get('output'))
+        self.assertEqual((job['status'], job['message']), ('succeeded', 'Operation completed')); self.assertEqual(job['output'], 'first line\nsecond line\n')
+        # The save that marks the job running: nothing runs on the VM, and the job says why without blaming SSH.
+        job, ran = run(lambda stored: stored['status'] == 'running' and not stored.get('output'))
+        self.assertEqual(ran, []); self.assertEqual(job['status'], 'failed')
+        self.assertNotIn('SSH', job['message']); self.assertIn('nothing was run on the VM', job['message'])
 
     def test_failed_persistent_save_keeps_review_and_does_not_submit(self):
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
