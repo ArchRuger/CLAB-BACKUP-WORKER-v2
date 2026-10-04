@@ -476,12 +476,16 @@ async function drwLoadChooser(){
  try{
   const context=typeof gitLoadContext==='function'?await gitLoadContext(id,false):null;
   const wanted=c.repository||'';
-  const places=await(await api('/labs/'+drwEnc(id)+'/git/places'+(wanted?'?repository='+drwEnc(wanted):''))).json();
+  const get=repo=>api('/labs/'+drwEnc(id)+'/git/places'+(repo?'?repository='+drwEnc(repo):'')).then(r=>r.json());
+  // The first answer lists the repositories and the default place; the tree comes with `repository` (DESIGN.md 4).
+  let places=await get(wanted);
   if(request!==saveDrawer.request)return;
-  c.context=context;c.places=places;c.repository=wanted||places.repository||places.default?.repository||context?.binding?.binding_id||'';
-  c.repositories=(places.repositories||[]).map(r=>({id:r.id,name:typeof gitRepoName==='function'?gitRepoName(r):r.id}));
+  const listed=places.repositories||[],pick=wanted||(listed.find(r=>r.current)||{}).id||places.default?.repository||context?.binding?.binding_id||(listed[0]||{}).id||'';
+  if(!places.tree&&pick){places=await get(pick);if(request!==saveDrawer.request)return;}
+  c.context=context;c.places=places;c.repository=pick;
+  c.repositories=(places.repositories||[]).map(r=>({id:r.id,name:r.name||(typeof gitRepoName==='function'?gitRepoName(r):r.id)}));
   const found=c.repositories.find(r=>r.id===c.repository);c.repoName=found?found.name:'';
-  c.model=typeof folderChooserModel==='function'?folderChooserModel(places):null;
+  c.model=typeof folderChooserModel==='function'&&places.tree?folderChooserModel(places.tree):null;
   const own=c.model&&typeof folderOwnPath==='function'?folderOwnPath(c.model):'';
   const base=context?.binding?own||String(context.binding.repository?.prefix||'').replace(/\/$/,''):places.default?.folder||'';
   c.parent=base;
@@ -500,7 +504,7 @@ function drwDrawerRenderSoon(){saveDrawerRender();}
 async function drwChooserCheck(folder){
  const c=saveDrawer.chooser,id=saveDrawer.lab,seq=++c.seq,request=saveDrawer.request;c.checking=true;
  try{
-  const answer=await json('/labs/'+drwEnc(id)+'/git/places/check','POST',{repository:c.repository,folder,purpose:c.mode==='state'?'state':''});
+  const answer=await json('/labs/'+drwEnc(id)+'/git/places/check','POST',{repository:c.repository,folder,purpose:c.mode==='state'?'state':'save',name:c.mode==='state'?c.name:''});
   if(seq!==c.seq||request!==saveDrawer.request)return;
   c.answer=answer;c.checkFailed=false;
   if(answer&&typeof answer.folder==='string'&&c.mode!=='state'&&answer.folder!==c.value&&(typeof folderClean==='function'?folderClean(c.value):c.value)===folder)c.value=answer.folder;
@@ -604,14 +608,13 @@ async function drwChooserState(choice){
   saveDrawerClose();
  }catch(error){c.busy=false;c.refused=error.message||'The state could not be saved.';drwSay('');saveDrawerRender();}
 }
-async function drwAddFolder(path){
+async function drwAddFolder(parent,name){
  const c=saveDrawer.chooser,id=saveDrawer.lab;
  try{
-  const answer=await json('/labs/'+drwEnc(id)+'/git/places/check','POST',{repository:c.repository,folder:path,purpose:c.mode==='state'?'state':''});
-  const folder=String(answer.folder??path),existed=c.model&&c.model.answers.has(folder)&&answer.exists!==false;
-  if(!existed){try{await json('/git/repositories/'+drwEnc(c.repository)+'/folders','POST',{prefix:folder,plan:true});}catch{/* the first save creates the folder in any case */}}
-  c.newFolder=null;c.answer=answer;c.value=folder;c.selected=folder;c.answerFor=folder;
-  c.notice=existed?`${folder} already exists. It is selected.`:'';
+  const result=await json('/git/repositories/'+drwEnc(c.repository)+'/folders/new','POST',{lab_id:id,parent,name});
+  const folder=String(result.folder??drwJoin(parent,name));
+  c.newFolder=null;c.answer=result.answer||null;c.value=folder;c.selected=folder;c.answerFor=folder;
+  c.notice=result.existed?`${folder} already exists. It is selected.`:'';
   if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,folder);
   saveDrawerRender();
  }catch(error){c.refused=error.message||'The folder could not be added.';saveDrawerRender();}
@@ -640,7 +643,7 @@ async function drwChooserApply(intent,event){
   case 'new-folder':c.newFolder={parent:String(intent.parent??''),value:''};saveDrawerRender();break;
   case 'new-input':if(c.newFolder)c.newFolder={...c.newFolder,value:intent.echo!==undefined?intent.echo:intent.value};saveDrawerRender();break;
   case 'new-cancel':c.newFolder=null;saveDrawerRender();break;
-  case 'new-add':{const nf=c.newFolder,typed=intent.value!==undefined?intent.value:nf?.value||'';const path=drwJoin(nf?nf.parent:'',typeof folderClean==='function'?folderClean(typed):typed);if(path)await drwAddFolder(path);break;}
+  case 'new-add':{const nf=c.newFolder,typed=intent.value!==undefined?intent.value:nf?.value||'';const name=typeof folderClean==='function'?folderClean(typed):typed;if(name)await drwAddFolder(nf?nf.parent:'',name);break;}
   case 'choice':if(c.mode==='state')await drwChooserState(intent.choice);else await drwChooserPlace(intent.choice,'');break;
   case 'pending':if(intent.pending==='upload')await drwChooserUploadThenMove();else await drwChooserPlace(c.lastChoice,'keep');break;
   case 'initialize':await drwChooserPlace(c.lastChoice,'',{initialize:true});break;
@@ -653,7 +656,7 @@ async function drwChooserApply(intent,event){
   case 'vm':saveDrawerClose();if(typeof openVmDialog==='function')openVmDialog();break;
   case 'forget':await drwChooserForget(intent.path);break;
   case 'load':{const n=drwChooserNode(intent.path);drwStartLoad({type:'folder',commit:'',path:'/'+n.path,backup_job_id:'',repository:n.repository},n.name);break;}
-  case 'view':{const n=drwChooserNode(intent.path),back=saveDrawer.back;saveDrawerOpen('files',{row:{path:n.path,commit:c.places?.head||''},name:n.name,repository:n.repository,back:{kind:'chooser',options:{mode:'browse',restore:true,keep:c,back}}});break;}
+  case 'view':{const n=drwChooserNode(intent.path),back=saveDrawer.back;saveDrawerOpen('files',{row:{path:n.path,commit:c.places?.tree?.head||''},name:n.name,repository:n.repository,back:{kind:'chooser',options:{mode:'browse',restore:true,keep:c,back}}});break;}
   default:return false;
  }
  return true;

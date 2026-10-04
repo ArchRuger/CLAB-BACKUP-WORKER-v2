@@ -403,7 +403,7 @@ test('D14 closing the header panels first: closeMenus is called behind a guard, 
  const bare=harness();bare.context.saveDrawerOpen('state',{});assert.equal(bare.dialog.open,true);
  assert.match(bare.content(),/The folder chooser is not available on this page\./,'a missing chooser degrades to a sentence');
 });
-const places=(over={})=>({repositories:[{id:'b',path:'/home/me/Course-Labs'}],repository:'b',default:{repository:'b',folder:'BGP',answer:{kind:'free',folder:'BGP',typed:'BGP',exists:true},ask:false,beside:''},own:{folder:'restore-square',files:6},files:[],head:'f'.repeat(40),folders:[{path:'',kind:'free',folder:'',typed:'',exists:true},{path:'restore-square',kind:'own',folder:'restore-square',typed:'restore-square',exists:true},{path:'BGP',kind:'free',folder:'BGP',typed:'BGP',exists:true}],states:{},...over});
+const places=(over={})=>({repositories:[{id:'b',name:'Course-Labs',path:'/home/me/Course-Labs',current:true}],default:{repository:'b',folder:'BGP',answer:{kind:'free',folder:'BGP',typed:'BGP',exists:true},ask:false,beside:''},tree:{repository:'b',own:{folder:'restore-square',files:6},files:[],head:'f'.repeat(40),truncated:false,saved:[],folders:[{path:'',kind:'free',folder:'',typed:'',exists:true},{path:'restore-square',kind:'own',folder:'restore-square',typed:'restore-square',exists:true},{path:'BGP',kind:'free',folder:'BGP',typed:'BGP',exists:true}]},...over});
 // Stubs of git-places.js (S10): the model holds the tree's answers by path; folderChooserEvent decodes the clicked fake control's data-act.
 const chooserStubs=seen=>({
  folderClean:v=>String(v).replace(/\s+/g,'-').replace(/\/+/g,'/').replace(/\/$/,''),folderOwnPath:m=>m.tree.own?.folder||'',folderDefaultExpanded:()=>new Set(['','restore-square']),
@@ -435,7 +435,7 @@ test('C3 typing writes the echo at once and asks the check once, 250 ms after th
  await g.act('typed',{value:'Week 4//BGP lab',echo:'Week-4/BGP-lab'});await g.act('typed',{value:'Week 4//BGP lab',echo:'Week-4/BGP-lab'});
  assert.equal(c.value,'Week-4/BGP-lab');assert.equal(asked.length,base,'nothing is asked while typing');
  g.timers[0]&&g.timers[0]();g.timers[1]&&g.timers[1]();await settle();
- assert.equal(asked.length,base+1);assert.deepEqual(JSON.parse(JSON.stringify(asked.at(-1))),{repository:'b',folder:'Week-4/BGP-lab',purpose:''});assert.equal(c.answer.folder,'Week-4/BGP-lab');
+ assert.equal(asked.length,base+1);assert.deepEqual(JSON.parse(JSON.stringify(asked.at(-1))),{repository:'b',folder:'Week-4/BGP-lab',purpose:'save',name:''});assert.equal(c.answer.folder,'Week-4/BGP-lab');
  let release;const gate=new Promise(r=>{release=r;});
  g.context.api=async()=>({json:async()=>({})});
  const stale=g.context.drwChooserCheck('old');c.seq++;await settle();await stale;assert.notEqual(c.answerFor,'old');
@@ -482,7 +482,7 @@ test('C14 Save as a lab state: starts in the lab\'s own folder, the name follows
  g.context.saveDrawerOpen('state',{back:{kind:'versions',options:{restore:true}}});await settle();const c=g.sd.chooser;
  assert.equal(g.title(),'Save as a lab state');assert.match(g.meta(),/Saves restore-square as it is now into a folder of its own\. Where restore-square normally saves does not change\./);
  assert.equal(c.mode,'state');assert.equal(c.parent,'restore-square');assert.equal(c.value,'restore-square');
- await g.act('name',{value:'start',echo:'start'});assert.equal(c.value,'restore-square/start','the path follows the name');g.timers.at(-1)();await settle();assert.equal(checks.at(-1).purpose,'state');assert.equal(checks.at(-1).folder,'restore-square/start');
+ await g.act('name',{value:'start',echo:'start'});assert.equal(c.value,'restore-square/start','the path follows the name');g.timers.at(-1)();await settle();assert.equal(checks.at(-1).purpose,'state');assert.equal(checks.at(-1).name,'start');assert.equal(checks.at(-1).folder,'restore-square/start');
  await g.act('typed',{value:'BGP/mine',echo:'BGP/mine'});await g.act('name',{value:'final',echo:'final'});assert.equal(c.value,'BGP/mine','an edited path is kept');
  await g.act('select',{path:'BGP'});assert.equal(c.value,'BGP/final','a picked folder becomes the parent');g.timers.at(-1)();await settle();
  await g.act('save');
@@ -513,12 +513,12 @@ test('browse mode: Load this state… goes through loadChoose with a five-key fo
 });
 test('chooser: a new folder is added through the check and the list, a name that exists is just selected, Remove from the list deletes, a repository switch reloads, the bring-along tick is sent as move_files',async()=>{
  const posted=[];
- const g=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>({kind:'free',folder:data.folder,typed:data.folder,exists:data.folder==='BGP'}),'POST /git/repositories/b/folders':data=>{posted.push(['add',data]);return {};},'DELETE /git/repositories/b/folders':data=>{posted.push(['del',data]);return {};},
+ const g=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>({kind:'free',folder:data.folder,typed:data.folder,exists:data.folder==='BGP'}),'POST /git/repositories/b/folders/new':data=>{posted.push(['add',data]);return {folder:data.parent+'/'+data.name,existed:false,answer:{kind:'free',folder:data.parent+'/'+data.name,exists:false}};},'DELETE /git/repositories/b/folders':data=>{posted.push(['del',data]);return {};},
   'POST /labs/lab/git/place':data=>{posted.push(['place',data]);return {saved:true};}}});
  g.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
  await g.act('new-folder',{parent:'BGP'});assert.deepEqual(JSON.parse(JSON.stringify(g.sd.chooser.newFolder)),{parent:'BGP',value:''});
  await g.act('new-input',{value:'week 5',echo:'week-5'});await g.act('new-add',{value:'week-5'});
- assert.deepEqual(JSON.parse(JSON.stringify(posted[0])),['add',{prefix:'BGP/week-5',plan:true}]);assert.equal(g.sd.chooser.value,'BGP/week-5');assert.equal(g.sd.chooser.newFolder,null);
+ assert.deepEqual(JSON.parse(JSON.stringify(posted[0])),['add',{lab_id:'lab',parent:'BGP',name:'week-5'}]);assert.equal(g.sd.chooser.value,'BGP/week-5');assert.equal(g.sd.chooser.newFolder,null);
  await g.act('new-folder',{parent:''});await g.act('new-cancel');assert.equal(g.sd.chooser.newFolder,null);
  await g.act('forget',{path:'BGP/week-5'});assert.deepEqual(JSON.parse(JSON.stringify(posted[1])),['del',{prefix:'BGP/week-5'}]);
  await g.act('bring',{value:false});g.sd.chooser.answer={kind:'free',folder:'BGP',bring:{offered:true,files:4,from:'old'}};g.sd.chooser.answerFor=g.sd.chooser.value;
