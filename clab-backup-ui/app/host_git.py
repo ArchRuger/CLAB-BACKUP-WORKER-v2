@@ -243,9 +243,19 @@ def control(c): return unicodedata.category(c) == 'Cc'
 
 
 def display_text(value, limit=SUMMARY_TEXT):
-    """A text for display: every control (Cc), format (Cf: bidi, zero-width and tag characters) and line or
-    paragraph separator (Zl, Zp) character dropped, then cut at `limit` characters."""
-    return ''.join(c for c in value if unicodedata.category(c) not in ('Cc', 'Cf', 'Zl', 'Zp'))[:limit]
+    """A text for display: every control (Cc), format (Cf: bidi, zero-width and tag characters), lone surrogate (Cs,
+    which JSON can carry but UTF-8 cannot encode) and line or paragraph separator (Zl, Zp) dropped, then cut at `limit`."""
+    return ''.join(c for c in value if unicodedata.category(c) not in ('Cc', 'Cf', 'Cs', 'Zl', 'Zp'))[:limit]
+
+
+def default_label(label, old, path):
+    """deploy/setup-git.sh: without --label a registered folder keeps its label (and so its revision)."""
+    return label or (old['label'] if old else Path(path).name)
+
+
+def owner_login_problem(message):
+    """deploy/setup-git.sh prints its identity and login hints only for a refusal about them."""
+    return any(word in message for word in ('identity', 'login', 'Authenticate', 'authenticat', 'signed in'))
 
 
 def manifest_summary(raw):
@@ -410,8 +420,8 @@ class GitRepository:
     def descriptor(self):
         return {k: self.binding[k] for k in ('id', 'label', 'owner', 'path', 'remote', 'push_url', 'branch', 'prefix', 'revision')}
 
-    def lock(self):
-        return exclusive(no_links(self.state / 'lock', False), 'Another Git operation is already running for this repository.')
+    def lock(self, wait=0):
+        return exclusive(no_links(self.state / 'lock', False), 'Another Git operation is already running for this repository.', wait)
 
     def validate(self):
         no_links(self.root); no_links(self.control)
@@ -551,37 +561,46 @@ class GitRepository:
         must be HEAD or an ancestor of it, and every commit in between a verified manager save of this checkout (the
         test a push applies). Any other answer of the ancestry test refuses, a remote commit missing here included."""
         remote = self.remote_head()
-        if remote == head: return
+        if remote == head: return remote
         if not further: raise ValueError(NOT_SYNCHRONIZED)
         self.fetch_remote(check=False)   # a failed fetch leaves a missing remote commit, which the test below refuses
         code, _ = self.run('merge-base', '--is-ancestor', remote, head, check=False)
         if code: raise ValueError(REMOTE_AHEAD)
         between = set(self.run('rev-list', remote + '..' + head).splitlines())
         if not between or not between.issubset(self.known_commits()): raise ValueError(NOT_MANAGER_SAVES)
+        return remote   # the remote head, now a commit of this checkout
 
     def check_retire(self):
         """H7: refuse while a save made through this registration waits for upload (check_waiting), under the lock."""
         with self.lock(): self.check_waiting()
 
-    def check_waiting(self):
-        """H7, the caller holds the checkout's lock. A save waits when a journal of this registration's revision that
-        is not marked pushed (verified or not) holds a commit that the registration's own branch (`refs/heads/<branch>`,
-        never the current HEAD, which a branch switch would move) contains and the remote branch does not. A commit
-        that branch no longer reaches (reset away, pruned) cannot be uploaded and does not wait, and with nothing
-        waiting the remote is not asked; a remote that cannot be asked refuses."""
-        commits = {j['commit'] for j in self.journals() if isinstance(j.get('commit'), str) and HEX.fullmatch(j['commit'])
-                   and j.get('binding_revision') == self.binding['revision'] and j.get('pushed') is not True}
+    def check_waiting(self, uploaded=None):
+        """H7, the caller holds the checkout's lock. A save waits when a journal of this registration's revision holds
+        a commit that the registration's own branch (`refs/heads/<branch>`, never the current HEAD, which a branch
+        switch would move) contains and the remote branch does not. Skipped: journals marked pushed, and an unchanged
+        save that is not verified (its commit is someone's own HEAD, not a manager save). A commit that branch no
+        longer reaches (reset away, pruned, the branch deleted) cannot be uploaded and does not wait, nor does one
+        `uploaded` contains (the remote head of the registration that replaces this one); with nothing waiting no
+        remote is asked; a remote that cannot be asked refuses."""
+        commits = sorted({j['commit'] for j in self.journals() if isinstance(j.get('commit'), str) and HEX.fullmatch(j['commit'])
+                          and j.get('binding_revision') == self.binding['revision'] and j.get('pushed') is not True
+                          and not (j.get('unchanged') and not j.get('verified'))})
         if not commits: return None
-        branch = 'refs/heads/' + self.binding['branch']
-        code, raw = self.run('rev-parse', '--verify', '--quiet', branch + '^{commit}', check=False, limit=4096)
+        code, raw = self.run('rev-parse', '--verify', '--quiet', 'refs/heads/' + self.binding['branch'] + '^{commit}', check=False, limit=4096)
         tip = raw.decode('utf8', errors='replace').strip() if not code else ''
         if not HEX.fullmatch(tip): return None
-        if not commits & set(self.run('rev-list', tip).splitlines()): return None
+
+        def contained(commit, ref): return self.run('merge-base', '--is-ancestor', commit, ref, check=False)[0] == 0
+        # The candidates are few (uploaded saves are skipped): one ancestry test each, never a walk of all history.
+        commits = [c for c in commits if contained(c, tip)]
+        if uploaded and HEX.fullmatch(uploaded) and self.has_commit(uploaded): commits = [c for c in commits if not contained(c, uploaded)]
+        if not commits: return None
         try:
             remote = self.remote_head()
             if not self.has_commit(remote): self.fetch_remote()
         except ValueError: raise ValueError(SAVE_UNKNOWN) from None
-        if commits & set(self.run('rev-list', tip, '^' + remote).splitlines()): raise ValueError(SAVE_WAITS)
+        if not self.has_commit(remote): raise ValueError(SAVE_UNKNOWN)   # the remote branch moved between the two questions
+        if any(not contained(c, remote) for c in commits): raise ValueError(SAVE_WAITS)
         return None
 
     def outgoing(self):
@@ -634,12 +653,12 @@ class GitRepository:
         return {key: journal.get(key) for key in ('status', 'commit', 'changed_files', 'message', 'pushed', 'snapshot_path', 'synced_operations')}
 
     def mark_synced(self, journal, remote):
-        synced = []; directory = no_links(self.state / 'journals', False)
-        for path in directory.glob('*.json'):
-            no_links(path)
-            if path.stat().st_size > MAX_JSON: continue
-            other = json.loads(path.read_text(encoding='utf8'))
-            if not other.get('verified') or not other.get('commit') or other.get('binding_revision') not in self.binding.get('_approved_revisions', [self.binding['revision']]): continue
+        # Through journals(): a corrupt or non-object journal is skipped, never a failure after the upload succeeded.
+        synced = []
+        for other in self.journals():
+            if not isinstance(other.get('operation_id'), str) or not ID.fullmatch(other['operation_id']): continue
+            if not isinstance(other.get('commit'), str) or not HEX.fullmatch(other['commit']): continue
+            if not other.get('verified') or other.get('binding_revision') not in self.binding.get('_approved_revisions', [self.binding['revision']]): continue
             code, _ = self.run('merge-base', '--is-ancestor', other['commit'], remote, check=False)
             if not code:
                 other.update(status='synced', pushed=True, message='Saved to Git.'); self.save_journal(other); synced.append(other['operation_id'])
@@ -865,11 +884,16 @@ class GitRepository:
 
     def history(self):
         self.validate()
-        raw = self.run('log', '-50', '--format=%H%x00%ct%x00%s', '--', self.scope('latest'), self.scope('baseline'), self.scope('checkpoints'), limit=128 * 1024)
+        # A subject is cut by Git to 500 columns (`trunc` pads, so the padding is dropped) and decoded leniently: one
+        # subject that is not UTF-8 or is very long must not fail the history of every lab of the checkout.
+        code, raw = self.run('log', '-50', '--format=%H%x00%ct%x00%<(500,trunc)%s', '--', self.scope('latest'), self.scope('baseline'),
+                             self.scope('checkpoints'), check=False, limit=256 * 1024)
+        if code: raise ValueError('Git could not complete this operation. Check the repository as its registered owner.')
         commits = []
-        for line in raw.split('\n'):   # not splitlines(): a subject may hold U+2028 or other characters it splits at
+        for line in raw.decode('utf8', errors='replace').split('\n'):   # not splitlines(): a subject may hold U+2028
             parts = line.split('\0', 2)
-            if len(parts) == 3: commits.append({'commit': parts[0], 'time': int(parts[1]), 'message': display_text(parts[2], 500)})
+            if len(parts) == 3 and HEX.fullmatch(parts[0]) and parts[1].isdigit():
+                commits.append({'commit': parts[0], 'time': int(parts[1]), 'message': display_text(parts[2].rstrip(' '), 500)})
         head = self.run('rev-parse', 'HEAD'); versions = []; blobs = {}; others = 0
         # Every snapshot folder committed anywhere in this checkout (a folder holding manifest.json,
         # whatever its name or depth: Final, Broken/latest, course/lab/reference/solution, the root),
@@ -1089,16 +1113,17 @@ class GitRepository:
         binding['push_url'] = checked_url(urls[0], self.allow_local)
         binding['anchor'] = self.validate(); self.clean(); self.commit_identity()
         result = self.registration(previous)
-        self.check_synchronized(binding['anchor'], self.further())
+        remote = self.check_synchronized(binding['anchor'], self.further())
         self.check_push_access()
         if not previous or result['revision'] == previous['revision']: return result
         # Re-registering a folder with other settings replaces its revision, which then approves no push: refused while
         # a save made through the old one waits for upload. The check runs last and the checkout's lock is held until
         # this returns, so no manager save can commit under the old revision after it; still uncovered is only the
-        # time from here to root's write of git.json (this child's exit and save_registration).
+        # time from here to root's write of git.json (this child's exit and save_registration). A save the NEW remote
+        # branch already holds (`remote`, read above) has been uploaded; only the rest is asked of the old remote.
         old = type(self)(dict(previous), git=self.git, allow_local=self.allow_local, env=self.env, gh=self.gh)
-        with old.lock():
-            old.check_waiting()
+        with old.lock(wait=10):
+            old.check_waiting(uploaded=remote)
             return result
 
     def unborn(self, url, initialize, identity):

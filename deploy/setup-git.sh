@@ -75,7 +75,8 @@ printf '%s\n' 'clab-discovery ALL=(root) NOPASSWD: /usr/local/sbin/clab-manager-
 visudo -cf "$temp_dir/sudoers"
 install -o root -g root -m 0755 "$temp_dir/helper" /usr/local/sbin/clab-manager-git
 install -o root -g root -m 0440 "$temp_dir/sudoers" /etc/sudoers.d/clab-manager-git
-if ! /usr/bin/python3 -I - "$refresh" "$owner" "$repo" "$remote" "$prefix" "$label" <<'PY'
+status=0
+/usr/bin/python3 -I - "$refresh" "$owner" "$repo" "$remote" "$prefix" "$label" <<'PY' || status=$?
 import importlib.util, json, os, pathlib, pwd, re, sys, uuid
 spec=importlib.util.spec_from_file_location('host_git','/usr/local/lib/clab-manager/host_git.py')
 h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
@@ -95,7 +96,7 @@ try:
     prefix=h.relpath(prefix,empty=True)
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}',remote): raise ValueError('Use a literal remote name.')
     old=next((b for b in registry['repositories'] if b['path']==str(path) and b['prefix']==prefix),None)
-    label=label or (old['label'] if old else path.name)  # re-running without --label keeps the folder's label and revision
+    label=h.default_label(label,old,path)  # re-running without --label keeps the folder's label and revision
     if len(label)>100 or any(ord(c)<32 for c in label): raise ValueError('Use a short repository label.')
     if not old: h.base_prefix(prefix)  # a new lab folder must not be a snapshot folder name; an existing registration stays repairable
     for b in registry['repositories']:
@@ -133,12 +134,15 @@ try:
     h.save_registration(binding)
     print('Registered '+binding['label']+' on '+binding['branch']+'. Binding ID: '+binding['id'])
 except (ValueError, KeyError) as error:
-    sys.exit(str(error))
+    print(str(error),file=sys.stderr)
+    sys.exit(3 if h.owner_login_problem(str(error)) else 1)  # 3: the hints about identity and login below apply
 PY
-then
+if [[ $status -ne 0 ]]; then
   if ! $refresh; then
     printf '\nRegistration failed. The checkout was not registered by this attempt.\n' >&2
-    if [[ "$remote" == origin && -z "$prefix" && -z "$label" ]]; then
+    if [[ $status -ne 3 ]]; then
+      echo 'Resolve the problem reported above, then retry the original registration command.' >&2
+    elif [[ "$remote" == origin && -z "$prefix" && -z "$label" ]]; then
       printf 'As Linux account %q, run this from any directory (without sudo):\n' "$owner" >&2
       printf '  bash %q --guided --repo %q\n' "$script_dir/setup-git.sh" "$repo" >&2
       echo 'This reuses the checkout, prompts for missing/invalid commit identity, and checks login before registration.' >&2

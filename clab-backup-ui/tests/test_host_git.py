@@ -1665,8 +1665,8 @@ class HelperSecondReviewTests(unittest.TestCase):
         self.publish(push=True)
         order = []; real_push, real_waiting = GitRepository.check_push_access, GitRepository.check_waiting
         def push(worker): order.append('push check'); return real_push(worker)
-        def waiting(worker):
-            real_waiting(worker); order.append('waiting check')
+        def waiting(worker, uploaded=None):
+            real_waiting(worker, uploaded=uploaded); order.append('waiting check')
             with self.assertRaisesRegex(ValueError, 'Another Git operation'):
                 with self.factory(dict(self.binding)).lock(): pass
         with patch.object(GitRepository, 'check_push_access', push), patch.object(GitRepository, 'check_waiting', waiting):
@@ -1696,7 +1696,8 @@ class HelperSecondReviewTests(unittest.TestCase):
         (self.repo / 'latest').mkdir(); (self.repo / 'latest' / 'notes.txt').write_text('x\n'); self.raw('add', 'latest')
         self.raw('commit', '-q', '-m', 'Save\u202e\u200b\u2028 BGP\x07 ' + 'm' * 600)
         message = self.worker.dispatch(self.request('history'))['commits'][0]['message']
-        self.assertEqual(len(message), 500); self.assertTrue(message.startswith('Save BGP m'))
+        # S1d: Git cuts the subject to 500 columns (ending in '..'), the filter then drops the invisible characters.
+        self.assertLessEqual(len(message), 500); self.assertGreater(len(message), 480); self.assertTrue(message.startswith('Save BGP m'))
 
     def test_a_failed_listing_after_the_start_push_is_finished_by_the_retry(self):
         remote = self.empty_remote(); binding = self.pending(); path = Path(binding['path'])
@@ -1735,12 +1736,136 @@ class HelperSecondReviewTests(unittest.TestCase):
         self.assertIsNotNone(result['outgoing'], 'a corrupt journal is not "the remote cannot be asked"')
 
     def test_setup_git_keeps_the_folder_s_label_when_none_is_given(self):
+        # S1d: by behaviour, through the function the script's child calls, and the revision it then keeps.
         script = (Path(__file__).resolve().parents[2] / 'deploy' / 'setup-git.sh').read_text()
-        self.assertIn("label=label or (old['label'] if old else path.name)", script)
-        self.assertLess(script.index("old=next("), script.index("label=label or"))
+        self.assertIn("label=h.default_label(label,old,path)", script)
+        self.assertLess(script.index("old=next("), script.index("label=h.default_label"))
+        old = dict(self.root(), label='Course BGP', anchor=self.raw('rev-parse', 'HEAD'))
+        self.assertEqual(host_git.default_label('', old, Path(self.repo)), 'Course BGP')
+        self.assertEqual(host_git.default_label('', None, Path(self.repo)), 'repo')
+        self.assertEqual(host_git.default_label('Given', old, Path(self.repo)), 'Given')
+        self.publish()   # a waiting save: a changed revision would be refused
+        again = self.setup_child({'repositories': [old]}, old, label=host_git.default_label('', old, Path(self.repo)))
+        self.assertEqual(again['revision'], old['revision'])
 
     def test_the_owner_is_checked_before_the_checkout_gets_its_manager_folder(self):
         state = self.repo / '.git' / 'clab-manager'; shutil.rmtree(state)
         with patch.object(GitRepository, 'check_owner', lambda worker: (_ for _ in ()).throw(ValueError('must be owned'))):
             with self.assertRaisesRegex(ValueError, 'must be owned'): self.factory(dict(self.binding))
         self.assertFalse(state.exists())
+
+
+@unittest.skipUnless(shutil.which('git'), 'Git executable required')
+class HelperThirdReviewTests(unittest.TestCase):
+    """The third risk review of the helper (S1d): lone surrogates, lenient history, mark_synced over journals(), a save
+    the new remote already holds, and the remaining waiting-save cases."""
+    setUp = HostGitTests.setUp
+    raw = HostGitTests.raw; request = HostGitTests.request; publish = HostGitTests.publish; capture = HostGitTests.capture
+    account = HostGitPlacesTests.account
+    factory = HelperRedesignTests.factory; root = HelperRedesignTests.root; setup_child = HelperRedesignTests.setup_child
+    other = HelperRedesignTests.other
+
+    def test_a_lone_surrogate_in_a_manifest_is_filtered_and_history_answers(self):
+        self.publish()
+        (self.repo / 'x').mkdir(); (self.repo / 'x' / 'manifest.json').write_text('{"lab_name": "a\\ud800b", "files": []}')
+        self.raw('add', 'x'); self.raw('commit', '-q', '-m', 'surrogate')
+        result = self.worker.dispatch(self.request('history'))
+        self.assertEqual({v['path']: v['summary'] for v in result['versions']}['x']['lab_name'], 'ab')
+        json.dumps(result, ensure_ascii=False).encode()
+        self.assertEqual(host_git.display_text('\ud800'), '')
+
+    def test_a_subject_that_is_not_utf8_does_not_fail_history(self):
+        self.publish()
+        (self.repo / 'latest' / 'notes.txt').write_text('x\n'); self.raw('add', 'latest/notes.txt')
+        tree = self.raw('write-tree'); parent = self.raw('rev-parse', 'HEAD')
+        commit = subprocess.run([self.git.encode(), b'commit-tree', tree.encode(), b'-p', parent.encode(), b'-m', b'Caf\xe9 \xff save'],
+                                cwd=self.repo, env=self.env, stdout=subprocess.PIPE, check=True).stdout.decode().strip()
+        self.raw('update-ref', 'HEAD', commit)
+        result = self.worker.dispatch(self.request('history'))
+        self.assertEqual(result['commits'][0]['commit'], commit)
+        self.assertTrue(result['commits'][0]['message'].startswith('Caf')); self.assertIn('save', result['commits'][0]['message'])
+
+    def test_corrupt_and_non_object_journals_do_not_spoil_a_successful_push(self):
+        req, saved = self.publish()
+        journals = self.worker.state / 'journals'
+        (journals / ('c' * 32 + '.json')).write_text('{corrupt'); (journals / ('d' * 32 + '.json')).write_text('[1, 2]')
+        (journals / ('e' * 32 + '.json')).write_text(json.dumps({'operation_id': '../x', 'commit': saved['commit'], 'verified': True,
+                                                                  'binding_revision': self.binding['revision']}))
+        result = self.worker.dispatch(self.request('push', operation_id=req['operation_id']))
+        self.assertEqual(result['status'], 'synced', result); self.assertTrue(result['pushed'])
+        self.assertEqual(self.raw('ls-remote', 'origin', 'refs/heads/main').split()[0], saved['commit'])
+
+    def second_remote(self):
+        second = self.base / 'second.git'; subprocess.check_call([self.git, 'init', '-q', '--bare', str(second)], env=self.env)
+        return second
+
+    def test_a_save_the_new_remote_already_holds_needs_no_answer_from_the_gone_old_one(self):
+        old = dict(self.root(), anchor=self.raw('rev-parse', 'HEAD'))
+        _, waiting = self.publish()   # its upload failed: the old remote is gone
+        second = self.second_remote(); os.rename(self.remote, self.base / 'gone.git')
+        self.raw('remote', 'set-url', 'origin', str(second)); self.raw('push', '-q', 'origin', 'main')
+        moved = self.setup_child({'repositories': [old]}, old)
+        self.assertNotEqual(moved['revision'], old['revision']); self.assertEqual(moved['push_url'], str(second))
+
+    def test_a_save_the_new_remote_lacks_still_refuses_while_the_old_remote_is_gone(self):
+        old = dict(self.root(), anchor=self.raw('rev-parse', 'HEAD'))
+        _, waiting = self.publish()
+        second = self.second_remote(); os.rename(self.remote, self.base / 'gone.git')
+        self.raw('switch', '-q', '-c', 'other', 'origin/main')   # the new registration's branch lacks the save
+        self.raw('remote', 'set-url', 'origin', str(second)); self.raw('push', '-q', 'origin', 'other')
+        with self.assertRaisesRegex(ValueError, '^' + host_git.SAVE_UNKNOWN + '$'): self.setup_child({'repositories': [old]}, old)
+
+    def test_nothing_waits_on_a_registered_branch_that_is_gone_or_was_never_committed(self):
+        self.publish()
+        self.raw('switch', '-q', '-c', 'other', 'origin/main'); self.raw('branch', '-q', '-D', 'main')
+        worker = self.factory(dict(self.binding))
+        with patch.object(worker, 'remote_head', side_effect=AssertionError('nothing waits: the remote is not asked')):
+            self.assertIsNone(worker.check_retire())
+            worker.binding['branch'] = 'never-committed'; self.assertIsNone(worker.check_retire())
+
+    def test_a_failed_fetch_answers_that_the_remote_could_not_be_asked(self):
+        _, waiting = self.publish()
+        other = self.other(); other('commit', '-q', '--allow-empty', '-m', 'remote only'); other('push', '-q')
+        worker = self.factory(dict(self.binding))
+        with patch.object(worker, 'fetch_remote', side_effect=ValueError('fetch failed')):
+            with self.assertRaisesRegex(ValueError, '^' + host_git.SAVE_UNKNOWN + '$'): worker.check_retire()
+        with patch.object(worker, 'fetch_remote', return_value=''):   # the fetch "worked" but the remote commit is still missing
+            with self.assertRaisesRegex(ValueError, '^' + host_git.SAVE_UNKNOWN + '$'): worker.check_retire()
+
+    def test_an_uploaded_save_lost_to_a_force_push_is_skipped_and_the_next_push_refuses(self):
+        req, saved = self.publish(push=True)
+        other = self.other(); other('reset', '-q', '--hard', 'HEAD~1'); other('commit', '-q', '--allow-empty', '-m', 'rewritten')
+        other('push', '-q', '--force', 'origin', 'HEAD:main')
+        self.assertIsNone(self.factory(dict(self.binding)).check_retire(), 'a journal marked pushed is not asked about')
+        req2, second = self.publish(self.capture('next\n'), push=True)
+        self.assertEqual(second['status'], 'needs_attention'); self.assertIn('advanced or diverged', second['message'])
+
+    def test_an_unchanged_save_on_the_owner_s_own_commit_does_not_wait(self):
+        self.publish(push=True)
+        (self.repo / 'notes.txt').write_text('mine\n'); self.raw('add', 'notes.txt'); self.raw('commit', '-q', '-m', 'owner work')
+        req, same = self.publish()
+        self.assertEqual(same['status'], 'unchanged'); self.assertFalse(self.worker.load_journal(req['operation_id'])['verified'])
+        worker = self.factory(dict(self.binding))
+        with patch.object(worker, 'remote_head', side_effect=AssertionError('the owner\'s own commit is no manager save')):
+            self.assertIsNone(worker.check_retire())
+
+    def test_the_old_registration_s_lock_is_waited_for(self):
+        old = dict(self.root(), anchor=self.raw('rev-parse', 'HEAD')); self.publish(push=True)
+        import threading
+        held = self.factory(dict(self.binding)).lock(); held.__enter__()
+        import time
+        threading.Timer(2.0, lambda: held.__exit__(None, None, None)).start(); started = time.monotonic()
+        renamed = self.setup_child({'repositories': [old]}, old, label='renamed')
+        self.assertEqual(renamed['label'], 'renamed'); self.assertGreater(time.monotonic() - started, 1.5, 'it waited for the lock')
+
+    def test_setup_git_gives_the_login_hint_only_for_identity_or_login_refusals(self):
+        for message in ('Git commit identity is missing or invalid.',
+                        "The remote branch is unavailable. Check connectivity and the owner's noninteractive HTTPS Git login.",
+                        'Git push preflight failed. Authenticate as the registered Linux owner and check remote write access.'):
+            self.assertTrue(host_git.owner_login_problem(message), message)
+        for message in (host_git.SAVE_WAITS, host_git.SAVE_UNKNOWN, 'Another Git operation is already running for this repository.',
+                        host_git.NOT_MANAGER_SAVES, host_git.REMOTE_AHEAD):
+            self.assertFalse(host_git.owner_login_problem(message), message)
+        script = (Path(__file__).resolve().parents[2] / 'deploy' / 'setup-git.sh').read_text()
+        self.assertIn('sys.exit(3 if h.owner_login_problem(str(error)) else 1)', script)
+        self.assertIn('if [[ $status -ne 3 ]]; then', script); self.assertIn("<<'PY' || status=$?", script)
