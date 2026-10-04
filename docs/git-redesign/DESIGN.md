@@ -397,6 +397,8 @@ saves**, and the review says so instead of refusing while another lab's save wai
 | The same, while saves wait here: each side has changes the other lacks | `The online copy and this VM both have changes the other does not have. They have to be combined on the VM.` | **Details** (what the repository's owner does on the VM; the manager never merges, rebases or force-pushes) |
 | A device cannot be read | `<device> could not be read, so nothing was saved.` | **Try again** · **Save settings** (leave it out) · **Details** |
 | Files the manager did not save are inside `latest`, `baseline` or a checkpoint folder | `<folder> holds files that were not saved by the manager.` | **Choose another place** · **Details** |
+| The save location on the VM is gone or was changed (the checkout was removed, its branch or its push address changed, the VM was replaced): code `settings` | `This lab’s save location has to be set up again.` | **Save settings** · **Details** (the helper's own sentence says what to do) |
+| None of the devices the lab saves is in the lab any more: code `devices` | `No device of this lab is selected for saving.` | **Save settings** |
 
 *Update from the repository* is a fast-forward and cannot work while a save waits, so it is offered only
 when nothing waits in the repository; with saves waiting the action is **Upload**.
@@ -457,7 +459,7 @@ and the chip must say what that is.
 
 | Need | Ruling |
 |---|---|
-| N1 `lab.git_status` in `/api/state` | Yes: `{checked, ready, problem, code, waiting}` (`waiting`: how many un-uploaded saves the manager holds for the lab's checkout, any lab's) kept in memory per lab from the last helper `status` the manager ran for it (the settings route, a save, a place, an update); never fetched by the poll. `code` is one of `vm`, `account`, `busy`, `diverged`, `files`, `settings`, `other`, mapped from the helper's fixed sentences in one table in `git_progress.py`. |
+| N1 `lab.git_status` in `/api/state` | Yes: `{checked, ready, problem, code, waiting}` (`waiting`: how many un-uploaded saves the manager holds for the lab's checkout, any lab's) kept in memory per lab from the last helper `status` the manager ran for it (the settings route, a save, a place, an update); never fetched by the poll. `code` is one of `vm`, `account`, `busy`, `diverged`, `files`, `settings`, `devices`, `other`, mapped from the helper's fixed sentences and the manager's own in one table in `git_progress.py` (`settings`: the save location has to be set up again; `devices`: an empty device selection; the part file's table gave `settings` the second meaning, which the two rows of 3.6 replace). |
 | N2 `source.label` on a restore job | No. The name is derived in the page (`loadSourceName`, LOAD.md 5.2) so that a renamed save shows its current name. |
 | N3 empty note, `note_auto` | Yes (3.2). |
 | N4 the change summary | Yes, stored on the job: after a save committed, the worker asks the helper's `compare` once and stores `summary = {devices: [labels], added, removed, topology, map, first, removed_devices}` (counts and labels only, public). The sentence then needs no request. `compare` answers gain `role` (`device`, `restore`, `topology`, `map`, `manifest`, `other`) and `node` per file, derived from the names the manager itself gave the files, and one row for every path in `changed_files`. |

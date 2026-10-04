@@ -1181,7 +1181,8 @@ Two causes DESIGN.md names outside that table, and the fallback:
 
 | Cause | Sentence | Actions |
 |---|---|---|
-| No device is selected (`settings`; DESIGN.md 3.3) | `No device of this lab is selected for saving.` | **Save settings** |
+| No device is selected (`devices`; DESIGN.md 3.3, 3.6) | `No device of this lab is selected for saving.` | **Save settings** |
+| The save location has to be set up again (`settings`; DESIGN.md 3.6) | `This lab’s save location has to be set up again.` | **Save settings** · **Details** |
 | Anything else (`other`: a helper that is missing or out of date, an unknown message) | `The save did not work.` | **Try again** · **Details** |
 
 Details of the rows:
@@ -1206,7 +1207,8 @@ Where each code comes from today, for the manager's table (N1; `app/git_progress
 | `busy` | `Finish the existing Git operation before saving lab progress.` (`app/host_git.py:340`); `The repository already has staged changes…` (`app/host_git.py:341`); `The repository has unsaved edits in the selected scope…` (`app/host_git.py:344`); the staged-edit checks (`app/host_git.py:494,499`); `The push would include commits created outside manager saves…` (`app/host_git.py:470`) |
 | `diverged` | `The remote branch advanced or diverged…` (`app/host_git.py:468`); `Local and remote history diverged…` (`app/host_git.py:757`) |
 | `files` | the `publish` refusal for a `latest`, `baseline` or checkpoint folder that holds files its manifest does not own (DESIGN.md 2.3, "Not changed") |
-| `settings` | an empty device selection (DESIGN.md 3.3) |
+| `settings` | the helper's sentences about a registration or checkout that is gone or changed, and `The VM identity changed…` (DESIGN.md 3.6) |
+| `devices` | an empty device selection (DESIGN.md 3.3): the manager's `NO_DEVICES` |
 | `other` | `Git helper is unavailable. Run setup-git.sh on the VM.` (`app/git_progress.py:358`); `Update the VM Git helper…` (`app/git_progress.py:592`); `Install or refresh the matching Git helper on the VM.` (`app/git_progress.py:354`); any other message |
 
 What each action does:
