@@ -1,0 +1,17 @@
+commit aaea4186b115de39752740f25b996e3bbba80ca0
+moved ceos1 on the map and described Ethernet1
+
+Manager-Operation: 9578b22f003a389a131841653cf83758
+1
+modified	git-redesign/latest/ceos1.cfg	+1/-0
+modified	git-redesign/latest/ceos1.eoscfg	+1/-0
+modified	git-redesign/latest/git-redesign.clab.yml.annotations.json	+2/-2
+modified	git-redesign/latest/manifest.json	+8/-8
+--- changed lines (patch +/- only)
+git-redesign/latest/ceos1.cfg
++   description s0-fixed-run-link-to-cjunos
+git-redesign/latest/git-redesign.clab.yml.annotations.json
+-        "x": 0,
+-        "y": 0
++        "x": 40,
++        "y": 200

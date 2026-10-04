@@ -1,0 +1,54 @@
+$ POST /api/discovery/refresh
+HTTP 200
+{
+  "checked_at": "2026-10-04T15:12:59.361788+00:00",
+  "checking": false,
+  "configured": true,
+  "connected": true,
+  "discovered": [
+    {
+      "excluded": false,
+      "imported": true,
+      "name": "git-redesign",
+      "nodes": 4,
+      "running": 4
+    },
+    {
+      "excluded": fa
+[('git-redesign', 4, 4, True), ('git-redesign-b', 2, 2, False)]
+$ POST /api/discovery/import-preview {"name":"git-redesign-b"}
+HTTP 200
+{
+  "excluded": false,
+  "files": {
+    "definition": {
+      "path": "/srv/containerlab-node-manager/projects/git-redesign-b/git-redesign-b.clab.yaml",
+      "sha256": "4899386db356ef59b86c2bb69c7d439bd294d926e3ba883caea7a54216f415e7"
+    },
+    "inventory": {
+      "path": "/srv/containerlab-node-manager/projects/git-redesign-b/clab-git-redesign-b/ansible-inventory.yml",
+      "sha256": "c7c5cefa6049e99531591df84456b7485fc4bb54db3bfe0d6c3cf569c86ca732"
+    },
+    "topology": {
+      "path": "/srv/containerlab-node-manager/projects/git-redesign-b/clab-git-redesign-b/topology-data.json",
+      "sha256": "b5a0e16685c7d6e5ef71a889a00f6a1798f7a6d425eb0ac9c3baabcb4b860a3f"
+    }
+  },
+  "links": 1,
+  "missing": [
+    "annotations"
+  ],
+  "name": "git-redesign-b",
+  "nodes": 2,
+  "token": "29a12c4c75de4d35a9c1d3ad1f7b2542",
+  "warnings": []
+}
+$ POST /api/discovery/import {"name":"git-redesign-b","token":"..."}
+HTTP 200
+{
+  "container_prefix": "clab",
+  "created": "2026-10-04T15:13:09.179973+00:00",
+  "defaults": {},
+  "deployment": {
+    "checked_at": "2026-10-04T15:13:09.092463+00:00",
+    "last_success":

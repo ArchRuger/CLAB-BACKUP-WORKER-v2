@@ -1,0 +1,15 @@
+commit 5a9724d29fe5a85fe0fde39ce9130fdd39c4d580
+described ceos2 Ethernet2; second lab already saved beside
+
+Manager-Operation: 4d6bde5411c42a2813ff2a2b9411dd10
+modified	git-redesign/latest/ceos2.cfg	+1/-0
+modified	git-redesign/latest/ceos2.eoscfg	+1/-0
+modified	git-redesign/latest/manifest.json	+6/-6
+--- tree after
+git-redesign/b/latest/ceos1.cfg  0d361336
+git-redesign/b/latest/ceos1.eoscfg  0d361336
+git-redesign/b/latest/ceos2.cfg  870c6902
+git-redesign/b/latest/ceos2.eoscfg  870c6902
+git-redesign/b/latest/git-redesign-b.clab.yml  65658f3a
+git-redesign/b/latest/git-redesign-b.clab.yml.annotations.json  4ff84ab9
+git-redesign/b/latest/manifest.json  bd5ef8e4

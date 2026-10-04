@@ -1,0 +1,4 @@
+ceos2#show running-config interfaces Ethernet2
+interface Ethernet2
+   description s0-fixed-run-link-to-ceos1
+ceos2#

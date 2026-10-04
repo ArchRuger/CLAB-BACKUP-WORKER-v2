@@ -1,0 +1,18 @@
+$ gh api contents/git-redesign/latest
+ceos1.cfg	971
+ceos1.eoscfg	971
+ceos2.cfg	971
+ceos2.eoscfg	971
+cjunos.cfg	555
+cjunos.jcfg	843
+git-redesign.clab.yml	1207
+git-redesign.clab.yml.annotations.json	885
+manifest.json	3268
+xrv9k.cfg	976
+xrv9k.xrcfg	976
+$ gh api commits/4010b8f
+{"files":[{"a":49,"f":"git-redesign/latest/ceos1.cfg","s":"added"},{"a":49,"f":"git-redesign/latest/ceos1.eoscfg","s":"added"},{"a":49,"f":"git-redesign/latest/ceos2.cfg","s":"added"},{"a":49,"f":"git-redesign/latest/ceos2.eoscfg","s":"added"},{"a":10,"f":"git-redesign/latest/cjunos.cfg","s":"added"},{"a":36,"f":"git-redesign/latest/cjunos.jcfg","s":"added"},{"a":36,"f":"git-redesign/latest/git-redesign.clab.yml","s":"added"},{"a":50,"f":"git-redesign/latest/git-redesign.clab.yml.annotations.json","s":"added"},{"a":91,"f":"git-redesign/latest/manifest.json","s":"added"},{"a":50,"f":"git-redesign/latest/xrv9k.cfg","s":"added"},{"a":50,"f":"git-redesign/latest/xrv9k.xrcfg","s":"added"}],"message":"first save of the whole lab\n\nManager-Operation: b87b456abdefd5843321f01ee6b4ca0b","sha":"4010b8f6fc"}
+
+README.md
+git-redesign
+4010b8f6fc92967b4c963d11e39bdc84486e48b0

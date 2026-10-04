@@ -1,0 +1,6 @@
+$ PUT /api/labs/<id>/layout {"positions":{"ceos1":[40,200]}}
+HTTP 200
+{
+  "saved": true
+}
+map-document ceos1: [{'x': 40, 'y': 200}]

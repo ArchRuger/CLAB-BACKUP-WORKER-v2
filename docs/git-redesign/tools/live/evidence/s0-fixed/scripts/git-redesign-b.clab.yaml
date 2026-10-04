@@ -1,0 +1,20 @@
+# git-redesign-b: second small disposable lab (two cEOS) for the nested-folder check of the Git save redesign (dev2).
+name: git-redesign-b
+mgmt:
+  network: clab
+  ipv4-subnet: 172.20.20.0/24
+topology:
+  defaults:
+    env:
+      TZ: UTC
+  nodes:
+    ceos1:
+      kind: arista_ceos
+      image: n24l/ceos:4.35.0F
+      mgmt-ipv4: 172.20.20.111
+    ceos2:
+      kind: arista_ceos
+      image: n24l/ceos:4.35.0F
+      mgmt-ipv4: 172.20.20.112
+  links:
+    - endpoints: ["ceos1:eth1", "ceos2:eth1"]

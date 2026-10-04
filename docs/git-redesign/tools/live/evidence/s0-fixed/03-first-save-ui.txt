@@ -1,0 +1,150 @@
+--- first-save dialog
+Where should git-redesign’s progress be saved?
+×
+
+Your device configurations are saved as a version in a Git repository on the lab VM and uploaded to its online copy.
+
+Repository
+clab-scratch-git-redesign
+Folder
+Browse…
+
+One repository can hold several labs, each in its own folder.
+
+Devices (4 included)
+What changed?
+
+Shown in the history and used as the Git commit message.
+
+I understand that complete device configurations — including any passwords or keys they contain — will be saved to this repository and uploaded to its online copy.
+Cancel
+Save progress
+--- devices checked: [True, True, True, True]
+--- after Save: first-save dialog visible = False
+[[role=alert]]
+[.form-error]
+--- review dialog (head)
+Review before uploading
+×
+
+What this save changed compared with the previous one. Configuration files may contain passwords or keys.
+
+Saving to
+clab-scratch-git-redesign
+›
+main
+›
+git-redesign/latest
+waiting for your review
+
+This save is on the lab VM only. Nothing is uploaded to the online repository unless you choose Upload these changes.
+
+Details
+ceos1.cfg added
+
+49 added · 0 removed
+
+Before this save / This save
+@@ -0,1 +1,50 @@
+1	50
+ceos1.eoscfg added
+
+49 added · 0 removed
+
+Before this save / This save
+@@ -0,1 +1,50 @@
+--- after upload, page text (head)
+Containerlab Node Manager
+My labs
+/
+git-redesign
+Manager
+git-redesign
+
+Running
+4 of 4 devices ready
+Saved to Git just now
+
+Save progress
+Lab actions
+Topology
+Devices
+Progress
+Tools
+Advanced
+eth1
+et-0/0/0
+et-0/0/1
+Gi0/0/0/0
+Gi0/0/0/1
+eth1
+eth2
+eth2
+ceos1
+ceos2
+cjunos
+xrv9k
+Fit
++
+−
+Expand
+Edit map
+More
+
+4 devices · 4 links
+
+Click a device to open it. Click a link to capture its traffic. Right-click for more actions.
+
+Devices
+Test logins
+Tests the SSH login of every device again. A successful test makes Open CLI available.
+ceos1
+EOS
+Ready
+Open CLI
+↗
+ceos2
+EOS
+Ready
+Open CLI
+↗
+cjunos
+Junos
+Ready
+Open CLI
+↗
+xrv9k
+IOS-XR
+Ready
+Open CLI
+↗
+Progress saved
+×
+Progress saved to Git
+
+Saving to
+clab-scratch-git-redesign
+›
+main
+›
+git-redesign/latest
+verified on remote
+
+Destination
+clab-scratch-git-redesign · main · git-redesign/latest
+Saved as
+Latest
+Started
+just now
+Label
+first save of the whole lab
+Details
+View configuration backup
+Review changes
+--- page errors: []
+--- API log (mutating requests)
+POST /api/git/repositories/e7d5f64d4c85487ebcff3baeff12694a/folders {"prefix":"git-redesign"} -> 200 {"repository":{"id":"723fdfad39da40ea8a4fc49d6e8016f7","label":"clab-scratch-git-redesign / git-redesign","owner":"archtop","path":"/home/archtop/labs/clab-scratch-git-redesign","remote":"origin","push_url":"https://github.com/ArchRuger/clab-scratch-git-redesign.git","branch":"main","prefix":"git-redesign","revision":"b1d56db2f140638359256874cdde600bbd1c9b1a4698d391477766a0ad95953d"}}
+PUT /api/labs/63d53e20db83464392ebfd4712bba5e3/git {"binding_id":"723fdfad39da40ea8a4fc49d6e8016f7","node_names":["clab-git-redesign-ceos1","clab-git-redesign-ceos2","clab-git-redesign-cjunos","clab-git-redesign-xrv9k"]} -> 200 {"saved":true,"binding":{"binding_id":"723fdfad39da40ea8a4fc49d6e8016f7","revision":"b1d56db2f140638359256874cdde600bbd1c9b1a4698d391477766a0ad95953d","repository":{"id":"723fdfad39da40ea8a4fc49d6e8016f7","label":"clab-scratch-git-redesign / git-redesign","owner":"archtop","path":"/home/archtop/labs/clab-scratch-git-redesign","remote":"origin","push_url":"https://github.com/ArchRuger/clab-scratch-git-redesign.git","branch":"main","prefix":"git-redesign","revision":"b1d56db2f140638359256874cdde600bbd1c9b1a4698d391477766a0ad95953d"},"host_identity":"9a2b7085e4a0dee06c55e85a065e00c62b19403fc1c53db6a9d1c0ee7c50de03","node_names":["clab-git-redesign-ceos1","clab-git-redesign-ceos2","clab-git-rede ...[trimmed]
+POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/save {"request_id":"b87b456abdefd5843321f01ee6b4ca0b","target":"latest","checkpoint":"","push":true,"note":"first save of the whole lab","backup_job_id":"","replace_baseline":false,"expected_baseline":"","allow_removed":false} -> 200 {"id":"b87b456abdefd5843321f01ee6b4ca0b","lab_id":"63d53e20db83464392ebfd4712bba5e3","lab_name":"git-redesign","created":"2026-10-04T15:07:43.424913+00:00","status":"capturing","message":"Capturing the configured devices.","backup_job_id":"","pushed":false,"target":"latest","checkpoint":"","note":"first save of the whole lab","review_before_push":true,"destination":{"repository":"clab-scratch-git-redesign","remote":"https://github.com/ArchRuger/clab-scratch-git-redesign.git","branch":"main","path":"git-redesign/latest","checkout":"/home/archtop/labs/clab-scratch-git-redesign"}}
+POST /api/labs/63d53e20db83464392ebfd4712bba5e3/git/compare {"job_id":"b87b456abdefd5843321f01ee6b4ca0b"} -> 200 {"files":[{"name":"ceos1.cfg","status":"added","before":"","after":"! Command: show running-config\n! device: ceos1 (cEOSLab, EOS-4.35.0F-44178984.4350F (engineering build))\n!\nno aaa root\n!\nusername admin privilege 15 role network-admin secret sha512 <hash removed> removed> api http-commands\n   no shutdown\n!\nno service interface inactive port-id allocation disabled\n!\ntransceiver qsfp default-mode 4x10G\n!\nservice routing protocols model multi-agent\n!\nhostname ceos1\n!\nspanning-tree mode mstp\n!\nsystem l1\n   unsupported speed action error\n   unsupported error-correction action err ...[trimmed]
+POST /api/git/jobs/b87b456abdefd5843321f01ee6b4ca0b/retry {"push":true,"reviewed":true} -> 200 {"id":"b87b456abdefd5843321f01ee6b4ca0b","lab_id":"63d53e20db83464392ebfd4712bba5e3","lab_name":"git-redesign","created":"2026-10-04T15:07:43.424913+00:00","finished":"2026-10-04T15:07:46.580691+00:00","status":"queued","message":"Retry queued; the saved capture will be reused.","backup_job_id":"d189c0c072074981a87dfdea956ae425","commit":"4010b8f6fc92967b4c963d11e39bdc84486e48b0","pushed":false,"target":"latest","checkpoint":"","changed_files":["git-redesign/latest/ceos1.cfg","git-redesign/latest/ceos1.eoscfg","git-redesign/latest/ceos2.cfg","git-redesign/latest/ceos2.eoscfg","git-redesign/latest/cjunos.cfg","git-redesign/latest/cjunos.jcfg","git-redesign/latest/xrv9k.cfg","git-redesign/late ...[trimmed]

@@ -1,0 +1,12 @@
+=== lab b: top level
+clab-scratch-git-redesign | New folder… | Save this lab here | clab-scratch-git-redesign | git-redesign | git-redesign | b | This lab | latest | latest | notes | scratch-a | Name	What it is	Size |  | git-redesign | 	Lab folder git-redesign saves here	19 KB |  | scratch-a | 	Empty folder not in the repository until the first save	 |  | README.md | 	File	117 B | Last saved 2 minutes ago | Details | This lab saves to git-redesign/b. Looking at other folders does not change that.
+[new] disabled=False title='Create a folder here'
+[use] disabled=False title=''
+=== lab b: looking at lab a's folder git-redesign
+clab-scratch-git-redesign | › | git-redesign | Apply to running lab… | New folder… | Save this lab here |  | Applies this folder’s latest save (git-redesign/latest) to the running devices. They are not rebooted. |  | clab-scratch-git-redesign | git-redesign | git-redesign | b | This lab | latest | latest | notes | scratch-a | Name	What it is	Size |  | b | 	Lab folder This lab saves here	6.9 KB |  | latest | 	Most recent save	12 KB |  | notes | 	Empty folder not in the repository until the first save	 | Last saved 2 minutes ago | Details | This lab saves to git-redesign/b. Looking at other folders does not change that. git-redesign already saves here.
+[new] disabled=False title='Create a folder here'
+[use] disabled=True title='git-redesign already saves here.'
+=== lab b: its own folder git-redesign/b
+clab-scratch-git-redesign | › | git-redesign | › | b | Apply to running lab… | New folder… | Save this lab here |  | Applies this folder’s latest save (git-redesign/b/latest) to the running devices. They are not rebooted. |  | clab-scratch-git-redesign | git-redesign | git-redesign | b | This lab | latest | latest | notes | scratch-a | Name	What it is	Size |  | latest | 	Most recent save	6.9 KB | Last saved 2 minutes ago | Details | This lab already saves here.
+[new] disabled=False title='Create a folder here'
+[use] disabled=True title='This lab already saves here.'

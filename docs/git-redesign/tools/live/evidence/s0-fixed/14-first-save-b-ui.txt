@@ -1,0 +1,132 @@
+--- first-save dialog
+Where should git-redesign-b’s progress be saved?
+×
+
+Your device configurations are saved as a version in a Git repository on the lab VM and uploaded to its online copy.
+
+Repository
+clab-scratch-git-redesign
+Folder
+Browse…
+
+One repository can hold several labs, each in its own folder.
+
+Devices (2 included)
+What changed?
+
+Shown in the history and used as the Git commit message.
+
+I understand that complete device configurations — including any passwords or keys they contain — will be saved to this repository and uploaded to its online copy.
+Cancel
+Save progress
+--- devices checked: [True, True]
+--- after Save: first-save dialog visible = False
+[[role=alert]]
+[.form-error]
+--- review dialog (head)
+Review before uploading
+×
+
+What this save changed compared with the previous one. Configuration files may contain passwords or keys.
+
+Saving to
+clab-scratch-git-redesign
+›
+main
+›
+git-redesign/b/latest
+waiting for your review
+
+This save is on the lab VM only. Nothing is uploaded to the online repository unless you choose Upload these changes.
+
+Details
+ceos1.cfg added
+
+47 added · 0 removed
+
+Before this save / This save
+@@ -0,1 +1,48 @@
+1	48
+ceos1.eoscfg added
+
+47 added · 0 removed
+
+Before this save / This save
+@@ -0,1 +1,48 @@
+--- after upload, page text (head)
+Containerlab Node Manager
+My labs
+/
+git-redesign-b
+Manager
+git-redesign-b
+
+Running
+2 of 2 devices ready
+Saved to Git just now
+
+Save progress
+Lab actions
+Topology
+Devices
+Progress
+Tools
+Advanced
+eth1
+eth1
+ceos1
+ceos2
+Fit
++
+−
+Expand
+Edit map
+More
+
+2 devices · 1 link
+
+Click a device to open it. Click a link to capture its traffic. Right-click for more actions.
+
+Devices
+Test logins
+Tests the SSH login of every device again. A successful test makes Open CLI available.
+ceos1
+EOS
+Ready
+Open CLI
+↗
+ceos2
+EOS
+Ready
+Open CLI
+↗
+Progress saved
+×
+Progress saved to Git
+
+Saving to
+clab-scratch-git-redesign
+›
+main
+›
+git-redesign/b/latest
+verified on remote
+
+Destination
+clab-scratch-git-redesign · main · git-redesign/b/latest
+Saved as
+Latest
+Started
+just now
+Label
+first save of the second lab inside the first lab folder
+Details
+View configuration backup
+Review changes
+--- page errors: []
+--- API log (mutating requests)
+POST /api/git/repositories/e7d5f64d4c85487ebcff3baeff12694a/folders {"prefix":"git-redesign/b"} -> 200 {"repository":{"id":"45add97279ec4deb979369009f5c55ff","label":"clab-scratch-git-redesign / git-redesign/b","owner":"archtop","path":"/home/archtop/labs/clab-scratch-git-redesign","remote":"origin","push_url":"https://github.com/ArchRuger/clab-scratch-git-redesign.git","branch":"main","prefix":"git-redesign/b","revision":"4b62d29aa78ec712ed7f0b2cef0a6138d09eecf0a556d6edf80c5ee150cea886"}}
+PUT /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git {"binding_id":"45add97279ec4deb979369009f5c55ff","node_names":["clab-git-redesign-b-ceos1","clab-git-redesign-b-ceos2"]} -> 200 {"saved":true,"binding":{"binding_id":"45add97279ec4deb979369009f5c55ff","revision":"4b62d29aa78ec712ed7f0b2cef0a6138d09eecf0a556d6edf80c5ee150cea886","repository":{"id":"45add97279ec4deb979369009f5c55ff","label":"clab-scratch-git-redesign / git-redesign/b","owner":"archtop","path":"/home/archtop/labs/clab-scratch-git-redesign","remote":"origin","push_url":"https://github.com/ArchRuger/clab-scratch-git-redesign.git","branch":"main","prefix":"git-redesign/b","revision":"4b62d29aa78ec712ed7f0b2cef0a6138d09eecf0a556d6edf80c5ee150cea886"},"host_identity":"9a2b7085e4a0dee06c55e85a065e00c62b19403fc1c53db6a9d1c0ee7c50de03","node_names":["clab-git-redesign-b-ceos1","clab-git-redesign-b-ceos2"],"revi ...[trimmed]
+POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/save {"request_id":"a497a8a743951daf06f02516fb50b1b3","target":"latest","checkpoint":"","push":true,"note":"first save of the second lab inside the first lab folder","backup_job_id":"","replace_baseline":false,"expected_baseline":"","allow_removed":false} -> 200 {"id":"a497a8a743951daf06f02516fb50b1b3","lab_id":"cbee72c4fe5741bca264d72dff0d8cab","lab_name":"git-redesign-b","created":"2026-10-04T15:14:08.794261+00:00","status":"queued","message":"Save progress queued.","backup_job_id":"","pushed":false,"target":"latest","checkpoint":"","note":"first save of the second lab inside the first lab folder","review_before_push":true,"destination":{"repository":"clab-scratch-git-redesign","remote":"https://github.com/ArchRuger/clab-scratch-git-redesign.git","branch":"main","path":"git-redesign/b/latest","checkout":"/home/archtop/labs/clab-scratch-git-redesign"}}
+POST /api/labs/cbee72c4fe5741bca264d72dff0d8cab/git/compare {"job_id":"a497a8a743951daf06f02516fb50b1b3"} -> 200 {"files":[{"name":"ceos1.cfg","status":"added","before":"","after":"! Command: show running-config\n! device: ceos1 (cEOSLab, EOS-4.35.0F-44178984.4350F (engineering build))\n!\nno aaa root\n!\nusername admin privilege 15 role network-admin secret sha512 <hash removed> api http-commands\n   no shutdown\n!\nno service interface inactive port-id allocation disabled\n!\ntransceiver qsfp default-mode 4x10G\n!\nservice routing protocols model multi-agent\n!\nhostname ceos1\n!\nspanning-tree mode mstp\n!\nsystem l1\n   unsupported speed action error\n   unsupported error-correction action err ...[trimmed]
+POST /api/git/jobs/a497a8a743951daf06f02516fb50b1b3/retry {"push":true,"reviewed":true} -> 200 {"id":"a497a8a743951daf06f02516fb50b1b3","lab_id":"cbee72c4fe5741bca264d72dff0d8cab","lab_name":"git-redesign-b","created":"2026-10-04T15:14:08.794261+00:00","finished":"2026-10-04T15:14:11.430416+00:00","status":"queued","message":"Retry queued; the saved capture will be reused.","backup_job_id":"7d6a58f7121a4280a2ab63290f4c20d7","commit":"260bb4a3c86f031afac0d1f4f6698c1646af5a53","pushed":false,"target":"latest","checkpoint":"","changed_files":["git-redesign/b/latest/ceos1.cfg","git-redesign/b/latest/ceos1.eoscfg","git-redesign/b/latest/ceos2.cfg","git-redesign/b/latest/ceos2.eoscfg","git-redesign/b/latest/git-redesign-b.clab.yml","git-redesign/b/latest/git-redesign-b.clab.yml.annotations. ...[trimmed]

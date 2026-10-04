@@ -1,0 +1,114 @@
+=== top level of the repository
+clab-scratch-git-redesign
+New folder…
+Save this lab here
+clab-scratch-git-redesign
+git-redesign
+This lab
+latest
+notes
+scratch-a
+Name	What it is	Size
+
+git-redesign
+	Lab folder This lab saves here	12 KB
+
+scratch-a
+	Empty folder not in the repository until the first save
+
+README.md
+	File	117 B
+Last saved 2 minutes ago
+Details
+This lab saves to git-redesign. Looking at other folders does not change that.
+[new] disabled=False title='Create a folder here'
+[use] disabled=False title=''
+lab-tagged rows: ['git-redesign \tLab folder This lab saves here\t12 KB']
+=== the lab's own folder git-redesign
+clab-scratch-git-redesign
+›
+git-redesign
+Apply to running lab…
+New folder…
+Save this lab here
+
+Applies this folder’s latest save (git-redesign/latest) to the running devices. They are not rebooted.
+
+clab-scratch-git-redesign
+git-redesign
+This lab
+latest
+notes
+scratch-a
+Name	What it is	Size
+
+latest
+	Most recent save	12 KB
+
+notes
+	Empty folder not in the repository until the first save
+Last saved 2 minutes ago
+Details
+This lab already saves here.
+[new] disabled=False title='Create a folder here'
+[use] disabled=True title='This lab already saves here.'
+lab-tagged rows: []
+(scratch-a already listed; not created again)
+=== after creating scratch-a
+clab-scratch-git-redesign
+New folder…
+Save this lab here
+clab-scratch-git-redesign
+git-redesign
+This lab
+latest
+notes
+scratch-a
+Name	What it is	Size
+
+git-redesign
+	Lab folder This lab saves here	12 KB
+
+scratch-a
+	Empty folder not in the repository until the first save
+
+README.md
+	File	117 B
+Last saved 2 minutes ago
+Details
+This lab saves to git-redesign. Looking at other folders does not change that.
+[new] disabled=False title='Create a folder here'
+[use] disabled=False title=''
+lab-tagged rows: ['git-redesign \tLab folder This lab saves here\t12 KB']
+(git-redesign/notes already listed; not created again)
+--- New folder dialog (inside git-redesign/notes): New folder | × |  | clab-scratch-git-redesign › git-redesign/notes › new folder |  | Folder name |  | Letters, numbers, dashes, dots and underscores. Use / to create nested folders in one step. The folder is listed here at once; Git keeps no empty folders, so it appears in the repository with the first save into it. |  | Save git-redesign here from now on | Also move the 11 files already saved under | git-redesign | into it. The move is saved and uploaded to the repository right away. | Cancel |
+--- after confirm: dialog still open = False
+=== after creating git-redesign/notes/deep
+clab-scratch-git-redesign
+›
+git-redesign
+›
+notes
+›
+deep
+Remove empty folder
+New folder…
+Save this lab here
+clab-scratch-git-redesign
+git-redesign
+This lab
+latest
+notes
+deep
+scratch-a
+
+Nothing is saved here yet. The folder is kept by the manager and appears in the repository with the first save into it.
+
+Last saved 3 minutes ago
+Details
+This lab saves to git-redesign. Looking at other folders does not change that.
+[new] disabled=False title='Create a folder here'
+[use] disabled=False title=''
+lab-tagged rows: []
+--- API log
+POST /api/git/repositories/723fdfad39da40ea8a4fc49d6e8016f7/folders {"prefix":"git-redesign/notes/deep","plan":true} -> 200 {"planned":"git-redesign/notes/deep"}
