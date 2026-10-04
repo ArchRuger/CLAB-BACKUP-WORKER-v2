@@ -2221,6 +2221,13 @@ class LoadBackendTests(unittest.TestCase):
             review = self.svc.preflight('lab1', self.source(), None)
         self.assertEqual(review['source']['topology'], {'differs': None, 'saved_devices': 2, 'matching_devices': 1})
 
+    def test_the_source_names_the_capture_it_is_by_id_only(self):
+        review = self.topology_of(LAB_TOPOLOGY)
+        self.assertRegex(review['source']['capture_id'], r'^([0-9a-f]{8,64})?$')
+        with patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            backup = self.svc.preflight('lab1', self.source(), None)
+        self.assertEqual(backup['source']['capture_id'], self.source()['backup_job_id'])
+
     def test_the_topology_line_is_counts_only_and_rides_on_the_stored_and_public_job(self):
         import json
         review = self.topology_of(LAB_TOPOLOGY.replace('SW1:ge-0/0/0', 'SW1:ge-0/0/5'))

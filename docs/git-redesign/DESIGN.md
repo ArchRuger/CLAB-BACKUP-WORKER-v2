@@ -25,7 +25,8 @@ goals now meet:
   every save the upload carries and the *What changed* drawer shows their files. The audit's rule
   survives in its real form: no upload carries a save that the person pressing Upload was not shown.
 - **A folder move whose upload would carry saves kept with *Keep snapshot only* waits for a review**
-  (`kept_saves`, `kept_refusal`). Kept as it is; only its wording stops naming the Progress tab.
+  (`kept_saves`, `kept_refusal`). A folder move no longer uploads by itself (3.4), so the refusal goes;
+  the kept saves are named in the review of whatever upload carries them, as before.
 - **`Host` allowlist, checked restart read-backs, capture hardening**: untouched by this work.
 
 ## 2. The folder model (PROMPT section 6, D8)
@@ -115,7 +116,8 @@ refused whenever a save waits for upload, which is the normal state after **Not 
 
 **H3. `history` returns a bounded summary of each listed manifest.** Each row of `versions` gains
 `summary`: `lab_id`, `lab_name`, `captured_at`, `kind`, `topology_digest` and, per device entry, `node`,
-`short_name`, `platform` and whether it has a restore artifact; the answer also carries `head`. Sizes
+`short_name`, `platform` and whether it has a restore artifact, and `state` (the name a lab state gave
+itself, else empty); the answer also carries `head`. Sizes
 come from `ls-tree -l`, a manifest over 256 KiB is never read, the others are read in one `git show`
 (4 MiB in total, the lab's own states first). Every field is type-checked, strings are cut at 200
 characters and may hold no control character, at most 500 devices are returned; on any deviation the
@@ -294,7 +296,9 @@ binding:
    state goes to `<folder>/<name>` and the dialog says so.
 2. The manager registers the folder (`register-prefix`, nothing retired) and creates a save job of kind
    `state` whose frozen binding (3.1) is that registration. The lab's own binding is not touched.
-3. The job captures the lab now and publishes with target `latest`, so the state is
+3. The job captures the lab now and publishes with target `latest`; its manifest carries `state: <name>`,
+   which the helper's summary returns (H3), so every lab, the authoring one included, sees a lab state
+   there and not its own earlier folder. The state is
    `<folder>/latest/manifest.json` with the topology, the map, every device configuration and the
    restore artifacts, exactly like any save. It ends waiting for upload with the same sentence.
 
@@ -391,7 +395,7 @@ saves**, and the review says so instead of refusing while another lab's save wai
 | An unfinished Git operation, staged or unsaved edits in the save's folder | `Someone is working in this repository on the VM.` | **Try again** · **Details** |
 | The online copy has changes this VM lacks, and nothing waits here | `The online copy has changes this VM does not have.` | **Update from the repository** |
 | The same, while saves wait here: each side has changes the other lacks | `The online copy and this VM both have changes the other does not have. They have to be combined on the VM.` | **Details** (what the repository's owner does on the VM; the manager never merges, rebases or force-pushes) |
-| A device cannot be read | `<device> could not be read, so nothing was saved.` | **Try again** · **Details** |
+| A device cannot be read | `<device> could not be read, so nothing was saved.` | **Try again** · **Save settings** (leave it out) · **Details** |
 | Files the manager did not save are inside `latest`, `baseline` or a checkpoint folder | `<folder> holds files that were not saved by the manager.` | **Choose another place** · **Details** |
 
 *Update from the repository* is a fast-forward and cannot work while a save waits, so it is offered only
@@ -453,7 +457,7 @@ and the chip must say what that is.
 
 | Need | Ruling |
 |---|---|
-| N1 `lab.git_status` in `/api/state` | Yes: `{checked, ready, problem, code}` kept in memory per lab from the last helper `status` the manager ran for it (the settings route, a save, a place, an update); never fetched by the poll. `code` is one of `vm`, `account`, `busy`, `diverged`, `files`, `settings`, `other`, mapped from the helper's fixed sentences in one table in `git_progress.py`. |
+| N1 `lab.git_status` in `/api/state` | Yes: `{checked, ready, problem, code, waiting}` (`waiting`: how many un-uploaded saves the manager holds for the lab's checkout, any lab's) kept in memory per lab from the last helper `status` the manager ran for it (the settings route, a save, a place, an update); never fetched by the poll. `code` is one of `vm`, `account`, `busy`, `diverged`, `files`, `settings`, `other`, mapped from the helper's fixed sentences in one table in `git_progress.py`. |
 | N2 `source.label` on a restore job | No. The name is derived in the page (`loadSourceName`, LOAD.md 5.2) so that a renamed save shows its current name. |
 | N3 empty note, `note_auto` | Yes (3.2). |
 | N4 the change summary | Yes, stored on the job: after a save committed, the worker asks the helper's `compare` once and stores `summary = {devices: [labels], added, removed, topology, map, first, removed_devices}` (counts and labels only, public). The sentence then needs no request. `compare` answers gain `role` (`device`, `restore`, `topology`, `map`, `manifest`, `other`) and `node` per file, derived from the names the manager itself gave the files, and one row for every path in `changed_files`. |
@@ -481,13 +485,12 @@ Routes are under the same-origin guard; mutating requests carry a body. New or c
 
 | Route | Body | Answer |
 |---|---|---|
-| `GET /api/labs/{lab}/git/places?repository=<id>` | | `repositories`, `default`, and for a repository: the tree (`files`, `truncated`, `head`), `folders` (path, `mark`, `kind`, `exists`), `own`, `states` |
+| `GET /api/labs/{lab}/git/places?repository=<id>` | | `repositories`, `default`, and for a repository: the tree (`files`, `truncated`, `head`), `folders` (one full answer of 7.4 per listed folder) and `own` (the lab's folder there, how many saved files it holds) |
 | `POST /api/labs/{lab}/git/places/check` | `repository`, `folder`, `purpose` | the answer of 2.5 |
 | `POST /api/labs/{lab}/git/place` | `repository` or `url`, `folder`, `choice` (`''`, `beside`, `take`), `pending` (`''`, `keep`), `move_files`, `node_names`, `acknowledge` | `{question}` or `{saved, binding, job}` |
-| `POST /api/labs/{lab}/git/state` | `request_id`, `repository`, `folder`, `name`, `choice` (`''`, `replace`) | `{question}` or the job |
+| `POST /api/labs/{lab}/git/state` | `request_id`, `repository`, `folder`, `name`, `choice` (`''`, `take` for *Replace it*) | `{question}` or the job |
 | `POST /api/labs/{lab}/git/save` | as today; `note` may be empty | the job |
 | `POST /api/git/jobs/{id}/name` | `note` | the job |
-| `GET /api/labs/{lab}/git/states?repository=<id>` | | saved states of the repository with their summaries, for a lab with or without a connection |
 | `POST /api/labs/{lab}/git/compare` | as today | plus `head`, `upload_job`, `also_sends` rows, and `role` and `node` per file |
 | `POST /api/git/jobs/{id}/retry` | `push`, `reviewed`, and `head` with an upload | the job; 409 when a save landed after the review |
 | `POST /api/labs/{lab}/git/place` with `url` | `initialize` only from **Start the repository** | `{question: {kind: 'empty'}}` for an empty repository without it |
@@ -498,7 +501,13 @@ The existing routes (`…/git` PUT, `…/git/destination`, `…/folders`, `…/g
 for stored pages and tests; they lose `guard_pending`, the snapshot-conflict refusal and the
 duplicate-folder refusal, and `destination` stops retiring.
 
-Public job fields added: `note_auto`, `capture_kept`. Private: `binding`. The exact fields the chip
+Shapes the page relies on: `default` is `{repository, folder, answer, ask, beside}`; an empty repository
+answers `{question: {kind: 'empty', name}}`; the pending question is `{kind: 'pending', count, names}`;
+`also_sends` rows are `{job_id, lab, name, kind, target}` for a save the manager holds and
+`{commit, name, files}` for one it does not; `upload_job` is a job id or null.
+
+Public job fields added: `note_auto`, `summary`, `captured`, `capture_kept`, `capture_whole`. Private: `binding`.
+A load's public `source` gains `repository`, `topology` and `capture_id` (the id of the capture the state is). The exact fields the chip
 needs in `/api/state` are in HEADER.md section 3 and LOAD.md section 7.
 
 ## 5. Build slices, file ownership and the names they share
@@ -514,7 +523,7 @@ files reach the CI lists through the lead.
 | S2 Folder answers, pure | `app/git_places.py` (new), `tests/test_git_places.py` (new) | Fable specialist |
 | S3 Save model and routes | `app/git_progress.py`, `app/main.py`, `tests/test_git_progress.py`, `tests/test_design_export_git.py` | Fable specialist |
 | S4 Load backend | `app/restore.py`, `app/runner.py`, `tests/test_restore.py`, `tests/test_restore_compare.py` | Network specialist (Opus) |
-| S5 Page skeleton | `app/static/index.html`, `style.css`, `shell.js`, `app.js`; `tests/test_shell_ui.js` | Fable specialist |
+| S5 Page skeleton | `app/static/index.html`, `style.css`, `shell.js`, `app.js`; `tests/test_shell_ui.js`, `tests/test_save_router_ui.js` (new) | Fable specialist |
 | S6 Status functions | `app/static/status.js`, `tests/test_status_ui.js` | UI builder |
 | S7 Header panels and save flow | `app/static/save-header.js` (new), `app/static/git-progress.js` (first wave: `gitReviewJob`, `gitSubmitSave`, `gitStartWatch` only), `tests/test_save_header_ui.js` (new) | UI builder |
 | S8 Load panel | `app/static/load.js` (new), `app/static/restore.js`, `tests/test_load_ui.js` (new), `tests/test_restore_ui.js` | Opus specialist |
@@ -535,8 +544,8 @@ loads alone in a Node test):
 | `renderSaveHeader()`, `saveOpenPanel(kind)` (`'status'` or `'load'`), `saveFinished(job)`, `saveAction(action, job, origin)` | `save-header.js` | header rendering and the chip panel |
 | `gitReviewJob(job, options)` | `git-progress.js` | the only sender of `{push: true, reviewed: true}`, reached with `options.upload === true` from the panel and from the drawer |
 | `loadOpen(labId)`, `loadChoose(labId, source, name, options)`, `loadUndo(job)`, `loadRetry(job)`, `loadJobMarkup(job)`, `loadChipView(cs, lab)` | `load.js` | Load; `loadSubmit()` is the only sender of `acknowledge: true` to a restore route |
-| `saveDrawerOpen(kind, options)` (`'changes'`, `'versions'`, `'settings'`, `'chooser'`, `'state'`), `saveDrawerRender()`, `saveDrawerClose()` | `save-drawers.js` | the one drawer |
-| `folderChooserMarkup(model, view)`, `folderClean(value)`, `gitTreeModel`, `gitApplySource` | `git-places.js` | the chooser's pure parts |
+| `saveDrawerOpen(kind, options)` (`'changes'`, `'versions'`, `'settings'`, `'chooser'`, `'state'`, `'different'`), `saveDrawerRender()`, `saveDrawerClose()` | `save-drawers.js` | the one drawer; `'different'` shows `loadDifferentMarkup(review)` from `load.js` |
+| `folderChooserMarkup(model, view)`, `folderChooserEvent(type, event)`, `folderClean(value)`, `gitTreeModel`, `gitApplySource` | `git-places.js` | the chooser's markup and its one event seam for the drawer |
 
 **Backend seams** (so S2, S3 and S4 can be built at the same time):
 
@@ -584,11 +593,12 @@ Definitions:
   (`verified`, `applied`, `applied_unverified`, `verify_mismatch`) or is unknown. A device is unknown
   only when its stage is `uncertain` or it still awaits its read-back; a device interrupted before it
   was changed is not. `L` is the newest effective load. A finished deploy, redeploy, destroy or design
-  apply of the lab that is newer than `L` ends it.
+  apply of the lab that is newer than `L` ends it (`operations` is capped for the whole manager, so the
+  lab's `last_deployed` is the second source for a deploy or redeploy).
 - **Capture save**: a job of the lab that read the devices itself (public `captured`), not of kind
   `state` or `design`, finished as `synced`, `unchanged`, `committed`, `review_pending` or
   `push_pending`. `S` is the newest. A checkpoint or starting point made from an existing capture is
-  not one.
+  not one. A job stored before `captured` existed counts when its target is `latest`.
 - **Failed attempt**: the newest job of the lab ended `export_pending`, `capture_incomplete`, `failed`,
   or `interrupted` without a commit, or the page holds a refusal of a save it just sent. `A` is its time.
 - **Waiting**: jobs of the lab with a commit that is not uploaded, in `committed`, `review_pending` or
@@ -600,17 +610,19 @@ Order, first match wins:
 |---|---|---|---|---|
 | 1 | Loading | a restore job of the lab is active | `Loading… k of m` (`k` devices with a final word); `Checking devices…` during a restart read-back | |
 | 2 | Saving | a Git job of the lab is active | `Saving…`; `Uploading…` while it pushes; `Updating…` for an update | |
-| 3 | Can't save | `A` is newer than `L` and than `S` | `Can't save` | the load of row 4 or 5 when `L` is newer than `S` |
+| 3 | Can't save | `A` is newer than `L` and than `S` | `Can't save` | the load of row 4 or 5 when `L` is newer than `S`, and a second line for waiting saves |
 | 4 | Partial | `L` is newer than `S` and `L` did not succeed | `Loaded n of m` (`n` verified devices only) | the highest of rows 6 to 8 that holds |
 | 5 | Running | `L` is newer than `S` and `L` succeeded | `Running <name>` | the same |
 | 6 | Can't save | `A` is newer than `S`, or the lab's `git_status` is not ready | `Can't save` | Upload failed or waiting saves |
 | 7 | Upload failed | a waiting job is `push_pending` | `Upload failed` | |
 | 8 | Waiting | one or more waiting jobs | `1 save to upload`, `N saves to upload` | |
-| 9 | Saved | the newest capture save that changed something is uploaded | `Saved <short time>` | |
+| 9 | Saved | the newest capture save that changed something is uploaded, or the lab has only unchanged capture saves | `Saved <short time>` | |
 | 10 | Kept | every save of the lab is dismissed | `Kept on this VM` | |
 | 11 | Not saved | otherwise | `Not saved yet` | |
 
-The name after *Running*: for the lab's own `latest`, the save whose commit is the loaded commit, else
+The name after *Running*: for the lab's own `latest`, the save whose capture is the loaded state's
+(`source.capture_id` equals the save's `backup_job_id`; the commit cannot tell, because a folder source
+pins the checkout's HEAD, which is another lab's save as soon as one lands), else
 `an earlier save, <when>`; a checkpoint by its name; the starting point as `your starting point`; any
 other state by its name from the states list; a backup taken before a load X as
 `the configuration from before X`, and the undo of that as `X`.
@@ -656,7 +668,8 @@ confirmation is disabled with `A save is running.` during row 2.
 | `folder` | the folder that will be used; `typed` what was asked; `adjusted`: `''`, `corrected` (unsafe characters), `above-state` (part of a saved state), `beside-files` (someone's own `latest` folder) |
 | `exists` | false for a folder that is in no commit; such a folder is never worded as being in the repository |
 | `label`, `lab`, `layout` | the state's name; the other lab `{id, name}`; `latest` or `flat` |
-| `collision` | true when `kind` is `lab` because of a collision and not the identical folder: the question then has one button |
+| `collision` | true when `kind` is `lab` because of a collision and not the identical folder: the question then has one button. Without a lab to name (a folder nothing uses, which still holds a waiting save) the sentence is `This folder is already used for saves on the VM.` |
+| `bring` | `{offered, files, from}`: whether the line that brings the lab's saved files along applies to this folder (2.6), set by the route, never derived in the page |
 | `beside` | the suggested alternative folder |
 | `mark` | the text beside the folder in the tree: `This lab saves here`, `<lab> saves here`, `Lab state: <name>`, or empty |
 | `choice` sent by the page | `''`, `beside`, `take` (*Use this folder anyway*, *Replace it*, *Continue there*) |
@@ -673,7 +686,7 @@ HEADER.md 1.3 is the list: `save-control`, `save-pair`, `save-chip`, `save-dot` 
 `none`, `busy`, `info`), `save-panel` (`wide`), `save-state`, `save-sub`, `save-row`, `save-note`,
 `save-kv`, `save-foot`, `save-name`, `save-keep`, `save-heading`, `save-list`, `save-item`, `save-when`,
 `save-why`, `open`, `picked`, `save-devices`, `save-end` (`ok`, `bad`, `now`, `warn`), `off`,
-`save-drawer`, `save-settings`, `save-settings-foot`. A quiet action is the existing
+`save-drawer`, `save-settings`, `save-settings-foot`, and `panel-button` on a panel's opener. A quiet action is the existing
 `button ghost small`. The chooser adds the names DRAWERS.md 8.2 lists under `folder-`.
 
 ### 7.6 Smaller answers

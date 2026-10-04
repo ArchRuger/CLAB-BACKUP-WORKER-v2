@@ -669,6 +669,10 @@ class RestoreService:
                 'short_name': entry.get('short_name', '')}
         desc['restore_capable_nodes'] = sum(1 for c in candidates.values() if not c.get('unusable'))
         desc['saved_nodes'] = manifest.get('node_names', [])
+        # Which capture this state is, so the page can name a loaded state after the save that made it (the commit a
+        # folder source pins is the checkout's HEAD, which is another lab's save as soon as one lands). An id, nothing else.
+        capture = manifest.get('backup_job_id')
+        desc['capture_id'] = capture if isinstance(capture, str) and re.fullmatch(r'[0-9a-f]{8,64}', capture) else ''
         with self.store.lock:
             lab = copy.deepcopy(self.store.lab(lab_id) or {})
         desc['topology'] = topology_summary(lab, manifest if stype != 'backup' else None, text, candidates)

@@ -3,17 +3,24 @@
 Design slice of the Git save and load redesign ([PROMPT.md](../PROMPT.md) 5.3 step 4, 5.5, 5.7, 5.8, 5.11,
 6.2, 6.3). Written against `main` at 1.30.60 on 2026-10-04. Nothing in this file was built or run: it is a
 specification read off the code. Every citation is a path below `clab-backup-ui/` with a line number of
-that checkout.
+that checkout (`main` at 1.30.60; the work branch has since moved lines in `app/git_progress.py`).
 
-Scope. This file owns the three drawers, the folder chooser as an interface, "Save as a lab state…" and
-the removal of the Progress tab. It does not own the header chip and its panels, the save flow or the Load
-flow (other designers), nor any folder rule or backend decision (the lead). Where this design needs
-something from those slices it says **NEEDS (backend)** or **NEEDS (header)** / **NEEDS (load)** and
-names the smallest thing that would do.
+Revised after the design review to follow the lead's rulings: [DESIGN.md](../DESIGN.md) sections 2.4
+to 2.9, 3, 4, 5 and 7, and [REVIEW.md](../REVIEW.md). Where this file and DESIGN.md disagree, DESIGN.md
+wins. The backend contract, the folder rules, the names shared between scripts, the file owners and the
+class names are the lead's and are restated here only so that the drawers can be built from one file.
+
+Scope. This file specifies the three drawers, the folder chooser as an interface, "Save as a lab
+state…" and the removal of the Progress tab. It does not specify the header chip and its panels, the
+save flow ([HEADER.md](HEADER.md)) or the Load flow ([LOAD.md](LOAD.md)), nor any folder rule or backend
+decision (the lead). The build is split by file, not by section of this document (8.3): the drawer
+slice builds `save-drawers.js`, the chooser slice `git-places.js`, the header slice the first wave of
+`git-progress.js` and the tab-removal slice the second, and the page-skeleton slice `index.html`,
+`style.css`, `shell.js` and `app.js`.
 
 Contents: 0 shared mechanics · 1 What changed · 2 All versions · 3 Save settings · 4 folder chooser ·
 5 Save as a lab state · 6 removing the Progress tab · 7 tests · 8 wording, files, friction, assumptions,
-open questions, what to attack.
+the answered questions, what to attack.
 
 ---
 
@@ -21,7 +28,8 @@ open questions, what to attack.
 
 ### 0.1 One drawer element
 
-One static element at page level in `index.html`, beside the device drawer (`app/static/index.html:335`),
+One static element at page level in `index.html` (added by the page-skeleton slice, which owns that
+file), beside the device drawer (`app/static/index.html:335`),
 never inside a tab panel (the reason is the one recorded for `#design-apply-dialog`,
 `app/static/index.html:294`: a modal inside a hidden panel shows nothing):
 
@@ -29,7 +37,7 @@ never inside a tab panel (the reason is the one recorded for `#design-apply-dial
 <dialog id="save-drawer" class="drawer save-drawer" data-lab-dialog aria-labelledby="save-drawer-title">
   <div class="drawer-head">
     <div class="dialog-head">
-      <button type="button" class="save-quiet save-back" id="save-drawer-back" hidden>Back</button>
+      <button type="button" class="button ghost small" id="save-drawer-back" hidden>Back</button>
       <h2 id="save-drawer-title"></h2>
       <button type="button" class="icon-button close" id="save-drawer-close" aria-label="Close"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-close"></use></svg></button>
     </div>
@@ -37,10 +45,12 @@ never inside a tab panel (the reason is the one recorded for `#design-apply-dial
     <div class="save-row" id="save-drawer-actions" hidden></div>
   </div>
   <div class="drawer-content" id="save-drawer-content"></div>
+  <p class="sr-only" role="status" aria-live="polite" id="save-drawer-status"></p>
 </dialog>
 ```
 
-- It is one `<dialog>` with one content at a time (`changes`, `versions`, `settings`, `chooser`), so
+- It is one `<dialog>` with one head and one content at a time (`changes`, `versions`, `settings`,
+  `chooser`, `state`), so
   "only one panel or drawer is open at a time" (PROMPT 5.1) is true by construction, not by bookkeeping.
 - `dialog.drawer` already gives the right-hand sheet, the sticky head and the light backdrop
   (`app/static/style.css:1521-1556`). `data-lab-dialog` makes it close when the page moves to another lab
@@ -56,12 +66,15 @@ never inside a tab panel (the reason is the one recorded for `#design-apply-dial
 
 ```js
 const saveDrawer={kind:'',lab:'',back:null,request:0,opener:null,openRow:'',data:null,draft:null};
-function saveDrawerOpen(kind,options={})   // 'changes' | 'versions' | 'settings' | 'chooser'
+function saveDrawerOpen(kind,options={})   // 'changes' | 'versions' | 'settings' | 'chooser' | 'state'
 function saveDrawerBack()                  // one level: different/files → versions, chooser → settings
 function saveDrawerClose()
 function saveDrawerRender()                // pure markup → setMarkup; called by render() on every poll
 function saveDrawerRefresh(force)          // refetch what the open kind shows; replaces gitShowRepository(true)
 ```
+
+`saveDrawerOpen`, `saveDrawerRender` and `saveDrawerClose` are the three names the other scripts may
+call ([DESIGN.md](../DESIGN.md) section 5); the other two are internal to this file.
 
 - `saveDrawerOpen` closes the header panels first (`closeMenus()`, `app/static/shell.js:71-76`), records
   the opener (`document.activeElement`), fills the head, shows the dialog and moves focus to the heading
@@ -70,27 +83,41 @@ function saveDrawerRefresh(force)          // refetch what the open kind shows; 
 - **Escape** goes back one level when `saveDrawer.back` is set (the dialog's own `cancel` event,
   `preventDefault`), otherwise closes. The close button and a click on the backdrop always close.
 - On close, focus returns to the opener when it is still visible, otherwise to the chip button
-  (`#save-chip`, **NEEDS (header)**: the id of the chip button).
+  (`#save-chip`, [HEADER.md](HEADER.md) 1.2).
 - Listeners sit on the dialog element only (one delegated `click`, `input`, `keydown`, `cancel`,
   `close`). No `window`, `document`, `location`, `history` or storage listener is added outside
   `shell.js` (PROMPT 5.1; addendum J1). The wiring block is guarded like today's
   (`if(typeof $==='function'&&$('save-drawer'))`, the pattern of `app/static/git-progress.js:783`), so
   the file loads in Node with no DOM.
-- `saveDrawer.openRow`, the chooser's selection and the settings draft live in this object, not in the
+- The content of the kinds `chooser` and `state` is the chooser slice's: `save-drawers.js` writes
+  `folderChooserMarkup(model, view)` into the drawer and forwards every event whose target carries a
+  `data-folder-*` attribute or sits inside `.folder-chooser` to `folderChooserEvent(type, event)` in
+  `git-places.js` (behind a `typeof` guard). The drawer slice owns the dialog, the head, Back and focus;
+  the chooser slice owns everything inside `.folder-chooser` (4.2).
+- `saveDrawer.openRow`, the chooser's selection and the settings draft live in script state, not in the
   DOM, so a re-render on the poll keeps them.
-- A polite live region inside the drawer (`<p class="sr-only" role="status" aria-live="polite"
-  id="save-drawer-status">`) announces what a click did (`Uploading…`, `Folder BGP/final selected`,
-  `Uploaded to github.com.`). The toast stays the visible message.
+- **Live regions hold a sentence and nothing else** (review A1, DESIGN.md 7.6). The drawer has one polite
+  region, `<p class="sr-only" role="status" aria-live="polite" id="save-drawer-status">`, which announces
+  what a click did (`Uploading…`, `Folder BGP/final selected`, `Uploaded to github.com.`), and the
+  chooser has one, `#folder-answer` (4.3). Neither ever contains a button, a link or a field: the
+  buttons of a question sit in the foot row below the region (4.5), the actions of a loading or error
+  state sit in a `save-row` after the sentence. A `role="alert"` paragraph is used only for a failed
+  request and holds only the reason. The toast stays the visible message of a finished action.
 
-### 0.3 Interfaces assumed from the other slices
+### 0.3 Interfaces used from the other slices
 
-| Name | Owner | What this slice needs from it |
+Each name is read at call time behind a `typeof` guard. The owners are those of DESIGN.md section 5.
+
+| Name | In, owner | What this slice uses it for |
 |---|---|---|
-| `saveOpenPanel(kind)` | header | Opens the chip panel (`'status'`, default) or the Load panel (`'load'`) on the current tab. Used by the router (6.2) and by every text that used to say "under Progress". |
-| `saveChipState(lab, state)` in `status.js` | header | The one status function of PROMPT 5.2. The drawers read `waiting` (the saves that wait for upload) from it, so the chip, the home card and a drawer can never disagree. |
-| `gitReviewJob(job, review)` | save flow | The single sender of `{push: true, reviewed: true}` (section 1.4). |
-| `saveChangeSummary(review)` | save flow | The sentence parts (`ceos and xrv9k`, `19 lines added, 1 removed`, `The topology changed.`) from one review answer; the drawer's meta line calls the same function as the panel's sentence. |
-| `loadState(labId, source, name)` | load | Starts the Load confirmation (G03) for a source `{type:'folder',path}` or `{type:'git',commit,path}`: today's `restoreFromFolder` and `restoreFromVersion` (`app/static/restore.js:141-160`). |
+| `saveOpenPanel(kind)` | `save-header.js`, header slice | Opens the chip panel (`'status'`) or the Load panel (`'load'`) on the current tab. Called by the router (6.2) and by every action that used to lead to the Progress tab. |
+| `saveChipState(lab, ctx, now)` | `status.js`, status slice | The one status function (DESIGN.md 7.1). The drawers read the waiting saves from it, so the chip, the home card and a drawer cannot disagree. |
+| `saveChangeSentence(summary, also)` | `status.js`, status slice | The sentence of a save (`ceos and xrv9k changed. 19 lines added, 1 removed.` and `This upload also sends 2 other saves: …`). The drawer's meta line is this function's result, not a second wording. |
+| `gitReviewData(job)` | `git-progress.js`, header slice | Fetches and caches the review of a job: `files`, `summary`, `head`, `upload_job`, `also_sends` (DESIGN.md 7.3). This file holds no review cache and no compare request of its own for a job. |
+| `gitReviewJob(job, options)` | `git-progress.js`, header slice | The only sender of `{push: true, reviewed: true}`. The drawer's **Upload** calls `gitReviewJob(job, {upload: true})`; without `upload` the function opens this drawer (`saveDrawerOpen('changes', {job})`). |
+| `saveAction(action, job, origin)` | `save-header.js`, header slice | **Not now** in the drawer is `saveAction('not-now', job, 'drawer')`, the same action as the panel's. |
+| `loadChoose(labId, source, name, options)` | `load.js`, load slice | Starts the Load confirmation for a source. **Load this state…** calls it everywhere in this file. `loadState` is the pure status function of `status.js` and starts nothing. |
+| `folderChooserMarkup(model, view)`, `folderChooserEvent(type, event)`, `folderClean(value)`, `gitTreeModel`, `gitApplySource` | `git-places.js`, chooser slice | The chooser inside the drawer (section 4). `folderChooserEvent` is not in the names table of DESIGN.md section 5; it is this design's proposal for the seam between the two files. |
 
 ---
 
@@ -130,121 +157,163 @@ as a second changed file.
 
 ### 1.2 The guarantee "every file the upload would send is visible"
 
-A pure function accounts for every path; nothing is left to a naming habit.
+The ruling (DESIGN.md 3.4, 3.8 N4, 7.3) changes the review answer, and the drawer is built on the new
+one. `gitReviewData(job)` returns:
+
+| Field | Content |
+|---|---|
+| `files` | one row for **every path of the job's `changed_files`**, each with `name`, `status`, `diff`, `label`, `role` (`device`, `restore`, `topology`, `map`, `manifest`, `other`) and, for `device` and `restore`, `node`. The roles come from the names the manager itself gave the files. |
+| `summary` | `{devices, added, removed, topology, map, first, removed_devices}`, the stored summary of the job |
+| `head` | the checkout's HEAD the review was made at |
+| `upload_job` | the manager's save whose commit is HEAD: the job an upload is posted to. `null` when no save of the manager is at HEAD. |
+| `also_sends` | one row for every other save the upload carries, older and newer, whichever lab made it and wherever that lab saves now. A save the manager holds has `job_id`, `lab`, `name`, `kind`; a commit the manager no longer holds (a removed lab, a trimmed job, a release before 1.30.37) has no `job_id` and is named by its `subject` with the `paths` it changed (helper change H6). |
+
+A pure function turns one review into what the drawer shows; nothing is left to a naming habit.
 
 ```js
-// → {entries:[{role:'device'|'topology'|'map'|'other', title, file, artifact, paths:[…]}], rest:[path…]}
+// → {entries:[{role:'device'|'topology'|'map'|'manifest'|'other', title, file, artifact, paths:[…]}], rest:[path…]}
 function saveChangeAccount(job, review)
 ```
 
-1. Every file of `review.files` becomes, or joins, exactly one entry: a device's human file opens the
-   entry, its restore artifact joins it (never a second entry: PROMPT 5.3 step 3), the topology file and
-   the map get one entry each, anything else is `other`.
-2. Each entry lists the repository paths it stands for: `job.snapshot_path + '/' + name` (and
-   `renamed_from` when present).
-3. `rest` is `job.changed_files` minus every path an entry stands for. It is rendered, always, as a plain
-   list under the heading **Also in this upload** (`manifest.json` reads `Save details (which devices,
-   when they were saved)`, the wording the folder listing uses today, `app/static/git-places.js:146`;
-   the copies a checkpoint save writes read `<path> (the same file, kept in the checkpoint)`).
+1. Every row of `review.files` becomes, or joins, exactly one entry. A row with role `device` opens the
+   entry of its `node`; the row with role `restore` and the same `node` joins it as a line under the
+   device and is **never a second change** (PROMPT 5.3 step 3). A `restore` row whose device row is
+   absent (the human file did not change) opens the device's entry itself. `topology`, `map` and
+   `manifest` get one entry each per folder; a row with any other or no role is `other`: still shown, so
+   a missing role can never hide a file.
+2. Each entry lists the repository paths it stands for.
+3. `rest` is `job.changed_files` minus every path an entry stands for. With the ruled answer it is
+   empty. It is still computed and, when it is not empty, rendered as a plain list under the heading
+   **Also in this upload**, so that a gap in the backend's answer shows a path instead of hiding it.
 4. The invariant, asserted in a Node test: the union of all `entries[].paths` and `rest` equals
-   `job.changed_files`, for a latest save, a checkpoint save, a baseline, a lab state, a renamed Junos
-   file, a removed device and a save that changed only the map.
-5. The earlier saves the upload carries along are stated under the head with today's sentence, from
-   `also_sends`, `also_sends_other_labs` and `also_sends_kept`.
+   `job.changed_files`, for a latest save, a checkpoint save (which writes `latest` and its checkpoint
+   folder in one commit), a starting point, a lab state, a renamed Junos file, a removed device, a
+   folder move and a save that changed only the map.
+5. **The other saves of the upload are shown as groups, not as a count.** Below the entries of the save
+   the drawer was opened for, each row of `also_sends` is one folded group (1.3). A group of a save the
+   manager holds is opened with `gitReviewData` for that job (the same `POST …/git/compare {job_id}`,
+   which reads through that save's own stored binding and accepts any save made in the same checkout),
+   and shows that save's entries the same way. A group of a commit the manager no longer holds shows its
+   subject and its `paths` as a plain list: there is no job to compare, and the paths are what the helper
+   reports.
 
-To group files by role the drawer must know which file is whose. Today the compare answer carries only
-names. Guessing from suffixes (`.eoscfg`, `.clab.yml`) would be a second, weaker source.
-
-**NEEDS (backend) N1.** The job compare answer gives each file `role` (`device`, `restore`, `topology`,
-`map`, `other`) and, for `device` and `restore`, `node` (the device's short name), read from the save's
-manifest (the after manifest; the before manifest for a removed file). A file without a role is shown as
-`other`: still visible, so a missing role can never hide a file.
-
-**NEEDS (backend) N2.** `upload_blocked` is a sentence today (`sibling_refusal`,
-`app/git_progress.py:283-292`, which ends in "Open <lab> › Progress"). The drawer needs
-`upload_blocked: {lab_id, lab_name, message}` so the action that clears it can be a button.
+So "every file the upload would send" is: the rows of this save, which cover its `changed_files`
+exactly, plus one group per other save, each of which lists its own files.
 
 ### 1.3 Markup
 
-Head (static slots filled; classes are the shared base names plus this slice's, see 8.2):
+The drawer head is this slice's: one head for `#save-drawer`, whichever script opened it. A quiet
+action is the existing `button ghost small` (DESIGN.md 7.5).
 
 ```html
 <h2 id="save-drawer-title">What changed</h2>
-<p class="drawer-meta" id="save-drawer-meta">ceos and xrv9k · 19 lines added, 1 removed · not uploaded yet</p>
+<p class="drawer-meta" id="save-drawer-meta">ceos and xrv9k changed. 19 lines added, 1 removed. Not uploaded yet.</p>
 <div class="save-row" id="save-drawer-actions">
   <button type="button" class="button primary" data-save-action="upload">Upload</button>
-  <button type="button" class="save-quiet" data-save-action="not-now">Not now</button>
-  <button type="button" class="save-quiet" data-save-action="files">View files</button>
+  <button type="button" class="button ghost small" data-save-action="not-now">Not now</button>
+  <button type="button" class="button ghost small" data-save-action="files">View files</button>
 </div>
 ```
 
 Content:
 
 ```html
+<p class="save-kv">To: <code>Course-Labs</code> <span aria-hidden="true">›</span> <code>BGP</code></p>
 <p class="save-note">Saved files can contain passwords or keys.</p>
-<p class="save-note" id="save-changes-also">Uploading also sends 2 earlier saves that are still waiting on the VM, 1 of them from another lab in this repository.</p>
-<details class="diff-file" open><summary>ceos <span class="badge">changed</span></summary>
+<p class="save-note" id="save-changes-also">This upload also sends 2 other saves: Topology changed (OSPF-lab), Start (restore-square).</p>
+
+<h3 class="save-heading">This save</h3>
+<details class="diff-file" open><summary>ceos <small>ceos.cfg</small> <span class="badge">changed</span></summary>
   <div class="diff-body">
     …diffMarkup(file.diff,{oldLabel:'Before this save',newLabel:'This save'})…
-    <details class="save-also"><summary>Also uploaded for ceos: ceos.eoscfg, the file Load uses</summary>…diffMarkup(artifact.diff)…</details>
+    <details><summary>Also uploaded for ceos: ceos.eoscfg, the file Load uses</summary>…diffMarkup(restore.diff)…</details>
   </div>
 </details>
-<details class="diff-file" open><summary>Topology file <span class="badge">changed</span></summary>…</details>
+<details class="diff-file" open><summary>Topology file <small>restore-square.clab.yml</small> <span class="badge">changed</span></summary>…</details>
 <details class="diff-file" open><summary>Map <span class="badge">changed</span></summary>…</details>
-<h3 class="save-h">Also in this upload</h3>
-<ul class="save-list save-plain"><li><code>restore-square/latest/manifest.json</code> Save details (which devices, when they were saved)</li></ul>
+<details class="diff-file"><summary>Save details <small>manifest.json</small> <span class="badge">changed</span></summary>…</details>
+
+<h3 class="save-heading">Also in this upload</h3>
+<details data-save-also="job-id-2"><summary>Topology changed <small>OSPF-lab · saved 2 hours ago</small></summary>
+  …the entries of that save, from gitReviewData for its job; while it loads: <p class="save-note">Reading what changed…</p>
+</details>
+<details data-save-also="commit-9c1e2aa"><summary>Save progress: week 3 <small>a save the manager no longer keeps</small></summary>
+  <ul class="save-list"><li><code>OSPF/latest/ceos.cfg</code></li><li><code>OSPF/latest/manifest.json</code></li></ul>
+</details>
 ```
 
-- A device entry is titled with the device's name, the file name follows in the summary as muted text
-  (`ceos <small>ceos.cfg</small>`); the topology file and the map are titled in words with the file name
-  the same way. The diff itself is `diffMarkup` unchanged, through `gitFilesDiffMarkup` for the human
-  file, so the cut-line, truncation and "counts in the part shown" wording stay
-  (`app/static/diff-view.js:26-39`).
-- A device whose human file is unchanged while its restore artifact changed still gets one entry: the
-  body says `The configuration text is the same. The file Load uses changed.` and the artifact's diff is
+- The `To:` line is the save's own frozen destination (the folder of its stored binding), not the
+  lab's current save location: a waiting save can go to a folder the lab has left (review F5).
+- A device entry is titled with the device's name, the file name follows as muted text; the topology
+  file and the map are titled in words. The diff itself is `diffMarkup` unchanged, through
+  `gitFilesDiffMarkup` for the human file, so the cut-line, truncation and "counts in the part shown"
+  wording stay (`app/static/diff-view.js:26-39`).
+- A device whose human file is unchanged while its restore file changed still gets one entry: the body
+  says `The configuration text is the same. The file Load uses changed.` and the restore file's diff is
   open. It counts as one device.
-- A removed device (`status: 'removed'`) is an entry with the badge `removed`.
-- A folder move shows no diff, with today's lead sentence (`app/static/git-progress.js:666-668`); its
-  moved files appear under **Also in this upload** from `changed_files`.
+- A removed device (`status: 'removed'`) is an entry with the badge `removed`. A device that left the
+  save because it left the lab or was unticked in Save settings shows the same way (DESIGN.md 3.3: the
+  removal is in the sentence and in the drawer before anything is uploaded).
+- `manifest.json` has a row like any other path, titled `Save details` with the words the folder
+  listing uses today (`app/static/git-places.js:146`), folded. The copies a checkpoint save writes into
+  its checkpoint folder are rows too, titled by their path.
+- A folder move is one of the waiting saves (DESIGN.md 3.4). Opened by itself it shows the lead
+  sentence `This moves the saved files of <lab> from <old> to <new>. No device file changes.` and its
+  moved paths as rows; inside another save's upload it is one group of **Also in this upload**.
+- A group of **Also in this upload** is a plain `<details>`; it is styled by `.save-drawer details`
+  without a class of its own. Opening one fetches its review once (cached by `gitReviewData`); the
+  loading sentence and a failed read (`<name> could not be read.` with **Try again** in a `save-row`
+  after the sentence) are inside the group. A group stays open across the poll (`saveDrawer.data`).
 - A design export (`job.kind==='design'`) uses the same drawer titled `What this design export changed`
   (today's separate title, `app/static/git-progress.js:665`, test at
   `tests/test_git_progress_ui.js:536`).
 - A save that is already uploaded, opened from All versions or from Details: the same drawer without
-  the action row; the meta line ends `uploaded to github.com`.
+  the action row and without **Also in this upload**; the meta line ends `Uploaded to github.com.`
 
-### 1.4 Upload and Not now: one function
+### 1.4 Upload and Not now
 
 Rule kept: `gitReviewJob` is the only sender of `{push: true, reviewed: true}` (CLAUDE.md "Save
-progress"; PROMPT 7.5). Today it both builds the dialog and sends (`app/static/git-progress.js:672`). It
-is split so the panel and the drawer cannot each grow a sender:
+progress"; PROMPT 7.5). The contract is DESIGN.md 7.3 and belongs to the header slice, which owns both
+functions in `git-progress.js`:
 
 ```js
-async function gitReviewData(job)           // POST /git/compare {job_id}; cached per job id + commit
-async function gitReviewJob(job, review)    // the only sender; refuses without a review of this very job
+async function gitReviewData(job)             // POST …/git/compare {job_id}; cached until the waiting saves change
+async function gitReviewJob(job, options)     // options.upload===true: the only sender; otherwise opens this drawer
 ```
 
-`gitReviewJob(job, review)` throws when `review.job_id!==job.id`, when `review.upload_blocked` is set,
-or when the job no longer needs an upload; otherwise it posts
-`/git/jobs/{id}/retry {push:true, reviewed:true}`, remembers the answer (`gitRememberJob`,
-`app/static/git-progress.js:611-614`) and refreshes. The panel's **Upload** and the drawer's **Upload**
-both call it with the review object their sentence was rendered from. The existing source-level test
+This file defines neither, keeps no review cache and sends no upload. The existing source-level test
 that only one place sends `reviewed: true` (`tests/test_git_progress_ui.js:170`) keeps its claim.
 
-- **Upload**: the button reads `Uploading…` and is disabled with that text as its reason; on success the
-  drawer closes and the header shows the toast; on failure the drawer stays open, a
-  `<p class="form-error" role="alert">` under the action row says why, and the chip turns *Failed*.
-- **Upload blocked** (another lab's unreviewed save, N2): Upload is disabled, the reason is visible
-  text above it and the clearing action is beside it: `<Other lab> has a save that must be uploaded
-  first.` **Open <Other lab>** (`selectLab(id)` then `saveOpenPanel()`).
-- **Not now**: closes the drawer; toast `Not uploaded. The save stays on the lab VM.`; the chip stays
-  *Waiting* (today's "Not now — keep it on the VM", `app/static/git-progress.js:668`, `:671`).
+- **Upload** calls `gitReviewJob(job, {upload: true})`. That function posts
+  `{push: true, reviewed: true, head}` to the retry route of the review's `upload_job` (the save at the
+  checkout's HEAD, which may be another save than the one the drawer was opened for) with the `head`
+  the person was shown. The button is enabled only when the review this drawer renders has arrived,
+  which is the same condition as the drawer having content. While the request runs the button reads
+  `Uploading…`; on success the drawer closes and the header shows the toast; on failure the drawer
+  stays open, a `<p class="form-error" role="alert">` under the action row says why, and the chip turns
+  *Upload failed*.
+- **A save landed after the review** (409, `Another save was made in this repository. Look at the
+  changes again.`): `gitReviewJob` fetches the review again; the drawer re-renders from it with that
+  sentence under the action row, the new save as a further group, and **Upload** enabled again. Nothing
+  was sent.
+- **No save of the manager at HEAD** (`upload_job` is `null`: someone committed on the VM by hand, or
+  the newest save belongs to a lab the manager no longer has): the action row has no **Upload**; the
+  sentence `Someone is working in this repository on the VM.` stands in its place with **Details**
+  (DESIGN.md 3.4, 3.6). The files stay readable.
+- **Not now**: `saveAction('not-now', job, 'drawer')`, then the drawer closes. There is no toast: the
+  chip says `1 save to upload` (DESIGN.md 7.6).
 - **View files**: today's "Open the full saved version" (`app/static/git-progress.js:670`), the files
   view of 2.4 for this save's commit and path.
 
-States: loading (`Reading what changed…`, `role="status"`); error (the manager's sentence, **Try
-again**; a save from before a folder change answers `Reconnect the original repository to review this
-save.`, `app/git_progress.py:1538`: shown as is with **Details** → the job window); nothing changed (the
-drawer is not reachable: the panel says `Nothing changed since your last save.`).
+There is no upload-blocked state. Another lab's waiting save no longer stops an upload (DESIGN.md 3.4,
+review D2): it is named in the sentence and shown as a group, and the upload carries it.
+
+States: loading (`Reading what changed…` in the drawer's live region and as visible text); error (the
+manager's sentence, then **Try again** in a `save-row`). A save made by an older release, which has no
+stored binding, is still compared through its lab's current binding and can answer `Reconnect the
+original repository to review this save.` (`app/git_progress.py:1538`): shown as it is with **Details**
+(the save window). Nothing changed: the drawer is not reachable, the panel says `Nothing changed since
+your last save.`
 
 ---
 
@@ -268,45 +337,55 @@ drawer is not reachable: the panel says `Nothing changed since your last save.`)
 | Full history | `gitHistory` (saved versions and commits) and `gitOpenCommit` | `app/static/git-progress.js:724-742` |
 | Recent saves | `gitRenderSaves`, `gitSavesAction` (Open, Review and upload… / Upload now, Keep snapshot only) | `app/static/git-progress.js:406-422` |
 
-### 2.2 Groups
+### 2.2 Where the rows come from, and the groups
 
-| New group | Fed by | Notes |
+The ruling (DESIGN.md 3.7 Q1, Q8 and 3.8 N3): the list of saved states is one backend answer,
+`GET /api/labs/{lab}/restore/states?repository=<id>`, built on the helper's `history` (H3). Each row
+carries:
+
+| Field | Content |
+|---|---|
+| `path`, `commit` | the exact folder of the state and the commit the list was read at |
+| `name` | the display name. The rule lives in the backend (`state_name`): the last folder name once a trailing `latest` is dropped, its first letter upper-cased when the name is all lower case; two equal names each add their parent (`Start · BGP`). |
+| `group` | `latest`, `checkpoint`, `baseline`, `state`, `other-lab` |
+| `lab`, `kind` | the lab the state was saved from; `capture` or a design export |
+| `saved_devices`, `loadable_devices` | the device counts ([LOAD.md](LOAD.md) B2) |
+| `view_only`, `view_only_reason` | whether the state can only be viewed and downloaded, and why (`no_restore_data`, `invalid`) |
+| `saved_at` | when the state was saved |
+
+The Load panel, this drawer and the chooser's marks read this one list, so a state has one name and one
+group on every surface. The page groups nothing itself and names nothing itself: `savedVersionName(path)`
+in `status.js` follows the same rule only for a page that has no list (a job row, a toast).
+`repository` is omitted for a lab with a save location and is the default repository of
+`GET …/git/places` (DESIGN.md 2.8) for a lab without one, so a lab that never saved lists, views,
+downloads and compares the course's states (3.8 N4: the view, download and compare routes take the same
+optional `repository`).
+
+| Group in the drawer | Fed by | Notes |
 |---|---|---|
-| **Your saves** | New: the lab's finished saves to `latest`, newest first, from the lab's jobs (`gitLabJobs`, `app/static/git-progress.js:19-22`): `target==='latest'`, a commit, a non-empty `changed_files` (an unchanged save reuses HEAD and is not a version of its own, `app/static/git-progress.js:733-734`). Each is opened by `{commit: job.commit, path: '/'+job.snapshot_path}`, the way `gitOpenCommit` opens one today (`app/static/git-progress.js:738`). Without any job (jobs are capped at 200, `app/git_progress.py:309-313`, `:295`) the one row of today's `groups.latest` stands in. | Today's "Latest" is a single row; F11 shows several saves. The first five show, **Show older saves** shows the rest; **Full history…** reaches every commit. The name is the save's name (`job.note`, automatic or typed after D2). A save that waits for upload carries `Not uploaded yet` as its second line. |
-| **Checkpoints** | `groups.checkpoints` | The star icon of the board (`#i-star`). A design export is a checkpoint of another kind: see 2.5. |
-| **Starting point** | `groups.baseline` | Row name `Starting configuration`. Hidden when the lab has none (today's behaviour, `app/static/git-progress.js:391`). |
-| **Lab states** | `groups.reference`, named by the one naming function (open question Q3) | Heading carries the quiet action **Save as a lab state…**. |
-| folded **Other labs in this repository (n)** | `groups.others` | Named by the owning lab, as today (`app/static/git-progress.js:356`). |
-| folded **Everything else in this repository (n)** | `groups.elsewhere` | Today's "Elsewhere in this repository". |
-| folded **Save activity (n)** | New home for Recent saves: every job of the lab that is not a row above (failed, a device could not be read, interrupted, kept on the VM, repository updates, folder moves) | Each row opens today's save window (`gitShowJob`, `app/static/git-progress.js:626-632`), which keeps its retry and keep-on-the-VM actions. Without this fold a failed attempt older than the newest one would have no home. |
+| **Your saves** | The lab's finished saves to `latest`, newest first, from the lab's jobs (`gitLabJobs`, `app/static/git-progress.js:19-22`): `target==='latest'`, kind neither `state` nor `design`, a commit, a non-empty `changed_files` (an unchanged save reuses HEAD and is not a version of its own, `app/static/git-progress.js:733-734`). Each is opened by `{commit: job.commit, path: '/'+job.snapshot_path}`, the way `gitOpenCommit` opens one today (`app/static/git-progress.js:738`). Without any job (jobs are capped, `app/git_progress.py:309-313`, `:295`) the list's row of group `latest` stands in. | The first five show, **Show older saves** shows the rest; **Full history…** reaches every commit. The name is the save's name (`job.note`, automatic or typed). A save that waits for upload carries `Not uploaded yet` as its second line. |
+| **Checkpoints** | rows of group `checkpoint` | The star icon of the board (`#i-star`). A design export is a checkpoint of another kind: see 2.5. |
+| **Starting point** | the row of group `baseline` | Row name `Starting configuration`. The group is always shown for a lab with a save location, because it holds **Choose a backup as starting point…** (2.4); without a starting point its text is `No starting point yet.` |
+| **Lab states** | rows of group `state` | Every saved state that no connected lab owns (DESIGN.md 2.1): a course's `start`, an earlier folder of this lab, a state saved with **Save as a lab state…**. The heading carries that action. |
+| folded **Other labs in this repository (n)** | rows of group `other-lab` | States inside the saved-state folders of a lab that is connected now; named by the owning lab (`lab`). |
+| folded **Save activity (n)** | Every job of the lab that is not a row above: failed, a device could not be read, interrupted, kept on the VM, repository updates, folder moves, lab-state saves, checkpoints made from a save | Each row opens today's save window. The fold is open when it holds a save that waits for upload. Without it a failed attempt older than the newest one would have no home. |
 
-One grouping function feeds the Load panel and this drawer. `gitVersionGroups` stays in
-`git-progress.js` (its tests load that file, `tests/test_git_progress_ui.js:294-365`) and gains the
-`saves` group; nothing else about its grouping changes in this slice. Whether "Lab states" should stop
-depending on distance from the lab's folder (`belowParent`, `app/static/git-progress.js:342-346`) is a
-folder-model question for the lead (Q3); the drawer renders whatever the function returns.
+Today's fold "Elsewhere in this repository" has no members left: every saved state is in one of the
+five groups (3.7 Q8), and a folder without a manifest is not a saved state. The drawer has no such fold;
+**Browse the repository…** shows everything else.
 
-What is missing today:
+`gitVersionGroups` (`app/static/git-progress.js:321-368`) is no longer the source. It stays in
+`git-progress.js` through the first wave, because its tests load that file
+(`tests/test_git_progress_ui.js:294-365`); the tab-removal slice retires it once the drawer and the Load
+panel read the list, and rewrites those four tests on the list's rows (the same folders as fixtures, each
+with the `group` the backend gives it). The grouping rule itself is then tested where it lives
+(`state_rows`, `tests/test_git_places.py`).
 
-1. **A list of the lab's saves** (above): present as jobs and commits, never shown as versions.
-2. **Coverage and loadability per row.** The tree knows only that a folder holds `manifest.json`
-   (`app/static/git-places.js:64`); whether a state can be loaded, on how many devices, and whether it is
-   a design export is known only after `/git/version` (`restore_supported`, `restore_nodes`,
-   `app/git_progress.py:1517-1519`). Today a checkpoint row offers Apply whenever the folder is a
-   snapshot (`app/static/git-progress.js:332`), a design export included.
-   **NEEDS (backend) N3**: one list of saved states per repository, each
-   `{path, commit, name, group, lab, kind ('capture'|'design'), devices:[…], loadable:[…], files, saved_at}`,
-   in the tree answer or beside it. PROMPT 7.6 already asks for the device coverage; `group` and `name`
-   coming from the same answer is what keeps the Load panel, this drawer and the chooser's marks
-   (`Lab state: Start`) from disagreeing.
-3. **A lab without a save location.** `history`, `version`, `download` and `compare` all start with
-   `self.binding(lab_id)` (`app/git_progress.py:1500`, `:1509`, `:1570`), so a lab that never saved can
-   neither list nor view the course's states (PROMPT 5.4 step 8, parity gate).
-   **NEEDS (backend) N4**: view, download and list by repository for a lab without a binding.
-4. **Keep as a checkpoint** from an existing save (PROMPT 7.4) and a rename route (PROMPT 7.3).
-5. **When a state was saved**: the tree gives a time only for the lab's own `latest` and `baseline`
-   (`tree.saved`, `app/static/git-progress.js:330`, `:334`); other rows show the file count, as the
-   board does (`9 files`). N3's `saved_at` would let every row show a time.
+What the ruled contract supplies that the page lacks today: the saves as versions (above); coverage and
+loadability per row without reading every state (`loadable_devices`, `view_only`); `kind`, so a design
+export is never offered for loading; `saved_at` for every row, not only for the lab's own `latest` and
+`baseline` (`tree.saved`, `app/static/git-progress.js:330`, `:334`); the list for a lab without a save
+location; a checkpoint from an existing save and a rename route (DESIGN.md 3.5, 3.2).
 
 ### 2.3 Markup
 
@@ -314,68 +393,85 @@ What is missing today:
 <h2 id="save-drawer-title">All versions</h2>
 <p class="drawer-meta">Everything saved for restore-square. Choose one to load it.</p>
 
-<h3 class="save-h">Your saves</h3>
+<h3 class="save-heading">Your saves</h3>
 <ul class="save-list">
   <li><button type="button" class="save-item" aria-expanded="false" aria-controls="save-row-1" data-save-row="…"><span>Interface descriptions cleaned up</span><span class="save-when">21 minutes ago</span></button></li>
-  <li class="save-open"><button type="button" class="save-item" aria-expanded="true" aria-controls="save-row-2" data-save-row="…"><span>Point-to-point OSPF on all four links</span><span class="save-when">47 minutes ago</span></button>
+  <li class="open"><button type="button" class="save-item" aria-expanded="true" aria-controls="save-row-2" data-save-row="…"><span>Point-to-point OSPF on all four links</span><span class="save-when">47 minutes ago</span></button>
     <div id="save-row-2">
-      <p>Your save · 4 devices · topology and map included</p>
+      <p class="save-why">Your save · 4 devices · topology and map included</p>
+      <p class="save-kv"><code>CLAB-MNGR-DEV-LLM</code> <span aria-hidden="true">›</span> <code>restore-square/latest</code> · commit <code>3f2a91c</code></p>
       <div class="save-row">
         <button type="button" class="button secondary" data-save-action="load">Load this state…</button>
-        <button type="button" class="save-quiet" data-save-action="different">See what’s different</button>
-        <button type="button" class="save-quiet" data-save-action="files">View files</button>
-        <button type="button" class="save-quiet" data-save-action="zip">Download ZIP</button>
+        <button type="button" class="button ghost small" data-save-action="different">See what’s different</button>
+        <button type="button" class="button ghost small" data-save-action="files">View files</button>
+        <button type="button" class="button ghost small" data-save-action="zip">Download ZIP</button>
       </div>
       <div class="save-row">
-        <button type="button" class="save-quiet" data-save-action="checkpoint">Keep as a checkpoint</button>
-        <button type="button" class="save-quiet" data-save-action="baseline">Use as starting point…</button>
+        <button type="button" class="button ghost small" data-save-action="checkpoint">Keep as a checkpoint</button>
+        <button type="button" class="button ghost small" data-save-action="baseline">Use as starting point…</button>
+        <button type="button" class="button ghost small" data-save-action="details">Details</button>
       </div>
     </div></li>
 </ul>
-<h3 class="save-h">Checkpoints</h3> …
-<h3 class="save-h">Starting point</h3> …
-<div class="save-h-row"><h3 class="save-h">Lab states</h3><button type="button" class="save-quiet" data-save-action="state">Save as a lab state…</button></div> …
-<details class="save-fold"><summary>Other labs in this repository (3)</summary>…</details>
-<details class="save-fold"><summary>Everything else in this repository (2)</summary>…</details>
-<details class="save-fold"><summary>Save activity (4)</summary>…</details>
-<div class="save-foot"><button type="button" class="save-quiet" data-save-action="history">Full history…</button><button type="button" class="save-quiet" data-save-action="browse">Browse the repository…</button></div>
+<h3 class="save-heading">Checkpoints</h3> …
+<h3 class="save-heading">Starting point</h3> …
+<div class="save-row"><button type="button" class="button ghost small" data-save-action="baseline-backup">Choose a backup as starting point…</button></div>
+<div class="save-row"><h3 class="save-heading">Lab states</h3><button type="button" class="button ghost small" data-save-action="state">Save as a lab state…</button></div> …
+<details><summary>Other labs in this repository (3)</summary>…</details>
+<details><summary>Save activity (4)</summary>…</details>
+<div class="save-foot"><button type="button" class="button ghost small" data-save-action="history">Full history…</button><button type="button" class="button ghost small" data-save-action="browse">Browse the repository…</button></div>
 ```
 
 - A row is a real button with `aria-expanded`; Enter and Space open it in place. One row is open at a
-  time; which one is `saveDrawer.openRow`, so the poll keeps it open. Tab order is the document order;
-  no roving focus is needed in a plain list.
-- The line under an open row is built from one answer (N3): `Your save · 4 devices`, `Lab state · covers
-  2 of your 4 devices`, `From OSPF-lab · 4 devices`, `Checkpoint · 4 devices`.
+  time (`li.open`); which one is `saveDrawer.openRow`, so the poll keeps it open. Tab order is the
+  document order; no roving focus is needed in a plain list.
+- **The open row shows the exact path** (review F6): the repository, the folder of the state as it is in
+  the repository (`restore-square/latest`, `BGP/start/latest`, `restore-square/checkpoints/ospf-done`)
+  and the short commit, from the row's `path` and `commit`. Two states with similar names are told apart
+  here, and this is the path Load reads.
+- The line above it is built from the same row: `Your save · 4 devices`, `Lab state · covers 2 of your
+  4 devices`, `From OSPF-lab · 4 devices`, `Checkpoint · 4 devices`.
 - Empty groups: Your saves `No saves yet. Save makes the first one.`; Checkpoints `No checkpoints yet.
-  Keep a save as a checkpoint to hold on to it.`; Lab states `No lab states in this repository yet.`
-  (with **Save as a lab state…** beside the heading). Starting point and the folds are omitted when empty.
-- Loading: `Loading the saved versions…` (`role="status"`). The VM did not answer: today's blank state
-  and its rule that a failed read is never worded as "not saved yet"
+  Keep a save as a checkpoint to hold on to it.`; Starting point `No starting point yet.`; Lab states
+  `No lab states in this repository yet.` (with **Save as a lab state…** beside the heading). The folds
+  are omitted when empty.
+- Loading: `Loading the saved versions…` (in the live region and as text). The VM did not answer:
+  today's blank state and its rule that a failed read is never worded as "not saved yet"
   (`app/static/git-progress.js:230`, `:243-248`): `The saved versions could not be loaded.` with the
-  manager's sentence, **Try again** and, for a network failure, **Check the VM connection…**.
-- No save location and no repository: `This lab has not been saved yet.` with **Save** (the header's
-  first-save action). With a repository on the VM the Lab states group still lists (needs N4).
+  manager's sentence, then a `save-row` with **Try again** and, for a network failure, **Check the VM
+  connection…**.
+- No save location: Your saves, Checkpoints and Starting point are replaced by one line, `This lab has
+  not been saved yet.` with **Save** (the header's first-save action); Lab states and Other labs list
+  from the default repository. With no repository on the VM only that line shows.
 
 ### 2.4 Actions
 
+**Load this state…** calls `loadChoose(labId, source, name)` in every place of this file, after the
+drawer closed. The source always has the five keys of DESIGN.md 7.2 (`type`, `commit`, `path`,
+`backup_job_id`, `repository`): `type: 'folder'` with the row's `path` for a state at HEAD,
+`type: 'git'` with `commit` and `path` for an older save or a commit of the history; `repository` is the
+one the list was asked with (empty for the lab's own). `name` is the row's `name`.
+
 | Action | On | Does | Today |
 |---|---|---|---|
-| **Load this state…** | every loadable row | closes the drawer, then `loadState(lab, source, name)`; source is `{type:'folder', path}` for a folder at HEAD and `{type:'git', commit, path}` for an older save | `restoreFromFolder` from the list (`app/static/git-progress.js:401`), `restoreFromVersion` from the view dialog (`:761`) |
-| | a row that cannot be loaded | the button is disabled and the reason is the visible second line of the row: `View only: saved without the files needed to load it` (PROMPT 5.4 step 2); the clearing action is **View files** beside it | today's sentence in the view dialog (`app/static/git-progress.js:757`) |
+| **Load this state…** | every row that can be loaded | `loadChoose` as above | `restoreFromFolder` from the list (`app/static/git-progress.js:401`), `restoreFromVersion` from the view dialog (`:761`) |
+| | a row with `view_only` | the button is disabled and the reason is the visible second line of the row: `View only: saved without the files needed to load it` (`no_restore_data`), `View only: its save details could not be read` (`invalid`), `Design plan: view and download only` (2.5); the action that still works, **View files**, is beside it | today's sentence in the view dialog (`app/static/git-progress.js:757`) |
 | **See what’s different** | every row except the newest own save; omitted when the lab has no save of its own (there is nothing to compare with) | the drawer shows the difference with **Back**; title `Different from your latest save`, lead `How <name> differs from the last save of <lab>. To see what would change on the devices, choose Load this state…: the devices are compared before anything is loaded.`; body `gitFilesDiffMarkup(files,'This version','Your latest save')` | `gitCompareVersion`. The wording stays true to what the backend compares (addendum D and H7: never "compare with current") |
 | **View files** | every row | the drawer shows the files with **Back**: three groups read off the returned manifest (`node`, `kind`, `restore_artifact`): **Devices**, **Topology and map**, folded **Files Load uses** and **Save details** (the manifest JSON). A state saved before the topology travelled says `Saved without its topology file.` | `gitViewVersion` (files as one flat list, manifest under "Technical details") |
 | **Download ZIP** | every row | unchanged request and file name | `app/static/git-progress.js:763` |
-| **Keep as a checkpoint** | own saves whose capture the manager still keeps | opens one field inside the row (`Checkpoint name`, prefilled from the save's name, corrected as typed by `gitCheckpointName`, `app/static/git-progress.js:584`, with `Saved as: <name>`, `:599`) and **Keep**; sends the save route's `backup_job_id` with `target:'checkpoint'` (PROMPT 7.4) | `Create checkpoint…` recaptured the devices (`app/static/git-progress.js:585-609`) |
-| | capture no longer kept | disabled; visible reason `The files of this save are no longer kept by the manager. Save again, then keep that save.` with **Save** beside it. Whether it is kept is known in the page: `job.backup_job_id` is among the complete captures of `state.jobs` (`gitCompleteBackups`) | new |
-| **Use as starting point…** | own saves with a complete capture | a review inside the row: `Make this save the starting point of <lab>? No device is read or changed.`; when one exists also `It replaces the current starting point, saved <when>. The previous one stays in the history.`; **Use as starting point** or **Replace the starting point**, and **Cancel**. Sends `{target:'baseline', backup_job_id, replace_baseline, expected_baseline}` exactly as today; `expected_baseline` is `repository_status.baseline_revision` | `gitSaveOptions('baseline')`. The replace tick box becomes the named button; the server check (`expected_baseline`) is unchanged |
+| **Details** | every row of Your saves while the manager still holds the save (its job is in `state.git_jobs`); every waiting row; every Save activity row | today's save window, `gitShowJob(job.id)` (`app/static/git-progress.js:626-632`): the commit, the changed files, *View configuration backup*, and for a waiting save *Keep snapshot only*. A save whose job was trimmed has no **Details**; its commit is in the open row and in **Full history…** | Recent saves "Open" (`app/static/git-progress.js:418`). Review F2 and F3: without it a waiting save could not be cleared without uploading it, and a synced save's window could not be reached |
+| **Upload…** | every waiting row: an own save in Your saves, and a lab-state save, a checkpoint or a folder move in Save activity | first action of the row; `gitReviewJob(job)` without `upload`, which opens What changed for that save | Recent saves "Review and upload…" (`app/static/git-progress.js:419`) |
+| **Keep as a checkpoint** | own saves whose capture the manager still keeps (`capture_kept`) and holds the whole lab (`capture_whole`) | one field inside the row (`Checkpoint name`, optional; its placeholder is the name made from the save's name, corrected as typed by `gitCheckpointName`, `app/static/git-progress.js:584`, with `Saved as: <name>`, `:599`) and **Keep**; sends the save route with `target:'checkpoint'`, the save's `backup_job_id` and the typed name, or an empty `checkpoint` so that the backend derives a free one (DESIGN.md 3.5, 3.8 N7). No device is read | `Create checkpoint…` recaptured the devices (`app/static/git-progress.js:585-609`) |
+| | capture no longer kept | disabled; visible reason `The capture of this save is no longer kept. Save again to make a checkpoint.` with **Save** beside it | new |
+| | capture without the topology | disabled; visible reason `This capture does not include the topology. Save again first.` with **Save** beside it (DESIGN.md 3.9) | new |
+| **Use as starting point…** | own saves, under the same two conditions and with the same reasons | a review inside the row: `Make this save the starting point of <lab>? No device is read or changed.`; when one exists also `It replaces the current starting point, saved <when>. The previous one stays in the history.`; **Use as starting point** or **Replace the starting point**, and **Cancel**. Sends `{target:'baseline', backup_job_id, replace_baseline, expected_baseline}` exactly as today; `expected_baseline` is `repository_status.baseline_revision` | `gitSaveOptions('baseline')` |
+| **Choose a backup as starting point…** | the Starting point group | today's dialog, `gitSaveOptions('baseline')` (`app/static/git-progress.js:585-609`), unchanged: any complete capture the manager keeps (`gitCompleteBackups`, `:67-70`), the tick box *Replace the current baseline* as its replace review, `replace_baseline` and `expected_baseline` in the request. Opening it closes the drawer (8.5) | the same dialog behind *Set baseline…* (review F1, capability C-013: any complete capture can become the starting point, not only the lab's own saves) |
 | **Save as a lab state…** | Lab states heading | section 5 | new |
-| **Full history…** | foot | `gitHistory` unchanged, retitled `Full history` | `app/static/git-progress.js:724-730` |
+| **Full history…** | foot | `gitHistory` unchanged, retitled `Full history` (`app/static/git-progress.js:724-730`). Opening a commit (`gitOpenCommit`, `:738`) shows its view (`gitViewVersion`), whose *Apply to running lab…* button becomes **Load this state…** and calls `loadChoose(labId, {type: 'git', commit, path, backup_job_id: '', repository}, name)` (review F8). The name is the save's name when a job of that commit is known, else `an earlier save, <when>` | `restoreFromVersion` from the view dialog (`:761`) |
 | **Browse the repository…** | foot | the folder chooser in `browse` mode (section 4.2) | the folder browser with its per-folder Apply (`app/static/git-progress.js:773`, `:291`) |
-| a waiting save's row | Your saves | first action is **Upload…** (opens What changed for that save) | Recent saves "Review and upload…" (`app/static/git-progress.js:419`) |
-| a Save activity row | fold | **Details** → `gitShowJob` | Recent saves "Open" (`app/static/git-progress.js:418`) |
 
-Keep as a checkpoint and Use as starting point both create a commit, so both end in the same upload
-sentence as any save (chip *Waiting*).
+Keep as a checkpoint, Use as starting point and Choose a backup as starting point all create a commit,
+so each ends in the same upload sentence as any save (chip `1 save to upload`).
 
 ### 2.5 A design export
 
@@ -383,9 +479,8 @@ A design export is a save of kind `design` into its own checkpoint folder
 (`app/git_progress.py:1383-1386`), its manifest marked `kind: network-design`
 (`app/host_git.py:588-592`); it is never a restore source (`app/static/git-progress.js:615-617`). Its
 row sits under Checkpoints with the second line `Design plan: view and download only` and offers **View
-files** and **Download ZIP** only. Until N3 gives `kind`, the page recognises it from the lab's own jobs
-(`job.kind==='design'` with the same `checkpoint`); a design export whose job is gone would show a
-disabled Load with the view-only reason once `/git/version` was read. N3 removes that gap.
+files** and **Download ZIP** only. The row's `kind` in the states list decides this, so a design export
+whose job is gone is recognised too.
 
 ---
 
@@ -397,18 +492,18 @@ disabled Load with the view-only reason once `/git/version` was read. N3 removes
 |---|---|---|---|
 | Destination line `repo › folder › latest/` | the Save location card's `.git-destination-line` | `app/static/git-progress.js:281` | moves unchanged |
 | Legacy notice (a lab folder named like a saved state) | `gitLegacyDestinationNotice` under the line | `app/static/git-progress.js:38-46`, `:279-281` | moves; its instruction is reworded (8.1) |
-| **Change folder…** | `<details id="git-change-folder">` holding the select `#git-binding-id` and the folder browser | `app/static/git-progress.js:265-269` | becomes a button that shows the chooser (section 4) in the drawer, with **Back** |
+| **Change folder…** | `<details id="git-change-folder">` holding the select `#git-binding-id` and the folder browser | `app/static/git-progress.js:265-269` | becomes a button that shows the chooser (section 4) in the drawer, with **Back**. The same chooser opens directly from the chip panel's **Change…** (8.4) |
 | **Use a different repository…** | `gitSwitchRepository`: a dialog listing the VM's lab folders as `repo › prefix` | `app/static/git-progress.js:477-483` | same dialog; it lists repositories (one per checkout path, as `gitFirstSave` already does, `:513`) and continues in the chooser on the chosen one. With no other repository it says so and offers Connect by URL, as today |
-| **Connect by URL…** | `gitConnectByUrl` | `app/static/git-progress.js:485-504` | same dialog and request; the folder field is the chooser's path field (4.4) and the tick box becomes the passwords sentence beside the button, which sends `acknowledge: true` (D5) |
+| **Connect by URL…** | `gitConnectByUrl` | `app/static/git-progress.js:485-504` | same dialog; the request becomes `POST …/git/place` with `url` (DESIGN.md 2.8: the checkout is connected at its top level, then the lab is placed in its folder). The folder field is the chooser's path field (4.4) and the tick box becomes the passwords sentence beside the button, which sends `acknowledge: true` (D5). An empty repository answers `{question: {kind: 'empty'}}`: the dialog then says `<name> is empty. The manager adds a README.md file to start it.` with **Start the repository**, the only sender of `initialize` (DESIGN.md 2.3 H4) |
 | Devices included in every save | `fieldset.git-node-scope`, the "can’t be included yet" sentence, the "save stops and nothing is written" sentence | `app/static/git-progress.js:271-273` | moves unchanged (`.git-node-scope`, `app/static/style.css:1992-2005`) |
 | "Nothing is uploaded without you…" | form help | `app/static/git-progress.js:274` | retired: the upload sentence says it at the moment it matters |
 | Exposure tick box | `#git-exposure`, required when the destination changed | `app/static/git-progress.js:275`, `:294`, `:299` | retired with D5; the sentence `Saved files can contain passwords or keys.` stands beside **Save here** in the chooser, where the destination changes |
-| Git details | three places: "Git repo details" (`:278`), "Registration details" (`:276`), and the static card "Advanced repository details" with Refresh status, Update from the repository, Disconnect… (`app/static/index.html:147`, filled by `gitRenderAdvanced`, `app/static/git-progress.js:423-431`) | | one fold **Git details**: the same `dl.kv` (Uploads go to, Branch, VM account, Checkout path, Status, the account sentence), then **Refresh status** and **Update from the repository**. The text `Verified push destination: <code>url</code>` stays (addendum H4, test at `tests/test_git_progress_ui.js:101`) |
+| Git details | three places: "Git repo details" (`:278`), "Registration details" (`:276`), and the static card "Advanced repository details" with Refresh status, Update from the repository, Disconnect… (`app/static/index.html:147`, filled by `gitRenderAdvanced`, `app/static/git-progress.js:423-431`) | | one fold **Git details**: the same `dl.kv` (Uploads go to, Branch, VM account, Checkout path, Status, the account sentence), then **Refresh status** and **Update from the repository**. The values are filled by `gitRenderAdvanced`, guarded for the element's absence (6.6). The text `Verified push destination: <code>url</code>` stays (addendum H4, test at `tests/test_git_progress_ui.js:101`) |
 | **Refresh status** | `#git-repository-refresh` → `gitShowRepository(true)` | `app/static/git-progress.js:786` | → `saveDrawerRefresh(true)`: rereads `GET /api/labs/{id}/git` (`app/git_progress.py:1120-1133`) |
-| **Update from the repository** | `gitUpdateRemote` (confirmation dialog, then `POST /git/update`) | `app/static/git-progress.js:714-718` | moves unchanged |
-| **Disconnect this lab…** | `gitUnlink` | `app/static/git-progress.js:719-723` | same dialog; the waiting-save notice becomes two buttons (3.3) |
-| **Save settings** | the form's submit: `PUT /api/labs/{id}/git {binding_id, node_names}` | `app/static/git-progress.js:296-302` | same request with the lab's current `binding_id`; only the devices can change here |
-| "Saving to Git is not possible right now" | `#git-problem` on the status card | `app/static/index.html:142`, `app/static/git-progress.js:205` | the chip's *Can't save* (header); the drawer repeats the reason as a `.banner.warn` above Save location and as Status in Git details |
+| **Update from the repository** | `gitUpdateRemote` (confirmation dialog, then `POST /git/update`) | `app/static/git-progress.js:714-718` | moves; it is a fast-forward and cannot work while a save waits in the repository, so it is offered only when nothing waits there. With saves waiting, its place holds the sentence `Saves are waiting for upload in this repository. Upload them before updating from the repository.` and **Upload…** (DESIGN.md 3.6) |
+| **Disconnect this lab…** | `gitUnlink` | `app/static/git-progress.js:719-723` | same dialog and request, one button; with a waiting save its notice says that the save stays part of the next upload (3.3) |
+| **Save settings** | the form's submit: `PUT /api/labs/{id}/git {binding_id, node_names}` | `app/static/git-progress.js:296-302` | same request with the lab's current `binding_id`; only the devices can change here. Never disabled because a save waits (3.3) |
+| "Saving to Git is not possible right now" | `#git-problem` on the status card | `app/static/index.html:142`, `app/static/git-progress.js:205` | the chip's *Can't save* (header), from the lab's `git_status`; the drawer repeats the reason as a `.banner.warn` above Save location and as Status in Git details |
 
 The mockup shows three folds ("Git repo details", "Registration details", "Advanced repository
 details"); PROMPT 5.8 says "the folded Git details". One fold is the design: three were an accident of
@@ -420,35 +515,45 @@ the tab's history, and G4 asks to hide what can be hidden.
 <h2 id="save-drawer-title">Save settings</h2>
 <p class="drawer-meta">Where restore-square saves, and which devices each save includes.</p>
 
-<h3 class="save-h">Save location</h3>
+<div class="save-settings">
+<h3 class="save-heading">Save location</h3>
 <p class="git-destination-line"><code>CLAB-MNGR-DEV-LLM</code><span aria-hidden="true">›</span><code>restore-square/qa-1-30-37</code><span aria-hidden="true">›</span><code>latest/</code></p>
-<div class="actions">
+<div class="save-row">
   <button type="button" class="button secondary small" data-save-action="folder">Change folder…</button>
   <button type="button" class="button secondary small" data-git-repo-action="switch">Use a different repository…</button>
   <button type="button" class="button secondary small" data-git-repo-action="connect">Connect by URL…</button>
 </div>
 
-<h3 class="save-h">Devices included in every save</h3>
+<h3 class="save-heading">Devices included in every save</h3>
 <fieldset class="git-node-scope"><legend class="sr-only">Devices included in every save</legend>
   <label class="checkbox-label"><input type="checkbox" name="git-node" value="ceos" checked> <span>ceos <small>EOS</small></span></label> …
 </fieldset>
 <p class="form-help">clab-restore-square-host1 can’t be included yet — configuration saves aren’t supported for its platform.</p>
 <p class="form-help">If an included device can’t be reached, the save stops and nothing is written — an older configuration is never saved in its place.</p>
+<p class="save-note" id="save-settings-waiting">1 save is waiting for upload. It was made with the devices chosen before and stays part of the next upload.</p>
 
-<details class="save-fold" id="save-git-details"><summary>Git details</summary>
+<details id="save-git-details"><summary>Git details</summary>
   <dl class="kv"><dt>Uploads go to</dt><dd id="git-advanced-push-url">…</dd><dt>Branch</dt><dd id="git-advanced-branch">…</dd><dt>VM account</dt><dd id="git-advanced-owner">…</dd><dt>Checkout path</dt><dd id="git-advanced-path" class="mono">…</dd><dt>Status</dt><dd id="git-advanced-status">…</dd></dl>
   <p id="git-advanced-account" class="caption"></p>
-  <div class="actions"><button type="button" class="button secondary small" data-git-repo-action="refresh">Refresh status</button><button type="button" class="button secondary small" data-git-repo-action="update">Update from the repository</button></div>
+  <div class="save-row"><button type="button" class="button secondary small" data-git-repo-action="refresh">Refresh status</button><button type="button" class="button secondary small" data-git-repo-action="update">Update from the repository</button></div>
 </details>
 
 <p class="form-error" role="alert" id="save-settings-error"></p>
-<div class="save-drawer-foot"><button type="button" class="link-button" data-git-repo-action="unlink">Disconnect this lab…</button><button type="button" class="button primary" data-save-action="save-settings">Save settings</button></div>
+<div class="save-settings-foot"><button type="button" class="link-button" data-git-repo-action="unlink">Disconnect this lab…</button><button type="button" class="button primary" data-save-action="save-settings">Save settings</button></div>
+</div>
 ```
 
 `data-git-repo-action` is kept on purpose: `gitRunAction` already dispatches `switch`, `connect`,
 `refresh`, `update` and `unlink` (`app/static/git-progress.js:765-782`).
 
-### 3.3 States and the two inline questions
+### 3.3 States
+
+Nothing in this drawer is disabled because a save waits. A save carries its own binding (DESIGN.md
+3.1), so a device change, a folder change, a change of repository and a disconnect all go ahead while a
+save waits, and the waiting save stays part of the next upload of its repository (3.4). The drawer says
+so where the person makes the change; it asks nothing and refuses nothing. The earlier draft's disabled
+**Save settings**, its two buttons **Upload…** / **Keep it on the VM only**, and the two-button
+disconnect are removed (review D2).
 
 - **Loading**: `Loading the save settings…`. **Error**: today's blank state and its Try again
   (`app/static/git-progress.js:243-248`).
@@ -458,38 +563,37 @@ the tab's history, and G4 asks to hide what can be hidden.
 - **No repository on the VM**: today's blank state with **Connect a repository by URL**, **Check
   again** and the folded administrator instruction (`app/static/git-progress.js:284`), unchanged.
 - **Unticked every device**: an error under the list, `Choose at least one device to include.`
-  (`app/static/git-progress.js:298`); the button is not disabled.
-- **A save waits for upload, and the person changes the devices.** Today the request is refused: the
-  link route runs `guard_pending` (`app/git_progress.py:1138-1139`) and answers `Finish pending Git
-  saves, or choose Keep snapshot only in Git history before continuing.` (`:610`), naming a place that
-  will not exist. The constraint is real (a pending save is bound to the binding's digest; stored
-  bindings are never rewritten). The drawer therefore says it before the click: above the foot,
-  `A save is still waiting to be uploaded. The devices can be changed once it is uploaded or kept on
-  the VM only.` with **Upload…** (What changed for that save) and **Keep it on the VM only** (today's
-  dismiss route, `app/static/git-progress.js:698-701`); **Save settings** is disabled while the device
-  ticks differ from the stored ones, with that sentence as its visible reason. Which saves wait comes
-  from the chip's status function, so the drawer cannot contradict the chip.
-  **NEEDS (backend) N5**: reword the message of `guard_pending` (and of `app/discovery.py:669`), or let a
-  device change proceed with the same inline choice as a folder change.
-- **Disconnect with a waiting save.** Today the dialog shows a notice and the server refuses
-  (`app/static/git-progress.js:721`). The dialog instead offers the two ways on: **Upload it, then
-  disconnect** and **Disconnect and keep that save on the VM only** (dismiss, then unlink: two existing
-  routes, no backend change). Without a waiting save the dialog is today's, with the danger button
-  **Disconnect**.
-- **A device was unticked whose file is already saved.** Today the next save is refused by the helper
-  unless the request carries `allow_removed` (`app/host_git.py:632-633`), a tick box that lives in the
-  save options dialog (`app/static/git-progress.js:595`), which D6 and 5.3 remove. The drawer says, under
-  the list, `<device> is no longer included. Its saved file leaves the next save; older versions keep
-  it.` and **NEEDS (header/save flow)**: the next Save sends `allow_removed: true` when the stored
-  device list no longer includes a device the last save had, or the chip offers **Save without
-  <device>** after the refusal. Without one of the two this is a dead end (Q4).
+  (`app/static/git-progress.js:298`); the button is not disabled. (A selection that became empty by
+  itself, because its devices left the lab, is the chip's *Can't save* with **Save settings**, DESIGN.md
+  3.3.)
+- **A save waits for upload.** The line `#save-settings-waiting` is shown, with the count from the
+  chip's status function: `1 save is waiting for upload. It was made with the devices chosen before and
+  stays part of the next upload.` It is information, not a condition: **Save settings** sends the new
+  selection at once (`guard_pending` no longer guards this route, DESIGN.md 3.1). The next save uses the
+  new selection; the waiting one is uploaded as it was made.
+- **Disconnect with a waiting save.** Today's dialog (`gitUnlink`, `app/static/git-progress.js:719-723`)
+  keeps its one danger button **Disconnect**. Its notice becomes `1 save of <lab> is still waiting for
+  upload. It stays part of the next upload of <repository>; the save status keeps showing it.` Nothing
+  is dismissed and nothing is uploaded by disconnecting (DESIGN.md 7.6); the chip keeps counting the
+  waiting save after the disconnect (7.1, review K4).
+- **A device was unticked whose file is already saved.** Under the list: `<device> is no longer
+  included. Its saved file is removed with the next save; older versions keep it.` The next save goes
+  ahead: `allow_removed` is always sent as true, the removal is named in the upload sentence and shown
+  in What changed before anything is uploaded (DESIGN.md 3.3). There is no tick box and no question.
+- **A lab without a topology file in the manager** (imported from an inventory): `This lab has no
+  topology file in the manager, so saves hold device configurations only.` with **Update topology
+  file…** (DESIGN.md 3.9), under the devices list.
+- **Saving is not possible right now** (the chip's *Can't save*): a `.banner.warn` above Save location
+  repeats the sentence of the lab's `git_status` (DESIGN.md 3.6, 3.8 N1) and Status in Git details shows
+  it; the actions are the chip panel's.
 
 ### 3.4 What moves unchanged
 
 The destination line, the devices fieldset and its two sentences, the Git details values and their
-ids, Refresh status, Update from the repository (dialog and request), Use a different repository… and
-Connect by URL… (dialogs and requests), Disconnect (dialog and request), the request of Save settings,
-and the load-error state.
+ids, Refresh status, Update from the repository (dialog and request), Use a different repository… (its
+dialog), Disconnect (dialog and request), the request of Save settings
+(`PUT /api/labs/{id}/git {binding_id, node_names}`, a route that stays and loses `guard_pending`,
+DESIGN.md section 4), and the load-error state.
 
 ---
 
@@ -499,14 +603,14 @@ and the load-error state.
 
 | # | Today | Citation | Becomes |
 |---|---|---|---|
-| 1 | Not connected: the browser sits under "Choose a folder for this lab"; the primary button reads **Choose this folder**; `gitUseFolder` registers the folder and preselects it in the connect form; toast "Now tick the devices…" | `app/static/git-places.js:156`; `app/static/git-progress.js:265`, `:442-448` | chooser `location` mode; **Save here** connects the lab in one request (N7). No second form. |
+| 1 | Not connected: the browser sits under "Choose a folder for this lab"; the primary button reads **Choose this folder**; `gitUseFolder` registers the folder and preselects it in the connect form; toast "Now tick the devices…" | `app/static/git-places.js:156`; `app/static/git-progress.js:265`, `:442-448` | chooser `location` mode; **Save here** connects the lab in one request (`POST …/git/place`, 4.7). No second form. |
 | 2 | Connected, same repository: **Save this lab here** → dialog "Save this lab here?" with the "Also move the N files" tick box → `POST /git/destination` | `app/static/git-places.js:156`; `app/static/git-progress.js:449-452`, `:433-439` | `location` mode; the confirmation dialog goes; the move tick box is one line in the chooser (4.5) |
 | 3 | Connected, browsing another repository through the select `#git-binding-id`: behaves like 1 | `app/static/git-progress.js:290`, `:294-295` | the chooser's Repository select |
-| 4 | **New folder…**: its own dialog; three outcomes (move there, plan only, register); disabled inside another lab's folder, inside a saved state and under one | `app/static/git-progress.js:454-472`; `gitCanCreateIn`, `app/static/git-places.js:121-128`, `:156`, `:158` | an inline row in the tree; never disabled (4.6) |
+| 4 | **New folder…**: its own dialog; three outcomes (move there, plan only, register); disabled inside another lab's folder, inside a saved state and under one | `app/static/git-progress.js:454-472`; `gitCanCreateIn`, `app/static/git-places.js:121-128`, `:156`, `:158` | an inline row in the tree; never disabled; it adds to the manager's list as today and never moves or registers (4.6) |
 | 5 | **Remove empty folder** for a folder made through the manager that holds nothing | `app/static/git-places.js:155-156`; `gitForgetFolder`, `app/static/git-progress.js:473-476` | kept: quiet **Remove from the list** on such a row |
 | 6 | **Apply to running lab…** on any folder that resolves to a saved state | `app/static/git-places.js:153-157`, `gitApplySource` `:76-81` | `browse` mode: **Load this state…** |
 | 7 | Read-only (`canAct: false`): Apply only | `app/static/git-places.js:156`, `:193` | `browse` mode |
-| 8 | First save: a text field `#git-first-folder` and **Browse…**, which jumps to the tab's browser | `app/static/git-progress.js:514`, `:517` | the first-save panel's **Choose another place** opens the chooser |
+| 8 | First save: a text field `#git-first-folder` and **Browse…**, which jumps to the tab's browser | `app/static/git-progress.js:514`, `:517` | the first-save view's **Choose another place** opens the chooser |
 | 9 | Connect by URL: a second, separately validated folder field | `app/static/git-progress.js:488`, `:495` | the chooser's path field alone (4.4): the repository is not on the VM yet, so there is no tree |
 | 10 | Breadcrumbs, a file listing with a "What it is" column, a foot with "Last saved", Details and "This lab saves to … Looking at other folders does not change that." | `app/static/git-places.js:137`, `:144-146`, `:149-152`, `:161` | breadcrumbs go (the path field is the breadcrumb); the file listing stays in `browse` mode only; the "does not change that" sentence stays in `browse` and `state` modes |
 | 11 | The rules themselves: `gitFolderChoice` (twelve refusals), `gitCanCreateIn`, `GIT_RESERVED_FOLDER_MESSAGE` | `app/static/git-places.js:91-128`, `:22-28` | removed from the page. The page renders the backend's one answer (4.7); it holds no folder rule |
@@ -517,19 +621,19 @@ object and the open-branch helpers `gitDefaultExpanded`, `gitToggleFolder`, `git
 
 ### 4.2 One component, three uses
 
-```js
-folderChooserOpen({labId, mode, repository, path, back})
-```
+The chooser is content of `#save-drawer`: `saveDrawerOpen('chooser', {mode, repository, path, back})`
+for the modes `location` and `browse`, and `saveDrawerOpen('state', {…})` for a lab state. Its markup,
+state and requests live in `git-places.js` (chooser slice); the drawer file hosts it (0.2).
 
-| `mode` | Opened from | Head | Ends in |
+| Use | Opened from | Head | Ends in |
 |---|---|---|---|
-| `location` | Save settings **Change folder…**, **Choose a place…**; the first-save panel's **Choose another place**; **Use a different repository…** | `Where should <lab> save?` / `Pick a folder, type a path, or make a new folder.` | **Save here** |
+| `chooser`, mode `location` | the chip panel's **Change…** beside `Saves to: <repository> › <folder>`; Save settings **Change folder…**, **Choose a place…**; the first-save view's **Choose another place**; **Use a different repository…**; **Choose another place** of a *Can't save* row | `Where should <lab> save?` / `Pick a folder, type a path, or make a new folder.` | **Save here** |
 | `state` | **Save as a lab state…** (section 5) | `Save as a lab state` / `Saves <lab> as it is now into a folder of its own. Where <lab> normally saves does not change.` | **Save state** |
-| `browse` | All versions and Load panel **Browse the repository…** | `Browse the repository` / `Every folder of <repo>. Looking at folders does not change where <lab> saves.` | no primary button; per saved state **Load this state…**, **View files** |
+| `chooser`, mode `browse` | All versions and Load panel **Browse the repository…** | `Browse the repository` / `Every folder of <repo>. Looking at folders does not change where <lab> saves.` | no primary button; per saved state **Load this state…** (`loadChoose`), **View files** |
 
-It is content of `#save-drawer` (kind `chooser`), 760 px wide like the other drawers, so it never
-stacks on another modal. Opened from Save settings it has **Back**; the unsaved device ticks are kept
-in `saveDrawer.draft` and restored.
+It is 760 px wide like the other drawers, so it never stacks on another modal. Opened from Save
+settings it has **Back**; the unsaved device ticks are kept in `saveDrawer.draft` and restored. Opened
+from the chip panel it has no Back and closes onto the page.
 
 ### 4.3 Markup
 
@@ -539,8 +643,8 @@ in `saveDrawer.draft` and restored.
   <select id="folder-repo">…one option per checkout…</select>            <!-- only when the VM has more than one -->
 
   <label for="folder-path">Folder</label>
-  <input id="folder-path" maxlength="360" autocomplete="off" spellcheck="false" aria-describedby="folder-result folder-answer" value="BGP/week-4">
-  <p class="git-destination-line" id="folder-result"><span>Saves go to</span><code>Course-Labs</code><span aria-hidden="true">›</span><code>BGP/week-4</code></p>
+  <input id="folder-path" maxlength="500" autocomplete="off" spellcheck="false" aria-describedby="folder-result folder-answer" value="BGP/start">
+  <p class="git-destination-line" id="folder-result"><span>Saves go to</span><code>Course-Labs</code><span aria-hidden="true">›</span><code>BGP/start</code></p>
 
   <ul class="folder-tree" role="tree" aria-label="Folders of Course-Labs" id="folder-tree">
     <li role="treeitem" aria-level="1" aria-expanded="true" aria-selected="false" tabindex="-1" data-folder="">
@@ -549,7 +653,7 @@ in `saveDrawer.draft` and restored.
         <li role="treeitem" aria-level="2" aria-expanded="false" aria-selected="false" tabindex="-1" data-folder="BGP">
           <span class="folder-row"><span class="git-twist" data-folder-twist="BGP" aria-hidden="true"></span><i class="git-folder-icon lab"></i><span class="folder-name">BGP</span><b class="git-tag other">UX-TEST-003 saves here</b></span></li>
         <li role="treeitem" aria-level="2" aria-selected="true" tabindex="0" data-folder="BGP/start">
-          <span class="folder-row"><span class="git-twist-space" aria-hidden="true"></span><i class="git-folder-icon managed"></i><span class="folder-name">start</span><b class="git-tag state">Lab state: Start</b></span></li>
+          <span class="folder-row"><span class="git-twist-space" aria-hidden="true"></span><i class="git-folder-icon managed"></i><span class="folder-name">start</span><b class="git-tag folder-state">Lab state: Start</b></span></li>
         <li role="treeitem" aria-level="2" aria-selected="false" tabindex="-1" data-folder="week-5">
           <span class="folder-row"><span class="git-twist-space" aria-hidden="true"></span><i class="git-folder-icon pending"></i><span class="folder-name">week-5</span><b class="git-tag pending">New</b></span></li>
       </ul></li>
@@ -558,31 +662,35 @@ in `saveDrawer.draft` and restored.
 
   <div class="save-row"><button type="button" class="button secondary small" data-folder-action="new">New folder…</button></div>
 
-  <div class="folder-answer" id="folder-answer" role="status" aria-live="polite">
-    <p>This folder holds the state “Start”.</p>
-    <div class="save-row">
-      <button type="button" class="button primary" data-folder-choice="beside">Save beside it in BGP/start/restore-square</button>
-      <button type="button" class="button secondary" data-folder-choice="replace">Replace it</button>
-    </div>
-    <p class="save-note">If you replace it, the older contents stay in the Git history.</p>
-  </div>
+  <p class="folder-answer" id="folder-answer" role="status" aria-live="polite">This folder holds the state “Start”.</p>
+  <p class="save-note" id="folder-answer-note">If you replace it, the next save of restore-square replaces its files. The older contents stay in the Git history.</p>
+  <label class="checkbox-label" id="folder-move" hidden><input type="checkbox" checked> Bring this lab’s saved files along</label>
 
-  <div class="save-drawer-foot"><button type="button" class="save-quiet" data-folder-action="cancel">Cancel</button><button type="button" class="button primary" data-folder-action="save">Save here</button></div>
+  <div class="save-settings-foot" id="folder-foot">
+    <button type="button" class="button ghost small" data-folder-action="cancel">Cancel</button>
+    <button type="button" class="button secondary" data-folder-choice="take">Replace it</button>
+    <button type="button" class="button primary" data-folder-choice="beside">Save beside it in BGP/start/restore-square</button>
+  </div>
   <p class="save-note">Saved files can contain passwords or keys.</p>
 </div>
 ```
 
+- **`#folder-answer` is a live region and holds only the sentence** (review A1). The buttons that
+  answer a question are in `#folder-foot`, where **Save here** otherwise sits; the explanatory note is a
+  separate paragraph outside the region. A screen reader hears the question once; the buttons are the
+  next tab stops.
 - The tree is a real ARIA tree, not nested `<details>` as today (`app/static/git-places.js:142-143`):
   one tab stop, arrow keys inside (4.8). The twist is `aria-hidden` because the tree item carries
   `aria-expanded`; a mouse click on the twist toggles, a click on the row selects.
-- A mark is text, never colour alone: `This lab saves here`, `<Lab> saves here`, `Lab state: <Name>`,
-  `New` (a folder that is in no commit yet: never worded as existing in the repository). The classes
-  `git-tag`, `git-tag other`, `git-tag pending` exist (`app/static/style.css:818-829`); `git-tag state`
-  is new.
+- A mark is text, never colour alone, and is the answer's `mark` printed as given: `This lab saves
+  here`, `<Lab> saves here`, `Lab state: <Name>`, or nothing. A folder whose `exists` is false also
+  carries `New`: it is in no commit yet and is never worded as existing in the repository. The classes
+  `git-tag`, `git-tag other`, `git-tag pending` exist (`app/static/style.css:818-829`); `folder-state`
+  is the one new modifier.
 - In `location` and `state` mode the inside of a saved state is not listed (a folder a lab saves to
-  shows its other subfolders but not `latest`, `baseline`, `checkpoints`; a folder that holds
-  `manifest.json` is a leaf). Fewer rows, and the only way to point at such a folder is to type it, which
-  the notice of 4.5 answers. `browse` mode lists everything, with today's file listing
+  shows its other subfolders but not `latest`, `baseline`, `checkpoints`; a folder that holds a manifest
+  is a leaf). Fewer rows, and the only way to point at such a folder is to type it, which the answer
+  corrects (`adjusted: 'above-state'`, 4.5). `browse` mode lists everything, with today's file listing
   (`app/static/git-places.js:144-146`, `.git-listing`) under the tree for the selected folder.
 - Only open branches are rendered (today's rule, `app/static/git-places.js:143`), so a large repository
   costs what is on screen.
@@ -590,26 +698,30 @@ in `saveDrawer.draft` and restored.
 ### 4.4 Picking, typing, correcting
 
 - **Pick**: a click, Enter or Space on a row selects it and writes its path into the field.
-- **Type**: the field accepts any path. It is corrected as typed, the way the checkpoint name field
-  rewrites its own value and shows `Saved as: <name>` (`gitCheckpointName`,
-  `app/static/git-progress.js:584`; its `oninput`, `:599`):
+- **Type**: the field accepts any path. While the person types, the page echoes the correction the
+  backend will make, the way the checkpoint name field rewrites its own value and shows `Saved as:
+  <name>` (`gitCheckpointName`, `app/static/git-progress.js:584`; its `oninput`, `:599`):
 
   ```js
   // "Week 4//BGP lab/" → "Week-4/BGP-lab/"; the result line shows it without the trailing slash
   function folderClean(value)
   ```
 
-  per segment: whitespace becomes `-`, a character outside `A-Z a-z 0-9 _ . -` is dropped, leading
-  characters that are not a letter, digit or underscore are dropped, the segment is cut at 181
-  characters (the helper's segment rule, mirrored today by `gitFolderName`,
-  `app/static/git-places.js:12-16`); empty segments, `.`, `..` and `.git` are dropped; a leading slash is
-  dropped; one trailing slash survives while typing. The input's value is rewritten only when it
-  differs, with the caret kept at the same distance from the end. The result is always on screen in
-  `#folder-result` (`Saves go to Course-Labs › Week-4/BGP-lab`; `…› top level` for an empty path).
-  Nothing is ever thrown at the person: `gitFolderPath`'s errors (`app/static/git-places.js:23-29`,
-  `GIT_RESERVED_FOLDER_MESSAGE` `:22`) have no counterpart.
-- A typed path that exists selects that row and opens the way to it (`gitRevealFolder`); one that does
-  not exist shows a provisional row marked `New` at its place in the tree.
+  It mirrors `clean_folder()` (DESIGN.md 2.5 step 1): split on `/`, trim each part, replace every run of
+  characters outside `A-Z a-z 0-9 _ . -` by one `-`, strip what cannot start a name, drop empty parts,
+  turn `.git` into `git`. One trailing slash survives while typing. The input's value is rewritten only
+  when it differs, with the caret kept at the same distance from the end. It never refuses a character
+  and never throws: `gitFolderPath`'s errors (`app/static/git-places.js:23-29`,
+  `GIT_RESERVED_FOLDER_MESSAGE` `:22`) have no counterpart. The one validation left is the backend's: a
+  path longer than 500 characters, which the field's `maxlength` prevents.
+- **`folderClean` is only an echo.** It decides nothing about the folder. 250 ms after the last
+  keystroke the page posts `POST …/git/places/check {repository, folder, purpose}` and the answer's
+  `folder` replaces the echoed value in the field and in `#folder-result` (`Saves go to Course-Labs ›
+  Week-4/BGP-lab`; `… › top level` for an empty path). When the two differ, the backend's is shown; a
+  test pins that the page never sends its own corrected path as final without an answer for it (4.7). A
+  newer keystroke discards an older request's answer (`saveDrawer.request`).
+- A typed path that is a listed folder selects that row and opens the way to it (`gitRevealFolder`);
+  one that is not shows a provisional row marked `New` at its place in the tree.
 - **Open branches belong to the person.** `aria-expanded` and the rendered children come from
   `gitPlacesState.expanded` only (`app/static/git-places.js:8-10`, `:141-143`). A click on a twist,
   Left and Right change it (`gitToggleFolder`). A selection the person made adds the way to it and never
@@ -617,40 +729,79 @@ in `saveDrawer.draft` and restored.
   `:47`); the first display of a repository opens the way to the lab's own folder
   (`gitDefaultExpanded`, `:41`). No code path computes "open" from the selected path at render time.
   The test at `tests/test_git_places_ui.js:147` keeps this claim.
-- The same path field, without a tree, is the folder field of Connect by URL: `folderClean`, the result
-  line, no second validator.
+- The same path field, without a tree, is the folder field of Connect by URL: `folderClean` as the
+  echo, the result line, no second validator. The repository is not on the VM yet, so nothing can be
+  checked before the request; the place route's answer corrects the folder.
 
 ### 4.5 The one answer, and the questions as buttons
 
-The chooser asks the backend what a folder is and renders the answer; it decides nothing. For the
-selected path it shows one sentence and, at most, one question.
+The chooser asks the backend what a folder is and renders the answer; it decides nothing. The contract
+is DESIGN.md 2.5, 2.6 and 7.4 (restated in 4.7). For the selected path it shows one sentence and, at
+most, one question at a time.
 
-| Answer (`kind`) | Sentence in `#folder-answer` | Buttons |
+| Answer | Sentence in `#folder-answer` | Buttons in the foot |
 |---|---|---|
-| `free`, the folder exists | none (the result line is the statement) | **Save here** |
-| `free`, the folder does not exist | `<path> is new. It appears in the repository with the first save.` | **Save here** |
+| `free`, `exists` | none (the result line is the statement) | **Save here** |
+| `free`, not `exists` | `<folder> is new. It appears in the repository with the first save.` | **Save here** |
 | `free`, top level | `<lab> will save at the top level of <repo>.` | **Save here** |
-| `this` | `<lab> already saves here.` | **Keep saving here** (closes; nothing is sent, nothing is disabled) |
-| `lab` | `<Other lab> saves here too.` | **Save in <path>/<this lab>** (primary) · **Use this folder anyway**; note `If you use this folder anyway, <Other lab> is disconnected from it. Its saves stay as versions.` |
-| `state` | `This folder holds the state “<Name>”.` | **Save beside it in <path>/<this lab>** (primary) · **Replace it**; note `If you replace it, the older contents stay in the Git history.` |
-| `inside` | `<path> is part of a saved state, so <lab> saves in <folder above>, the lab folder above it.` | **Save here** (acts on the folder above; the result line shows that folder) |
+| `own` | `<lab> already saves here.` | **Keep saving here** (closes; nothing is sent, nothing is disabled) |
+| `own-before` | `<lab> saved here before and continues there.` | **Save here** |
+| `lab`, the identical folder (`collision` false) | `<Other lab> saves here too.` | **Save in `<beside>`** (primary) · **Use this folder anyway**; note `If you use this folder anyway, <Other lab> is disconnected from it. Its saves stay as versions, and a save of it that is still waiting stays part of the next upload.` |
+| `lab`, a collision (`collision` true) | `<Other lab> saves here too.`; note `<lab> gets a folder of its own inside it.` | **Save in `<beside>`** only |
+| `lab`, a collision with no connected lab (`lab` empty: a folder still in use on the VM that could not be released) | `This folder is already used for saves on the VM.`; the same note. This sentence is this file's proposal: DESIGN.md 2.6 words question 1 only with a lab's name | **Save in `<beside>`** only |
+| `state`, `layout: 'latest'` | `This folder holds the state “<Label>”.` | **Save beside it in `<beside>`** (primary) · **Replace it**; note `If you replace it, the next save of <lab> replaces its files. The older contents stay in the Git history.` |
+| `state`, `layout: 'flat'` | `This folder holds the state “<Label>”.` | **Save beside it in `<beside>`** (primary) · **Use this folder anyway**; note `If you use this folder anyway, the state “<Label>” stays listed: its files are stored directly in the folder and are not replaced.` |
 
-- When the answer is a question, its two buttons take the place of **Save here** in the foot: there is
-  one primary button on screen at any time, and choosing an answer is the confirmation (no extra click).
-- **A save of this lab still waits for upload** (any folder other than the current one): the confirm
-  button, whichever it is, is replaced by `A save of <lab> is still waiting to be uploaded: <the upload
-  sentence>.` with **Upload it, then move** (primary; it goes through `gitReviewJob` with that save's
-  review, so the single-sender rule and "nothing is uploaded without the sentence on screen" both hold),
-  **Move and keep that save on the VM only**, and **See changes**. When a folder question applies as
-  well, the folder question is answered first and the waiting-save choice follows in the same place.
-- **The lab already has saves and moves to another folder**: one tick box above the foot, ticked, `Move
-  the saves made so far into the new folder` (today's default, `app/static/git-progress.js:450`). Whether
-  moving stays optional is the lead's folder model (Q5); the chooser sends the tick as `move_files`.
-- While the request runs the confirm button reads `Saving here…` and the tree is inert (`aria-busy`).
-  On success the drawer goes back to Save settings (or closes, when it was opened from the header) and
-  the toast says `<lab> now saves to <repo> › <path>.` (today's toast, `app/static/git-progress.js:437`).
-- If the answer changed between display and click (another lab took the folder meanwhile), the request
-  comes back with the new answer and the chooser shows that question. It is never an error message.
+`adjusted` adds a sentence in front, whatever the kind, and the result line shows `folder`, never
+`typed`:
+
+| `adjusted` | Sentence |
+|---|---|
+| `corrected` | none: the field and the result line already show the corrected path |
+| `above-state` | `<typed> is part of a saved state, so <lab> saves in <folder>, the lab folder above it.` |
+| `beside-files` | `<typed> holds a folder named latest that the manager did not save, so <lab> saves in <folder>.` |
+
+- **The buttons are DESIGN.md 2.6, exactly.** Question 1 has two buttons only when the two labs want
+  the identical folder; for a collision (a folder of the other lab lies inside this folder's saved
+  states, or the reverse, or a registration of the checkout that could not be retired) it has the one
+  button. Question 2's second button reads **Replace it** only when the state has the `latest` layout;
+  for a `flat` one nothing can replace it, the button reads **Use this folder anyway** and the note says
+  that the state stays listed.
+- The page prints `beside` as given (`<folder>/<this lab>`, or `-2`, … when taken); it never builds
+  that path. `label`, `lab.name` and `mark` are printed as given, through `esc()`.
+- A click on a question's button is the confirmation: it posts `POST …/git/place` with `choice`
+  `'beside'` (the suggested folder) or `'take'` (*Use this folder anyway*, *Replace it*). **Save here**
+  posts `choice: ''`. There is one primary button on screen at any time.
+- **Question 3: a save of this lab waits** (`1 save of <lab> is waiting for upload.`). It appears when
+  the lab changes its folder or repository while a save of it waits, after a folder question was
+  answered, in the same place. Under the sentence the note shows what that upload sends (the sentence
+  of `saveChangeSentence` from `gitReviewData` for the waiting save; `Checking what this upload sends…`
+  until it arrived). Both answers go ahead:
+  - **Upload it, then move**: enabled once the review arrived, because the sentence must name
+    everything the upload carries before the click. The page calls `gitReviewJob(job, {upload: true})`,
+    the one upload function, and when the upload succeeded posts the place with `pending: ''`. A failed
+    upload leaves the lab where it was and shows the failure under the foot; nothing moved.
+  - **Move and keep that save on the VM only**: posts the place with `pending: 'keep'`. The lab moves.
+    The save is not dismissed: it keeps waiting and goes up with the next Upload (DESIGN.md 2.6, 3.4),
+    and the note under the button says so: `That save stays on the VM and stays part of the next
+    upload.`
+- **The line that brings the saved files along** (`#folder-move`, ticked, `Bring this lab’s saved files
+  along`; today's default, `app/static/git-progress.js:450`) is offered only when all three hold: the
+  lab has saved files in the folder it leaves, the new folder holds none, and every pending save of the
+  lab has a commit (DESIGN.md 2.6, review F12). When a save of the lab has not reached its commit the
+  line is replaced by the sentence `A save of this lab has not finished. Its files stay in <old
+  folder>.` The tick is sent as `move_files`. The move makes a commit of its own, which **waits for
+  Upload like a save** and is named in the upload sentence; it never uploads by itself.
+- While the request runs the pressed button reads `Saving here…`, the tree is inert (`aria-busy`) and
+  the header's Save is disabled with its reason (a place request of the lab runs, DESIGN.md 7.1). On
+  success the drawer goes back to Save settings (or closes, when it was opened from the header) and the
+  toast says `<lab> now saves to <repo> › <folder>.` (today's toast, `app/static/git-progress.js:437`);
+  after a move with files the chip reads `1 save to upload`.
+- If the answer changed between display and click (another lab took the folder meanwhile, a save
+  started waiting), the request comes back as `{question}` with status 200 and the chooser shows that
+  question. It is never an error message. A refusal the route still gives (the VM cannot be reached, the
+  kept-saves review of DESIGN.md section 1) is shown under the foot as the manager's sentence with
+  **Try again**.
 - The words `registration`, `prefix` and `overlap` appear in no string of the chooser; a Node test
   greps the markup of every answer and state for them.
 
@@ -660,67 +811,84 @@ selected path it shows one sentence and, at most, one question.
   sets one (today's is `app/static/git-places.js:156`). A Node test renders the chooser for every answer
   kind, for loading, empty, truncated, error and VM-unreachable, and asserts the button is present and
   enabled each time.
-- A click adds a row with a text field under the selected folder and focuses it; the field is corrected
-  as typed (`folderClean`; `/` makes nested folders in one step, as today,
-  `app/static/git-progress.js:457`). Enter (or **Add**) makes it the selection and puts it in the path
-  field; Escape removes the row. In `location` and `state` mode nothing is sent: the folder comes into
-  being with the save (Git keeps no empty folders), and it is marked `New` until then.
-- Inside a saved state it creates the folder in the lab folder above and says so in the answer area:
+- A click adds a row with a text field under the folder being looked at and focuses it; the field is
+  echoed as typed (`folderClean`; `/` makes nested folders in one step, as today,
+  `app/static/git-progress.js:457`). Enter (or **Add**) asks `…/git/places/check` for the path, adds the
+  answer's `folder` to the manager's list (`POST …/folders {prefix, plan: true}`, as today,
+  `app/git_progress.py:1184-1195`), makes it the selection and puts it in the path field; Escape removes
+  the row. The folder is marked `New` until a save puts a file in it (Git keeps no empty folders).
+- Inside a saved state it adds the folder in the lab folder above and says so in the answer line:
   `<selected> is part of a saved state, so the new folder is made in <folder above>.` The parent comes
-  from the answer (`use`), not from a rule in the page.
-- A name that already exists is not an error: that folder is selected and the status line says `<path>
+  from the answer (`adjusted: 'above-state'`, `folder`), not from a rule in the page.
+- A name that already exists is not an error: that folder is selected and the answer line says `<path>
   already exists. It is selected.` (today: an error, `app/static/git-progress.js:464`, and a 409,
-  `app/git_progress.py:1190-1191`).
-- In `browse` mode, where no save follows, the new folder is kept by the manager as today (`POST
-  …/folders {prefix, plan: true}`, `app/git_progress.py:1184-1195`) and listed with the mark `New`;
-  **Remove from the list** takes it away again (`DELETE …/folders`, `:1202-1214`).
+  `app/git_progress.py:1190-1191`; the route loses that refusal, DESIGN.md section 4).
+- When the list cannot be written (the VM cannot be reached), the typed path is still selected and put
+  in the field: a `free` folder that does not exist is created by the first save in any case. The
+  button itself is never the thing that fails.
+- **Remove from the list** (`DELETE …/folders`, `app/git_progress.py:1202-1214`) takes away a folder
+  made this way that holds nothing.
 
-### 4.7 Data contract (proposal for the lead)
+### 4.7 Data contract
 
-**NEEDS (backend) N6: one answer per folder.** `GET /api/git/repositories/{id}/tree?lab=<lab_id>` adds,
-for every folder of the repository (committed, planned, or a place a lab saves to):
+The contract is the lead's: DESIGN.md 2.5, 2.6, section 4 and 7.4. It is restated here because the
+chooser is built on nothing else.
 
-```json
-{"path": "BGP/start",
- "answer": {"kind": "state", "state": {"name": "Start"}, "choices": [{"id": "beside", "path": "BGP/start/restore-square"}, {"id": "replace"}]},
- "below":  {"kind": "inside", "use": "BGP"},
- "new": false}
-```
+**The answer for one folder**
 
-- `answer.kind` is exactly one of `free`, `this` (the asking lab saves here), `lab` (with `lab: {id,
-  name}`), `state` (with `state: {name}`), `inside` (with `use`: the folder that is used instead).
-- `choices` lists the answers the backend will accept for a question, with the path each leads to. The
-  page maps the ids to its fixed button texts and prints the path it was given; it never builds
-  `<folder>/<this lab>` itself.
-- `below` is the answer for a path that does not exist yet and whose nearest existing folder is this one
-  (`free`, or `inside` with `use`). With it the page answers any typed path with no further request and
-  no rule of its own: an existing path uses its own `answer`, a new one the `below` of its nearest
-  existing ancestor.
-- `new` is true for a folder that is in no commit (today's `planned`, `app/git_progress.py:1177`).
-- A folder registered on the VM that no lab uses is simply `free` (PROMPT 6.2, last row); today it is
-  marked "Lab folder" (`app/static/git-places.js:133`).
-- The marks in the tree, the sentence, the buttons, and the Lab states names of section 2 all read this
-  one object. That is what makes two contradicting texts on one screen impossible (the reported
-  "This lab folder is free" beside a greyed New folder came from two functions,
-  `gitFolderChoice` and `gitCanCreateIn`, `app/static/git-places.js:113`, `:121-128`).
+| Field | Values |
+|---|---|
+| `kind` | `free`, `own`, `own-before`, `lab`, `state` |
+| `folder` | the folder that will be used |
+| `typed` | what was asked |
+| `adjusted` | `''`, `corrected` (unsafe characters), `above-state` (the path was part of a saved state), `beside-files` (someone's own `latest` folder) |
+| `exists` | false for a folder that is in no commit; such a folder is never worded as being in the repository |
+| `label` | the state's name (kind `state`) |
+| `lab` | the other lab, `{id, name}` (kind `lab`) |
+| `layout` | `latest` or `flat` (kind `state`) |
+| `collision` | true when `kind` is `lab` because of a collision and not the identical folder: the question then has one button |
+| `beside` | the suggested alternative folder |
+| `mark` | the text beside the folder in the tree: `This lab saves here`, `<lab> saves here`, `Lab state: <name>`, or empty |
 
-**NEEDS (backend) N7: one request for "Save here".**
-`POST /api/labs/{lab_id}/git/place {repository, path, choice, pending, move_files, expect}` where
-`choice` is `''`, `beside`, `anyway` or `replace`, `pending` is `''`, `upload` (the page uploaded
-first) or `keep`, and `expect` is the `kind` the page showed. It answers `{saved, binding, job?}` or,
-when the situation is not the one shown or a choice is missing, `{question: <answer object>}` with
-status 200. It serves a lab without a save location (first place) and a lab with one (change), in the
-current or another repository, and replaces the page's sequences `POST …/folders` then `PUT …/git`
-(`app/static/git-progress.js:445`, `:526-527`) and `POST …/git/destination` (`:434`).
+**What the page sends**
 
-**NEEDS (backend) N8: every folder even in a large repository.** The helper stops at 4000 files
-(`MAX_TREE`, `app/host_git.py:37`, `:785`) and the tree answer only says `truncated`
-(`app/git_progress.py:1176`). The chooser needs the folders complete (they are few even when files are
-many), or it must tell the person to type.
+| Field | Values |
+|---|---|
+| `choice` | `''`, `beside`, `take` (*Use this folder anyway*, *Replace it*, *Continue there*) |
+| `pending` | `''`, `keep` (the page has uploaded first when the person chose *Upload it, then move*) |
+
+**Routes**
+
+| Route | Use |
+|---|---|
+| `GET /api/labs/{lab}/git/places?repository=<id>` | `repositories`, the `default` place (DESIGN.md 2.8), and for one repository the tree (`files`, `truncated`, `head`), `folders` with the answer of every listed folder, `own` and `states`. One request fills the Repository select, the tree, the marks and the answer of any row the person picks. |
+| `POST /api/labs/{lab}/git/places/check` `{repository, folder, purpose}` | the answer for a typed path, debounced (4.4). `purpose` is `''` for a save location and `'state'` for a lab state. |
+| `POST /api/labs/{lab}/git/place` `{repository or url, folder, choice, pending, move_files, node_names, acknowledge}` | applies the choice: `{saved, binding, job}`, or `{question}` with status 200 when a choice is needed or the situation is no longer the one shown. It serves a lab without a save location (first place) and a lab with one (change), in the current or another repository, and replaces the page's sequences `POST …/folders` then `PUT …/git` (`app/static/git-progress.js:445`, `:526-527`) and `POST …/git/destination` (`:434`). |
+| `POST /api/labs/{lab}/git/state` `{request_id, repository, folder, name, choice}` | a lab state (section 5): `{question}` or the job. |
+
+- The page sends what the person chose and nothing about what it showed. The route decides again with
+  the same function (`place_answer`) under the store lock, so a stale screen gets a `{question}`, never
+  a wrong write.
+- A picked row uses the answer the tree embedded for it; a typed path uses the answer of
+  `…/places/check`. Both are the same object from the same function, which is what makes two
+  contradicting texts on one screen impossible (the reported "This lab folder is free" beside a greyed
+  New folder came from two page functions, `gitFolderChoice` and `gitCanCreateIn`,
+  `app/static/git-places.js:113`, `:121-128`). If a listed folder's row carries less than the full
+  answer (DESIGN.md section 4 names `path`, `mark`, `kind`, `exists`), the page asks `…/places/check`
+  for it when it is picked, exactly as for a typed path; it never completes an answer itself.
+- A folder registered on the VM that no lab uses is `free` and carries no mark (PROMPT 6.2, last row);
+  today it is marked "Lab folder" (`app/static/git-places.js:133`).
+- **Every folder of a large repository is listed** (helper change H5): the helper's `browse` returns
+  `dirs`, every directory of the tree at HEAD, up to 20 000, so the folder tree is complete even when
+  the file list stopped at 4000 (`MAX_TREE`, `app/host_git.py:37`, `:785`). Only when `dirs_truncated`
+  is set does the note `#folder-tree-note` say `This repository is very large and not every folder is
+  listed. Type the path of a folder that is not shown.`; a typed path is answered by `…/places/check`
+  from the registrations and the manifest summaries, which the tree's cap does not limit.
 
 ### 4.8 Keyboard
 
-The field, the tree, New folder…, the answer buttons and the foot are five tab stops in that order.
+The field, the tree, New folder…, the bring-along tick box when it is offered, and the buttons of the
+foot (Cancel, then the answer's buttons or **Save here**) are the tab stops, in that order.
 
 | Key (focus in the tree) | Effect |
 |---|---|
@@ -741,10 +909,10 @@ re-render the way today's panel restores them (`app/static/git-places.js:190-205
 
 | State | What shows | Controls |
 |---|---|---|
-| Loading | `Loading folders…` (`role="status"`), the path field already usable | **Save here** waits with the visible reason `The folders are still loading.`; New folder… enabled |
+| Loading | `Loading folders…` (`role="status"`), the path field already usable | **Save here** waits with the visible reason `The folders are still loading.` beside it (plain text, not in the live region); New folder… enabled |
 | Empty repository | the top-level row only; `<repo> is empty. <lab> can save at the top level or in a new folder.`; the path field prefilled with the suggested folder (`gitSuggestedFolder`, `app/static/git-progress.js:484`) | all enabled |
-| Huge repository | open branches only are rendered; a branch with more than 200 folders shows the first 200 and **Show all 1,240 folders**; when the list was shortened: `This repository is large and not every folder is listed. Type the path of a folder that is not shown.` | all enabled; an unlisted path is answered by the save request (N7) |
-| Error (the VM answered with a reason) | `The folders could not be loaded.` and the manager's sentence; **Try again** | the path field and New folder… work; **Save here** sends the typed path and the backend answers |
+| Large repository | every folder is listed even when the file list was cut, through the helper's `dirs` (4.7); open branches only are rendered; a branch with more than 200 folders shows the first 200 and **Show all 1,240 folders**. Only when `dirs_truncated` is set: `This repository is very large and not every folder is listed. Type the path of a folder that is not shown.` | all enabled; a typed path is answered by `…/places/check` |
+| Error (the VM answered with a reason) | `The folders could not be loaded.` and the manager's sentence; **Try again** | the path field and New folder… work; a typed path is still checked, and **Save here** sends it: the place route answers with `{saved}` or `{question}` |
 | VM unreachable | `The lab VM cannot be reached, so its folders cannot be shown.`; **Try again**, **Check the VM connection…** (`openVmDialog`) | **Save here** disabled with that sentence as its reason and those two buttons beside it; New folder… enabled (it only writes the path) |
 | No repository on the VM | not a chooser state: the caller shows Connect by URL | |
 
@@ -752,8 +920,16 @@ re-render the way today's panel restores them (`app/static/git-places.js:190-205
 
 ## 5. "Save as a lab state…" (PROMPT 5.5, D9)
 
-Reached from the chip panel at rest and from the Lab states heading of All versions. It is the chooser
-in `state` mode with a name above the tree.
+The ruling is DESIGN.md 2.9. A lab state is a normal saved state in its own folder, written by a normal
+save that carries its own binding; the lab's own save location is not touched.
+
+Offered in three places, each of which calls `saveDrawerOpen('state')`:
+
+1. the chip panel at rest (its foot, [HEADER.md](HEADER.md) 5.1);
+2. the Lab states heading of All versions (2.3);
+3. the foot of the first-save view, for a lab without a save location (review R2, DESIGN.md 7.6).
+
+It is the chooser with a name above the tree.
 
 ```html
 <div class="folder-chooser" data-mode="state">
@@ -764,47 +940,77 @@ in `state` mode with a name above the tree.
     <button type="button" class="pill neutral" data-state-name="broken">broken</button>
     <button type="button" class="pill neutral" data-state-name="final">final</button>
   </div>
+  <label for="folder-repo">Repository</label>
+  <select id="folder-repo">…</select>                                     <!-- only for a lab without a save location, when the VM has more than one -->
   <label for="folder-path">Folder</label>
   <input id="folder-path" value="BGP/start" …>
   <p class="git-destination-line" id="folder-result"><span>The state is saved in</span><code>Course-Labs</code><span aria-hidden="true">›</span><code>BGP/start</code></p>
-  <details class="save-fold"><summary>Put it somewhere else</summary>…the tree and New folder… of 4.3…</details>
-  <div class="folder-answer" id="folder-answer" role="status" aria-live="polite"></div>
-  <div class="save-drawer-foot"><button type="button" class="save-quiet" data-folder-action="cancel">Cancel</button><button type="button" class="button primary" data-folder-action="save">Save state</button></div>
+  <details><summary>Put it somewhere else</summary>…the tree and New folder… of 4.3…</details>
+  <p class="folder-answer" id="folder-answer" role="status" aria-live="polite"></p>
+  <p class="save-note" id="folder-answer-note" hidden></p>
+  <div class="save-settings-foot" id="folder-foot"><button type="button" class="button ghost small" data-folder-action="cancel">Cancel</button><button type="button" class="button primary" data-folder-action="save">Save state</button></div>
   <p class="save-note">Reads every included device now. Saved files can contain passwords or keys. Where restore-square normally saves does not change.</p>
 </div>
 ```
 
-- The folder starts **beside the lab's own folder**: for a lab that saves to `BGP/restore-square` the
-  parent is `BGP` and the path is `BGP/<name>`. The path field follows the name until the person edits
-  the path or picks a folder in the tree; picking a folder makes it the parent. Selecting a folder that
-  already is a state fills the name from it.
-- The name is corrected as typed like a folder segment (`folderClean` on one segment). The three name
+- **The chooser starts in the lab's own folder**, so the default destination is `<lab folder>/<name>`:
+  `BGP/start` for a lab that saves to `BGP`, `BGP/restore-square/start` for one that saves to
+  `BGP/restore-square`, `start` for one that saves at the top level. This is the prompt's own example
+  with the default first-save folder (DESIGN.md section 6, review X5); the person can choose any other
+  folder. The path field follows the name until the person edits the path or picks a folder in the
+  tree; picking a folder makes it the parent, so the path becomes `<picked>/<name>`. Selecting a folder
+  that already is a state fills the name from it.
+- **A lab without a save location** chooses the repository in the same chooser: the Repository select
+  starts on the default repository of `GET …/git/places` (DESIGN.md 2.8) and the parent is that answer's
+  default folder for the lab (the folder its first save would use), so the destination is
+  `<default folder>/<name>`. Nothing connects the lab: the state's save carries its own binding. With no
+  repository on the VM the action leads to the first-save view's address field first.
+- The name is echoed as typed like one folder part (`folderClean` on one segment). The three name
   buttons fill it in one click; they are real buttons in a labelled group, and the pressed one carries
   `aria-pressed="true"`.
 - The tree is folded because the default place is right in the common case; **New folder…** is inside
   the fold, enabled.
-- Answers: `free` → **Save state**. `state` → `This folder holds the state “Start”.` with the choices
-  the backend lists for this purpose (**Replace it**, **Save beside it in …**) and the note about the
-  Git history. `lab` and `inside` → as in 4.5. The page shows what `choices` holds; which choices exist
-  for a state save is the lead's rule.
-- **Save state** closes the drawer and starts a save whose destination is that folder; the chip shows
-  *Saving* (`Saving the state Start…`), then the same upload sentence as any save, with **Upload** and
-  **Not now**. Toast when the files are written: `State Start saved in BGP/start.` The lab's own save
-  location, its chip text for its own saves and its Your saves list are untouched; the new state appears
-  under Lab states, here and in every lab that uses the repository.
-- A lab without a save location can still author a state: the chooser shows the Repository select; with
-  no repository on the VM the action leads to Connect by URL first.
-- **NEEDS (backend) N9**: a save whose destination is a folder other than the lab's own (PROMPT 6.4, 7.8):
-  the save route accepts `state: {repository, path, choice}`, answers a `{question}` like N7, and the job
-  carries its destination so the chip can name it.
+- The destination is checked like any typed path, with `purpose: 'state'`
+  (`POST …/git/places/check`), and the answers are those of DESIGN.md 2.9:
 
-Clicks: chip (1), **Save as a lab state…** (2), a name button or typing the name (3, or none), **Save
-state** (4). Three clicks plus a typed name, four with a name button; the upload afterwards is the same
-one click as after any save.
+  | Answer | Sentence | Buttons in the foot |
+  |---|---|---|
+  | `free` | none | **Save state** |
+  | `state` | `“Start” already exists here.` | **Replace it** · **Use another name** |
+  | `own` | `<lab> saves in <typed>, so the state is saved in <folder>.` | **Save state** |
+  | `lab` | `<Other lab> saves in <typed>, so the state is saved in <folder>.` | **Save state** |
+
+  For the lab's own folder and for another lab's folder the state goes to `<folder>/<name>`; the answer's
+  `folder` is that path, the result line shows it, and the sentence says so. There is no *Use this
+  folder anyway* for a state: a state never takes a lab's folder. **Use another name** sends nothing: it
+  moves focus to the name field and selects its text. **Replace it** posts the state route with
+  `choice: 'replace'`; the older contents stay in the Git history, and the note says so.
+- **Save state** posts `POST /api/labs/{lab}/git/state {request_id, repository, folder, name, choice}`.
+  The answer is the job, or `{question}` (status 200) when the folder is no longer what the screen
+  showed; the chooser then shows that question. `request_id` makes a repeated click the same save.
+- On the job the drawer closes; the chip shows *Saving*, then the same upload sentence as any save, with
+  **Upload** and **Not now**. Toast when the files are written: `State Start saved in BGP/start.` A
+  lab-state save counts as a save to upload and never as the lab's latest save (DESIGN.md 3.5, 7.1): the
+  lab's own save location, its *Saved* time and its Your saves list are untouched. The new state appears
+  under Lab states, here and in every lab that uses the repository, with `Not uploaded yet` until it is
+  uploaded.
+- While the state is being saved its folder is a `state` for every other request (review F11), so a lab
+  placed there at the same moment gets question 2 and not a second writer.
+
+Clicks: chip (1), **Save as a lab state…** (2), a name button (3), **Save state** (4). With a typed
+name it is three clicks and the name; each question the situation needs adds one. The upload afterwards
+is the same one click as after any save.
 
 ---
 
 ## 6. Removing the Progress tab (D1) and "Where everything goes" (PROMPT 5.11)
+
+This section is the specification of the removal as a whole. It is built by the owner of each file
+(DESIGN.md section 5): 6.1, 6.2 and 6.5 by the page-skeleton slice (`index.html`, `app.js`, `shell.js`,
+`style.css`); 6.3 by the header slice for `gitReviewJob`, `gitReviewData`, `gitSubmitSave` and
+`gitStartWatch` in the first wave, and by the tab-removal slice for everything else in the second wave,
+after the header, Load, drawer and chooser slices are merged; 6.4 by the owner of each file named; 6.6
+by the tab-removal slice.
 
 ### 6.1 Markup of `index.html`
 
@@ -812,11 +1018,12 @@ one click as after any save.
 |---|---|---|
 | `#lab-progress` in the status line | `app/static/index.html:73` | retired (PROMPT 5.1: the chip carries it); its writer at `app/static/app.js:103` goes with it |
 | `.git-save-control`: `#git-save-progress`, `details#git-save-menu`, its four items and the help pane | `:75` | replaced by the chip, Save and Load (header slice). `closeMenus` and `shellEscape` name `details#git-save-menu` (`app/static/shell.js:74`, `:130`, `:134`): the header slice drops or keeps those selectors with its markup |
-| banner buttons `#banner-retry-save`, `#banner-save-details`, `#banner-restore` | `:107` | ids stay (static children, addendum J3); their actions change (6.5) |
+| banner buttons `#banner-retry-save`, `#banner-save-details` | `:107` | removed with the two save banners of the lab banner (6.5; DESIGN.md 7.6); the addendum's J3 list is amended (6.6) |
+| banner button `#banner-restore` | `:107` | stays: the banner keeps what a load or an operation reports |
 | `#tab-progress` | `:109` | removed. The tab key handler and `showTab` iterate `PANELS` and `[data-tab]` (`app/static/app.js:316`, `:322`, `:332`), so removing the name from `PANELS` is enough |
 | `section#progress-view`, `#git-view` | `:137-149` | removed with everything inside |
-| status card `#git-progress-bar`: `#git-open-settings`, `#git-destination`, `#git-progress-status`, `#progress-save-reason`, `#git-last-restore` (+ `-text`, `-open`) | `:139-140` | retired: chip and chip panel. The destination with its Change… button: see Q1 |
-| `#progress-save`, **Create checkpoint…**, `#progress-more-button` and `#progress-more-menu` (Save on this VM only, Upload saved progress, Update from the repository, Set baseline…, Load a saved version…, Save location settings…) | `:141` | Save · Keep as a checkpoint · Save then Not now · Upload in the chip panel · Save settings › Git details · All versions › Use as starting point… · Load · Save settings |
+| status card `#git-progress-bar`: `#git-open-settings`, `#git-destination`, `#git-progress-status`, `#progress-save-reason`, `#git-last-restore` (+ `-text`, `-open`) | `:139-140` | retired: chip and chip panel. The destination with its Change… button becomes the line `Saves to: <repository> › <folder>` with **Change…** in the chip panel at rest (DESIGN.md 3.8, Q1 row) |
+| `#progress-save`, **Create checkpoint…**, `#progress-more-button` and `#progress-more-menu` (Save on this VM only, Upload saved progress, Update from the repository, Set baseline…, Load a saved version…, Save location settings…) | `:141` | Save · Keep as a checkpoint · Save then Not now · Upload in the chip panel · Save settings › Git details · All versions › Use as starting point… and Choose a backup as starting point… · Load · Save settings |
 | `#git-problem` | `:142` | chip *Can't save*; repeated in Save settings (3.1) |
 | Saved versions section, `#git-saved-versions` | `:144` | All versions drawer |
 | Recent saves section, `#git-recent`, `#git-saves-list` | `:145` | chip panel (newest), All versions rows and its Save activity fold |
@@ -828,8 +1035,9 @@ one click as after any save.
 Addendum J2 lists `git-progress-bar git-open-settings git-destination git-progress-status
 git-save-progress git-save-menu git-repository-refresh git-repository-content git-view` as load-bearing
 ids. They are load-bearing only for the wiring block at `app/static/git-progress.js:783-796`, which is
-rewritten; J2's own rule (every `$('id')` in the scripts exists in `index.html`) is the acceptance check
-after the removal, and the addendum needs a dated amendment (documentation slice).
+rewritten. All of them go except `git-save-progress`, which stays on the header's Save button. J2's own
+rule (every `$('id')` in the scripts exists in `index.html`) is the acceptance check after the removal
+and runs as a test; the dated amendment to the addendum is a work item of the tab-removal slice (6.6).
 
 ### 6.2 The router: old links land on the default tab with the chip panel open
 
@@ -838,7 +1046,9 @@ resolves an alias, then falls back to `topology` for an unknown name (`:62`); `s
 the tab (`:324`); `applyRoute` passes the hash's view to `selectLab` or `showTab`
 (`app/static/shell.js:41-43`) and writes the normalised route back (`:47`).
 
-Change, in `app.js` only:
+Change, in `app.js` only (page-skeleton slice). The function the router calls is
+`saveOpenPanel(kind)` of `save-header.js`, with `'status'` for the chip panel (`'load'` opens the Load
+panel and is not used by the router):
 
 ```js
 const PANELS=['topology','devices','tools','advanced'];
@@ -847,7 +1057,7 @@ const SAVE_VIEWS=['git','progress'];        // the removed Progress tab and its 
 let savePanelWanted=false;
 function setTab(value){if(SAVE_VIEWS.includes(value)){savePanelWanted=true;subview='';tab='topology';return;} …unchanged… }
 // last line of showTab():
-if(savePanelWanted&&typeof saveOpenPanel==='function'){savePanelWanted=false;saveOpenPanel();}
+if(savePanelWanted&&typeof saveOpenPanel==='function'){savePanelWanted=false;saveOpenPanel('status');}
 ```
 
 - `git` stays in `TAB_ALIAS` and `progress` joins it: stored-data compatibility, not dead code
@@ -874,14 +1084,16 @@ if(savePanelWanted&&typeof saveOpenPanel==='function'){savePanelWanted=false;sav
 ### 6.3 Functions of `git-progress.js`
 
 Consumers were searched in every script, `index.html`, the Node tests and the Playwright tools under
-`docs/*/tools`. "header", "save flow" and "load" mean the decision belongs to that slice; this table
-records what the Progress tab's removal requires.
+`docs/*/tools`. "header" and "load" mean the decision belongs to that slice; this table records what
+the Progress tab's removal requires. In the first wave only the header slice edits this file, and only
+`gitReviewJob`, `gitReviewData`, `gitSubmitSave` and `gitStartWatch`; every other row is the
+tab-removal slice's, in the second wave.
 
 | Function or constant (line) | Fate |
 |---|---|
 | `gitActiveStates`, `gitPendingStates` (6-7), `gitStateLabels`, `gitLabel` (8, 14), `gitSaveSentences`, `gitSaveSentence`, `gitSavePill`, `gitBadgeClass`, `gitSavedAs`, `gitUploadState` (9, 55-65) | keep: the save window (Details) and the Save activity fold use them |
 | `GIT_EXPOSURE_TEXT`, `GIT_EXPOSURE_ERROR` (10-11), `gitBindingChanged` (24) | retire with the tick box (D5). Used only by the form, Connect by URL and the first-save dialog (`:275`, `:299`, `:488`, `:496`, `:514`, `:522`) |
-| `gitContexts`, `gitLoads`, `gitLoadContext` (12, 138) | keep (`gitProblem` in `app/static/app.js:88` reads `gitContexts`) |
+| `gitContexts`, `gitLoads`, `gitLoadContext` (12, 138) | keep while Save settings reads them; `gitProblem` in `app/static/app.js:88` goes with the save banner (6.5), the chip reads `lab.git_status` instead |
 | `gitViewLab`, `gitViewRequest` (13), `gitShowRepository` (233), `gitFolderCollapsed` (251) | retire; `saveDrawerOpen` / `saveDrawerRefresh` take over. Callers to update: `app/static/app.js:324`, `app/static/git-places.js:174`, and the stubs in `tests/test_git_places_ui.js` |
 | `gitVersionRows`, `gitVersionTree` (13) | move into `saveDrawer.data` |
 | `gitJobTime`, `gitTime`, `gitWhen` (15-17), `gitLabJobs` (19), `gitRepository` (23), `gitRepoName` (26; also `app/static/restore.js:155`), `gitFolderWords` (29), `gitSnapshotPath` (34), `gitTargetPath`, `gitTargetLabel`, `gitMoveDone`, `gitMoveFolder` (47-53), `gitLabName` (432) | keep |
@@ -890,40 +1102,40 @@ records what the Progress tab's removal requires.
 | `gitDestination` (27) | header (it only feeds the Save button's title, `:200`) |
 | `gitLegacyDestinationNotice` (38) | keep, reworded; shown in Save settings |
 | `gitCompleteBackups` (67) | keep: decides whether Keep as a checkpoint and Use as starting point… are available |
-| `gitSavePayload`, `gitRequestId`, `GIT_REQUEST_REUSE_MS`, `gitNow`, `gitReusableRequest`, `gitSubmitSave` (71-72, 536-562) | keep (save flow) |
-| `gitLabelKey` … `gitValidateLabel` (77-88), `gitLabelDialog` (566) | save flow (D2): the dialog goes, the validation serves the rename |
+| `gitSavePayload`, `gitRequestId`, `GIT_REQUEST_REUSE_MS`, `gitNow`, `gitReusableRequest`, `gitSubmitSave` (71-72, 536-562) | keep; `gitSubmitSave` is the header slice's in the first wave |
+| `gitLabelKey` … `gitValidateLabel` (77-88), `gitLabelDialog` (566) | header (D2): the dialog goes, the validation serves the rename |
 | `closeDialogsExcept`, `gitFocusDialog` (92-104) | keep; `#save-drawer` is a dialog like the others for both |
 | `gitDestinationState`, `gitDestinationPill`, `gitDestinationMarkup`, `gitJobMarkup` (108-131) | keep (save window) |
 | `gitFilesDiffMarkup` (134) | keep: What changed and "See what’s different" |
 | `gitActionButtons` (144), `GIT_SAVE_HELP_ACTIONS` … `gitInsideMenu` (151-183), `gitSaveReason` (186), `renderGitProgress` (191) | header: the menu, its help pane and the status card go; `render()` calls `renderGitProgress` (`app/static/app.js:122`), so the name or its replacement must stay callable there |
 | `gitRenderLastRestore` (213) | retire: chip *Running* / *Partial* and What changed (5.11) |
-| `gitOpenRepository` (222) | keep the name, new body `saveDrawerOpen('settings')`. Consumers: the banner (`app/static/app.js:237`), `:769`, `:787`, `:517` |
+| `gitOpenRepository` (222) | keep the name, new body `saveDrawerOpen('settings')`. Consumers: `:769`, `:787`, `:517`; the banner's call (`app/static/app.js:237`) goes with the save banner (6.5) |
 | `gitFetchHistory`, `gitFetchTree` (231-232) | keep (drawer loaders) |
 | `gitRenderRepository` (252) | split into the pure `saveSettingsMarkup(id, context, catalog)` and its wiring in `save-drawers.js` |
-| `gitVersionsOwner`, `gitVersionGroups` (317-368) | keep in this file; gains the `saves` group; also feeds the Load panel |
+| `gitVersionsOwner`, `gitVersionGroups` (317-368) | retire in the second wave: the drawer and the Load panel read the states list and its `group` (2.2); their tests are rewritten on the list's rows (7.1) |
 | `gitVersionRowMarkup`, `gitRenderVersions`, `gitVersionAction` (369-403) | replaced by `saveVersionsMarkup` and the drawer's action dispatcher; `gitVersionsMarkup` (376) goes with them (`setMarkup` is always present on `/`) |
-| `gitRenderSaves`, `gitSavesAction` (406-422) | replaced by the waiting rows and the Save activity fold. The direct `{push: true}` for a save whose review already happened (`:420`) stays the Try again of the *Failed* chip |
-| `gitRenderAdvanced` (423) | keep; fills the same ids inside Git details |
-| `gitApplyDestination`, `gitUseFolder`, `gitNewFolder` (433-472) | replaced by the chooser (`folderSaveHere`, the inline new-folder row) |
+| `gitRenderSaves`, `gitSavesAction` (406-422) | replaced by the waiting rows and the Save activity fold. The direct `{push: true}` for a save whose review already happened (`:420`) goes: **Try again** of the *Upload failed* chip is an upload like any other, through `gitReviewJob(job, {upload: true})` with the reviewed `head` (DESIGN.md 3.4) |
+| `gitRenderAdvanced` (423) | keep; fills the same ids inside Git details; guarded, because those ids exist only while Save settings is rendered (6.6) |
+| `gitApplyDestination`, `gitUseFolder`, `gitNewFolder` (433-472) | replaced by the chooser in `git-places.js` (its `…/git/place` request, the inline new-folder row) |
 | `gitForgetFolder` (473) | keep (Remove from the list) |
 | `gitSwitchRepository` (477) | keep; lists repositories, continues in the chooser |
 | `gitSuggestedFolder` (484) | keep |
-| `gitConnectByUrl` (485) | keep; the path field and the sentence replace its folder field and tick box |
-| `gitFirstSave` (507) | header / save flow (F12 panel); its Browse… becomes `folderChooserOpen` |
+| `gitConnectByUrl` (485) | keep the dialog; the path field and the sentence replace its folder field and tick box, the request becomes `…/git/place` with `url`, and an empty repository gets **Start the repository** (3.1) |
+| `gitFirstSave` (507) | header (the first-save view of the chip panel); its Browse… becomes `saveDrawerOpen('chooser', {mode: 'location'})` |
 | `gitSaveProgress` (578) | keep the name: `operations.js` offers "Save progress first" through it (`app/static/operations.js:238-241`) |
 | `gitCheckpointName` (584) | keep (Keep as a checkpoint; the model for `folderClean`) |
-| `gitSaveOptions` (585) | retire, target by target: checkpoint → Keep as a checkpoint; local → Not now; baseline → Use as starting point…; its `allow_removed` tick box → Q4 |
-| `gitRememberJob` (611), `gitStartWatch` (682) | keep (`app/static/network-design.js:2137-2139`); the watch's automatic review (`:692`) becomes "open the chip panel" (header) |
+| `gitSaveOptions` (585) | keep for `baseline` only: it is **Choose a backup as starting point…** with its replace review (2.4, review F1). Its other targets retire: checkpoint → Keep as a checkpoint; local → Not now. Its `allow_removed` tick box goes: the value is always sent as true (DESIGN.md 3.3) |
+| `gitRememberJob` (611), `gitStartWatch` (682) | keep (`app/static/network-design.js:2137-2139`); `gitStartWatch` is the header slice's: its automatic review (`:692`) becomes "open the chip panel" |
 | `gitJobTitle`, `gitShowJob`, `gitRenderJob` (618-647) | keep: "Details opens today's save window"; one sentence reworded (6.4) |
 | `gitNeedsReview`, `gitUploadLabel` (652-653) | keep |
-| `gitReviewJob` (654) | reshaped: the sender only (1.4); its dialog becomes the What changed drawer; `gitReviewData` is new |
-| `gitDoneToast` (674) | save flow |
-| `gitDismissJob` (698) | keep, reworded (8.1) |
-| `gitJobLabel` (704), `gitPushPending` (705) | header: the banner's Retry calls `gitPushPending` (`app/static/app.js:240`); with the chip panel listing the waiting saves, its `git-pending-dialog` has no other caller |
-| `gitUpdateRemote`, `gitUnlink` (714-723) | keep; unlink gains the two buttons of 3.3 |
-| `gitHistory`, `gitOpenCommit` (724-742) | keep (Full history…) |
+| `gitReviewJob` (654) | header slice, first wave (DESIGN.md 7.3): with `{upload: true}` the only sender; without it it opens the What changed drawer, which replaces its dialog; `gitReviewData` is new beside it and holds the one review cache (1.4) |
+| `gitDoneToast` (674) | header |
+| `gitDismissJob` (698) | keep as it is: *Keep snapshot only* in the save window, reached through **Details** |
+| `gitJobLabel` (704), `gitPushPending` (705) | `gitPushPending` and its `git-pending-dialog` retire: the banner's Retry (`app/static/app.js:240`) was the only caller and goes with the save banners (6.5); the chip panel lists the waiting saves. `gitJobLabel` stays while the save window uses it |
+| `gitUpdateRemote`, `gitUnlink` (714-723) | keep; unlink keeps its one button, and its notice for a waiting save is reworded (3.3) |
+| `gitHistory`, `gitOpenCommit` (724-742) | keep (Full history…); a commit's view offers **Load this state…** (2.4, review F8) |
 | `gitCompareVersion` (743) | keep the request; renders into the drawer |
-| `gitViewVersion` (749) | keep the request; renders into the drawer as View files; its Apply button becomes **Load this state…** |
+| `gitViewVersion` (749) | keep the request; renders into the drawer as View files; its Apply button becomes **Load this state…** and calls `loadChoose`, also in the view of a commit opened from Full history, with a `git` source (2.4) |
 | `gitRunAction` (765) | keep as the dispatcher of `[data-git-repo-action]`; `settings` opens the drawer, `load` opens the Load panel, `browse` opens the chooser in `browse` mode, `history` unchanged |
 | load-time wiring (783-796) | rewritten: the two document listeners for the old menu (`:794-795`) go with it |
 
@@ -945,247 +1157,390 @@ not edited.
 |---|---|---|
 | `app/static/shell.js:183` | "…Check the devices under Progress › Save settings." | `The devices in this lab changed since the save location was set up. Open Save settings and choose the devices again.` (the banner action beside it opens the drawer) |
 | `app/static/network-design.js:887`, pinned by `tests/test_network_design_ui.js:695` | "Bind this lab to a repository under Progress first." | `Save this lab once first: the export goes to the lab's save location.` |
-| `app/static/network-design.js:2138` | `showTab('progress')` after an export started | `saveOpenPanel()` |
+| `app/static/network-design.js:2138` | `showTab('progress')` after an export started | `saveOpenPanel('status')` |
 | `app/static/git-progress.js:156`, `:158` | menu help: "Progress › More › Upload saved progress", "Opens Progress › Save location." | retired with the menu help (header) |
 | `app/static/git-progress.js:639` | "…its result appears under Progress › Recent saves." | `You can close this window. The save continues, and the save status in the lab header shows when it is done.` |
-| `app/static/git-progress.js:671` | "Not uploaded. … upload it from Progress › Recent saves when you are ready." | `Not uploaded. The save stays on the lab VM.` |
+| `app/static/git-progress.js:671` | "Not uploaded. … upload it from Progress › Recent saves when you are ready." | no toast: the chip says `1 save to upload` (DESIGN.md 7.6) |
 | `app/static/git-progress.js:695` | "Open the save under Progress › Recent saves to check it." | `The save status could not be refreshed. Open the save status in the lab header to check it.` |
 | `app/static/git-progress.js:127` | "No saves yet. Save progress saves every device chosen under Save settings." | `No saves yet. Save reads every device chosen in Save settings.` |
 | `app/static/git-progress.js:45` | "…open Change folder…, pick <x> and choose Save this lab here without moving the files." | `…open Save settings, choose Change folder…, pick <x> and choose Save here.` |
 | `app/static/git-progress.js:447`, `:481` | "Now tick the devices to include and choose Connect." / "Choose the folder, then tick the devices under Save settings." | retired (one request connects) |
 | `app/static/index.html:335` | "Backups kept on this VM by the manager. Progress saved to Git is under the Progress tab." | `Backups kept on this VM by the manager. What you saved with Save is under All versions.` |
-| `app/static/app.js:237` | banner "Saving to Git is not possible right now." with **Save location settings** | the chip's *Can't save* (5.11); if the banner line is kept its button reads **Save settings** and opens the drawer |
+| `app/static/app.js:237` | banner "Saving to Git is not possible right now." with **Save location settings** | removed with the banner (6.5): the chip's *Can't save* carries the sentence and its actions |
 | `app/static/operations.js:145`, `:238` | "Save progress first" | `Save first` (the button runs Save) |
-| `app/git_progress.py:291` | "Open <lab> › Progress, review and upload that save, then …" | `Open <lab> and upload that save, then …` (and structured, N2) |
+| `app/git_progress.py:291` | "Open <lab> › Progress, review and upload that save, then …" | gone with the refusal: another lab's waiting save no longer stops a save or an upload (DESIGN.md section 1, 3.4) |
 | `app/git_progress.py:691` | "Open this move under Progress › Recent saves and choose Review and upload…" | `Open the save status in the lab header and choose Upload: what the upload sends is named before anything is uploaded.` |
-| `app/git_progress.py:610`, `app/discovery.py:669` | "Finish pending Git saves, or choose Keep snapshot only in Git history before continuing." | `A save is still waiting to be uploaded. Upload it, or keep it on the VM only, then try again.` |
+| `app/git_progress.py:610`, `app/discovery.py:669` | "Finish pending Git saves, or choose Keep snapshot only in Git history before continuing." | the guard leaves `link`, `destination`, `connect` and `unlink` (DESIGN.md 3.1); where it remains: `A save is still waiting to be uploaded. Upload it, or open its Details and choose Keep snapshot only, then try again.` |
 | `app/git_progress.py:1232` | "…Choose its devices again under Save settings, then change the folder." | `…Open Save settings, choose its devices again, then change the folder.` |
 | `app/git_progress.py:1256` | "…Open Change folder again." | `…Choose the folder again.` |
 | `app/git_progress.py:1262` | "(Use a different repository… on the Save location card)" | `(Use a different repository… in Save settings)` |
 | comments only | `app/static/git-progress.js:4`, `app/static/git-places.js:163`, `app/static/restore.js:349`, `app/static/style.css:2461` | reworded when the line is touched |
 
-The Python messages are the lead's (several disappear with the folder rules); Python tests that pin them
-move with them.
+The messages inside `app/git_progress.py` are the save-model slice's (several disappear with the folder
+rules); the Python-emitted texts outside it are the tab-removal slice's. Python tests that pin them move
+with them.
 
 ### 6.5 Lab banner and home card
 
-- Banner, restore running or finished: **View progress** / **Details** → `restoreShowJob`
-  (`app/static/app.js:222`, `:226`): unchanged, it is "today's job window".
-- Banner, save location problem: **Save location settings** → `gitOpenRepository`
-  (`app/static/app.js:237`): the function now opens the Save settings drawer on the current tab.
-- Banner, save needs attention: **Retry** → `gitPushPending` (`:240`) becomes `saveOpenPanel()` (the
-  panel holds **Try again** / **Upload**); **Details** → `gitShowJob` (`:241`) unchanged.
+- **The two save banners of the lab banner are removed** (DESIGN.md 7.6): "save location problem"
+  (`app/static/app.js:237`, with **Save location settings**) and "save needs attention"
+  (`app/static/app.js:240-241`, with **Retry** and **Details**). The chip carries both: *Can't save*
+  with its sentence and actions, *Upload failed* and `N saves to upload` with **Upload** and
+  **Details**. Their buttons `#banner-retry-save` and `#banner-save-details` leave `index.html` and
+  `BANNER_BUTTONS` (`app/static/app.js:12`); `gitPushPending` and its `git-pending-dialog` lose their
+  only caller and retire (6.3).
+- **The banner keeps what a load or an operation reports**: operation running or failed, a restore
+  running, read back after a restart, finished needing attention or partial (**View progress** /
+  **Details** → `restoreShowJob`, `app/static/app.js:222`, `:226`: "today's job window"), a design
+  apply reading devices back, login and credentials, starting, stopped, VM unreachable, not matched.
+  `#banner-restore` stays.
 - Home card: it has no link to the tab; its click opens the lab on the default tab. Its saved line
   (`homeSavedLine`, `app/static/home.js:7-14`) reads the chip's status function (PROMPT 5.2), so the
   card says what the chip says (`tests/test_home_ui.js:29`, `:31` are rewritten for the new strings).
+
+### 6.6 The amendment to the binding UI contract (work item of the tab-removal slice)
+
+`docs/redesign/DESIGN-SPEC-ADDENDUM.md` is the binding UI contract, and this work supersedes more of it
+than one id (review B1). The tab-removal slice adds a dated section to that file, **"Amendment
+2026-10: Git save and load redesign (owner decisions D1 to D9)"**, which lists, item by item, what the
+owner decisions supersede and what replaces it. It does not rewrite J2 to J6 in place: those stay as the
+record of what was built.
+
+| Addendum item | Superseded | Replaced by |
+|---|---|---|
+| **J2**, load-bearing ids | These ids go from `index.html` and from the scripts: `git-progress-bar`, `git-open-settings`, `git-destination`, `git-progress-status`, `git-save-menu`, `git-repository-refresh`, `git-repository-content`, `git-view`. `git-save-progress` stays, on the header's Save button (HEADER.md 1.2). | New load-bearing ids: `save-control`, `save-chip`, `save-panel`, `save-panel-body`, `save-live` and the Load button's and panel's ids (HEADER.md 1.2, LOAD.md), `save-drawer`, `save-drawer-title`, `save-drawer-meta`, `save-drawer-actions`, `save-drawer-content`, `save-drawer-back`, `save-drawer-close`, `save-drawer-status`. |
+| **J2**, the rule | unchanged, and made a test: every `$('id')` in the static scripts exists in `index.html`, or is an id that a script's own markup string writes (the `git-advanced-*` values of Git details, the chooser's `folder-*` ids), in which case the function that reads it is guarded | test R4 of 7.2 |
+| **J3**, "Header, banner, tabs and menus are never re-rendered with innerHTML" | **Exception: the panel bodies.** `#save-panel-body`, the Load panel's body and `#save-drawer-content` are written with `setMarkup` on the poll (it writes only when the markup changed, so focus and scroll stay). Everything around them stays static: the chip is two spans that get `textContent` and `className`, the drawer's head gets text and `hidden` only. | HEADER.md 1.2, 2.4; this file 0.1 |
+| **J3**, the banner | Static children `#banner-retry-save` and `#banner-save-details` go; the priorities "save location problem" and "save needs attention" go from the banner's order | the chip (6.5) |
+| **J3**, the `_markup` diff list | `#git-saved-versions` goes | `#save-drawer-content`, `#save-panel-body` |
+| **J3**, the tablist | The Progress tab and its panel go; `PANELS` has four names | 6.2 |
+| **J4**, "Only `#git-save-menu` stays a `details`" and "Header split-menu items (4)" | The split menu and its four items go. The chip panel and the Load panel are not menus: `role="dialog"` panels with `data-panel` and `data-panel-focus`, opened by `initPanel` (HEADER.md section 2), outside J4's menu contract except for `closeMenus()` and the Escape order, which they join. | HEADER.md section 2 |
+| **J6**, first save | The dialog "Where should <lab>'s progress be saved?", its acknowledgement tick box and its two-request sequence go | the first-save view of the chip panel and `POST …/git/place` (HEADER.md section 6) |
+| **J6**, quiet saves | "header/status card/toast carry the phases" and the job dialog that opens by itself for `review_pending` and the failure states go | the chip, its panel opening by itself (HEADER.md 2.5), and **Details** for the job window |
+| **J6**, checkpoint names | The checkpoint dialog with its note field goes | *Keep as a checkpoint* on a save (2.4); the sanitising rule stays (`gitCheckpointName`) |
+| **J6**, saved versions grouping (F5) | "Latest · Checkpoints · Baseline · Instructor and reference versions · Other labs" from the tree | Your saves · Checkpoints · Starting point · Lab states · Other labs, from the states list (2.2) |
+| **J6**, lifecycle confirmations | `[Save progress first]` | **Save first**; the last-save sentence comes from `saveChipState` |
+| **J5**, `progressState`, `savedVersionName` | The header no longer reads `progressState`; `savedVersionName`'s "Final state (instructor)" names go | `saveChipState`, and the name rule of DESIGN.md 3.8 (N3) |
+
+Two code items belong to the same work item:
+
+1. **J2's grep check runs as a test** (R4): `grep -o "\$('[a-z0-9-]*')"` over `app/static/*.js`, diffed
+   against the ids of `index.html` plus the ids found in `id="…"` literals of the scripts. It fails on
+   any id that is in neither.
+2. **`gitRenderAdvanced` is guarded** (`app/static/git-progress.js:423-431`). It fills
+   `#git-advanced-push-url`, `-branch`, `-owner`, `-path`, `-status` and `-account`, which after the
+   removal exist only while Save settings is the drawer's content. Its first line becomes
+   `if(!$('git-advanced-status'))return;`, and Save settings calls it after its markup was written. A
+   test calls it with no such element and expects no throw.
 
 ---
 
 ## 7. Tests
 
+Ownership follows DESIGN.md section 5: `tests/test_save_drawers_ui.js` is the drawer slice's,
+`tests/test_git_places_ui.js` the chooser slice's, `tests/test_git_progress_ui.js`,
+`tests/test_home_ui.js` and every test that pins the tab the tab-removal slice's,
+`tests/test_shell_ui.js` and the router tests the page-skeleton slice's. New test files reach CI only
+through the explicit list in `.github/workflows/release-check.yml` (lead).
+
 ### 7.1 Existing Node tests that pin this slice's surfaces
 
 A test whose subject an owner decision removes is rewritten to assert the new behaviour; none is deleted.
 
-`tests/test_git_places_ui.js`
+`tests/test_git_places_ui.js` (chooser slice)
 
 | Test (line) | Asserts today | Afterwards | Decision |
 |---|---|---|---|
-| folder rules: own, other lab, inside, managed, unused, root versus subfolders (29) | twelve outcomes of `gitFolderChoice` and `gitCanCreateIn`, most of them refusals | the same fixtures, each mapped to its answer kind and buttons: own → `this` / Keep saving here; other lab → `lab` with both choices; inside another lab's folder → `free`; top level → `free`; `bgp/latest` → `inside`, uses `bgp`; nothing refuses | D8 |
-| selecting a snapshot folder named latest resolves to its parent; any other snapshot folder is refused outright (52) | `target` is the parent; another snapshot folder is refused | `latest` → `inside` with `use`; another saved state → the `state` question with its two buttons | D8 |
-| a folder below a saved configuration is refused too (70) | refusal naming the ancestor | `inside`: the sentence names the folder above and **Save here** acts on it | D8 |
-| folder names are literal single segments (83); nested folder helpers validate each segment and preview the full destination (248) | `gitFolderName` / `gitFolderPath` throw; `gitDestinationPreview` | `folderClean` corrects the same inputs and never throws; the result line shows the same destinations | D8 |
-| latest, baseline and checkpoints are reserved names inside a lab folder (261) | `gitFolderPath` throws the reserved-name message | typing such a path yields the `inside` notice from the nearest folder's `below`; a `latest` segment higher up stays an ordinary name | D8 |
-| the browser markup escapes names and labels and explains each folder (93) | escaping; `data-git-places-action="new" disabled`; `use disabled` with "already saves here" | escaping of names, lab names and state names in tree, marks, result line and answer; no `disabled` on New folder… or the primary button for any answer | D8 |
-| an empty folder made through the manager stays in the tree, is told apart from a saved one, and can be chosen (108) | `pending` rows, "not in the repository until the first save" | the mark `New`; never worded as existing | unchanged claim |
-| New folder: a connected lab plans the folder without moving, a duplicate is refused before any request, an unconnected lab still registers (128) | three requests; a duplicate throws | New folder… adds the selection with no request in `location` mode; a duplicate selects the existing folder; `browse` mode still sends `{plan: true}` | D8 |
+| folder rules: own, other lab, inside, managed, unused, root versus subfolders (29) | twelve outcomes of `gitFolderChoice` and `gitCanCreateIn`, most of them refusals | the same fixtures, each as the answer the backend gives it, and the markup for it: own → `own` / Keep saving here; another lab's very folder → `lab` with two buttons; a collision → `lab` with `collision` and one button; inside, above or beside another lab's folder → `free`; top level → `free`; nothing refuses | D8 |
+| selecting a snapshot folder named latest resolves to its parent; any other snapshot folder is refused outright (52) | `target` is the parent; another snapshot folder is refused | `bgp/latest` → `adjusted: 'above-state'`, `folder: 'bgp'`, the sentence names both; another saved state → the `state` question with its two buttons | D8 |
+| a folder below a saved configuration is refused too (70) | refusal naming the ancestor | `adjusted: 'above-state'`: the sentence names the folder above and **Save here** acts on `folder` | D8 |
+| folder names are literal single segments (83); nested folder helpers validate each segment and preview the full destination (248) | `gitFolderName` / `gitFolderPath` throw; `gitDestinationPreview` | `folderClean` echoes a correction for the same inputs and never throws; the result line shows the answer's `folder` | D8 |
+| latest, baseline and checkpoints are reserved names inside a lab folder (261) | `gitFolderPath` throws the reserved-name message | typing such a path shows the `above-state` sentence from the answer of `…/places/check`; a `latest` part higher up that is no saved state stays an ordinary name (the answer says `free`) | D8 |
+| the browser markup escapes names and labels and explains each folder (93) | escaping; `data-git-places-action="new" disabled`; `use disabled` with "already saves here" | escaping of names, `lab.name`, `label`, `mark` and `beside` in tree, marks, result line, sentence and buttons; no `disabled` on New folder… or the primary button for any answer | D8 |
+| an empty folder made through the manager stays in the tree, is told apart from a saved one, and can be chosen (108) | `pending` rows, "not in the repository until the first save" | `exists: false` shows the mark `New`; never worded as existing | unchanged claim |
+| New folder: a connected lab plans the folder without moving, a duplicate is refused before any request, an unconnected lab still registers (128) | three requests; a duplicate throws | New folder… asks the check, then sends `{prefix, plan: true}` for the answer's `folder` and never a move or a registration; a duplicate selects the existing folder | D8 |
 | the outline opens and closes by the student's own state (147); the folder panel keeps branches, selection and focus across a refresh (176) | `expanded` rules; focus and scroll restored | unchanged claims, asserted on `role="tree"` markup and `aria-expanded` | none |
-| the connected card names the folder path and offers the switch and disconnect actions (205) | the Save location card's markup | `saveSettingsMarkup`: the destination line, `data-git-repo-action` switch, connect, unlink, and **Change folder…** | D1 |
-| Save location opens with the folder browser unfolded, keeps a deliberate fold per lab, and names its Git details (213) | `details#git-change-folder` open / folded; "Git repo details", "Registration details" | Change folder… is a button that opens the chooser; one fold **Git details** holds push destination, branch, account, path, status | D1 |
 | choosing a folder in a repository the lab is not connected to prepares the form instead of moving (234) | register, then preselect in the form | **Save here** in another repository sends one `place` request with that repository | D5, D8 |
-| Apply to running lab sends the exact resolved snapshot path to onApply (302) | the path given to `onApply` | `browse` mode: **Load this state…** hands the same exact path to `loadState` | D4 |
-| saved versions come from the repository tree … apply only where one exists (317) | `gitRenderVersions` output | the drawer's markup from the same groups; Load offered only where the state can be loaded | D1 |
-| recent saves rows explain each save and offer upload or keep-snapshot-only while one is pending (353) | `gitRenderSaves` rows | waiting rows in Your saves offer **Upload…**; other jobs sit in the Save activity fold and open the save window | D1, D3 |
+| Apply to running lab sends the exact resolved snapshot path to onApply (302) | the path given to `onApply` | `browse` mode: **Load this state…** hands the same exact path to `loadChoose` in a five-key source | D4 |
 | tree model (15), path chips (24), sizes (89), saved-configuration detection (268), move jobs (228) | pure helpers | unchanged; `gitPathChips` goes with the breadcrumbs unless `browse` mode keeps them, then the test stays as is | none |
 
-`tests/test_git_progress_ui.js`
+Three tests of that file pin markup that moves to `save-drawers.js`; the chooser slice hands them to the
+drawer slice, which keeps each claim in `tests/test_save_drawers_ui.js`:
+
+| Test (line) | Afterwards |
+|---|---|
+| the connected card names the folder path and offers the switch and disconnect actions (205) | `saveSettingsMarkup`: the destination line, `data-git-repo-action` switch, connect, unlink, and **Change folder…** |
+| Save location opens with the folder browser unfolded, keeps a deliberate fold per lab, and names its Git details (213) | Change folder… is a button that opens the chooser; one fold **Git details** holds push destination, branch, account, path, status |
+| saved versions come from the repository tree … apply only where one exists (317); recent saves rows explain each save and offer upload or keep-snapshot-only while one is pending (353) | the drawer's rows from the states list, Load offered only where `view_only` is false; waiting rows offer **Upload…** and **Details**, and the save window that **Details** opens still offers *Keep snapshot only* |
+
+`tests/test_git_progress_ui.js` (header slice for the three functions of the first wave, tab-removal slice
+for the rest)
 
 | Test (line) | Asserts today | Afterwards | Decision |
 |---|---|---|---|
-| a changed registered destination requires export acknowledgement even with the same binding ID (88) | `gitBindingChanged` drives a required tick box | the chooser shows `Saved files can contain passwords or keys.` beside the confirm button in `location` and `state` mode | D5 |
+| a changed registered destination requires export acknowledgement even with the same binding ID (88) | `gitBindingChanged` drives a required tick box | the chooser shows `Saved files can contain passwords or keys.` beside the confirm button in `location` and `state` mode, and the place request carries `acknowledge` | D5 |
 | repository selection identifies the verified remote URL and branch (95); connected repository displays the push URL as escaped text (101) | `gitRegisteredDestination`; escaped push URL on the card | the same strings inside Git details | D1 |
-| the review before an upload is mandatory … only its button uploads (170) | every upload of an unreviewed save goes through the review window; one sender | `gitReviewJob(job, review)` is the only sender; it refuses without this job's review; the panel's and the drawer's Upload both call it | D3 |
+| the review before an upload is mandatory … only its button uploads (170) | every upload of an unreviewed save goes through the review window; one sender | `gitReviewJob(job, {upload: true})` is the only sender; it sends the reviewed `head` to `upload_job`; the panel's and the drawer's Upload both call it | D3 |
 | the save location form no longer offers to skip the review (196) | no `review_before_push` control or field | same claim on `saveSettingsMarkup` and its request | none |
 | single-job review requests parent-versus-saved changes (236) | `compare {job_id}` | `gitReviewData` sends the same request | D3 |
-| saved versions list every snapshot folder … (294), top-level lab folder (330), lab at the repository root (343), root snapshot uses "/" (355) | `gitVersionGroups` | unchanged, plus the `saves` group | none |
+| saved versions list every snapshot folder … (294), top-level lab folder (330), lab at the repository root (343), root snapshot uses "/" (355) | `gitVersionGroups` | the same folders as rows of the states list with their `group`; the drawer and the Load panel render them by `group` and never regroup (2.2). The grouping rule is tested with `state_rows` in `tests/test_git_places.py` | D1 |
 | gitReviewJob's "Open the full saved version" opens the job's own snapshot path (386) | the path it requests | What changed › **View files** requests the same path | D3 |
-| the Full history… dialog opens a saved version with the leading slash (400); gitViewVersion falls back to a slash-free label (413) | request and label | unchanged; rendered into the drawer | none |
+| the Full history… dialog opens a saved version with the leading slash (400); gitViewVersion falls back to a slash-free label (413) | request and label | unchanged, plus: the commit's view offers **Load this state…** with a `git` source | none |
 | gitLegacyDestinationNotice … (423); a legacy binding shows the notice on the Save location card (435) | sentence; placement under the destination line | new sentence; placement under the destination line of Save settings | D1 |
 | the review dialog for a design export says "Design export…" (536) | dialog title | the drawer's title for `kind: design` | D3 |
-| a folder move kept on the VM … is uploaded through the review that names them (566); the review counts the saves an upload carries … (596); the review names the saves kept with Keep snapshot only (612) | sentences from `also_sends*`, `upload_blocked` | the same facts in the drawer's `#save-changes-also` and the blocked state; the single-sender call unchanged | D3 |
-| the disabled reason of Save progress is visible text … (286); the three menu tests (48, 66, 75); the last configuration change skips a restore still read back (649); one-click save asks for a label first (134); an empty or over-length label is refused (151) | status card, menu, label dialog | header and save-flow slices rewrite them (chip state function, optional label) | D1, D2 |
+| a folder move kept on the VM … is uploaded through the review that names them (566); the review counts the saves an upload carries … (596); the review names the saves kept with Keep snapshot only (612) | sentences from `also_sends*`, `upload_blocked` | the same facts from the `also_sends` rows: each carried save, kept ones included, is named in the sentence and is a group of the drawer; a folder move never uploads by itself; there is no blocked state | D3 |
+| the disabled reason of Save progress is visible text … (286); the three menu tests (48, 66, 75); the last configuration change skips a restore still read back (649); one-click save asks for a label first (134); an empty or over-length label is refused (151) | status card, menu, label dialog | header slice (chip state function, optional name) | D1, D2 |
 
 Other files: `tests/test_shell_ui.js:87-88` stays as it is (the shell passes `progress` through);
 `tests/test_network_design_ui.js:695` gets the new sentence; `tests/test_home_ui.js:29`, `:31` follow the
-chip's strings (header slice).
+chip's strings.
 
 ### 7.2 New Node tests
 
-`tests/test_save_drawers_ui.js` (new; `status.js`, `diff-view.js`, `git-progress.js`, `git-places.js`,
-`save-drawers.js` in one context, the harness of `tests/test_git_progress_ui.js`):
+**Removed from the earlier draft**, with the states they pinned (review D2; DESIGN.md 3.1, 3.4): test 3
+(Upload blocked: disabled button and **Open <lab>**), test 7 (the waiting-save state of Save settings
+with its disabled button and two actions) and test 8 (disconnect offers two buttons and dismisses before
+unlinking). The rest of what test 7 covered (the Save settings markup) is D10 below; D4 and D11 assert the
+opposite of the removed states.
 
-1. `saveChangeAccount`: for a latest save, a checkpoint save, a baseline, a lab state, a Junos rename, a
-   removed device and a map-only change, entries plus rest equal `changed_files`; a restore artifact
-   never opens a second entry; a file without a role is listed as other.
-2. What changed markup: one entry per device, topology and map titled in words, Upload and Not now in
-   the head, the passwords sentence, the also-sends sentence; names, notes and diff text escaped.
-3. Upload blocked: the button is disabled, the reason is visible text and **Open <lab>** is present.
-4. Single sender: the string `reviewed:true` occurs once in the static scripts, inside `gitReviewJob`;
-   the drawer's and the panel's Upload reach it; without a review of the same job it throws and sends
-   nothing.
-5. All versions markup: the group order; a row opens in place with the four actions; own saves add the
-   two; the newest own save has no "See what’s different"; a design export has only View files and
-   Download ZIP; a state without restore files shows `View only` with the reason as text; empty groups;
-   the open row survives a re-render.
-6. Use as starting point: the request carries `backup_job_id`, `replace_baseline` and
-   `expected_baseline` exactly as `gitSaveOptions('baseline')` does today; without a kept capture the
-   reason is visible.
-7. Save settings markup: the F15 controls, one Git details fold with the `git-advanced-*` ids, the
-   waiting-save state (reason and its two buttons), the no-location and no-repository states.
-8. Disconnect with a waiting save offers the two buttons and sends dismiss before unlink.
-9. One drawer: opening a second kind replaces the first; Back and Escape go one level; the drawer
-   closes on a lab change.
+`tests/test_save_drawers_ui.js` (new, drawer slice; `status.js`, `diff-view.js`, `git-progress.js`,
+`git-places.js`, `save-drawers.js` in one context, the harness of `tests/test_git_progress_ui.js`):
 
-`tests/test_git_places_ui.js` (existing file, extended):
+- **D1** `saveChangeAccount`: for a latest save, a checkpoint save, a starting point, a lab state, a
+  Junos rename, a removed device, a folder move and a map-only change, entries plus rest equal
+  `changed_files`; every role (`device`, `restore`, `topology`, `map`, `manifest`, `other`) has its
+  entry; a `restore` row is a line under its device and never a second entry; a row without a role is
+  listed as `other`; a path of `changed_files` that no row covers appears under `rest`.
+- **D2** What changed markup: one entry per device, topology and map titled in words, `Save details`
+  for the manifest, Upload / Not now / View files in the head, the `To:` line from the save's frozen
+  destination (not the lab's current folder), the passwords sentence; names, notes and diff text escaped.
+- **D3** Also in this upload: one group per `also_sends` row, older and newer, own and other labs'; a
+  row with `job_id` asks `gitReviewData` for that job when opened and shows its entries; a row without
+  one shows its subject and its paths and asks nothing; an uploaded save shows no such heading.
+- **D4** Upload: the drawer's Upload calls `gitReviewJob(job, {upload: true})` and nothing else; the
+  string `reviewed:true` occurs once in the static scripts, inside `gitReviewJob`; `save-drawers.js`
+  defines neither `gitReviewData` nor a cache and contains no `fetch` of `/git/compare` (source-level);
+  after a 409 the drawer re-renders from the new review with the sentence and Upload enabled; with
+  `upload_job` null there is no Upload button and the sentence is shown.
+- **D5** Not now sends `saveAction('not-now', …)`, closes the drawer and shows no toast.
+- **D6** All versions markup: the group order (Your saves, Checkpoints, Starting point, Lab states,
+  Other labs, Save activity) and no "Everything else" fold; rows come from the states list by `group`
+  and are named by `name`; a row opens in place; **the open row shows the exact path and commit**
+  (review F6); the newest own save has no "See what’s different"; a design export has only View files
+  and Download ZIP; a `view_only` row shows its reason as text and a disabled Load; empty groups; the
+  open row survives a re-render; a lab without a save location lists Lab states with `repository` in
+  the request.
+- **D7** Details (review F2, F3): every row of Your saves whose job the manager holds has **Details**,
+  which calls `gitShowJob` with that job's id; a row whose job is gone has none; every waiting row (an
+  own save, a lab state, a folder move) has **Upload…** first and **Details**; **Upload…** calls
+  `gitReviewJob(job)` without `upload`.
+- **D8** Starting point (review F1): **Use as starting point…** sends `backup_job_id`,
+  `replace_baseline` and `expected_baseline` exactly as `gitSaveOptions('baseline')` does today;
+  **Choose a backup as starting point…** is present in the Starting point group, also when the lab has
+  no starting point, and calls `gitSaveOptions('baseline')`; without `capture_kept` or `capture_whole`
+  the two per-save actions are disabled with their reason as text.
+- **D9** Load (review X1, F8): every **Load this state…** of this file calls `loadChoose` with a source
+  of exactly five keys; the source is `folder` for a state at HEAD and `git` with the commit for an
+  older save; the string `loadState(` does not occur in `save-drawers.js` (source-level); the view of a
+  commit opened from Full history offers **Load this state…** with `{type: 'git', commit, path}`.
+- **D10** Save settings markup: the F15 controls, one Git details fold with the `git-advanced-*` ids,
+  the no-location and no-repository states, the no-topology sentence.
+- **D11** A waiting save disables nothing (review D2): with a waiting save and changed device ticks,
+  **Save settings** is enabled and sends the `PUT` at once; the line says the waiting save stays part of
+  the next upload; the disconnect dialog has one button, sends only the unlink request and no dismiss;
+  no markup of this file contains `Keep it on the VM only`.
+- **D12** Live regions (review A1): in the markup of every kind and state of the drawer, no element with
+  `role="status"`, `aria-live` or `role="alert"` contains a `button`, `a`, `input` or `select`.
+- **D13** Class names (review X7): the markup of this file uses no `save-quiet`, `save-h`, `save-open`,
+  `save-fold`, `save-drawer-foot`, `rx-` or `px-` class; quiet actions carry `button ghost small`.
+- **D14** One drawer: opening a second kind replaces the first; Back and Escape go one level; the drawer
+  closes on a lab change; `saveDrawerOpen('state')` and `saveDrawerOpen('chooser', …)` write the
+  chooser's markup and forward `data-folder-*` events to `folderChooserEvent`.
 
-10. **New folder is enabled in every state**: every answer kind, every mode, loading, empty, truncated,
-    error, VM unreachable: the button is present and carries no `disabled`.
-11. `folderClean`: spaces, unsafe characters, leading dots and dashes, `..`, `.git`, double and leading
-    slashes, over-long segments; idempotent (`folderClean(folderClean(x))===folderClean(x)`).
-12. One answer: for each kind the mark, the sentence and the buttons come from the same object; a typed
-    path that does not exist takes `below` of its nearest existing folder.
-13. The words `registration`, `prefix` and `overlap` occur in no chooser markup, for any answer or state.
-14. Keyboard reducer `folderKey`: every key of 4.8; focus movement never changes `expanded` or the
-    selection.
-15. `aria-expanded` and the rendered children depend on `expanded` only: selecting a deep path adds its
-    ancestors and removes nothing; a re-render with another selection leaves the set equal.
-16. State mode: the name buttons fill the name and the path; the path follows the name until edited;
-    the default parent is the folder above the lab's own; the request names the state's folder and
-    leaves the lab's binding out.
-17. A `{question}` answer to Save here re-renders the question and reports no error.
+`tests/test_git_places_ui.js` (existing file, extended; chooser slice):
 
-`tests/test_save_routing_ui.js` (new; the `status.js` + `app.js` harness of
-`tests/test_readiness_ui.js`):
+- **C1** **New folder is enabled in every state**: every answer kind, every mode, loading, empty,
+  truncated, error, VM unreachable: the button is present and carries no `disabled`.
+- **C2** `folderClean`: spaces, runs of unsafe characters (one `-`), leading dots and dashes, `..`,
+  `.git` → `git`, double and leading slashes; idempotent (`folderClean(folderClean(x))===folderClean(x)`);
+  for a table of inputs shared with `tests/test_git_places.py` it equals `clean_folder`.
+- **C3** The echo is replaced (DESIGN.md 3.8 N6): after typing, one debounced `…/places/check` request
+  is sent; the field and the result line then show the answer's `folder` even where `folderClean` gave
+  something else; an older answer arriving after a newer keystroke is ignored.
+- **C4** One answer, the contract of 4.7: for each `kind`, `adjusted`, `layout` and `collision` value
+  the mark, the sentence and the buttons come from the same object. `lab` without `collision`: two
+  buttons; with it: only **Save in …**. `state` with `latest`: **Replace it**; with `flat`: **Use this
+  folder anyway** and the stays-listed note. The page prints `beside` and `mark` as given.
+- **C5** What is sent: **Save here** → `choice: ''`; the suggested button → `beside`; the other →
+  `take`; the body never contains `expect`, `below`, `anyway`, `replace` or `pending: 'upload'`
+  (`replace` only in the state route's `choice`); the tree is fetched from
+  `/api/labs/{lab}/git/places?repository=` and from no `…/tree?lab=` address.
+- **C6** Question 3: with a waiting save the foot offers **Upload it, then move** and **Move and keep
+  that save on the VM only**; the first is disabled until the review arrived, then calls
+  `gitReviewJob(job, {upload: true})` and posts the place with `pending: ''` only after it resolved; a
+  rejected upload posts nothing; the second posts `pending: 'keep'` and no dismiss request.
+- **C7** The bring-along line (review F12): shown and ticked only when the lab has saved files where it
+  leaves, the new folder holds none and every pending save has a commit; with a pending save that has no
+  commit the sentence `A save of this lab has not finished…` replaces it and `move_files` is false; no
+  string of the chooser says "uploaded right away".
+- **C8** A `{question}` answer to Save here or Save state re-renders the question and reports no error.
+- **C9** The words `registration`, `prefix` and `overlap` occur in no chooser markup, for any answer or
+  state.
+- **C10** Live region (review A1): `#folder-answer` contains text only for every answer; the question's
+  buttons are inside `#folder-foot`.
+- **C11** Keyboard reducer `folderKey`: every key of 4.8; focus movement never changes `expanded` or the
+  selection.
+- **C12** `aria-expanded` and the rendered children depend on `expanded` only: selecting a deep path
+  adds its ancestors and removes nothing; a re-render with another selection leaves the set equal.
+- **C13** A large repository: with `dirs` of 5000 folders and `truncated` files every folder can be
+  reached in the tree; only `dirs_truncated` shows the type-the-path note.
+- **C14** State mode (review X5): the default path is `<lab folder>/<name>` (`BGP/start` for a lab that
+  saves to `BGP`, `start` at the top level, `<default folder>/<name>` without a save location); the name
+  buttons fill the name and the path; the path follows the name until edited; the check carries
+  `purpose: 'state'`; `state` offers **Replace it** / **Use another name** and the latter sends nothing;
+  `own` and `lab` show the `<folder>/<name>` sentence; the request goes to `…/git/state` with
+  `request_id` and never to `…/git/place`.
 
-18. `setTab('progress')` and `setTab('git')` leave `tab==='topology'` and ask for the panel once; a
-    second `showTab(tab)` (the poll) does not ask again.
-19. `PANELS` has no `progress`; `TAB_ALIAS.git` and `TAB_ALIAS.progress` exist.
-20. With `saveOpenPanel` undefined at the first render the request is kept and served by the next one.
-21. Every `$('…')` id used by the static scripts exists in `index.html` (addendum J2's rule as a test).
+Router and removal tests (page-skeleton slice for `app.js`; the lead names the file, the
+`status.js` + `app.js` harness of `tests/test_readiness_ui.js` fits):
 
-New test files reach CI only through the explicit list in `.github/workflows/release-check.yml`
-(lead).
+- **R1** `setTab('progress')` and `setTab('git')` leave `tab==='topology'` and call
+  `saveOpenPanel('status')` once; a second `showTab(tab)` (the poll) does not call it again.
+- **R2** `PANELS` has no `progress`; `TAB_ALIAS.git` and `TAB_ALIAS.progress` exist.
+- **R3** With `saveOpenPanel` undefined at the first render the request is kept and served by the next
+  one.
+- **R4** (tab-removal slice, review B1) Addendum J2's rule as a test: every `$('…')` id used by the
+  static scripts exists in `index.html` or in an `id="…"` literal of a script; none of the removed J2
+  ids (6.6) occurs in any script or page.
+- **R5** (tab-removal slice) `gitRenderAdvanced` returns without throwing when the `git-advanced-*`
+  elements are absent, and fills them when Save settings is rendered.
+- **R6** (tab-removal slice) The lab banner offers no save action: `BANNER_BUTTONS` holds neither
+  `banner-retry-save` nor `banner-save-details`, and a lab with a save problem or a waiting upload
+  renders no banner for it.
+
+Asked of the header slice, because the control is in its panel (listed so the claim is not lost): the
+panel at rest shows `Saves to: <repository> › <folder>` with **Change…**, which calls
+`saveDrawerOpen('chooser', {mode: 'location'})` (review R1); the first-save view's foot offers **Save as
+a lab state…**, which calls `saveDrawerOpen('state')` (review R2).
 
 ---
 
-## 8. Wording, files, friction, assumptions, questions
+## 8. Wording, files, friction, assumptions, answered questions
 
 ### 8.1 Final strings
 
 | Where | String |
 |---|---|
 | What changed: title / design export | `What changed` / `What this design export changed` |
-| meta | `<devices> · <n> lines added, <m> removed · not uploaded yet` (or `· uploaded to <host>`) |
+| meta | the sentence of `saveChangeSentence`, then `Not uploaded yet.` or `Uploaded to <host>.` |
 | buttons | `Upload` · `Not now` · `View files` · `Uploading…` |
-| notes | `Saved files can contain passwords or keys.` · `Uploading also sends <n> earlier save(s) that is/are still waiting on the VM[, <k> of them from another lab / other labs in this repository].` · `Among them, kept on the VM only and not seen uploaded yet: <names>.` |
-| entries | `<device>` · `Topology file` · `Map` · `Also uploaded for <device>: <file>, the file Load uses` · `The configuration text is the same. The file Load uses changed.` |
-| rest | `Also in this upload` · `Save details (which devices, when they were saved)` · `<path> (the same file, kept in the checkpoint)` |
-| blocked | `<Lab> has a save that must be uploaded first.` · `Open <Lab>` |
-| toast | `Not uploaded. The save stays on the lab VM.` |
+| notes | `To: <repository> › <folder>` · `Saved files can contain passwords or keys.` · `This upload also sends <n> other save(s): <name> (<lab>), …` |
+| headings | `This save` · `Also in this upload` |
+| entries | `<device>` · `Topology file` · `Map` · `Save details` · `Also uploaded for <device>: <file>, the file Load uses` · `The configuration text is the same. The file Load uses changed.` · `This moves the saved files of <lab> from <old> to <new>. No device file changes.` |
+| other saves | `<name>` with `<lab> · saved <when>` · `<subject>` with `a save the manager no longer keeps` · `<name> could not be read.` |
+| upload states | `Another save was made in this repository. Look at the changes again.` · `Someone is working in this repository on the VM.` · `Reading what changed…` |
 | All versions: title / meta | `All versions` / `Everything saved for <lab>. Choose one to load it.` |
-| groups | `Your saves` · `Checkpoints` · `Starting point` · `Lab states` · `Other labs in this repository (n)` · `Everything else in this repository (n)` · `Save activity (n)` |
-| row lines | `Your save · <n> devices · topology and map included` · `Checkpoint · <n> devices` · `Lab state · covers <k> of your <n> devices` · `From <lab> · <n> devices` · `Not uploaded yet` · `View only: saved without the files needed to load it` · `Design plan: view and download only` |
-| actions | `Load this state…` · `See what’s different` · `View files` · `Download ZIP` · `Keep as a checkpoint` · `Use as starting point…` · `Upload…` · `Details` · `Show older saves` |
-| checkpoint | `Checkpoint name` · `Saved as: <name>` · `Keep` · `The files of this save are no longer kept by the manager. Save again, then keep that save.` |
-| starting point | `Make this save the starting point of <lab>? No device is read or changed.` · `It replaces the current starting point, saved <when>. The previous one stays in the history.` · `Use as starting point` · `Replace the starting point` · `Cancel` |
+| groups | `Your saves` · `Checkpoints` · `Starting point` · `Lab states` · `Other labs in this repository (n)` · `Save activity (n)` |
+| row lines | `Your save · <n> devices · topology and map included` · `Checkpoint · <n> devices` · `Lab state · covers <k> of your <n> devices` · `From <lab> · <n> devices` · `Not uploaded yet` · `<repository> › <path> · commit <short>` · `View only: saved without the files needed to load it` · `View only: its save details could not be read` · `Design plan: view and download only` |
+| actions | `Load this state…` · `See what’s different` · `View files` · `Download ZIP` · `Keep as a checkpoint` · `Use as starting point…` · `Choose a backup as starting point…` · `Upload…` · `Details` · `Show older saves` |
+| checkpoint | `Checkpoint name` · `Saved as: <name>` · `Keep` · `The capture of this save is no longer kept. Save again to make a checkpoint.` · `This capture does not include the topology. Save again first.` |
+| starting point | `Make this save the starting point of <lab>? No device is read or changed.` · `It replaces the current starting point, saved <when>. The previous one stays in the history.` · `Use as starting point` · `Replace the starting point` · `Cancel` · `No starting point yet.` |
 | different | `Different from your latest save` · `How <name> differs from the last save of <lab>. To see what would change on the devices, choose Load this state…: the devices are compared before anything is loaded.` · `No differences: this version matches your latest save.` |
 | files | `Devices` · `Topology and map` · `Files Load uses` · `Save details` · `Saved without its topology file.` |
-| empties | `No saves yet. Save makes the first one.` · `No checkpoints yet. Keep a save as a checkpoint to hold on to it.` · `No lab states in this repository yet.` |
+| empties | `No saves yet. Save makes the first one.` · `No checkpoints yet. Keep a save as a checkpoint to hold on to it.` · `No lab states in this repository yet.` · `This lab has not been saved yet.` |
 | load states | `Loading the saved versions…` · `The saved versions could not be loaded.` · `Try again` · `Check the VM connection…` |
 | foot | `Full history…` · `Browse the repository…` · `Save as a lab state…` |
 | Save settings: title / meta | `Save settings` / `Where <lab> saves, and which devices each save includes.` |
 | sections | `Save location` · `Devices included in every save` · `Git details` |
-| buttons | `Change folder…` · `Use a different repository…` · `Connect by URL…` · `Refresh status` · `Update from the repository` · `Disconnect this lab…` · `Save settings` · `Choose a place…` |
-| states | `This lab has no save location yet.` · `Choose at least one device to include.` · `A save is still waiting to be uploaded. The devices can be changed once it is uploaded or kept on the VM only.` · `Upload…` · `Keep it on the VM only` · `<device> is no longer included. Its saved file leaves the next save; older versions keep it.` · `Save settings updated.` |
-| disconnect | `Upload it, then disconnect` · `Disconnect and keep that save on the VM only` · `Disconnect` |
-| keep on the VM (today "Keep snapshot only") | title `Keep this save on the VM only?` · button `Keep it on the VM only` |
+| buttons | `Change folder…` · `Use a different repository…` · `Connect by URL…` · `Refresh status` · `Update from the repository` · `Disconnect this lab…` · `Save settings` · `Choose a place…` · `Update topology file…` |
+| states | `This lab has no save location yet.` · `Choose at least one device to include.` · `<n> save(s) is/are waiting for upload. It was / They were made with the devices chosen before and stay(s) part of the next upload.` · `<device> is no longer included. Its saved file is removed with the next save; older versions keep it.` · `This lab has no topology file in the manager, so saves hold device configurations only.` · `Saves are waiting for upload in this repository. Upload them before updating from the repository.` · `Save settings updated.` |
+| disconnect | `<n> save(s) of <lab> is/are still waiting for upload. It stays / They stay part of the next upload of <repository>; the save status keeps showing it / them.` · `Disconnect` |
+| keep on the VM (the save window) | unchanged: `Keep snapshot only` |
 | chooser: heads | `Where should <lab> save?` / `Pick a folder, type a path, or make a new folder.` · `Browse the repository` / `Every folder of <repo>. Looking at folders does not change where <lab> saves.` |
-| chooser: field and result | `Repository` · `Folder` · `Saves go to <repo> › <path>` · `… › top level` |
-| marks | `This lab saves here` · `<Lab> saves here` · `Lab state: <Name>` · `New` |
-| answers | as in the table of 4.5 |
-| chooser: buttons | `Save here` · `Keep saving here` · `Save in <path>` · `Use this folder anyway` · `Save beside it in <path>` · `Replace it` · `Upload it, then move` · `Move and keep that save on the VM only` · `New folder…` · `Add` · `Remove from the list` · `Cancel` · `Saving here…` |
-| chooser: notes | `Move the saves made so far into the new folder` · `<path> already exists. It is selected.` · `<path> is part of a saved state, so the new folder is made in <folder above>.` · the state sentences of 4.9 |
-| toast | `<lab> now saves to <repo> › <path>.` |
+| chooser: field and result | `Repository` · `Folder` · `Saves go to <repo> › <folder>` · `… › top level` |
+| marks | `This lab saves here` · `<Lab> saves here` · `Lab state: <Name>` (the answer's `mark`) · `New` |
+| answers | as in the tables of 4.5 |
+| chooser: buttons | `Save here` · `Keep saving here` · `Save in <beside>` · `Use this folder anyway` · `Save beside it in <beside>` · `Replace it` · `Upload it, then move` · `Move and keep that save on the VM only` · `New folder…` · `Add` · `Remove from the list` · `Cancel` · `Saving here…` |
+| chooser: question 3 | `1 save of <lab> is waiting for upload.` · `Checking what this upload sends…` · `That save stays on the VM and stays part of the next upload.` |
+| chooser: notes | `Bring this lab’s saved files along` · `A save of this lab has not finished. Its files stay in <old folder>.` · `<path> already exists. It is selected.` · `<selected> is part of a saved state, so the new folder is made in <folder above>.` · `This repository is very large and not every folder is listed. Type the path of a folder that is not shown.` · the state sentences of 4.9 |
+| toast | `<lab> now saves to <repo> › <folder>.` |
 | lab state: head | `Save as a lab state` / `Saves <lab> as it is now into a folder of its own. Where <lab> normally saves does not change.` |
-| lab state: fields | `Name` · `start` · `broken` · `final` · `The state is saved in <repo> › <path>` · `Put it somewhere else` · `Save state` · `Reads every included device now. Saved files can contain passwords or keys.` |
-| lab state: progress | `Saving the state <Name>…` · `State <Name> saved in <path>.` |
+| lab state: fields | `Name` · `start` · `broken` · `final` · `The state is saved in <repo> › <folder>` · `Put it somewhere else` · `Save state` · `Reads every included device now. Saved files can contain passwords or keys.` |
+| lab state: answers | `“<Name>” already exists here.` · `Replace it` · `Use another name` · `<lab> saves in <typed>, so the state is saved in <folder>.` · `<Other lab> saves in <typed>, so the state is saved in <folder>.` |
+| lab state: progress | `State <Name> saved in <folder>.` |
+
+There is no toast after **Not now** and no string `uploaded right away`, `must be uploaded first`,
+`Open <Lab>` or `Keep it on the VM only` (DESIGN.md 7.6, review D2).
 
 ### 8.2 Classes
 
-Shared base names used: `save-list`, `save-devices`, `save-dot`, `save-panel`, `save-chip` (the last three
-only through the header's pieces).
+The shared names are HEADER.md 1.3's (DESIGN.md 7.5) and this slice makes no second name for a shared
+piece:
 
-Added by this slice:
+| Piece | Class |
+|---|---|
+| the drawer | `dialog.drawer.save-drawer` (`width:min(760px,100vw)` and the inner spacing) |
+| a group heading | `save-heading` |
+| a list, a row of it, its right-hand text, its second line | `save-list`, `save-item`, `save-when`, `save-why` |
+| the row opened in place | `.open` on the `li` |
+| a row of buttons | `save-row` |
+| a quiet action (also **Back** and **Cancel**) | `button ghost small` |
+| the small note; a key and value line | `save-note`; `save-kv` |
+| the closing links of a list | `save-foot` |
+| the content of Save settings; the foot row of settings and chooser | `save-settings`; `save-settings-foot` |
+| a control that is switched off | `.off` (only for a row that is not a real control; a button uses `disabled` with its reason as text) |
 
-| Class | Replaces (Appendix A) | Use |
-|---|---|---|
-| `save-drawer` | `rx-drawer`, `px-drawer` | `dialog.save-drawer{width:min(760px,100vw)}` and the drawer's inner spacing |
-| `save-drawer-foot` | `px-drawer-foot` | the foot row of settings and chooser |
-| `save-back` | none | the Back button in the head |
-| `save-h`, `save-h-row` | `rx-h` | group headings; a heading with an action beside it |
-| `save-item`, `save-when`, `save-why` | `rx-ver`, `rx-when`, `rx-why` | a row of `save-list`, its right-hand text, its second line |
-| `save-open` | `rx-open` | the row opened in place |
-| `save-row` | `rx-row` | a row of buttons |
-| `save-quiet` | `rx-quiet` | the quiet text button |
-| `save-note` | `rx-note` | the small note |
-| `save-foot` | `rx-foot` | the closing links of a list |
-| `save-fold` | `.px-drawer details` | a folded group |
-| `save-also`, `save-plain` | none | the artifact fold inside a diff entry; the plain file list |
-| `folder-chooser`, `folder-tree`, `folder-row`, `folder-name`, `folder-answer`, `folder-names` | none | the chooser |
-| `git-tag state` | none | the lab-state mark (same shape as `git-tag other`) |
+A folded group is a plain `<details>` styled by `.save-drawer details`, and the restore-file fold inside
+a diff entry by `.save-drawer .diff-body details`: no class of their own. The earlier draft's
+`save-drawer-foot`, `save-back`, `save-h`, `save-h-row`, `save-open`, `save-quiet`, `save-fold`,
+`save-also` and `save-plain` are dropped.
 
-`save-row`, `save-quiet`, `save-note` and `save-h` are needed by the header's panels as well; the lead
-settles the names once (Q6). Reused as they are: `drawer`, `drawer-head`, `drawer-meta`,
-`drawer-content`, `dialog-head`, `icon-button`, `button` and its variants, `git-destination-line`,
-`git-node-scope`, `checkbox-label`, `kv`, `form-help`, `form-error`, `banner`, `pill`, `badge`,
-`git-tag`, `git-twist`, `git-folder-icon`, `git-file-icon`, `git-listing`, `diff-*`, `sr-only`.
+The chooser adds, and only the chooser uses:
+
+| Class | Use |
+|---|---|
+| `folder-chooser` | the chooser's root, with `data-mode` |
+| `folder-tree` | the `role="tree"` list |
+| `folder-row` | the visible row of a tree item |
+| `folder-name` | the folder's name in a row |
+| `folder-answer` | the sentence line (live region) |
+| `folder-names` | the row of name buttons of a lab state |
+| `folder-state` | the lab-state mark, as `git-tag folder-state` (same shape as `git-tag other`) |
+
+Reused as they are: `drawer`, `drawer-head`, `drawer-meta`, `drawer-content`, `dialog-head`,
+`icon-button`, `button` and its variants, `link-button`, `git-destination-line`, `git-node-scope`,
+`checkbox-label`, `kv`, `form-help`, `form-error`, `banner`, `pill`, `badge`, `git-tag`, `git-twist`,
+`git-folder-icon`, `git-file-icon`, `git-listing`, `diff-*`, `sr-only`.
 
 No new colour is used: marks and rows take existing tokens, so no contrast figure changes. The focus
 ring is the existing two-tone ring; tree rows get it through an inset outline like
 `.git-outline summary:focus-visible` (`app/static/style.css:2323`).
 
-CSS that leaves with the tab: `.git-progress-bar` (`app/static/style.css:1966-1980`),
-`.git-binding-form` (`:1982-1991`, `:2005-2007`), `#git-saves-list` and `.git-saved-job` (`:2020-2054`),
-`.git-versions-head`, `.git-version-group`, `.git-version-list`, `.git-version-row`,
-`.git-versions-empty`, `.git-version-when` (`:2463-2472`, `:2486-2487`, `:2505`), `.git-change-folder`,
-`.git-first-folder` (`:2478-2480`), `.git-places*`, `.git-crumbs`, `.git-outline*` (`:2091-2151`,
-`:2167`, `:2389-2390`, `:2481-2484`). Each selector is searched in scripts, HTML, tests and tools before
-it is deleted.
+CSS that leaves with the tab (page-skeleton slice, which owns `style.css`): `.git-progress-bar`
+(`app/static/style.css:1966-1980`), `.git-binding-form` (`:1982-1991`, `:2005-2007`), `#git-saves-list`
+and `.git-saved-job` (`:2020-2054`), `.git-versions-head`, `.git-version-group`, `.git-version-list`,
+`.git-version-row`, `.git-versions-empty`, `.git-version-when` (`:2463-2472`, `:2486-2487`, `:2505`),
+`.git-change-folder`, `.git-first-folder` (`:2478-2480`), `.git-places*`, `.git-crumbs`, `.git-outline*`
+(`:2091-2151`, `:2167`, `:2389-2390`, `:2481-2484`). Each selector is searched in scripts, HTML, tests
+and tools before it is deleted.
 
-### 8.3 File plan
+### 8.3 File plan and owners
 
-| File | Change |
-|---|---|
-| `app/static/save-drawers.js` | new: the drawer shell, What changed, All versions, Save settings |
-| `app/static/git-places.js` | rewritten in place: the chooser (three modes), `folderClean`, `folderKey`, the tree markup; pure helpers kept |
-| `app/static/git-progress.js` | per 6.3 |
-| `app/static/app.js` | `PANELS`, `TAB_ALIAS`, `SAVE_VIEWS`, `setTab`, `showTab` (6.2); the banner actions (6.5); `render()` calls `saveDrawerRender` behind a `typeof` guard |
-| `app/static/index.html` | per 6.1; one new script tag |
-| `app/static/style.css` | 8.2 |
-| `app/static/shell.js` | one sentence (`:183`); the `#git-save-menu` selectors follow the header slice |
-| `app/static/network-design.js`, `app/static/operations.js` | the strings and the one call of 6.4 |
-| `app/git_progress.py`, `app/discovery.py` | messages of 6.4 and N1 to N9 (lead) |
-| tests | 7 |
+One owner per file (DESIGN.md section 5). This design specifies what each owner does for the drawers; it
+gives no slice a file that is not its own.
+
+| File | Owner | Change |
+|---|---|---|
+| `app/static/save-drawers.js`, `tests/test_save_drawers_ui.js` | drawer slice (S9) | new: the drawer shell, What changed, All versions, Save settings, the host of the chooser (0.2); tests D1 to D14 |
+| `app/static/git-places.js`, `tests/test_git_places_ui.js` | chooser slice (S10, after S0) | rewritten in place: `folderChooserMarkup`, `folderChooserEvent`, `folderClean`, `folderKey`, the chooser's state and its three requests; pure helpers kept (4.1); tests C1 to C14 and the rewritten rows of 7.1 |
+| `app/static/git-progress.js` | header slice (S7) in the first wave: `gitReviewJob`, `gitReviewData`, `gitSubmitSave`, `gitStartWatch` only; tab-removal slice (S11) in the second wave | per 6.3. The drawer slice does not edit this file: it calls the functions that stay |
+| `tests/test_git_progress_ui.js`, `tests/test_home_ui.js`, `app/static/home.js`, `operations.js`, `network-design.js`, the Python texts outside `git_progress.py` | tab-removal slice (S11) | 6.3, 6.4, 6.6; tests R4 to R6 |
+| `app/static/index.html`, `style.css`, `shell.js`, `app.js`, `tests/test_shell_ui.js` | page-skeleton slice (S5) | the `#save-drawer` element (0.1), the removed markup (6.1), the new script tag, the CSS of 8.2, the router (6.2), the banner (6.5), `render()` calling `saveDrawerRender` behind a `typeof` guard, the one sentence at `shell.js:183`; tests R1 to R3 |
+| `app/static/status.js` | status slice (S6) | `saveChipState`, `saveChangeSentence`, `savedVersionName` |
+| `app/static/save-header.js` | header slice (S7) | `saveOpenPanel`, `saveAction`; **Change…** and the first-save foot open this slice's drawer |
+| `app/static/load.js` | load slice (S8) | `loadChoose` |
+| `app/git_places.py`, `app/git_progress.py`, `app/main.py`, `app/restore.py`, `app/host_git.py` | S2, S3, S4, S1 | the contract of DESIGN.md section 4; the messages of 6.4 inside `git_progress.py` |
+| `docs/redesign/DESIGN-SPEC-ADDENDUM.md` | tab-removal slice, as its work item (6.6) | the dated amendment |
 
 Load order in `index.html` (`:3`): … `diff-view.js`, `git-progress.js`, `git-places.js`,
 **`save-drawers.js`**, `restore.js`, … Functions of other files are read at call time behind `typeof`
@@ -1196,117 +1551,120 @@ everything the poll re-renders.
 
 ### 8.4 Friction budget (designed, not measured)
 
+The budget follows review R1: four clicks in the plain case, through the chip panel's **Change…**; each
+question the situation needs adds one click.
+
 | Task | Clicks | Path |
 |---|---|---|
-| Change folder | 4 | chip → **Change…** beside the save location in the chip panel (Q1) → folder → **Save here** |
-| | 5 | chip → **Save settings** → **Change folder…** → folder → **Save here** (the path the prompt names) |
-| | 4 | the same path with a typed folder: focus lands in the path field, Enter confirms |
-| with a folder question | same | the answer button is the confirmation |
-| with a waiting save | same | the two choices replace the confirm button |
-| Save as a lab state | 4 + nothing typed | chip → **Save as a lab state…** → `start` → **Save state** |
-| | 3 + the name | chip → **Save as a lab state…** → type → **Save state** |
+| Change folder, plain case | 4 | chip → **Change…** beside `Saves to: <repository> › <folder>` in the panel at rest → a folder → **Save here** |
+| the same with a typed folder | 3 and the path | chip → **Change…** → type (focus lands in the path field) → Enter |
+| with a folder question (another lab, a state) | at most 5 | budgeted +1. In this design the question is on screen as soon as the folder is picked and its answer button takes the place of **Save here**, so it costs the fifth click only when the question comes back from the request (a screen that was stale) |
+| with a waiting save (question 3) | 5 | the answer to question 3 follows the confirmation: +1 |
+| with both | at most 6 | +1 each |
+| through Save settings | 5 | chip → **Save settings** → **Change folder…** → folder → **Save here** (the longer path; it is not the budgeted one) |
+| Save as a lab state | 4, nothing typed | chip → **Save as a lab state…** → `start` → **Save state** |
+| | 3 and the name | chip → **Save as a lab state…** → type → **Save state** |
 | See what an upload sends | 1 from the panel | **See changes** |
 | Load a state from All versions | chip → **All versions** → row → **Load this state…**, then the Load confirmation | |
 
-The budget of four clicks for a folder change is met only through Q1 or by typing; through Save
-settings with a mouse pick it is five. This is stated rather than hidden: the count must be measured on
-the build (PROMPT 9.5).
+The count must be measured on the build (PROMPT 9.5).
 
 Refusals and dead ends this design removes from the page: the twelve reasons of `gitFolderChoice`
 (`app/static/git-places.js:92-119`); the disabled New folder… and its caption (`:156`, `:158`); the
 disabled "Save this lab here" on the lab's own folder (`:111`); the errors of `gitFolderName` and
 `gitFolderPath` (`:14`, `:25`, `:27`); "A folder named … already exists" (`app/static/git-progress.js:464`);
 the two-step "choose the folder, then tick the devices and Connect" (`:447`, `:481`); the required
-exposure tick box (`:299`, `:496`, `:522`); the baseline tick box error (`:605`); the disconnect notice
-with no way on (`:721`).
+exposure tick box (`:299`, `:496`, `:522`); the `allow_removed` tick box (`:595`); the disconnect notice
+with no way on (`:721`); "Finish pending Git saves…" on a device change, a folder change, a reconnect
+and a disconnect (`app/git_progress.py:610`); the upload that waits for another lab's save
+(`app/git_progress.py:283-292`).
 
 ### 8.5 Assumptions
 
-1. The backend gives one answer per folder (N6) and one request for Save here (N7). Until it does, the
-   chooser cannot be built without copying rules into the page, which is the defect being removed.
+1. The backend contract is the one of DESIGN.md section 4 and 7.4; the chooser cannot be built without
+   it except by copying rules into the page, which is the defect being removed.
 2. A saved state keeps its manifest-referenced layout, so View files can group by `node`, `kind` and
    `restore_artifact` from the manifest the version route already returns.
-3. The save route's `backup_job_id` path accepts `target: 'checkpoint'` (PROMPT 7.4) and keeps accepting
-   `target: 'baseline'` with `replace_baseline` and `expected_baseline`.
-4. The save window (`git-job-dialog`), Full history, Update from the repository, Use a different
-   repository and Connect by URL stay centred dialogs; opening one closes the drawer
-   (`closeDialogsExcept`), and they do not return to it.
-5. A lab's saves are listed from its jobs; the manager keeps the newest 200 jobs per installation, never
-   dropping a pending one. Older saves are reached through Full history.
-6. `#save-chip` is the chip button's id and `saveOpenPanel` its opener (header slice).
-7. The mockups' wording loses to the prompt where they differ: "Load this state…", "Lab states",
+3. The save route's `backup_job_id` path accepts `target: 'checkpoint'` with an empty `checkpoint`
+   (DESIGN.md 3.8 N7) and keeps accepting `target: 'baseline'` with `replace_baseline` and
+   `expected_baseline`.
+4. The save window (`git-job-dialog`), Full history, the starting-point dialog, Update from the
+   repository, Use a different repository and Connect by URL stay centred dialogs; opening one closes
+   the drawer (`closeDialogsExcept`), and they do not return to it.
+5. A lab's saves are listed from its jobs; the manager keeps a capped number of jobs and never drops a
+   pending one. Older saves are reached through Full history.
+6. **Save settings** keeps sending `PUT /api/labs/{id}/git {binding_id, node_names}` for a change of
+   devices only (the route stays, DESIGN.md section 4); a change of folder or repository goes through
+   `…/git/place`.
+7. A row of `folders` in the answer of `GET …/git/places` is the full answer of 4.7, or the page asks
+   `…/places/check` when the row is picked (4.7).
+8. The page can tell when the bring-along line applies from what it already has: the lab's saved files
+   (`own` of the places answer), the picked folder's answer and the lab's pending jobs in
+   `state.git_jobs`. The route checks again and ignores `move_files` it cannot honour.
+9. The mockups' wording loses to the prompt where they differ: "Load this state…", "Lab states",
    "Choose one to load it".
 
-### 8.6 Open questions for the lead
+### 8.6 The questions of the earlier draft, and where each is answered
 
-- **Q1. Four clicks for a folder change.** Through Save settings a mouse pick takes five. Adding the
-  save location with **Change…** to the chip panel at rest (today's status card has exactly that,
-  `app/static/index.html:140`, addendum H10) makes it four. Accept that line in the panel, or accept
-  five?
-- **Q2. Device changes and disconnect while a save waits.** Keep the constraint and show the two
-  buttons (3.3), or resolve it in the backend like a folder change (N5)?
-- **Q3. What is a "Lab state" and what is it called.** Today the group depends on distance from the
-  lab's folder and the names are "Final state (instructor)", "Starting state"; the prompt wants every
-  other saved state under Lab states, named Start, Broken, Final. One function (or N3's `group` and
-  `name`) must serve the Load panel, this drawer and the chooser's marks. Which rule, and does "Everything
-  else" then still have members?
-- **Q4. A device removed from the save.** `allow_removed` has no home once the save options dialog is
-  gone; without one the next save is refused by the helper (3.3). Send it automatically after the
-  person unticked the device in Save settings, or ask in the chip panel after the refusal?
-- **Q5. Moving the earlier saves on a folder change.** Keep today's ticked box (one line in the
-  chooser), always move, or never move (the old folder then shows up as a lab state of its own)?
-- Q6. The shared names for `save-row`, `save-quiet`, `save-note`, `save-h` (header and drawers both
-  need them).
-- Q7. Where a lab state is saved for a lab at the top level of its repository, and for a lab with no
-  save location ("beside the lab's own folder" has no meaning there). The chooser shows whatever default
-  path it is given.
-- Q8. Whether folder moves stay their own job kind with their own review; the drawer supports them as
-  today.
-- Q9. "Keep snapshot only" is renamed "Keep it on the VM only" here, to match Not now; it is the same
-  dismiss route. Accept the rename (it touches Python messages)?
+None is open. Each was ruled on by the lead:
 
-### 8.7 NEEDS (backend), in one place
+| Earlier question | Answer | Where |
+|---|---|---|
+| Q1, four clicks for a folder change | The chip panel at rest shows `Saves to: <repository> › <folder>` with **Change…**, which opens the chooser; four clicks is the plain case and each question adds one | DESIGN.md 3.8 (Q1 row); [REVIEW.md](../REVIEW.md) section 2 R1; 8.4 |
+| Q2, device changes and disconnect while a save waits | They go ahead; the waiting save stays part of the next upload; nothing is dismissed | DESIGN.md 3.1, 3.8 (N5 row), 7.6; REVIEW.md section 2 D2; 3.3 |
+| Q3, what a lab state is and what it is called | A saved state no connected lab owns; one list with `group` and `name`, the name rule in the backend; "another lab's" is only what lies inside the saved-state folders of a connected lab, so "Everything else" has no members | DESIGN.md 2.1, 3.7 (Q8), 3.8 (N3 row); 2.2 |
+| Q4, a device removed from the save | `allow_removed` is always sent as true; the removal is in the sentence and the drawer | DESIGN.md 3.3, 7.6; 3.3 |
+| Q5, the earlier saves on a folder change | One ticked line in the chooser, offered under three conditions; its commit waits for Upload | DESIGN.md 2.6, 3.8 (Q5 row); REVIEW.md section 1 F2, F12; 4.5 |
+| Q6, the shared class names | HEADER.md 1.3 is the list | DESIGN.md 7.5; 8.2 |
+| Q7, where a lab state goes for a lab at the top level or without a save location | In the lab's own folder (`<name>` at the top level); a lab without a save location chooses the repository in the same chooser | DESIGN.md 2.9, section 6, 7.6; REVIEW.md section 2 X5, R2; section 5 |
+| Q8, folder moves as saves | A move's commit is one of the repository's waiting saves and never uploads by itself | DESIGN.md 3.4; REVIEW.md section 1 F2 |
+| Q9, renaming "Keep snapshot only" | Not renamed: the save window keeps *Keep snapshot only*, reached through **Details** | DESIGN.md 7.3; REVIEW.md section 2 F2 |
 
-| # | Need |
-|---|---|
-| N1 | job compare: per file `role` and `node`, read from the manifest |
-| N2 | `upload_blocked` as `{lab_id, lab_name, message}` |
-| N3 | one list of saved states per repository: `path, commit, name, group, lab, kind, devices, loadable, files, saved_at` |
-| N4 | list, view, download and compare for a lab without a save location (by repository) |
-| N5 | reword `guard_pending` (and `discovery.py:669`), or allow a device change with an inline choice |
-| N6 | tree answer: per folder one `answer` (`free`, `this`, `lab`, `state`, `inside`) with `choices`, plus `below` and `new`; `?lab=` names the asking lab |
-| N7 | one `place` request for Save here (first place and change, any repository) that answers `{question}` instead of refusing |
-| N8 | every folder listed even when the file list is cut at 4000 |
-| N9 | a save into a folder other than the lab's own (`state`), answering `{question}` like N7 |
+### 8.7 The NEEDS of the earlier draft, and the ruling on each
+
+| # | Need | Ruling |
+|---|---|---|
+| N1 | job compare: per file `role` and `node` | Yes, with `manifest` as a role and one row for every path of `changed_files` (DESIGN.md 3.8, N4 row of the header's table) |
+| N2 | `upload_blocked` as a structure | Not needed: the sibling refusal is gone (DESIGN.md 3.4, 3.8 N5 of the header's table) |
+| N3 | one list of saved states | `GET /api/labs/{lab}/restore/states` (DESIGN.md 3.7 Q1, 3.8) |
+| N4 | a lab without a save location | List, view, download and compare take an optional `repository` (DESIGN.md 3.8) |
+| N5 | a device change or disconnect while a save waits | They go ahead (DESIGN.md 3.1) |
+| N6 | one answer per folder | `place_answer`; the tree embeds it, a typed path asks `…/places/check` (DESIGN.md 2.5, 7.4) |
+| N7 | one request for Save here | `POST …/git/place` (DESIGN.md section 4) |
+| N8 | every folder of a large repository | Helper change H5: `browse` returns `dirs` (DESIGN.md 2.3) |
+| N9 | a save into a folder other than the lab's own | `POST …/git/state` (DESIGN.md 2.9) |
 
 ### 8.8 What a reviewer should attack
 
 1. **The accounting of 1.2.** Find a save whose upload sends a file the drawer does not show: a
-   checkpoint save, a baseline, a state replaced in place, a device removed, a rename, a save reusing
-   HEAD, and above all the earlier commits (`also_sends` is a count with names, not a file list: is a
-   count enough to call them "visible"?).
-2. **The single sender.** Can any path reach `{push: true, reviewed: true}` without the sentence of that
-   very job having been on screen: the chooser's "Upload it, then move", a stale review after the job
-   changed, two tabs?
+   checkpoint save, a starting point, a state replaced in place, a device removed, a rename, a save
+   reusing HEAD, a folder move, and above all the other saves of the upload: a group that is never
+   opened shows a name and not its files. Is a folded group "visible"?
+2. **The single sender.** Can any path reach `{push: true, reviewed: true}` without the sentence for
+   the reviewed HEAD having been on screen: the chooser's **Upload it, then move**, a review that went
+   stale while the drawer was open, two browser tabs?
 3. **One answer.** Is there any text in the chooser that is computed in the page from something other
-   than `answer` / `below`: the default path of a lab state, the hidden insides of a saved state, the
-   provisional `New` row?
-4. **`below` for typed paths.** Does "nearest existing ancestor" give the right answer for a path under
-   another lab's folder, under a state, under a planned folder, and in a truncated tree where the
-   nearest listed ancestor is not the nearest real one?
+   than the answer: the default path of a lab state, the hidden insides of a saved state, the
+   provisional `New` row, the bring-along line (8.5 item 8), the echo of `folderClean` shown for 250 ms
+   before the answer replaces it?
+4. **The typed path.** A path under another lab's folder, under a state, under a planned folder, in a
+   repository whose `dirs` were cut; an answer that arrives after the person pressed Enter.
 5. **Open branches.** Any render path where `aria-expanded` follows the selection instead of
    `gitPlacesState.expanded`, including the typed path, the new-folder row and a repository switch.
 6. **The router.** `view=progress` with a device (`&device=R1`), on an unknown lab, before the first
    state, with the header script not yet loaded, twice in a row; Back after the rewrite; the poll
    reopening the panel.
 7. **Lost functions.** Walk every row of 6.1 and 6.3 against the build: Remove empty folder, the saves
-   that failed before the newest one, Keep snapshot only, the legacy-folder notice, the administrator
-   setup text, the per-folder Apply, View configuration backup in the save window.
-8. **Disabled controls.** Each remaining disabled state (Upload blocked, Save here while loading or
-   with the VM unreachable, Save settings with a waiting save, Keep as a checkpoint without a capture,
-   Load on a view-only state) must show its reason as text and the clearing action beside it. New
-   folder… must have none.
-9. **Keyboard and focus.** The tree as one tab stop; Escape in the new-folder field versus Escape in the
-   drawer; focus after Back, after Save here, after the drawer closes onto a panel that is gone.
-10. **The poll.** A drawer open for ten minutes: does a re-render move focus, close the open row, reset
-    the device ticks, refetch the tree, or drop a half-typed path?
+   that failed before the newest one, *Keep snapshot only*, any complete capture as the starting point,
+   the legacy-folder notice, the administrator setup text, the per-folder Apply, *View configuration
+   backup* in the save window, loading a commit from Full history.
+8. **Disabled controls.** Each remaining disabled state (Upload until the review arrived, Save here
+   while loading or with the VM unreachable, Keep as a checkpoint and Use as starting point without a
+   kept or whole capture, Load on a view-only state) must show its reason as text and the action that
+   clears it beside it. New folder… must have none, and nothing may be disabled because a save waits.
+9. **Live regions.** Any region that gains a button through a later edit; a question whose buttons a
+   screen-reader user cannot find after hearing the sentence.
+10. **Keyboard and focus.** The tree as one tab stop; Escape in the new-folder field versus Escape in
+    the drawer; focus after Back, after Save here, after the drawer closes onto a panel that is gone.
+11. **The poll.** A drawer open for ten minutes: does a re-render move focus, close the open row or an
+    open group, reset the device ticks, refetch the tree, or drop a half-typed path?
