@@ -21,11 +21,7 @@ def chip_body(s):
 
 def open_list(s):
     p = s.page
-    # On a narrow screen a long chip text takes a row of its own, and its open panel then lies over Save and Load: a person
-    # closes it first (Escape or a tap outside). On a wide screen Load is beside it and opening Load closes the other panel.
-    if p.viewport_size['width'] < 700 and s.visible('#save-panel'):
-        p.keyboard.press('Escape')
-        expect(p.locator('#save-panel')).to_be_hidden()
+    # No Escape first: an open chip panel hangs under the header's controls at every width, so Load stays within reach (Q760-04).
     s.click('#load-button')
     expect(p.locator('#load-panel-body .save-list').first).to_be_visible(timeout=20000)
 

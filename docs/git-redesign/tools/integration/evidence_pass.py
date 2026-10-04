@@ -40,6 +40,14 @@ from save_flow import EXPOSURE, IDENTITY, page_fetch, panel_text, save_and_wait 
 from drawers_flow import content as drawer_text, open_row  # noqa: E402
 
 # The surfaces a state can show; the second screenshot is taken when one of them does not fit the viewport.
+# Clicks after which the thing a state is about is gone from the screen (see Evidence.click).
+DISMISSING = ['#folder-foot [data-folder-', '#save-keep']
+# Before a picture: the folders have arrived, and the chooser's sentence (its question, its refusal) is inside the screen.
+SETTLE = """(()=>{const d=document.getElementById('save-drawer');if(!d||!d.open)return true;
+  if(/The folders are still loading\\.|Loading folders…|Reading what changed…|Loading the saved versions…/.test(d.textContent))return false;
+  const a=document.getElementById('folder-refused')||document.getElementById('folder-answer');
+  if(a&&/Checking…/.test(a.textContent))return false;
+  if(a&&a.textContent.trim())a.scrollIntoView({block:'center'});return true;})()"""
 SURFACES = ['save-drawer', 'save-panel', 'load-panel', 'git-job-dialog', 'restore-job-dialog', 'git-update-dialog', 'git-unlink-dialog', 'git-switch-dialog', 'git-history-dialog']
 WHOLE = """(ids=>{let need=0;for(const id of ids){const e=document.getElementById(id);if(!e||e.hidden||!e.getClientRects().length||(e.tagName==='DIALOG'&&!e.open))continue;
   const r=e.getBoundingClientRect();need=Math.max(need,r.bottom);let extra=0;
@@ -129,7 +137,15 @@ class Evidence(Session):
             return selector if isinstance(selector, str) else 'a control'
 
     def click(self, selector, count=True, **kwargs):
-        self.note('click ' + self._label(selector))
+        label = self._label(selector)
+        # A click that takes the state's subject off the screen (Save here, a question's answer, Cancel, the tick that turns a
+        # save into a checkpoint, a confirmation): the state is photographed first, so its picture shows what it is about.
+        if self.current is not None and self.current.get('_before') is None and isinstance(selector, str) and any(part in selector for part in DISMISSING):
+            try:
+                self.current['_before'] = self.shots(self.current['_stem'])
+            except Exception as error:
+                self.current['errors'].append('screenshot failed: ' + str(error).split('\n')[0])
+        self.note('click ' + label)
         return super().click(selector, count, **kwargs)
 
     def fill(self, selector, text):
@@ -166,11 +182,12 @@ class Evidence(Session):
 
     # ---- a state ----
     @contextmanager
-    def state(self, name, ref):
+    def state(self, name, ref, before=True):
+        """`before=False`: the state's subject appears after its dismissing click (a question the click provokes, a result)."""
         self.report['count'] += 1
         number = self.report['count']
         slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')[:70]
-        entry = dict(n=number, name=name, prompt=ref, scenario=self.scenario, reached=True, reason='', steps=[], assertions=[], errors=[], screenshots=[])
+        entry = dict(n=number, name=name, prompt=ref, scenario=self.scenario, reached=True, reason='', steps=[], assertions=[], errors=[], screenshots=[], _stem='%03d-%s' % (number, slug), _before=None if before else [])
         for item in self.loose:
             (entry['assertions'] if isinstance(item, dict) else entry['steps']).append(item)
         self.loose = []
@@ -184,8 +201,10 @@ class Evidence(Session):
             entry['trace'] = traceback.format_exc()[-1500:]
             print('NOT REACHED %s :: %s' % (name, entry['reason']), flush=True)
         finally:
+            stem, before = entry.pop('_stem'), entry.pop('_before')
             try:
-                entry['screenshots'] = self.shots('%03d-%s' % (number, slug))
+                # With a picture taken before a dismissing click, that one is the state's picture and this one shows what followed.
+                entry['screenshots'] = (before or []) + self.shots(stem + ('-after' if before else ''))
             except Exception as error:
                 entry['errors'].append('screenshot failed: ' + str(error).split('\n')[0])
             entry['errors'] += list(self.errors) + list(self.failed)
@@ -205,6 +224,10 @@ class Evidence(Session):
 
     def shots(self, stem):
         page, names = self.page, [stem + '.png']
+        end = time.time() + 8
+        while time.time() < end and not page.evaluate(SETTLE):
+            page.wait_for_timeout(150)
+        page.wait_for_timeout(120)
         page.screenshot(path=os.path.join(self.out, names[0]))
         need = page.evaluate(WHOLE + '(%s)' % json.dumps(SURFACES))
         width, height = self.viewport
@@ -460,7 +483,8 @@ def scenario_first_save(s):
         s.click('#save-first-url')
         expect(p.locator('#folder-url')).to_be_visible(timeout=20000)
         s.check('one field for the address, the passwords sentence beside it', EXPOSURE in drawer_text(s) or 'passwords' in drawer_text(s), drawer_text(s)[:400])
-        s.equal('the primary button', foot_buttons(s)[-1], 'Connect and save here')
+        s.equal('the one button, Save here, is off until an address is typed', [foot_buttons(s)[-1], p.locator('#folder-foot [data-folder-primary]').is_disabled()], ['Save here', True])
+        s.check('nothing is said about the folder before an address is there', not s.visible('#folder-result') and not re.search(r'already saves here|Keep saving here', drawer_text(s)), drawer_text(s)[:300])
         s.click('#folder-foot [data-folder-action="cancel"]')
     with s.state('first save: saved, waiting for upload', '5.9, 5.3'):
         close_panels(s)
@@ -480,6 +504,7 @@ def scenario_first_save(s):
         s.click('#git-save-progress')
         expect(p.locator('#save-url')).to_be_visible(timeout=15000)
         s.check('one field for the HTTPS address', 'Paste its address' in panel_text(s), panel_text(s))
+        s.check('the administrator’s setup is folded under it, with Check again', p.locator('#save-first-admin').count() == 1 and not p.locator('#save-first-admin').get_attribute('open') and p.locator('#save-first-check').count() == 1)
         s.check('the exposure sentence', EXPOSURE in panel_text(s))
     with s.state('first save: an address the VM account cannot use is refused in words', '5.9, 6.5'):
         s.fill('#save-url', 'https://github.com/ArchRuger/forbidden-x.git')
@@ -711,11 +736,14 @@ def scenario_lab_state(s):
         expect(p.locator('#state-name')).to_be_visible(timeout=20000)
         s.equal('title', s.text('#save-drawer-title'), 'Save as a lab state')
         s.equal('the one-click names', p.locator('.folder-names button').all_inner_texts(), ['start', 'broken', 'final'])
+        s.wait_js("!!document.getElementById('folder-foot')&&!/still loading/.test(document.getElementById('save-drawer').textContent)", what='the chooser')
+        s.check('without a name: no claim where the state goes, Save state off with the reason', not s.visible('#folder-result') and p.locator('#folder-foot [data-folder-primary]').is_disabled() and s.text('#folder-reason') == 'Give the lab state a name.',
+                p.locator('#folder-foot').inner_text())
         s.fill('#state-name', 'mine')
         s.wait_js("!/Checking/.test(document.getElementById('folder-answer').textContent)&&document.getElementById('folder-path').value==='BGP/mine'&&!document.querySelector('#folder-foot [data-folder-primary][disabled]')")
         s.equal('the result line', s.text('#folder-result').replace('\n', ' '), 'The state is saved in Nested-Labs › BGP/mine')
         s.check('New folder… is enabled', p.locator('.folder-chooser [data-folder-action="new"]').is_enabled())
-    with s.state('a lab state is saved and waits for upload like any save', '5.5'):
+    with s.state('a lab state is saved and waits for upload like any save', '5.5', before=False):
         s.click('#folder-foot [data-folder-action="save"]')
         s.wait_toast(r'^State Mine saved in BGP/mine\.$')
         s.wait_chip(r'^1 save to upload$', timeout=40000)
@@ -741,7 +769,7 @@ def scenario_lab_state(s):
         s.wait_js("!/Checking/.test(document.getElementById('folder-answer').textContent)&&document.getElementById('folder-path').value==='BGP/start'")
         s.equal('the question', s.text('#folder-answer'), '“Start” already exists here.')
         s.equal('its answers', foot_buttons(s), ['Cancel', 'Replace it', 'Use another name'])
-    with s.state('Replace it: the state is written again, complete', '5.5'):
+    with s.state('Replace it: the state is written again, complete', '5.5', before=False):
         expect(p.locator('#folder-foot [data-folder-choice="take"]')).to_be_enabled(timeout=20000)
         s.click('#folder-foot [data-folder-choice="take"]')
         s.wait_toast(r'^State Start saved in BGP/start\.$')
@@ -924,7 +952,8 @@ def scenario_drawers(s):
         expect(p.locator('#save-drawer-content [data-git-repo-action="connect"]')).to_be_visible(timeout=20000)
         s.click('#save-drawer-content [data-git-repo-action="connect"]')
         expect(p.locator('#folder-url')).to_be_visible(timeout=20000)
-        s.equal('the primary button', foot_buttons(s)[-1], 'Connect and save here')
+        s.equal('the one button, Save here, is off until an address is typed', [foot_buttons(s)[-1], p.locator('#folder-foot [data-folder-primary]').is_disabled()], ['Save here', True])
+        s.check('nothing is said about the folder before an address is there', not s.visible('#folder-result') and not re.search(r'already saves here|Keep saving here', drawer_text(s)), drawer_text(s)[:300])
         s.check('Back to the settings', s.visible('#save-drawer-back'))
     close_panels(s)
     with s.state('Save settings: a device left out', '5.8'):
@@ -958,6 +987,7 @@ def scenario_drawers(s):
         s.click('#git-save-progress')
         expect(p.locator('#save-first, #save-url').first).to_be_visible(timeout=15000)
         s.check('Save shows the first-save view', s.visible('#save-first'))
+        s.match('it says the lab has no save location now, not that this is a first save', s.text('#save-first-place'), r'^(This lab has no save location now\. Your next save goes to |Your saves continue in )')
 
 
 def scenario_folders(s):
@@ -1101,7 +1131,7 @@ def scenario_folders(s):
         expect(p.locator('#save-upload')).to_be_enabled(timeout=15000)
         s.click('#save-not-now', count=False)
 
-    with s.state('row 9 (question 3): a folder change while a save waits for upload', ref + ' row 9'):
+    with s.state('row 9 (question 3): a folder change while a save waits for upload', ref + ' row 9', before=False):
         waiting_save('interface Loopback41')
         choose('moved-1')
         s.click('#folder-foot [data-folder-action="save"]')
@@ -1131,7 +1161,7 @@ def scenario_folders(s):
         press(s, '#folder-foot [data-folder-choice="take"]')
         saved_here(s, 'shared-b', 'Nested-Labs:shared', 'question 1, take')
         s.equal('the other lab is disconnected from it', place_of(s, 'shared-a'), None)
-    with s.state('a placement only the VM can refuse: said like the chip, with the action that clears it', '6.5'):
+    with s.state('a placement only the VM can refuse: said like the chip, with the action that clears it', '6.5', before=False):
         choose('refused-then-fine')
         s.switch(remote_ahead=True)
         with s.expect_status(409, r'/git/place$'):
