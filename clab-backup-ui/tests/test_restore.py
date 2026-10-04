@@ -393,8 +393,15 @@ class RestoreServiceTests(unittest.TestCase):
         # PTX1's saved artifact still says juniper; running platform now EOS -> platform mismatch
         self.assertTrue(row is None or not row['eligible'])
 
+    def _connect_lab(self):
+        """The lab's own save location is the fake's binding 'b': a folder source without `repository` reads through it
+        and takes HEAD from `status`, as before `repository` existed."""
+        self.lab['git_binding'] = {'binding_id': 'b', 'revision': 'r', 'repository': {'prefix': 'labs/BGP-LAB/Base'}}
+        self.store.save()
+
     def _fake_git_folder(self, suffix='cfg'):
         import base64, hashlib
+        self._connect_lab()
         setraw = DESIRED_SET.encode(); hraw = DESIRED_HIER.encode()
         snap = {'manifest': {'schema': 2, 'lab_id': 'lab1', 'lab_name': 'clabllm-dev', 'node_names': ['PTX1'],
                              'files': [{'path': f'PTX1.{suffix}', 'size': len(setraw), 'sha256': hashlib.sha256(setraw).hexdigest(),
@@ -408,6 +415,8 @@ class RestoreServiceTests(unittest.TestCase):
             calls = []
             def binding(self, lab_id):
                 return {'binding_id': 'b', 'revision': 'r', 'repository': {'prefix': 'labs/BGP-LAB/Base'}}
+            def reader(self, lab_id, repository=''):
+                return self.binding(lab_id)   # the lab's own save location (GitProgress.reader with no repository)
             def invoke(self, request, binding=None):
                 FakeGit.calls.append(request)
                 return {'ready': True, 'head': 'a' * 40} if request['mode'] == 'status' else {'snapshot': snap}
@@ -446,6 +455,7 @@ class RestoreServiceTests(unittest.TestCase):
         """A folder source whose HEAD can move between preflight and submit, with more than one
         commit in branch history, and one commit whose manifest is malformed."""
         import base64, hashlib
+        self._connect_lab()
 
         def make_snap(hostname):
             raw = ('set system host-name ' + hostname + '\n').encode()
@@ -470,6 +480,9 @@ class RestoreServiceTests(unittest.TestCase):
 
             def binding(self, lab_id):
                 return {'binding_id': 'b', 'revision': 'r', 'repository': {'prefix': 'labs/BGP-LAB/Base'}}
+
+            def reader(self, lab_id, repository=''):
+                return self.binding(lab_id)
 
             def invoke(self, request, binding=None):
                 self.calls.append(dict(request))
@@ -1969,6 +1982,462 @@ class ParallelRestoreTests(unittest.TestCase):
         on_disk = next(j for j in reread.state['restore_jobs'] if j['id'] == 'race')
         self.assertEqual(json.dumps(on_disk['targets'], sort_keys=True), json.dumps(stored['targets'], sort_keys=True))
 
+
+
+# --- the Load panel's backend: repository sources, topology, the states list, undo ---------------------------------
+
+LAB_TOPOLOGY = """name: clabllm-dev
+topology:
+  nodes:
+    PTX1:
+      kind: juniper_cjunosevolved
+    SW1:
+      kind: juniper_vjunosswitch
+  links:
+    - endpoints: ["PTX1:et-0/0/7", "SW1:ge-0/0/0"]
+"""
+# The same structure in other bytes: nodes in another order, a comment, the link's endpoints swapped, the
+# newer mapping form for one endpoint.
+SAME_TOPOLOGY = """# saved by the course author
+name: clabllm-dev
+topology:
+  nodes:
+    SW1: {kind: juniper_vjunosswitch}
+    PTX1: {kind: juniper_cjunosevolved}
+  links:
+    - endpoints:
+        - SW1:ge-0/0/0
+        - {node: PTX1, interface: et-0/0/7}
+"""
+REPO = '0123456789abcdef0123456789abcdef'
+OTHER_REPO = 'fedcba9876543210fedcba9876543210'
+
+
+def _snapshot(devices=('PTX1',), topology=None, restore=True):
+    import base64
+    files, rows = {}, []
+    platforms = {'PTX1': 'juniper_cjunosevolved', 'SW1': 'juniper_vjunosswitch'}
+    for name in devices:
+        raw, hraw = DESIRED_SET.encode(), DESIRED_HIER.encode()
+        row = {'path': name + '.cfg', 'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(), 'node': name,
+               'platform': platforms.get(name, 'juniper_cjunosevolved'), 'format': 'junos-display-set'}
+        files[name + '.cfg'] = base64.b64encode(raw).decode()
+        if restore:
+            row.update(restore_artifact=name + '.jcfg', restore_size=len(hraw), restore_sha256=hashlib.sha256(hraw).hexdigest(),
+                       restore_format='junos-hierarchical', restore_capable=True)
+            files[name + '.jcfg'] = base64.b64encode(hraw).decode()
+        rows.append(row)
+    if topology is not None:
+        raw = topology.encode()
+        rows.append({'path': 'topology.clab.yml', 'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(),
+                     'kind': 'topology', 'source': 'vm', 'vm_path': '/home/u/lab/topology.clab.yml'})
+        files['topology.clab.yml'] = base64.b64encode(raw).decode()
+    return {'manifest': {'schema': 2, 'lab_id': 'course', 'lab_name': 'clabllm-dev', 'node_names': sorted(devices),
+                         'files': rows}, 'files': files}
+
+
+class LoadBackendTests(unittest.TestCase):
+    """DESIGN.md 3.7 and LOAD.md B2 to B4: what the Load panel reads. The transaction itself is untouched; these tests
+    drive it through the same fakes as RestoreServiceTests."""
+    setUp = RestoreServiceTests.setUp
+    node = RestoreServiceTests.node
+    make_source_backup = RestoreServiceTests.make_source_backup
+    source = RestoreServiceTests.source
+    fake_apply = RestoreServiceTests.fake_apply
+    pending_ours = RestoreServiceTests.pending_ours
+    run_execute = RestoreServiceTests.run_execute
+
+    def run_source(self, source, node_names=('PTX1', 'SW1')):
+        job = self.svc.submit('lab1', source, list(node_names), 5, uuid.uuid4().hex)
+        with self.fake_apply(), self.pending_ours(), \
+                patch('app.restore.junos.confirm', return_value={'confirmed': True, 'had_pending_rollback': True}), \
+                patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            self.svc.execute(job['id'])
+        return self.svc.get_job(job['id'])
+
+    # The real GitProgress (reader, invoke and its VM identity check) over a scripted helper.
+    def real_git(self, snapshot=None, head='a' * 40, repositories=None):
+        from app import __version__
+        from app.git_progress import GitProgress, PROTOCOL
+        calls = []
+        repositories = [{'id': REPO, 'revision': 'rev1', 'label': 'course', 'path': '/home/teacher/course-repo',
+                         'prefix': 'labs/course'}] if repositories is None else repositories
+
+        def remote(host, request, stopping=None):
+            calls.append(dict(request))
+            mode = request['mode']
+            if mode == 'list':
+                return {'protocol': PROTOCOL, 'version': __version__, 'repositories': copy.deepcopy(repositories)}
+            if mode == 'history':
+                return {'commits': [], 'versions': [], 'head': head}
+            if mode == 'status':
+                return {'ready': True, 'head': head}
+            if mode == 'read-version':
+                return {'snapshot': copy.deepcopy(snapshot or _snapshot())}
+            raise AssertionError(mode)
+        patch('app.git_progress.remote_git', side_effect=remote).start()
+        self.svc.git = GitProgress(self.store, self.runner)
+        self.addCleanup(self.svc.git.close)
+        return calls
+
+    def own_binding(self, host=None):
+        from app.git_progress import host_identity
+        self.lab['git_binding'] = {'binding_id': 'own0000000000000000000000000000a', 'revision': 'r1',
+                                   'repository': {'prefix': 'labs/mine', 'path': '/home/student/repo'},
+                                   'host_identity': host_identity(host or self.store.state['host'])}
+        self.store.save()
+        return self.lab['git_binding']['binding_id']
+
+    # --- `repository` on a source (DESIGN.md 3.7 Q3) ---------------------------------------------------------------
+
+    def test_a_folder_source_through_a_repository_loads_on_a_lab_without_a_save_location(self):
+        calls = self.real_git(_snapshot(('PTX1', 'SW1')))
+        self.assertNotIn('git_binding', self.lab)
+        source = {'type': 'folder', 'path': '/labs/course/final', 'repository': REPO}
+        with patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            review = self.client.post('/api/labs/lab1/restore/preflight', json={'source': source})
+        self.assertEqual(review.status_code, 200, review.text)
+        data = review.json()
+        self.assertEqual(data['eligible_count'], 2)
+        self.assertEqual(data['source']['commit'], 'a' * 40)
+        self.assertEqual(data['source']['repository'], REPO)
+        modes = [c['mode'] for c in calls]
+        # HEAD of another registration comes from `history`, never from `status` (review F17).
+        self.assertIn('history', modes)
+        self.assertNotIn('status', modes)
+        self.assertTrue(all(c.get('binding_id') == REPO for c in calls if c['mode'] in ('history', 'read-version')))
+        job = self.run_source(dict(source, commit=data['source']['commit']))
+        self.assertEqual(job['status'], 'succeeded', job['message'])
+        self.assertTrue(job['pre_backup_job_id'])
+        public = self.client.get('/api/restore/jobs/' + job['id']).json()
+        self.assertEqual(public['source']['repository'], REPO)
+        # Only the opaque id: no path, label, revision or binding of the registration.
+        import json
+        text = json.dumps(public)
+        for secret in ('/home/teacher/course-repo', 'rev1', 'binding_id', 'host_identity'):
+            self.assertNotIn(secret, text)
+
+    def test_a_git_source_with_a_repository_reads_through_that_registration(self):
+        calls = self.real_git(_snapshot(('PTX1',)))
+        own = self.own_binding()
+        desc, candidates = self.svc.resolve_source('lab1', {'type': 'git', 'commit': 'b' * 40, 'path': '/labs/course/final',
+                                                            'repository': REPO})
+        self.assertEqual(desc['repository'], REPO)
+        self.assertIn('PTX1', candidates)
+        read = next(c for c in calls if c['mode'] == 'read-version')
+        self.assertEqual((read['binding_id'], read['commit'], read['path']), (REPO, 'b' * 40, 'labs/course/final'))
+        self.assertNotEqual(read['binding_id'], own)
+        self.assertFalse(any(c['mode'] in ('status', 'history') for c in calls))   # a git source names its commit
+
+    def test_the_labs_own_repository_keeps_reading_head_from_status(self):
+        calls = self.real_git(_snapshot(('PTX1',)))
+        own = self.own_binding()
+        for repository in ('', own):
+            calls.clear()
+            desc, _ = self.svc.resolve_source('lab1', {'type': 'folder', 'path': '/labs/mine/latest', 'repository': repository})
+            modes = [c['mode'] for c in calls]
+            self.assertEqual(modes, ['status', 'read-version'], repository)   # no `list`: the lab's own binding
+            self.assertEqual(desc['commit'], 'a' * 40)
+            self.assertTrue(all(c['binding_id'] == own for c in calls))
+
+    def test_an_unknown_repository_is_404_and_touches_no_device(self):
+        self.real_git()
+        with patch('app.restore.junos.capture') as capture:
+            for source in ({'type': 'folder', 'path': '/x/final', 'repository': OTHER_REPO},
+                           {'type': 'git', 'commit': 'a' * 40, 'path': '/x/final', 'repository': OTHER_REPO}):
+                response = self.client.post('/api/labs/lab1/restore/preflight', json={'source': source})
+                self.assertEqual(response.status_code, 404, response.text)
+                self.assertIn('not registered on the VM', response.json()['detail'])
+        capture.assert_not_called()
+
+    def test_without_a_save_location_or_a_repository_the_answer_is_todays_409(self):
+        self.real_git()
+        response = self.client.post('/api/labs/lab1/restore/preflight',
+                                    json={'source': {'type': 'folder', 'path': '/x/final'}})
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['detail'], 'Connect this lab to a Git repository first.')
+
+    def test_a_repository_of_another_vm_connection_is_refused_by_the_host_identity_check(self):
+        calls = self.real_git()
+        other_vm = dict(self.store.state['host'], address='10.9.9.9', fingerprint='SHA256:other')
+        own = self.own_binding(host=other_vm)   # the lab was connected while the manager used another VM
+        for repository in (own, ''):
+            response = self.client.post('/api/labs/lab1/restore/preflight',
+                                        json={'source': {'type': 'folder', 'path': '/labs/mine/latest', 'repository': repository}})
+            self.assertEqual(response.status_code, 409, response.text)
+            self.assertIn('VM identity changed', response.json()['detail'])
+        self.assertFalse(any(c['mode'] in ('status', 'read-version', 'history') for c in calls))
+
+    def test_a_repository_id_is_bounded_and_a_backup_source_ignores_it(self):
+        for bad in ('x' * 65, '../etc', 'a b'):
+            response = self.client.post('/api/labs/lab1/restore/preflight',
+                                        json={'source': {'type': 'folder', 'path': '/x', 'repository': bad}})
+            self.assertEqual(response.status_code, 422, bad)
+        with patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            response = self.client.post('/api/labs/lab1/restore/preflight',
+                                        json={'source': dict(self.source(), repository=OTHER_REPO)})
+        self.assertEqual(response.status_code, 200, response.text)   # self.git is a bare object(): nothing asked it
+        self.assertNotIn('repository', response.json()['source'])
+
+    # --- the topology comparison (DESIGN.md 3.7 Q4) ------------------------------------------------------------------
+
+    def topology_of(self, saved_topology, lab_topology=LAB_TOPOLOGY, devices=('PTX1', 'SW1')):
+        self.real_git(_snapshot(devices, topology=saved_topology))
+        if lab_topology is None:
+            self.lab.pop('definition_yaml', None)
+        else:
+            self.lab['definition_yaml'] = lab_topology
+        self.store.save()
+        with patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            return self.svc.preflight('lab1', {'type': 'folder', 'path': '/labs/course/final', 'repository': REPO}, None)
+
+    def test_the_topology_is_compared_by_structure_not_by_bytes(self):
+        self.assertEqual(self.topology_of(SAME_TOPOLOGY)['source']['topology'],
+                         {'differs': False, 'saved_devices': 2, 'matching_devices': 2})
+
+    def test_a_different_node_kind_or_link_is_a_different_topology(self):
+        variants = (LAB_TOPOLOGY + '    - endpoints: ["PTX1:et-0/0/1", "SW1:ge-0/0/1"]\n',
+                    LAB_TOPOLOGY.replace('kind: juniper_vjunosswitch', 'kind: arista_ceos'),
+                    LAB_TOPOLOGY.replace('SW1:ge-0/0/0', 'SW1:ge-0/0/5'),
+                    LAB_TOPOLOGY.replace('  links:', '    R3:\n      kind: cisco_xrv9k\n  links:'))
+        for variant in variants:
+            self.assertIs(self.topology_of(variant)['source']['topology']['differs'], True, variant)
+
+    def test_differs_is_null_when_either_side_is_missing_or_unreadable(self):
+        bomb = 'topology:\n  nodes:\n    a: ' + '[' * 5000 + ']' * 5000 + '\n'
+        cases = ((None, LAB_TOPOLOGY), (LAB_TOPOLOGY, None), (LAB_TOPOLOGY, ''), ('topology: [unclosed\n', LAB_TOPOLOGY),
+                 (LAB_TOPOLOGY, 'nodes: {a: 1}\n'), (bomb, LAB_TOPOLOGY), (LAB_TOPOLOGY, bomb),
+                 (LAB_TOPOLOGY, LAB_TOPOLOGY + '#' * (2 * 1024 * 1024)))
+        for saved, lab in cases:
+            topology = self.topology_of(saved, lab)['source']['topology']
+            self.assertIsNone(topology['differs'], (str(saved)[:40], str(lab)[:40]))
+            self.assertEqual((topology['saved_devices'], topology['matching_devices']), (2, 2))
+
+    def test_a_backup_source_has_no_topology_line_but_counts_its_devices(self):
+        self.lab['definition_yaml'] = LAB_TOPOLOGY
+        self.lab['nodes'][1]['platform'] = 'arista_ceos'   # SW1 runs another platform than the one saved
+        self.store.save()
+        with patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            review = self.svc.preflight('lab1', self.source(), None)
+        self.assertEqual(review['source']['topology'], {'differs': None, 'saved_devices': 2, 'matching_devices': 1})
+
+    def test_the_topology_line_is_counts_only_and_rides_on_the_stored_and_public_job(self):
+        import json
+        review = self.topology_of(LAB_TOPOLOGY.replace('SW1:ge-0/0/0', 'SW1:ge-0/0/5'))
+        self.assertEqual(set(review['source']['topology']), {'differs', 'saved_devices', 'matching_devices'})
+        self.assertNotIn('et-0/0/7', json.dumps(review))
+        self.assertNotIn('juniper_vjunosswitch:', json.dumps(review))
+        job = self.svc.submit('lab1', {'type': 'folder', 'path': '/labs/course/final', 'repository': REPO,
+                                       'commit': review['source']['commit']}, ['PTX1'], 5, uuid.uuid4().hex)
+        self.assertEqual(job['source']['topology'], {'differs': True, 'saved_devices': 2, 'matching_devices': 2})
+        self.assertNotIn('et-0/0/7', json.dumps(job))
+        stored = self.svc.get_job(job['id'])
+        self.assertEqual(stored['source']['topology']['differs'], True)
+
+    def test_topology_shape_never_raises(self):
+        from app.restore import topology_shape
+        for text in (None, 5, '', '   ', '- a\n- b\n', 'topology: {nodes: []}', 'topology: {nodes: {a: 1}, links: [1]}',
+                     'topology: {nodes: {a: 1}, links: [{endpoints: [1, 2]}]}',
+                     'topology: {nodes: {a: 1}, links: [{endpoints: [a, b, c]}]}', '\x00\x01', '{{{{'):
+            self.assertIsNone(topology_shape(text), repr(text))
+        self.assertIsNotNone(topology_shape('topology: {nodes: {a: {kind: linux}}}'))
+
+    # --- the saved states of a repository (LOAD.md B2) ---------------------------------------------------------------
+
+    def states_git(self, rows, head='c' * 40):
+        asked = []
+
+        class StubGit:
+            def states(self, lab_id, repository=''):
+                asked.append((lab_id, repository))
+                return {'head': head, 'truncated': False, 'states': copy.deepcopy(rows)}
+        self.svc.git = StubGit()
+        return asked
+
+    @staticmethod
+    def state_row(path, devices, kind='capture', group='state'):
+        summary = None if devices is None else {
+            'lab_id': 'course', 'lab_name': 'clabllm-dev', 'kind': kind, 'captured_at': '2026-10-01T10:00:00+00:00',
+            'topology_digest': 'f' * 64,
+            'devices': [{'node': n, 'short_name': n, 'platform': p, 'restore': r} for n, p, r in devices]}
+        return {'path': path, 'name': path.rsplit('/', 1)[-1], 'group': group, 'lab': 'clabllm-dev', 'kind': kind,
+                'layout': 'lab', 'saved_at': '2026-10-01T10:00:00+00:00', 'summary': summary}
+
+    def test_the_states_list_gives_each_state_its_coverage_and_view_only_reason_without_touching_a_device(self):
+        from unittest.mock import Mock
+        both = [('PTX1', 'juniper_cjunosevolved', True), ('SW1', 'juniper_vjunosswitch', True)]
+        rows = [self.state_row('BGP/latest', both, group='latest'),
+                self.state_row('BGP/start', both[:1]),
+                self.state_row('BGP/broken', [('PTX1', 'arista_ceos', True), ('SW1', 'juniper_vjunosswitch', True)]),
+                self.state_row('BGP/old', [(n, p, False) for n, p, _ in both]),
+                self.state_row('design/net', both, kind='design'),
+                self.state_row('BGP/unreadable', None)]
+        asked = self.states_git(rows)
+        self.own_binding()
+        self.svc.connect = Mock()
+        with patch('app.restore.junos.capture') as capture, patch('app.restore.junos.pending') as pending:
+            response = self.client.get('/api/labs/lab1/restore/states')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.svc.connect.assert_not_called(); capture.assert_not_called(); pending.assert_not_called()
+        self.assertEqual(asked, [('lab1', '')])
+        data = response.json()
+        self.assertEqual(set(data), {'head', 'truncated', 'lab_devices', 'states'})
+        self.assertEqual((data['head'], data['truncated'], data['lab_devices']), ('c' * 40, False, 2))
+        keys = {'path', 'commit', 'name', 'group', 'lab', 'kind', 'layout', 'saved_at', 'saved_devices',
+                'loadable_devices', 'view_only', 'view_only_reason'}
+        for row in data['states']:
+            self.assertEqual(set(row), keys)
+            self.assertEqual(row['commit'], 'c' * 40)
+        got = {r['path']: (r['saved_devices'], r['loadable_devices'], r['view_only'], r['view_only_reason'])
+               for r in data['states']}
+        self.assertEqual(got, {'BGP/latest': (2, 2, False, ''),
+                               'BGP/start': (1, 1, False, ''),          # "1 of 2 devices"
+                               'BGP/broken': (2, 1, False, ''),         # a platform mismatch is not loadable
+                               'BGP/old': (2, 0, True, 'no_restore_data'),
+                               'design/net': (2, 2, True, 'design'),
+                               'BGP/unreadable': (None, None, False, 'unknown')})
+        import json
+        text = json.dumps(data)
+        for private in ('topology_digest', 'lab_id', 'f' * 64, 'summary', 'short_name'):
+            self.assertNotIn(private, text)
+
+    def test_the_states_list_reads_a_repository_for_a_lab_without_a_save_location(self):
+        asked = self.states_git([self.state_row('final', [('PTX1', 'juniper_cjunosevolved', True)])])
+        self.assertEqual(self.client.get('/api/labs/lab1/restore/states').status_code, 409)
+        self.assertEqual(self.client.get('/api/labs/lab1/restore/states').json()['detail'],
+                         'Connect this lab to a Git repository first.')
+        self.assertEqual(asked, [])
+        response = self.client.get('/api/labs/lab1/restore/states', params={'repository': REPO})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(asked, [('lab1', REPO)])
+        self.assertEqual(response.json()['states'][0]['loadable_devices'], 1)
+        self.assertEqual(self.client.get('/api/labs/nope/restore/states', params={'repository': REPO}).status_code, 404)
+        self.assertEqual(self.client.get('/api/labs/lab1/restore/states', params={'repository': '../x'}).status_code, 422)
+
+    def test_the_states_list_passes_on_the_readers_refusals(self):
+        from fastapi import HTTPException
+
+        class Refusing:
+            def states(self, lab_id, repository=''):
+                if repository:
+                    raise HTTPException(404, 'This repository is not registered on the VM. Refresh the list.')
+                raise ValueError('Cannot reach the VM Git helper.')
+        self.svc.git = Refusing()
+        self.own_binding()
+        self.assertEqual(self.client.get('/api/labs/lab1/restore/states', params={'repository': OTHER_REPO}).status_code, 404)
+        response = self.client.get('/api/labs/lab1/restore/states')
+        self.assertEqual((response.status_code, response.json()['detail']), (409, 'Cannot reach the VM Git helper.'))
+
+    def test_the_states_list_and_the_preflight_give_the_same_verdict_for_each_no_device_reason(self):
+        from app.restore import NO_ARTIFACT, NO_DRIVER, NO_NODE, OTHER_PLATFORM, public_state
+        self.lab['nodes'].append(self.node('H1', 'linux'))
+        cases = (('GONE', 'juniper_cjunosevolved', True, NO_NODE),
+                 ('H1', 'linux', True, NO_DRIVER),
+                 ('SW1', 'juniper_cjunosevolved', True, OTHER_PLATFORM),
+                 ('PTX1', 'juniper_cjunosevolved', False, NO_ARTIFACT),
+                 ('PTX1', 'juniper_cjunosevolved', True, ''))
+        for name, platform, restore, expected in cases:
+            listed = public_state(self.state_row('s', [(name, platform, restore)]), self.lab)
+            cand = {'candidate': DESIRED_HIER if restore else '', 'desired_set': DESIRED_SET if restore else '',
+                    'platform': platform, 'restore_format': 'junos-hierarchical' if restore else '', 'short_name': name}
+            if not restore:
+                cand['unusable'] = NO_ARTIFACT
+            row = self.svc.map_targets(self.lab, {name: cand}, None)[0]
+            no_device = row['reason'] if row['reason'] in (NO_NODE, NO_DRIVER, OTHER_PLATFORM, NO_ARTIFACT) else ''
+            self.assertEqual(no_device, expected, name)
+            self.assertEqual(listed['loadable_devices'], 0 if expected else 1, name)
+            if not expected:
+                self.assertTrue(row['eligible'], row['reason'])
+
+    # --- a retry asks about some devices only (review L2) ------------------------------------------------------------
+
+    def test_a_retry_preflight_marks_the_devices_it_did_not_ask_about_and_never_probes_them(self):
+        with patch('app.restore.junos.capture', return_value=DESIRED_SET) as capture:
+            data = self.svc.preflight('lab1', self.source(), {'SW1'})
+        rows = {r['name']: r for r in data['targets']}
+        self.assertIs(rows['SW1']['requested'], True)
+        self.assertIs(rows['PTX1']['requested'], False)
+        self.assertEqual(capture.call_count, 1)
+        for probed in ('reachable', 'matches_saved', 'pending_changes', 'diff', 'diff_reason'):
+            self.assertNotIn(probed, rows['PTX1'])
+        self.assertIn('diff', rows['SW1'])
+        self.assertEqual(data['eligible_count'], 1)
+        everything = self.svc.preflight('lab1', self.source(), None)
+        self.assertTrue(all(r['requested'] is True for r in everything['targets']))
+
+    # --- undo: a load of the automatic backup a load took first (LOAD.md section 6, B4) ------------------------------
+
+    def test_a_load_of_a_loads_own_backup_succeeds_with_a_new_safety_backup_of_its_own(self):
+        first = self.run_execute()
+        self.assertEqual(first['status'], 'succeeded', first['message'])
+        undo = self.run_source({'type': 'backup', 'backup_job_id': first['pre_backup_job_id']})
+        self.assertEqual(undo['status'], 'succeeded', undo['message'])
+        self.assertTrue(undo['pre_backup_job_id'])
+        self.assertNotIn(undo['pre_backup_job_id'], (first['pre_backup_job_id'], self.backup['id']))
+        self.assertEqual(undo['source']['backup_job_id'], first['pre_backup_job_id'])
+
+    def partial_safety_backup(self):
+        self.runner.fail_nodes = {'PTX1'}
+        job = self.run_execute()
+        self.runner.fail_nodes = set()
+        backup = next(b for b in self.store.state['jobs'] if b['id'] == job['pre_backup_job_id'])
+        self.assertEqual((backup['source'], backup['status']), ('restore-pre', 'partial'))
+        return backup
+
+    def test_the_undo_of_a_load_whose_safety_backup_failed_for_one_device_lists_the_other_devices(self):
+        backup = self.partial_safety_backup()
+        source = {'type': 'backup', 'backup_job_id': backup['id']}
+        with patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            review = self.svc.preflight('lab1', source, None)
+        self.assertEqual([r['name'] for r in review['targets']], ['SW1'])
+        self.assertEqual(review['source']['saved_nodes'], ['SW1'])
+        self.assertEqual(review['eligible_count'], 1)
+        undo = self.run_source(source, node_names=('SW1',))
+        self.assertEqual(undo['status'], 'succeeded', undo['message'])
+
+    def test_the_same_partial_backup_is_refused_when_it_is_not_a_loads_safety_backup(self):
+        backup = self.partial_safety_backup()
+        for source_name in ('manual', 'restore-post', 'scheduled', None):
+            if source_name is None:
+                backup.pop('source')
+            else:
+                backup['source'] = source_name
+            self.store.save()
+            with self.assertRaises(Exception) as refused:
+                self.svc.preflight('lab1', {'type': 'backup', 'backup_job_id': backup['id']}, None)
+            self.assertEqual(refused.exception.status_code, 400)
+            self.assertIn('Capture incomplete', refused.exception.detail)
+
+    def test_a_safety_backup_without_one_successful_device_is_refused(self):
+        backup = self.partial_safety_backup()
+        for node in backup['nodes']:
+            node['status'] = 'failed'
+        for status, words in (('partial', 'Capture incomplete'), ('failed', 'Choose a completed configuration capture')):
+            backup['status'] = status
+            self.store.save()
+            with self.assertRaises(Exception) as refused:
+                self.svc.preflight('lab1', {'type': 'backup', 'backup_job_id': backup['id']}, None)
+            self.assertEqual(refused.exception.status_code, 400)
+            self.assertIn(words, refused.exception.detail)
+
+    def test_a_safety_backup_whose_file_no_longer_matches_its_digest_is_still_refused(self):
+        backup = self.partial_safety_backup()
+        sw1 = next(n for n in backup['nodes'] if n['name'] == 'SW1')
+        folder = self.store.root / 'backups' / 'lab1' / 'history' / backup['id']
+        (folder / sw1['restore_file']).write_text(DESIRED_HIER.replace('FINAL', 'TAMPERED'), encoding='utf-8')
+        with patch('app.restore.junos.capture') as capture:
+            with self.assertRaises(Exception) as refused:
+                self.svc.preflight('lab1', {'type': 'backup', 'backup_job_id': backup['id']}, None)
+        self.assertEqual(refused.exception.status_code, 400)
+        self.assertIn('no longer matches the digest', refused.exception.detail)
+        capture.assert_not_called()
+
+    def test_a_git_save_of_a_partial_backup_stays_strict(self):
+        from app.git_progress import captured_snapshot
+        backup = self.partial_safety_backup()
+        with self.assertRaises(ValueError) as refused:
+            captured_snapshot(self.store, copy.deepcopy(backup))
+        self.assertIn('Capture incomplete', str(refused.exception))
 
 if __name__ == '__main__':
     unittest.main()
