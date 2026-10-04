@@ -658,6 +658,19 @@ test('B09 a path typed key by key is cleaned from what was typed, not from the e
  const html=p2.folderChooserMarkup(null,{mode:'state',name:'x',value:'BGP/x',status:'ready',unavailable:'A backup is running.',answer:{kind:'free',folder:'BGP/x',typed:'BGP/x',exists:false}});
  assert.match(html,/data-folder-primary="1" disabled>Save state<\/button><span class="form-help" id="folder-reason">A backup is running\. Save state is available when it finishes\.<\/span>/);
 });
+test('L2-7 no folder check is sent without a repository: a name chip clicked before the list arrived waits for it; L2-6 a typed address clears what was asked about the repository shown before',async()=>{
+ let release=null;const checks=[];
+ const g=chooserHarness({routes:{'GET /labs/lab/git/places':()=>new Promise(resolve=>{release=()=>resolve(places({}));}),'POST /labs/lab/git/places/check':data=>{checks.push(data.repository+':'+data.folder);return {kind:'free',folder:data.folder,typed:data.folder,exists:false};}}});
+ g.context.saveDrawerOpen('state',{});await settle();
+ await g.act('name',{value:'start',echo:'start'});for(const timer of [...g.timers])if(typeof timer==='function')timer();await settle();
+ assert.deepEqual(checks,[],'nothing is asked while the repository is not known');
+ release();await settle();for(const timer of [...g.timers])if(typeof timer==='function')timer();await settle();
+ assert.ok(checks.length>=1&&checks.every(c=>c.startsWith('b:')),'every check names the repository: '+JSON.stringify(checks));
+ const a=chooserHarness({});a.context.saveDrawerOpen('chooser',{mode:'location',address:true});await settle();
+ a.sd.chooser.answer={kind:'state',label:'Old',folder:'x'};a.sd.chooser.question={kind:'same-name'};a.sd.chooser.pending={count:1};
+ await a.act('url',{value:'https://github.com/me/other.git'});
+ assert.equal(a.sd.chooser.answer,null);assert.equal(a.sd.chooser.question,null);assert.equal(a.sd.chooser.pending,null);
+});
 test('T1-6 a save keeps its name in All versions when a newer save arrives: its own note, or Unnamed save; never the folder’s name for the newest row only',()=>{
  const g=harness();
  const job=(id,note,created)=>({id,lab_id:'lab',target:'latest',status:'synced',pushed:true,commit:id.repeat(40).slice(0,40),note,created,finished:created,changed_files:['Work/latest/r1.cfg'],snapshot_path:'Work/latest'});

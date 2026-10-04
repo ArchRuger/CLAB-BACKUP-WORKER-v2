@@ -526,6 +526,7 @@ async function drwLoadChooser(){
   c.answer=!c.model&&!context?.binding&&c.value===(places.default?.folder||'')?places.default?.answer||null:null;
   c.status='ready';
   if(c.mode!=='browse'&&!c.address&&!(c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(drwTyped(c)):c.value))&&!c.answer)drwChooserCheck(c.value);
+  else if(c.held){c.answer=c.answer||(c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(drwTyped(c)):c.value))||null;if(drwChooserHeld())return;}
   drwSay('');
  }catch(error){if(request!==saveDrawer.request)return;c.status=error instanceof TypeError?'unreachable':'error';c.error=c.status==='error'?error.message||'':'';}
  saveDrawerRender();
@@ -550,7 +551,11 @@ function drwChooserHeld(){
  return true;
 }
 async function drwChooserCheck(folder){
- const c=saveDrawer.chooser,id=saveDrawer.lab,seq=++c.seq,request=saveDrawer.request;c.checking=true;c.checkingFor=folder;
+ const c=saveDrawer.chooser,id=saveDrawer.lab;
+ // No check without a repository (the list has not arrived: the loaded chooser asks for the folder it shows, and a held click
+ // waits for that answer; L2-7).
+ if(!c.repository||c.status==='loading'){saveDrawerRender();return;}
+ const seq=++c.seq,request=saveDrawer.request;c.checking=true;c.checkingFor=folder;
  try{
   const answer=await json('/labs/'+drwEnc(id)+'/git/places/check','POST',{repository:c.repository,folder,purpose:c.mode==='state'?'state':'save',name:c.mode==='state'?c.name:''});
   if(seq!==c.seq||request!==saveDrawer.request)return;
@@ -759,7 +764,8 @@ async function drwChooserApply(intent,event){
   case 'name':drwChooserName(intent);break;
   case 'address-on':{c.address={value:''};c.answer=null;c.question=null;c.pending=null;c.refused='';c.problem=null;c.selected=null;c.newFolder=null;if(!c.pathTouched)c.value=c.defaultFolder||c.value;saveDrawerRender();drwChooserFocus('#folder-url');break;}
   case 'address-off':{c.address=null;c.answer=null;c.question=null;c.refused='';c.problem=null;saveDrawerRender();if(c.status==='ready')drwChooserCheck(typeof folderClean==='function'?folderClean(drwTyped(c)):c.value);drwChooserFocus('[data-folder-action="address-on"]');break;}
-  case 'url':if(c.address){c.address={value:String(intent.value??'')};c.answer=null;c.question=null;c.refused='';c.problem=null;saveDrawerRender();}break;
+  // A typed address is another repository: nothing asked or answered about the one shown before stays (L2-6).
+  case 'url':if(c.address){c.address={value:String(intent.value??'')};c.answer=null;c.answerFor=null;c.question=null;c.pending=null;c.held=null;c.refused='';c.problem=null;saveDrawerRender();}break;
   case 'repository':c.repository=intent.value;c.value='';c.raw=null;c.pathTouched=false;c.answer=null;await drwLoadChooser();break;
   case 'bring':c.bring=!!intent.value;saveDrawerRender();break;
   case 'tree-open':c.treeOpen=!!intent.value;break;

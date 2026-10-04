@@ -71,6 +71,20 @@ const classes=html=>[...html.matchAll(/class="([^"]*)"/g)].flatMap(m=>m[1].split
 const focusCount=html=>(html.match(/data-panel-focus/g)||[]).length;
 
 // ---- 9. the list ---------------------------------------------------------------------------------------------------------------------
+test('L2-5 while the submit is on its way the confirmation says Starting the load…',async()=>{
+ const p=confirmPage(fourTargets());
+ await p.c.loadChoose('lab',{type:'folder',path:'/BGP/final'},'Final');
+ const r=vm.runInContext('loadReview',p.c);assert.equal(p.c.loadRunReason(r),'');
+ r.sending=true;assert.equal(p.c.loadRunReason(r),'Starting the load…');p.c.loadSyncRun();
+ assert.equal(p.els['load-run-reason']?p.els['load-run-reason'].textContent:'Starting the load…','Starting the load…');
+});
+test('L2-3 named lab states come first and are never hidden behind the cut while an unnamed one is shown',async()=>{
+ const rows=[];for(let i=1;i<=8;i++)rows.push(stateRow('a'+i+'/latest','state',{name:'A'+i}));
+ rows.push(stateRow('course/solution/latest','state',{name:'Solution',named:true}),stateRow('course/start/latest','state',{name:'Start',named:true}));
+ const p=page({gets:e=>e==='/labs/lab/restore/states'?rowAnswer(rows):{}});await p.open();
+ const names=[...p.body().matchAll(/data-load-row="\d+"><span>([^<]+)</g)].map(m=>m[1]);
+ assert.deepEqual(names.slice(0,2),['Solution','Start']);assert.equal(names.length,8);assert.match(p.body(),/2 more in All versions/);
+});
 test('Q1440-14 one time for one save: the latest save shows when it was saved (the job’s time, as the chip and All versions show it), not when its folder was last written',async()=>{
  const rows=[stateRow('BGP/latest','latest',{saved_at:iso(NOW-5e3)}),stateRow('BGP/checkpoints/cp1','checkpoint',{saved_at:iso(NOW-7200e3)})];
  const job={id:'g1',lab_id:'lab',target:'latest',status:'synced',pushed:true,commit:'a'.repeat(40),note:'Interface descriptions cleaned up',created:iso(NOW-22*60e3),finished:iso(NOW-21*60e3),captured:true,changed_files:['BGP/latest/r1.cfg'],snapshot_path:'BGP/latest'};

@@ -241,9 +241,10 @@ function saveWantedView(cs,lab){
  if(want.panel==='first')return lab.git_binding?null:{panel:'first',job:null};   // Save on a lab without a save location
  if(want.panel==='upload'||want.panel==='failed'){
   const job=saveJobById(want.job);if(!job||!job.commit||job.pushed||!['committed','review_pending','push_pending','interrupted'].includes(job.status))return null;
-  // One state, one name (DESIGN.md 7.1: Can't save comes before Upload failed): an upload refused because both sides changed is
-  // the chip's Can't save, with the failed upload behind its Also line, unless the person asked for that view with Show.
-  if(!want.asked&&job.status==='push_pending'&&cs.key==='cant'&&cs.code==='diverged')return null;
+  // One state, one name (DESIGN.md 7.1: Can't save comes before Upload failed): while the chip reads Can't save (both sides
+  // changed, the account cannot upload), the panel shows that view, with the failed upload behind its Also line, unless the
+  // person asked for the upload's view with Show. No second view lingers beside the chip (Q1440-11, L2-4).
+  if(!want.asked&&job.status==='push_pending'&&cs.key==='cant')return null;
   return {panel:job.status==='push_pending'?'failed':'upload',job};
  }
  const holds=[cs,cs.also,cs.also2].some(s=>s&&s.panel===want.panel);

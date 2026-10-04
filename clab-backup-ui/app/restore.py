@@ -380,7 +380,10 @@ def public_state(row, lab, head=''):
     return {'path': _text(row.get('path'), 1000), 'commit': _text(head, 64), 'name': _text(row.get('name')),
             'group': row.get('group') if row.get('group') in STATE_GROUPS else 'state', 'lab': _text(row.get('lab')),
             'kind': kind, 'layout': _text(row.get('layout')), 'saved_at': _text(row.get('saved_at'), 64),
-            'saved_devices': saved, 'loadable_devices': loadable, 'view_only': view_only, 'view_only_reason': reason}
+            'saved_devices': saved, 'loadable_devices': loadable, 'view_only': view_only, 'view_only_reason': reason,
+            # A lab state that named itself (its manifest carries `state`), as against a folder that is listed only because
+            # it holds someone's saves: the Load panel shows the named ones first and never hides one behind its cut.
+            'named': isinstance(summary, dict) and bool(str(summary.get('state') or '').strip())}
 
 
 class RestoreService:

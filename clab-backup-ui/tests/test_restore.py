@@ -2291,10 +2291,14 @@ class LoadBackendTests(unittest.TestCase):
         self.assertEqual(set(data), {'head', 'truncated', 'lab_devices', 'states'})
         self.assertEqual((data['head'], data['truncated'], data['lab_devices']), ('c' * 40, False, 2))
         keys = {'path', 'commit', 'name', 'group', 'lab', 'kind', 'layout', 'saved_at', 'saved_devices',
-                'loadable_devices', 'view_only', 'view_only_reason'}
+                'loadable_devices', 'view_only', 'view_only_reason', 'named'}
         for row in data['states']:
             self.assertEqual(set(row), keys)
+            self.assertIs(row['named'], False, 'none of these manifests names itself a lab state')
             self.assertEqual(row['commit'], 'c' * 40)
+        from app.restore import public_state
+        named = public_state(dict(path='course/start/latest', name='Start', group='state', summary=dict(state='Start', devices=[])), self.store.lab('lab1'), 'c' * 40)
+        self.assertIs(named['named'], True)
         got = {r['path']: (r['saved_devices'], r['loadable_devices'], r['view_only'], r['view_only_reason'])
                for r in data['states']}
         self.assertEqual(got, {'BGP/latest': (2, 2, False, ''),

@@ -155,7 +155,9 @@ function loadListModel(lab,entry){
  const own=!!(lab&&lab.git_binding)&&!entry.repository;
  const latest=own?rows.filter(r=>r.group==='latest').slice(0,1):[];
  const checkpoints=own?rows.filter(r=>r.group==='checkpoint').sort((a,b)=>loadEpoch(b.saved_at)-loadEpoch(a.saved_at)).slice(0,LOAD_OWN_CHECKPOINTS):[];
- const states=rows.filter(r=>r.group==='state');
+ // Lab states that named themselves come first (in the manager's order), before folders listed only because they hold saves:
+ // the cut below never hides a named lab state while an unnamed one is shown (live finding L2-3).
+ const listed=rows.filter(r=>r.group==='state'),states=[...listed.filter(r=>r.named===true),...listed.filter(r=>r.named!==true)];
  const labDevices=Number.isFinite(answer.lab_devices)?answer.lab_devices:loadLabDevices(lab).length;
  const repository=String(entry.repository||'');
  const item=(row,name,when)=>({row,name,when,source:loadSource({type:'folder',path:'/'+String(row.path||'').replace(/^\/+/,''),commit:row.commit,repository})});
@@ -258,6 +260,7 @@ function loadConfirmRows(r,lab){
 // Why the red Load is disabled, as the visible text beside it; '' when it is enabled.
 function loadRunReason(r,rows){
  rows=rows||loadConfirmRows(r,loadLab(r.labId));
+ if(r.sending)return 'Starting the load…';   // the manager checks the devices before it answers; this can take half a minute (L2-5)
  if(!rows.some(x=>x.eligible))return '';
  if(loadSaveRunning(r.labId))return 'A save is running.';
  const hold=loadBusy(r.labId);if(hold)return hold;
