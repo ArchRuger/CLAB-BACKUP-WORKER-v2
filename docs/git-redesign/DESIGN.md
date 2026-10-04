@@ -406,6 +406,15 @@ when nothing waits in the repository; with saves waiting the action is **Upload*
 Transient states (a save or load in progress, another operation running) disable Save with the reason
 visible in the chip or beside the button; they are not refusals of a choice.
 
+A placement (the first save, the chooser's **Save here**, **Save as a lab state…**) can meet the same causes,
+because registering a folder asks the VM and the online copy. It then reads exactly like the chip: the manager
+records the cause in the lab's `git_status` (the helper's sentences of `register`, `register-prefix` and
+`connect` have their codes in the same table: the online copy is ahead, `diverged`; the checkout holds commits
+nobody saved through the manager, `busy`), and the chooser and the first-save panel show that sentence with its
+action; **Try again** repeats the placement. This is not a refusal of the folder: no other folder of that
+repository would be accepted either until the cause is cleared. A placement that succeeded forgets the
+remembered status, which described the folder the lab left.
+
 ### 3.9 The whole lab in every save (G1)
 
 `tests/test_git_whole_lab.py` (27 tests) proves that the topology file and the map travel with a save to
