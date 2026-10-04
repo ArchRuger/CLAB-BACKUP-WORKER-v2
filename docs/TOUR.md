@@ -24,11 +24,14 @@ operation history, manager settings and Diagnostics.
 
 ## The lab workspace
 
-**One header, one situation.** The lab name, its state, *n of m devices ready*, the
-last save, **Save progress** and **Lab actions ▾**. When something needs you — a device
-that refuses its login, an operation that failed, a save that needs attention — a
-banner under the header says so in one sentence with the button that fixes it. Five
-tabs: **Topology · Devices · Progress · Tools · Advanced**.
+**One header, one situation.** The lab name, its state, *n of m devices ready*, a small
+**save chip** that says where the lab's saved work stands (*Saved 21 min ago*, *1 save to
+upload*, *Can't save*, *Running <name>*), **Save**, **Load** and **Lab actions ▾**. The header
+is the same on every tab: saving and loading are never more than one click away. Clicking the
+chip opens a panel with the one sentence that matters now and the button that goes with it. When
+something else needs you — a device that refuses its login, an operation that failed — a
+banner under the header says so in one sentence with the button that fixes it. Four tabs:
+**Topology · Devices · Tools · Advanced**.
 
 **Topology.** Every device on the map carries its state; right-click one (or press
 Shift+F10) for *Open CLI ↗*, *Capture traffic…*, *Back up configuration* and *Device
@@ -48,22 +51,34 @@ and, under *Advanced*, the connection and credential settings.
 
 ![Device panel](images/ui/13-device-drawer-attention.png)
 
-**Progress.** Where the lab saves (*Saving to Course-Labs › labs/BGP/work*), when it
-last saved, and the saved versions you can return to: *Latest*, your *Checkpoints*,
-the *Baseline*, and the *Instructor and reference versions* kept in other folders of
-the same repository. Every version can be viewed, compared with your latest save or —
-for Junos, EOS and IOS XR labs — applied to the running devices without changing where the lab saves.
+**Save.** **Save** saves the lab at once, without asking you to type anything: the topology
+file, the map and the configuration of every included device go into one folder of your
+repository as one save on the lab VM. Then one sentence says what changed, with three buttons:
+**Upload** sends it to the online repository, **Not now** leaves it on the VM (the chip then
+says *1 save to upload*) and **See changes** opens the files. Nothing is uploaded without
+**Upload**. A save gets a name automatically (*ceos and xrv9k changed*); you can change it, and
+**Keep as a checkpoint** keeps a save under a name you choose. The chip panel also shows where
+the lab saves (*Saves to: Course-Labs › BGP*, with **Change…**) and, at the bottom, **All
+versions**, **Save as a lab state…** and **Save settings**.
 
-![Progress](images/ui/30-progress.png)
+![Save](images/ui/30-progress.png)
+
+**All versions.** The drawer opened from the chip panel lists everything saved for the lab:
+*Your saves*, *Checkpoints*, the *Starting point*, the *Lab states* of the repository (a
+course's Start, Broken and Final) and, folded away, *Other labs in this repository*. Every
+version can be viewed, downloaded as a ZIP, compared with your latest save (**See what's
+different**) or loaded with **Load this state…**.
 
 ![A saved version](images/ui/34-saved-version.png)
 
-**Replacing the running configuration is reviewed first.** The review lists the source,
-every device with what would change (or why it is skipped), the three safety rules —
-a backup first, no reboot, automatic undo when a device cannot be reached — and asks
-you to acknowledge before *Replace configurations*.
+**Loading is reviewed first.** **Load** lists your saves and the lab states of the repository.
+Choose one and the panel lists every device with what would change (*3 lines differ*, *Already
+matches*, or why a device is skipped). The red **Load** is the confirmation: each device
+replaces its whole running configuration inside its own transaction, after an automatic
+backup, nothing reboots, and each device undoes the change itself if it loses contact. **Undo
+this load** puts the backup from before the load back. Load never changes the topology.
 
-![Apply a saved state](images/ui/36-restore-review.png)
+![Load a saved state](images/ui/36-restore-review.png)
 
 **Tools.** Packet capture and the manager's own configuration backups, with *Open all
 CLIs* and *Edit map* (where the map file download and the draw.io export are) under *More tools*.
@@ -83,7 +98,7 @@ list of lab operations and the danger zone.
 options* group holds *Import map…*, *Edit map* and *Operation history…*. The review
 names the action, says what happens to the devices, warns that unsaved configuration
 changes are lost, shows when progress was last saved (in red when it never was) and
-offers *Save progress first*; the exact containerlab command sits under *Technical
+offers **Save first**; the exact containerlab command sits under *Technical
 details*. Confirming closes the review; the banner reports the running operation with
 *View output*.
 

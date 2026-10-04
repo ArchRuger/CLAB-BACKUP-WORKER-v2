@@ -23,9 +23,9 @@ Current release: **1.30.60** · [changelog](docs/CHANGELOG.md) · [all documenta
   actions, a map editor (*Edit map*: the drawing only, never the topology) with draw.io
   export, SuperPuTTY session export.
 - **Keep configurations**: on-demand and scheduled backups over Ansible for EOS,
-  Junos and IOS-XR, per-device history and downloads, and *Save progress* that commits
-  on the VM and, after you have reviewed the changes, pushes to your Git repository with
-  your existing login.
+  Junos and IOS-XR, per-device history and downloads, and **Save** in the lab header that
+  commits on the VM and, when you click **Upload**, pushes to your Git repository with
+  your existing login; **Load** puts a saved state back onto the running devices.
 - **See the packets**: Wireshark runs on the VM in an isolated container and streams
   to your browser. Pick a node's port on the map and start.
 - **Stay in step with the VM**: read-only discovery every 30 seconds over a
@@ -44,7 +44,7 @@ vJunos-switch and vQFX, Cisco XRv9k. Any node that speaks SSH gets a terminal.
 | | |
 |---|---|
 | ![Progress tab: saved versions with Latest, checkpoints and the instructor's reference states](docs/images/progress-saved-versions.png) | ![Review before a saved state replaces the running configuration](docs/images/restore-review.png) |
-| *Save progress to Git, keep checkpoints, and apply the instructor's reference states to the running lab.* | *Every operation is reviewed first: each device's outcome, the safety rules, and an acknowledgement before anything changes.* |
+| *Save to Git, keep checkpoints, and load the instructor's lab states onto the running lab.* | *Every operation is reviewed first: each device's outcome, the safety rules, and a confirmation before anything changes.* |
 | ![Wireshark in the browser](docs/images/wireshark-in-browser.png) | ![SSH terminal](docs/images/ssh-terminal.png) |
 | *Wireshark runs on the VM and streams to the browser: a ping crossing the captured link.* | *SSH to any node in a browser tab with the credentials the manager already holds.* |
 
@@ -101,7 +101,7 @@ bash "$HOME/projects/clab-manager/deploy/install.sh"
 
 The [quick install](docs/QUICK-INSTALL.md) lists the same route step by step, the
 [fresh VM guide](docs/FRESH-VM-GUIDE-V2.md) starts before Ubuntu is installed, and
-[Git setup](docs/GIT-SETUP.md) connects a repository for *Save progress*.
+[Git setup](docs/GIT-SETUP.md) connects a repository for **Save**.
 
 ## How it fits together
 
@@ -138,14 +138,15 @@ and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 | Read this | When you want to |
 |---|---|
-| [Tour](docs/TOUR.md) | See the student UI — My labs, the lab workspace, Progress and Tools — in screenshots |
+| [Tour](docs/TOUR.md) | See the student UI — My labs, the lab workspace with its Save and Load header, and Tools — in screenshots |
 | [Quick install](docs/QUICK-INSTALL.md) | Follow the shortest route: paste, type, click |
 | [Fresh VM guide](docs/FRESH-VM-GUIDE-V2.md) | Build a VM from Proxmox settings to the first Git save, with recovery steps |
 | [Guided installation](docs/INSTALL.md) | Understand the installer's menu and phases, upgrades and the capture stack |
 | [VM connection](docs/VM-CONNECTION.md) | Set up or repair the `clab-discovery` account and password |
 | [Lab operations](docs/LAB-OPERATIONS.md) | Start, stop, redeploy and destroy labs, edit the map, read device readiness |
 | [Lab builder](docs/LAB-BUILDER.md) | Draw a new lab in the browser, save it to the VM and deploy it, or edit the topology of a lab that is not deployed |
-| [Git setup](docs/GIT-SETUP.md) and [Save progress](docs/GIT-PROGRESS.md) | Register a checkout, then save, checkpoint, compare, apply and push from the Progress tab |
+| [Git setup](docs/GIT-SETUP.md) and [Save and load](docs/GIT-PROGRESS.md) | Register a checkout, then use **Save**, **Upload**, checkpoints and **Load** from the lab header |
+| [Course states](docs/COURSE-STATES.md) | Make a course's Start, Broken and Final states with **Save as a lab state…** and know how students load them |
 | [Browser Wireshark](docs/CAPTURE.md) | Run capture sessions, download captures, repair or remove the capture stack |
 | [Network telemetry](docs/TELEMETRY.md) | Read the retirement notice for the removed telemetry feature and Grafana dashboards |
 | [Health check](docs/HEALTH-CHECK.md) and [Diagnostics](docs/DEBUG-PANEL.md) | Read `check-install.sh` results and diagnose the VM connection from the browser |

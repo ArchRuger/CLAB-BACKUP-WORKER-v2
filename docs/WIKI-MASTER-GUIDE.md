@@ -880,7 +880,7 @@ The helper accepts regular files without symlink components, with limits of 1 Mi
 
 ## Devices
 
-Opening a lab from **My labs** shows its workspace on the **Topology** tab. The tabs are **Topology**, **Devices**, **Progress**, **Tools** and **Advanced**, in that order; **Credentials** and **Action logs** are sections of **Advanced**. The lab header shows the lab's state pill, *n of m devices ready*, the last-save sentence, **Save progress** and **Lab actions ▾**. Select **Devices** for one row per device with its state pill (Ready · Starting · Needs credentials · Needs attention · Unavailable), the reason sentence, **Open CLI ↗** and **Details**; the **Technical details** toggle shows the classic table (backup checkbox, address:port, network OS, credentials, last SSH check, last backup). **Details** opens the device panel with the state, **Open CLI ↗** / **Capture traffic…** / **Back up configuration**, the latest login check (**Test login now**, **Check credentials**), the backups of this device and, under **Advanced**, **Edit connection** for the endpoint, network OS, credentials and download device name. Test a device after its network OS completes booting. Choose the correct network OS for supported devices; generic SSH access does not imply configuration-backup support.
+Opening a lab from **My labs** shows its workspace on the **Topology** tab. The tabs are **Topology**, **Devices**, **Tools** and **Advanced**, in that order; **Credentials** and **Action logs** are sections of **Advanced**. The lab header shows the lab's state pill, *n of m devices ready*, the save chip (*Saved 21 min ago*, *1 save to upload*, *Can't save*, *Running <name>*), **Save**, **Load** and **Lab actions ▾**; the header is the same on every tab. Select **Devices** for one row per device with its state pill (Ready · Starting · Needs credentials · Needs attention · Unavailable), the reason sentence, **Open CLI ↗** and **Details**; the **Technical details** toggle shows the classic table (backup checkbox, address:port, network OS, credentials, last SSH check, last backup). **Details** opens the device panel with the state, **Open CLI ↗** / **Capture traffic…** / **Back up configuration**, the latest login check (**Test login now**, **Check credentials**), the backups of this device and, under **Advanced**, **Edit connection** for the endpoint, network OS, credentials and download device name. Test a device after its network OS completes booting. Choose the correct network OS for supported devices; generic SSH access does not imply configuration-backup support.
 
 The device list remains available even when a map is imported. The current MVP has no host CPU/memory utilization collector to configure.
 
@@ -918,16 +918,15 @@ and host helpers using [Part 16](#part-16), refresh the browser, then use **Lab
 actions ▾ › Sync topology from VM** or select the new network OS manually. Sync
 retains enabled/disabled choices and saved credential settings. Review **Include in
 backups** (**Devices › Technical details**) for every intended device before taking a
-lab-wide backup; the devices included in every Save progress are chosen separately
-under **Progress › Save settings**.
+lab-wide backup; the devices included in every **Save** are chosen separately
+in **Save settings** (chip panel › **Save settings**).
 
 Wait for the NOS to finish booting, then verify login and one configuration
 capture. Manager support does not prove an image can boot on the chosen host;
 vJunos-switch's nested-virtualization requirement is explained in [Part 2](#part-2). Consult the
 [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/) and
 [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) kind guides
-for image and runtime requirements. Loading a saved version downloads files; **Apply to running
-lab…** (Progress tab) is offered for cJunosEvolved and vJunos-switch, not for
+for image and runtime requirements. Downloading a saved version downloads files; **Load** (the header) puts a saved state onto the running devices and is offered for cJunosEvolved and vJunos-switch, not for
 vQFX (see LAB-OPERATIONS.md for the full list of restorable platforms).
 
 ## Map and right-click actions
@@ -966,9 +965,9 @@ container on the VM and opens in a browser tab. See [CAPTURE.md](CAPTURE.md).
 
 ## Save progress to Git
 
-**Save progress** (lab header or **Progress** tab) captures the selected devices,
+**Save** (the lab header, on every tab) captures the selected devices and the lab's topology and map,
 exports the completed snapshot into the engineer's registered VM repository, commits
-changed configuration files and, after you confirm **Review before uploading**, pushes. Set this up once using [Part 21](#part-21). An ordinary backup or
+the changed files and then offers **Upload**, **Not now** and **See changes**; the push happens only after you click **Upload**. **Load** puts a saved state back onto the running devices. Set this up once using [Part 21](#part-21). An ordinary backup or
 schedule does not publish to that repository automatically.
 
 ## SuperPuTTY session export
@@ -1065,7 +1064,7 @@ displays the active application release and the supported network OSes.
 Every lab operation is reviewed before it runs. The review names the action in
 plain words (*Destroy <lab>?*, *Stop devices?*), states what happens, warns
 *Configuration changes you have not saved are lost.* for disruptive actions, shows
-when the lab was last saved with a **Save progress first** button when the lab has
+when the lab was last saved with a **Save first** button when the lab has
 a save location, and shows the exact containerlab command under **Technical
 details**. Review tokens expire after five minutes and bind the VM connection,
 original file digest and relevant deployment state. A change requires another
@@ -1233,8 +1232,9 @@ settings. Neither is required for an image upgrade. Neither destroys live labs.
 
 After **Remove from this manager…**, the default exclusion keeps the lab hidden. Under **Manager ▾ › Labs found on the VM…**, choose **Stop hiding** on the hidden lab to offer it again. The next import still needs confirmation.
 
-Close active terminals and wait for jobs before **Start fresh**. Resolve pending
-Git saves, or explicitly choose **Keep snapshot only** to dismiss their export
+Close active terminals and wait for jobs before **Start fresh**. Upload pending
+Git saves (the chip reads *1 save to upload*), or open a save's **Details** and explicitly choose
+**Keep snapshot only** to dismiss its export
 while retaining the local snapshot and any Git commit. Start fresh still removes
 manager backups; it does not delete the engineer's Git checkout or remote.
 Back up that checkout independently.
@@ -1580,7 +1580,7 @@ those lines in `deploy/image.env` rather than appending a second copy. Then run 
 - [ ] A complete manager data archive has been copied off the VM.
 - [ ] If Git publishing is enabled, the chosen owner can authenticate without an interactive prompt.
 - [ ] The separate installation report has been run after browser VM/Git setup, with failed/warned/skipped results resolved or understood; manual workstation, device and push tests remain separate.
-- [ ] Save progress, a pending push retry and a version ZIP download have been checked on a test repository.
+- [ ] Save, Upload, a retry after a failed upload and a version ZIP download have been checked on a test repository.
 - [ ] The Git checkout and helper registration/journal have an independent backup.
 
 ## Documentation baseline
@@ -1589,8 +1589,8 @@ This guide follows the current release; the release history is in the
 [changelog](CHANGELOG.md). The Proxmox, storage, administrator-access and VS Code
 build notes are retained from the original build log. Manager procedures reflect password-only VM authentication,
 persistent storage, the student-centred Home / lab workspace layout, map editing and
-registered Git repository saves. Loading a saved version downloads files; applying one
-to running devices is offered for Junos, EOS and IOS XR devices. Git-owner execution is not browser-user authentication.
+registered Git repository saves. Downloading a saved version gives you files; **Load** puts a saved state
+onto running devices and is offered for Junos, EOS and IOS XR devices. Git-owner execution is not browser-user authentication.
 The source includes automated checks for release consistency, helper preflight,
 the installer, Git onboarding/registrations and APT source handling, plus the
 separate VM installation report described in [HEALTH-CHECK.md](HEALTH-CHECK.md). Earlier
@@ -1623,8 +1623,8 @@ requests. Requiring it for merges is a separate branch-protection setting.
 
 # Part 21 — Save lab progress to the engineer's Git repository {#part-21}
 
-Once configured, **Save progress** captures the lab's chosen devices, commits a
-complete configuration set in the engineer's repository and pushes it once you confirm the review. The goal
+Once configured, **Save** in the lab header captures the lab's chosen devices, commits a
+complete configuration set (with the topology and the map) in the engineer's repository and pushes it when you click **Upload**. The goal
 is one daily action after a lab experiment. Setup happens once for each checkout.
 
 ## Step 21.1 — Run guided Git setup
@@ -1738,13 +1738,13 @@ permissions. A normal checkout with a published initial commit is required;
 
 This completes setup; continue to Step 21.3 in the manager UI. See
 [GIT-SETUP.md](GIT-SETUP.md) for the short guide, account/password table and recovery
-steps. **Save progress automatically commits, then asks you to review before it pushes
-(Upload these changes). There is no separate
-Commit button.** If a save fails, fix its problem and retry that original save.
-Do not start another save or manually commit manager-staged files as the normal
+steps. **Save commits on the VM at once and nothing is uploaded until you click
+Upload. There is no separate Commit button.** If a save fails, fix its problem
+(the chip panel names it and the action that clears it) and try again.
+Do not manually commit manager-staged files as the normal
 recovery path. If already manually committed, publish that commit as the owner,
-verify remote synchronization, dismiss the old export with **Keep snapshot only**,
-then start a new save.
+verify remote synchronization, dismiss the old export with **Keep snapshot only**
+(the save's **Details**), then start a new save.
 
 For an already prepared checkout, an administrator can register directly:
 
@@ -1759,14 +1759,15 @@ not need sudo membership: authenticate and prepare its checkout as that account,
 then return to the administrator for registration. Optional `--remote NAME`,
 `--label "Lab name"` and `--prefix labs/bgp` configure an existing remote, label
 and managed subfolder. A prefix inside the `latest`, `baseline` or `checkpoints` folder of another
-registered prefix is refused (nesting is otherwise allowed). Bare repositories, linked
+registered prefix is refused (a folder inside, above or beside another lab's folder is otherwise allowed). Bare repositories, linked
 worktrees, submodules and symbolic-link paths are unsupported.
 
 Routine `start-manager.sh` upgrades refresh an already enabled Git helper and
 retain registrations. `sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --refresh` refreshes only
 the helper. Re-registering identical settings keeps the ID and revision, even
-if ordinary commits advanced HEAD. Resolve pending saves and reconnect the lab
-when changing owner, branch, destination or prefix.
+if ordinary commits advanced HEAD. Reconnect the lab when changing owner or
+branch. Choosing another folder for a lab needs no such step: a waiting save keeps
+waiting and goes up with the next **Upload**.
 
 Git authentication persists in the owner's credential-helper setup. GitHub CLI
 uses a system credential store where available, otherwise it may report storing
@@ -1791,18 +1792,19 @@ flowchart LR
 
 ## Step 21.3 — Connect the lab and save
 
-In the **manager**, open the lab and choose **Save progress** in the lab header: the
-first save asks where the lab's progress should be saved (repository, folder and
-devices). The same settings live on the **Progress** tab under **Save location**:
-**Change folder…** opens the folder browser **Folders in this repository** (with
-**New folder…**, **Save this lab here**, **Use a different repository…** and
-**Connect by URL…**), and **Save settings** holds the devices included in every save;
-**Save location settings…**
-in the **Save progress ▾** menu opens the same place. Select the registered checkout,
-review the included devices, review the branch/destination and acknowledge that
-device configurations will be committed there. The device selection is independent
-of the **Include in backups** checkboxes. Every save pauses for your review before anything
-is uploaded; there is no setting that skips it.
+In the **manager**, open the lab and choose **Save** in the lab header. The first save
+shows where it will go (*Your first save goes to <repository>, in the folder <lab name>.*) with
+**Save** and **Choose another place**; with no repository on the VM yet it asks for the
+repository's HTTPS address. Saved files can contain passwords or keys, and the panel says so. A lab can
+save into any folder of the repository, inside, above or beside other labs' folders, and the
+folder can be created on the spot. The manager asks one question, with buttons only, when two
+labs want the very same folder, when the folder already holds a saved state of another lab or a
+course, or when a save of the lab still waits for upload. Afterwards the chip panel shows
+*Saves to: <repository> › <folder>* with **Change…**, which opens the same folder chooser
+(**New folder…**, **Save here**), and **Save settings** holds the devices included in every
+save and the repository connection. The device selection is independent
+of the **Include in backups** checkboxes. Every save stays on the VM until you click
+**Upload**; there is no setting that uploads without it.
 Save the settings, then run the final installation report from the **ordinary
 Ubuntu account** before your first save:
 
@@ -1829,14 +1831,13 @@ features and limits. The report always separates manual workstation WinSCP,
 real NOS backup and Git push verification. An optional `--git-remote` read
 does not prove write permission. See [all report options and recovery](HEALTH-CHECK.md).
 
-Then choose **Save progress**, confirm the review (**Upload these changes**) and confirm **Saved to Git** (the status card on the
-Progress tab and the last-save sentence in the lab header) plus the expected files
+Then choose **Save**, click **Upload** and confirm that the chip reads *Saved* (the chip panel says *Uploaded: yes, to <host>*) plus the expected files
 on the remote. Keep this deliberate workflow test even when the automated report
 passes.
 
 ```mermaid
 flowchart TD
-    A[Save progress] --> B[Capture selected devices]
+    A[Save] --> B[Capture selected devices, topology and map]
     B --> C{Complete capture?}
     C -- No --> D[Keep local results; latest unchanged]
     C -- Yes --> E[Retain immutable backup snapshot]
@@ -1844,12 +1845,12 @@ flowchart TD
     F --> G{Files changed?}
     G -- Yes --> K[Commit exact changed files]
     G -- No --> L[Keep existing commit]
-    K --> S[Review before uploading: see what changed]
+    K --> S[One sentence says what changed: Upload, Not now, See changes]
     L --> S
-    S -- Upload these changes --> H[Push selected branch]
-    S -- Not now --> N[Saved on this VM; waiting for your review]
-    H -- Verified --> I[Saved to Git]
-    H -- Offline or rejected --> J[Saved on this VM; Upload now]
+    S -- Upload --> H[Push selected branch]
+    S -- Not now --> N[Saved on this VM; the chip says 1 save to upload]
+    H -- Verified --> I[Saved; uploaded]
+    H -- Offline or rejected --> J[Upload failed; Try again]
 ```
 
 Only the recorded configurations and manifest enter the commit. Existing YAML,
@@ -1873,7 +1874,7 @@ BENS-BGP-LAB/
   latest/                    newest complete saved capture
     PE1.cfg
     manifest.json
-  baseline/                  changes only through Set baseline
+  baseline/                  the starting point; changes only through Use as starting point…
     PE1.cfg
     manifest.json
   checkpoints/
@@ -1884,35 +1885,38 @@ BENS-BGP-LAB/
 
 The filenames are illustrative; names are generated consistently from the node
 identity and actual configuration format. Git history retains earlier ordinary
-saves, so a separate timestamp folder is unnecessary for each Save progress.
+saves, so a separate timestamp folder is unnecessary for each **Save**. A lab state (see
+[course states](COURSE-STATES.md)) is a folder of its own with the same layout, for example
+`BGP/start/latest/`.
 
 | Action | Meaning |
 |---|---|
-| Save progress (lab header, Progress tab) | Capture, export latest and commit changes on the VM; push only after the mandatory review (*Upload these changes*). |
-| Save on this VM only (Save progress ▾, Progress › More ▾) | Capture and commit without pushing. |
-| Create checkpoint… | Update latest and preserve the same capture under a new descriptive checkpoint name. |
-| Set baseline… (Progress › More ▾) | Select a complete capture to change baseline only; review explicit replacement if a baseline already exists. |
-| Saved versions / Full history… (Progress tab) | Browse versions (**Latest**, **Checkpoints**, **Baseline**, **Instructor and reference versions**, **Other labs in this repository**) with **View** and **Compare with my latest save**. |
-| Upload now (Recent saves) | Retry the recorded local commit without recapturing devices. |
-| Update from the repository (Progress › More ▾) | Fast-forward an eligible clean checkout; resolve diverged history outside the app. |
-| Load a saved version… / View | View or download a saved version as a configuration ZIP. |
-| Apply to running lab… | Junos, EOS and IOS XR: replaces the running configuration of the saved devices from any compatible folder, without changing the save location; the current configuration is backed up first. |
+| Save (lab header) | Capture the included devices, the topology and the map, export latest and commit the changes on the VM. Nothing is uploaded until **Upload**. |
+| Upload / Not now / See changes | The three buttons under the sentence that says what changed. **Upload** pushes the repository's waiting saves and names every one of them; **Not now** leaves the save on this VM (*1 save to upload*); **See changes** opens the files. |
+| Keep as a checkpoint | Keep a save under a name (the chip panel and **All versions**). No device is read; the save's own capture is used. |
+| Use as starting point… (All versions) | Make one of your saves the lab's starting point (the `baseline` folder); review explicit replacement if one already exists. No device is read or changed. |
+| All versions (chip panel) | Browse everything saved for the lab: *Your saves*, *Checkpoints*, the *Starting point*, *Lab states*, *Other labs in this repository* and *Save activity*, each with **View files**, **Download ZIP**, **See what's different** and **Load this state…**; **Full history…** and **Browse the repository…** at the foot. |
+| Save settings (chip panel) | The devices every save includes, where the lab saves and the repository connection. |
+| Save as a lab state… | Write the lab's current state into another folder (default `<the lab's folder>/<name>`) without changing where the lab saves. |
+| Update from the repository | Fast-forward an eligible clean checkout when the online copy has changes this VM lacks and nothing waits to be uploaded; resolve diverged history outside the app. |
+| Load (lab header) | Junos, EOS and IOS XR: replaces the running configuration of the saved devices from your saves, a checkpoint or any lab state, without changing the save location or the topology; the current configuration is backed up first. |
+| Undo this load | Loads the backup taken before the load, through the same review. |
 
-**Load a saved version… downloads files.** It does not apply commands to running
+**Download ZIP downloads files.** It does not apply commands to running
 devices, change the repository branch, rewrite the original topology or redeploy the
-lab. **Apply to running lab…** is the only action that changes running devices; it is
-offered for Junos, EOS and IOS XR devices and shows a *Replace running configuration* review
-before it runs. Older captures can have unknown topology provenance; match the
+lab. **Load** is the only action that changes running devices; it is
+offered for Junos, EOS and IOS XR devices and lists every device with what would change before the red **Load**
+confirms. Older captures can have unknown topology provenance; match the
 intended devices and configuration format before using downloaded files outside the
 tool.
 
 ## Recovery, ownership and backups
 
 Capture, commit and push have separate results. A successful snapshot remains
-available even if the repository is busy or remote authentication fails. **Retry
-save, then review** reuses its captured files. **Review and upload…** / **Upload now** reuse its recorded
-commit. A restart reconciles the job with the VM journal instead of issuing a new
-capture silently. Inspect the save under **Recent saves** before assuming it reached
+available even if the repository is busy or remote authentication fails: the chip
+reads *Upload failed* and **Try again** sends the recorded commit without reading the devices again. A restart
+reconciles the job with the VM journal instead of issuing a new
+capture silently. Inspect the save under **All versions › Save activity** before assuming it reached
 the remote.
 
 Keep the checkout clean. Unexpected staged work, changed branch/remote, unsafe
@@ -1920,8 +1924,9 @@ paths and conflicting history require attention. The manager does not force push
 automatically stash, merge/rebase conflicts or destructively reset a checkout.
 Resolve these issues in Ben's VM session, then retry the saved job.
 
-Pending saves block forgetting or redirecting their context, including removing
-the lab from this manager, Start fresh, replacing its repository or changing VM identity.
+Pending saves hold removing the lab from this manager, Start fresh and changing the VM
+identity. A change of a lab's folder, repository or included devices, and disconnecting the lab, do
+not wait: a waiting save keeps its own destination and goes up with the next **Upload**.
 Password repair for the same VM/account remains possible. **Keep snapshot only**
 explicitly dismisses a pending export and retains its backup and any existing Git
 commit. It does not undo a remote push. A later Start fresh still deletes the

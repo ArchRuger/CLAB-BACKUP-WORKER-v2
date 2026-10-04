@@ -174,6 +174,7 @@ settings are untouched.
 | Interactive SSH / SFTP denied | Expected for clab-discovery. Select the installed helper and use Save and test connection. Direct SFTP mode requires another existing account with ordinary file access. |
 | Fingerprint changed | Verify the VM's host key independently before trusting a replacement in the UI. Password resets do not fix host identity changes. |
 | Discovery connected, but folders and Git answer HTTP 409 | The session is not running the operations gateway; rerun the launcher with `--enable-operations` (see [the health report](HEALTH-CHECK.md#recover-the-operations-helper-error)). |
+| The lab's save chip reads *Can't save* with *The lab VM could not be reached.* | **Check the VM connection…** in the chip panel opens this dialog. Fix the connection here, then choose **Try again** in the chip panel. A save that was already made stays on the VM. |
 | Helper outdated / commands unavailable | Run the launcher from the current release source with the required lab roots and operations enabled. |
 | Save failed | Check free disk space and data ownership; retain state.key and state.enc. |
 
