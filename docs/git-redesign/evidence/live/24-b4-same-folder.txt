@@ -1,0 +1,15 @@
+[19:19:12] B4 on git-redesign-b (saves in l2-move-2); lab A saves in git-redesign
+[19:19:14] typed git-redesign -> question 'git-redesign saves here too.'; buttons ['Cancel', 'Save in git-redesign/git-redesign-b', 'Use this folder anyway']; note 'If you use this folder anyway, git-redesign is disconnected from it. Its saves stay as versions, and a save of it that is still waiting stays part of the next upload.'
+PASS B4 the question is asked, not a refusal
+[19:19:14] answering with: 'Save in git-redesign/git-redesign-b'
+[19:19:16] lab B saves in git-redesign/git-redesign-b; lab A still saves in git-redesign; chip 'Saved just now'
+PASS B4 never took A's folder
+PASS B4: no console, page or request errors
+
+=== B4: 3 checks, 0 failed
+PASS B4 the question is asked, not a refusal
+PASS B4 never took A's folder
+PASS B4: no console, page or request errors
+None
+
+3 checks, 0 failed

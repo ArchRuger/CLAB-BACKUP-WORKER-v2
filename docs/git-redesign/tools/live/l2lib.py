@@ -146,3 +146,56 @@ def changed_lines(s, limit=8):
     out = s.page.evaluate("""()=>[...document.querySelectorAll('#save-drawer-content details.diff-file')].map(d=>({name:d.querySelector('summary').textContent.trim().replace(/\\s+/g,' '),
         lines:[...d.querySelectorAll('.diff-add,.diff-del,.add,.del,[class*=add],[class*=del]')].map(e=>e.textContent.trim()).filter(Boolean).slice(0,8)}))""")
     return out
+
+
+# ---- the folder chooser (selectors of tools/integration/folder_flow.py) ----
+def open_chooser(s):
+    p = s.page
+    if not s.visible('#save-panel'):
+        s.click('#save-chip')
+    button = p.locator('#save-change, #save-first-place-other').first
+    expect(button).to_be_visible(timeout=15000)
+    s.click(button)
+    expect(p.locator('#folder-tree')).to_be_visible(timeout=20000)
+
+
+def chooser_answer(s):
+    s.wait_js("(()=>{const a=document.getElementById('folder-answer');return !!a&&!/Checking/.test(a.textContent)&&!document.querySelector('.folder-chooser [data-folder-primary][disabled]');})()", what='the answer for the folder')
+    return s.page.locator('#folder-answer').inner_text()
+
+
+def new_folder_enabled(s):
+    b = s.page.locator('.folder-chooser [data-folder-action="new"]')
+    return b.count() == 1 and b.is_enabled()
+
+
+def select_folder(s, folder):
+    """Selects a folder row of the tree (opening its parents), or types it when the tree has no row for it."""
+    p = s.page
+    row = '#folder-tree > [data-folder=""] > .folder-row' if folder == '' else '[data-folder="%s"] > .folder-row' % folder
+    parts = folder.split('/') if folder else []
+    for i in range(1, len(parts)):
+        parent = '/'.join(parts[:i])
+        if p.locator('[data-folder="%s"]' % '/'.join(parts[:i + 1])).count() == 0:
+            twist = p.locator('[data-folder="%s"] > .folder-row [data-folder-twist]' % parent)
+            if twist.count():
+                twist.click()
+                p.wait_for_timeout(300)
+    if p.locator(row).count() == 0:
+        s.fill('#folder-path', folder)
+    else:
+        s.click(row)
+    return chooser_answer(s)
+
+
+def new_folder_in(s, parent, name):
+    p = s.page
+    ans = select_folder(s, parent)
+    enabled = new_folder_enabled(s)
+    s.click('.folder-chooser [data-folder-action="new"]')
+    s.fill('#folder-new', name)
+    s.click('.folder-new [data-folder-action="new-add"]')
+    want = (parent + '/' if parent else '') + name
+    expect(p.locator('[data-folder="%s"]' % want)).to_be_visible(timeout=15000)
+    made = p.locator('#folder-path').input_value()
+    return enabled, ans, made, chooser_answer(s)
