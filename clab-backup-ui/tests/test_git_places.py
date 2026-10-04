@@ -269,6 +269,7 @@ class Steps(unittest.TestCase):
         repo = checkout(states={'old/latest': summary('lab-1', 'renamed since'), 'flat': summary('lab-1', 'UX-TEST-003')})
         answer = place_answer(ME, repo, 'old')
         self.assertEqual((answer['kind'], answer['layout'], answer['label'], answer['beside'], answer['same_name']), ('own-before', 'latest', 'Old', '', False))
+        self.assertEqual(answer['mark'], 'This lab saved here before')   # its own earlier folder is not marked as a lab state
         self.assertEqual((place_answer(ME, repo, 'flat')['kind'], place_answer(ME, repo, 'flat')['layout']), ('own-before', 'flat'))
 
     def test_review_F3_a_state_of_a_lab_with_the_same_name_and_another_id_is_a_state_never_own_before(self):

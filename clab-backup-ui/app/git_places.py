@@ -249,7 +249,8 @@ class Tree:
         if adjusted in ('', 'corrected', 'past-file'):
             if kind == 'own': mark = 'This lab saves here'
             elif kind == 'lab' and not found['collision']: mark = found['lab']['name'] + ' saves here'
-            elif kind in ('state', 'own-before'): mark = 'Lab state: ' + found['label']
+            elif kind == 'state': mark = 'Lab state: ' + found['label']
+            elif kind == 'own-before': mark = 'This lab saved here before'   # its own earlier folder is not a lab state (QA 1280)
         return {'folder': folder, 'typed': typed, 'kind': kind, 'exists': folder in self.dirs, 'label': found['label'], 'lab': found['lab'],
                 'layout': found['layout'], 'collision': found['collision'], 'adjusted': adjusted, 'beside': beside, 'mark': mark,
                 'same_name': found['same_name']}
