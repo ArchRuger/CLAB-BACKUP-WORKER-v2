@@ -201,9 +201,9 @@ Deployed from the VM terminal instead (`sudo containerlab deploy -t
 
 ## 12. Save to Git
 
-1. **Save progress** in the lab header → choose the registered checkout, a folder and
-   the devices → **Save progress**.
-2. In **Review before uploading** click **Upload these changes** → wait for **Saved to Git** → check the files on GitHub.
+1. **Save** in the lab header. The first time, the panel names the repository and the folder
+   the lab saves into (a folder named after the lab) → **Save**.
+2. When the panel says what changed, click **Upload** → wait for the chip to read `Saved just now` → check the files on GitHub.
 
 ## 13. Check everything
 

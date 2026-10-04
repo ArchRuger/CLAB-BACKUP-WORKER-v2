@@ -30,13 +30,14 @@ python3 deploy/scaffold-lab.py snapshot bgp-core broken-01
 restore-grade candidate) to `<slug>/reference/<state>`, lists what it saved and asks before it uploads
 (`--yes` answers for a script; no keeps the state on the lab VM), and rebinds the lab to `work`.
 
-Prerequisites: the lab is deployed and reachable, and the lab is already connected to the target
-Git repository in the manager (the **Git repository** tab → Connect by URL). The scaffold needs one
+Prerequisites: the lab is deployed and reachable, and the lab already saves into the target
+Git repository (press **Save** in the lab header once; the first save connects the lab, and a
+repository that is not on the VM yet is connected there by its HTTPS address). The scaffold needs one
 connected repository to create folders in.
 
-Students then clone your repository, and from *Where this lab lives* select `reference/start`,
-`reference/solution` or `reference/broken-01` and choose **Apply to running lab…**. They save
-their own work under `work` (and `work/checkpoints/<name>` for milestones).
+Students then use your repository on their VM, press **Load** in the lab header and choose the
+state (`start`, `solution` or `broken-01`) under **Lab states**. They save their own work with
+**Save**, which goes to `work` (and to `work/checkpoints/<name>` with **Keep as a checkpoint**).
 
 ## Custom state names
 
