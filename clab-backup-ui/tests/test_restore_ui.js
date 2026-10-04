@@ -29,27 +29,24 @@ test('source labels describe git and backup origins',()=>{
  assert.equal(c.restoreSourceLabel({type:'folder',path:'/Final'}),'Saved version · Final');
  assert.equal(c.restoreSourceLabel(null),'Saved configuration');
 });
-test('restoreFromFolder sends the exact snapshot path over the wire with one leading slash, never a substituted /latest, and "/" for the repository root; a path that already carries the slash is not doubled',async()=>{
+test('a folder of the repository is loaded from its exact snapshot path, one leading slash on the wire, never a substituted /latest, "/" for the top level; its headline is the state’s name alone',async()=>{
+ // The folder browser's Apply (restoreFromFolder) went with the Progress tab (D1). Its home is Browse the repository… › Load this
+ // state… (save-drawers.js builds the folder source) and the Load panel's rows; both end in restoreReview/loadChoose with this source.
  const c=ctx(),sent=[];
- c.notify=()=>{};
- c.restoreReview=async(labId,source,label)=>sent.push({labId,source,label});
- await c.restoreFromFolder('lab','Final',{repository:{path:'/home/ben/Course-Labs'}});
- same(sent[0].source,{type:'folder',path:'/Final'});
- assert.match(sent[0].label,/^Final$/,'the name in the headline (Load Final?) is the state’s name alone: no repository, no folder, no leading slash (integration seam 8)');
- await c.restoreFromFolder('lab','Broken/latest',{repository:{path:'/home/ben/Course-Labs'}});
- same(sent[1].source,{type:'folder',path:'/Broken/latest'},'the exact folder is sent; nothing appends another /latest');
- assert.match(sent[1].label,/^Broken$/);
- await c.restoreFromFolder('lab','',{repository:{path:'/home/ben/Course-Labs'}});
- same(sent[2].source,{type:'folder',path:'/'},'the repository root is written "/" on the wire');
- assert.match(sent[2].label,/^the repository’s top level$/,'the root is named in words, never as a bare slash');
- await c.restoreFromFolder('lab','/Final',{repository:{path:'/home/ben/Course-Labs'}});
- same(sent[3].source,{type:'folder',path:'/Final'},'a path that already carries the leading slash is not doubled');
- assert.match(sent[3].label,/^Final$/);
- await c.restoreFromFolder('lab','/',{repository:{path:'/home/ben/Course-Labs'}});
- same(sent[4].source,{type:'folder',path:'/'},'the wire-form root, given directly, stays "/"');
- const toasts=[];c.notify=m=>toasts.push(m);
- await c.restoreFromFolder('lab',undefined,{});
- assert.equal(sent.length,5,'nothing chosen sends no request');assert.match(toasts[0],/Choose a saved folder/);
+ c.notify=()=>{};c.loadChoose=async(labId,source,name)=>{sent.push({labId,source,label:name});return true;};
+ const drawers=require('node:fs').readFileSync(require('node:path').join(__dirname,'../app/static/save-drawers.js'),'utf8');
+ // The source the drawer builds for a browsed folder, exactly as its `load` action does.
+ const bare=value=>String(value||'').replace(/^\/+|\/+$/g,''),folderSource=value=>({type:'folder',commit:'',path:'/'+bare(value),backup_job_id:'',repository:''});
+ assert.match(drawers,/drwStartLoad\(\{type:'folder',commit:'',path:'\/'\+n\.path,backup_job_id:'',repository:n\.repository\},n\.name\)/);assert.match(drawers,/clean=drwBare\(path\)/);
+ for(const [chosen,wire] of [['Final','/Final'],['Broken/latest','/Broken/latest'],['','/'],['/Final','/Final'],['/','/']]){
+  await c.restoreReview('lab',folderSource(chosen),'Final');
+  same(sent.at(-1).source,{type:'folder',commit:'',path:wire,backup_job_id:'',repository:''},chosen+': the exact folder is sent; nothing appends another /latest and no slash is doubled');
+ }
+ // The name in the headline (Load Final?) is the state's name alone: no repository, no folder, no leading slash (integration seam 8).
+ require('node:vm').runInContext(require('node:fs').readFileSync(require('node:path').join(__dirname,'../app/static/status.js'),'utf8'),c);
+ assert.equal(c.restoreSourceName('lab',{type:'folder',path:'/Final'},''),'Final');assert.equal(c.restoreSourceName('lab',{type:'folder',path:'/Broken/latest'},''),'Broken');
+ assert.equal(c.restoreSourceName('lab',{type:'folder',path:'/'},'the repository’s top level'),'the repository’s top level','the top level is named in words, never as a bare slash');
+ assert.equal(typeof c.restoreFromFolder,'undefined');
 });
 // Owner decision D4: the review dialog with its acknowledgement tick box is replaced by the Load panel's confirmation (load.js); the red
 // Load is the acknowledgement. restoreReview keeps its name and leads there. The claims of the old test are kept: the folder source that
@@ -244,18 +241,20 @@ test('the device rows and the progress line are rebuilt from the job document al
 test('the review offers each differing device its saved → running now differences before anything is submitted',()=>{
  const c=ctx(),diff={identical:false,truncated:false,added:1,removed:1,labels:{old:'Saved (Final)',new:'Running now'},
   hunks:[{old_start:1,old_count:1,new_start:1,new_count:1,lines:[{type:'del',old:1,new:null,text:'set snmp contact <A>'},{type:'add',old:null,new:1,text:'set snmp contact B'}]}]};
- const fallback=c.restoreDiffDetails({name:'r1',eligible:true,diff});
- assert.match(fallback,/<details class="restore-diff"><summary>Show differences \(saved → running now\)<\/summary>/);
+ // The differences of one device, as See what's different shows them (restoreDiffBody; the old review's folded restoreDiffDetails
+ // went with its dialog, D4).
+ const fallback=c.restoreDiffBody({name:'r1',eligible:true,diff});
  assert.match(fallback,/what the device runs right now/);
  assert.match(fallback,/--- Saved \(Final\)/);assert.match(fallback,/restore-diff-del">- set snmp contact &lt;A&gt;/);assert.match(fallback,/restore-diff-add">\+ set snmp contact B/);
  const calls=[];c.diffMarkup=(d,labels)=>{calls.push(labels);return '<div class="diff-view">shared</div>';};
- assert.match(c.restoreDiffDetails({name:'r1',eligible:true,diff}),/<div class="diff-view">shared<\/div>/,'the shared diff view is used when it is loaded');
+ assert.match(c.restoreDiffBody({name:'r1',eligible:true,diff}),/<div class="diff-view">shared<\/div>/,'the shared diff view is used when it is loaded');
  same(calls[0],{oldLabel:'Saved (Final)',newLabel:'Running now'});
- assert.match(c.restoreDiffDetails({name:'r1',eligible:true,diff:{...diff,truncated:true}}),/only its first part is shown/);
- assert.equal(c.restoreDiffDetails({name:'r1',eligible:true,diff:{identical:true,hunks:[]}}),'','"Already matches" says it; no empty diff');
- assert.match(c.restoreDiffDetails({name:'r1',eligible:true}),/The differences are not available for this device\./,'no data says why, never "0 differences"');
- assert.match(c.restoreDiffDetails({name:'r1',eligible:true,diff_reason:'The differences could not be shown for this device.'}),/could not be shown/);
- assert.equal(c.restoreDiffDetails({name:'r1',eligible:false,reason:'SSH probe failed'}),'','a skipped device already says why');
+ assert.match(c.restoreDiffBody({name:'r1',eligible:true,diff:{...diff,truncated:true}}),/only its first part is shown/);
+ assert.match(c.restoreDiffBody({name:'r1',eligible:true}),/The differences are not available for this device\./,'no data says why, never "0 differences"');
+ assert.match(c.restoreDiffBody({name:'r1',eligible:true,diff_reason:'The differences could not be shown for this device.'}),/could not be shown/);
+ // A device that already matches, or one that is skipped, has no diff at all: the differences view lists ticked, differing devices only.
+ const load=require('node:fs').readFileSync(require('node:path').join(__dirname,'../app/static/load.js'),'utf8');
+ assert.match(load,/const shown=ticked\.map\(x=>targets\.find\(t=>String\(t\.name\)===x\.name\)\)\.filter\(t=>t&&!\(t\.diff&&t\.diff\.identical\)&&t\.matches_saved!==true\);/);assert.equal(typeof c.restoreDiffDetails,'undefined');
 });
 // D4 moved the per-device differences out of the review: the confirmation's device rows are labels with a tick box and nothing that
 // could be opened inside them; the differences are in "See what's different" (LOAD.md 3.4). The claims kept: opening the differences
@@ -271,7 +270,7 @@ test('the differences are never inside a tick box label: the confirmation rows h
  const different=c.loadDifferentMarkup().html;
  assert.equal((different.match(/<h3 class="save-heading">/g)||[]).length,1,'only the differing device has a diff');
  assert.match(different,/hostname A/);assert.doesNotMatch(different,/type="checkbox"/,'the differences view has no tick box');
- assert.match(c.restoreDiffDetails({name:'r1',eligible:true,diff:{identical:false,hunks:[{old_start:1,old_count:1,new_start:1,new_count:1,lines:[{type:'del',text:'x'}]}]}}),/^<details class="restore-diff"><summary>Show differences \(saved → running now\)<\/summary>/,'the folded diff of one device is still available');
+ assert.match(c.restoreDiffBody({name:'r1',eligible:true,diff:{identical:false,hunks:[{old_start:1,old_count:1,new_start:1,new_count:1,lines:[{type:'del',text:'x'}]}]}}),/what the device runs right now/,'the diff of one device is what the differences view shows under its name');
 });
 test('elapsed times are measured on the manager\'s clock, never the browser\'s',()=>{
  const c=ctx();
@@ -427,7 +426,7 @@ test('L-10 follow-up: a job read back, or stored by an older manager, opens as t
 });
 test('a device that differs is never shown as identical: with no lines to show it says why',()=>{
  const c=ctx();
- const html=c.restoreDiffDetails({name:'r1',eligible:true,diff:{identical:false,hunks:[],reason:'The comparison found differences in spacing or layout that this line view cannot show.'}});
+ const html=c.restoreDiffBody({name:'r1',eligible:true,diff:{identical:false,hunks:[],reason:'The comparison found differences in spacing or layout that this line view cannot show.'}});
  assert.match(html,/differences in spacing or layout/);assert.doesNotMatch(html,/<details/);
 });
 // Review U1: the job window offers Load this backup… beside its backup from before the load, only while the manager keeps that backup,

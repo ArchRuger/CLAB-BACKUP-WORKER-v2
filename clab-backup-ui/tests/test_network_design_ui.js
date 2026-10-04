@@ -692,7 +692,7 @@ test('designExportGitReason: no succeeded plan, then a plan with no repository b
  assert.equal(c.designExportGitReason(lab,{generations:[]}),'Generate a plan first.');
  assert.equal(c.designExportGitReason(lab,{generations:[{id:'g',status:'running'}]}),'Generate a plan first.');
  const view={generations:[{id:'g',status:'succeeded'}]};
- assert.equal(c.designExportGitReason({id:'lab1'},view),'Bind this lab to a repository under Progress first.');
+ assert.equal(c.designExportGitReason({id:'lab1'},view),'Save this lab once first (Save in the lab’s header): the export goes into the folder the lab saves to.');
  assert.equal(c.designExportGitReason(lab,view),'');
 });
 test('designExportGitDefaultCheckpoint takes the generation id\'s first 12 characters, prefixed',()=>{

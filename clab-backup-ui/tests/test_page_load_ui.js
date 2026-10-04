@@ -63,7 +63,7 @@ test('the names the page scripts call across files exist once the page is loaded
   'loadOpen','loadChoose','loadUndo','loadRetry','loadJobMarkup','loadChipView','loadRender','loadDifferentMarkup','loadCtx',
   'saveDrawerOpen','saveDrawerRender','saveDrawerClose','saveDrawerBack',
   'folderChooserMarkup','folderChooserEvent','folderClean','folderChooserModel','gitTreeModel','gitApplySource',
-  'restoreShowJob','restoreReview','restoreFromVersion','restoreFromFolder','restoreDiffBody','diffMarkup'];
+  'restoreShowJob','restoreReview','restoreFromVersion','restoreDiffBody','diffMarkup','gitResumeWatch','gitRunAction','gitSwitchRepository','openSaveRoute','saveUploadsText'];
  for(const name of functions)assert.equal(typeof get(context,name),'function',name+' is not defined by any script of the page');
  assert.equal(typeof get(context,'saveDrawer'),'object','save-drawers.js keeps its state under the name saveDrawer');
  assert.equal(typeof get(context,'saveHeader'),'object');
@@ -129,9 +129,9 @@ test('an upload sent through the save of another lab keeps its watch across a re
  const lab={id:'lab',name:'bgp',nodes:[],git_binding:{repository:{path:'/r',prefix:'a'},node_names:[]}};
  Object.assign(context,{__lab:lab});
  vm.runInContext('state={labs:[__lab],jobs:[],git_jobs:[],restore_jobs:[],platforms:{},loaded:true};activeId="lab";',context);
- vm.runInContext('gitStartWatch({id:"other-job",lab_id:"other-lab",status:"queued"},{quiet:true,keep:true});renderGitProgress();',context);
+ vm.runInContext('gitStartWatch({id:"other-job",lab_id:"other-lab",status:"queued"},{quiet:true,keep:true});renderSaveHeader();',context);
  assert.equal(vm.runInContext('gitWatch&&gitWatch.id',context),'other-job','the upload’s watch is not dropped because its save belongs to another lab');
- vm.runInContext('gitWatch=null;gitStartWatch({id:"plain",lab_id:"other-lab",status:"queued"},{quiet:true});renderGitProgress();',context);
+ vm.runInContext('gitWatch=null;gitStartWatch({id:"plain",lab_id:"other-lab",status:"queued"},{quiet:true});renderSaveHeader();',context);
  assert.equal(vm.runInContext('gitWatch',context),null,'any other watch on another lab’s save still ends with the render');
  vm.runInContext('gitStartWatch({id:"mine",lab_id:"lab",status:"queued"});gitStartWatch({id:"mine",lab_id:"lab",status:"pushing"},{quiet:true,keep:true});',context);
  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify({quiet:gitWatch.quiet,keep:gitWatch.keep})',context)),{quiet:true,keep:true});
@@ -140,7 +140,7 @@ test('the Load confirmation is headed by the state’s name alone, and a design 
  const page=loadPage(),context=page.context,chosen=[];
  vm.runInContext('state={labs:[{id:"lab",name:"bgp",nodes:[]}],jobs:[],git_jobs:[],restore_jobs:[],platforms:{},loaded:true};activeId="lab";',context);
  context.__chosen=chosen;vm.runInContext('loadChoose=async function(lab,source,name){__chosen.push(name);return true;};',context);
- vm.runInContext('restoreFromFolder("lab","course/final/latest",{repository:{path:"/home/x/Course-Labs"}});restoreFromVersion("lab",{type:"git",commit:"c",path:"/BGP/checkpoints/day-1"},"BGP/checkpoints/day-1");',context);
+ vm.runInContext('restoreReview("lab",{type:"folder",path:"/course/final/latest"},restoreSourceName("lab",{type:"folder",path:"/course/final/latest"},""));restoreFromVersion("lab",{type:"git",commit:"c",path:"/BGP/checkpoints/day-1"},"BGP/checkpoints/day-1");',context);
  return Promise.resolve().then(()=>new Promise(resolve=>setImmediate(resolve))).then(()=>{
   assert.deepEqual(chosen,['Final','Day-1']);
   const design=fs.readFileSync(path.join(dir,'network-design.js'),'utf8'),submit=design.slice(design.indexOf('async function designExportGitSubmit'),design.indexOf('function initDesignExportGit'));

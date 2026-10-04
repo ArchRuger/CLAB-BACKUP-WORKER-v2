@@ -617,8 +617,9 @@ test('index.html: the lab header holds chip, Save, Load, then Lab actions; the c
  assert.match(header,/<small class="caption" id="save-reason" hidden><\/small>\s*<p class="sr-only" id="save-live" role="status" aria-live="polite"><\/p>/,'the reason is visible text; the live region holds a sentence, never a button');
  assert.doesNotMatch(html,/id="lab-progress"|git-save-menu|git-save-help|git-save-control|banner-retry-save|banner-save-details/);
  assert.doesNotMatch(header,/data-git-action/);assert.doesNotMatch(header,/ style=/);
- // First wave: the Progress tab and what git-progress.js renders into stay.
- for(const id of ['git-progress-bar','progress-save','git-saved-versions','git-saves-list','git-repository-content'])assert.match(html,new RegExp('id="'+id+'"'),id+' stays');
+ // The Progress tab is gone (owner decision D1): no tab button, no panel, none of the ids its renderers wrote into.
+ for(const id of ['tab-progress','progress-view','git-progress-bar','progress-save','git-saved-versions','git-saves-list','git-repository-content','git-repository-advanced','git-problem','git-last-restore'])assert.doesNotMatch(html,new RegExp('id="'+id+'"'),id+' is gone');
+ assert.doesNotMatch(html,/data-tab="progress"|data-git-action=|data-git-repo-action=/);
 });
 
 test('index.html: the one save drawer is a page-level lab dialog with a static head, and the three new scripts load in the agreed order with the release marker',()=>{
@@ -660,9 +661,9 @@ test('style.css: the header group is one wrapping row with chip and Save kept to
  assert.ok(rules.length>60);for(const [,selector,body] of rules)assert.doesNotMatch(body,/#[0-9a-fA-F]{3,8}\b|rgba?\(/,'no new colour, tokens only: '+selector.trim());
 });
 
-test('render() hands every poll and every lab switch to the header and the drawer, after renderGitProgress, and loads without them',()=>{
+test('render() hands every poll and every lab switch to the header, the drawer and Load, and loads without them',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../app/static/app.js'),'utf8'),body=source.slice(source.indexOf('function render(){'),source.indexOf('function syncProxies'));
- const order=['renderGitProgress','renderSaveHeader','saveDrawerRender','renderNetworkDesign'].map(name=>body.indexOf(`if(typeof ${name}==='function')${name}();`));
+ const order=['renderSaveHeader','saveDrawerRender','loadRender','renderNetworkDesign'].map(name=>body.indexOf(`if(typeof ${name}==='function')${name}();`));
  assert.ok(order.every(i=>i>=0),'each is called behind its typeof guard');assert.deepEqual([...order].sort((a,b)=>a-b),order);
  assert.ok(order[2]<body.indexOf('if(!lab){'),'also on Home, so the drawer and the panels can drop a lab that is no longer open');
  assert.doesNotMatch(source,/lab-progress|banner-retry-save|banner-save-details|gitPushPending/);

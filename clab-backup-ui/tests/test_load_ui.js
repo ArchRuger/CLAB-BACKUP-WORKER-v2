@@ -298,7 +298,7 @@ test('single sender: `acknowledge: true` reaches a restore route from one place,
  const calls=files.flatMap(f=>[...code(read(f)).matchAll(/(?<!function )loadSubmit\(\)/g)].map(m=>({f,i:m.index})));
  assert.equal(calls.length,2,'two calls: the red Load and the drawer\'s Load on n devices');
  assert.match(load,/case 'run':return loadSubmit\(\);\n\s*case 'diff-run':return loadSubmit\(\);/);
- for(const name of ['loadChoose','loadUndo','loadRetry','restoreFromVersion','restoreFromFolder','restoreReview']){
+ for(const name of ['loadChoose','loadUndo','loadRetry','restoreFromVersion','restoreReview']){
   const text=files.map(read).join('\n'),at=text.search(new RegExp('function '+name+'\\('));assert.ok(at>=0,name);
   assert.doesNotMatch(text.slice(at,text.indexOf('\n}\n',at)),/loadSubmit|acknowledge/,name+' ends in the confirmation, never in the submit');
  }
@@ -603,13 +603,14 @@ test('no repository on the VM: "There is nothing to load yet" with Save…, and 
 });
 
 // ---- parity (LOAD.md section 9) ---------------------------------------------------------------------------------------------------------
-test('parity: restoreFromVersion, restoreFromFolder, restoreReview and the job window\'s Load this backup… each lead to a confirmation',async()=>{
+test('parity: restoreFromVersion, a folder of the repository (Browse the repository… › Load this state…), restoreReview and the job window\'s Load this backup… each lead to a confirmation',async()=>{
  const job=partialJob({source:{type:'git',commit:'a'.repeat(40),path:'BGP/latest'}});
  const p=page({state:{restore_jobs:[job],jobs:[{id:'pre9',status:'succeeded',source:'restore-pre',progress_id:'job9'}]},routes:()=>preflight(fourTargets())});
  const confirmed=()=>/<span class="save-dot warn" aria-hidden="true"><\/span>(Load |Undo loading )[^<]*\?<\/p>/.test(p.body());
  await p.c.restoreFromVersion('lab',{type:'git',commit:'b'.repeat(40),path:'BGP/checkpoints/day-1'},'day-1');
  assert.ok(confirmed());assert.deepEqual(p.calls.at(-1).body.source,{type:'git',commit:'b'.repeat(40),path:'BGP/checkpoints/day-1',backup_job_id:'',repository:''});
- await p.c.restoreFromFolder('lab','course/final',{repository:{path:'/home/ben/Course-Labs'}});
+ // The folder source Browse the repository… builds for a browsed folder (save-drawers.js `load`), with the name of that folder.
+ await p.c.loadChoose('lab',{type:'folder',commit:'',path:'/course/final',backup_job_id:'',repository:''},'Final');
  assert.ok(confirmed());assert.deepEqual(p.calls.at(-1).body.source,{type:'folder',commit:'',path:'/course/final',backup_job_id:'',repository:''});assert.match(p.body(),/>Load Final\?<\/p>/,'the headline is the state’s name alone, never its repository or folder (integration seam 8)');assert.doesNotMatch(p.body(),/Course-Labs|course\/final\?/);
  await p.c.restoreReview('lab',{type:'backup',backup_job_id:'b1'},'A backup');
  assert.ok(confirmed());assert.equal(p.calls.at(-1).body.source.backup_job_id,'b1');

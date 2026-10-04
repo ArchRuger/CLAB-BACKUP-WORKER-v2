@@ -192,7 +192,7 @@ test('L-10 follow-up: a restore reading devices back after a restart is shown as
   assert.equal(get('worker-state').hidden,true);
  }
  paint({restore_jobs:[{id:'r1',lab_id:'lab',status:'applying',message:'Applying.'}]});
- assert.equal(get('lab-banner-text').textContent,'Replacing configuration…','a running restore keeps its words');assert.equal(get('worker-state').textContent,'Replacing configuration…');
+ assert.equal(get('lab-banner-text').textContent,'Loading a saved state…','a running load keeps its words');assert.equal(get('worker-state').textContent,'Loading…','the worker line words it as the chip does');
  // A design apply's read-back (its `rechecking` lists the devices) holds its lab the same way.
  paint({design_jobs:[{id:'d1',lab_id:'lab',status:'interrupted',rechecking:['r1'],message:'Manager restarted while the design was being applied.'}]});
  assert.equal(get('lab-banner-text').textContent,'Checking the devices after a manager restart…');
