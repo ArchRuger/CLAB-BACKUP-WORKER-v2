@@ -11,8 +11,9 @@
 // naming: the save being named in this panel session. view: {lab, panel, job}, a view shown instead of the chip's own (the result
 // of a save that just ended, or the state behind an Also line). places: lab id → {status, data, message}. first: the address
 // form. typed: the name typed and not committed. reviewErrors: job id → {key, message}. shown: what the panel body shows now.
+// seen: lab id → the saves (job ids and commits) a review on screen named as part of an upload (saveSeenReview).
 // watched: the lab whose Saving… view the open panel showed last (the poll may repaint the panel before the save's end is handed over).
-const saveHeader={refusal:null,placing:'',connecting:false,opened:new Map(),last:new Map(),naming:'',view:null,places:new Map(),first:{lab:'',url:'',question:null},typed:null,reviewErrors:new Map(),reviewing:new Set(),uploading:'',sent:'',keeping:'',renaming:'',error:null,shown:{lab:'',view:'',job:''},watched:''};
+const saveHeader={refusal:null,placing:'',connecting:false,opened:new Map(),last:new Map(),naming:'',view:null,places:new Map(),first:{lab:'',url:'',question:null},typed:null,reviewErrors:new Map(),reviewing:new Set(),uploading:'',sent:'',keeping:'',renaming:'',error:null,shown:{lab:'',view:'',job:''},watched:'',seen:new Map()};
 let saveClock;   // the `now` of the render in progress (tests pass one; the page uses the real time)
 const SAVE_EXPOSURE='Saved files can contain passwords or keys.';
 const SAVE_URL_ERROR='Paste the HTTPS address, for example https://github.com/you/your-lab-repo.';
@@ -77,6 +78,18 @@ function saveFailedSentence(job,lab,review){
  if(!rows.length)return first;
  const names=[saveRowName({job_id:job.id,name:job.note||(job.target==='move'?'Folder move':''),lab:job.lab_name||lab.name}),...rows.map(saveRowName)];
  return `${first} This upload sends ${names.length} saves: ${names.join(', ')}.`;
+}
+// What an upload was shown to send (DESIGN.md 7.3): the save itself and every row of the review a view put on screen, in the chip
+// panel or in the What changed drawer. `upload-again` uploads without another click only what is in here.
+function saveSeenReview(labId,job,review){
+ if(!labId||!job||!review)return;
+ const seen=saveHeader.seen.get(labId)||new Set();saveHeader.seen.set(labId,seen);
+ for(const key of [job.id,job.commit,...(Array.isArray(review.also_sends)?review.also_sends:[]).flatMap(row=>[row&&row.job_id,row&&row.commit])])if(key)seen.add(String(key));
+}
+function saveSeenAll(labId,job,review){
+ const seen=saveHeader.seen.get(labId);if(!seen||!review)return false;
+ if(!(seen.has(String(job.id))||(job.commit&&seen.has(String(job.commit)))))return false;
+ return (Array.isArray(review.also_sends)?review.also_sends:[]).every(row=>!!row&&((row.job_id&&seen.has(String(row.job_id)))||(row.commit&&seen.has(String(row.commit)))));
 }
 // The review of a waiting save as the views read it: {review, error, pending}. Upload is enabled from `review` alone, in the
 // same render that shows its sentence.
@@ -314,6 +327,7 @@ function renderSaveHeader(now){
  saveHeader.shown={lab:lab.id,view:view.name,job:view.job};
  if(view.name==='saving')saveHeader.watched=lab.id;
  savePanelMarkup(body,view.key,()=>view.html);
+ if((view.name==='upload'||view.name==='failed')&&view.job&&typeof gitReviewCached==='function'){const shownJob=saveJobById(view.job);saveSeenReview(lab.id,shownJob,shownJob?gitReviewCached(shownJob):null);}
  if(view.needs&&view.needs.places&&typeof api==='function')saveLoadPlaces(lab.id);
  if(view.needs&&view.needs.review)saveLoadReview(view.needs.review);
 }
@@ -357,7 +371,11 @@ function saveFinished(job){
  if(!panel||!mine||job.kind==='design'||saveHeader.opened.get(job.id)===status){renderSaveHeader();return false;}
  const chip=saveEl('save-chip'),open=savePanelOpen();
  if(!open&&(typeof panelCanOpen!=='function'||!panelCanOpen(chip))){renderSaveHeader();return false;}
- saveHeader.opened.set(job.id,status);saveHeader.view={lab:lab.id,panel,job:job.id};
+ saveHeader.opened.set(job.id,status);
+ // A view the person asked for with Show (or one an action put there) stays while the panel is open and it still holds: the end
+ // of a save that arrives after the click (the watch answers later than the poll) changes the chip and the Also lines, not the view.
+ if(open&&saveHeader.view&&saveHeader.view.asked&&saveHeader.view.lab===lab.id&&saveWantedView(saveChipState(lab,saveCtx(lab)),lab)){renderSaveHeader();return false;}
+ saveHeader.view={lab:lab.id,panel,job:job.id};
  if(!open){
   const a=typeof document!=='undefined'&&document?document.activeElement:null,free=!a||a===document.body||a===chip||a===saveEl('git-save-progress');
   saveOpenPanel('status',{focus:free});
@@ -495,12 +513,18 @@ async function saveAction(action,job,origin){
    }
    case 'upload-again':{
     // The upload of the waiting saves again (after the repository's owner combined both sides on the VM). A save whose review the
-    // person has not seen yet is shown first; one that was reviewed and failed to upload goes up with a fresh review of what it sends.
+    // person has not seen yet is shown first. One that was reviewed gets a fresh review, and goes up without another click only
+    // when that review sends nothing the person was not shown (a save that landed meanwhile is named first: DESIGN.md 7.3, 3.4).
     const waiting=lab&&typeof statusWaitingSaves==='function'?statusWaitingSaves(lab,saveCtx(lab)):[],target=waiting.find(j=>j.status==='push_pending')||waiting[0]||null;
     if(!target||typeof gitReviewJob!=='function'||typeof gitReviewData!=='function')throw new Error(SAVE_MISSING);
-    if(!target.reviewed){saveHeader.view={lab:lab.id,panel:target.status==='push_pending'?'failed':'upload',job:target.id};break;}
+    if(!target.reviewed){saveHeader.view={lab:lab.id,panel:target.status==='push_pending'?'failed':'upload',job:target.id,asked:true};break;}
     saveHeader.uploading=target.id;renderSaveHeader();
-    try{await gitReviewData(target,{fresh:true});const next=await gitReviewJob(target,{upload:true});saveHeader.sent=next&&next.id||'';}finally{saveHeader.uploading='';}
+    const show={lab:lab.id,panel:target.status==='push_pending'?'failed':'upload',job:target.id,asked:true};
+    try{
+     const fresh=await gitReviewData(target,{fresh:true});
+     if(!saveSeenAll(lab.id,target,fresh)){saveHeader.view=show;break;}
+     const next=await gitReviewJob(target,{upload:true});saveHeader.sent=next&&next.id||'';
+    }finally{saveHeader.uploading='';}
     break;
    }
    case 'vm':saveClosePanel(true);if(typeof openVmDialog==='function')openVmDialog();return;
@@ -538,7 +562,7 @@ async function saveAction(action,job,origin){
    }
    case 'show-also':{
     const cs=lab&&typeof saveChipState==='function'?saveChipState(lab,saveCtx(lab)):null,list=cs?saveAlsoList(cs,saveHeader.shown.view==='naming'?'rest':saveHeader.shown.view):[];
-    const also=list[Number(origin&&origin.index)||0];if(also)saveHeader.view={lab:lab.id,panel:also.panel,job:also.job?also.job.id:''};
+    const also=list[Number(origin&&origin.index)||0];if(also)saveHeader.view={lab:lab.id,panel:also.panel,job:also.job?also.job.id:'',asked:true};
     break;
    }
    default:return;

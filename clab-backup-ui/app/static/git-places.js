@@ -425,6 +425,8 @@ function folderRefusedMarkup(view){
  return view.refused?`<div class="save-row"><p class="form-error" role="alert" id="folder-refused">${esc(problem?problem.sentence:view.refused)}</p>${problem&&problem.update?'<button type="button" class="button secondary small" data-folder-action="update">Update from the repository</button>':''}<button type="button" class="button secondary small" data-folder-action="again">Try again</button></div>${problem&&problem.detail?`<details id="folder-refused-details"><summary>Details</summary><p class="save-note">${esc(problem.detail)}</p></details>`:''}`:'';
 }
 function folderButtonMarkup(button,view){
+ // A click made before the answer arrived is held (view.held): the button says what it waits for and takes no second click.
+ if(view.held&&button.action==='save'&&!view.busy)return `<button type="button" class="button primary" data-folder-action="save" data-folder-primary="1" data-folder-held="1" disabled>Checking the folder…</button>`;
  const busy=!!view.busy,label=busy&&button.primary&&(button.action==='save'||button.choice!==undefined||button.pending!==undefined)?(view.mode==='state'?'Saving…':view.connecting?'Connecting… this can take a minute':'Saving here…'):button.label;
  const data=button.pending!==undefined?`data-folder-pending="${esc(button.pending)}"`:button.choice!==undefined?`data-folder-choice="${esc(button.choice)}"`:`data-folder-action="${esc(button.action)}"`;
  return `<button type="button" class="button ${button.primary?'primary':'secondary'}" ${data}${button.primary?' data-folder-primary="1"':''}${busy||button.disabled?' disabled':''}>${esc(label)}</button>`;

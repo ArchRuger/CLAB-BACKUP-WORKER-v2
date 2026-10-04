@@ -575,13 +575,51 @@ test('S11-15 Save as a lab state always sends the folder its Folder field shows:
  const g=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>({kind:'free',folder:data.folder,typed:data.folder,exists:false}),'POST /labs/lab/git/state':data=>{posts.push(data);return {id:'s1',lab_id:'lab',status:'queued'};}},extras:{gitRequestId:()=>'r'.repeat(32)}});
  g.context.saveDrawerOpen('state',{});await settle();const c=g.sd.chooser;
  await g.act('name',{value:'start',echo:'start'});
- await g.act('save');assert.equal(posts.length,0,'nothing is sent before the manager answered for the folder shown');
- g.timers.at(-1)();await settle();await g.act('save');
- assert.equal(posts.length,1);assert.equal(posts[0].folder,'restore-square/start','the default case carries the non-empty default');assert.equal(posts[0].name,'start');
+ const asked=g.requests.filter(r=>/places\/check$/.test(r.url)).length;
+ await g.act('save');   // before the 250 ms passed: the click asks for the folder shown at once and is carried out with the answer (Q1280-04)
+ assert.equal(g.requests.filter(r=>/places\/check$/.test(r.url)).length,asked+1,'nothing is sent before the manager answered for the folder shown: the answer is asked first');
+ assert.equal(posts.length,1);assert.ok(g.requests.findIndex(r=>/git\/state$/.test(r.url))>g.requests.map(r=>/places\/check$/.test(r.url)).lastIndexOf(true),'the state request follows the answer');assert.equal(posts[0].folder,'restore-square/start','the default case carries the non-empty default');assert.equal(posts[0].name,'start');
  const k=chooserHarness({routes:{'POST /labs/lab/git/places/check':data=>({kind:'free',folder:data.folder,typed:data.folder,exists:true}),'POST /labs/lab/git/state':data=>{posts.push(data);return {id:'s2',lab_id:'lab',status:'queued'};}},extras:{gitRequestId:()=>'q'.repeat(32)}});
  k.context.saveDrawerOpen('state',{});await settle();await k.act('name',{value:'final',echo:'final'});await k.act('typed',{value:'',echo:''});k.timers.at(-1)();await settle();
  assert.equal(k.seen.at(-1).view.value,'','the field is empty because the person emptied it');await k.act('save');
  assert.equal(posts.at(-1).folder,'','then, and only then, the top level');assert.equal(posts.at(-1).name,'final');
+});
+test('Q1280-04 a click on Save here or Save state before the answer for the shown folder arrived is held, not lost: the button says Checking the folder…, the request follows the answer; a question is shown instead; a new value drops it',async()=>{
+ // The check answers only when the test lets it (a real VM is slower than a click).
+ let release=[];const posts=[],asked=[];
+ const routes=answerFor=>({'POST /labs/lab/git/places/check':data=>new Promise(resolve=>{asked.push(data.folder);release.push(()=>resolve(answerFor(data)));}),
+  'POST /labs/lab/git/place':data=>{posts.push(['place',data]);return {saved:true};},'POST /labs/lab/git/state':data=>{posts.push(['state',data]);return {id:'s1',lab_id:'lab',status:'queued'};}});
+ const free=data=>({kind:'free',folder:data.folder,typed:data.folder,exists:false});
+ const g=chooserHarness({routes:routes(free),extras:{gitRequestId:()=>'r'.repeat(32)}});
+ g.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
+ await g.act('typed',{value:'week-9',echo:'week-9'});
+ await g.act('save');                                        // within the 250 ms: the check was not even sent yet
+ assert.equal(posts.length,0);assert.deepEqual(asked.slice(-1),['week-9'],'the click sends the check at once instead of waiting for the timer');
+ assert.equal(g.seen.at(-1).view.held.value,'week-9');
+ await g.act('save');assert.equal(asked.filter(f=>f==='week-9').length,1,'a second click asks nothing twice');
+ release.pop()();await settle();
+ assert.equal(posts.length,1,'the held click is carried out when the answer for that value arrives');assert.equal(posts[0][0],'place');assert.equal(posts[0][1].folder,'week-9');
+ // An answer that is a question: nothing is sent, the question's buttons are shown.
+ release=[];posts.length=0;
+ const q=chooserHarness({routes:routes(data=>({kind:'lab',folder:data.folder,typed:data.folder,exists:true,lab:{id:'o',name:'ospf'},beside:data.folder+'/restore-square'}))});
+ q.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
+ await q.act('typed',{value:'shared',echo:'shared'});await q.act('save');release.pop()();await settle();
+ assert.equal(posts.length,0,'a question is never answered by a click made before it was asked');assert.equal(q.sd.chooser.held,null);assert.equal(q.sd.chooser.answer.kind,'lab');
+ // Typing again drops the held click.
+ release=[];
+ const t=chooserHarness({routes:routes(free)});
+ t.context.saveDrawerOpen('chooser',{mode:'location'});await settle();
+ await t.act('typed',{value:'one',echo:'one'});await t.act('save');await t.act('typed',{value:'two',echo:'two'});assert.equal(t.sd.chooser.held,null);
+ for(const go of release)go();await settle();for(const timer of [...t.timers])if(typeof timer==='function')timer();await settle();for(const go of release)go();await settle();
+ assert.equal(posts.length,0,'the click was for another folder');
+ // Save state right after a name chip.
+ release=[];
+ const st=chooserHarness({routes:routes(free),extras:{gitRequestId:()=>'q'.repeat(32)}});
+ st.context.saveDrawerOpen('state',{});await settle();for(const go of release)go();release=[];await settle();
+ await st.act('name',{value:'final',echo:'final'});await st.act('save');
+ assert.equal(posts.length,0);assert.equal(st.sd.chooser.held.kind,'state');
+ for(const go of release)go();await settle();
+ assert.equal(posts.length,1);assert.equal(posts[0][0],'state');assert.equal(posts[0][1].folder,'restore-square/final');assert.equal(posts[0][1].name,'final');
 });
 test('a name typed while the chooser is still loading: the check for the folder it had then is dropped, the state is saved in the folder the field shows',async()=>{
  // Found in the browser (evidence pass): the field read BGP/mine while the answer, and so the save, was for "mine" at the top level.

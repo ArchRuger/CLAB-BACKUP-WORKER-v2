@@ -140,6 +140,7 @@ async function drwLoadChanges(refresh){
   const review=await gitReviewData(d.job);
   if(request!==saveDrawer.request)return;
   d.review=review;d.error='';d.key=typeof gitWaitingKey==='function'?gitWaitingKey():'';drwSay('');
+  if(typeof saveSeenReview==='function')saveSeenReview(saveDrawer.lab,d.job,review);   // what this drawer names is what an upload may send without another look
  }catch(error){if(request!==saveDrawer.request)return;d.error=error.message||'The changes could not be read.';}
  saveDrawerRender();
 }
@@ -521,8 +522,26 @@ async function drwLoadChooser(){
  saveDrawerRender();
 }
 function drwDrawerRenderSoon(){saveDrawerRender();}
+// A click on Save here or Save state made before the manager answered for the folder the field shows (right after typing a path,
+// or after a name chip): the click is held, the button says the folder is being checked, and the click is carried out when the
+// answer for that very value arrives. An answer that is a question is shown instead (its buttons are the answer); a new value
+// drops the held click. Nothing is ever sent for a folder the manager has not answered for, and no click vanishes.
+function drwChooserHold(kind){
+ const c=saveDrawer.chooser,clean=value=>typeof folderClean==='function'?folderClean(value):String(value||''),value=clean(c.value);
+ c.held={kind,value};clearTimeout(c.timer);c.timer=0;
+ if(!(c.checking&&c.checkingFor===value))drwChooserCheck(value);else saveDrawerRender();
+}
+function drwChooserHeld(){
+ const c=saveDrawer.chooser,held=c.held,clean=value=>typeof folderClean==='function'?folderClean(value):String(value||'');c.held=null;
+ if(!held||c.busy||(c.mode!=='state'&&held.value!==clean(c.value)&&held.value!==clean(c.answer&&c.answer.typed)))return false;
+ // Only an answer carries the click out: a check that failed leaves the button for a second click, and an answer that asks
+ // (another lab's folder, a folder that holds a state) shows its buttons.
+ if(!c.answer||['lab','state'].includes(String(c.answer.kind||'')))return false;
+ if(held.kind==='state')drwChooserState('');else drwChooserPlace('','');
+ return true;
+}
 async function drwChooserCheck(folder){
- const c=saveDrawer.chooser,id=saveDrawer.lab,seq=++c.seq,request=saveDrawer.request;c.checking=true;
+ const c=saveDrawer.chooser,id=saveDrawer.lab,seq=++c.seq,request=saveDrawer.request;c.checking=true;c.checkingFor=folder;
  try{
   const answer=await json('/labs/'+drwEnc(id)+'/git/places/check','POST',{repository:c.repository,folder,purpose:c.mode==='state'?'state':'save',name:c.mode==='state'?c.name:''});
   if(seq!==c.seq||request!==saveDrawer.request)return;
@@ -530,7 +549,8 @@ async function drwChooserCheck(folder){
   if(answer&&typeof answer.folder==='string'&&c.mode!=='state'&&answer.folder!==c.value&&(typeof folderClean==='function'?folderClean(c.value):c.value)===folder)c.value=answer.folder;
   c.answerFor=c.value;
  }catch(error){if(seq!==c.seq||request!==saveDrawer.request)return;c.checkFailed=true;c.answer=null;c.notice='';}
- c.checking=false;saveDrawerRender();
+ c.checking=false;c.checkingFor=null;
+ if(!drwChooserHeld())saveDrawerRender();
 }
 // The check asked 250 ms after the last keystroke. It is dropped when the field no longer shows that folder (a name typed while
 // the chooser was still loading: the loaded chooser puts the name under the lab's folder and asks for that one itself), so an
@@ -540,7 +560,7 @@ function drwChooserDebounce(folder){
  c.timer=setTimeout(()=>{c.timer=0;if(saveDrawer.chooser!==c||clean(c.value)!==clean(folder))return;drwChooserCheck(folder);},250);
 }
 function drwChooserSelect(path){
- const c=saveDrawer.chooser;c.selected=path;c.question=null;c.notice='';c.answer=null;c.checkFailed=false;
+ const c=saveDrawer.chooser;c.selected=path;c.question=null;c.notice='';c.answer=null;c.checkFailed=false;c.held=null;
  if(typeof gitRevealFolder==='function')gitRevealFolder(c.expanded,path);
  if(c.mode==='state'){c.parent=path;c.pathTouched=false;c.requestId='';c.value=drwJoin(path,typeof folderClean==='function'?folderClean(c.name):c.name);drwChooserDebounce(c.value);}
  else if(c.mode==='browse'){c.value=path;}
@@ -548,7 +568,7 @@ function drwChooserSelect(path){
  drwSay(path?'Folder '+path+' selected':'Top level selected');saveDrawerRender();
 }
 function drwChooserTyped(intent){
- const c=saveDrawer.chooser;c.value=intent.echo!==undefined?intent.echo:intent.value;c.selected=null;c.pathTouched=true;c.question=null;c.answer=null;c.answerFor=null;c.requestId='';c.checkFailed=false;
+ const c=saveDrawer.chooser;c.value=intent.echo!==undefined?intent.echo:intent.value;c.selected=null;c.pathTouched=true;c.question=null;c.answer=null;c.answerFor=null;c.requestId='';c.checkFailed=false;c.held=null;
  const clean=typeof folderClean==='function'?folderClean(c.value):c.value;
  if(c.address){saveDrawerRender();return;}   // nothing to ask before the repository is connected
  if(c.mode==='state')c.parent=drwDir(clean);
@@ -556,7 +576,7 @@ function drwChooserTyped(intent){
  drwChooserDebounce(clean);saveDrawerRender();
 }
 function drwChooserName(intent){
- const c=saveDrawer.chooser;c.name=intent.echo!==undefined?intent.echo:intent.value;c.requestId='';c.question=null;
+ const c=saveDrawer.chooser;c.name=intent.echo!==undefined?intent.echo:intent.value;c.requestId='';c.question=null;c.held=null;
  if(!c.pathTouched){c.value=drwJoin(c.parent,typeof folderClean==='function'?folderClean(c.name):c.name);c.answer=null;c.answerFor=null;drwChooserDebounce(c.value);}
  saveDrawerRender();
 }
@@ -579,7 +599,7 @@ function drwChooserDone(result,message){
 // One place request for Save here and every question button. `choice` and `pending` are what the person chose, as given.
 async function drwChooserPlace(choice,pending,extra){
  const c=saveDrawer.chooser,id=saveDrawer.lab;if(c.busy)return;
- const folder=drwChooserFolder(c);if(folder===null)return;
+ const folder=drwChooserFolder(c);if(folder===null){if(!choice&&!pending&&!extra)drwChooserHold('place');return;}
  const names=c.context?.binding?.node_names||(c.context?.supported_nodes||[]).map(n=>n.name);
  const answer=c.answer||(!c.address&&c.model&&c.model.answers.get(typeof folderClean==='function'?folderClean(c.value):c.value))||null;
  // A repository of the VM by its id, or one the VM does not have yet by its address (connected at its top level, then the lab is placed).
@@ -648,7 +668,8 @@ async function drwChooserState(choice){
  // The folder the Folder field shows: the default <the lab's folder>/<the state's folder name>, what the person chose or typed, or
  // the top level when the person emptied the field (the line under it says so). Never an empty folder by omission.
  const folder=drwChooserFolder(c),name=typeof folderClean==='function'?folderClean(c.name):c.name;
- if(!name||folder===null)return;
+ if(!name)return;
+ if(folder===null){if(!choice)drwChooserHold('state');return;}
  if(!c.requestId)c.requestId=typeof gitRequestId==='function'?gitRequestId():'0'.repeat(32);
  c.lastRequest=()=>drwChooserState(choice);
  c.busy=true;c.refused='';drwSay('Saving the state…');saveDrawerRender();

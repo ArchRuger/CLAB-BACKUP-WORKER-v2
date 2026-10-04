@@ -555,16 +555,61 @@ test('S11-5, S11-7 the first-save view offers Connect by URL… (the chooser’s
  const drawer=h.drawers.at(-1);assert.equal(drawer.kind,'chooser');assert.equal(drawer.opts.mode,'location');assert.equal(drawer.opts.address,true);assert.equal(drawer.opts.folder,'restore-square');assert.equal(typeof drawer.opts.then,'function','the first save continues after the placement');
  assert.equal(h.posts().length,0);assert.equal(h.dialogs.length,0,'no dialog of the old connect route');
 });
-test('S11-12 both sides changed while saves wait: Try again uploads a reviewed waiting save through gitReviewJob with a fresh review; one not reviewed yet is shown first',async()=>{
+test('S11-12 both sides changed while saves wait: Try again uploads a reviewed waiting save only when the fresh review sends nothing the person was not shown; one not reviewed yet is shown first',async()=>{
  const job=waiting({id:'w',status:'push_pending',reviewed:ago(3)});
  const lab=boundLab({git_status:{checked:true,ready:false,problem:'The remote branch advanced or diverged.',code:'diverged',waiting:1}});
- const h=harness({lab,state:{git_jobs:[job]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w',also_sends:[]}),'/retry':payload=>({...job,status:'queued',sent:payload})}});
+ // The person saw the failed upload's view (Show), with the review of that moment: this save alone.
+ let rows=[];
+ const routes={'/git/compare':()=>({files:[],head:'h1',upload_job:'w',also_sends:rows}),'/retry':payload=>({...job,status:'queued',sent:payload})};
+ const h=harness({lab,state:{git_jobs:[job]},routes});
  await h.open();assert.equal(h.text('save-chip-text'),'Can’t save');assert.match(h.body.innerHTML,/id="save-cant-commands"[^>]*>git -C \/[^\n]+ pull --no-rebase\ngit -C \/[^\n]+ push<\/pre>/);
+ await h.press('save-also-show');await h.flush();h.render();assert.equal(h.text('save-panel-title-text'),'Upload failed');assert.ok(h.mem().seen.get('lab').has('w'),'the view on screen is what was shown');
+ h.mem().view=null;h.render();assert.equal(h.text('save-panel-title-text'),'Can’t save');
  await h.press('save-cant-upload-again');
- const retry=h.posts().filter(c=>c.endpoint.endsWith('/retry'));assert.equal(retry.length,1);assert.deepEqual(JSON.parse(JSON.stringify(retry[0].payload)),{push:true,reviewed:true,head:'h1'});
+ const retry=h.posts().filter(c=>c.endpoint.endsWith('/retry'));assert.equal(retry.length,1,'nothing new: it goes up with the fresh review');assert.deepEqual(JSON.parse(JSON.stringify(retry[0].payload)),{push:true,reviewed:true,head:'h1'});
+ // P2-1: a save of another lab landed in the repository since that review. The fresh review names it; the person has not seen it:
+ // nothing is uploaded, the waiting view shows the new sentence, and Upload there sends it.
+ rows=[];
+ const g=harness({lab,state:{git_jobs:[job]},routes});
+ await g.open();await g.press('save-also-show');await g.flush();g.render();g.mem().view=null;g.render();
+ rows=[{job_id:'o',lab:'ospf',name:'Landed meanwhile',kind:'capture',target:'latest'}];
+ await g.press('save-cant-upload-again');await g.flush();g.render();
+ assert.equal(g.posts().filter(c=>c.endpoint.endsWith('/retry')).length,0,'a save nobody was shown is never uploaded by Try again');
+ assert.equal(g.text('save-panel-title-text'),'Upload failed');assert.match(g.body.innerHTML,/This upload sends 2 saves: [^<]*Landed meanwhile \(ospf\)\./,'it is named first');
+ await g.press('save-retry');assert.equal(g.posts().filter(c=>c.endpoint.endsWith('/retry')).length,1,'and goes up with the click that follows the sentence');
+ // A row known only by its commit (a commit the manager holds no save for) counts the same.
+ rows=[];
+ const k=harness({lab,state:{git_jobs:[job]},routes});
+ await k.open();await k.press('save-also-show');await k.flush();k.render();k.mem().view=null;k.render();
+ rows=[{commit:'9c1e2aa',name:'Edited by hand'}];
+ await k.press('save-cant-upload-again');await k.flush();assert.equal(k.posts().filter(c=>c.endpoint.endsWith('/retry')).length,0);
+ // Never shown at all on this page (the review flag came from another browser): shown first.
+ const n=harness({lab,state:{git_jobs:[job]},routes});
+ await n.open();await n.press('save-cant-upload-again');await n.flush();n.render();
+ assert.equal(n.posts().filter(c=>c.endpoint.endsWith('/retry')).length,0);assert.equal(n.text('save-panel-title-text'),'Upload failed');
  const u=harness({lab,state:{git_jobs:[waiting({id:'w2',status:'review_pending'})]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w2',also_sends:[]})}});
  await u.open();await u.press('save-cant-upload-again');await u.flush();u.render();
  assert.equal(u.posts().filter(c=>c.endpoint.endsWith('/retry')).length,0,'a save the person has not reviewed is never uploaded from here');assert.equal(u.text('save-panel-title-text'),'Not uploaded yet');
+});
+test('Q390-01 the view asked for with Show stays: the end of the upload that arrives after the click does not flip the panel back; it ends when the panel closes or its state ends',async()=>{
+ const job=waiting({id:'w',status:'push_pending',reviewed:ago(3)});
+ const lab=boundLab({git_status:{checked:true,ready:false,problem:'The remote branch advanced or diverged.',code:'diverged',waiting:1}});
+ const h=harness({lab,state:{git_jobs:[job]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w',also_sends:[]})}});
+ // The upload failed: the panel is on Upload failed, the poll already turned the chip to Can't save with its Also line.
+ await h.open();h.mem().view={lab:'lab',panel:'failed',job:'w'};h.render();await h.flush();h.render();
+ assert.equal(h.text('save-panel-title-text'),'Upload failed');assert.match(h.body.innerHTML,/Also: saving is not possible right now\./);
+ await h.press('save-also-show');assert.equal(h.text('save-panel-title-text'),'Can’t save');
+ // The watch of the upload answers only now.
+ assert.equal(h.context.saveFinished(job),false);h.render();
+ assert.equal(h.text('save-panel-title-text'),'Can’t save','the view the person asked for is still shown');assert.match(h.body.innerHTML,/id="save-cant-commands"/);
+ for(let i=0;i<3;i++)h.render();assert.equal(h.text('save-panel-title-text'),'Can’t save','and every poll after it');
+ // Its state ends (the status is ready again): the chip's own view returns.
+ h.state.labs[0]={...lab,git_status:{checked:true,ready:true,problem:'',code:'',waiting:1}};h.render();assert.equal(h.text('save-panel-title-text'),'Upload failed');
+ // Closing the panel forgets the asked view; a result that arrives while no view was asked for opens on itself as before.
+ const g=harness({lab,state:{git_jobs:[job]},routes:{'/git/compare':()=>({files:[],head:'h1',upload_job:'w',also_sends:[]})}});
+ await g.open();assert.equal(g.text('save-panel-title-text'),'Can’t save');
+ assert.equal(g.context.saveFinished(job),true);g.render();assert.equal(g.text('save-panel-title-text'),'Upload failed');
+ g.chip._menuClose(false);assert.equal(g.mem().view,null);
 });
 
 test('Keep as a checkpoint sends nothing when the save has no capture id (the manager would read the devices again and write latest too)',async()=>{
