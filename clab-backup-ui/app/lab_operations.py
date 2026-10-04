@@ -361,7 +361,10 @@ class LabOperations:
         with self.store.lock: return copy.deepcopy(self.store.state.get('host', {}))
 
     def guard(self, lab_id=''):
-        if self.active or operation_busy(self.store.state): raise HTTPException(409, 'Wait for the current lab operation to finish.')
+        # operation_busy without a lab holds every lab for the others' work; a design apply's read-back after a restart
+        # holds only its own lab, so a named lab asks for it too (a Restart device under it would decide its outcome).
+        if self.active or operation_busy(self.store.state) or (lab_id and design_rechecking(self.store.state, lab_id)):
+            raise HTTPException(409, 'Wait for the current lab operation to finish.')
         if any(j['status'] in BUSY and (not lab_id or j['lab_id'] == lab_id) for j in self.store.state['jobs']):
             raise HTTPException(409, 'Wait for the lab backup or login job to finish.')
 

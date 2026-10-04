@@ -1280,10 +1280,14 @@ class BusyGuardTests(DesignApplyTestCase):
 
     def test_the_read_back_after_a_restart_never_holds_another_lab_or_a_check_that_names_no_lab(self):
         # The read-back waits out an IOS XR trial at the device's timer (up to about 31 minutes): other labs, and the
-        # callers that name no lab (background discovery, Git's idle check, a lab-operation submit), stay free.
+        # callers that name no lab (background discovery, Git's idle check, a lab-operation submit that names no lab),
+        # stay free. A lab operation of the lab under read-back is held (review follow-up K3, the next test).
         store, other_lab_id = self._reading_back()
         self.assertFalse(operation_busy(store.state, other_lab_id), 'another lab stays free')
         self.assertFalse(operation_busy(store.state))
+        with store.lock:
+            self.app.state.operations.guard(other_lab_id)
+            self.app.state.operations.guard()
         real_runner = Runner(store)
         self.addCleanup(real_runner.close)
         RestoreService(store, real_runner, object(), connector=fake_connect).guard_idle(other_lab_id)
@@ -1313,6 +1317,49 @@ class BusyGuardTests(DesignApplyTestCase):
             store.save()
         self.assertFalse(operation_busy(store.state, self.lab_id), 'once read back, the lab is free')
         restore_service.guard_idle(self.lab_id)
+
+    def test_a_lab_operation_of_the_lab_under_read_back_is_refused_until_it_settles(self):
+        # Review follow-up K3 (audit L-15): Deploy, Destroy and Restart device of that lab were accepted (LabOperations.guard
+        # asked operation_busy without a lab), so the read-back could record `rolled_back` or `uncertain` about a device the
+        # manager itself had rebooted. The stricter claim: the lab under read-back is held for its lab operations and its
+        # map and setting edits too; another lab and an operation that names no lab stay free (the test above).
+        store, other_lab_id = self._reading_back()
+        operations = self.app.state.operations
+        with store.lock:
+            with self.assertRaises(da.HTTPException) as caught: operations.guard(self.lab_id)
+        self.assertEqual(caught.exception.status_code, 409)
+        self.assertIn('Wait for the current lab operation', caught.exception.detail)
+        with patch('app.lab_operations.remote') as remote:
+            for action, extra in (('deploy', {}), ('destroy', {}), ('restart-node', {'node': 'ceos'})):
+                refused = self.client.post('/api/operations/preview', json=dict(action=action, lab_id=self.lab_id, **extra))
+                self.assertEqual(refused.status_code, 409, (action, refused.text))
+            for path, body in ((f'/api/labs/{self.lab_id}/layout', {'positions': {}}),
+                               (f'/api/labs/{self.lab_id}/operations-settings', {'favorite': True})):
+                self.assertEqual(self.client.put(path, json=body).status_code, 409, path)
+            remote.assert_not_called()                                   # refused before the VM is asked anything
+        with store.lock:
+            store.state['design_jobs'][-1].pop('rechecking')
+            store.save()
+        with store.lock: operations.guard(self.lab_id)                    # once read back, the lab is free
+
+    def test_start_fresh_and_a_vm_connection_change_wait_for_the_read_back(self):
+        # Both refuse during a restore's read-back (operation_busy without a lab); a design apply's read-back holds them
+        # the same way and with the same words: Start fresh would drop the job that is reading the devices back, and a
+        # new VM connection would point the read-back at another VM's devices (review follow-up K3).
+        store, _ = self._reading_back()
+        host = {k: store.state['host'][k] for k in ('address', 'port', 'username', 'password')}
+        changed = self.client.put('/api/host', json=host)
+        self.assertEqual(changed.status_code, 409, changed.text)
+        self.assertEqual(changed.json()['detail'], 'Wait for the lab operation to finish.')
+        reset = self.client.post('/api/manager/reset', json={'confirmation': 'RESET'})
+        self.assertEqual(reset.status_code, 409, reset.text)
+        self.assertEqual(reset.json()['detail'], 'Wait for the current lab operation to finish.')
+        self.assertEqual(len(store.state['labs']), 2, 'nothing was reset')
+        with store.lock:
+            store.state['design_jobs'][-1].pop('rechecking')
+            store.save()
+        self.assertEqual(self.client.put('/api/host', json=host).status_code, 200)
+        self.assertEqual(self.client.post('/api/manager/reset', json={'confirmation': 'RESET'}).status_code, 200)
 
     def test_the_page_sees_the_read_back_while_it_holds_the_lab_and_not_after(self):
         # The page shows the lab as "Checking devices" from the public job's `rechecking` list (status.js): it must

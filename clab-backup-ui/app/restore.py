@@ -262,6 +262,7 @@ class RestoreService:
         self.connect_pause = 3        # seconds between the attempts to open a connection
         self.unchecked = []           # (job id, node name) of changes a restart left in flight
         self.rechecks = {}            # job id -> nodes still to be read back after that restart
+        finished = []                 # jobs whose read-back ended but which were never finalized
         with store.lock:
             for job in store.state.setdefault('restore_jobs', []):
                 # A job an earlier restart left 'interrupted' whose node was never read back (that start was stopped,
@@ -278,7 +279,18 @@ class RestoreService:
                         elif target.get('status') in ('backing_up', 'pending', 'ready', 'preflight'):
                             target.update(status='interrupted', message='Restore interrupted before this node was changed.')
                             _enter_stage(job, target, 'failed', time.time())   # settled: not changed, and not rechecked
+                elif job.get('status') == 'interrupted' and any(t.get('_recheck') for t in job.get('targets', [])) and not any(
+                        t.get('status') in IN_FLIGHT for t in job.get('targets', [])):
+                    # Every node a restart marked for its read-back (`_recheck`, written by this start code only) has its
+                    # outcome, but the process died before the job was finalized: nothing else would ever look at it again.
+                    # A job an older release left 'interrupted' carries no mark and keeps its record (audit L-9, K2).
+                    finished.append(job['id'])
             store.save()
+        for job_id in finished:
+            try:
+                self._finalize(job_id, '', prefix='Checked after a manager restart. ')
+            except Exception:
+                pass   # a failed save keeps the finalized job in memory; the next start finalizes the stored one
 
     def start(self):
         """Read back every node a restart left in flight. Called once the application is up.
@@ -715,7 +727,7 @@ class RestoreService:
         try:
             self.pool.submit(self.execute, job['id'])
         except RuntimeError:
-            self.update(job['id'], status='interrupted', finished=now(), message='Manager is stopping. Retry later.')
+            self._end(job['id'], status='interrupted', finished=now(), message='Manager is stopping. Retry later.')
         return public_job(self.get_job(job['id']))
 
     def _wait_backup(self, backup_id):
@@ -821,18 +833,32 @@ class RestoreService:
             self._finalize(job_id, lab_id)
         except _Fail as exc:
             self._settle_unfinished(job_id)
-            self.update(job_id, status='preflight_failed' if 'pre-restore' not in str(exc) else 'failed',
-                        finished=now(), message=str(exc))
+            self._end(job_id, status='preflight_failed' if 'pre-restore' not in str(exc) else 'failed',
+                      finished=now(), message=str(exc))
             self.event('restore.failed', str(exc), lab_id, job_id, level='error')
         except Exception as exc:
             with self.store.lock:
                 message = scrub(f'Restore interrupted: {type(exc).__name__}', self.store.state)
             self._settle_unfinished(job_id)
+            self._end(job_id, status='needs_attention', finished=now(), message=message)
+            self.event('restore.failed', message, lab_id, job_id, level='error')
+
+    def _end(self, job_id, **fields):
+        """The terminal status of a job that ends on an error, kept in memory even when the save fails (a full disk).
+        update() would roll it back to the busy status it replaces, and that status would hold every lab
+        (operation_busy, the Runner) until the manager restarts; the restart marks the stored busy job interrupted
+        and reads back what it was changing. Never raises (as git_progress's worker and lab operations end). A job that
+        already has its outcome (_finalize set it, and only its save failed) keeps it; it is only saved again."""
+        with self.store.lock:
+            job = next((j for j in self.store.state['restore_jobs'] if j['id'] == job_id), None)
+            if job is None:
+                return   # the lab and its restore jobs were removed meanwhile
+            if job.get('status') in RESTORE_BUSY:
+                job.update(fields)
             try:
-                self.update(job_id, status='needs_attention', finished=now(), message=message)
+                self.store.save()
             except OSError:
                 pass
-            self.event('restore.failed', message, lab_id, job_id, level='error')
 
     def _settle_unfinished(self, job_id):
         """A job that ends on an error gives every node without an outcome one, so that no node of a finished job keeps
@@ -1059,15 +1085,18 @@ class RestoreService:
                 # it stays marked as being changed, and the next start reads it back (`start()`).
                 return 'stopping', {}
 
-    def _record_settled(self, job_id, lab_id, name, state, detail, armed, applied):
+    def _record_settled(self, job_id, lab_id, name, state, detail, armed, applied, final=None):
+        """`final`: the status and message an `applied` node gets instead, in the same write (the restart's read-back
+        already compared the device; a second write could be lost to a crash and leave the node `applied`)."""
         if state == 'stopping':
             return
         if state == 'applied':
             with self.store.lock:
                 target = next((t for t in self.get_job(job_id)['targets'] if t['name'] == name), {})
                 stage = 'matched' if target.get('no_op') else 'replaced'
-            self.stage_target(job_id, name, stage, status='applied', persistence=detail.get('persistence', ''),
-                              message='Configuration replaced and the change confirmed.')
+            fields = {'status': 'applied', 'persistence': detail.get('persistence', ''),
+                      'message': 'Configuration replaced and the change confirmed.', **(final or {})}
+            self.stage_target(job_id, name, stage, **fields)
             if applied is not None:
                 applied.append(name)
             self.event('restore.node', 'Configuration replaced and confirmed on this node.', lab_id, job_id, name)
@@ -1125,13 +1154,13 @@ class RestoreService:
             if state == 'stopping':
                 looked = False
                 return
-            self._record_settled(job_id, job['lab_id'], name, state, detail, armed, None)
-            if state == 'applied' and detail.get('matches'):
-                self.update_target(job_id, name, status='verified', message='Checked after the manager restart: the saved '
-                                   'configuration is active on this device and nothing is waiting for confirmation.')
-            elif state == 'applied':
-                self.update_target(job_id, name, status='applied_unverified', message='After the manager restart the pending '
-                                   'change was confirmed, but the device could not be compared with the saved configuration.')
+            if detail.get('matches'):
+                final = dict(status='verified', message='Checked after the manager restart: the saved configuration is active '
+                                                        'on this device and nothing is waiting for confirmation.')
+            else:
+                final = dict(status='applied_unverified', message='After the manager restart the pending change was confirmed, '
+                                                                  'but the device could not be compared with the saved configuration.')
+            self._record_settled(job_id, job['lab_id'], name, state, detail, armed, None, final=final)   # used for `applied` only
         except Exception as exc:
             try:
                 self.stage_target(job_id, name, 'uncertain', status='uncertain', message='The manager restarted during this change and '

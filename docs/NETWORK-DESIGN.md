@@ -300,7 +300,10 @@ is `docs/netlab-integration/PROVISIONING.md`; the live proofs on the four-node a
    ran out before the manager could confirm, and the configuration from before was read back), *Outcome
    unknown* (the device must be looked at; the next review reads it back and settles what is owned),
    *Interrupted* (a manager restart: the device is read back at start-up; a pending change the manager can
-   still confirm is confirmed, an IOS XR trial is left to the device's timer). The job is *Applied*, *Partly
+   still confirm is confirmed, an IOS XR trial is left to the device's timer). Until every such device is read
+   back the lab reads *Checking devices* and refuses backups, restores, design applies, Git saves, lab
+   operations and the device, topology, map and setting edits of that lab; other labs are not held, while
+   *Start fresh* and a change of the VM connection wait for it. The job is *Applied*, *Partly
    applied*, *Not applied* or *Needs attention*; a healthy label never hides a failed or unverified device.
 
 **Ownership.** The manager owns exactly the statements its own commits added to a device, kept per device in

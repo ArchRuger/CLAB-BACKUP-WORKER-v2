@@ -160,8 +160,10 @@ class DesignApply:
                 elif job.get('status') == 'interrupted' and job.get('rechecking'):
                     # The manager stopped during an earlier restart's read-back: read the rest back now.
                     self.unchecked.extend((job['id'], name) for name in job['rechecking'])
-            # The job holds its lab (guard_idle, and `operation_busy` for backups, restores, Git saves and imports of
-            # that lab) until each device is read back; other labs and checks that name no lab stay free (audit L-15).
+            # The job holds its lab until each device is read back (audit L-15): guard_idle refuses its design applies,
+            # `operation_busy` asked with the lab its backups, restores, imports, Git saves and device and topology edits,
+            # LabOperations.guard its lab operations and map and setting saves (`design_rechecking`). Start fresh and a VM
+            # connection change wait for any such job; other labs and checks that name no lab stay free.
             for job_id in dict.fromkeys(job_id for job_id, _ in self.unchecked):
                 job = self.get_job(job_id); job['rechecking'] = list(dict.fromkeys(n for j, n in self.unchecked if j == job_id))
             store.save()
@@ -258,7 +260,7 @@ class DesignApply:
     def guard_idle(self, lab_id):
         state = self.store.state
         # The read-back after a restart holds only its own lab: it needs no backup, so other labs stay free (audit L-15).
-        # Checked first so the student reads why, also once `operation_busy` reads `rechecking` too.
+        # Checked first so the student reads why: `operation_busy` below refuses the same lab for it, in general words.
         if any(j.get('rechecking') and j.get('lab_id') == lab_id for j in state.get('design_jobs', [])):
             raise HTTPException(409, 'After a restart the manager is reading back devices of this lab that were being changed; wait for it to finish.')
         if operation_busy(state, lab_id) or any(j['status'] in ('queued', 'running') for j in state['jobs']):

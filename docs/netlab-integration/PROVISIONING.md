@@ -179,8 +179,13 @@ idempotent by `request_id`. Flow, mirroring `restore.py`:
    `applying`, `confirming`) on a thread of its own, never the single apply worker; the job records the devices
    still to read back (`rechecking`), which holds that lab only (no review or apply of it meanwhile, other labs
    stay free) and survives another restart; `operation_busy` reads `rechecking` for the named lab only, so
-   backups, restores and imports of that lab wait too, while checks that name no lab (background discovery,
-   Git's idle check, a lab-operation submit) are not held; a read-back that
+   backups, restores, Git saves, imports and device and topology edits of that lab wait too, and
+   `LabOperations.guard` asks `design_rechecking` for the lab it names, so Deploy, Destroy, Restart device and
+   the other lab operations, map and lab-setting saves of that lab are refused (a device the manager restarted
+   itself would decide the read-back's `rolled_back` or `uncertain`); *Start fresh* and a change of the VM
+   connection (also the setup seed's prefill) wait while any job has `rechecking`, with the words a restore's
+   read-back gives there; checks that name no lab (background discovery, a lab operation that names no lab
+   such as creating one) are not held; a read-back that
    fails inside the manager records the device `uncertain` with a pending ledger entry, never "not changed";
 5. verification: semantic read-back (every `desired` statement present, every stale statement and every
    removed ancestor gone, ordered objects in order), the ledger written with the outcome (§3), then

@@ -358,11 +358,11 @@ def consume_host_bootstrap(store, data_dir=None, skip=None):
     applied = False
     if seed:
         from .git_progress import pending_progress, host_identity
-        from .lab_operations import operation_busy
+        from .lab_operations import design_rechecking, operation_busy
         with store.lock:
-            # Never swap the VM identity under a running backup, restore or lab operation:
-            # leave the seed in place and let the next discovery cycle retry.
-            if operation_busy(store.state): return None
+            # Never swap the VM identity under a running backup, restore or lab operation, or under a design apply's
+            # read-back after a restart: leave the seed in place and let the next discovery cycle retry.
+            if operation_busy(store.state) or design_rechecking(store.state): return None
             old = store.state.get('host', {})
             same = (old.get('address'), old.get('port')) == (seed['host']['address'], seed['host']['port'])
             host = {**{k: v for k, v in old.items() if k not in ('private_key', 'passphrase', 'bootstrap_verify')},
@@ -645,6 +645,10 @@ class Discovery:
                 if not username: raise ValueError('Enter a VM username')
                 with self.store.lock:
                     idle()
+                    # A design apply's read-back after a restart holds only its own lab for lab work, but it reads the devices
+                    # this VM connection reaches: no new VM until it has finished (a restore's read-back holds idle() itself).
+                    from .lab_operations import design_rechecking
+                    if design_rechecking(self.store.state): raise HTTPException(409, 'Wait for the lab operation to finish.')
                     old = self.store.state.get('host', {})
                     same = (old.get('address'),old.get('port'),old.get('username'),old.get('auth')) == (endpoint,data.port,username,data.auth)
                     host = dict(address=endpoint,port=data.port,username=username,auth=data.auth,

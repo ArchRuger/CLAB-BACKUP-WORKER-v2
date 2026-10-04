@@ -23,7 +23,7 @@ from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
 from .discovery import Discovery, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path, stored_file, topology_names
-from .lab_operations import LabOperations, last_deployed, operation_busy, restarting_nodes
+from .lab_operations import LabOperations, design_rechecking, last_deployed, operation_busy, restarting_nodes
 from .git_progress import GitProgress, public_job as public_git_job
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
@@ -196,6 +196,8 @@ def create_app(data_dir=None):
         try:
             with store.lock, services.lock:
                 operations.guard()
+                # A design apply's read-back after a restart holds only its own lab elsewhere; a reset would drop its job.
+                if design_rechecking(store.state): raise HTTPException(409, 'Wait for the current lab operation to finish.')
                 git_progress.guard_pending()
                 network_design.guard_idle()
                 if services.clients or services.checking:

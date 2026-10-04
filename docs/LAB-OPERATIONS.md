@@ -275,6 +275,11 @@ credential and topology-file edits and *Remove lab* on that lab, and lab operati
 lab-setting saves, Git saves and adding a lab on every lab. A restore of another lab is accepted but
 starts only once the read-back has finished (the exact list is in
 [the restore notes](multi-platform-restore/README.md#outcomes-the-manager-reports-per-node)).
+The read-back of a network-design apply after a restart holds only its own lab: backups, restores,
+design applies, lab operations (Restart device included), map and lab-setting saves of that lab are
+refused, other labs stay free, and
+*Start fresh* and a change of the VM connection wait for it
+([network design](NETWORK-DESIGN.md#applying-a-plan-to-devices)).
 Live restore is supported for Junos
 (`juniper_cjunosevolved`, `juniper_vjunosswitch`), Arista EOS (`arista_ceos`) and Cisco
 IOS XR (`cisco_xrv9k`). This uses the manager's direct SSH path to the node and is

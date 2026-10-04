@@ -304,6 +304,22 @@ class DiscoveryParserTests(unittest.TestCase):
                 self.assertFalse(path.exists(),'a malformed seed is removed, not retried on every start')
                 self.assertNotIn('host',store.state)
 
+    def test_setup_seed_waits_while_a_design_apply_reads_devices_back(self):
+        # Review follow-up K3: a design apply's read-back after a restart holds only its own lab for lab work, but a new VM
+        # connection would point it at another VM's devices. The seed stays and the next discovery cycle retries it.
+        from app.discovery import consume_host_bootstrap, BOOTSTRAP_FILE
+        good={'schema':1,'created':'2026-09-23T10:00:00+00:00','password':'pw-from-setup',
+              'fingerprint':'','host':{'address':'127.0.0.1','port':22,'username':'clab-discovery','auth':'password','command_mode':'helper','enabled':True}}
+        with tempfile.TemporaryDirectory() as tmp:
+            store=Store(tmp);path=Path(tmp)/BOOTSTRAP_FILE
+            store.state['design_jobs']=[{'id':'job-r','lab_id':'lab-a','status':'interrupted','rechecking':['ceos'],'targets':[]}]
+            path.write_text(json.dumps(good));path.chmod(0o600)
+            self.assertIsNone(consume_host_bootstrap(store))
+            self.assertTrue(path.exists(),'kept for the next cycle');self.assertNotIn('host',store.state)
+            store.state['design_jobs'][0].pop('rechecking')
+            self.assertIsNone(consume_host_bootstrap(store))
+            self.assertFalse(path.exists());self.assertEqual(store.state['host']['username'],'clab-discovery')
+
     def test_container_status_uptime_and_expected_container_names(self):
         from app.discovery import uptime_seconds, expected_container
         data=json.loads(response());data['training'][0]['status']='Up 12 minutes (healthy)'

@@ -720,6 +720,73 @@ class RestoreServiceTests(unittest.TestCase):
         self.assertEqual((by_name['SW1']['status'], by_name['SW1']['stage']), ('verified', 'replaced'))
         self.assert_every_node_settled(result)
 
+    # --- review follow-up K1: a restore that ends on an error never stays busy because the disk is full ----------
+
+    def assert_ended_not_busy(self, job_id, status):
+        from app.lab_operations import RESTORE_BUSY, operation_busy
+        result = self.svc.get_job(job_id)
+        self.assertEqual(result['status'], status, result['message'])
+        self.assertNotIn(result['status'], RESTORE_BUSY)
+        self.assertTrue(result['finished'])
+        self.assertFalse(operation_busy(self.store.state), 'a finished restore holds no lab')
+        self.assertFalse(operation_busy(self.store.state, 'lab1'))
+        self.assert_every_node_settled(result)
+
+    def test_a_restore_that_fails_while_the_disk_is_full_ends_terminal_in_memory(self):
+        # The status write of the error handler used to roll back to the busy status it replaced when its save failed:
+        # until a restart every backup, restore, Git save and lab operation on every lab was refused.
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        self.store.state['discovery']['checked_epoch'] = 0       # the restore stops on a _Fail at its preflight
+        self.store.save()
+        save, full = self.store.save, []
+        settle = self.svc._settle_unfinished
+
+        def saving():
+            if full:
+                raise OSError(28, 'No space left on device')
+            save()
+
+        def disk_full_from_here(job_id):
+            full.append(True)
+            settle(job_id)
+        with patch.object(self.store, 'save', side_effect=saving), \
+                patch.object(self.svc, '_settle_unfinished', side_effect=disk_full_from_here):
+            try:
+                self.svc.execute(job['id'])
+            except OSError:
+                pass   # the pool would swallow it; what counts is the job it leaves behind
+        self.assertTrue(full, 'the save failed only once the restore had ended')
+        self.assert_ended_not_busy(job['id'], 'preflight_failed')
+
+    def test_a_restore_that_crashes_on_a_full_disk_ends_needing_attention_not_queued(self):
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        with patch.object(self.store, 'save', side_effect=OSError(28, 'No space left on device')), \
+                patch('app.restore.junos.apply_candidate') as apply:
+            self.svc.execute(job['id'])       # its very first status write fails
+        self.assert_ended_not_busy(job['id'], 'needs_attention')
+        self.assertEqual({(t['status'], t['stage']) for t in self.svc.get_job(job['id'])['targets']}, {('failed', 'failed')})
+        apply.assert_not_called()
+
+    def test_a_restore_whose_final_save_fails_keeps_its_outcome_and_holds_nothing(self):
+        # _finalize sets the outcome in memory before its save fails; the error handler must neither roll it back to a
+        # busy status nor replace the per-node verdict with "Restore interrupted".
+        save, full = self.store.save, []
+        finalize = self.svc._finalize
+
+        def saving():
+            if full:
+                raise OSError(28, 'No space left on device')
+            save()
+
+        def disk_full_from_here(*args, **kwargs):
+            full.append(True)
+            return finalize(*args, **kwargs)
+        with patch.object(self.store, 'save', side_effect=saving), patch.object(self.svc, '_finalize', side_effect=disk_full_from_here):
+            result = self.run_execute()
+        self.assertTrue(full)
+        self.assert_ended_not_busy(result['id'], 'succeeded')
+        self.assertTrue(result['message'].startswith('All 2 node(s) restored and verified'), result['message'])
+
     def test_verify_mismatch_when_stale_remains(self):
         self.runner.post_config = DESIRED_SET + 'set interfaces lo0 unit 0 family inet address 10.9.9.9/32\n'
         job = self.run_execute()
@@ -1292,6 +1359,34 @@ class RestoreServiceTests(unittest.TestCase):
         statuses = {t['name']: t['status'] for t in third.get_job(job['id'])['targets']}
         self.assertEqual(statuses, {'PTX1': 'interrupted', 'SW1': 'verified'})
         self.assertEqual(third.get_job('stopped')['targets'][0]['status'], 'pending')
+
+    def test_a_death_after_the_last_node_was_read_back_is_finalized_at_the_next_start(self):
+        # Review follow-up K2 (L-9): the read-back writes the node's outcome, then its post-restart status, then the job.
+        # A process that dies after the first write left a job 'interrupted' for good: no node awaited a read-back, so no
+        # start looked at it again (stale "is checking" wording, the saved candidates kept).
+        job_id, again = self._restarted_mid_change()
+        with patch('app.restore.junos.pending', return_value=False), patch('app.restore.junos.capture', return_value=DESIRED_SET), \
+                patch.object(again, 'update_target'), patch.object(again, '_finalize'):    # the process dies after the outcome
+            again._recheck_interrupted(job_id, 'PTX1')
+        died = again.get_job(job_id)
+        self.assertEqual(died['status'], 'interrupted')
+        self.assertIn('settled', died['targets'][0]['timeline'])
+        # A job an older release left 'interrupted' with every node settled (no restart mark) is history: never relabelled.
+        older = dict(copy.deepcopy(died), id='older', request_id='older')
+        for target in older['targets']:
+            target.pop('_recheck', None)
+        self.store.state['restore_jobs'].append(older)
+        self.store.save()
+        third = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        self.assertEqual(third.unchecked, [])                                 # nothing is read back again
+        finished = third.get_job(job_id)
+        self.assertEqual(finished['status'], 'succeeded', finished['message'])
+        self.assertEqual(finished['targets'][0]['status'], 'verified', 'the post-restart status is written with the outcome')
+        self.assertTrue(finished['message'].startswith('Checked after a manager restart.'))
+        self.assertNotIn('_candidates', finished)
+        self.assertEqual((third.get_job('older')['status'], third.get_job('older')['message']), ('interrupted', older['message']))
+        from app.lab_operations import operation_busy
+        self.assertFalse(operation_busy(self.store.state, 'lab1'))
 
     def test_the_lab_stays_busy_until_the_restart_recheck_has_read_every_node_back(self):
         # L-10: between the restart and the read-back the node may still run an unconfirmed change, so backups,
