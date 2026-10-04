@@ -435,7 +435,10 @@ manager calls the helper's existing `update` mode. Best effort and silent: a ref
 changes nothing and the save goes on as before; a success that moved HEAD is one event in the lab's
 log, and the save's name and review compare with the updated `latest`. After a failure the manager
 does not try again for that checkout for ten minutes. No new mode or option; the manager still never
-merges. What is left for the owner's two commands is the case where a save waited while the online
+merges. When the fast-forward changed the lab's OWN `latest` (another VM saved this lab, or someone edited
+it online), the save still writes what the devices run now, and the upload sentence and the What
+changed drawer say so before anything is uploaded: `The online copy held a newer save of this lab.
+This save replaces it.` (review 4, finding 1). What is left for the owner's two commands is the case where a save waited while the online
 copy changed. The recovery was verified live: after `pull --no-rebase` and `push` as the VM account,
 **Try again** uploads every waiting save; a pull without the push does not help.
 
