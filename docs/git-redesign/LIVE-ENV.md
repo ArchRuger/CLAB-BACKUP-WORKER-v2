@@ -540,3 +540,21 @@ an owner commit (`eb4eb58`, `32`), so the lab's Start, Broken and Final carry no
 `ArchRuger/clab-scratch-git-redesign-empty` holds `README.md` and `lab-b-empty/latest/*`. The manager's list of VM
 registrations still holds the folders the moves and states created. No merge, force-push, tag or image publication; no data
 deleted.
+
+## 11. Re-check after the page fixes (L3)
+
+Run 2026-10-04 20:30 to 20:37 UTC, through the page (Playwright, 1440x900), against the manager built from `3249547`
+(branch `slice/l3-live`) with the Git helper refreshed: API 1.30.60, installed `host_git.py` `cmp`-identical, every
+`app/*` file in the container equal to the worktree, both labs Ready (`evidence/live/l3-00-build.txt`). Console, page and
+request errors: none in any step. Evidence: `evidence/live/l3-*.txt` and `l3-*.png` (no configuration text).
+
+| Item | Result | What the page showed |
+|---|---|---|
+| 1 Finding 1 | PASS | A save kept with Not now, one commit added online, Upload: chip `Can’t save`, panel `The online copy and this VM both have changes the other does not have. They have to be combined on the VM.` with `git -C /home/archtop/labs/clab-scratch-git-redesign pull --no-rebase` and `... push`. Both run as `archtop` (exit 0). **One click on Try again**: requests `compare` then `retry`, toast `Uploaded to github.com.`, chip `Saved just now`, 0 waiting, no new job, no error shown (`l3-1-finding-1.txt`). |
+| 2 Finding 2 | PASS | Lab B removed and imported again, `B` loaded (chip `Running B`, CLI `description l1-s15-b1`). **Save** opened the first-save view: `This repository already holds saves of a lab named git-redesign-b.` with Save in git-redesign-b-2 / Continue there / Connect by URL…; Continue there saved, Upload ended `Saved just now`; the lab saves in `git-redesign-b` (2 clicks to the commit, 3 with Upload) (`l3-2-lab-b.txt`). Same on lab A after loading `Start` (`l3-2-lab-a.txt`). |
+| 3 Finding 3 | PASS | The Load panel of such a lab lists `Broken`, `C6probe`, `Final`, `Start` first (the instructor's states, `4 devices`; `C6probe` is my stray state of L2), the other lab's states after them, `3 more in All versions`. Loading one is **3 clicks** (Load, state, red Load, nothing typed): `Start` on lab A, CLI `description l2-c1-start` on ceos1; `B` on lab B. (A first attempt on lab A waited for the confirmation longer than 40 s and was repeated; the lab was then loaded normally.) |
+| 4 No regression | PASS | Lab A: device change `l3-4` and a map move, Save (`1 device changed since your last save: ceos2. 1 line added, 1 removed. The map changed.`), Upload: `Saved just now`, 2 clicks (3 with See changes); a load of the lab state `Start` with the CLI proof above. |
+
+State left: both labs Ready (4 of 4, 2 of 2), lab A saves in `git-redesign`, lab B in `git-redesign-b`, nothing waits, nothing
+paused, `/etc/hosts` untouched. Both labs are new records (removed and imported again); the scratch repository gained
+`l3-online/one.txt` and the owner's merge commit of item 1.
