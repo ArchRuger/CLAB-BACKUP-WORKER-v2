@@ -83,6 +83,7 @@ def create_app(data_dir=None):
     operations.install(app)
     app.state.git_progress=git_progress
     git_progress.install(app)
+    from . import git_place; git_place.install(app,git_progress)   # placing a lab in any folder (docs/git-redesign/DESIGN.md 2.4-2.8)
     app.state.restore=restore
     restore.install(app)
     app.state.node_services=services
