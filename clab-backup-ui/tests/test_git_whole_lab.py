@@ -552,6 +552,28 @@ class GapTests(WholeLabCase):
         saved, source = self.saved_map()
         self.assertEqual((saved, source), (map_document(self.lab_state()), 'manager')); self.assertIn('"x": 999', saved)
 
+    def test_two_syncs_within_one_clock_tick_are_still_syncs(self):
+        # The mark a sync leaves must not depend on the clock: with the same stamp twice, the VM's map stays the saved one.
+        with patch('app.discovery.stamp', return_value='2026-10-04T12:00:00+00:00'):   # vm_files imports it at call time
+            self.sync_from_vm(VM_MAP); self.sync_from_vm(VM_MAP)
+        self.assertNotIn('map_written_at', self.lab_state())
+        self.assertEqual(self.saved_map(), (VM_MAP, 'vm'))
+
+    def test_a_map_that_discovery_placed_from_the_vm_is_not_taken_for_an_edit(self):
+        from app.layout import keep_document
+        from app.runner import Runner
+        from app.topology import unplaced
+        lab = self.lab_state(); name = lab['deployment_name']
+        lab['drawing']['placed'] = False; keep_document(lab, b''); self.store.save()   # as if known from the topology alone: nobody placed a node
+        self.assertIn('map_written_at', self.lab_state())
+        self.assertTrue(unplaced(self.lab_state()['drawing']))
+        def raw(text, where): return dict(content=base64.b64encode(text.encode()).decode(), sha256=sha(text.encode()), path=where)
+        where = '/srv/labs/training/training.clab.yml'
+        with self.store.lock:
+            self.service.update_sources({name: dict(files={'definition': raw(LAB_YAML, where), 'annotations': raw(VM_MAP, where + '.annotations.json')})})
+        self.assertFalse(unplaced(self.lab_state()['drawing']), 'discovery placed the nodes from the VM file')
+        self.assertFalse(Runner.map_changed_in_manager(self.lab_state()))
+
     def test_a_drag_in_the_topology_tab_after_a_sync_is_the_saved_map_too(self):
         self.sync_from_vm(VM_MAP)
         alias = self.lab_state()['drawing']['nodes'][0]['id']
