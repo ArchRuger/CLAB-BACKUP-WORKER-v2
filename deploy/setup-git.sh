@@ -113,19 +113,10 @@ try:
         os.close(read_fd)
         try:
             h.drop_owner(binding)
-            worker=h.GitRepository(binding)
-            if worker.root.stat().st_uid!=account.pw_uid or worker.control.stat().st_uid!=account.pw_uid: raise ValueError('The checkout and .git must be owned by the registered account.')
-            binding['branch']=worker.run('symbolic-ref','--quiet','--short','HEAD')
-            worker.run('check-ref-format','--branch',binding['branch'])
-            urls=worker.run('remote','get-url','--push','--all',remote).splitlines()
-            if len(urls)!=1: raise ValueError('Configure exactly one HTTPS push URL.')
-            binding['push_url']=h.checked_url(urls[0])
-            binding['anchor']=worker.validate();worker.clean();worker.commit_identity()
-            worker.check_synchronized(binding['anchor'],worker.further())  # the helper's register() calls the same method
-            worker.check_push_access()
-            # A repeated setup for unchanged settings must not invalidate pending
-            # jobs just because HEAD advanced through ordinary manager saves.
-            binding=worker.registration(old)
+            # The helper's own register(): owner, branch, push URL, clean checkout, identity, the sync test (H2) and the
+            # push check, so the two stay equivalent by construction. A repeated setup for unchanged settings keeps the
+            # revision (pending jobs compare it); changed settings replace it only while no save made through it waits.
+            binding=h.GitRepository(binding).register(old)
             result={'binding':binding}
         except ValueError as error: result={'error':str(error)}
         except Exception: result={'error':'Could not register the repository. Check checkout permissions and the owner\'s HTTPS Git authentication.'}

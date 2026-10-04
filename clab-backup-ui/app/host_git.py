@@ -44,15 +44,17 @@ SUMMARY_TEXT = 200
 SUMMARY_DEVICES = 500
 SHOW_BATCH = 1000                 # blob ids per `git show` (41 bytes each): one call unless the list is long
 MAX_OUTGOING = 200
+OUTGOING_BYTES = 2 * 1024 * 1024  # the outgoing rows of one compare answer
+DIRS_BYTES = 2 * 1024 * 1024      # the dirs of one browse answer
+SUMMARY_BYTES = 4 * 1024 * 1024   # the summaries of one history answer, as JSON
 OUTGOING_FILES = 500
 # Fixed refusals the manager recognises by their text.
 NOT_SYNCHRONIZED = 'Before linking, synchronize the current branch with its existing remote branch using your ordinary Git login.'
 REMOTE_AHEAD = 'The online copy of this repository has changes this VM does not have.'
 NOT_MANAGER_SAVES = 'This checkout has commits that were not made by manager saves.'
 EMPTY_REPOSITORY = 'This repository has no commits yet. Add a README on GitHub first, then connect it.'
-NOT_EMPTY = 'This repository already holds branches or tags but none that the VM can use, so the manager does not start it.'
 START_FAILED = 'The manager could not start the repository; connecting again retries it.'
-FOLDER_NOT_EMPTY = 'The VM folder of this repository holds files that are not in the repository, so the manager does not start it.'
+START_PUSHED = 'README.md was pushed to start the repository, but other branches or tags appeared at the same time; connecting again finishes it.'
 SAVE_WAITS = 'A save made in that folder still waits for upload.'
 SAVE_UNKNOWN = 'The online copy could not be asked whether a save made in that folder still waits for upload.'
 START_README = (b'# Lab saves\n\n'
@@ -176,6 +178,18 @@ def collision_message(prefix, other):
             (prefix if prefix else 'a lab folder at the repository top level') + ' would keep its saves; choose another folder for this lab.')
 
 
+def not_empty(folder, branch):
+    return 'The repository has branches or tags but no branch ' + branch + ', which the VM folder ' + str(folder) + ' was cloned for; nothing was changed.'
+
+
+def folder_not_empty(folder):
+    return 'The VM folder ' + str(folder) + ' holds files that are not in the repository; nothing was changed.'
+
+
+def finish_failed(folder):
+    return 'The VM folder ' + str(folder) + ' could not take the repository\'s first commits; connecting again retries it.'
+
+
 def no_links(path, require=True):
     path = Path(path)
     for part in (path, *path.parents):
@@ -224,15 +238,27 @@ def content_digest(manifest):
     return digest({k: v for k, v in manifest.items() if k not in ('backup_job_id', 'captured_at')})
 
 
+BIDI = {'\u061c', '\u200e', '\u200f', *map(chr, range(0x202a, 0x202f)), *map(chr, range(0x2066, 0x206a))}
+
+
+def control(c): return ord(c) < 32 or 127 <= ord(c) < 160
+
+
+def display_text(value):
+    """A text for display: control characters and the Unicode bidi controls dropped, cut at 200 characters."""
+    return ''.join(c for c in value if not control(c) and c not in BIDI)[:SUMMARY_TEXT]
+
+
 def manifest_summary(raw):
     """H3: the few manifest fields a saved state is chosen by, or None on any deviation. Strings only where a
-    string is expected, cut at 200 characters, no control character; at most 500 file entries. Nothing of the
-    configuration and no path is returned: the manager decides what to believe (a copied lab_id stays as it is)."""
+    string is expected, cut at 200 characters, no control character (bidi controls are dropped); at most 500 file
+    entries. Nothing of the configuration and no path is returned: the manager decides what to believe (a copied
+    lab_id stays as it is)."""
     def text(value, key):
         if key not in value or value[key] is None: return None
         item = value[key]
-        if not isinstance(item, str) or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in item): raise ValueError
-        return item[:SUMMARY_TEXT]
+        if not isinstance(item, str) or any(control(c) for c in item): raise ValueError
+        return display_text(item)
     try:
         value = json.loads(raw.decode('utf8'))
         if not isinstance(value, dict) or not isinstance(value.get('files'), list) or len(value['files']) > SUMMARY_DEVICES: return None
@@ -496,10 +522,13 @@ class GitRepository:
         if len(lines) != 1 or not HEX.fullmatch(lines[0].split('\t')[0]): raise ValueError('The remote branch response was invalid.')
         return lines[0].split('\t')[0]
 
-    def fetch_remote(self, check=True):
+    def fetch_remote(self, check=True, timeout=60):
         """Fetch the remote branch's objects only; never the index, the checkout, a ref or FETCH_HEAD."""
         return self.run('fetch', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', self.binding['push_url'],
-                        'refs/heads/' + self.binding['branch'], check=check, timeout=60)
+                        'refs/heads/' + self.binding['branch'], check=check, timeout=timeout)
+
+    def has_commit(self, commit):
+        return self.run('cat-file', '-e', commit + '^{commit}', check=False)[0] == 0
 
     def journals(self):
         """Every readable journal of this checkout, whatever registration wrote it; an unreadable one is skipped."""
@@ -536,30 +565,35 @@ class GitRepository:
         if not between or not between.issubset(self.known_commits()): raise ValueError(NOT_MANAGER_SAVES)
 
     def check_retire(self):
-        """H7: this registration may be retired only while no save journaled under it waits for upload: every
-        verified commit of its journals must be contained in the remote branch. Runs as the owner under the
-        checkout's lock; a remote that cannot be asked refuses."""
+        """H7: this registration may be retired only while no save made through it waits for upload. A save waits
+        when a journal of this registration's revision (verified or not) holds a commit that HEAD contains and the
+        remote branch does not; a commit HEAD no longer reaches (reset away, pruned) cannot be uploaded and does not
+        wait. Runs as the owner under the checkout's lock; a remote that cannot be asked refuses."""
         with self.lock():
-            commits = sorted({j['commit'] for j in self.journals() if j.get('verified') and isinstance(j.get('commit'), str)
+            commits = sorted({j['commit'] for j in self.journals() if isinstance(j.get('commit'), str) and HEX.fullmatch(j['commit'])
                               and j.get('binding_revision') == self.binding['revision']})
-            if not commits: return None
+            code, raw = self.run('rev-parse', '--verify', 'HEAD', check=False)
+            head = raw.decode('utf8', errors='replace').strip() if not code else ''
+            reachable = [c for c in commits if head and self.run('merge-base', '--is-ancestor', c, head, check=False)[0] == 0]
+            if not reachable: return None
             try:
-                remote = self.remote_head(); self.fetch_remote()
+                remote = self.remote_head()
+                if not self.has_commit(remote): self.fetch_remote()
             except ValueError: raise ValueError(SAVE_UNKNOWN) from None
-            for commit in commits:
-                code, _ = self.run('merge-base', '--is-ancestor', commit, remote, check=False) if HEX.fullmatch(commit) else (1, b'')
-                if code: raise ValueError(SAVE_WAITS)
+            for commit in reachable:
+                if self.run('merge-base', '--is-ancestor', commit, remote, check=False)[0]: raise ValueError(SAVE_WAITS)
         return None
 
     def outgoing(self):
-        """H6: the commits an upload of this checkout would carry (`<remote>..HEAD`, oldest first, the newest 200),
-        each with the operation of the journal that made it, its subject and the paths it changed; None when the
-        remote cannot be asked."""
+        """H6: the commits an upload of this checkout would carry (`<remote>..HEAD`, oldest first, the newest 200
+        within about 2 MiB), each with the operation of the journal that made it, whether a push would accept it
+        (`approved`, the rule of known_commits()), its subject and the paths it changed; None when the remote cannot
+        be asked."""
         try:
             # A review must not hold the checkout's lock for long when the remote is down, and needs no fetch
             # when the remote branch is a commit this checkout already has (the usual case: the VM is ahead).
             remote = self.remote_head(timeout=15)
-            if self.run('cat-file', '-e', remote + '^{commit}', check=False)[0]: self.fetch_remote()
+            if not self.has_commit(remote): self.fetch_remote(timeout=20)
             head = self.run('rev-parse', '--verify', 'HEAD')
             code, raw = self.run('rev-list', '--max-count=' + str(MAX_OUTGOING + 1), '--format=%H%x00%s', remote + '..' + head, check=False)
             if code: return None, False
@@ -569,13 +603,16 @@ class GitRepository:
             for journal in self.journals():
                 if isinstance(journal.get('commit'), str) and not journal.get('unchanged') and isinstance(journal.get('operation_id'), str):
                     made.setdefault(journal['commit'], journal['operation_id'])
-            result = []
-            for commit, subject in reversed(rows[:MAX_OUTGOING]):
+            approved = self.known_commits(); result = []; size = 0
+            for commit, subject in rows[:MAX_OUTGOING]:   # newest first, so the budget keeps the newest
                 if not HEX.fullmatch(commit): return None, False
                 files = self.run('diff-tree', '--no-commit-id', '--name-only', '-r', '--root', '-z', commit).split('\0')
-                result.append({'commit': commit, 'operation_id': made.get(commit), 'subject': subject[:SUMMARY_TEXT],
-                               'files': [f for f in files if f][:OUTGOING_FILES]})
-            return result, truncated
+                row = {'commit': commit, 'operation_id': made.get(commit), 'approved': commit in approved,
+                       'subject': display_text(subject), 'files': [f for f in files if f][:OUTGOING_FILES]}
+                size += len(json.dumps(row, ensure_ascii=False).encode())
+                if size > OUTGOING_BYTES: truncated = True; break
+                result.append(row)
+            return result[::-1], truncated
         except ValueError:
             return None, False
 
@@ -850,18 +887,20 @@ class GitRepository:
             versions.append({'name': folder, 'path': folder, 'commit': head, 'connected': here, 'summary': None})
             blobs[folder] = (fields[0], fields[2], int(fields[3]) if fields[3].isdigit() else None)
         versions.sort(key=lambda version: (not version['connected'], version['path']))
-        self.summarize(versions, blobs)
-        return {'head': head, 'commits': commits, 'versions': versions}
+        truncated = self.summarize(versions, blobs)
+        return {'head': head, 'commits': commits, 'versions': versions, 'summaries_truncated': truncated}
 
     def summarize(self, versions, blobs):
         """H3: a bounded summary per listed saved state, in list order so the lab's own states come first and
         never lose theirs to the budget. A manifest over 256 KiB is never read; the others, up to 4 MiB in all,
         are read by blob id in one `git show` (a second only when the id list is long) and split by their known
-        sizes. A batch whose output is not exactly those sizes yields no summaries."""
-        budget = SUMMARY_TOTAL; wanted = []
+        sizes. A batch whose output is not exactly those sizes yields no summaries. The summaries themselves stop at
+        about 4 MiB of JSON. True when a budget, not the manifest, left a row without its summary."""
+        budget = SUMMARY_TOTAL; wanted = []; truncated = False
         for version in versions:
             mode, blob, size = blobs[version['path']]
-            if mode not in ('100644', '100755') or not HEX.fullmatch(blob) or size is None or size > SUMMARY_FILE or size > budget: continue
+            if mode not in ('100644', '100755') or not HEX.fullmatch(blob) or size is None or size > SUMMARY_FILE: continue
+            if size > budget: truncated = True; continue
             budget -= size; wanted.append((version, blob, size))
         for start in range(0, len(wanted), SHOW_BATCH):
             batch = wanted[start:start + SHOW_BATCH]; expected = sum(size for _, _, size in batch)
@@ -871,6 +910,12 @@ class GitRepository:
             offset = 0
             for version, _, size in batch:
                 version['summary'] = manifest_summary(raw[offset:offset + size]); offset += size
+        output = 0
+        for version in versions:   # list order: the lab's own states first
+            if version['summary'] is None: continue
+            output += len(json.dumps(version['summary'], ensure_ascii=False).encode())
+            if output > SUMMARY_BYTES: version['summary'] = None; truncated = True
+        return truncated
 
     def allowed_repo_version(self, folder):
         """A snapshot folder anywhere in this checkout: any safe repository folder ('' or '/' is the
@@ -980,9 +1025,13 @@ class GitRepository:
         # H5: every directory of the committed tree, so a folder stays choosable when the file list stops at 4000.
         code, raw = self.tool([self.git, '-c', 'color.ui=false', 'ls-tree', '-r', '-d', '--name-only', '-z', head], timeout=60, limit=MAX_JSON)
         if code: raise ValueError('Git could not list the repository contents. Check the repository as its registered owner.')
-        dirs = [p for p in raw.decode('utf8', errors='replace').split('\0') if p]
+        dirs = []; size = 0; dirs_truncated = False
+        for path in filter(None, raw.decode('utf8', errors='replace').split('\0')):
+            size += len(path.encode()) + 3
+            if len(dirs) >= MAX_DIRS or size > DIRS_BYTES: dirs_truncated = True; break
+            dirs.append(path)
         return {'repository': self.descriptor(), 'head': head, 'files': files, 'truncated': truncated, 'saved': saved, 'folders': folders,
-                'dirs': dirs[:MAX_DIRS], 'dirs_truncated': len(dirs) > MAX_DIRS}
+                'dirs': dirs, 'dirs_truncated': dirs_truncated}
 
     def ensure_identity(self, url):
         if not any(self.run('var', role, check=False)[0] for role in ('GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT')): return
@@ -1015,39 +1064,66 @@ class GitRepository:
         if code or raw.strip() != b'true':
             raise ValueError('The GitHub account signed in on the VM cannot push to ' + slug + '. Check the repository name, or grant that account write access on GitHub.')
 
+    def check_owner(self):
+        if os.name == 'posix' and (self.root.stat().st_uid != os.geteuid() or self.control.stat().st_uid != os.geteuid()):
+            raise ValueError('The checkout and .git must be owned by the registered account.')
+
     def register(self, previous=None):
-        """Validate this checkout exactly as the terminal wizard does before it is registered.
+        """Validate this checkout exactly as the terminal wizard does before it is registered: deploy/setup-git.sh's
+        child calls this method too, with the folder's existing registration as `previous`.
 
         Runs as the owner. Fills branch, push URL, anchor and revision into the binding it returns."""
         binding = self.binding
-        if os.name == 'posix' and (self.root.stat().st_uid != os.geteuid() or self.control.stat().st_uid != os.geteuid()):
-            raise ValueError('The checkout and .git must be owned by the registered account.')
+        self.check_owner()
         binding['branch'] = self.run('symbolic-ref', '--quiet', '--short', 'HEAD')
         self.run('check-ref-format', '--branch', binding['branch'])
         urls = self.run('remote', 'get-url', '--push', '--all', binding['remote']).splitlines()
         if len(urls) != 1: raise ValueError('Configure exactly one HTTPS push URL.')
         binding['push_url'] = checked_url(urls[0], self.allow_local)
         binding['anchor'] = self.validate(); self.clean(); self.commit_identity()
+        result = self.registration(previous)
+        if previous and result['revision'] != previous['revision']:
+            # Re-registering a folder with other settings replaces its revision, which then approves no push: refused
+            # while a save made through the old one waits for upload (H7's test, as its owner, under the lock).
+            type(self)(dict(previous), git=self.git, allow_local=self.allow_local, env=self.env, gh=self.gh).check_retire()
         self.check_synchronized(binding['anchor'], self.further())
         self.check_push_access()
-        return self.registration(previous)
+        return result
 
-    def start(self, url):
-        """H4, only on the request's `initialize: true` and only for a remote without any ref. Builds one commit
-        holding the fixed README.md without the working tree or the index (the blob and the tree are written with
-        `hash-object -w` from files inside .git/clab-manager; stdin stays closed), pushes it to the branch the
-        clone's HEAD names (`main` when that name is unusable), verifies the remote, and only then fast-forwards
-        the unborn branch, which populates the working tree. A failure before that leaves the clone as it was; a
-        retry adopts a start commit this clone already made and the remote already holds."""
+    def unborn(self, url, initialize, identity):
+        """A clone whose branch has no commit yet (an empty repository when it was cloned). When the remote now has
+        the branch the clone's HEAD names (`main` when that name is unusable), the clone is finished: that branch is
+        fetched without FETCH_HEAD and the unborn branch fast-forwarded to it; nothing is pushed. When the remote has
+        no ref at all, H4 starts it, only on the request's `initialize: true`. Anything else refuses, the clone as it was."""
         self.check_rewrites()
-        if any(p.name != '.git' for p in self.root.iterdir()): raise ValueError(FOLDER_NOT_EMPTY)
         code, raw = self.run('symbolic-ref', '--quiet', 'HEAD', check=False, limit=4096)
         named = raw.decode('utf8', errors='replace').strip() if not code else ''
         branch = named[len('refs/heads/'):] if named.startswith('refs/heads/') else ''
-        if not branch or branch.startswith('-') or self.run('check-ref-format', '--branch', branch, check=False)[0]: branch = 'main'
+        if not branch or branch.startswith('-') or self.run('check-ref-format', 'refs/heads/' + branch, check=False)[0]: branch = 'main'
+        target = 'refs/heads/' + branch
         code, raw = self.run('ls-remote', '--heads', '--tags', url, check=False, limit=64 * 1024, timeout=45)
         if code: raise ValueError('The remote branch is unavailable. Check connectivity and the owner\'s noninteractive HTTPS Git login.')
-        refs = [line.split('\t') for line in raw.decode('utf8', errors='replace').splitlines() if line]
+        refs = {name: sha for sha, name in (line.split('\t', 1) for line in raw.decode('utf8', errors='replace').splitlines() if '\t' in line)}
+        if target not in refs and refs: raise ValueError(not_empty(self.root, branch))
+        if not refs and initialize is not True: raise ValueError(EMPTY_REPOSITORY)
+        if any(p.name != '.git' for p in self.root.iterdir()): raise ValueError(folder_not_empty(self.root))
+        if target in refs:
+            commit = refs[target]
+            if not HEX.fullmatch(commit): raise ValueError(finish_failed(self.root))
+            if not self.has_commit(commit):
+                self.run('fetch', '--no-tags', '--no-recurse-submodules', '--no-write-fetch-head', url, target, check=False, timeout=60)
+            failed = finish_failed(self.root)
+        else:
+            self.ensure_identity(identity); commit = self.start(url, branch); failed = START_FAILED
+        if named != target: self.run('symbolic-ref', 'HEAD', target)
+        code, _ = self.run('merge', '--ff-only', commit, check=False, timeout=90)
+        if code or self.run('rev-parse', '--verify', 'HEAD') != commit: raise ValueError(failed)
+
+    def start(self, url, branch):
+        """H4: one commit holding the fixed README.md, built without the working tree or the index (the blob and the
+        tree are written with `hash-object -w` from files inside .git/clab-manager; stdin stays closed), pushed to
+        `branch`, and returned only when the remote then holds exactly that one ref. A failure leaves the clone as it
+        was; once the README is on the remote, connecting again finishes the clone (unborn())."""
         files = []
         try:
             def written(kind, content):
@@ -1062,25 +1138,17 @@ class GitRepository:
             if self.run('ls-tree', '-z', tree) != '100644 blob ' + blob + '\tREADME.md\0': raise ValueError(START_FAILED)
         finally:
             for path in files: path.unlink(missing_ok=True)
-
-        def started(commit):   # a parentless commit of exactly that tree, present in this clone
-            if not HEX.fullmatch(commit) or self.run('cat-file', '-t', commit, check=False)[1].strip() != b'commit': return False
-            header = self.run('cat-file', 'commit', commit).split('\n\n', 1)[0].splitlines()
-            return [line for line in header if line.startswith('tree ')] == ['tree ' + tree] and not any(line.startswith('parent ') for line in header)
-
-        if not refs:
-            commit = self.run('commit-tree', tree, '-m', START_MESSAGE)
-            if not started(commit): raise ValueError(START_FAILED)
-            code, _ = self.run('push', '--porcelain', '--no-follow-tags', url, commit + ':refs/heads/' + branch, check=False, timeout=90)
-            if code: raise ValueError(START_FAILED)
-        elif len(refs) == 1 and len(refs[0]) == 2 and refs[0][1] == 'refs/heads/' + branch and started(refs[0][0]):
-            commit = refs[0][0]   # a retry after the push of this clone's own start commit
-        else: raise ValueError(NOT_EMPTY)
-        code, raw = self.run('ls-remote', '--exit-code', url, 'refs/heads/' + branch, check=False, limit=4096, timeout=45)
-        if code or raw.decode('utf8', errors='replace').splitlines() != [commit + '\trefs/heads/' + branch]: raise ValueError(START_FAILED)
-        if named != 'refs/heads/' + branch: self.run('symbolic-ref', 'HEAD', 'refs/heads/' + branch)
-        code, _ = self.run('merge', '--ff-only', commit, check=False, timeout=90)
-        if code or self.run('rev-parse', '--verify', 'HEAD') != commit: raise ValueError(START_FAILED)
+        commit = self.run('commit-tree', tree, '-m', START_MESSAGE)
+        header = self.run('cat-file', 'commit', commit).split('\n\n', 1)[0].splitlines() if HEX.fullmatch(commit) else []
+        if [line for line in header if line.startswith('tree ')] != ['tree ' + tree] or any(line.startswith('parent ') for line in header):
+            raise ValueError(START_FAILED)
+        code, _ = self.run('push', '--porcelain', '--no-follow-tags', url, commit + ':refs/heads/' + branch, check=False, timeout=90)
+        if code: raise ValueError(START_FAILED)
+        code, raw = self.run('ls-remote', '--heads', '--tags', url, check=False, limit=64 * 1024, timeout=45)
+        refs = raw.decode('utf8', errors='replace').splitlines() if not code else []
+        if refs == [commit + '\trefs/heads/' + branch]: return commit
+        if commit + '\trefs/heads/' + branch in refs: raise ValueError(START_PUSHED)
+        raise ValueError(START_FAILED)
 
     def connect(self, url, initialize=False):
         """Clone (or adopt) the checkout for a pasted URL as the owner, then validate it for registration."""
@@ -1099,10 +1167,9 @@ class GitRepository:
         actual = checked_url(self.run('remote', 'get-url', '--push', self.binding['remote']), self.allow_local)
         if not same_repository(actual, url):
             raise ValueError('The VM folder ' + str(path) + ' already holds a different repository (' + actual + '). Choose another repository name.')
+        self.check_owner()
         code, _ = self.run('rev-parse', '--verify', 'HEAD', check=False)
-        if code:
-            if initialize is not True: raise ValueError(EMPTY_REPOSITORY)
-            self.ensure_identity(url); self.start(actual)
+        if code: self.unborn(actual, initialize, url)
         self.ensure_identity(url)
         return self.register(None)
 

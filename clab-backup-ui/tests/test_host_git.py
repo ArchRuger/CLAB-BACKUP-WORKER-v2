@@ -1130,33 +1130,43 @@ class HelperRedesignTests(unittest.TestCase):
         lonely = self.factory(dict(planned, branch='main', _registered=[{'revision': 'r-dev', 'branch': 'dev', 'push_url': str(self.remote)}]))
         self.assertFalse(lonely.further()); self.assertEqual(lonely.binding['_approved_revisions'], [])
 
+    def setup_child(self, registry, old, **changes):
+        """deploy/setup-git.sh's child exactly: root builds the binding (the folder's own id when it is registered) and
+        `_registered` from git.json, the child calls `GitRepository(binding).register(old)`."""
+        binding = {k: old[k] for k in ('id', 'label', 'owner', 'uid', 'gid', 'home', 'path', 'remote', 'prefix')}
+        binding.update(branch='', push_url='', revision='', **changes)
+        binding['_registered'] = host_git.registered_revisions(registry, binding)
+        return self.factory(binding).register(old)
+
     def test_h2_setup_git_re_registers_an_existing_folder_through_the_same_method(self):
-        # deploy/setup-git.sh: root passes every registration of the checkout and owner, the folder's own included, and
-        # the child calls check_synchronized(anchor, further()) where register() does. Its child needs root, so the
-        # script is pinned by text and the child's sequence is replayed here with the same calls.
         script = (Path(__file__).resolve().parents[2] / 'deploy' / 'setup-git.sh').read_text()
         self.assertIn("binding['_registered']=h.registered_revisions(registry,binding)", script)
-        self.assertIn("worker.check_synchronized(binding['anchor'],worker.further())", script)
-        self.assertNotIn('remote_head()!=', script)
-        source = (Path(host_git.__file__)).read_text()
-        self.assertIn("self.check_synchronized(binding['anchor'], self.further())", source)
+        self.assertIn("binding=h.GitRepository(binding).register(old)", script)
+        self.assertNotIn('remote_head()', script); self.assertNotIn('check_push_access', script)
         old = dict(self.root(), anchor=self.raw('rev-parse', 'HEAD'))
         _, waiting = self.publish()
-        def child(registry):
-            binding = {k: old[k] for k in ('id', 'label', 'owner', 'uid', 'gid', 'home', 'path', 'remote', 'prefix')}
-            binding.update(branch='', push_url='', revision='', _registered=host_git.registered_revisions(registry, binding))
-            worker = self.factory(binding)
-            binding['branch'] = worker.run('symbolic-ref', '--quiet', '--short', 'HEAD')
-            binding['push_url'] = host_git.checked_url(worker.run('remote', 'get-url', '--push', '--all', 'origin'), True)
-            binding['anchor'] = worker.validate(); worker.clean(); worker.commit_identity()
-            worker.check_synchronized(binding['anchor'], worker.further())
-            return worker.registration(old)
-        again = child({'repositories': [old]})
+        again = self.setup_child({'repositories': [old]}, old)
         self.assertEqual(again['revision'], old['revision'], 'the waiting save keeps its registration')
         self.assertEqual(again['anchor'], old['anchor']); self.assertFalse([k for k in again if k.startswith('_')])
-        with self.assertRaisesRegex(ValueError, host_git.NOT_SYNCHRONIZED): child({'repositories': []})
+        with self.assertRaisesRegex(ValueError, host_git.NOT_SYNCHRONIZED): self.setup_child({'repositories': []}, dict(old, id=uuid.uuid4().hex, prefix='bgp', revision='other'))
         (self.repo / 'notes.txt').write_text('hand\n'); self.raw('add', 'notes.txt'); self.raw('commit', '-m', 'by hand')
-        with self.assertRaisesRegex(ValueError, 'not made by manager saves'): child({'repositories': [old]})
+        with self.assertRaisesRegex(ValueError, 'not made by manager saves'): self.setup_child({'repositories': [old]}, old)
+
+    def test_h2_setup_git_with_other_settings_never_strands_a_waiting_save(self):
+        # Review must-fix: setup-git.sh without --label gives the folder another label, so registration(old) yields a new
+        # revision that would replace the old one in git.json and leave its waiting save unpushable.
+        old = dict(self.root(), anchor=self.raw('rev-parse', 'HEAD'))
+        _, waiting = self.publish()
+        with self.assertRaisesRegex(ValueError, '^A save made in that folder still waits for upload\\.$'):
+            self.setup_child({'repositories': [old]}, old, label='repo')
+        self.raw('push', '-q', 'origin', 'main')
+        renamed = self.setup_child({'repositories': [old]}, old, label='repo')
+        self.assertNotEqual(renamed['revision'], old['revision']); self.assertEqual(renamed['label'], 'repo')
+        self.assertEqual(renamed['anchor'], waiting['commit'])
+        # Unchanged settings keep the revision and need no remote answer about waiting saves.
+        self.publish(self.capture('second\n'))
+        same = self.setup_child({'repositories': [old]}, old)
+        self.assertEqual(same['revision'], old['revision'])
 
     # ---- H3 --------------------------------------------------------------------------------------------------------
     def commit_folders(self, folders, message='states'):
@@ -1319,57 +1329,112 @@ class HelperRedesignTests(unittest.TestCase):
         self.assertEqual(result['anchor'], pushed, 'the retry adopts the start commit this clone made')
         self.assertEqual(self.git_in(remote, 'rev-list', '--count', 'main').stdout.strip(), b'1')
 
+    def seed(self, remote, branch='main', message='someone else', readme=None, tag=None):
+        """Another clone pushes to `remote`: one commit on `branch` (README.md as given), or only a tag."""
+        seed = self.base / ('seed-' + uuid.uuid4().hex[:6]); subprocess.check_call([self.git, 'init', '-q', '-b', branch, str(seed)], env=self.env)
+        if readme is not None: (seed / 'README.md').write_bytes(readme); self.git_in(seed, 'add', 'README.md')
+        self.git_in(seed, '-c', 'user.name=S', '-c', 'user.email=s@x', 'commit', '-q', '--allow-empty', '-m', message)
+        self.assertEqual(self.git_in(seed, 'push', '-q', str(remote), ('refs/heads/' + branch + ':refs/tags/' + tag) if tag else branch).returncode, 0)
+        return self.git_in(seed, 'rev-parse', 'HEAD').stdout.decode().strip()
+
+    def connect_pending(self, binding, remote, initialize=False):
+        return GitRepository(dict(binding), git=self.git, allow_local=True, env=self.identity_env()).connect(str(remote), initialize)
+
     def test_h4_a_branch_appearing_before_the_push_is_refused_and_the_clone_untouched(self):
         remote = self.empty_remote(); binding = self.pending(); path = Path(binding['path'])
         worker = GitRepository(dict(binding), git=self.git, allow_local=True, env=self.identity_env())
         original = worker.run
         def race(*args, **kwargs):
-            if args[:1] == ('push',):
-                seed = self.base / 'seed'; subprocess.check_call([self.git, 'init', '-q', '-b', 'main', str(seed)], env=self.env)
-                self.git_in(seed, '-c', 'user.name=S', '-c', 'user.email=s@x', 'commit', '-q', '--allow-empty', '-m', 'someone else')
-                self.assertEqual(self.git_in(seed, 'push', '-q', str(remote), 'main').returncode, 0)
+            if args[:1] == ('push',): self.seed(remote)
             return original(*args, **kwargs)
         self.git_in(self.base, 'clone', '-q', str(remote), str(path)); before = self.clone_state(path)
         with patch.object(worker, 'run', side_effect=race):
-            with self.assertRaisesRegex(ValueError, host_git.START_FAILED): worker.connect(str(remote), True)
+            with self.assertRaisesRegex(ValueError, '^' + host_git.START_FAILED + '$'): worker.connect(str(remote), True)
         self.assertEqual(self.clone_state(path), before)
         self.assertEqual(self.git_in(remote, 'log', '-1', '--format=%s', 'main').stdout.strip(), b'someone else')
-        with self.assertRaisesRegex(ValueError, host_git.NOT_EMPTY):
-            GitRepository(dict(binding), git=self.git, allow_local=True, env=self.identity_env()).connect(str(remote), True)
+        # The repository is no longer empty: connecting again finishes the clone with its branch; nothing is pushed.
+        result = self.connect_pending(binding, remote)
+        self.assertEqual(result['anchor'], self.git_in(remote, 'rev-parse', 'main').stdout.decode().strip())
+        self.assertEqual(self.git_in(remote, 'rev-list', '--count', 'main').stdout.strip(), b'1')
 
-    def test_h4_a_repository_with_only_a_dev_branch_is_not_empty(self):
-        remote = self.empty_remote(); seed = self.base / 'seed-dev'
-        subprocess.check_call([self.git, 'init', '-q', '-b', 'dev', str(seed)], env=self.env)
-        self.git_in(seed, '-c', 'user.name=S', '-c', 'user.email=s@x', 'commit', '-q', '--allow-empty', '-m', 'dev only')
-        self.assertEqual(self.git_in(seed, 'push', '-q', str(remote), 'dev').returncode, 0)
-        binding = self.pending(); path = Path(binding['path'])
-        with self.assertRaisesRegex(ValueError, 'no commits yet'):
-            GitRepository(dict(binding), git=self.git, allow_local=True, env=self.identity_env()).connect(str(remote))
-        before = self.clone_state(path)
-        with self.assertRaisesRegex(ValueError, '^' + host_git.NOT_EMPTY + '$'):
-            GitRepository(dict(binding), git=self.git, allow_local=True, env=self.identity_env()).connect(str(remote), True)
-        self.assertEqual(self.clone_state(path), before)
-        self.assertEqual(self.git_in(remote, 'for-each-ref', '--format=%(refname)').stdout, b'refs/heads/dev\n')
+    def test_h4_another_ref_appearing_after_the_push_is_said_and_the_retry_finishes(self):
+        remote = self.empty_remote(); binding = self.pending(); path = Path(binding['path'])
+        worker = GitRepository(dict(binding), git=self.git, allow_local=True, env=self.identity_env())
+        original = worker.run
+        def race(*args, **kwargs):
+            result = original(*args, **kwargs)
+            if args[:1] == ('push',): self.seed(remote, branch='dev', message='other branch')
+            return result
+        with patch.object(worker, 'run', side_effect=race):
+            with self.assertRaisesRegex(ValueError, '^README.md was pushed to start the repository, but other branches or tags appeared'): worker.connect(str(remote), True)
+        self.assertEqual(self.git_in(path, 'rev-parse', '--verify', '-q', 'HEAD').returncode, 1, 'the clone is still unborn')
+        pushed = self.git_in(remote, 'rev-parse', 'main').stdout.decode().strip()
+        self.assertEqual(self.connect_pending(binding, remote)['anchor'], pushed)
+        self.assertEqual((path / 'README.md').read_bytes(), host_git.START_README)
 
-    def test_h4_initialize_must_be_a_boolean_and_reaches_only_connect(self):
+    def test_h4_a_repository_with_only_a_dev_branch_or_only_a_tag_is_not_empty(self):
+        for label, kwargs in (('dev', {'branch': 'dev'}), ('tag', {'tag': 'v1'})):
+            remote = self.empty_remote(); self.seed(remote, **kwargs)
+            binding = self.pending('lab-' + label); path = Path(binding['path'])
+            sentence = '^The repository has branches or tags but no branch main, which the VM folder ' + str(path) + ' was cloned for; nothing was changed\\.$'
+            with self.assertRaisesRegex(ValueError, sentence, msg=label): self.connect_pending(binding, remote)
+            before = self.clone_state(path)
+            with self.assertRaisesRegex(ValueError, sentence, msg=label): self.connect_pending(binding, remote, True)
+            self.assertEqual(self.clone_state(path), before)
+            self.assertEqual(self.git_in(remote, 'for-each-ref', '--format=%(refname)').stdout, b'refs/heads/dev\n' if label == 'dev' else b'refs/tags/v1\n')
+
+    def test_h4_a_readme_added_online_after_a_refused_connect_finishes_the_clone(self):
+        remote = self.empty_remote(); binding = self.pending(); path = Path(binding['path'])
+        with self.assertRaisesRegex(ValueError, '^' + host_git.EMPTY_REPOSITORY + '$'): self.connect_pending(binding, remote)
+        added = self.seed(remote, readme=b'# Course\n', message='Initial commit')
+        self.assertNotEqual(self.git_in(path, 'cat-file', '-e', added).returncode, 0, 'that commit is not in this clone yet')
+        result = self.connect_pending(binding, remote)
+        self.assertEqual(result['anchor'], added); self.assertEqual((path / 'README.md').read_text(), '# Course\n')
+        self.assertEqual(self.git_in(remote, 'rev-list', '--count', 'main').stdout.strip(), b'1', 'nothing was pushed')
+
+    def test_h4_a_repository_another_vm_started_is_finished_here(self):
+        remote = self.empty_remote(); first = self.pending('first'); second = self.pending('second')
+        with self.assertRaisesRegex(ValueError, 'no commits yet'): self.connect_pending(second, remote)
+        started = self.connect_pending(first, remote, True)['anchor']
+        self.assertNotEqual(self.git_in(Path(second['path']), 'cat-file', '-e', started).returncode, 0, 'a README root commit not made by this clone')
+        self.assertEqual(self.connect_pending(second, remote, True)['anchor'], started)
+        self.assertEqual(self.git_in(remote, 'rev-list', '--count', 'main').stdout.strip(), b'1')
+
+    def test_h4_root_wiring_reaches_the_owner_s_connect_for_real(self):
+        self.registry(self.root()); remote = self.empty_remote()
+        patches = (patch.object(host_git, 'GitRepository', lambda binding: GitRepository(binding, git=self.git, allow_local=True, env=self.identity_env())),
+                   patch.object(host_git, 'clone_url', lambda value: value), patch.object(host_git, 'ENGINEER', self.base / 'none.json'))
+        with patches[0], patches[1], patches[2]:
+            with self.assertRaisesRegex(ValueError, '^' + host_git.EMPTY_REPOSITORY + '$'):
+                host_git.connect(host_git.load_registry(), {'url': str(remote), 'prefix': ''}, self.owner, lookup=self.account)
+            with self.assertRaisesRegex(ValueError, '^Invalid connect option\\.$'):
+                host_git.connect(host_git.load_registry(), {'url': str(remote), 'prefix': '', 'initialize': 'true'}, self.owner, lookup=self.account)
+            self.assertEqual(self.git_in(remote, 'for-each-ref').stdout, b'')
+            result = host_git.connect(host_git.load_registry(), {'url': str(remote), 'prefix': '', 'initialize': True}, self.owner, lookup=self.account)
+        self.assertEqual(result['branch'], 'main'); self.assertEqual(result['path'], str(self.home / 'labs' / remote.name.removesuffix('.git')))
+        self.assertIn(result['id'], [b['id'] for b in self.saved().values()])
+        self.assertEqual(self.git_in(remote, 'ls-tree', '-r', '--name-only', 'main').stdout, b'README.md\n')
+
+    def test_h4_initialize_must_be_a_boolean(self):
         self.registry(self.root())
         for value in ('yes', 1, None, [], {}):
             with self.assertRaisesRegex(ValueError, '^Invalid connect option\\.$'):
                 host_git.connect(host_git.load_registry(), {'url': 'https://github.com/Owner/Empty', 'prefix': '', 'initialize': value},
                                  lambda *a: self.fail('nothing runs as the owner'), lookup=self.account)
-        seen = []
-        with patch.object(host_git, 'ENGINEER', self.base / 'none.json'):
-            host_git.connect({'repositories': [self.root()]}, {'url': 'https://github.com/Owner/Empty', 'prefix': '', 'initialize': True},
-                             lambda binding, work: seen.append(binding) or dict(binding, branch='main', push_url='https://github.com/Owner/Empty.git', revision='r', anchor='a' * 40),
-                             lookup=self.account)
-        self.assertFalse(set(seen[0]) & {'initialize'})
 
-    def test_h4_files_in_the_clone_folder_refuse_the_start(self):
+    def test_h4_files_in_the_clone_folder_or_a_foreign_owner_refuse_before_anything_is_written(self):
         remote = self.empty_remote(); binding = self.pending(); path = Path(binding['path'])
         self.git_in(self.base, 'clone', '-q', str(remote), str(path)); (path / 'README.md').write_text('mine\n')
-        with self.assertRaisesRegex(ValueError, host_git.FOLDER_NOT_EMPTY):
-            GitRepository(dict(binding), git=self.git, allow_local=True, env=self.identity_env()).connect(str(remote), True)
+        with self.assertRaisesRegex(ValueError, '^The VM folder ' + str(path) + ' holds files that are not in the repository; nothing was changed\\.$'):
+            self.connect_pending(binding, remote, True)
         self.assertEqual((path / 'README.md').read_text(), 'mine\n'); self.assertEqual(self.git_in(remote, 'for-each-ref').stdout, b'')
+        (path / 'README.md').unlink()
+        def foreign(worker): raise ValueError('The checkout and .git must be owned by the registered account.')
+        objects = sorted(str(p) for p in (path / '.git' / 'objects').rglob('*'))
+        with patch.object(GitRepository, 'check_owner', foreign):
+            with self.assertRaisesRegex(ValueError, 'must be owned'): self.connect_pending(binding, remote, True)
+        self.assertEqual(sorted(str(p) for p in (path / '.git' / 'objects').rglob('*')), objects, 'no object was written')
+        self.assertEqual(self.git_in(remote, 'for-each-ref').stdout, b'')
 
     # ---- H5 --------------------------------------------------------------------------------------------------------
     def test_h5_browse_lists_every_directory_of_a_large_tree(self):
@@ -1462,3 +1527,110 @@ class RegistrySizeTests(unittest.TestCase):
                 self.assertEqual(len(host_git.load_registry()['repositories']), 4000)
                 path.write_text(json.dumps({'repositories': rows, 'pad': 'x' * host_git.MAX_FILE}))
                 with self.assertRaisesRegex(ValueError, 'too large'): host_git.load_registry()
+
+
+@unittest.skipUnless(shutil.which('git'), 'Git executable required')
+class HelperReviewFollowUpTests(unittest.TestCase):
+    """The risk review of S1 (items 3 to 7 and 10): who waits for a retire, `approved`, display texts, response budgets,
+    and the remote calls of `outgoing`."""
+    setUp = HostGitTests.setUp
+    raw = HostGitTests.raw; request = HostGitTests.request; publish = HostGitTests.publish; capture = HostGitTests.capture
+    account = HostGitPlacesTests.account; sibling = HostGitPlacesTests.sibling
+    factory = HelperRedesignTests.factory; other = HelperRedesignTests.other; commit_folders = HelperRedesignTests.commit_folders
+    manifest = HelperRedesignTests.manifest
+
+    def sibling_save(self, prefix='eth', text='eth\n'):
+        binding, worker = self.sibling(prefix)
+        req = {'mode': 'publish', 'binding_id': binding['id'], 'revision': binding['revision'], 'operation_id': uuid.uuid4().hex,
+               'expected_head': self.raw('rev-parse', 'HEAD'), 'target': 'latest', 'push': False, 'snapshot': self.capture(text)}
+        return binding, req, worker.dispatch(req)
+
+    # ---- item 3: H7 decides "waits" by reachability, verified or not --------------------------------------------------
+    def test_an_unverified_journal_with_a_commit_blocks_the_retire(self):
+        req, saved = self.publish()
+        journal = self.worker.load_journal(req['operation_id']); journal.update(verified=False, status='needs_attention'); self.worker.save_journal(journal)
+        with self.assertRaisesRegex(ValueError, '^' + host_git.SAVE_WAITS + '$'): self.factory(dict(self.binding)).check_retire()
+
+    def test_a_commit_head_no_longer_reaches_does_not_wait_and_asks_nobody(self):
+        req, saved = self.publish()
+        self.raw('reset', '-q', '--hard', 'origin/main')   # the owner dropped the save by hand
+        worker = self.factory(dict(self.binding))
+        with patch.object(worker, 'remote_head', side_effect=AssertionError('no remote question for nothing waiting')):
+            self.assertIsNone(worker.check_retire())
+        journal = self.worker.load_journal(req['operation_id']); journal['commit'] = 'f' * 40; self.worker.save_journal(journal)
+        self.assertIsNone(self.factory(dict(self.binding)).check_retire(), 'a commit missing from the checkout cannot wait')
+
+    def test_a_sibling_registration_s_waiting_save_does_not_block(self):
+        self.publish(push=True)
+        eth_binding, _, result = self.sibling_save()
+        self.assertEqual(result['status'], 'committed')
+        self.assertIsNone(self.factory(dict(self.binding)).check_retire())
+        with self.assertRaisesRegex(ValueError, host_git.SAVE_WAITS): self.factory(dict(eth_binding)).check_retire()
+
+    # ---- item 4: approved -----------------------------------------------------------------------------------------
+    def test_outgoing_rows_say_whether_a_push_would_accept_them(self):
+        own, saved = self.publish()
+        _, eth_req, eth_save = self.sibling_save()
+        (self.repo / 'notes.txt').write_text('hand\n'); self.raw('add', 'notes.txt'); self.raw('commit', '-q', '-m', 'by hand')
+        rows = self.worker.dispatch(self.request('compare', operation_id=own['operation_id']))['outgoing']
+        self.assertEqual([(r['operation_id'], r['approved']) for r in rows],
+                         [(own['operation_id'], True), (eth_req['operation_id'], False), (None, False)],
+                         'a save under a registration main() does not approve has its operation and approved false')
+        self.binding['_approved_revisions'] = [self.binding['revision'], hashlib.sha256(b'eth').hexdigest()]
+        rows = self.worker.dispatch(self.request('compare', operation_id=own['operation_id']))['outgoing']
+        self.assertEqual([r['approved'] for r in rows], [True, True, False])
+        journal = self.worker.load_journal(own['operation_id']); journal['verified'] = False; self.worker.save_journal(journal)
+        self.assertFalse(self.worker.dispatch(self.request('compare', operation_id=own['operation_id']))['outgoing'][0]['approved'])
+
+    # ---- item 5: display texts --------------------------------------------------------------------------------------
+    def test_subjects_and_summary_strings_drop_control_and_bidi_characters(self):
+        own, _ = self.publish()
+        (self.repo / 'notes.txt').write_text('x\n'); self.raw('add', 'notes.txt')
+        self.raw('commit', '-q', '-m', 'evil‮⁦gnp.exe\x1b[31m ' + 'y' * 300)
+        subject = self.worker.dispatch(self.request('compare', operation_id=own['operation_id']))['outgoing'][-1]['subject']
+        self.assertTrue(subject.startswith('evilgnp.exe[31m y')); self.assertEqual(len(subject), 200)
+        self.assertFalse(any(ord(c) < 32 or c in host_git.BIDI for c in subject))
+        self.commit_folders({'s/bidi': self.manifest(lab_name='Lab‮A‏', state='st⁧art')})
+        summary = {v['path']: v['summary'] for v in self.worker.dispatch(self.request('history'))['versions']}['s/bidi']
+        self.assertEqual((summary['lab_name'], summary['state']), ('LabA', 'start'))
+        self.commit_folders({'s/only-bidi': self.manifest(state='‮')})
+        self.assertIsNone({v['path']: v['summary'] for v in self.worker.dispatch(self.request('history'))['versions']}['s/only-bidi'])
+
+    # ---- item 6 and 10: the remote calls of outgoing ------------------------------------------------------------------
+    def test_outgoing_asks_for_15_seconds_and_fetches_for_20_only_when_the_remote_commit_is_missing(self):
+        own, saved = self.publish()
+        calls = []
+        real_head, real_fetch = GitRepository.remote_head, GitRepository.fetch_remote
+        def head(worker, timeout=45): calls.append(('ls-remote', timeout)); return real_head(worker, timeout=timeout)
+        def fetch(worker, check=True, timeout=60): calls.append(('fetch', timeout)); return real_fetch(worker, check=check, timeout=timeout)
+        with patch.object(GitRepository, 'remote_head', head), patch.object(GitRepository, 'fetch_remote', fetch):
+            rows = self.worker.dispatch(self.request('compare', operation_id=own['operation_id']))['outgoing']
+            self.assertEqual(calls, [('ls-remote', 15)], 'the VM is ahead: the remote commit is here, no fetch')
+            self.assertEqual([r['commit'] for r in rows], [saved['commit']])
+            other = self.other(); other('commit', '-q', '--allow-empty', '-m', 'remote only'); other('push', '-q')
+            remote = other('rev-parse', 'HEAD'); self.assertNotEqual(subprocess.run([self.git, 'cat-file', '-e', remote], cwd=self.repo, env=self.env).returncode, 0)
+            calls.clear(); rows = self.worker.dispatch(self.request('compare', operation_id=own['operation_id']))['outgoing']
+            self.assertEqual(calls, [('ls-remote', 15), ('fetch', 20)])
+            self.assertEqual([r['commit'] for r in rows], [saved['commit']], 'after the fetch the diverged save is still listed')
+        with patch.object(GitRepository, 'fetch_remote', lambda worker, check=True, timeout=60: (_ for _ in ()).throw(ValueError('down'))):
+            other('commit', '-q', '--allow-empty', '-m', 'again'); other('push', '-q')
+            self.assertIsNone(self.worker.dispatch(self.request('compare', operation_id=own['operation_id']))['outgoing'])
+
+    # ---- item 7: response budgets ---------------------------------------------------------------------------------------
+    def test_summaries_dirs_and_outgoing_degrade_by_bytes_with_their_flags(self):
+        own, _ = self.publish(); self.publish(target='baseline')
+        self.commit_folders({f'aaa/{i:02d}': self.manifest(lab_name='n' * 150) for i in range(10)})
+        full = self.worker.dispatch(self.request('history'))
+        self.assertFalse(full['summaries_truncated']); self.assertTrue(all(v['summary'] for v in full['versions']))
+        own_size = sum(len(json.dumps(v['summary'], ensure_ascii=False).encode()) for v in full['versions'][:2])
+        with patch.object(host_git, 'SUMMARY_BYTES', own_size + 10): capped = self.worker.dispatch(self.request('history'))
+        self.assertTrue(capped['summaries_truncated'])
+        self.assertTrue(all(v['summary'] for v in capped['versions'][:2]), "the lab's own states keep theirs")
+        self.assertTrue(all(v['summary'] is None for v in capped['versions'][2:]))
+        with patch.object(host_git, 'DIRS_BYTES', 20): browsed = self.worker.dispatch(self.request('browse'))
+        self.assertTrue(browsed['dirs_truncated']); self.assertLess(sum(len(d) + 3 for d in browsed['dirs']), 21)
+        for i in range(3):
+            (self.repo / f'n{i}.txt').write_text('x\n'); self.raw('add', f'n{i}.txt'); self.raw('commit', '-q', '-m', f'note {i}')
+        with patch.object(host_git, 'OUTGOING_BYTES', 700): result = self.worker.dispatch(self.request('compare', operation_id=own['operation_id']))
+        self.assertTrue(result['outgoing_truncated']); self.assertGreaterEqual(len(result['outgoing']), 1)
+        self.assertEqual(result['outgoing'][-1]['subject'], 'note 2', 'the budget keeps the newest commits, oldest first')
