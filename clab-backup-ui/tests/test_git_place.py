@@ -510,7 +510,9 @@ class PlaceTests(unittest.TestCase):
     def test_the_stored_binding_is_replaced_never_edited_and_devices_default_to_the_selection(self):
         lab = self.lab('ux-a')
         names = [n['name'] for n in self.store.lab(lab['id'])['nodes']]
-        self.assertEqual(self.place(lab, 'a', expect=400, node_names=[])['detail'], 'Select distinct supported devices from this lab.')
+        # An empty list is "not chosen here" (the first save sends none), exactly like no list: every supported device.
+        other = self.lab('ux-none-chosen'); every = [n['name'] for n in self.store.lab(other['id'])['nodes']]
+        self.assertEqual(self.placed(other, 'none-chosen', node_names=[])['binding']['node_names'], every)
         self.assertEqual(self.place(lab, 'a', expect=400, node_names=['nope'])['detail'], 'Select distinct supported devices from this lab.')
         self.placed(lab, 'a', node_names=names[:1])
         stored = self.binding(lab); frozen = copy.deepcopy(stored)

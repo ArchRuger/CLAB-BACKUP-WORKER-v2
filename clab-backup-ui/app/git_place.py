@@ -136,11 +136,12 @@ class Placement:
         return dict(id=lab['id'], name=lab['name'], prefix=self.own(lab, path, before))
 
     def devices(self, lab, asked):
-        """The devices of the new binding: the request's (refused only when given empty or invalid), else the lab's
-        current selection still in the lab, else every supported device."""
+        """The devices of the new binding: the request's (refused only when invalid), else the lab's current selection
+        still in the lab, else every supported device. No selection and an empty one both mean "not chosen here": the
+        first save sends none, and nobody places a lab in order to save nothing."""
         supported = [n['name'] for n in lab.get('nodes', []) if n.get('platform') in PLATFORMS]
-        if asked is not None:
-            if not asked or len(set(asked)) != len(asked) or not set(asked) <= set(supported): raise HTTPException(400, DEVICES)
+        if asked:
+            if len(set(asked)) != len(asked) or not set(asked) <= set(supported): raise HTTPException(400, DEVICES)
             return list(asked)
         previous = (lab.get('git_binding') or {}).get('node_names') or []
         return [n for n in previous if n in supported] or supported
