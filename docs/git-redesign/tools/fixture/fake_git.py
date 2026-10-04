@@ -5,8 +5,16 @@
 live side by side; every checkout keeps its commits, the tree of each, the commits the fake remote holds and the helper's
 journals, so a push carries every earlier waiting commit exactly like `GitRepository.push` / `mark_synced`.
 
-Where the real helper has a pure function the fake imports it (`snapshot`, `content_digest`, `colliding`, `base_prefix`,
-`relpath`, `clone_url`, `same_repository`), so a rule cannot drift from the helper.
+Where the real helper has a pure function or a fixed sentence the fake imports it instead of copying it, so a rule cannot
+drift: `snapshot`, `content_digest`, `colliding`, `collision_message`, `base_prefix`, `relpath`, `clone_url`,
+`same_repository`, `manifest_summary` (the history rows' `summary`), `display_text`, the START_* and connect sentences and
+the limits (MAX_TREE, MAX_DIRS, MAX_OUTGOING, SUMMARY_*). What is copied is only what the real helper writes inline, and
+`check_fixture.py` compares each copied sentence with the manager's table of the helper's sentences (`HELPER_PROBLEMS`).
+
+Shapes and orders the manager relies on (host_git.py): `history` answers `head`, `commits`, `versions` (each with `summary`,
+`state` inside it) and `summaries_truncated`; `browse` answers `files` and `dirs` in Git's own tree order with `truncated` and
+`dirs_truncated`; `compare` answers `outgoing` OLDEST FIRST with `{commit, operation_id, subject, files, approved}` and
+`outgoing_truncated`, or `outgoing: None` when the remote cannot be asked.
 """
 import base64
 import hashlib
@@ -16,28 +24,49 @@ import threading
 import time
 
 from app import __version__
-from app.git_progress import PROTOCOL
-from app.host_git import (RESERVED, SLUG, base_prefix, clone_url, collision_message, colliding, content_digest, digest, relpath,
+from app.git_progress import PROTOCOL, UNREGISTERED
+from app.host_git import (DIRS_BYTES, EMPTY_REPOSITORY, MAX_DIRS, MAX_OUTGOING, MAX_TREE, NOT_MANAGER_SAVES, NOT_SYNCHRONIZED,
+                          OUTGOING_BYTES, OUTGOING_FILES, REMOTE_AHEAD, RESERVED, SAVE_UNKNOWN, SAVE_WAITS, SLUG, START_FAILED,
+                          START_MESSAGE, START_README, SUMMARY_BYTES, SUMMARY_FILE, SUMMARY_TOTAL, base_prefix, clone_url,
+                          collision_message, colliding, content_digest, digest, display_text, manifest_summary, relpath,
                           repository_name, same_repository, snapshot, snapshot_file, snapshot_folder)
 
 OPERATION = re.compile(r'[0-9a-f]{32}\Z')
-MAX_TREE = 4000
-MAX_DIRS = 20000
+STAGES = ('validate', 'clean', 'manifest', 'write')    # where in the helper's order a problem is raised (see `gate`)
+# switch value -> (the helper's sentence, the stage that raises it). The sentences are the helper's (host_git.py):
+#   validate  every mode that opens the checkout (history, browse, read-version, compare, status, publish, ...)
+#   clean     status, publish, move, update and the late check of a push; NOT history, browse, read-version or compare
+#   manifest  status and publish (they read the folder's existing manifest)
+#   write     publish and move only (the commit identity is asked right before a save is written)
 PROBLEMS = {
-    'operation': 'Finish the existing Git operation before saving lab progress.',
+    'operation': ('Finish the existing Git operation before saving lab progress.', 'clean'),
     'staged': ('The repository already has staged changes. If an earlier manager save failed, fix its reported issue and retry that '
-               'original save: Retry commits automatically. For unrelated staged work, resolve it as the repository owner first.'),
-    'edits': 'The repository has unsaved edits in the selected scope. Resolve them before continuing.',
-    'diverged': 'The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.',
-    'permission': 'The GitHub account signed in on the VM cannot push to the repository. Check the repository name, or grant that account write access on GitHub.',
+               'original save: Retry commits automatically. For unrelated staged work, resolve it as the repository owner first.', 'clean'),
+    'edits': ('The repository has unsaved edits in the selected scope. Resolve them before continuing.', 'clean'),
+    'settings': ('The repository branch changed. Restore the registered branch or register it again.', 'validate'),
+    'files': ('Existing snapshot files no longer match their saved manifest. Review the repository before exporting.', 'manifest'),
+    'identity': ('Git commit identity is missing or invalid. As the registered Linux owner, run guided Git setup or set user.name and '
+                 'user.email inside this checkout, then retry the original save.', 'write'),
+    # A fixture shortcut: the real `status` never says this (it is the answer of a push or an update); it lets a browser pass
+    # show the chip's `diverged` state without making a waiting save first. The real thing is `remote_ahead`.
+    'diverged': ('The remote branch advanced or diverged. Resolve the branch before pushing; no force push was attempted.', 'clean'),
 }
+PROBLEMS['permission'] = PROBLEMS['identity']   # the name the first fixture used; upload failures are `push_refused`
 PUSH_FAILED = 'The commit is saved on the VM, but push failed. Check authentication, branch permissions or remote changes, then retry.'
 REMOTE_UNAVAILABLE = "The remote branch is unavailable. Check connectivity and the owner's noninteractive HTTPS Git login."
+PUSH_PREFLIGHT = ('Git push preflight failed. Authenticate as the registered Linux owner and check remote write access. For GitHub use gh auth '
+                  'login and gh auth setup-git; your GitHub website password cannot authenticate a Git push. No commits were pushed.')
 RESULT_KEYS = ('status', 'commit', 'changed_files', 'message', 'pushed', 'snapshot_path', 'synced_operations')
 
 
 def sha1(*parts):
     return hashlib.sha1('\0'.join(map(str, parts)).encode()).hexdigest()
+
+
+def tree_key(path, directory=False):
+    """Git's order of a tree listing (`ls-tree -r`): a directory sorts as its name plus a slash, so `a-b` comes before `a/c`."""
+    parts = path.split('/')
+    return tuple(p + '/' for p in parts[:-1]) + (parts[-1] + '/' if directory else parts[-1],)
 
 
 class Checkout:
@@ -84,8 +113,13 @@ class Checkout:
             out.append(c)
         return out
 
-    def known_commits(self):
-        return {j['commit'] for j in self.journals.values() if j.get('commit') and j.get('verified')}
+    def approved(self):
+        """The revisions whose journals a push accepts: those of this checkout's current registrations (host_git `known_commits`)."""
+        return {r['revision'] for r in self.registrations}
+
+    def known_commits(self, revisions=None):
+        revisions = self.approved() if revisions is None else revisions
+        return {j['commit'] for j in self.journals.values() if j.get('commit') and j.get('verified') and j.get('revision') in revisions}
 
     def scope(self, reg, name):
         return '/'.join(p for p in (reg['prefix'], name) if p)
@@ -99,38 +133,11 @@ def descriptor(reg):
     return {k: reg[k] for k in ('id', 'label', 'owner', 'path', 'remote', 'push_url', 'branch', 'prefix', 'revision')}
 
 
-def summary_of(raw):
-    """H3: the bounded summary of one manifest, or None when it cannot be read (the real helper's null)."""
-    try:
-        manifest = json.loads(raw)
-        if not isinstance(manifest, dict) or manifest.get('schema') not in (1, 2) or not isinstance(manifest.get('files'), list):
-            return None
-
-        def text(value):
-            if value is None:
-                return ''
-            if not isinstance(value, str) or any(ord(c) < 32 or ord(c) == 127 for c in value):
-                raise ValueError
-            return value[:200]
-        devices = []
-        for item in manifest['files']:
-            if not isinstance(item, dict):
-                return None
-            if item.get('node'):
-                devices.append(dict(node=text(item['node']), short_name=text(item.get('short_name')), platform=text(item.get('platform')),
-                                    restore=bool(item.get('restore_artifact'))))
-        return dict(lab_id=text(manifest.get('lab_id')), lab_name=text(manifest.get('lab_name')), kind=text(manifest.get('kind')),
-                    captured_at=text(manifest.get('captured_at') or manifest.get('generated_at')),
-                    topology_digest=text(manifest.get('topology_digest')), devices=devices[:500])
-    except (ValueError, TypeError):
-        return None
-
-
 class FakeGit:
     def __init__(self, control):
         self.control = control
         self.checkouts = {}
-        self.remotes = {}            # normalized url -> {'empty': bool} for repositories reachable only by address
+        self.remotes = {}            # normalized url -> {'empty': bool}: repositories the VM can reach by address
         self.lock = threading.RLock()
 
     # --- building the fixture -----------------------------------------------------------------------------------
@@ -154,14 +161,16 @@ class FakeGit:
     def key(url):
         return url.rstrip('/').removesuffix('.git').lower()
 
-    def find(self, request):
+    def find(self, request, planning=False):
+        """host_git.main(): an id the registry does not hold is `Select a registered Git repository.`; a stale revision (dispatch,
+        plan_prefix) is `The repository binding changed.` `planning` is register-prefix, which has one sentence for both."""
         for checkout in self.checkouts.values():
             for reg in checkout.registrations:
                 if reg['id'] == request.get('binding_id'):
                     if reg['revision'] != request.get('revision'):
-                        break
+                        raise ValueError('The repository binding changed. Select it again.')
                     return checkout, reg
-        raise ValueError('The repository binding changed. Select it again.')
+        raise ValueError('The repository binding changed. Select it again.' if planning else UNREGISTERED)
 
     def registrations(self):
         regs = [r for c in self.checkouts.values() for r in c.registrations]
@@ -180,9 +189,10 @@ class FakeGit:
                 return {'protocol': PROTOCOL, 'version': __version__, 'repositories': [descriptor(r) for r in regs]}
             if mode == 'connect':
                 return self.connect(request)
-            checkout, reg = self.find(request)
             if mode == 'register-prefix':
+                checkout, reg = self.find(request, planning=True)
                 return self.register_prefix(checkout, reg, request)
+            checkout, reg = self.find(request)
             handler = {'status': self.status, 'publish': self.publish, 'push': self.retry_push, 'history': self.history,
                        'read-version': self.read_version, 'compare': self.compare, 'update': self.update, 'browse': self.browse,
                        'move': self.move}.get(mode)
@@ -193,16 +203,18 @@ class FakeGit:
     # --- the checkout's own state (the problems a status can answer) --------------------------------------------
 
     def problem(self, checkout):
+        """(sentence, stage) of the switched problem, or None. Any other value is a sentence of the `clean` stage."""
         value = self.control.get('status_problem', checkout.name)
         if not value:
-            return ''
-        return PROBLEMS.get(value, str(value))
+            return None
+        return PROBLEMS.get(value) or (str(value), 'clean')
 
-    def guard(self, checkout):
-        """validate() then clean(): the sentences the helper raises before it reads or writes."""
-        text = self.problem(checkout)
-        if text:
-            raise ValueError(text)
+    def gate(self, checkout, through):
+        """The sentences the helper raises before it reads or writes: every stage up to `through`, in the helper's order
+        (validate, clean, the folder's manifest, the commit identity)."""
+        found = self.problem(checkout)
+        if found and STAGES.index(found[1]) <= STAGES.index(through):
+            raise ValueError(found[0])
         return checkout.head
 
     def remote_head(self, checkout):
@@ -210,13 +222,29 @@ class FakeGit:
             raise ValueError(REMOTE_UNAVAILABLE)
         return next((c['commit'] for c in checkout.commits if c['commit'] in checkout.remote), '')
 
+    def has_waiting(self, checkout, reg):
+        """host_git `check_waiting`: a save made through this registration that the remote lacks. A remote that cannot be asked
+        refuses once something could be waiting; with nothing to ask about the remote is not asked."""
+        commits = {j['commit'] for j in checkout.journals.values() if j.get('commit') and j.get('revision') == reg['revision']
+                   and j.get('pushed') is not True and checkout.commit(j['commit'])}
+        if not commits:
+            return
+        if self.control.get('remote_unreachable', checkout.name):
+            raise ValueError(SAVE_UNKNOWN)
+        if any(c not in checkout.remote for c in commits):
+            raise ValueError(SAVE_WAITS)
+
     # --- modes ----------------------------------------------------------------------------------------------------
 
     def status(self, checkout, reg, request):
-        result = {'repository': descriptor(reg), 'head': checkout.head, 'ready': False, 'problem': '', 'baseline_revision': '', 'latest_manifest': None}
-        text = self.problem(checkout)
-        if text:
-            result['problem'] = text
+        result = {'repository': descriptor(reg), 'head': '', 'ready': False, 'problem': '', 'baseline_revision': '', 'latest_manifest': None}
+        found = self.problem(checkout)
+        if found and found[1] == 'validate':
+            result['problem'] = found[0]
+            return result
+        result['head'] = checkout.head
+        if found and STAGES.index(found[1]) <= STAGES.index('manifest'):
+            result['problem'] = found[0]
             return result
         try:
             latest = checkout.manifest_at(checkout.files, checkout.scope(reg, 'latest'))
@@ -228,32 +256,43 @@ class FakeGit:
         return result
 
     def browse(self, checkout, reg, request):
-        self.guard(checkout)
-        paths = sorted(checkout.files)
-        files = [dict(path=p, size=len(checkout.files[p])) for p in paths[:MAX_TREE]]
-        dirs = set()
+        self.gate(checkout, 'validate')
+        paths = sorted(checkout.files, key=tree_key)
+        files, truncated = [], False
         for path in paths:
-            parts = path.split('/')[:-1]
-            dirs.update('/'.join(parts[:n]) for n in range(1, len(parts) + 1))
+            if len(files) >= MAX_TREE:
+                truncated = True
+                break
+            files.append(dict(path=path, size=len(checkout.files[path])))
         saved = {}
         for name in RESERVED:
             scope = checkout.scope(reg, name)
-            times = [c['time'] for c in checkout.commits if any(f.startswith(scope + '/') for f in c['files'])]
+            times = [c['time'] for c in checkout.commits if any(f == scope or f.startswith(scope + '/') for f in c['files'])]
             saved[name] = max(times) if times else None
-        return {'repository': descriptor(reg), 'head': checkout.head, 'files': files, 'truncated': len(paths) > MAX_TREE, 'saved': saved,
+        directories = set()
+        for path in paths:
+            parts = path.split('/')[:-1]
+            directories.update('/'.join(parts[:n]) for n in range(1, len(parts) + 1))
+        dirs, size, dirs_truncated = [], 0, False
+        for path in sorted(directories, key=lambda p: tree_key(p, True)):
+            size += len(path.encode()) + 3
+            if len(dirs) >= MAX_DIRS or size > DIRS_BYTES:
+                dirs_truncated = True
+                break
+            dirs.append(path)
+        return {'repository': descriptor(reg), 'head': checkout.head, 'files': files, 'truncated': truncated, 'saved': saved,
                 'folders': [dict(id=r['id'], label=r['label'], prefix=r['prefix']) for r in checkout.registrations],
-                'dirs': sorted(dirs)[:MAX_DIRS], 'dirs_truncated': len(dirs) > MAX_DIRS}
+                'dirs': dirs, 'dirs_truncated': dirs_truncated}
 
     def history(self, checkout, reg, request):
-        self.guard(checkout)
-        scopes = tuple(checkout.scope(reg, n) + '/' for n in RESERVED)
-        commits = [dict(commit=c['commit'], time=c['time'], message=c['message'].splitlines()[0][:500] if c['message'] else '')
-                   for c in checkout.commits if any(f.startswith(scopes) for f in c['files'])][:50]
+        self.gate(checkout, 'validate')
+        scopes = tuple(checkout.scope(reg, n) for n in RESERVED)
+        commits = [dict(commit=c['commit'], time=c['time'], message=display_text(c['message'].split('\n', 1)[0], 500))
+                   for c in checkout.commits if any(f == s or f.startswith(s + '/') for f in c['files'] for s in scopes)][:50]
         connected = {checkout.scope(reg, 'latest'), checkout.scope(reg, 'baseline')}
         checkpoints = checkout.scope(reg, 'checkpoints') + '/'
-        unreadable = self.control.get('unreadable_states') or []
-        versions = []
-        for path in sorted(checkout.files):
+        versions, raw, others = [], {}, 0
+        for path in sorted(checkout.files, key=tree_key):
             if path != 'manifest.json' and not path.endswith('/manifest.json'):
                 continue
             folder = path.rsplit('/', 1)[0] if '/' in path else ''
@@ -262,15 +301,43 @@ class FakeGit:
             except ValueError:
                 continue
             here = folder in connected or (folder.startswith(checkpoints) and '/' not in folder[len(checkpoints):])
-            if not here and sum(1 for v in versions if not v['connected']) >= 500:
+            if not here and others >= 500:
                 continue
-            versions.append(dict(name=folder, path=folder, commit=checkout.head, connected=here,
-                                 summary=None if folder in unreadable else summary_of(checkout.files[path])))
+            others += not here
+            versions.append(dict(name=folder, path=folder, commit=checkout.head, connected=here, summary=None))
+            raw[folder] = checkout.files[path]
         versions.sort(key=lambda v: (not v['connected'], v['path']))
-        return {'head': checkout.head, 'commits': commits, 'versions': versions}
+        truncated = self.summarize(reg, checkout, versions, raw)
+        return {'head': checkout.head, 'commits': commits, 'versions': versions, 'summaries_truncated': truncated}
+
+    def summarize(self, reg, checkout, versions, raw):
+        """host_git `summarize`: the budgets go to the lab's own states first (latest, baseline, its checkpoints); a manifest over 256 KiB is
+        never read; the summaries stop at about 4 MiB. `unreadable_states` is the fixture's way to make a manifest unreadable."""
+        own = {checkout.scope(reg, 'latest'): 0, checkout.scope(reg, 'baseline'): 1}
+        order = sorted(versions, key=lambda v: (not v['connected'], own.get(v['path'], 2) if v['connected'] else 0, v['path']))
+        budget, truncated = SUMMARY_TOTAL, False
+        unreadable = self.control.get('unreadable_states') or []
+        for version in order:
+            data = raw[version['path']]
+            if len(data) > SUMMARY_FILE:
+                continue
+            if len(data) > budget:
+                truncated = True
+                continue
+            budget -= len(data)
+            version['summary'] = None if version['path'] in unreadable else manifest_summary(data)
+        output = 0
+        for version in order:
+            if version['summary'] is None:
+                continue
+            output += len(json.dumps(version['summary'], ensure_ascii=False).encode())
+            if output > SUMMARY_BYTES:
+                version['summary'] = None
+                truncated = True
+        return truncated
 
     def read_version(self, checkout, reg, request):
-        self.guard(checkout)
+        self.gate(checkout, 'validate')
         commit, folder = request.get('commit'), request.get('path')
         if not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40}', commit) or not isinstance(folder, str):
             raise ValueError('Select a listed snapshot path and exact commit.')
@@ -290,23 +357,56 @@ class FakeGit:
         files = {}
         for item in manifest['files']:
             for key in ('path', 'restore_artifact'):
-                name = item.get(key) if isinstance(item, dict) else None
-                if name:
-                    blob = found['tree'].get(snapshot_file(folder, relpath(name)))
-                    if blob is None:
-                        raise ValueError('The saved snapshot is missing files or exceeds its limit.')
-                    files[name] = base64.b64encode(blob).decode()
-        return {'snapshot': {'manifest': manifest, 'files': files}}
+                if key == 'restore_artifact' and not item.get(key):
+                    continue
+                name = relpath(item.get(key))
+                if '/' in name or name == 'manifest.json':
+                    raise ValueError('Invalid saved snapshot filename.')
+                blob = found['tree'].get(snapshot_file(folder, name))
+                if blob is None:
+                    raise ValueError('The saved snapshot is missing files or exceeds its limit.')
+                files[name] = base64.b64encode(blob).decode()
+        result = {'manifest': manifest, 'files': files}
+        snapshot(result)
+        return {'snapshot': result}
+
+    def outgoing(self, checkout):
+        """host_git `outgoing`: (rows oldest first, truncated), or (None, False) when the remote cannot be asked."""
+        if self.control.get('remote_unreachable', checkout.name):
+            return None, False
+        pending = checkout.unpushed()
+        truncated = len(pending) > MAX_OUTGOING
+        made = {}
+        for operation in sorted(checkout.journals):
+            journal = checkout.journals[operation]
+            if journal.get('commit') and not journal.get('unchanged'):
+                made.setdefault(journal['commit'], operation)
+        approved = checkout.known_commits()
+        result, size = [], 0
+        for c in pending[:MAX_OUTGOING]:     # newest first, so the budget keeps the newest
+            row = {'commit': c['commit'], 'operation_id': made.get(c['commit']), 'approved': c['commit'] in approved,
+                   'subject': display_text(c['message'].split('\n', 1)[0]), 'files': sorted(c['files'], key=tree_key)[:OUTGOING_FILES]}
+            cost = len(json.dumps(row, ensure_ascii=False).encode())
+            if not result:
+                while cost > OUTGOING_BYTES and row['files']:
+                    row['files'] = row['files'][:len(row['files']) // 2]
+                    truncated = True
+                    cost = len(json.dumps(row, ensure_ascii=False).encode())
+            elif size + cost > OUTGOING_BYTES:
+                truncated = True
+                break
+            size += cost
+            result.append(row)
+        return result[::-1], truncated
 
     def compare(self, checkout, reg, request):
         journal = checkout.journals.get(request.get('operation_id'))
         if not journal or not journal.get('commit') or journal.get('revision') != reg['revision']:
             raise ValueError('Select saved progress with a recorded commit.')
-        outgoing = None if self.control.get('remote_unreachable', checkout.name) else [
-            dict(commit=c['commit'], operation_id=c['operation_id'], subject=c['message'].splitlines()[0][:200] if c['message'] else '', files=list(c['files']))
-            for c in checkout.unpushed()]
+        outgoing, truncated = self.outgoing(checkout)
         if journal.get('unchanged') or not journal.get('changed_files'):
-            return {'files': [], 'outgoing': outgoing}
+            return {'files': [], 'outgoing': outgoing, 'outgoing_truncated': truncated}
+        self.gate(checkout, 'validate')
         found = checkout.commit(journal['commit'])
         index = checkout.commits.index(found)
         parent = checkout.commits[index + 1] if index + 1 < len(checkout.commits) else None
@@ -329,10 +429,10 @@ class FakeGit:
                 continue
             rows.append({'name': name, 'status': 'added' if name not in before else 'removed' if name not in after else 'changed',
                          'before': before.get(name, b'').decode('utf8', errors='replace'), 'after': after.get(name, b'').decode('utf8', errors='replace')})
-        return {'files': rows, 'outgoing': outgoing}
+        return {'files': rows, 'outgoing': outgoing, 'outgoing_truncated': truncated}
 
     def update(self, checkout, reg, request):
-        head = self.guard(checkout)
+        head = self.gate(checkout, 'clean')
         if request.get('expected_head') != head:
             raise ValueError('The checkout changed. Refresh repository status before updating.')
         self.remote_head(checkout)
@@ -368,7 +468,7 @@ class FakeGit:
                                                        status='needs_attention', commit=None, verified=False, changed_files=[], pushed=False,
                                                        snapshot_path='', message='Snapshot preserved; export has not completed.')
         try:
-            head = self.guard(checkout)
+            head = self.gate(checkout, 'write')
             if not retry_before_write and req.get('expected_head') != head:
                 raise ValueError('The repository changed since it was selected. Refresh status and retry the preserved snapshot.')
             target = req.get('target')
@@ -410,10 +510,11 @@ class FakeGit:
                         old_devices.add(name)
                     if item.get('restore_artifact'):
                         old_names.add(relpath(item['restore_artifact']))
-                existing = {p[len(folder) + 1:] for p in checkout.files if p.startswith(folder + '/') and '/' not in p[len(folder) + 1:]}
+                inside = [p[len(folder) + 1:] for p in checkout.files if p.startswith(folder + '/')]
+                existing = {p for p in inside if '/' not in p}
                 if existing - (old_names | {'manifest.json'}):
                     raise ValueError('The destination contains files outside its manager manifest; preserve or move them first.')
-                if not old and existing:
+                if not old and inside:     # any entry, a subfolder included (the helper lists the directory itself)
                     raise ValueError('The destination is not an empty manager snapshot folder.')
                 if old_devices - set(files) and not req.get('allow_removed'):
                     raise ValueError('This capture removes previously saved devices. Review the new device scope before allowing removal.')
@@ -430,7 +531,13 @@ class FakeGit:
                 if req.get('push'):
                     if journal['verified']:
                         return self.retry_push(checkout, reg, req)
-                    journal.update(pushed=head in checkout.remote, message='No configuration changes; ' + ('already up to date.' if head in checkout.remote else 'remote synchronization needs attention.'))
+                    try:
+                        if self.remote_head(checkout) == head:
+                            journal.update(pushed=True, message='No configuration changes; already up to date.')
+                        else:
+                            journal.update(message='No configuration changes; remote synchronization needs attention.')
+                    except ValueError:
+                        journal.update(message='No configuration changes; remote status is unknown.')
                 return self.result(journal)
             message = req.get('message') or ('Save ' + str(manifest.get('lab_name', 'lab')) + ' progress')
             if not isinstance(message, str) or len(message) > 500 or any(ord(c) < 32 for c in message):
@@ -456,7 +563,7 @@ class FakeGit:
         commit = journal.get('commit')
         if not commit or (not journal.get('verified') and not journal.get('unchanged')):
             raise ValueError('This save has no verified commit to push. Review its export status.')
-        head = self.guard(checkout)
+        head = self.gate(checkout, 'validate')
         remote = self.remote_head(checkout)
         if remote == commit or commit in checkout.remote:
             return self.mark_synced(checkout, journal)
@@ -464,8 +571,9 @@ class FakeGit:
             raise ValueError('This unchanged save points to a commit created outside manager saves. Publish it as the repository owner first.')
         if head != commit:
             raise ValueError('The checkout moved since this save. Push the newest saved progress or resolve it as the repository owner.')
+        self.gate(checkout, 'clean')
         if self.control.get('remote_ahead', checkout.name):
-            raise ValueError(PROBLEMS['diverged'])
+            raise ValueError(PROBLEMS['diverged'][0])
         if not {c['commit'] for c in checkout.unpushed()} <= checkout.known_commits():
             raise ValueError('The push would include commits created outside manager saves. Publish or resolve them as the repository owner first.')
         if self.control.take('push_fail_once', checkout.name) or self.control.get('push_refused', checkout.name):
@@ -474,9 +582,9 @@ class FakeGit:
         return self.mark_synced(checkout, journal)
 
     def mark_synced(self, checkout, journal):
-        synced = []
+        synced, approved = [], checkout.approved()
         for other in checkout.journals.values():
-            if other.get('verified') and other.get('commit') and other['commit'] in checkout.remote:
+            if other.get('verified') and other.get('commit') and other['commit'] in checkout.remote and other.get('revision') in approved:
                 other.update(status='synced', pushed=True, message='Saved to Git.')
                 synced.append(other['operation_id'])
         if journal['operation_id'] not in synced:
@@ -508,7 +616,7 @@ class FakeGit:
                                                        status='needs_attention', commit=None, verified=False, changed_files=[], pushed=False,
                                                        snapshot_path=checkout.scope(reg, 'latest'), message='Move prepared; nothing has been committed.')
         try:
-            head = self.guard(checkout)
+            head = self.gate(checkout, 'write')
             if req.get('expected_head') != head:
                 raise ValueError('The repository changed since it was selected. Refresh status and retry the move.')
             old_folders = [('/'.join(p for p in (source, n) if p)) + '/' for n in RESERVED]
@@ -538,12 +646,28 @@ class FakeGit:
             if colliding(prefix, other['prefix']):
                 raise ValueError(collision_message(prefix, other['prefix']))
 
-    def waiting_saves(self, checkout, reg):
-        waiting = {c['commit'] for c in checkout.unpushed()}
-        return any(j.get('registration') == reg['id'] and j.get('commit') in waiting for j in checkout.journals.values())
+    def check_registered(self, checkout, retiring=None):
+        """host_git `register()`: the first folder of a checkout needs the branch to equal the remote; a further one may sit on
+        saves that wait for upload (every commit in between a verified manager save), then the push access is probed."""
+        further = any(r is not retiring for r in checkout.registrations)
+        remote = self.remote_head(checkout)
+        ahead = bool(self.control.get('remote_ahead', checkout.name))
+        if not ahead and remote == checkout.head:
+            pass
+        elif not further:
+            raise ValueError(NOT_SYNCHRONIZED)
+        elif ahead:
+            raise ValueError(REMOTE_AHEAD)
+        else:
+            revisions = {r['revision'] for r in checkout.registrations if r is not retiring}
+            between = {c['commit'] for c in checkout.unpushed()}
+            if not between or not between <= checkout.known_commits(revisions):
+                raise ValueError(NOT_MANAGER_SAVES)
+        if self.control.get('push_refused', checkout.name):
+            raise ValueError(PUSH_PREFLIGHT)
 
     def register_prefix(self, checkout, source, req):
-        """H1 and H7: nesting is never refused; only a real collision is, and a retire that would strand a waiting save."""
+        """plan_prefix, then the retire check (H7), then the owner's `register`: nesting is never refused (H1), only a real collision."""
         prefix = relpath(req.get('prefix'), empty=True)
         retire = req.get('retire') is True
         if prefix == source['prefix']:
@@ -551,22 +675,18 @@ class FakeGit:
         existing = next((r for r in checkout.registrations if r['prefix'] == prefix), None)
         if existing:
             if retire:
-                self.retire(checkout, source)
+                self.has_waiting(checkout, source)
+                checkout.registrations.remove(source)
             return descriptor(existing)
         base_prefix(prefix)
         self.check_collision(checkout, prefix, ignore=source if retire else None)
+        if retire:
+            self.has_waiting(checkout, source)
+        self.check_registered(checkout, retiring=source if retire else None)
         new = self.register(checkout, prefix, label=req.get('label') or (checkout.name + (' / ' + prefix if prefix else '')))
         if retire:
-            self.retire(checkout, source)
+            checkout.registrations.remove(source)
         return descriptor(new)
-
-    def retire(self, checkout, reg):
-        if self.control.get('remote_unreachable', checkout.name):
-            raise ValueError(REMOTE_UNAVAILABLE)
-        if self.waiting_saves(checkout, reg):
-            raise ValueError('A save made in that folder still waits for upload.')
-        if reg in checkout.registrations:
-            checkout.registrations.remove(reg)
 
     def connect(self, req):
         answer = self.connect_checkout(req)
@@ -574,32 +694,58 @@ class FakeGit:
         return answer
 
     def connect_checkout(self, req):
+        if 'initialize' in req and type(req['initialize']) is not bool:
+            raise ValueError('Invalid connect option.')
         url = clone_url(req.get('url'))
-        prefix = base_prefix(req.get('prefix', ''))
+        prefix = relpath(req.get('prefix'), empty=True)
         key = self.key(url)
-        checkout = next((c for c in self.checkouts.values() if self.key(c.url) == key), None)
+        checkout = next((c for c in self.checkouts.values() if same_repository(c.url, url)), None)
         if checkout:
             existing = next((r for r in checkout.registrations if r['prefix'] == prefix), None)
             if existing:
                 return descriptor(existing)
+        base_prefix(prefix)
+        if checkout:
             self.check_collision(checkout, prefix)
-            return descriptor(self.register(checkout, prefix, label=repository_name(url) + (' / ' + prefix if prefix else '')))
         if 'forbidden' in url:
             raise ValueError('The GitHub account signed in on the VM cannot push to ' + url.split('github.com/')[-1].removesuffix('.git') +
                              '. Check the repository name, or grant that account write access on GitHub.')
-        if 'missing' in url:
-            raise ValueError('Cloning failed. Check the URL and that the VM account is signed in to GitHub with access to this repository (gh auth login).')
-        name = repository_name(url)
         remote = self.remotes.get(key, {'empty': False})
-        if remote['empty'] and req.get('initialize') is not True:
-            raise ValueError('This repository has no commits yet. Add a README on GitHub first, then connect it.')
-        checkout = self.add_checkout(name, url)
-        if remote['empty']:
-            checkout.add_commit('Start the repository', {'README.md': ('# ' + name + '\n').encode()}, pushed=True)
-            remote['empty'] = False
-        else:
-            checkout.add_commit('Initial commit', {'README.md': ('# ' + name + '\n').encode()}, pushed=True, age=86400 * 30)
-        return descriptor(self.register(checkout, prefix, label=name + (' / ' + prefix if prefix else '')))
+        if checkout is None:
+            if 'missing' in url:
+                raise ValueError('Cloning failed. Check the URL and that the VM account is signed in to GitHub with access to this repository (gh auth login).')
+            checkout = self.add_checkout(repository_name(url), url)
+            if not remote['empty']:
+                checkout.add_commit('Initial commit', {'README.md': ('# ' + checkout.name + '\n').encode()}, pushed=True, age=86400 * 30)
+        if not checkout.commits:
+            self.unborn(checkout, remote, req.get('initialize') is True)
+        elif checkout.registrations:
+            self.check_registered(checkout)
+        return descriptor(self.register(checkout, prefix, label=checkout.name + (' / ' + prefix if prefix else '')))
+
+    def unborn(self, checkout, remote, initialize):
+        """host_git `unborn`: a clone whose branch has no commit yet. The remote now has its branch (someone added a README on
+        GitHub): the clone is finished, nothing is pushed. No ref at all: only `initialize: true` starts it, with the fixed
+        README and message; otherwise the helper's sentence, and the clone stays as it was (the next connect retries it)."""
+        if self.control.get('remote_unreachable', checkout.name):
+            raise ValueError(REMOTE_UNAVAILABLE)
+        if not remote['empty']:
+            checkout.add_commit('Initial commit', {'README.md': ('# ' + checkout.name + '\n').encode()}, pushed=True, age=86400 * 30)
+            return
+        if not initialize:
+            raise ValueError(EMPTY_REPOSITORY)
+        if self.control.get('initialize_fails', checkout.name):
+            raise ValueError(START_FAILED)
+        checkout.add_commit(START_MESSAGE, {'README.md': START_README}, pushed=True)
+        remote['empty'] = False
+
+    def add_readme(self, url):
+        """The instructor adds a README on GitHub: the empty remote now has its branch (a later connect finishes the clone)."""
+        remote = self.remotes.get(self.key(url))
+        if not remote:
+            raise ValueError('No such remote: ' + str(url))
+        remote['empty'] = False
+        return {'url': url, 'empty': False}
 
     # --- what the control and the self-check read -------------------------------------------------------------------
 

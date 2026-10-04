@@ -485,7 +485,30 @@ def build(data_dir, port, classic=False):
         except ValueError as exc:
             return {'error': str(exc)}
 
-    actions = {'helper': helper, 'edit_device': devices.edit, 'device_config': devices.set_tag, 'lab_state': lab_state, 'hand_commit': hand_commit, 'reset': reset}
+    def remote_readme(url):
+        """Someone adds a README on GitHub: an empty repository reachable by address now has its branch."""
+        return fake_git.add_readme(url)
+
+    def prefer_repository(repository, lab='square-fresh'):
+        """Make `repository` (a checkout name, `Archtop-Lab`) the one the manager offers `lab` first. The manager chooses the default of a
+        first save as: the repository the lab used last, else the one any save used most recently, else the first by name. A save by another
+        lab therefore moves the default; this puts it back (a finished `update` of the lab in that checkout, which the chip ignores)."""
+        checkout = fake_git.checkouts.get(repository)
+        if not checkout:
+            raise ValueError('No such repository: ' + str(repository))
+        with store.lock:
+            found = next((l for l in store.state['labs'] if l['name'] == lab), None)
+            if not found:
+                raise ValueError('No such lab: ' + str(lab))
+            stamp = now()
+            store.state.setdefault('git_jobs', []).append(dict(
+                id=uuid.uuid4().hex, lab_id=found['id'], status='dismissed', created=stamp, finished=stamp, target='update',
+                message='Repository updated from remote.', destination=dict(checkout=checkout.path, repository=repository)))
+            store.save()
+        return {'lab': lab, 'repository': repository}
+
+    actions = {'helper': helper, 'edit_device': devices.edit, 'device_config': devices.set_tag, 'lab_state': lab_state, 'hand_commit': hand_commit, 'reset': reset,
+               'remote_readme': remote_readme, 'prefer_repository': prefer_repository}
 
     def describe():
         with store.lock:

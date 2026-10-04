@@ -17,11 +17,12 @@ import urllib.request
 
 SWITCHES = {
     'vm_unreachable': 'true: every call of the Git helper fails the way an unreachable VM does',
-    'status_problem': "staged | edits | operation | diverged | permission | any sentence: `status` answers ready=false with it",
+    'status_problem': "staged | edits | operation (busy) | settings | files | identity (= permission) | diverged (fixture shortcut) | any sentence: the helper answers it where it would (see SCENARIOS.md)",
     'remote_unreachable': 'true: the remote cannot be asked (push, compare.outgoing, update, retire)',
     'remote_ahead': 'true: the remote has a commit this VM lacks (push refused as diverged; update fast-forwards when nothing waits)',
-    'push_refused': 'true: every push fails as when the account lacks permission',
+    'push_refused': 'true: every push fails as when the account lacks permission (and a new folder cannot be registered: the push probe fails)',
     'push_fail_once': 'true: the next push fails once (Upload failed), then clears itself',
+    'initialize_fails': 'true: starting an empty repository (connect with initialize) fails with the helper\'s sentence',
     'no_repositories': 'true: the helper `list` answers no repository (a VM with nothing registered; the first save asks for an address)',
     'list_first': 'repository name to list first in the helper `list` answer',
     'unreadable_states': 'list of folder paths whose manifest summary is null',

@@ -225,11 +225,12 @@ def snapshot_name(platform, label):
 
 
 def build_state(lab_id, lab_name, nodes, tag, *, restore=True, topology=None, annotations=None, captured_ago=1200,
-                backup_job_id='fixture', overrides=None, source='manager'):
+                backup_job_id='fixture', overrides=None, source='manager', state=''):
     """A saved state as the manager's capture builds it: `(manifest, {file name: bytes})`.
 
     nodes: dicts with name, short_name, platform. `overrides` maps a node name to (capture, candidate) texts that replace
-    the generated ones. `topology` and `annotations` are bytes embedded as entries of their own kind."""
+    the generated ones. `topology` and `annotations` are bytes embedded as entries of their own kind. `state` is the name a save made
+    with "Save as a lab state…" writes into its manifest (a top-level `state` string, DESIGN 2.9); '' is an ordinary save."""
     files, entries = {}, []
     for n in sorted(nodes, key=lambda n: n['name']):
         label = component(short_name(n, lab_name))
@@ -257,6 +258,8 @@ def build_state(lab_id, lab_name, nodes, tag, *, restore=True, topology=None, an
                     topology_digest=digest or None, topology_provenance='embedded' if digest else 'unknown',
                     node_names=sorted(n['name'] for n in nodes), excluded_nodes=[],
                     restore_capable_nodes=sum(1 for e in entries if e.get('restore_artifact')), files=entries)
+    if state:
+        manifest['state'] = state
     return manifest, files
 
 

@@ -94,7 +94,8 @@ class Seeder:
         topo = lab['definition_yaml'].encode() if topology else None
         notes = map_document(lab).encode() if topology and map_document(lab) else None
         manifest, files = content.build_state(kw.get('lab_id', INSTRUCTOR), kw.get('lab_name', lab['name']), nodes_of(lab, only) + list(kw.get('extra_nodes', [])), tag,
-                                              restore=restore, topology=kw.get('topology_bytes', topo), annotations=notes, captured_ago=age)
+                                              restore=restore, topology=kw.get('topology_bytes', topo), annotations=notes, captured_ago=age,
+                                              state=kw.get('mark', ''))
         changes = {snapshot_file(folder, n): raw for n, raw in files.items()}
         changes[snapshot_file(folder, 'manifest.json')] = content.dumps(manifest)
         return checkout.add_commit(message, changes, pushed=True, age=age)
@@ -189,9 +190,9 @@ class Seeder:
         co = self.fake.add_checkout('Archtop-Lab', URL.format('ArchRuger/Archtop-Lab'))
         co.add_commit('Initial commit', {'README.md': b'# Archtop-Lab\n', 'notes/week1.md': b'Week 1 notes\n', 'Examples/hello.txt': b'hello\n'}, pushed=True, age=30 * DAY)
         reg = self.fake.register(co, '', id='reg-archtop', label='Archtop-Lab')
-        self.state(co, 'Course/start/latest', fresh, 'start', 'Add the starting state', 20 * DAY, restore=False, lab_name='square-fresh')
-        self.state(co, 'Course/broken/latest', fresh, 'broken', 'Add the broken state', 19 * DAY, lab_name='square-fresh')
-        self.state(co, 'Course/final/latest', fresh, 'final', 'Add the final state', 18 * DAY, lab_name='square-fresh')
+        self.state(co, 'Course/start/latest', fresh, 'start', 'Add the starting state', 20 * DAY, restore=False, lab_name='square-fresh', mark='Start')
+        self.state(co, 'Course/broken/latest', fresh, 'broken', 'Add the broken state', 19 * DAY, lab_name='square-fresh', mark='Broken')
+        self.state(co, 'Course/final/latest', fresh, 'final', 'Add the final state', 18 * DAY, lab_name='square-fresh', mark='Final')
         return co, reg
 
     def nested_labs(self, square, edge, shared_a, solo_unused=None):
@@ -203,9 +204,9 @@ class Seeder:
         reg_shared = self.fake.register(co, 'shared', id='reg-shared', label='Nested-Labs / shared')
         self.fake.register(co, 'old-lab-folder', id='reg-unused', label='Nested-Labs / old-lab-folder')   # no lab uses it: invisible
         # The course states, under the lab's folder (layout `latest`): Start (view only), Broken, Final, and a state stored directly in a folder (flat).
-        self.state(co, 'BGP/start/latest', square, 'start', 'Add the starting state', 50 * DAY, restore=False, lab_name='restore-square')
-        self.state(co, 'BGP/broken/latest', square, 'broken', 'Add the broken state', 49 * DAY, lab_name='restore-square')
-        self.state(co, 'BGP/final/latest', square, 'final', 'Add the final state', 48 * DAY, lab_name='restore-square')
+        self.state(co, 'BGP/start/latest', square, 'start', 'Add the starting state', 50 * DAY, restore=False, lab_name='restore-square', mark='Start')
+        self.state(co, 'BGP/broken/latest', square, 'broken', 'Add the broken state', 49 * DAY, lab_name='restore-square', mark='Broken')
+        self.state(co, 'BGP/final/latest', square, 'final', 'Add the final state', 48 * DAY, lab_name='restore-square', mark='Final')
         self.state(co, 'Final', square, 'final', 'Add the final state (flat folder)', 47 * DAY, lab_name='restore-square')
         # A subset of the lab's devices (2 of 4), a state saved on a different topology (3 of its 4 devices match), a design export, an unreadable manifest.
         self.state(co, 'BGP/junos-only/latest', square, 'final', 'Add the Junos-only state', 46 * DAY, only=('cjunosevolved', 'vjunos-switch'), lab_name='restore-square')
@@ -217,6 +218,7 @@ class Seeder:
         changes['BGP/checkpoints/plan-sept/manifest.json'] = content.dumps(manifest)
         co.add_commit("Export the plan 'plan-sept'", changes, pushed=True, age=40 * DAY)
         co.add_commit('Add notes', {'BGP/notes.md': b'Ordinary files may sit beside saved states.\n', 'BGP/exercises/ex1.txt': b'exercise 1\n'}, pushed=True, age=39 * DAY)
+        co.add_commit('Keep the old notes', {'notes-old/week0.md': b'Week 0 notes\n'}, pushed=True, age=39 * DAY)   # `notes-old` sorts before `notes` in Git's tree order
         co.add_commit('Add an old save that cannot be read', {'BGP/legacy/manifest.json': b'{ this is not json', 'BGP/legacy/old.cfg': b'old\n'}, pushed=True, age=38 * DAY)
         # Other labs of the repository: BGP/edge inside BGP, `shared` that lab A saves to and lab B wants too.
         self.bind(edge, reg_edge, co)
@@ -251,12 +253,13 @@ class Seeder:
         co.add_commit('Initial commit', files, pushed=True, age=90 * DAY)
         self.fake.register(co, '', id='reg-big', label='Big-Repo')
         for name, tag, restore in (('start', 'start', False), ('broken', 'broken', True), ('final', 'final', True)):
-            self.state(co, f'zz-states/{name}/latest', square, tag, f'Add the {name} state', 30 * DAY, restore=restore, lab_name='restore-square')
+            self.state(co, f'zz-states/{name}/latest', square, tag, f'Add the {name} state', 30 * DAY, restore=restore, lab_name='restore-square', mark=name.capitalize())
         return co
 
     def remotes(self):
         self.fake.remote_only(URL.format('ArchRuger/New-Empty'), empty=True)
         self.fake.remote_only(URL.format('ArchRuger/Spare-Lab'), empty=False)
+        self.fake.remote_only(URL.format('ArchRuger/Late-README'), empty=True)   # empty until the `remote_readme` action adds its README
 
 
 def gp_descriptor(reg):
