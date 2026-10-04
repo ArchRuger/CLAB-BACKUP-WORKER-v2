@@ -184,3 +184,29 @@ unchanged. Verdict: **ready for the live pass on a disposable VM**; rows 1 to 4 
 | 4 | should-fix | The waiting check always asks the previous push address: after the owner moved the repository to a new remote and pushed everything there, setup is refused for ever. | A commit the new remote already has does not wait. |
 | 5 to 8, 10 | optional | An unchanged journal of the owner's own commit counted as a waiting save; the cost of the reachability walk on a very large history; a remote that moves between the two remote calls; the lock that does not wait and the misleading hint after it; missing tests. | Done where small; listed in the commit. |
 | 9 | optional | The window between the retire check and the new registration in `register-prefix`. | Closed on the manager's side: `git_place.register` retires only records no lab is connected to and no waiting save names (`in_use`, under the store lock) while `changing` keeps every other connection change out; a lab saves only through a record it is connected to. |
+
+## 7. Fourth review: the helper's last options, the save sequence, the integration's backend changes, the deletions
+
+The risk reviewer read the tree at `2578f22` (the Progress tab removed) and three diffs: the helper since the
+third review (S1d, S1e), the save model's follow-ups (S3c) and what the page integration and the tab removal
+changed in the manager. No test was run by the reviewer. **No must-fix.** Confirmed by reading: with
+`checkpoint_only` only the checkpoint folder is written, replayed and compared (H8); a cut label cannot make
+two registrations' revisions collide and an existing registration keeps its label (H9); every answer to the
+third review holds; the save's fast-forward cannot run while any save, kept save or hand-made commit waits,
+and a failure leaves no state; only the upload route asks the helper to push, and it needs the reviewed head;
+the connection lock cannot deadlock; an unchanged save is only counted as uploaded when the remote holds its
+commit; nothing private reaches `/api/state` through the new fields or the recorded refusals; no deleted page
+function is still called, every guard still resolves, and there is exactly one sender of
+`{push: true, reviewed: true, head}` (`gitReviewJob`) and one of `acknowledge: true` to a restore route
+(`loadSubmit`). Verdict: fit for the live browser pass; findings 1 and 2 before the release.
+
+| # | Severity | Finding | Answer |
+|---|---|---|---|
+| 1 | should-fix | The save's fast-forward can bring a NEWER save of this lab from the online copy (another VM saved it); the save then writes its capture over it. The review's diff is true, but reads like an ordinary change, and a device file added online leaves without the removal question. | Accepted: when the fast-forward changed the lab's own `latest`, the job records it and the upload sentence and the What changed drawer say `The online copy held a newer save of this lab. This save replaces it.` before anything is uploaded. |
+| 2 | should-fix | The Playwright tools the project keeps as regression tooling still drive the removed tab. | In progress (the tools worker rewrites `verify_after.py` and the `check_ui*.py` that touch saving); the dated tools of finished work streams stay as records. |
+| 3 | optional | Two more `status` reads reset a kept `diverged` code. | Accepted: the same guard in all three places. |
+| 4 | optional | A refusal for another repository (a lab state saved elsewhere, a placement into another checkout) becomes the lab's own status. | Accepted: recorded only for the lab's current checkout, or for a lab without one. |
+| 5 | optional | A state or lab named `Latest` gets a folder that a case-insensitive clone folds into `latest`. | Done: the reserved names are avoided in any case (`git_places.folder_name`). |
+| 6 | optional | Guided setup (`git-onboard.py`) still refuses a deep folder for its label. | Accepted: it cuts the generated label by the helper's rule. |
+| 7 | optional | Keep as a checkpoint could post an empty capture id in a race, which is a fresh capture. | Accepted: nothing is sent without the capture's id. |
+| 8 | optional | A checkpoint-from-save job queued before the upgrade keeps its old request. | No such job exists in a released version (the action is new in this release); recorded in the handoff. |

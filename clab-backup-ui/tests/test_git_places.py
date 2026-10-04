@@ -65,6 +65,14 @@ class CleanFolder(unittest.TestCase):
         self.assertEqual(host_git.relpath('/'.join(['ab'] * 167)), '/'.join(['ab'] * 167))
         with self.assertRaises(ValueError): host_git.relpath('/'.join(['ab'] * 167) + 'c')
 
+    def test_folder_name_avoids_the_saved_state_names_in_any_case(self):
+        """Fourth risk review, finding 5: `Latest` is another folder than `latest` on the VM, but a clone on a file
+        system that ignores case would fold the two together."""
+        for name, expected in (('Latest', 'lab-Latest'), ('LATEST', 'lab-LATEST'), ('Baseline', 'lab-Baseline'), ('Checkpoints', 'lab-Checkpoints'),
+                               ('latest', 'lab-latest'), ('Latest-2', 'Latest-2'), ('my-latest', 'my-latest')):
+            self.assertEqual(folder_name(name), expected, name)
+        self.assertEqual(folder_name('Latest', 'state'), 'state-Latest')
+
     def test_folder_name_is_one_safe_name_and_never_a_saved_state_folder(self):
         self.assertEqual(folder_name('UX-TEST-003'), 'UX-TEST-003')
         self.assertEqual(folder_name('my lab / two'), 'my-lab---two')

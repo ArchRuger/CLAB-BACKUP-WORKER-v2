@@ -41,9 +41,10 @@ def clean_folder(value):
 
 def folder_name(name, fallback='lab'):
     """One folder name made from a lab's or a state's name. It is never one of the names a lab writes
-    inside its folder: a lab called `latest` saves in `lab-latest`."""
+    inside its folder, in any case: a lab called `latest` or `Latest` saves in `lab-latest` or `lab-Latest`."""
     name = clean_folder(str('' if name is None else name).replace('/', '-'))[:NAME_LIMIT].rstrip('-') or fallback
-    return fallback + '-' + name if name in RESERVED else name
+    # Whatever its case: a clone on a file system that ignores case would fold `Latest` into `latest`.
+    return fallback + '-' + name if name.lower() in RESERVED else name
 
 
 def colliding(prefix, other):
