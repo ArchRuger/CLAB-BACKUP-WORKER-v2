@@ -890,3 +890,74 @@ Considered and dropped as intended design or negligible:
 **Read.** All in full: .github/workflows/release-check.yml, deploy/verify-release.py, deploy/set-release.py, docs/maintenance-audit/tools/check_links.py, deploy/clab-manager-gateway, deploy/recreate-manager.sh. Also read in full: clab-backup-ui/tests/test_release_consistency.py, test_helper_preflight.py (first 60 lines), test_recreate_manager.py (first 75 lines). Partial reads: test_eos_ssh.py (first 50 lines), test_host_git.py (first 70 lines), test_check_host.py (first 60 lines), test_retire_telemetry.py (first 60 lines), test_lab_operations.py (lines 355-395), test_restore.py (lines 524-575), test_design_apply.py (lines 1118-1165), test_nodes.py (lines 128-140), test_node_readiness.py (lines 405-420), test_design_capabilities.py (first 40 lines), and the headers of test_install_tui_core.py and test_install_tui_app.py. I also grepped across all of clab-backup-ui/tests for the CI listing, imports, live-data and network use, skips, and vacuous assertions, and ran the read-only checkers verify-release.py and check_links.py (both clean). Not read in full: any of the 97 test files other than those above, docs/installer-tui/HANDOFF.md (read section 1 only), deploy/check_*.py and deploy/install-manager.py.
 
 **Not covered, or seen and not reported.** The bodies of most of the roughly 38k lines of tests were sampled by grep and targeted reads, not read line by line. test_install_manager, test_check_install, test_git_progress, test_restore*, test_design_*, test_app, test_runner_resilience, the JS UI suites, test_install_tui_core and test_install_tui_app (which CI does not run) were not audited for vacuous assertions beyond pattern greps (assertTrue(True), assertRaises(Exception), swallowed catches). The following were observed but judged non-defects or too weak to report: verify-release.py ignores a missing ?v= on a stylesheet or script; its TOKEN regex lets 'v1.30.x' through; its THIRD_PARTY regex exempts any release within 40 characters after words like 'plugin'; and `--runtime --docs` together run nothing and exit 0. Also: action versions are pinned by tag, not SHA; the browser tests run before setup-node 24, so they use the runner's default Node; and check_links.py has false positives and negatives on parentheses in targets, code spans and duplicate heading slugs. I did not run any test suite, start the manager, or touch Docker or a VM, per the read-only brief."}
+
+## Disposition (fixes released as 1.30.60)
+
+Every finding was fixed on branch `worker-a/audit-fixes-2026-10-03` with a regression test that an independent reviewer showed to fail without the fix. The table is the closure check run on the whole branch at `a98a2b0`, before the last fix wave: **closed** means the scenario and the listed variants could not be made to happen; **closed with residual** means closed as far as code can, with what remains stated. The last wave then changed M-2, M-9, M-11, M-13, M-14, L-9, L-10, L-15, L-38 and L-40 again; each of those changes was reviewed, but the closure check was not rerun on them. Evidence is static, unit and fixture-browser only: nothing was deployed or checked on live devices.
+
+| Finding | Closure at `a98a2b0` | Residual |
+|---|---|---|
+| M-1 | closed |  |
+| M-2 | partial at `a98a2b0`; the kept-save gap it names was fixed in the last wave (reviewed, not re-verified) | (1) Variant (a) through a kept save (see issue): an unchanged save whose HEAD is another lab's kept commit is reviewed as no change, the kept save is not named, and the upload sends it. This contradicts docs/GIT-PROGRESS.md:236 ('never too low for a save that remembers its checkout and its VM'). (2) Documented by design: kept saves go along named only, not diff-reviewed. A removed lab's kept save, a save made before … |
+| M-3 | closed |  |
+| M-4 | closed |  |
+| M-5 | closed | Unit evidence only. No live IOS XR restart was run in this session. Defence in depth: with the 'stopping' early return removed, the finalize guard still holds and only the counter assertion fails. |
+| M-6 | closed | Rests on the documented live fact that XRv9k running-config never shows typed negations. No XR 'uncertain' outcome was produced live in this session. |
+| M-7 | closed | Generation is proven with the real engine. Applying such a plan to devices was not exercised live in this session. |
+| M-8 | closed with residual | Design exports already committed by the older manager, and saves bound before the fix, keep lab_name 'mapping.json' and the 'mapping.json-<commit>.zip' download name. Frozen snapshot metadata is never relabelled, so this is intended. |
+| M-9 | closed with residual | Single-label and .local names are accepted without configuration. A machine on the browser's own network (LLMNR, NBNS or mDNS), or one that controls a name under the OS DNS search suffix, can still rebind such a name. allowed_hosts.py and docs/INSTALL.md document this, apart from the search-suffix path (see issue). No browser or live rebinding test was run. An installation that is opened by a DNS name breaks until UI… |
+| M-10 | closed |  |
+| M-11 | closed | No live NOS boot-window check was run in this session. The CLI check is the same one the monitor already relies on. |
+| M-12 | closed with residual | Live-only facts, none proven in this session: that KEEP_APP_RUNNING=1 in the pinned image restarts Wireshark without stopping the container (including after an OOM kill of Wireshark inside the 1 GiB limit), and moby's tmpfs-volume unmount behaviour. deploy/capture/smoke.py does not exercise a Wireshark exit. No CI run exists for a98a2b0 (gh run list for the commit and the branch returned nothing). If the container st… |
+| M-13 | closed with residual | Same as M-9: rebinding of single-label and .local names from the browser's local network (and through DNS search suffixes) is not covered, and no live browser test was run. |
+| M-14 | closed with residual | The Git-problem banner (app.js:237, fixed headline 'Saving to Git is not possible right now.', varying detail from repository_status.problem) has no identity. Closing it hides any later, different Git problem of that lab for the rest of the browser session. The fix was not tested in a real browser. |
+| M-15 | closed |  |
+| M-16 | closed | node:test only. No Playwright or browser run in this session. |
+| M-17 | closed with residual | No CI run of these steps on this commit was observed. The steps were reproduced locally only. |
+| L-1 | closed with residual | setup-git.sh's inline Python registration path is pinned only by text matching; no test executes it. No concurrent setup-git.sh and manager run on a real VM was done. Only the lock-wait test failed under my lock-removal mutation; I did not mutate the reload-inside-the-lock behaviour. |
+| L-2 | closed with residual | The match is an exact string compare of containerlab's reported path with the helper's path, the same limit as revise. Whether a real containerlab reports the identical absolute path (relative labPath from old releases, symlinked roots) was not checked on a VM. The finding was PLAUSIBLE, and there was no live run. |
+| L-3 | closed with residual | Whether 25 s is enough on a loaded VM with many labs is a live-timing fact (the finding was PLAUSIBLE), not checked on a VM. |
+| L-4 | closed |  |
+| L-5 | closed with residual | The trigger (containerlab printing ipv4 'N/A' next to a real IPv6 on an IPv6-only management network) and SSH, backups and readiness over the discovered IPv6 address were not exercised on a live lab. |
+| L-6 | closed |  |
+| L-7 | closed |  |
+| L-8 | closed |  |
+| L-9 | closed with residual | (1) A job that an older release already finalized wrongly (status 'failed' with a target still 'interrupted') is not repaired, because restore_holds_lab needs job status 'interrupted'. That is historical data only. (2) There is a tiny window inside _recheck_interrupted between _record_settled('applied') and update_target('verified'). A crash there leaves a target 'applied' (read back) on a job that stays 'interrupted… |
+| L-10 | closed | By design the hold covers only the job's own lab: backups and restores on other labs may run during a read-back (runner.py:291 still checks RESTORE_BUSY globally for active restores). |
+| L-11 | closed with residual | Only a live cEOS can show whether, and in what form, `rollback clean-config` is refused. A refusal that does not begin a line with '% ', or a reset that silently does nothing, would still not be detected; only the post-restore comparison (verify_mismatch) would catch it. No live EOS run in this session. |
+| L-12 | closed |  |
+| L-13 | closed |  |
+| L-14 | closed | Not part of this finding: EOS has no configuration lock, so the existing gap between the 'again' running-config check and `commit timer` (design_eos.py:123-127) is unchanged and is documented in the code. |
+| L-15 | closed | Intended behaviour: the read-back of an IOS XR trial that can no longer be confirmed still waits for the device timer (up to about 31.5 min per device, one device at a time), and it holds only its own lab for that time. |
+| L-16 | closed |  |
+| L-17 | closed |  |
+| L-18 | closed | update() still swallows OSError for the 'running' and failure transitions, which is the repository's convention for background jobs. It never reports a plan as succeeded. |
+| L-19 | closed |  |
+| L-20 | closed | edit_node with endpoint_mode auto calls reconcile(store.state), which re-derives the discovery fields of other linked labs. Those are not rolled back on a failed save. They are a deterministic function of the discovery data (the next discovery pass writes the same values), so no user change survives. |
+| L-21 | closed |  |
+| L-22 | closed | Before python runs, the wrapper still runs verify-release.py --runtime and docker info. Both are read-only. |
+| L-23 | closed |  |
+| L-24 | closed |  |
+| L-25 | closed with residual | That the pinned image enforces VNC_PASSWORD on its 5800 websockify path and really closes 5900 is checked only by deploy/capture/smoke.py (RFB security types == [2], nc to 5900 fails), and that needs Docker/CI. It was not run here, and no CI run exists for a98a2b0. Peers on the shared bridge can still reach each desktop's HTTP/websockify port 5800, but only to face the VNC password (no per-session network or ICC isol… |
+| L-26 | closed | An expired row whose removal keeps failing stays counted against MAX_SESSIONS until the removal succeeds. This is deliberate, because its container still exists. |
+| L-27 | closed | The manager relay (capture_sessions.py download) turns the service's 503 into a 409 that carries the service's retry wording. The status code is imprecise but the text is correct. |
+| L-28 | closed with residual | Only deploy/capture/smoke.py (Docker/CI) proves that the 52 pinned hashes and the module list match the real pinned image (it fetches every VIEWER_ASSETS path with raise_for_status). It was not run here, and no CI run exists for a98a2b0. A wrong list would break the viewer, not weaken the boundary. |
+| L-29 | closed |  |
+| L-30 | closed | Fake-DOM unit evidence only. getBBox on hidden SVG in real Chromium or Firefox was not run. |
+| L-31 | closed |  |
+| L-32 | closed |  |
+| L-33 | closed |  |
+| L-34 | closed | The list is still rebuilt when its content really changes (for example a running backup job). Focus is restored then, but a pointer click whose mousedown and mouseup straddle that rebuild can still be lost. Not run in a real browser. |
+| L-35 | closed | node:test only. No browser run in this session. |
+| L-36 | closed | Apply still depends on the generation's status, not on the loaded plan. That is unchanged, and the verifier judged it to have no safety impact. |
+| L-37 | closed | Unit (fake DOM) only; real focus behaviour after inert was not checked in a browser. |
+| L-38 | closed with residual | Only SystemExit, KeyboardInterrupt and EOFError are caught. urllib does not wrap errors raised by http.client getresponse() (RemoteDisconnected, TimeoutError after the 180 s read timeout, ConnectionResetError), and api() lets them escape. My probe (scratchpad/final/probe_l38_wf0b03.py) bound to reference and then raised RemoteDisconnected from the save POST: the result was an uncaught traceback, no rebind and no 'STI… |
+| L-39 | closed with residual | These cases are documented in the module docstring: SIGKILL, SIGQUIT, the OOM kill, a VM crash and a failed systemctl start leave the timers stopped until the next boot. A real SSH hangup relayed through sudo with the real systemctl was not run live. |
+| L-40 | closed with residual | The audit's primary fix (a root-controlled directory) was not taken, so the lock still lives in a sticky world-writable directory. The listed variants (symlink, mode-000) now end in a clear refusal with a removal command, but they still block every installer run until an administrator acts; this is documented. An undocumented variant still blocks all runs, see the issue. |
+| L-41 | closed |  |
+| L-42 | closed with residual | No CI run observed on this commit. |
+| L-43 | closed with residual | No CI run observed on this commit. |
+| L-44 | closed |  |
+| L-45 | closed with residual | No CI run observed on this commit. |
+
+What stays open is listed in the 1.30.60 section of `agent instructions.md`.

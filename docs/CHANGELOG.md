@@ -4,6 +4,130 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.60
+
+The fixes for the whole-codebase audit of 2026-10-03: 62 findings (60 distinct defects), none rated critical or high.
+The findings, their evidence and the verifier's notes are in
+[`docs/technical-audit/WHOLE-CODEBASE-AUDIT-2026-10-03.md`](technical-audit/WHOLE-CODEBASE-AUDIT-2026-10-03.md);
+the finding numbers below (M-n, L-n) are that record's, and its closing section lists how each one was closed and
+what stays open.
+
+**What an installer or engineer must know**
+
+- **The manager now checks the name in the address bar** (M-9, M-13). The manager has no login, and its same-origin
+  guard and both WebSocket checks compared `Origin` with a URL built from the request's own `Host`, so a web page on a
+  name whose DNS an attacker controls could re-point that name at the VM (DNS rebinding) and act through a student's
+  browser. A new outermost layer (`app/allowed_hosts.py`) refuses every request and WebSocket handshake whose `Host`
+  is a name outside DNS could control. An IP address, `localhost`, a single-label name and a `.local` name work as
+  before with no setting. **Any other name (for example `manager.example.edu`, or a reverse proxy's name) must be
+  listed in `UI_ALLOWED_HOSTS`** in `clab-backup-ui/.env` (`deploy/image.env` for a prepared release image), then the
+  manager recreated; until then the page says so and names the setting. `X-Forwarded-Host` is never read. See
+  [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name), which also states the residual (a host
+  on the browser's own network, or whoever controls its DNS search suffix, can answer a single-label or `.local` name).
+- **The VM helpers changed** (`host_git.py`, `host_operations.py`), so the upgrade must refresh them as usual
+  (`deploy/install.sh`, or `setup-git.sh --refresh` / `setup-operations.sh --refresh`); the launcher refuses a mixed
+  tree. A new root-owned `/etc/clab-manager/git.json.lock` appears next to the Git registry.
+
+**Save progress**
+
+- **No upload carries a save nobody reviewed or was told about** (M-2). Labs that share one checkout stack their
+  commits, so one lab's reviewed upload (or an unchanged save, or a folder move's automatic push) also pushed a
+  sibling lab's commit. While another lab of the same repository has a save on the VM waiting for review, Save
+  progress, design exports, a retry that commits, a folder move with its files and uploads are refused with a sentence
+  that names that lab and the next step; an upload refused this way keeps the student's review. Only a save that may
+  hold a commit on the VM blocks other labs. The review counts waiting saves of the other labs and counts and names
+  saves kept with *Keep snapshot only* that may still have a commit on the VM, also when the reviewed save changed
+  nothing and only reuses such a commit, until an upload settled them. A folder move whose upload would carry a kept
+  save stays on the VM and is uploaded through a review that names it. Saves stacked by an earlier release stay
+  recoverable, and two labs whose stored saves both lack a commit no longer hold each other's retry.
+- **Changing a lab's folder validates before the VM retires the old registration** (M-3): a refusal leaves the lab on
+  its old, still existing registration; once the VM has made the change the lab follows it even when the answer was
+  lost (the next folder change reconciles it, never from a VM connection that was switched meanwhile). A stale device
+  selection is refused with *The devices of this lab changed since it was connected…*. While a lab's repository
+  connection is being changed, its Disconnect, Save progress and design exports answer *A repository connection is
+  being changed. Try again in a moment.*
+- **A folder move that failed or lost its answer stays retryable** and is worded as moved only after it committed
+  (M-4); moves an earlier release stored as failed can be retried.
+- The VM's Git registry is written under one lock, so a registration made by `setup-git.sh` while the manager was
+  connecting or changing a folder is no longer silently lost (L-1). A comparison cut short by its 20 000-line limit
+  says so instead of *Identical — nothing changed*, and counts over a cut text are marked *in the part shown* (L-7).
+  A stale save request left in the browser no longer returns an old finished save as *Saved to Git just now* (L-8).
+
+**Replace running configuration**
+
+- **A restart during the post-restart check never reports a node as checked** (M-5): the job stays *Interrupted* and
+  the node is read back at the next start, also after a second restart or crash (L-9), including jobs an earlier
+  release left stuck. Until every such node was read back the restore holds its lab against backups, Git saves, lab
+  operations, another restore and *Remove lab* (L-10), and the page shows it: the lab header, the banner and the
+  restore dialog read *Checking the devices after a manager restart…* and follow the job.
+- EOS: a refused `rollback clean-config` aborts the session instead of committing a merge, in the restore and in the
+  design review's throwaway session (L-11, defensive: the refusal was not reproduced live). A restore that stops on
+  an error gives every node a final outcome instead of leaving *Backing up…* on a finished job (L-12), also when the
+  manager's own save fails at that moment.
+- The lab header shows restores that end *needs attention* or *partly done* (M-15).
+
+**Network design**
+
+- IOS XR: a change that ended *uncertain* is judged at the next review by the same present/absent test as the apply
+  itself, so the manager's own statements no longer drop out of the ownership ledger (M-6). A trial of this manager
+  that is still armed is never recorded as owned (L-13). The would-be configuration is compared with the review
+  before anything is armed, on all three drivers (L-14). The read-back after a restart runs off the single apply
+  worker and holds only its own lab (backups, restores, imports, Git saves, lab operations and edits of that lab;
+  Start fresh and a VM-connection change are refused meanwhile); the page shows it as running (L-15).
+- Two access or native ports of one VLAN no longer fail the plan as a prefix collision (M-7, proven against the
+  pinned netlab engine). The Git export manifest names the lab instead of `mapping.json` (M-8); a save bound before
+  the fix still publishes the files it was bound to. Malformed `families` or device `modules` give a 400 with a
+  problem list (L-16); a LAG whose member is itself a bundle, or shared by two bundles, is refused (L-17); a plan
+  whose save fails is reported failed (L-18).
+- On the page: a file of an earlier plan opens that plan's file (M-16); a failed progress poll shows a retry line and
+  *Check again* instead of a frozen dialog (L-35); a plan that could not be loaded says so with *Try again* (L-36).
+
+**Devices, labs and the VM**
+
+- *Test login* and *Test logins* report *reachable* only after the CLI answered (the readiness invariant: `show
+  version` on the supported platforms; any real answer on a kind without a platform); a login accepted while the CLI
+  is still starting reads *Starting*, in the Devices table too, and promises an automatic recheck only for a lab
+  linked to a VM deployment; the check has one overall time limit (M-11). `terminal.close` is logged only for a
+  session that opened (L-23).
+- Labs that use containerlab's `prefix: __lab-name` match their containers in discovery and capture (M-1); an
+  IPv6-only management address is used (L-5); a malformed VM setup seed is ignored instead of crash-looping the
+  manager (L-4).
+- The operations helper refuses to delete a topology file that is deployed under another lab name (L-2) and waits
+  25 s / 4 MiB for `containerlab inspect --all`, as discovery already did (L-3). A deploy that ran is no longer
+  recorded as failed when the manager's final save fails (L-6).
+- *Start fresh* recovers from a journal write that failed (for example a full disk): a retry completes it, and its
+  messages no longer offer a manager restart as an equal way out, because a restart completes only a reset that was
+  fully prepared (M-10). A rejected node edit changes and logs nothing (L-19, L-29); a failed save no longer leaves
+  the change in memory (L-20); a login test no longer moves the scheduled-backup clock (L-21).
+- Page: closing a notice no longer hides later, different errors, the Git-problem banner included (M-14); *Try
+  again* keeps the operation's options (L-31); blocked browser storage no longer breaks navigation or saving (L-32);
+  a slow poll cannot overwrite newer state (L-33); lists are not rebuilt when nothing changed and a running download
+  keeps its button disabled (L-34); the map is not measured while hidden (L-30); the map editor's problem overlay
+  takes focus (L-37).
+
+**Browser Wireshark**
+
+- A stopped Wireshark is restarted in the same desktop, so saved captures survive it; the viewer and the download
+  report a lost desktop accurately (M-12, L-27). A stopped desktop frees its slot after the idle time (L-24); one
+  stuck container removal no longer blocks every start and listing (L-26).
+- Each desktop demands its own random VNC password and exposes no raw VNC port (L-25). The viewer's JavaScript is
+  relayed only when it is, byte for byte, the pinned image's own noVNC module; a viewer that cannot load says what
+  to do (L-28). A reverse proxy's name must be listed in `UI_ALLOWED_HOSTS` (see above).
+
+**Installer, tools and CI**
+
+- `scaffold-lab.py snapshot` says where the lab saves when it is interrupted, fails or loses its connection (L-38)
+  and never sends the loopback manager URL through a proxy (L-41). `apt_lock.py` restores paused timers on SIGHUP and
+  SIGTERM, also when the signal arrives as the wait ends (L-39). The full-screen installer refuses a lock file another
+  local user planted and names a foreign owner (L-40). `retire-telemetry.sh --dry-run` changes nothing, including no
+  manager recreate (L-22).
+- `set-release.py` looks for every marker before it writes anything (L-44).
+- CI now runs the installer TUI suites (M-17), a whitelist test and syntax check for the SSH forced command (L-42),
+  the Markdown link check (L-43), `node --check` on every manager script and a test for `terminal.js` (L-45), with
+  Node 24 pinned before the first Node step.
+- Five Playwright regression tools whose expectations had gone stale against earlier releases (`check_ui005`,
+  `check_ui007c`, `check_ui008a`, `student_workflow.py`, `coverage_run.py` row ND-GUIDED-003) run to their end again.
+
 ## Changes in 1.30.59
 
 The "Ui/Ux Changes" email of 2026-10-03 (tasks 1–8 and two closing requests), implemented on dev1. Task records:
