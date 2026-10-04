@@ -389,12 +389,34 @@ saves**, and the review says so instead of refusing while another lab's save wai
 | The VM cannot be reached | `The lab VM could not be reached.` | **Try again** · **Check the VM connection…** |
 | The VM account cannot upload | `The VM account cannot upload to <host>.` | **Try again** · **Details** |
 | An unfinished Git operation, staged or unsaved edits in the save's folder | `Someone is working in this repository on the VM.` | **Try again** · **Details** |
-| The local and online copies diverged | `The online copy has changes this VM does not have.` | **Update from the repository** |
+| The online copy has changes this VM lacks, and nothing waits here | `The online copy has changes this VM does not have.` | **Update from the repository** |
+| The same, while saves wait here: each side has changes the other lacks | `The online copy and this VM both have changes the other does not have. They have to be combined on the VM.` | **Details** (what the repository's owner does on the VM; the manager never merges, rebases or force-pushes) |
 | A device cannot be read | `<device> could not be read, so nothing was saved.` | **Try again** · **Details** |
 | Files the manager did not save are inside `latest`, `baseline` or a checkpoint folder | `<folder> holds files that were not saved by the manager.` | **Choose another place** · **Details** |
 
+*Update from the repository* is a fast-forward and cannot work while a save waits, so it is offered only
+when nothing waits in the repository; with saves waiting the action is **Upload**.
+
 Transient states (a save or load in progress, another operation running) disable Save with the reason
-visible in the chip; they are not refusals of a choice.
+visible in the chip or beside the button; they are not refusals of a choice.
+
+### 3.9 The whole lab in every save (G1)
+
+`tests/test_git_whole_lab.py` (27 tests) proves that the topology file and the map travel with a save to
+`latest`, a checkpoint, a checkpoint from an existing capture and a starting point, that a change of
+only the map or only the topology is a real change with its own entry in the review, and that the view
+and the ZIP hold both. It also pins eight gaps; the design closes those where a save would reach the
+repository without a file the lab has:
+
+| Gap | Decision |
+|---|---|
+| The map a person edited in the manager loses to the VM's map file | The capture takes the manager's map when it was changed in the manager since the VM's file was last synced into it, and the VM's file otherwise (a VM file that changed since the last sync is the newer one, as today). |
+| The topology or the map could not be embedded (a write error) and the save went on without it | The save stops with `The topology could not be saved with this capture. Try again.`; nothing is committed. |
+| A capture made before topologies were embedded, used for a checkpoint or a starting point | It is not offered: the tick box or button is disabled with `This capture does not include the topology. Save again first.` (public `capture_whole`). |
+| A save without the files deletes them from `latest` | Follows from the two rows above: a lab that has a topology never saves without it. |
+| A lab imported from an inventory has no topology text | Unchanged: it saves its device configurations, and Save settings says `This lab has no topology file in the manager, so saves hold device configurations only.` with **Update topology file…**. |
+| A topology edited in the manager after deployment loses to the deployed file | Unchanged and intended: a save is what the lab runs. |
+| A design export carries neither | Unchanged: it is not a save of the lab. |
 
 ### 3.7 Load: the lead's answers to LOAD.md section 14
 
@@ -417,9 +439,10 @@ family and the save family, because PROMPT 5.4 step 5 makes the chip *Running* a
 condition and step 9 ends it only "when the next save completes":
 
 1. *Loading* (a load is active), 2. *Saving* (a save is active);
-3. when the newest effective load (LOAD.md 5.2) is newer than the newest save attempt of any outcome:
-   *Partial* or *Running*;
-4. otherwise *Can't save*, *Upload failed*, *N saves to upload*, *Saved*, *Kept on this VM*, *Not saved yet*.
+3. *Can't save*, when a save attempt failed after the newest effective load;
+4. *Partial* or *Running*, while the newest effective load is newer than the newest save that read the
+   devices (7.1);
+5. otherwise *Can't save*, *Upload failed*, *N saves to upload*, *Saved*, *Kept on this VM*, *Not saved yet*.
 
 `also` (HEADER.md 3.4) carries the highest hidden save state into the *Running* and *Partial* panels as
 one line with **Show** (`Also: 1 save to upload.`), so a waiting upload is never out of reach. This
@@ -538,7 +561,133 @@ loads alone in a Node test):
 | 6.4: prefer no new helper option | `connect` gains `initialize` | Starting an empty repository uploads a file, so it needs the person's click to reach the helper (H4, review F4) |
 | 5.3: Upload uploads a save | Upload uploads the repository's waiting saves, all named in the sentence | Git can only push the newest commit, which carries the others (3.4, review F1) |
 | Today: a folder move uploads at once | It waits for Upload like a save | Its push would carry saves nobody pressed Upload for (review F2) |
+| 5.5: the chooser of a lab state starts beside the lab's own folder | It starts in the lab's own folder, so the state of a lab that saves to `BGP` is `BGP/start` | That is the prompt's own example with the default first-save folder; the person can choose any other folder |
+| 7.1: the VM's files win when they are newer than the manager's copy | For the map, the manager's copy wins when a person changed it in the manager since the last sync | Otherwise a map edited on the Topology tab would never be saved (3.9) |
 | 6.2: a lab imported again continues in its folder | One question in the first-save panel when the folder holds saves of a lab with the same name and another id | A student's copy of a course lab has the same name as the instructor's (review F3) |
 | 6.5: only outside causes stop a save | Another lab's waiting save no longer does | 1.30.60 added that refusal after the prompt was written (section 1) |
 | 9.6: "load a state on a second lab with the same topology" | The second lab carries the same lab name | Devices match by full node name and the preflight stays untouched (3.7 Q2). Open for the owner: match by the topology's node name across differently named labs |
 | G06 mockup: `Kept previous` for a device that did not accept the state | `Not loaded` with the device's reason; `Kept previous` only for `rolled_back` | PROMPT 5.4 step 6 says to use the service's vocabulary exactly (LOAD.md 5.1) |
+
+## 7. Rulings that override the part files
+
+Written after the UI review ([REVIEW.md](REVIEW.md) section 2). The part files were revised to follow
+them; where one still differs, this section wins.
+
+### 7.1 One status function
+
+`saveChipState(lab, ctx, now)` and `loadState(lab, ctx, now)` live in `status.js`; the first calls the
+second. Nothing else decides a chip state, a count or a name.
+
+Definitions:
+
+- **Effective load**: a finished restore job of the lab with at least one device that was replaced
+  (`verified`, `applied`, `applied_unverified`, `verify_mismatch`) or is unknown. A device is unknown
+  only when its stage is `uncertain` or it still awaits its read-back; a device interrupted before it
+  was changed is not. `L` is the newest effective load. A finished deploy, redeploy, destroy or design
+  apply of the lab that is newer than `L` ends it.
+- **Capture save**: a job of the lab that read the devices itself (public `captured`), not of kind
+  `state` or `design`, finished as `synced`, `unchanged`, `committed`, `review_pending` or
+  `push_pending`. `S` is the newest. A checkpoint or starting point made from an existing capture is
+  not one.
+- **Failed attempt**: the newest job of the lab ended `export_pending`, `capture_incomplete`, `failed`,
+  or `interrupted` without a commit, or the page holds a refusal of a save it just sent. `A` is its time.
+- **Waiting**: jobs of the lab with a commit that is not uploaded, in `committed`, `review_pending` or
+  `interrupted`, whether or not the lab is connected now; lab states and folder moves count.
+
+Order, first match wins:
+
+| # | State | Holds when | Chip text | `also` |
+|---|---|---|---|---|
+| 1 | Loading | a restore job of the lab is active | `Loading… k of m` (`k` devices with a final word); `Checking devices…` during a restart read-back | |
+| 2 | Saving | a Git job of the lab is active | `Saving…`; `Uploading…` while it pushes; `Updating…` for an update | |
+| 3 | Can't save | `A` is newer than `L` and than `S` | `Can't save` | the load of row 4 or 5 when `L` is newer than `S` |
+| 4 | Partial | `L` is newer than `S` and `L` did not succeed | `Loaded n of m` (`n` verified devices only) | the highest of rows 6 to 8 that holds |
+| 5 | Running | `L` is newer than `S` and `L` succeeded | `Running <name>` | the same |
+| 6 | Can't save | `A` is newer than `S`, or the lab's `git_status` is not ready | `Can't save` | Upload failed or waiting saves |
+| 7 | Upload failed | a waiting job is `push_pending` | `Upload failed` | |
+| 8 | Waiting | one or more waiting jobs | `1 save to upload`, `N saves to upload` | |
+| 9 | Saved | the newest capture save that changed something is uploaded | `Saved <short time>` | |
+| 10 | Kept | every save of the lab is dismissed | `Kept on this VM` | |
+| 11 | Not saved | otherwise | `Not saved yet` | |
+
+The name after *Running*: for the lab's own `latest`, the save whose commit is the loaded commit, else
+`an earlier save, <when>`; a checkpoint by its name; the starting point as `your starting point`; any
+other state by its name from the states list; a backup taken before a load X as
+`the configuration from before X`, and the undo of that as `X`.
+
+Save is disabled, with the reason as visible text, while row 1 or 2 holds, while a place request of the
+lab runs, and while anything `operation_busy` counts is running in the manager (`busy()` in `app.js`
+mirrors it and names it). The Load button is disabled only while row 1 holds; the red **Load** of a
+confirmation is disabled with `A save is running.` during row 2.
+
+### 7.2 Load
+
+- The review object is cleared when the Load panel closes and when the lab changes; `loadSubmit` does
+  nothing unless the review is of the lab on screen; the panel always opens on the list.
+- A source carries five keys: `type`, `commit`, `path`, `backup_job_id`, `repository`.
+- A retry renders only the devices it asked about. The differences drawer's button reads
+  `Load on <n> devices`.
+- `uncertain` reads `Not confirmed` with `The manager could not confirm what this device runs. Open
+  Details.` The toast fires only for a load that succeeded and says `on <m> devices` for a subset.
+- The restore job window gains **Load this backup…** beside its backup from before the load, while that
+  backup is kept. The panel at rest shows `Last load: <name>, <when>` with **Details**.
+- *Full history…* opens today's history; a commit's view offers **Load this state…** with a `git`
+  source. The confirmation says `Saved <when>.` under its sentence.
+
+### 7.3 The review and the upload
+
+- `gitReviewData(job)`: fetches `POST …/git/compare` for the job and caches the answer until the set of
+  waiting saves in `/api/state` changes. It returns `files`, `summary`, `head`, `upload_job` and
+  `also_sends`.
+- The waiting view shows the sentence from the job's stored `summary` at once and enables **Upload**
+  when the review answer has arrived (until then `Checking what this upload sends…`), because the
+  sentence must name everything the upload carries before the click.
+- `gitReviewJob(job, {upload: true})` posts `{push: true, reviewed: true, head}` to the retry route of
+  `upload_job`. It is the only sender. On 409 it fetches the review again and shows it. Without
+  `upload` it opens the What changed drawer.
+- The view also shows `To: <repository> › <folder>` from the save's frozen destination and offers
+  **Details** (today's save window, with *Keep snapshot only*).
+
+### 7.4 The chooser's contract
+
+| Field | Values |
+|---|---|
+| `kind` | `free`, `own`, `own-before`, `lab`, `state` |
+| `folder` | the folder that will be used; `typed` what was asked; `adjusted`: `''`, `corrected` (unsafe characters), `above-state` (part of a saved state), `beside-files` (someone's own `latest` folder) |
+| `exists` | false for a folder that is in no commit; such a folder is never worded as being in the repository |
+| `label`, `lab`, `layout` | the state's name; the other lab `{id, name}`; `latest` or `flat` |
+| `collision` | true when `kind` is `lab` because of a collision and not the identical folder: the question then has one button |
+| `beside` | the suggested alternative folder |
+| `mark` | the text beside the folder in the tree: `This lab saves here`, `<lab> saves here`, `Lab state: <name>`, or empty |
+| `choice` sent by the page | `''`, `beside`, `take` (*Use this folder anyway*, *Replace it*, *Continue there*) |
+| `pending` sent by the page | `''`, `keep` (the page has uploaded first when the person chose *Upload it, then move*) |
+
+Routes: `GET …/git/places` (repositories, the default place, and for one repository the tree with the
+answer of every listed folder), `POST …/git/places/check` (the answer for a typed path),
+`POST …/git/place`, `POST …/git/state`. An answer that needs a choice comes back as `{question}` with
+status 200. The page's `folderClean` only echoes the correction while typing.
+
+### 7.5 Class names
+
+HEADER.md 1.3 is the list: `save-control`, `save-pair`, `save-chip`, `save-dot` (`ok`, `warn`, `bad`,
+`none`, `busy`, `info`), `save-panel` (`wide`), `save-state`, `save-sub`, `save-row`, `save-note`,
+`save-kv`, `save-foot`, `save-name`, `save-keep`, `save-heading`, `save-list`, `save-item`, `save-when`,
+`save-why`, `open`, `picked`, `save-devices`, `save-end` (`ok`, `bad`, `now`, `warn`), `off`,
+`save-drawer`, `save-settings`, `save-settings-foot`. A quiet action is the existing
+`button ghost small`. The chooser adds the names DRAWERS.md 8.2 lists under `folder-`.
+
+### 7.6 Smaller answers
+
+| Question | Answer |
+|---|---|
+| A toast after *Not now* | None: the chip says `1 save to upload`. |
+| `allow_removed` | Always true (3.3). |
+| The first connection by address | The checkout is connected at its top level, then the lab is placed in its folder (2.8). |
+| The two save banners of the lab banner | Removed; the chip carries them. The banner keeps what a load or an operation reports. |
+| Disconnect while a save waits | The save keeps waiting (3.1); nothing is dismissed. |
+| A label stored on the restore job | No; the name is derived (7.1). |
+| *Use as starting point…* | On the lab's own saves, plus **Choose a backup as starting point…** in the Starting point group (today's dialog). |
+| A device that cannot be read | The *Can't save* row offers **Try again**, **Save settings**, **Details**. |
+| *Save as a lab state…* for a lab without a save location | Offered in the foot of the first-save view. |
+| Live regions | Each holds only its sentence, never a button. |
+| The binding UI contract | A dated amendment to `docs/redesign/DESIGN-SPEC-ADDENDUM.md` lists what the owner decisions supersede (the ids of J2 that go, the panel bodies under J3, J4, J6). |

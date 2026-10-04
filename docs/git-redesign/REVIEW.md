@@ -37,4 +37,62 @@ source give the page nothing it cannot read today.
 
 ## 2. Load path, lost functionality, chip, friction and accessibility (UI reviewer, Opus 5.5)
 
-Running.
+Verdict: not ready to build until the chip and the load state are one function (K1 to K4, O1), the upload
+is bound to the saves that were shown (X3), the diverged dead end is settled (X9) and the names are
+reconciled (X1, X2). The reviewer checked all 84 capabilities, PROMPT 5.4's parity gate and 5.11 row by
+row; found the friction budget met for the first save (2 clicks), later saves (2) and loading a lab
+state (3); and found nothing against: one request id per review, the pinned commit of folder sources,
+undo and retry always passing the confirmation, typed text and tick boxes surviving the poll, Escape and
+outside click, keyboard use of the tree, colour as the only signal, inline styles and global listeners.
+
+The answers below are decisions of [DESIGN.md](DESIGN.md) section 7, which the part files were then
+revised to follow.
+
+| ID | Severity | Finding | Answer |
+|---|---|---|---|
+| F1 | should-fix | *Use as starting point…* only on the lab's own saves; today any complete capture can become the baseline (C-013). | The Starting point group of All versions also offers **Choose a backup as starting point…**, today's dialog with its replace review. |
+| F2 | should-fix | A waiting save can never be cleared without uploading it: no way to today's save window and its *Keep snapshot only* (C-039, C-043). | The upload view and every waiting row offer **Details**, which opens today's save window. |
+| F3 | should-fix | A synced save's window (commit, changed files, *View configuration backup*) cannot be reached (C-037, C-041). | Every row of Your saves offers **Details** while the manager still holds the save. |
+| F4 | should-fix | After the next save a succeeded load's job window cannot be reached (C-025, C-072). | The panel at rest shows `Last load: <name>, <when>` with **Details** while the manager holds a finished load of the lab. |
+| F5 | should-fix | The upload sentence names no destination; a waiting save can go to a folder the lab left. | The upload view shows `To: <repository> › <folder>` from the save's own frozen destination. |
+| F6 | should-fix | The exact path of a state is nowhere in All versions. | The open row shows it. |
+| F7 | should-fix | A device that cannot be read stops the save and nothing offers to leave it out. | That *Can't save* row offers **Try again**, **Save settings** and **Details**. |
+| F8 | should-fix | Loading an older commit through Full history is not specified. | *Full history…* opens today's history; a commit's view offers **Load this state…** with a `git` source. |
+| F9 | optional | The saved time and the pinned commit are only in the differences drawer. | The confirmation says `Saved <when>.` under its sentence. |
+| L1 | should-fix | Nothing clears a finished review: reopening Load can show a confirmation of an old preflight or of another lab. | The review is cleared when the panel closes and when the lab changes; `loadSubmit` refuses unless the review is of the lab on screen; Load always opens on the list. |
+| L2 | should-fix | A retry shows devices that were not asked for as ready and ticked. | A retry renders only the devices it asked about, without page-derived rows and without the subset sentence; a test pins it. |
+| L3 | should-fix | The source carries five keys once `repository` exists. | Five keys; the test counts five. |
+| L4 | optional | The drawer's Load submits tick boxes it does not show. | It reads `Load on 3 devices`. |
+| O1 | must-fix | The header's chip counted replaced devices, the load design verified ones. | One function, `loadState`, counts verified devices only; the chip calls it. |
+| O2 | should-fix | A device interrupted before it was changed made a load "effective": `Loaded 0 of 4`, Undo offered. | A device counts as unknown only when its stage is `uncertain` or it still awaits its read-back. |
+| O3 | should-fix | "could not check what this device runs" is untrue when the device was read and matches neither configuration. | `The manager could not confirm what this device runs. Open Details.` |
+| O4 | should-fix | The name after *Running* named the newest save for any commit of `latest`. | The save whose commit is the loaded commit names it; otherwise `an earlier save, <when>`. `saveLoadName` is dropped. |
+| O5 | optional | The toast and the line "on all m devices". | The toast fires only for a load that succeeded; a subset reads `on <m> devices`. |
+| K1 | must-fix | The chip took the newest restore job of any outcome: a failed load after a good one turned the chip to *Saved* while the devices ran the loaded state. | `saveChipState` calls `loadState`, which keeps the newest effective load. |
+| K2 | must-fix | Three definitions of the save that ends *Running*. | One: the newest save that read the devices itself (public `captured`), of the lab's own kind (not a lab state, not a design export), finished as `synced`, `unchanged`, `committed`, `review_pending` or `push_pending`. A checkpoint or a starting point made from an existing capture reads no device and ends nothing. A failed attempt ends nothing either: it is shown as *Can't save* in front of the load, which stays reachable through its *Also* line with Undo. |
+| K3 | must-fix | The header's code put *Waiting* before *Running*. | DESIGN.md 7.1 is the order; the part file and its tests follow it. |
+| K4 | must-fix | After Disconnect the chip read *Not saved yet* and hid a waiting upload. | Waiting saves count whether or not the lab is connected. |
+| K5 | should-fix | A lab state has target `latest` and would be taken for the lab's latest save; *Try again* would start a lab save. | Kind `state` is left out of "your latest save", stays in the waiting count, and its retry retries that job. |
+| K6 | should-fix | *Running X* stays after a redeploy, a restart or a design apply changed the devices. | A finished deploy, redeploy, destroy or design apply of the lab newer than the load ends it. |
+| K7 | should-fix | Save stays enabled while another lab's load, a design apply or a retirement holds the manager, and the click fails. | `busy()` in `app.js` mirrors `operation_busy`; Save is disabled with the sentence that names what runs. |
+| U1 | should-fix | After a save Undo is gone although it would still work. | Today's restore job window gains **Load this backup…** beside its "before loading" backup while that backup is kept; the `Last load` line leads there. |
+| U2 | should-fix | Undo offered when it cannot work, or lost. | Follows O2 and K2. For a trimmed backup: `The automatic backup of this load is no longer kept.` |
+| U3 | optional | The name of an undo of an undo nests. | Collapsed: undoing an undo of X reads `X`. |
+| R1 | should-fix | Four clicks to change the folder need the `Saves to … Change…` line; a question adds a click. | The line is in the panel at rest. Four clicks is the plain case; each question the situation needs adds one. |
+| R2 | should-fix | *Save as a lab state…* cannot be reached for a lab without a save location. | The first-save view has it in its foot. |
+| D1 | should-fix | Load disabled while saving blocks browsing the states. | The Load button is disabled only while a load runs (PROMPT 5.2), with the chip saying so; during a save it opens, and the red Load is disabled with `A save is running.` |
+| D2 | should-fix | Save settings disabled while a save waits; an upload-blocked state. | Both removed with their tests (DESIGN.md 3.1, 3.4). |
+| D3 | optional | Device reasons name a menu path instead of offering the action. | A link button where an action exists. |
+| A1 | should-fix | A live region wraps buttons. | Each live region holds only its sentence. |
+| A2 | should-fix | The Load panel lacks the header's panel attributes and has its own focus rule. | It uses `data-panel` and `data-panel-focus` like the chip panel. |
+| A3 | optional | Board F16 predates the Load button. | The built layout is checked at 760 px in the fixture pass. |
+| X1 | must-fix | The drawers call `loadState` to start a load; it is the pure status function. | `loadChoose` starts a load (DESIGN.md section 5). |
+| X2 | must-fix | Two contracts for the single sender. | One: `gitReviewData(job)` fetches the review; `gitReviewJob(job, {upload: true})` uploads what that review showed; without `upload` it opens the What changed drawer (DESIGN.md 7.3). |
+| X3 | must-fix | The upload request names nothing that was shown; another lab's later save goes out unseen. | The upload carries the reviewed HEAD and the server compares it (risk review F1; DESIGN.md 3.4). |
+| X4 | should-fix | Two data contracts for the chooser. | One table: DESIGN.md 7.4. |
+| X5 | should-fix | A lab state inside the lab's folder (DESIGN.md) or beside it (the prompt). | Inside, as the default the chooser starts in: `BGP/start` for a lab that saves to `BGP`, which is the prompt's own example. Recorded in DESIGN.md section 6. |
+| X6 | should-fix | Functions one part assumes and none provides. | Each has an owner in DESIGN.md section 5. |
+| X7 | should-fix | Five pairs of class names for the same thing. | One table: DESIGN.md 7.5. |
+| X8 | optional | Smaller disagreements. | DESIGN.md 7.6 lists the answer to each. |
+| X9 | must-fix | *Update from the repository* is offered for diverged copies, but it is fast-forward only and refused while a save waits: a dead end. | It is offered only when nothing waits in the repository. With saves waiting the action is **Upload**. When both sides have changes the other lacks, nothing in the manager can combine them; the sentence says so and **Details** says what the repository's owner does on the VM (DESIGN.md 3.6). |
+| B1 | should-fix | More of the binding UI contract is superseded than listed. | A dated amendment to `docs/redesign/DESIGN-SPEC-ADDENDUM.md` lists every item; its J2 check runs as a test; `gitRenderAdvanced` is guarded. |
