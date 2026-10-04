@@ -804,14 +804,18 @@ class GitRepository:
             if not retry_before_write and req.get('expected_head') != head: raise ValueError('The repository changed since it was selected. Refresh status and retry the preserved snapshot.')
             target = req.get('target')
             if target not in ('latest', 'baseline', 'checkpoint'): raise ValueError('Choose latest, baseline or checkpoint.')
-            for key in ('replace_baseline', 'allow_removed', 'push'):
+            for key in ('replace_baseline', 'allow_removed', 'push', 'checkpoint_only'):
                 if key in req and type(req[key]) is not bool: raise ValueError('Invalid save option.')
             # A design export (a plan's generated files, `kind: network-design`) is never a configuration
             # snapshot: it goes to its own checkpoint folder only and never touches `latest` or `baseline`.
             design = manifest.get('kind') == 'network-design'
             if 'kind' in manifest and not design: raise ValueError('Unsupported snapshot kind.')   # a capture manifest carries no kind
             if design and target != 'checkpoint': raise ValueError('A design export goes to its own checkpoint folder.')
-            folders = [] if target == 'baseline' or design else [self.scope('latest')]
+            # H8: an existing (older) save kept as a checkpoint writes only that checkpoint; `latest` keeps the newest
+            # save. Without the option a checkpoint is a fresh capture and also becomes `latest`, as before.
+            only = req.get('checkpoint_only') is True
+            if only and (target != 'checkpoint' or design): raise ValueError('Invalid save option.')
+            folders = [] if target == 'baseline' or design or only else [self.scope('latest')]
             if target == 'baseline':
                 old = self.read_manifest(self.scope('baseline'))
                 if old and (not req.get('replace_baseline') or req.get('expected_baseline') != digest(old)):

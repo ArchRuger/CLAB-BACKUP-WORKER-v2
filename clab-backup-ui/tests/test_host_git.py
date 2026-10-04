@@ -1869,3 +1869,87 @@ class HelperThirdReviewTests(unittest.TestCase):
         script = (Path(__file__).resolve().parents[2] / 'deploy' / 'setup-git.sh').read_text()
         self.assertIn('sys.exit(3 if h.owner_login_problem(str(error)) else 1)', script)
         self.assertIn('if [[ $status -ne 3 ]]; then', script); self.assertIn("<<'PY' || status=$?", script)
+
+
+@unittest.skipUnless(shutil.which('git'), 'Git executable required')
+class CheckpointOnlyTests(unittest.TestCase):
+    """H8 (live pass, LIVE-ENV 9.3 item 5): an existing, older save kept as a checkpoint (`checkpoint_only: true`)
+    writes only `checkpoints/<name>`; `latest` keeps the lab's newest save. Without the option nothing changes."""
+    setUp = HostGitTests.setUp
+    raw = HostGitTests.raw; capture = HostGitTests.capture
+    sibling = HostGitPlacesTests.sibling
+    design = HostGitDesignExportTests.design
+
+    def lab(self):
+        self.lab_binding, self.lab_worker = self.sibling('git-redesign')
+
+    def save(self, snapshot, operation=None, **options):
+        req = {'mode': 'publish', 'binding_id': self.lab_binding['id'], 'revision': self.lab_binding['revision'],
+               'operation_id': operation or uuid.uuid4().hex, 'expected_head': self.raw('rev-parse', 'HEAD'),
+               'target': 'latest', 'push': False, 'snapshot': snapshot}
+        req.update(options)
+        return req, self.lab_worker.dispatch(req)
+
+    def with_topology(self, text):
+        capture = self.capture(text); topology = b'name: BGP\ntopology:\n  nodes: {}\n'; layout = b'{"nodeAnnotations": []}'
+        for name, raw, kind in (('BGP.clab.yml', topology, 'topology'), ('BGP.clab.yml.annotations.json', layout, 'annotations')):
+            capture['files'][name] = base64.b64encode(raw).decode()
+            capture['manifest']['files'].append(dict(path=name, size=len(raw), sha256=hashlib.sha256(raw).hexdigest(), kind=kind))
+        capture['manifest']['schema'] = 2
+        return capture
+
+    def blobs(self, folder): return self.raw('ls-tree', '-r', 'HEAD', '--', folder)
+
+    def test_an_older_save_kept_as_a_checkpoint_leaves_latest_alone(self):
+        self.lab(); older = self.with_topology('router bgp 65001\n')
+        self.assertEqual(self.save(older)[1]['status'], 'committed')
+        self.assertEqual(self.save(self.with_topology('router bgp 65002\n'))[1]['status'], 'committed')
+        latest = self.blobs('git-redesign/latest'); head = self.raw('rev-parse', 'HEAD')
+        req, kept = self.save(older, target='checkpoint', checkpoint='kept', checkpoint_only=True)
+        self.assertEqual(kept['status'], 'committed', kept); self.assertEqual(kept['snapshot_path'], 'git-redesign/checkpoints/kept')
+        self.assertEqual(self.blobs('git-redesign/latest'), latest, 'every blob of latest is unchanged')
+        touched = self.raw('diff-tree', '--no-commit-id', '--name-only', '-r', head, kept['commit']).splitlines()
+        self.assertEqual(sorted(touched), ['git-redesign/checkpoints/kept/BGP.clab.yml', 'git-redesign/checkpoints/kept/BGP.clab.yml.annotations.json',
+                                           'git-redesign/checkpoints/kept/PE1.cfg', 'git-redesign/checkpoints/kept/manifest.json'])
+        self.assertEqual(json.loads(self.raw('show', kept['commit'] + ':git-redesign/checkpoints/kept/manifest.json')), older['manifest'])
+        self.assertEqual(self.raw('show', 'HEAD:git-redesign/latest/PE1.cfg'), 'router bgp 65002')
+        self.assertIn('Manager-Operation: ' + req['operation_id'], self.raw('log', '-1', '--format=%B'))
+        compared = self.lab_worker.dispatch({'mode': 'compare', 'binding_id': self.lab_binding['id'], 'revision': self.lab_binding['revision'],
+                                             'operation_id': req['operation_id']})
+        self.assertEqual(sorted((f['name'], f['status']) for f in compared['files']),
+                         [('BGP.clab.yml', 'added'), ('BGP.clab.yml.annotations.json', 'added'), ('PE1.cfg', 'added')],
+                         'compare reads the journal\'s folder: the checkpoint, new in that commit')
+        # Idempotent retry; the same operation with the option flipped is another request.
+        self.assertEqual(self.lab_worker.dispatch(req)['commit'], kept['commit'])
+        with self.assertRaisesRegex(ValueError, 'already belongs to a different snapshot'): self.lab_worker.dispatch(dict(req, checkpoint_only=False))
+        pushed = self.lab_worker.dispatch({'mode': 'push', 'binding_id': self.lab_binding['id'], 'revision': self.lab_binding['revision'],
+                                           'operation_id': req['operation_id']})
+        self.assertEqual(pushed['status'], 'synced', pushed)
+
+    def test_without_the_option_a_checkpoint_still_also_writes_latest(self):
+        self.lab(); older = self.with_topology('router bgp 65001\n')
+        self.save(older); self.save(self.with_topology('router bgp 65002\n'))
+        _, kept = self.save(older, target='checkpoint', checkpoint='kept')
+        self.assertEqual(kept['status'], 'committed', kept)
+        self.assertEqual(self.raw('show', 'HEAD:git-redesign/latest/PE1.cfg'), 'router bgp 65001', 'today\'s behaviour: latest turns back')
+        self.assertIn('git-redesign/latest/PE1.cfg', kept['changed_files'])
+
+    def test_the_option_is_refused_outside_a_capture_checkpoint_and_writes_nothing(self):
+        self.lab(); self.save(self.capture('router bgp 65001\n'))
+        head = self.raw('rev-parse', 'HEAD')
+        for options in ({'target': 'latest', 'checkpoint_only': True}, {'target': 'baseline', 'checkpoint_only': True},
+                        {'target': 'checkpoint', 'checkpoint': 'k', 'checkpoint_only': 'true'},
+                        {'target': 'checkpoint', 'checkpoint': 'k', 'checkpoint_only': 1}):
+            _, result = self.save(self.capture('router bgp 65009\n'), **options)
+            self.assertEqual((result['status'], result['message'], result['commit']), ('needs_attention', 'Invalid save option.', None), options)
+        _, result = self.save(self.design(), target='checkpoint', checkpoint='plan', checkpoint_only=True)
+        self.assertEqual((result['status'], result['message']), ('needs_attention', 'Invalid save option.'), 'a design export needs no flag')
+        self.assertEqual(self.raw('rev-parse', 'HEAD'), head); self.assertEqual(self.raw('status', '--porcelain'), '')
+        self.assertFalse((self.repo / 'git-redesign' / 'checkpoints').exists())
+
+    def test_an_empty_lab_folder_gets_only_the_checkpoint(self):
+        self.lab()
+        _, kept = self.save(self.with_topology('router bgp 65001\n'), target='checkpoint', checkpoint='first', checkpoint_only=True)
+        self.assertEqual(kept['status'], 'committed', kept)
+        self.assertTrue(all(p.startswith('git-redesign/checkpoints/first/') for p in kept['changed_files']), kept['changed_files'])
+        self.assertFalse((self.repo / 'git-redesign' / 'latest').exists()); self.assertEqual(self.blobs('git-redesign/latest'), '')
