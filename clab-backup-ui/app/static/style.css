@@ -2544,3 +2544,44 @@ tr.diff-ctx .diff-marker { color: var(--muted); }
 .design-review-log td, .design-review-log th { vertical-align: top; }
 .design-review-log .design-review-reason { display: block; margin-top: 4px; color: var(--muted); overflow-wrap: anywhere; }
 #design-review-running { margin-top: 6px; }
+
+/* --------------------------------------------------------------------------
+   Page fixes after the QA wave of the Git save and load redesign (F1)
+   -------------------------------------------------------------------------- */
+/* Q1440-10: the busy indicator of the top bar keeps its distance from the Manager button. */
+.topbar-right .worker-state { margin-right: 12px; }
+/* Q1440-13: a line of the chip panel that ends in an action (Saves to … Change…, Last load … Details) keeps the action on the
+   line; the text before it wraps instead. */
+.save-kv:has(> .button) { display: flex; align-items: baseline; gap: 0 6px; }
+.save-kv:has(> .button) > span { flex: none; }
+.save-kv:has(> .button) > .button { flex: none; margin-left: auto; }
+/* Q760-04, Q390-06: where the header's controls can wrap onto a second row, a panel of the header hangs under the whole action
+   row (never over Save, Load or Lab actions), so the row stays visible and usable while a panel is open. Above 1100 px the
+   controls share one row and the panel hangs under its own opener, as before. */
+@media (max-width: 1100px) {
+  .lab-header-actions .menu:has(> .save-panel) { position: static; }
+  .lab-header-actions .menu:has(> .save-panel) > .save-panel { right: auto; left: 0; }
+}
+/* Q390-09: controls a finger can hit. On a touch screen, and on any narrow one, the header's buttons, the actions of the panels
+   and of the drawer, its close button and the name chips are at least 40 px high. */
+@media (pointer: coarse), (max-width: 480px) {
+  .lab-header-actions .button, .save-panel .button, .save-drawer .button { min-height: 40px; }
+  .save-drawer .icon-button { min-width: 40px; min-height: 40px; }
+  .folder-names .pill { min-height: 40px; padding-left: 14px; padding-right: 14px; display: inline-flex; align-items: center; }
+}
+/* The top bar and the header on a phone. Nothing in this block applies above 480 px. */
+@media (max-width: 480px) {
+  /* Q390-02, Q390-03: the bar fits the screen and nothing is printed over the brand. The mark stays and the product name is not
+     drawn (it is the page's title and stays the link's name); the breadcrumb takes the middle and is cut with an ellipsis; the
+     busy indicator is its pulsing dot alone (the chip and the banner say what runs). */
+  .topbar { gap: 8px; padding: 0 12px; }
+  .brand { flex: none; font-size: 0; gap: 0; }
+  .crumbs { overflow: hidden; gap: 2px; }
+  #crumb-home { padding: 4px 2px; }
+  .topbar-right { flex: none; }
+  .topbar-right .worker-state { font-size: 0; gap: 0; margin-right: 8px; }
+  #manager-button { padding-left: 10px; padding-right: 8px; }
+  /* Q390-08: a name breaks between its words before it breaks inside one. */
+  .save-item > span:first-child { overflow-wrap: break-word; flex: 1 1 auto; }
+  .save-item > .save-when { flex: none; }
+}

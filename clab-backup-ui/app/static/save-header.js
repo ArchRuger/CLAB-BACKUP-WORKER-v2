@@ -123,7 +123,7 @@ function saveAlsoMarkup(cs,panel){
 function saveTailMarkup(lab,cs,options={}){
  // Last load: the lab's newest finished load, also one that changed no device (its job window has no other way in once its banner is gone).
  const bound=!!lab.git_binding,ctx=saveCtx(lab),last=options.load===false?null:(typeof loadState==='function'?loadState(lab,ctx,saveClock):null)?.recent||null;
- const place=bound&&options.place!==false?`<p class="save-kv" id="save-place"><span>Saves to:</span> ${saveEsc(savePlaceWords(lab))} ${saveButton('place','Change…','save-change',{disabled:!!options.busy,describedby:options.busy?'save-change-why':''})}${options.busy?' <span class="save-why" id="save-change-why">Available when the save has finished.</span>':''}</p>`:'';
+ const place=bound&&options.place!==false?`<p class="save-kv" id="save-place"><span>Saves to:</span> ${saveEsc(savePlaceWords(lab))} ${saveButton('place','Change…','save-change',{disabled:!!options.busy,describedby:options.busy?'save-change-why':''})}</p>${options.busy?'<p class="save-note" id="save-change-why">Change… is available when the save has finished.</p>':''}`:'';
  const when=last?saveLongTime(last.at,saveClock):'';
  const loaded=last&&last.job?`<p class="save-kv" id="save-last-load"><span>Last load:</span> ${saveEsc(last.name+(last.changed===false?', nothing changed':when?', '+when:''))} ${saveButton('load-details','Details','save-load-details')}</p>`:'';
  const foot=bound?saveButton('versions','All versions','save-all')+saveButton('lab-state','Save as a lab state…','save-as-state')+(options.settings===false?'':saveButton('settings','Save settings','save-settings')):saveButton('lab-state','Save as a lab state…','save-as-state');
@@ -328,7 +328,9 @@ function renderSaveHeader(now){
  // Save and Load, each disabled with its reason as visible text: the chip says a load or a save runs; the line under the
  // buttons says anything else. A lab without a save location keeps Save enabled: it opens the first-save view.
  const placing=saveHeader.placing===lab.id,bound=!!lab.git_binding,own=cs.saveDisabled||submitting;
- const busy=!own&&!placing&&bound?saveBusyReason(lab):'',reason=placing?'The place to save is being set.':busy?busy+' Save is available when it finishes.':'';
+ // Whenever Save or Load is off a sentence says why beside them, at every width (the chip names the state as well).
+ const busy=!own&&!placing&&bound?saveBusyReason(lab):'';
+ const reason=placing?'The place to save is being set.':cs.key==='loading'?'A saved state is being loaded. Save and Load are available when it finishes.':own?'A save is running. Save is available when it finishes.':busy?busy+' Save is available when it finishes.':'';
  write('git-save-progress','textContent','Save');write('git-save-progress','disabled',own||placing||!!busy);
  const line=saveEl('save-reason');if(line){if(line.textContent!==reason)line.textContent=reason;if(line.hidden!==!reason)line.hidden=!reason;}
  write('load-button','disabled',!!cs.loadDisabled);
@@ -380,8 +382,11 @@ function saveFinished(job){
  // The panel shows this save: its own view, or the Saving… view it has shown since the click (a poll that arrived first has
  // already repainted it with the chip's state, which is why the view on screen alone cannot tell).
  const watched=mine&&saveHeader.watched===lab.id;if(mine)saveHeader.watched='';
- const shows=mine&&savePanelOpen()&&(saveHeader.shown.job===job.id||saveHeader.shown.view==='saving'||watched||(saveHeader.view&&saveHeader.view.job===job.id));
- const sent=saveHeader.sent===job.id&&savePanelOpen();   // the upload this page sent, which may be the save of another lab
+ // An end that arrives late (the watch answers after the person already started the next save of this lab) is not what the
+ // open panel shows: the Saving… view on screen belongs to the newer save, and its panel must not be closed by the older one.
+ const later=(saveState().git_jobs||[]).some(other=>other.lab_id===job.lab_id&&other.id!==job.id&&other.target!=='update'&&String(other.created||'')>String(job.created||''));
+ const shows=mine&&savePanelOpen()&&(saveHeader.shown.job===job.id||(!later&&(saveHeader.shown.view==='saving'||watched))||(saveHeader.view&&saveHeader.view.job===job.id));
+ const sent=saveHeader.sent===job.id&&savePanelOpen()&&!(mine&&later);   // the upload this page sent, which may be the save of another lab
  if(status==='unchanged'||status==='synced'){
   if(typeof notify==='function')notify(status==='unchanged'?'Nothing changed since your last save.':job.target==='update'?'Repository updated.':`Uploaded to ${(typeof statusHost==='function'&&statusHost(job.destination?.remote))||saveHost(mine?lab:null)}.`);
   if(shows||sent){saveHeader.view=null;saveHeader.sent='';saveClosePanel(saveFocusInside());}

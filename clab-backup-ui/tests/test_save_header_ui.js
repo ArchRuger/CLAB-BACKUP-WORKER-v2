@@ -87,18 +87,18 @@ test('the chip changes textContent and className only, the title carries the lon
  const before=h.text('save-live');h.state.git_jobs=[waiting({status:'synced',pushed:true}),saved()];h.render();assert.equal(h.text('save-live'),before);
  h.state.git_jobs=[waiting({id:'n',status:'capturing',commit:''}),saved()];h.render();h.state.git_jobs=[waiting({id:'n',status:'unchanged',pushed:true}),saved()];const said=h.text('save-live');h.render();assert.equal(h.text('save-live'),said);
 });
-test('Save and Load are disabled with a visible reason: the chip for a save or a load, the line under the buttons for anything else',()=>{
+test('Save and Load are disabled with a visible reason: the line beside the buttons says why whenever one of them is off (Q760-08), and the chip names a save or a load too',()=>{
  const h=harness({state:{git_jobs:[saved()]}}),save=h.el('git-save-progress'),load=h.el('load-button'),reason=h.el('save-reason');
  h.render();assert.equal(save.disabled,false);assert.equal(reason.hidden,true);
  h.context.busyText='A backup is running.';h.render();
  assert.equal(save.disabled,true);assert.equal(reason.hidden,false);assert.equal(reason.textContent,'A backup is running. Save is available when it finishes.');assert.equal(load.disabled,false);
  for(const text of ['Starting lab is running.','A load is running on ospf.','A network design is being applied on ospf.']){h.context.busyText=text;h.render();assert.equal(reason.textContent,text+' Save is available when it finishes.');assert.equal(save.disabled,true);}
- // A save of this lab: the chip says it, the line stays hidden, Load stays enabled.
+ // A save of this lab: the chip says it and so does the line; Load stays enabled.
  h.state.git_jobs=[waiting({status:'capturing',commit:''}),saved()];h.context.busyText='A save is running on bgp.';h.render();
- assert.equal(h.text('save-chip-text'),'Saving…');assert.equal(save.disabled,true);assert.equal(reason.hidden,true);assert.equal(load.disabled,false,'the states can be browsed during a save');
+ assert.equal(h.text('save-chip-text'),'Saving…');assert.equal(save.disabled,true);assert.equal(reason.hidden,false);assert.equal(reason.textContent,'A save is running. Save is available when it finishes.');assert.equal(load.disabled,false,'the states can be browsed during a save');
  // A load of this lab: both disabled, the chip says why.
  h.state.git_jobs=[saved()];h.state.restore_jobs=[{id:'r',lab_id:'lab',status:'applying',created:ago(1),targets:[{node:'a',status:'verified'},{node:'b',status:'applying'}]}];h.render();
- assert.match(h.text('save-chip-text'),/^Loading… 1 of 2$/);assert.equal(save.disabled,true);assert.equal(load.disabled,true);assert.equal(reason.hidden,true);
+ assert.match(h.text('save-chip-text'),/^Loading… 1 of 2$/);assert.equal(save.disabled,true);assert.equal(load.disabled,true);assert.equal(reason.hidden,false);assert.equal(reason.textContent,'A saved state is being loaded. Save and Load are available when it finishes.');
  // A place request of this lab.
  h.state.restore_jobs=[];h.context.busyText='';h.mem().placing='lab';h.render();assert.equal(save.disabled,true);assert.equal(reason.textContent,'The place to save is being set.');assert.equal(reason.hidden,false);
  h.mem().placing='';h.render();assert.equal(save.disabled,false);assert.equal(reason.hidden,true);
@@ -418,7 +418,7 @@ test('the first save on a lab without a save location: Save opens the panel and 
  h.state.labs=[boundLab({name:'restore-square'})];release({saved:true,binding,job:null,moved:false,move_reason:''});await click;await h.flush();h.render();
  const posts=h.posts();assert.deepEqual(posts.map(c=>c.endpoint),['/labs/lab/git/place','/labs/lab/git/save']);
  assert.deepEqual(JSON.parse(JSON.stringify(posts[0].payload)),{repository:'reg',folder:'restore-square',choice:'',pending:'',move_files:false,acknowledge:true});
- assert.equal(posts[1].payload.note,'');assert.equal(posts[1].payload.target,'latest');assert.equal(h.text('save-reason'),'');assert.equal(h.text('save-chip-text'),'Saving…');
+ assert.equal(posts[1].payload.note,'');assert.equal(posts[1].payload.target,'latest');assert.equal(h.text('save-reason'),'A save is running. Save is available when it finishes.');assert.equal(h.text('save-chip-text'),'Saving…');
  // The other wordings of the default place.
  const words=async(def,lab)=>{const d=harness({lab:lab||freeLab(),routes:{'/git/places':()=>({...places,default:{...places.default,...def}})}});await d.open();return d.body.innerHTML;};
  assert.match(await words({answer:{kind:'free',folder:'restore-square',exists:true}}),/Your first save goes to CLAB-MNGR-DEV-LLM, in the folder restore-square\./);
@@ -636,8 +636,27 @@ test('Q1440-11 one state, one name: an upload refused because both sides changed
  const rest=harness({state:{git_jobs:[saved()]}});await rest.open();assert.equal((rest.body.innerHTML.match(/>Save settings<\/button>/g)||[]).length,1);
  // Q1280-09: Change… is off while a save runs, with the reason beside it.
  const busy=harness({state:{git_jobs:[waiting({id:'q',status:'capturing',commit:''}),saved()]}});await busy.open();
- assert.match(busy.body.innerHTML,/id="save-change" data-save-action="place" disabled aria-describedby="save-change-why">Change…<\/button> <span class="save-why" id="save-change-why">Available when the save has finished\.<\/span>/);
+ assert.match(busy.body.innerHTML,/id="save-change" data-save-action="place" disabled aria-describedby="save-change-why">Change…<\/button><\/p><p class="save-note" id="save-change-why">Change… is available when the save has finished\.<\/p>/);
  assert.doesNotMatch(rest.body.innerHTML,/save-change-why/);
+});
+test('Q760-05 the panel does not close by itself: the end of an older upload that arrives after the next save started leaves the newer save’s panel open; a poll that rebuilds the body and focus moving inside it close nothing',async()=>{
+ const older=waiting({id:'old',status:'synced',pushed:true,commit:'c-old',created:ago(5),finished:ago(4)});
+ const newer=waiting({id:'new',status:'review_pending',commit:'c-new',created:ago(1),finished:ago(0)});
+ const h=harness({state:{git_jobs:[newer,older]},routes:{'/git/compare':()=>review({upload_job:'new'})}});
+ h.mem().sent='old';                                  // this page sent the older save's upload
+ assert.equal(h.context.saveFinished(newer),true);h.render();await h.flush();h.render();
+ assert.equal(h.panel.hidden,false);assert.equal(h.text('save-panel-title-text'),'Not uploaded yet');
+ h.context.saveFinished(older);                        // its watch answers only now
+ assert.equal(h.panel.hidden,false,'the newer save’s panel stays open');assert.equal(h.text('save-panel-title-text'),'Not uploaded yet');
+ assert.deepEqual(h.toasts,['Uploaded to github.com.'],'the upload is still announced');
+ // the Saving… view of a newer save is not closed by the older end either
+ const g=harness({state:{git_jobs:[waiting({id:'run',status:'capturing',commit:'',created:ago(0)}),older]}});await g.open();
+ assert.equal(g.text('save-panel-title-text'),'Saving…');g.context.saveFinished(older);assert.equal(g.panel.hidden,false);
+ // a poll that rebuilds the body, and focus moving from one control of the panel to another, never close it
+ h.el('save-see').focus();h.body._listKey='stale';h.render();h.render();assert.equal(h.panel.hidden,false);
+ // and the end of the save the panel does show still closes it, as before
+ const k=harness({state:{git_jobs:[waiting({id:'u',status:'pushing'})]}});await k.open();assert.equal(k.text('save-panel-title-text'),'Uploading…');
+ k.state.git_jobs=[waiting({id:'u',status:'synced',pushed:true})];k.context.saveFinished(k.state.git_jobs[0]);assert.equal(k.panel.hidden,true);
 });
 test('Q390-05 a name being typed is never posted by the poll: a change fired by the rebuild of the panel is ignored, the caret stays where it is, Enter and a real change commit',async()=>{
  const job=saved({note:'abcdefgh'});
