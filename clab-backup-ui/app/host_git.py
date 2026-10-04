@@ -489,8 +489,8 @@ class GitRepository:
                 result.add(value['commit'])
         return result
 
-    def remote_head(self):
-        code, raw = self.run('ls-remote', '--exit-code', self.binding['push_url'], 'refs/heads/' + self.binding['branch'], check=False, limit=4096, timeout=45)
+    def remote_head(self, timeout=45):
+        code, raw = self.run('ls-remote', '--exit-code', self.binding['push_url'], 'refs/heads/' + self.binding['branch'], check=False, limit=4096, timeout=timeout)
         if code: raise ValueError('The remote branch is unavailable. Check connectivity and the owner\'s noninteractive HTTPS Git login.')
         lines = raw.decode('utf8').splitlines()
         if len(lines) != 1 or not HEX.fullmatch(lines[0].split('\t')[0]): raise ValueError('The remote branch response was invalid.')
@@ -556,7 +556,10 @@ class GitRepository:
         each with the operation of the journal that made it, its subject and the paths it changed; None when the
         remote cannot be asked."""
         try:
-            remote = self.remote_head(); self.fetch_remote()
+            # A review must not hold the checkout's lock for long when the remote is down, and needs no fetch
+            # when the remote branch is a commit this checkout already has (the usual case: the VM is ahead).
+            remote = self.remote_head(timeout=15)
+            if self.run('cat-file', '-e', remote + '^{commit}', check=False)[0]: self.fetch_remote()
             head = self.run('rev-parse', '--verify', 'HEAD')
             code, raw = self.run('rev-list', '--max-count=' + str(MAX_OUTGOING + 1), '--format=%H%x00%s', remote + '..' + head, check=False)
             if code: return None, False
