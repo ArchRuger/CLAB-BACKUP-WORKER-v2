@@ -53,7 +53,11 @@ with sync_playwright() as pw:
     check('device selection is still there', page.evaluate('() => document.querySelectorAll("#git-binding-form [name=git-node]").length') > 0)
 
     # 1. Save progress: the review opens by itself; cancelling uploads nothing
+    # Every save is labelled first ("What changed?", the Git commit message); the review follows.
     page.click('#progress-save')
+    page.wait_for_selector('#git-label-dialog[open] #git-label-input')
+    page.fill('#git-label-input', 'ui007c review before upload')
+    page.click('#git-label-confirm')
     page.wait_for_selector('#git-diff-dialog[open] #git-review-push', timeout=60000)
     title = page.inner_text('#git-diff-dialog h2')
     check('Save progress ends in the review window', title == 'Review before uploading', title)
@@ -96,9 +100,14 @@ with sync_playwright() as pw:
     page.click('#progress-more-menu [data-git-action="local"]')
     page.wait_for_selector('#git-save-options[open] #git-save-confirm')
     check('the local save dialog has no upload box', page.evaluate('() => !document.getElementById("git-save-push")'))
+    # The save needs its label (required) and the wait must name a job that did not exist before the click:
+    # the fixture holds older committed jobs, so "any other committed job" would pass without this save.
+    known = page.evaluate('''async () => (await (await fetch('/api/state')).json()).git_jobs.map(j => j.id)''')
+    page.fill('#git-save-note', 'ui007c local save')
     page.click('#git-save-confirm')
-    page.wait_for_function('''async (before) => { const s = await (await fetch('/api/state')).json(); const j = s.git_jobs.filter(j => j.id !== before).sort((a, b) => a.created < b.created ? 1 : -1)[0]; return j && ['committed', 'unchanged'].includes(j.status); }''', arg=job['id'], timeout=60000)
+    page.wait_for_function('''async (known) => { const s = await (await fetch('/api/state')).json(); const j = s.git_jobs.filter(j => !known.includes(j.id) && j.note === 'ui007c local save')[0]; return j && ['committed', 'unchanged'].includes(j.status); }''', arg=known, timeout=60000)
     local = page.evaluate(NEWEST, LAB)['job']
+    check('the newest save is the local one', local['note'] == 'ui007c local save', local)
     check('a local save opens no review and uploads nothing', not local['pushed'] and not page.evaluate('() => document.getElementById("git-diff-dialog")?.open'), local)
     check('no console or page errors', not errors, errors)
     browser.close()

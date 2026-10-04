@@ -114,10 +114,19 @@ with sync_playwright() as pw:
     open_group(page)
     check('Edit map is available for a lab with a map', not page.evaluate('() => document.getElementById("menu-map-edit").disabled'))
     page.click('#menu-map-edit')
-    page.wait_for_function('() => /Editing|Save map|Done/i.test(document.body.innerText) && document.getElementById("lab-actions-menu").hidden', timeout=15000)
-    check('Edit map starts the map editor from the group', True)
+    # Edit map is the separate map-editor.html page (the lab builder's editor in map mode), not an in-page editor.
+    page.wait_for_url('**/static/map-editor.html#lab=*', timeout=15000)
+    # Ready means the editor bundle attached, not just that the map document arrived: "Saved in the manager" and the lab
+    # name appear as soon as mapStart() has fetched the document, and #map-save is disabled until the editor is mounted
+    # as well as when nothing changed. #map-link is enabled only once the editor is attached and idle, the welcome
+    # screen is hidden once it mounted, and a mounted editor has drawn the map's nodes.
+    page.wait_for_function('() => document.getElementById("map-status")?.textContent === "Saved in the manager" && !!document.getElementById("map-name")?.textContent && !document.getElementById("map-link").disabled && document.getElementById("map-welcome").hidden && document.querySelectorAll(".react-flow__node").length > 0', timeout=60000)
+    check('Edit map starts the map editor from the group', page.evaluate('() => document.getElementById("map-name").textContent') == LAB and page.is_disabled('#map-save') and page.is_enabled('#map-link') and page.evaluate('() => document.getElementById("map-welcome").hidden && document.querySelectorAll(".react-flow__node").length > 0'))
     shot(page, 'ui005-edit-map')
-    check('Edit map is still on the map toolbar', page.evaluate('() => !!document.getElementById("map-edit")'))
+    page.click('#map-back')
+    page.wait_for_selector('#lab-content:not([hidden])', timeout=15000)
+    check('Back to the lab leaves the editor page', '/static/map-editor.html' not in page.url, page.url)
+    check('Back to the lab returns to the manager, Edit map still on the map toolbar', page.evaluate('() => !!document.getElementById("map-edit")'))
     # A lab without a map: the moved item keeps its disabled state and its reason. A fresh context,
     # because the router reopens the last lab of a session and the map editor is still open in this one.
     ctx.close()

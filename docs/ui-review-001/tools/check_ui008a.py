@@ -41,7 +41,9 @@ def open_progress(page):
 
 
 OUTLINE = '() => [...document.querySelectorAll("#git-places-panel .git-outline summary")].map(s => s.dataset.gitPlace)'
-DESTINATION = '() => document.querySelector("#git-save-location .git-destination-line").innerText.replace(/\\s+/g, " ")'
+# The Save location card is rebuilt after every folder move (the panel shows "Loading your saved progress…"
+# meanwhile), so the line can be absent for a moment: read it null-safely and let the wait run until it is back.
+DESTINATION = '() => (document.querySelector("#git-save-location .git-destination-line")?.innerText || "").replace(/\\s+/g, " ")'
 
 
 def new_folder(page, parent, name, use):
@@ -65,6 +67,7 @@ with sync_playwright() as pw:
     open_progress(page)
     working, solution = HOME + '/working', HOME + '/solution'
     before = page.evaluate(DESTINATION)
+    check('the Save location card states the folder the lab saves to', HOME in before and 'saves to' in before, before)
 
     # 1. Create "working" beneath the folder the lab saves to, without moving the lab there
     new_folder(page, HOME, 'working', use=False)
@@ -99,11 +102,11 @@ with sync_playwright() as pw:
     if page.query_selector('#git-move-files') and page.is_checked('#git-move-files'):
         page.click('#git-move-files')
     page.click('#git-folder-confirm')
-    page.wait_for_function('(p) => document.querySelector("#git-save-location .git-destination-line").innerText.includes(p)', arg=working, timeout=30000)
+    page.wait_for_function('(p) => (document.querySelector("#git-save-location .git-destination-line")?.innerText || "").includes(p)', arg=working, timeout=30000)
     check('Save this lab here moves the lab into the empty folder', True)
     page.wait_for_selector('#git-places-panel .git-places-head', timeout=20000)
     new_folder(page, HOME, 'solution', use=True)
-    page.wait_for_function('(p) => document.querySelector("#git-save-location .git-destination-line").innerText.includes(p)', arg=solution, timeout=30000)
+    page.wait_for_function('(p) => (document.querySelector("#git-save-location .git-destination-line")?.innerText || "").includes(p)', arg=solution, timeout=30000)
     page.wait_for_selector('#git-places-panel .git-places-head', timeout=20000)
     outline = page.evaluate(OUTLINE)
     check('after the lab moved on, the folder it left is still listed (the reported defect)', working in outline and solution in outline, outline)
