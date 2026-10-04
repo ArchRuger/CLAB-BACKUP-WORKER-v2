@@ -10,7 +10,7 @@ const gitSaveSentences={queued:'Waiting to start…',capturing:'Reading device c
 const GIT_EXPOSURE_TEXT='I understand that complete device configurations — including any passwords or keys they contain — will be saved to this repository and uploaded to its online copy.';
 const GIT_EXPOSURE_ERROR='Tick the box to confirm that complete configurations will be saved to this repository.';
 const gitContexts=new Map(),gitLoads=new Map();
-let gitViewLab='',gitViewRequest=0,gitWatch=null,gitWatchTimer=null,gitDialogJob='',gitSubmitting=false,gitVersionRows=[],gitVersionTree=null;
+let gitViewLab='',gitViewRequest=0,gitWatch=null,gitWatchTimer=null,gitDialogJob='',gitSubmitting=false,gitSubmittingLab='',gitVersionRows=[],gitVersionTree=null;
 function gitLabel(job){return gitStateLabels[job?.status]||job?.status||'No progress saved yet';}
 function gitJobTime(job){return job?.created||job?.finished||'';}
 function gitTime(value){return utcDisplay(typeof value==='number'?value*1000:value);}
@@ -197,9 +197,10 @@ function renderGitProgress(){
  $('git-destination').textContent=binding?'Saving to '+gitFolderWords(binding):'Not connected — choose where this lab’s progress is saved';
  $('git-progress-status').textContent=ps?(ps.key==='git'&&typeof progressSummary==='function'?progressSummary(lab,jobs,undefined,problem):[ps.label,ps.detail].filter(Boolean).join(' · ')):(jobs[0]?gitLabel(jobs[0]):'Save progress creates a snapshot you can return to later.');
  const reason=gitSaveReason(binding,active),label=gitSubmitting||active?'Saving…':binding?'Save progress':'Connect a save location…';
- for(const id of ['git-save-progress','progress-save']){const button=$(id);if(!button)continue;button.textContent=label;button.disabled=!!reason;button.title=reason||(binding?'Save every device’s configuration to '+gitDestination(binding):'Choose where this lab’s progress is saved');}
+ // The header's Save button belongs to save-header.js once the page has the chip (#save-chip): only the Progress tab's button is written here then.
+ for(const id of $('save-chip')?['progress-save']:['git-save-progress','progress-save']){const button=$(id);if(!button)continue;button.textContent=label;button.disabled=!!reason;button.title=reason||(binding?'Save every device’s configuration to '+gitDestination(binding):'Choose where this lab’s progress is saved');}
  if($('progress-save-reason')){$('progress-save-reason').textContent=reason;$('progress-save-reason').hidden=!reason;}
- $('git-save-menu').hidden=!binding;gitRenderSaveHelp(binding);
+ if($('git-save-menu'))$('git-save-menu').hidden=!binding;gitRenderSaveHelp(binding);
  for(const button of gitActionButtons()){button.disabled=(gitSubmitting||!!active)&&!['history','load','settings'].includes(button.dataset.gitAction);if(!gitInsideMenu(button))button.hidden=!binding;}
  const more=$('progress-more-button');if(more&&more.parentElement)more.parentElement.hidden=!binding;
  if($('git-problem')){$('git-problem').hidden=!problem;if($('git-problem-text'))$('git-problem-text').textContent=problem;}
@@ -421,7 +422,7 @@ async function gitSavesAction(button,id=activeId){
  const jobId=button.dataset.gitJobOpen||button.dataset.gitJobUpload||button.dataset.gitJobKeep;if(!jobId)return;
  const job=gitLabJobs(id).find(item=>item.id===jobId);
  if(button.dataset.gitJobOpen)return gitShowJob(jobId,job);
- if(button.dataset.gitJobUpload&&job&&gitNeedsReview(job))return gitReviewJob(job);
+ if(button.dataset.gitJobUpload&&job&&job.commit&&!job.pushed)return gitReviewJob(job);
  if(button.dataset.gitJobUpload){const result=await json('/git/jobs/'+encodeURIComponent(jobId)+'/retry','POST',{push:true});gitRememberJob(result);await gitShowJob(result.id,result);await refresh();return;}
  if(button.dataset.gitJobKeep&&job)return gitDismissJob(job);
 }
@@ -548,24 +549,34 @@ function gitReusableRequest(previous,request){
  const known=[...(state.git_jobs||[]),...[...gitContexts.values()].flatMap(context=>context?.jobs||[])].find(job=>job.id===previous.request.request_id);
  return known&&!gitActiveStates.has(known.status)?null:previous.request;
 }
-// options.quiet: no job dialog — the header, the status card and a toast carry the phases; the dialog
-// opens on its own only when the save ends needing attention. Every step after gitSubmitting is set runs
-// inside the try, so nothing (blocked site data included: every storage call may throw) leaves it stuck.
+// options.quiet: no job dialog. With the header chip (save-header.js) the chip and its panel carry the phases and the result;
+// without it a toast does, and the dialog opens on its own only when the save ends needing attention. Every step after
+// gitSubmitting is set runs inside the try, so nothing (blocked site data included: every storage call may throw) leaves it stuck.
+// A refusal of the request itself is handed to the header (saveRefused), which shows it in the chip panel; the error is still thrown,
+// marked `saveShown`, so a caller with its own error place can tell.
 async function gitSubmitSave(id,values,requestId,options={}){
  if(gitSubmitting)return;
- gitSubmitting=true;
+ gitSubmitting=true;gitSubmittingLab=id;
+ const header=()=>{if(typeof renderSaveHeader==='function')renderSaveHeader();};
+ let sent=false;
  try{
-  renderGitProgress();
+  renderGitProgress();header();
   const storageKey='git-save-request:'+id;
   let request=gitSavePayload(values,requestId||gitRequestId());
   if(!requestId){try{request=gitReusableRequest(JSON.parse(sessionStorage.getItem(storageKey)||'null'),request)||request;sessionStorage.setItem(storageKey,JSON.stringify({request,sent:gitNow()}));}catch{}}
+  sent=true;
   const job=await json('/labs/'+encodeURIComponent(id)+'/git/save','POST',request);
+  sent=false;
   if(!requestId){try{sessionStorage.removeItem(storageKey);}catch{}}
   gitRememberJob(job);
-  if(options.quiet){notify(values.target==='checkpoint'?'Saving checkpoint…':values.target==='baseline'?'Setting the baseline…':'Saving progress…');gitStartWatch(job,{quiet:true});}
+  if(typeof saveRefused==='function')saveRefused(id,null,values);
+  if(options.quiet){if(typeof saveFinished!=='function')notify(values.target==='checkpoint'?'Saving checkpoint…':values.target==='baseline'?'Setting the baseline…':'Saving progress…');gitStartWatch(job,{quiet:true});}
   else await gitShowJob(job.id,job);
   await refresh();return job;
- }finally{gitSubmitting=false;renderGitProgress();}
+ }catch(error){
+  if(sent&&error&&typeof saveRefused==='function'&&saveRefused(id,error,values))error.saveShown=true;
+  throw error;
+ }finally{gitSubmitting=false;gitSubmittingLab='';renderGitProgress();header();}
 }
 // A small dialog asking only for the save's label (E1): every save needs one, shown in the history
 // and used as the Git commit message. `onConfirm(note)` runs the actual save; the draft (per lab)
@@ -582,11 +593,17 @@ function gitLabelDialog(id,onConfirm){
  });
  return dialog;
 }
-async function gitSaveProgress(){
- const id=activeId;if(!id)return;
- const context=await gitLoadContext(id);
- if(!context.binding){await gitFirstSave(id);return;}
- gitLabelDialog(id,note=>gitSubmitSave(id,{target:'latest',push:true,note},undefined,{quiet:true}));
+// Save (owner decision D2): no label is asked. A lab with a save location is saved at once with an empty note (the manager names
+// the save) and the chip panel shows the phases; a lab without one gets the first-save view of the chip panel. On a page without
+// save-header.js the first save keeps its dialog. A refusal the chip panel shows is not thrown again.
+async function gitSaveProgress(id=activeId){
+ if(!id||typeof id!=='string')id=activeId;if(!id)return;
+ const lab=(state.labs||[]).find(item=>item.id===id),bound=lab?!!lab.git_binding:!!(await gitLoadContext(id)).binding;
+ const panel=typeof saveOpenPanel==='function'&&id===activeId;
+ if(!bound){if(panel)saveOpenPanel('status',{focus:true});else await gitFirstSave(id);return;}
+ if(panel)saveOpenPanel('status',{focus:true});
+ try{await gitSubmitSave(id,{target:'latest',push:true,note:'',allow_removed:true},undefined,{quiet:true});}
+ catch(error){if(!error||!error.saveShown)throw error;}
 }
 function gitCheckpointName(value){return String(value||'').replace(/\s+/g,'-').replace(/[^A-Za-z0-9_-]/g,'').replace(/^[_-]+/,'');}
 async function gitSaveOptions(target,id=activeId){
@@ -647,7 +664,7 @@ function gitRenderJob(job){
  for(const button of $('git-job-actions').querySelectorAll('[data-git-job-action]'))button.onclick=()=>opTask($('git-job-dialog'),async()=>{
   const action=button.dataset.gitJobAction;
   if(action==='backup'){closeDialogsExcept();selectLab(job.lab_id);showTab('backups');const capture=[...document.querySelectorAll('.job')].find(item=>item.dataset.job===job.backup_job_id);if(capture){capture.open=true;capture.scrollIntoView({block:'center',behavior:'smooth'});const summary=capture.querySelector('summary');if(summary&&typeof summary.focus==='function')summary.focus();}return;}
-  if(action==='review'){await gitReviewJob(job);return;}
+  if(action==='review'||(action==='push'&&job.commit&&!job.pushed)){await gitReviewJob(job);return;}
   if(action==='dismiss'){await gitDismissJob(job);return;}
   const result=await json('/git/jobs/'+encodeURIComponent(job.id)+'/retry','POST',{push:action==='push'});gitRememberJob(result);await gitShowJob(result.id,result);await refresh();
  });
@@ -658,25 +675,92 @@ function gitRenderJob(job){
 // kept on the VM because its upload would send saves kept with Keep snapshot only along (review_before_push) is reviewed.
 function gitNeedsReview(job){return !!job&&!!job.commit&&!job.reviewed&&!job.pushed&&(job.target!=='move'||job.review_before_push===true);}
 function gitUploadLabel(job){if(job.target==='move'&&!job.commit)return 'Retry the move';return !job.commit?'Retry save, then review':gitNeedsReview(job)?'Review and upload…':'Upload now';}
-async function gitReviewJob(job){
- const result=await json('/labs/'+encodeURIComponent(job.lab_id)+'/git/compare','POST',{job_id:job.id});
- const waiting=gitPendingStates.has(job.status),decide=waiting&&gitNeedsReview(job),context=gitContexts.get(job.lab_id),host=(typeof statusHost==='function'&&statusHost(gitRepository(context?.binding).push_url))||'the online repository';
- // What the upload carries along: the manager counts every save of this checkout still waiting on the VM, this
- // lab's and other labs' (also_sends); the page's own count of this lab is the floor, so it never under-reports.
- const local=decide?gitLabJobs(job.lab_id,context).filter(item=>item.id!==job.id&&item.commit&&!item.pushed&&gitPendingStates.has(item.status)).length:0;
- const others=decide?Math.max(local,Number(result.also_sends)||0):0,otherLabs=decide?Math.min(others,Number(result.also_sends_other_labs)||0):0,blocked=decide&&result.upload_blocked?String(result.upload_blocked):'';
- // Saves kept with Keep snapshot only are no longer pending, but a commit of theirs stays on the VM and goes along. They
- // are part of also_sends and named here as such; "not seen uploaded yet" because an earlier upload may have carried one.
- const kept=decide&&Array.isArray(result.also_sends_kept)?result.also_sends_kept.map(item=>String(item?.lab||'')+(item?.note?' ('+String(item.note)+')':'')).filter(Boolean):[];
+// The review of a save and of the upload it would be part of (DESIGN.md 3.4, 7.3). One cache for the page: job id → the answer of
+// POST …/git/compare, kept until the set of waiting saves in /api/state changes (a save made anywhere changes what an upload carries).
+const gitReviews={key:'',answers:new Map(),loads:new Map()};
+function gitWaitingKey(){return (state.git_jobs||[]).filter(j=>j.commit&&!j.pushed).map(j=>j.id+':'+j.commit+':'+j.status).sort().join('|');}
+function gitReviewsCurrent(){const key=gitWaitingKey();if(gitReviews.key!==key){gitReviews.key=key;gitReviews.answers.clear();gitReviews.loads.clear();}return key;}
+// The answer the page holds for this save and the current set of waiting saves, or null: what a view renders and what Upload sends.
+function gitReviewCached(job){gitReviewsCurrent();return (job&&gitReviews.answers.get(job.id))||null;}
+// The floor of `also_sends`: a waiting save of the same checkout this page knows and the answer does not name is added, so the
+// sentence never under-reports what an upload carries.
+function gitReviewRows(job,rows){
+ const list=(Array.isArray(rows)?rows:[]).filter(row=>row&&typeof row==='object'),checkout=job.destination?.checkout||'';
+ if(!checkout||!job.commit||job.pushed)return list;
+ const named=new Set(list.map(row=>row.job_id).filter(Boolean)),commits=new Set([job.commit]);
+ for(const other of state.git_jobs||[]){
+  if(other.id===job.id||!other.commit||other.pushed||named.has(other.id)||commits.has(other.commit)||!gitPendingStates.has(other.status)||(other.destination?.checkout||'')!==checkout)continue;
+  commits.add(other.commit);list.push({job_id:other.id,lab:other.lab_name||gitLabName(other.lab_id),name:other.note||(other.target==='move'?'Folder move':'Unnamed save'),kind:other.kind||'',target:other.target||'latest'});
+ }
+ return list;
+}
+// What a save changed and what an upload of its repository would send: {files, summary, head, upload_job, also_sends}.
+// options.fresh asks the VM again. An answer for a set of waiting saves that changed meanwhile is returned but not kept.
+async function gitReviewData(job,options={}){
+ const key=gitReviewsCurrent();
+ if(!options.fresh&&gitReviews.answers.has(job.id))return gitReviews.answers.get(job.id);
+ if(!options.fresh&&gitReviews.loads.has(job.id))return gitReviews.loads.get(job.id);
+ const load=(async()=>{
+  const result=await json('/labs/'+encodeURIComponent(job.lab_id)+'/git/compare','POST',{job_id:job.id});
+  const review={files:result.files||[],summary:result.summary||job.summary||null,head:String(result.head||''),upload_job:result.upload_job||'',also_sends:gitReviewRows(job,result.also_sends)};
+  if(gitReviewsCurrent()===key&&gitReviews.loads.get(job.id)===load)gitReviews.answers.set(job.id,review);
+  return review;
+ })();
+ gitReviews.loads.set(job.id,load);
+ try{return await load;}finally{if(gitReviews.loads.get(job.id)===load)gitReviews.loads.delete(job.id);}
+}
+// The review before an upload is mandatory. Without options.upload this opens the What changed drawer for the save (save-drawers.js),
+// or the review window below on a page without it. With options.upload===true it uploads what the review of this save showed: it
+// posts to the retry route of the review's `upload_job` (the manager's save at the checkout's newest commit) with the `head` the
+// person was shown, and refuses when the page holds no review of this save for the current set of waiting saves. On 409 (a save
+// landed after the review) it fetches the review again and the views show it; nothing was uploaded. This function is the only
+// place in the static scripts that sends the reviewed flag with an upload.
+async function gitReviewJob(job,options={}){
+ if(options.upload!==true){
+  if(typeof saveDrawerOpen==='function'){closeDialogsExcept('save-drawer');saveDrawerOpen('changes',{job,opener:options.opener});return null;}
+  return gitReviewDialog(job);
+ }
+ const review=gitReviewCached(job);
+ if(!review||!review.head||!review.upload_job)throw new Error('See what this upload sends before uploading.');
+ try{
+  const next=await json('/git/jobs/'+encodeURIComponent(review.upload_job)+'/retry','POST',{push:true,reviewed:true,head:review.head});
+  gitRememberJob(next);gitStartWatch(next,{quiet:true});await refresh();return next;
+ }catch(error){
+  if(error&&error.status===409){
+   gitReviews.answers.clear();gitReviews.loads.clear();
+   try{await gitReviewData(job,{fresh:true});}catch{}
+   if(typeof renderSaveHeader==='function')renderSaveHeader();if(typeof saveDrawerRender==='function')saveDrawerRender();
+  }
+  throw error;
+ }
+}
+// The review window of a page without the What changed drawer: what the save changed, everything the upload sends, and the two
+// choices. Its Upload button is gitReviewJob(job,{upload:true}), like every other one.
+async function gitReviewDialog(job){
+ const review=await gitReviewData(job);
+ const decide=gitPendingStates.has(job.status)&&!!job.commit&&!job.pushed,context=gitContexts.get(job.lab_id),host=(typeof statusHost==='function'&&statusHost(gitRepository(context?.binding).push_url))||'the online repository';
+ const rows=decide?review.also_sends:[],names=rows.map(row=>{const name=String(row.name||'Unnamed save'),lab=row.lab&&typeof row.lab==='object'?row.lab.name:row.lab;return row.job_id?(lab?`${name} (${lab})`:name):`"${name}"`;});
+ const also=rows.length?` This upload also sends ${rows.length===1?'1 other save':rows.length+' other saves'}: ${names.join(', ')}.`:'';
  closeDialogsExcept();
  const design=job.kind==='design',move=job.target==='move',what=design?'export':move?'move':'save',title=design?(decide?'Review design export before uploading':'Review this design export'):(decide?'Review before uploading':'Review this save');
  // A folder move changes no configuration: its review is about what the upload sends along, so it shows no file diff.
  const lead=move?'<p>A folder move changes no configuration: it moves the files this lab saved into its new folder, in one commit.</p>':`<p>What this ${what} changed compared with the previous one. Configuration files may contain passwords or keys.</p>`;
- const dialog=opDialog('git-diff-dialog',title,`${lead}${gitDestinationMarkup(job.destination,job)}${decide?`<p class="op-notice" id="git-review-decision">This ${what} is on the lab VM only. Nothing is uploaded to ${esc(host)} unless you choose <strong>Upload these changes</strong>.${others?` Uploading also sends ${others} earlier ${others===1?'save':'saves'} that ${others===1?'is':'are'} still waiting on the VM${otherLabs?`, ${otherLabs} of them from ${otherLabs===1?'another lab':'other labs'} in this repository`:''}.`:''}${kept.length?` Among them, kept with Keep snapshot only and not seen uploaded yet: ${esc(kept.join(', '))}.`:''}</p>${blocked?`<p class="op-notice" id="git-review-blocked">${esc(blocked)}</p>`:''}`:''}<details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${move?'':gitFilesDiffMarkup(result.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${decide?'<button class="button secondary" id="git-review-cancel">Not now — keep it on the VM</button><button class="button primary" id="git-review-push">Upload these changes</button>':waiting?'<button class="button primary" id="git-review-push">Upload now</button>':''}</div>`);
+ const upload=decide&&!!review.upload_job&&!!review.head;
+ const dialog=opDialog('git-diff-dialog',title,`${lead}${gitDestinationMarkup(job.destination,job)}${decide?`<p class="op-notice" id="git-review-decision">This ${what} is on the lab VM only. Nothing is uploaded to ${esc(host)} unless you choose <strong>Upload these changes</strong>.${esc(also)}</p>${upload?'':'<p class="op-notice" id="git-review-busy">Someone is working in this repository on the VM.</p>'}`:''}<details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${move?'':gitFilesDiffMarkup(review.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${decide?`<button class="button secondary" id="git-review-cancel">Not now — keep it on the VM</button>${upload?'<button class="button primary" id="git-review-push">Upload these changes</button>':''}`:''}</div>`);
  gitFocusDialog(dialog);
  $('git-review-files').onclick=()=>opTask(dialog,()=>gitViewVersion(job.lab_id,{commit:job.commit,path:job.snapshot_path?'/'+job.snapshot_path:gitSnapshotPath(context?.binding,gitTargetPath(job))}));
- if($('git-review-cancel'))$('git-review-cancel').onclick=()=>{dialog.close();notify('Not uploaded. The save stays on the lab VM; upload it from Progress › Recent saves when you are ready.');};
- $('git-review-push')?.addEventListener('click',()=>opTask(dialog,async()=>{const next=await json('/git/jobs/'+encodeURIComponent(job.id)+'/retry','POST',{push:true,reviewed:true});dialog.close();gitRememberJob(next);await gitShowJob(next.id,next);await refresh();}));
+ if($('git-review-cancel'))$('git-review-cancel').onclick=()=>dialog.close();   // no toast: the save keeps waiting and the page says so (DESIGN.md 7.6)
+ if(upload)$('git-review-push')?.addEventListener('click',()=>opTask(dialog,async()=>{
+  let next;
+  try{next=await gitReviewJob(job,{upload:true});}
+  catch(error){
+   if(!error||error.status!==409)throw error;
+   // A save landed after the review: the window shows the new review, with the manager's sentence; nothing was uploaded.
+   await gitReviewDialog(job);const holder=typeof $('git-diff-dialog')?.querySelector==='function'?$('git-diff-dialog').querySelector('.form-error'):null;if(holder)holder.textContent=error.message;return;
+  }
+  dialog.close();if(typeof saveFinished!=='function')await gitShowJob(next.id,next);
+ }));
+ return dialog;
 }
 function gitDoneToast(job){
  if(job.target==='checkpoint')return `Checkpoint '${job.checkpoint||''}' saved.`;
@@ -696,7 +780,9 @@ function gitStartWatch(job,options={}){
    if(gitActiveStates.has(value.status))gitWatchTimer=setTimeout(poll,1500);
    else{
     gitWatch=null;await refresh();
-    if(watch.quiet){if(value.status==='review_pending'&&gitNeedsReview(value))await gitReviewJob(value);else if(['push_pending','export_pending','failed','capture_incomplete','interrupted','review_pending'].includes(value.status))await gitShowJob(value.id,value);else notify(gitDoneToast(value));}
+    // With the header chip the result is the chip panel's (saveFinished in save-header.js): no job window, no review window.
+    if(watch.quiet&&typeof saveFinished==='function')saveFinished(value);
+    else if(watch.quiet){if(value.status==='review_pending'&&gitNeedsReview(value))await gitReviewJob(value);else if(['push_pending','export_pending','failed','capture_incomplete','interrupted','review_pending'].includes(value.status))await gitShowJob(value.id,value);else notify(gitDoneToast(value));}
     if(gitTabActive()&&activeId===value.lab_id)await gitShowRepository(true);
    }
   }catch(error){if(gitWatch===watch){gitWatch=null;if(gitDialogJob===job.id&&$('git-job-dialog')?.open)$('git-job-dialog').querySelector('.form-error').textContent='The save status could not be refreshed. Close and reopen this save to check it. ('+error.message+')';else if(watch.quiet)notify('The save status could not be refreshed. Open the save under Progress › Recent saves to check it.');}}
@@ -788,8 +874,8 @@ function gitRunAction(action,id=activeId){
  });
 }
 if(typeof $==='function'&&$('git-progress-bar')){
- $('git-save-progress').onclick=()=>opTask(null,gitSaveProgress);
- if($('progress-save'))$('progress-save').onclick=()=>opTask(null,gitSaveProgress);
+ if($('git-save-progress'))$('git-save-progress').onclick=()=>opTask(null,()=>gitSaveProgress());
+ if($('progress-save'))$('progress-save').onclick=()=>opTask(null,()=>gitSaveProgress());
  $('git-repository-refresh').onclick=()=>opTask(null,()=>gitShowRepository(true));
  $('git-open-settings').onclick=gitOpenRepository;
  for(const button of gitActionButtons())button.onclick=()=>gitRunAction(button.dataset.gitAction);
@@ -798,6 +884,9 @@ if(typeof $==='function'&&$('git-progress-bar')){
   if(menu&&typeof menu.addEventListener==='function'){menu.addEventListener('mouseover',pick);menu.addEventListener('focusin',pick);menu.addEventListener('toggle',()=>{if(menu.open)gitPlaceSaveMenu();else gitShowSaveHelp('');});}}
  if($('git-saved-versions'))$('git-saved-versions').addEventListener('click',event=>{const button=event.target.closest('[data-git-version-action]');if(!button)return;const row=gitVersionRows[Number(button.dataset.gitVersion)];if(row)gitVersionAction(button.dataset.gitVersionAction,row);});
  if($('git-saves-list'))$('git-saves-list').addEventListener('click',event=>{const button=event.target.closest('[data-git-job-open],[data-git-job-upload],[data-git-job-keep]');if(button)opTask(null,()=>gitSavesAction(button));});
- document.addEventListener('click',event=>{const menu=$('git-save-menu');if(menu?.open&&!menu.contains(event.target))menu.open=false;});
- document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('git-save-menu'))$('git-save-menu').open=false;});
+ // Only a page that still has the header's split menu needs these two; panels are closed by shell.js.
+ if($('git-save-menu')){
+  document.addEventListener('click',event=>{const menu=$('git-save-menu');if(menu?.open&&!menu.contains(event.target))menu.open=false;});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('git-save-menu'))$('git-save-menu').open=false;});
+ }
 }

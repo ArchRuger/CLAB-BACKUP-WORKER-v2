@@ -61,7 +61,10 @@ test('every Save progress option is explained from what it really does: a local 
  const attack={binding_id:'b',repository:{path:'/labs/<img src=x onerror=1>',push_url:'https://github.com/x/y'}};
  assert.doesNotMatch(context.gitSaveHelpMarkup(context.gitSaveHelp('local',attack)),/<img/);
  const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
- for(const action of actions){assert.match(html,new RegExp('data-git-action="'+action+'" aria-describedby="git-save-help-'+action+'"'));assert.match(html,new RegExp('<div id="git-save-help-'+action+'" hidden>'));}
+ // Owner decision D1: the header is the chip, Save and Load; its split menu and the help pane are gone. A page with the chip carries
+ // none of the menu's options in the header; a page that still has the menu keeps each option described by its help text.
+ if(/id="save-chip"/.test(html)){assert.doesNotMatch(html,/id="git-save-menu"|id="git-save-help/);assert.match(html,/<button type="button" class="button primary" id="git-save-progress"[^>]*>Save<\/button>/);}
+ else for(const action of actions){assert.match(html,new RegExp('data-git-action="'+action+'" aria-describedby="git-save-help-'+action+'"'));assert.match(html,new RegExp('<div id="git-save-help-'+action+'" hidden>'));}
 });
 test('the help pane shows one explanation at a time and the default line when no option is active',()=>{
  const context=makeContext(),els={};for(const id of ['default','checkpoint','local','history','settings'])els['git-save-help-'+id]={hidden:id!=='default',innerHTML:''};
@@ -131,67 +134,81 @@ test('gitOpenCommit fast path sends the job\'s own snapshot_path with the wire\'
  await context.gitOpenCommit('lab',{commit:'c2'},[]);
  assert.deepEqual(opened,['/course/lab-a/checkpoints/day-1','/course/lab-a/baseline'],'the job\'s own recorded path is preferred and never doubles the leading slash; a job saved before that field existed falls back to the binding\'s prefix');
 });
-test('one-click save asks for a label first (E1), then captures fresh configurations and delegates review preference to server',async()=>{
- const context=makeContext(),calls=[],elements=new Map(),dialogs=new Map();
- const element=()=>({value:'',oninput:null,onclick:null});
- context.$=id=>elements.get(id)||dialogs.get(id)||null;
- context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
+test('one-click save sends the save at once with an empty label (D2), captures fresh configurations and delegates review preference to server',async()=>{
+ const context=makeContext(),calls=[],dialogs=[];
+ context.opDialog=id=>{dialogs.push(id);return {open:true,close(){}};};
  context.opTask=async(dialog,fn)=>fn();
  context.gitLoadContext=async()=>({binding:{node_names:['r1'],review_before_push:true}});
  context.gitSubmitSave=async(id,request)=>calls.push({id,request});
  await context.gitSaveProgress();
- assert.equal(calls.length,0,'nothing is saved before the label is confirmed');
- elements.get('git-label-input').value='OSPF adjacencies up';
- await elements.get('git-label-confirm').onclick();
- assert.equal(calls.length,1);assert.equal(calls[0].id,'lab');assert.equal(calls[0].request.target,'latest');assert.equal(calls[0].request.push,true);
- assert.equal(calls[0].request.note,'OSPF adjacencies up');assert.equal(calls[0].request.node_names,undefined);
- assert.equal(dialogs.get('git-label-dialog').open,false,'the label dialog closes once the save is created');
- let opened=0;context.gitLoadContext=async()=>({binding:null});context.gitFirstSave=async()=>{opened++;};await context.gitSaveProgress();assert.equal(opened,1,'an unbound lab goes to the first-save flow');assert.equal(calls.length,1,'and nothing is saved yet');
+ assert.equal(calls.length,1,'the save is sent by the click itself');assert.deepEqual(dialogs,[],'no dialog asks for a label');
+ assert.equal(calls[0].id,'lab');assert.equal(calls[0].request.target,'latest');assert.equal(calls[0].request.push,true);
+ assert.equal(calls[0].request.note,'','the manager names the save');assert.equal(calls[0].request.allow_removed,true);assert.equal(calls[0].request.node_names,undefined);
+ // The lab in /api/state decides without a request when the page holds it.
+ context.state.labs=[{id:'lab',name:'bgp',git_binding:{binding_id:'b'}}];context.gitLoadContext=async()=>{throw new Error('not asked');};
+ await context.gitSaveProgress();assert.equal(calls.length,2);
+ let opened=0;context.state.labs=[];context.gitLoadContext=async()=>({binding:null});context.gitFirstSave=async()=>{opened++;};await context.gitSaveProgress();assert.equal(opened,1,'an unbound lab goes to the first-save flow');assert.equal(calls.length,2,'and nothing is saved yet');
+ // With the header chip the first save is the chip panel's view: the panel opens and nothing is sent.
+ const panels=[];context.saveOpenPanel=(kind,options)=>panels.push([kind,options&&options.focus]);context.state.labs=[{id:'lab',name:'bgp'}];
+ await context.gitSaveProgress();assert.deepEqual(panels,[['status',true]]);assert.equal(opened,1);assert.equal(calls.length,2);
+ // A refusal the chip panel shows is not thrown a second time; any other failure is.
+ context.state.labs=[{id:'lab',name:'bgp',git_binding:{binding_id:'b'}}];
+ context.gitSubmitSave=async()=>{throw Object.assign(new Error('busy'),{saveShown:true});};await context.gitSaveProgress();
+ context.gitSubmitSave=async()=>{throw new Error('lost');};await assert.rejects(context.gitSaveProgress(),/lost/);
 });
-test('an empty or over-length label is refused before the save is sent, and the draft survives a cancel',async()=>{
+test('where a label is still asked (the first-save dialog of a page without the chip), an empty or over-length one is refused before the save is sent, and the draft survives a cancel',async()=>{
  const context=makeContext(),calls=[],elements=new Map(),dialogs=new Map();
  const element=()=>({value:'',oninput:null,onclick:null});
  context.$=id=>elements.get(id)||dialogs.get(id)||null;
  context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
  const errors=[];context.opTask=async(dialog,fn)=>{try{await fn();}catch(e){errors.push(e.message);}};
- context.gitLoadContext=async()=>({binding:{node_names:['r1']}});
- context.gitSubmitSave=async(id,request)=>calls.push({id,request});
- await context.gitSaveProgress();
+ context.gitLabelDialog('lab',async note=>calls.push(note));
  elements.get('git-label-input').value='   ';
  await elements.get('git-label-confirm').onclick();
  assert.deepEqual(errors,['Give this save a short label.']);assert.equal(calls.length,0);assert.equal(dialogs.get('git-label-dialog').open,true,'the dialog stays open on a refused label');
  elements.get('git-label-input').value='a'.repeat(121);
  await elements.get('git-label-confirm').onclick();
  assert.equal(errors[1],'Keep the label to 120 characters or fewer.');
+ elements.get('git-label-input').value='kept draft';elements.get('git-label-input').oninput();
  elements.get('git-label-cancel').onclick();
- assert.equal(dialogs.get('git-label-dialog').open,false);
+ assert.equal(dialogs.get('git-label-dialog').open,false);assert.equal(context.gitLabelDraft('lab'),'kept draft');
  assert.equal(calls.length,0,'cancelling never saves anything');
+ // The save itself needs none (D2): an empty note is a valid request.
+ const sent=[];context.json=async(endpoint,method,payload)=>{sent.push(payload);return {id:'j',lab_id:'lab',status:'queued',created:'2026-10-04T12:00:00Z'};};context.gitStartWatch=()=>{};
+ await context.gitSubmitSave('lab',{target:'latest',push:true,note:''},undefined,{quiet:true});assert.equal(sent[0].note,'');
 });
-test('the review before an upload is mandatory: every upload of an unreviewed save goes through the review window, and only its button uploads',async()=>{
+test('the review before an upload is mandatory: every upload of a save goes through the review, and only its button uploads, with the head that was shown',async()=>{
  const context=makeContext(),elements=new Map(),dialogs=new Map(),calls=[],toasts=[];
  const element=()=>({onclick:null,innerHTML:'',listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},querySelectorAll:()=>[]});
  context.$=id=>elements.get(id)||dialogs.get(id)||null;context.notify=m=>toasts.push(m);context.opTask=async(dialog,fn)=>fn();context.refresh=async()=>{};
  context.opDialog=(id,title,html)=>{for(const stale of ['git-review-cancel','git-review-push'])elements.delete(stale);for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;this.onclose?.();},querySelector:()=>null};dialogs.set(id,dialog);return dialog;};
- context.json=async(endpoint,method,payload)=>{calls.push({endpoint,payload});return endpoint.endsWith('/compare')?{files:[{name:'r1.cfg',status:'modified',before:'a',after:'b'}]}:{id:'j',lab_id:'lab',status:'queued',commit:'c'.repeat(40),created:'2026-09-11T12:00:00Z'};};
+ context.json=async(endpoint,method,payload)=>{calls.push({endpoint,payload});return endpoint.endsWith('/compare')?{files:[{name:'r1.cfg',status:'modified',before:'a',after:'b'}],head:'h'.repeat(40),upload_job:'j',also_sends:[]}:{id:'j',lab_id:'lab',status:'queued',commit:'c'.repeat(40),created:'2026-09-11T12:00:00Z'};};
  const pending={id:'j',lab_id:'lab',status:'review_pending',target:'latest',commit:'c'.repeat(40),created:'2026-09-11T12:00:00Z'};
  assert.equal(context.gitNeedsReview(pending),true);assert.equal(context.gitNeedsReview({...pending,reviewed:'2026-09-11T12:01:00Z'}),false);assert.equal(context.gitNeedsReview({...pending,commit:''}),false);
  assert.equal(context.gitNeedsReview({...pending,target:'move'}),false,'a folder move has no configuration change to review');assert.equal(context.gitNeedsReview({...pending,status:'committed'}),true,'a local save uploaded later is reviewed too');
  assert.equal(context.gitUploadLabel(pending),'Review and upload…');assert.equal(context.gitUploadLabel({...pending,reviewed:'x'}),'Upload now');assert.equal(context.gitUploadLabel({...pending,commit:''}),'Retry save, then review');
- // Cancel: nothing is uploaded and nothing is reported as uploaded
+ // Not now: nothing is uploaded, nothing is reported as uploaded, and no toast (DESIGN.md 7.6: the page says the save waits)
  await context.gitReviewJob(pending);const review=dialogs.get('git-diff-dialog');
  assert.equal(review.title,'Review before uploading');assert.match(review.html,/Nothing is uploaded to the online repository unless you choose <strong>Upload these changes<\/strong>/);assert.match(review.html,/r1\.cfg/);
- elements.get('git-review-cancel').onclick();assert.equal(review.open,false);assert.match(toasts[0],/^Not uploaded\. The save stays on the lab VM/);
+ elements.get('git-review-cancel').onclick();assert.equal(review.open,false);assert.deepEqual(toasts,[]);
  assert.deepEqual(calls.map(c=>c.endpoint),['/labs/lab/git/compare'],'declining sends no upload request');
- // Proceed: the upload states that the review happened
+ // Proceed: the upload states that the review happened and which head was shown
  await context.gitReviewJob(pending);await elements.get('git-review-push').listeners.click();
- assert.equal(calls[calls.length-1].endpoint,'/git/jobs/j/retry');assert.equal(JSON.stringify(calls[calls.length-1].payload),'{"push":true,"reviewed":true}');
- // The Recent saves button and the job window lead to the review, never straight to the upload
+ assert.equal(calls[calls.length-1].endpoint,'/git/jobs/j/retry');assert.equal(JSON.stringify(calls[calls.length-1].payload),JSON.stringify({push:true,reviewed:true,head:'h'.repeat(40)}));
+ // The Recent saves button and the job window lead to the review, never straight to the upload; a save whose review already
+ // happened and whose upload failed goes the same way, because the saves under it may have changed since.
  calls.length=0;context.state.git_jobs=[pending];
  await context.gitSavesAction({dataset:{gitJobUpload:'j'}},'lab');assert.deepEqual(calls.map(c=>c.endpoint),['/labs/lab/git/compare']);
+ calls.length=0;context.state.git_jobs=[{...pending,status:'push_pending',reviewed:'x'}];
+ await context.gitSavesAction({dataset:{gitJobUpload:'j'}},'lab');assert.ok(calls.every(c=>!c.endpoint.endsWith('/retry')),'a reviewed save is not uploaded by the row either');
+ context.state.git_jobs=[pending];
  await context.gitShowJob('j',pending);const actions=elements.get('git-job-actions').innerHTML;
  assert.match(actions,/data-git-job-action="review">Review and upload…/);assert.doesNotMatch(actions,/data-git-job-action="push"/);assert.match(actions,/data-git-job-action="dismiss">Keep snapshot only/);
  // A synced save is reviewed for reading only: no decision, no upload button
  await context.gitReviewJob({...pending,status:'synced',pushed:true});assert.equal(dialogs.get('git-diff-dialog').title,'Review this save');assert.equal(elements.get('git-review-push'),undefined);assert.equal(elements.get('git-review-cancel'),undefined);
+ // With the What changed drawer on the page the review is the drawer: nothing is requested here and nothing is uploaded
+ calls.length=0;const drawers=[];context.saveDrawerOpen=(kind,options)=>drawers.push([kind,options.job.id]);context.document={querySelectorAll:()=>[]};
+ await context.gitReviewJob(pending);assert.deepEqual(drawers,[['changes','j']]);assert.equal(calls.length,0);
 });
 test('the save location form no longer offers to skip the review and never sends the old preference',()=>{
  assert.doesNotMatch(source,/git-review-before-push|Let me review changes/);assert.doesNotMatch(source,/review_before_push\s*:/,'no request carries the preference any more');
@@ -563,24 +580,27 @@ test('a folder move reads as moved only once it committed; one that stopped or l
  assert.equal(context.gitSavedAs({...move,status:'synced',snapshot_path:'labs/x/latest'}),'Moved to labs/x');
  assert.equal(context.gitUploadLabel({...move,status:'export_pending'}),'Retry the move');assert.equal(context.gitUploadLabel({...move,status:'push_pending',commit:'c'}),'Upload now');
 });
-test('a folder move kept on the VM for saves kept with Keep snapshot only is uploaded through the review that names them (review follow-up J2)',async()=>{
+test('a folder move waiting on the VM is uploaded through the review that names every save the upload sends (review follow-up J2; DESIGN.md 3.4)',async()=>{
  const context=makeContext(),elements=new Map(),dialogs=new Map(),calls=[];
  const element=()=>({onclick:null,innerHTML:'',listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},querySelectorAll:()=>[]});
  context.$=id=>elements.get(id)||dialogs.get(id)||null;context.opTask=async(dialog,fn)=>fn();context.refresh=async()=>{};context.notify=()=>{};
  context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
- context.json=async(endpoint,method,payload)=>{calls.push({endpoint,payload});return endpoint.endsWith('/compare')?{files:[],also_sends:1,also_sends_other_labs:1,also_sends_kept:[{lab:'other-lab',note:'OSPF <done>'}]}:{id:'m',lab_id:'lab',status:'queued',target:'move',created:'2026-10-04T12:00:00Z'};};
+ context.json=async(endpoint,method,payload)=>{calls.push({endpoint,payload});return endpoint.endsWith('/compare')?{files:[],head:'h1',upload_job:'m',also_sends:[{job_id:'k',lab:'other-lab',name:'OSPF <done>',kind:'',target:'latest'}]}:{id:'m',lab_id:'lab',status:'queued',target:'move',created:'2026-10-04T12:00:00Z'};};
  const move={id:'m',lab_id:'lab',target:'move',status:'committed',commit:'c'.repeat(40),snapshot_path:'bgp/latest',review_before_push:true,created:'2026-10-04T12:00:00Z'};
  assert.equal(context.gitNeedsReview(move),true);assert.equal(context.gitUploadLabel(move),'Review and upload…');
- assert.equal(context.gitNeedsReview({...move,review_before_push:false}),false,'a move with nothing kept to name still uploads at once');
  assert.equal(context.gitNeedsReview({...move,reviewed:'2026-10-04T12:01:00Z'}),false);assert.equal(context.gitSaveSentence(move),'Moved to folder bgp');
  context.state.git_jobs=[move];await context.gitSavesAction({dataset:{gitJobUpload:'m'}},'lab');
  assert.deepEqual(calls.map(c=>c.endpoint),['/labs/lab/git/compare'],'the row leads to the review, never straight to the upload');
+ // A move without the old preference goes the same way now: every upload of a commit is reviewed (DESIGN.md 3.4)
+ calls.length=0;context.state.git_jobs=[{...move,review_before_push:false,status:'push_pending'}];await context.gitSavesAction({dataset:{gitJobUpload:'m'}},'lab');
+ assert.ok(calls.every(c=>!c.endpoint.endsWith('/retry')),'a move never uploads from its row');
+ context.state.git_jobs=[move];await context.gitReviewJob(move);
  const review=dialogs.get('git-diff-dialog');
  assert.equal(review.title,'Review before uploading');assert.match(review.html,/A folder move changes no configuration/);assert.match(review.html,/This move is on the lab VM only/);
- assert.match(review.html,/Among them, kept with Keep snapshot only and not seen uploaded yet: other-lab \(OSPF &lt;done&gt;\)\./);
+ assert.match(review.html,/This upload also sends 1 other save: OSPF &lt;done&gt; \(other-lab\)\./);
  assert.doesNotMatch(review.html,/No differences/,'no file diff is shown for a move');
  await elements.get('git-review-push').listeners.click();
- assert.equal(calls[calls.length-1].endpoint,'/git/jobs/m/retry');assert.equal(JSON.stringify(calls[calls.length-1].payload),'{"push":true,"reviewed":true}');
+ assert.equal(calls[calls.length-1].endpoint,'/git/jobs/m/retry');assert.equal(JSON.stringify(calls[calls.length-1].payload),'{"push":true,"reviewed":true,"head":"h1"}');
 });
 test('a move an older release marked failed offers its retry in the job window',async()=>{
  const context=makeContext(),elements=new Map(),dialogs=new Map();
@@ -593,38 +613,41 @@ test('a move an older release marked failed offers its retry in the job window',
  const actions=elements.get('git-job-actions').innerHTML;
  assert.match(actions,/data-git-job-action="push">Retry the move</);assert.match(actions,/data-git-job-action="local">Retry the move on this VM only</);
 });
-test('the review counts the saves an upload carries from every lab of the checkout and says when another lab\'s save must be reviewed first',async()=>{
+test('the review names the saves an upload carries from every lab of the checkout, and another lab\'s waiting save no longer blocks it (DESIGN.md 3.4)',async()=>{
  const context=makeContext(),elements=new Map(),dialogs=new Map();
  const element=()=>({onclick:null,innerHTML:'',listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},querySelectorAll:()=>[]});
  context.$=id=>elements.get(id)||dialogs.get(id)||null;context.opTask=async(dialog,fn)=>fn();
  context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
- let answer={files:[],also_sends:2,also_sends_other_labs:1,upload_blocked:'Another lab in this repository, <b>, has a save waiting on the VM without a review.'};
+ let answer={files:[],head:'h',upload_job:'s',also_sends:[{job_id:'a',lab:'bgp',name:'Start',kind:'',target:'latest'},{job_id:'b',lab:'<b>',name:'ospf fixed',kind:'state',target:'latest'}]};
  context.json=async endpoint=>endpoint.endsWith('/compare')?answer:{};
- const save={id:'s',lab_id:'lab',status:'review_pending',target:'latest',commit:'c'.repeat(40),created:'2026-10-03T12:00:00Z'};
+ const save={id:'s',lab_id:'lab',status:'review_pending',target:'latest',commit:'c'.repeat(40),created:'2026-10-03T12:00:00Z',destination:{checkout:'/home/me/labs'}};
  await context.gitReviewJob(save);let html=dialogs.get('git-diff-dialog').html;
- assert.match(html,/Uploading also sends 2 earlier saves that are still waiting on the VM, 1 of them from another lab in this repository\./);
- assert.match(html,/id="git-review-blocked">Another lab in this repository, &lt;b&gt;, has a save/);
- // The page's own count of this lab is the floor: an answer without the count never lowers it.
- context.state.git_jobs=[{...save,id:'earlier',status:'committed',created:'2026-10-03T11:00:00Z'}];answer={files:[]};
+ assert.match(html,/This upload also sends 2 other saves: Start \(bgp\), ospf fixed \(&lt;b&gt;\)\./);
+ assert.doesNotMatch(html,/git-review-blocked/);assert.ok(elements.get('git-review-push'),'the upload is offered: the other lab\'s save goes along and is named');
+ // The page's own knowledge is the floor: a waiting save of the same checkout the answer does not name is still named.
+ context.state.git_jobs=[{...save,id:'earlier',commit:'d'.repeat(40),status:'committed',note:'Before lunch',lab_name:'bgp',created:'2026-10-03T11:00:00Z'},{...save,id:'elsewhere',commit:'e'.repeat(40),status:'committed',destination:{checkout:'/home/me/other'}}];answer={files:[],head:'h',upload_job:'s'};
  await context.gitReviewJob(save);html=dialogs.get('git-diff-dialog').html;
- assert.match(html,/Uploading also sends 1 earlier save that is still waiting on the VM\./);assert.doesNotMatch(html,/git-review-blocked/);
+ assert.match(html,/This upload also sends 1 other save: Before lunch \(bgp\)\./,'a save of another checkout is not counted');
+ // No save of the manager at the checkout's newest commit: no upload is offered and the window says why.
+ context.state.git_jobs=[];answer={files:[],head:'h',upload_job:null,also_sends:[]};
+ await context.gitReviewJob(save);html=dialogs.get('git-diff-dialog').html;
+ assert.match(html,/id="git-review-busy">Someone is working in this repository on the VM\./);assert.doesNotMatch(html,/id="git-review-push"/);
 });
-test('the review names the saves kept with Keep snapshot only that the upload may send along, as part of its count (review follow-up G1)',async()=>{
+test('the review names the saves kept with Keep snapshot only and the commits the manager no longer holds that the upload sends along (review follow-up G1)',async()=>{
  const context=makeContext(),elements=new Map(),dialogs=new Map();
  const element=()=>({onclick:null,innerHTML:'',listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},querySelectorAll:()=>[]});
  context.$=id=>elements.get(id)||dialogs.get(id)||null;context.opTask=async(dialog,fn)=>fn();
  context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
- let answer={files:[],also_sends:1,also_sends_other_labs:1,also_sends_kept:[{lab:'<b>-lab',note:'OSPF done'}]};
+ let answer={files:[],head:'h',upload_job:'s',also_sends:[{job_id:'k',lab:'<b>-lab',name:'OSPF done',kind:'',target:'latest'},{commit:'f'.repeat(40),name:'Save r1: first save',files:['r1.cfg']}]};
  context.json=async endpoint=>endpoint.endsWith('/compare')?answer:{};
  const save={id:'s',lab_id:'lab',status:'review_pending',target:'latest',commit:'c'.repeat(40),created:'2026-10-03T12:00:00Z'};
  await context.gitReviewJob(save);let html=dialogs.get('git-diff-dialog').html;
- assert.match(html,/Uploading also sends 1 earlier save that is still waiting on the VM, 1 of them from another lab in this repository\./);
- // One save, counted once: the kept save is named as part of the count, never as one more (review issues G1-b, G1-c).
- assert.match(html,/still waiting on the VM, 1 of them from another lab in this repository\. Among them, kept with Keep snapshot only and not seen uploaded yet: &lt;b&gt;-lab \(OSPF done\)\./);
- assert.doesNotMatch(html,/<b>-lab/);assert.doesNotMatch(html,/as well/);
- answer={files:[],also_sends:1,also_sends_other_labs:1};
+ // Each save is named once; one the manager no longer holds is named by its subject, in quotes.
+ assert.match(html,/This upload also sends 2 other saves: OSPF done \(&lt;b&gt;-lab\), &quot;Save r1: first save&quot;\./);
+ assert.doesNotMatch(html,/<b>-lab/);
+ context.state.git_jobs=[{...save,id:'changed',commit:'9'.repeat(40)}];answer={files:[],head:'h',upload_job:'s',also_sends:[]};
  await context.gitReviewJob(save);html=dialogs.get('git-diff-dialog').html;
- assert.doesNotMatch(html,/Keep snapshot only/,'nothing kept, nothing named');
+ assert.doesNotMatch(html,/also sends/,'nothing else waits, nothing is named');
 });
 test('blocked site data never stops a save or leaves Save progress stuck: every storage call may throw (audit L-32, review follow-up G7)',async()=>{
  const context=makeContext(),calls=[],submitting=()=>vm.runInContext('gitSubmitting',context);
