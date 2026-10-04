@@ -210,3 +210,10 @@ function is still called, every guard still resolves, and there is exactly one s
 | 6 | optional | Guided setup (`git-onboard.py`) still refuses a deep folder for its label. | Accepted: it cuts the generated label by the helper's rule. |
 | 7 | optional | Keep as a checkpoint could post an empty capture id in a race, which is a fresh capture. | Accepted: nothing is sent without the capture's id. |
 | 8 | optional | A checkpoint-from-save job queued before the upgrade keeps its old request. | No such job exists in a released version (the action is new in this release); recorded in the handoff. |
+
+Findings 1, 3, 4, 6 and 7 are done in `1b555da` (S3d), each with a test; finding 5 in `3dd9a6c`. One change of that
+slice goes beyond the list and touches the scrubber: a problem sentence that is exactly one of the fixed
+sentences of the code table (`PROBLEM_CODES`, dictionary membership, so equality with a constant) is no longer
+passed through `scrub`, because the helper's push-preflight sentence holds the word "password" and was replaced
+by `[sensitive output omitted]`, which lost its code. A string equal to a constant of the source holds no
+secret; everything else is scrubbed as before. Read by the lead; not yet seen by the risk reviewer.
