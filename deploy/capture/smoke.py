@@ -5,8 +5,17 @@ checks noVNC's RFB greeting, the per-session VNC password challenge, the pinned
 viewer modules and real capture bytes, and removes its own resources.
 Run with the application's Python dependencies installed. Never use a production
 capture stack: the preflight refuses any existing clab-manager-capture project.
+
+After the single-session checks it starts a second desktop on the same namespace under
+another request id and checks what the manager's capture sets rely on (C07): the two
+sessions are distinct (id, container, VNC password), each id is the service's
+HMAC-SHA256(token, owner + request_id), posting the first request again meets the first
+session (no third container), and ending both leaves no labelled container.
 """
+import argparse
 import asyncio
+import hashlib
+import hmac
 import io
 import os
 from pathlib import Path
@@ -48,6 +57,40 @@ def packets(data):
     return False
 
 
+def session_id(token, owner, request_id):
+    """The id the service gives an owner's request: the same derivation as capture_service.Sessions.start
+    and BrowserSessions.session_id, repeated here so the real service pins it."""
+    return hmac.new(token.encode(), (owner + request_id).encode(), hashlib.sha256).hexdigest()
+
+
+def labelled(*flags):
+    return command('docker', 'ps', *flags, '--filter', 'label=' + LABEL, capture_output=True, text=True).stdout.splitlines()
+
+
+def two_desktops(client, token, target, first, sid):
+    """A second desktop on the same namespace with its own request id, and the first one's request posted
+    again. Returns the second session's id; the caller ends both."""
+    owner = client.headers['X-Capture-Owner']
+    assert sid == session_id(token, owner, first['request_id']), 'The first session id is not HMAC(token, owner + request_id)'
+    password = client.get('/sessions/' + sid).raise_for_status().json()['viewer_password']
+    second = {'target': target, 'interfaces': ['lo'], 'request_id': secrets.token_hex(32)}
+    other = client.post('/sessions', json=second).raise_for_status().json()['id']
+    assert other != sid, 'A new request id must start a new session'
+    assert other == session_id(token, owner, second['request_id']), 'The second session id is not HMAC(token, owner + request_id)'
+    assert {row['id'] for row in client.get('/sessions').raise_for_status().json()['sessions']} == {sid, other}
+    status = client.get('/sessions/' + other).raise_for_status().json()
+    assert len(status['viewer_password']) == 8 and status['viewer_password'] != password, 'Desktops must not share a VNC password'
+    names = labelled('--format', '{{.Names}}')
+    first_name, second_name = (next(n for n in names if n.endswith(i)) for i in (sid, other))
+    assert first_name != second_name
+    # The same body again (the manager's retry after a lost reply) meets the first session.
+    again = client.post('/sessions', json=first).raise_for_status().json()
+    assert again['id'] == sid, 'The same request id must answer the same session'
+    assert {row['id'] for row in client.get('/sessions').raise_for_status().json()['sessions']} == {sid, other}
+    assert sorted(labelled('--format', '{{.Names}}')) == sorted([first_name, second_name]), 'The repeated request created a container'
+    return other
+
+
 def eventually(callback, seconds=90):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -62,6 +105,7 @@ def eventually(callback, seconds=90):
 
 
 def main():
+    argparse.ArgumentParser(description=__doc__.split('\n\n')[0]).parse_args()
     existing = command('docker', 'ps', '-aq', '--filter', 'label=com.docker.compose.project=clab-manager-capture',
                        capture_output=True, text=True).stdout.strip()
     if existing:
@@ -82,7 +126,8 @@ def main():
             data = httpx.get('http://127.0.0.1:5001/discover/mobyshark', timeout=15, trust_env=False).raise_for_status().json()
             return next(t for t in data['containers'] if t.get('type') == 'proc' and t.get('pid') == 1 and 'lo' in t.get('network-interfaces', []))
         target = eventually(discover)
-        result = client.post('/sessions', json={'target': target, 'interfaces': ['lo'], 'request_id': secrets.token_hex(32)}).raise_for_status().json()
+        first = {'target': target, 'interfaces': ['lo'], 'request_id': secrets.token_hex(32)}
+        result = client.post('/sessions', json=first).raise_for_status().json()
         sid = result['id']
         eventually(lambda: client.get('/sessions/' + sid + '/assets/core/rfb.js').raise_for_status().content)
         # The service relays a module only when it is the pinned image's own bytes.
@@ -141,9 +186,13 @@ def main():
         with tarfile.open(fileobj=io.BytesIO(download.content)) as archive:
             entry = next(e for e in archive if e.name.endswith('smoke.pcapng'))
             assert archive.extractfile(entry).read() == data
-        client.post('/sessions/' + sid + '/end', json={}).raise_for_status()
+        other = two_desktops(client, env['CAPTURE_SESSION_TOKEN'], target, first, sid)
+        for ended in (sid, other):
+            client.post('/sessions/' + ended + '/end', json={}).raise_for_status()
         assert not client.get('/sessions').json()['sessions']
-        print('PASS: real Wireshark/extcap stream, noVNC RFB, saved capture download and cleanup.')
+        assert not labelled('-a', '-q'), 'A capture container outlived its session'
+        print('PASS: real Wireshark/extcap stream, noVNC RFB, saved capture download, two concurrent desktops with idempotent '
+              'request ids, and cleanup.')
     finally:
         client.close()
         command(*compose, 'down', '--remove-orphans', env=env)

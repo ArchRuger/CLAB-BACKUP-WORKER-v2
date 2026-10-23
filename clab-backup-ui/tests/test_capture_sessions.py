@@ -161,6 +161,29 @@ class CaptureSessionTests(unittest.TestCase):
         for n in range(3):self.start({**self.data,'request_id':str(n)*64})
         self.assertEqual(self.client.post('/sessions',headers=self.headers,json={**self.data,'request_id':'9'*64}).status_code,429)
 
+    def test_two_request_ids_for_one_namespace_are_two_desktops_with_their_own_passwords(self):
+        # C07's "one Wireshark per interface" fan-out relies on this: the manager sends one start per entry
+        # with a derived request id; each is its own desktop, listing row and VNC password.
+        first=self.start();second=self.start({**self.data,'request_id':'1'*64})
+        self.assertNotEqual(first,second)
+        names={self.sessions.rows[sid]['container'] for sid in (first,second)}
+        self.assertEqual(len(names),2);self.assertEqual(set(self.docker.containers),names)
+        passwords={sid:[e for e in self.docker.containers[self.sessions.rows[sid]['container']]['Env'] if e.startswith('VNC_PASSWORD=')][0]
+                   for sid in (first,second)}
+        self.assertNotEqual(passwords[first],passwords[second])
+        self.assertEqual([r['id'] for r in self.client.get('/sessions',headers=self.headers).json()['sessions']],[first,second])
+        self.assertEqual(self.client.post('/sessions/'+first+'/end',headers=self.headers,json={}).status_code,200)
+        self.assertEqual([r['id'] for r in self.client.get('/sessions',headers=self.headers).json()['sessions']],[second])
+        self.assertEqual(len(self.docker.containers),1)
+
+    def test_the_manager_derives_the_same_session_id_as_the_service(self):
+        # The manager recognises its own set's sessions in a listing (a retry, a lost reply) by this id.
+        sid=self.start()
+        adapter=BrowserSessions('http://127.0.0.1:5801','a'*64)
+        self.assertEqual(adapter.session_id(self.headers['X-Capture-Owner'],self.data['request_id']),sid)
+        self.assertNotEqual(adapter.session_id('d'*64,self.data['request_id']),sid)
+        self.assertNotEqual(BrowserSessions('http://127.0.0.1:5801','e'*64).session_id(self.headers['X-Capture-Owner'],self.data['request_id']),sid)
+
     def test_failed_start_removes_partial_container_and_hides_daemon_output(self):
         self.docker.fail='/start'
         response=self.client.post('/sessions',headers=self.headers,json=self.data)
