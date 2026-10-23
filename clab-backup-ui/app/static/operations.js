@@ -297,17 +297,23 @@ function opInspectionFilter(rows,text){
  const needle=String(text||'').trim().toLowerCase();if(!needle)return rows;
  return rows.filter(row=>OP_INSPECT_COLUMNS.map(([key])=>opInspectionValue(row,key)).join(' ').toLowerCase().includes(needle));
 }
-function opInspectionCaption(shown,total){const word=(total===1?'device':'devices');return (shown===total?String(total):shown+' of '+total)+' running '+word;}
+function opInspectionIsRunning(row){return /^running\b/i.test(String(row&&row.state||''));}
+// Counts only the running rows: a stopped or exited container is listed but is not a running device.
+function opInspectionCaption(shown,all){
+ const n=shown.filter(opInspectionIsRunning).length,m=all.filter(opInspectionIsRunning).length;
+ return (n===m?String(m):n+' of '+m)+' running '+(m===1?'device':'devices');
+}
 function opInspectionHead(view){
  return '<tr>'+OP_INSPECT_COLUMNS.map(([key,label])=>{const sorted=view.key===key&&view.dir;return `<th scope="col" aria-sort="${sorted==='asc'?'ascending':sorted==='desc'?'descending':'none'}"><button type="button" class="op-sort" data-op-sort="${key}">${label}</button></th>`;}).join('')+'</tr>';
 }
 function opInspectionBody(rows){
+ if(!rows.length)return `<tr><td colspan="${OP_INSPECT_COLUMNS.length}" class="op-inspection-empty">No device matches.</td></tr>`;
  return rows.map(r=>`<tr><td>${esc(r.topology)||'—'}</td><td>${esc(r.lab)}</td><td>${esc(r.node)}</td><td>${esc(r.kind)}<small>${esc(r.image)}</small></td><td>${esc(r.state)}</td><td>${esc(r.ipv4)}<small>${esc(r.ipv6)}</small></td><td class="mono">${esc(r.id)||'—'}</td><td>${esc(r.owner)||'—'}</td></tr>`).join('');
 }
 // view: {key, dir, filter} kept by the dialog that shows the table, so a repeated render keeps the person's sort and filter.
 function opInspectionTable(rows,view={}){
  const shown=opInspectionSort(opInspectionFilter(rows,view.filter),view.key,view.dir);
- return `<div class="op-inspection-tools"><label for="op-inspect-filter">Filter devices</label><input type="search" id="op-inspect-filter" value="${esc(view.filter||'')}" autocomplete="off"></div><div class="op-inspection"><table><caption>${opInspectionCaption(shown.length,rows.length)}</caption><thead>${opInspectionHead(view)}</thead><tbody>${opInspectionBody(shown)}</tbody></table></div>`;
+ return `<div class="op-inspection-tools"><label for="op-inspect-filter">Filter devices</label><input type="search" id="op-inspect-filter" value="${esc(view.filter||'')}" autocomplete="off"></div><div class="op-inspection"><table><caption>${opInspectionCaption(shown,rows)}</caption><thead>${opInspectionHead(view)}</thead><tbody>${opInspectionBody(shown)}</tbody></table></div>`;
 }
 // Wire the filter box and the header buttons of a rendered table; only the table's own parts are redrawn, so typing keeps focus.
 function opInspectionBind(root,rows,view){
@@ -315,7 +321,7 @@ function opInspectionBind(root,rows,view){
  if(!filter||!table)return;
  const redraw=refocus=>{
   const shown=opInspectionSort(opInspectionFilter(rows,view.filter),view.key,view.dir);
-  table.innerHTML=`<caption>${opInspectionCaption(shown.length,rows.length)}</caption><thead>${opInspectionHead(view)}</thead><tbody>${opInspectionBody(shown)}</tbody>`;
+  table.innerHTML=`<caption>${opInspectionCaption(shown,rows)}</caption><thead>${opInspectionHead(view)}</thead><tbody>${opInspectionBody(shown)}</tbody>`;
   if(refocus){const back=table.querySelector('[data-op-sort="'+refocus+'"]');if(back&&typeof back.focus==='function')back.focus();}
  };
  filter.addEventListener('input',()=>{view.filter=filter.value;redraw('');});

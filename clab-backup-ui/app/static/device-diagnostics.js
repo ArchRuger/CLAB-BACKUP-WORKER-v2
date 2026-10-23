@@ -246,7 +246,8 @@ function diagExport(){
  const text=diagShownLines().map(diagLineFull).join('\n')+'\n';
  const lab=typeof current==='function'?current():null;
  const link=document.createElement('a'),url=URL.createObjectURL(new Blob([text],{type:'text/plain'}));
- link.href=url;link.download=diagExportName(lab&&lab.name,typeof detailName==='string'?detailName:'',new Date());
+ link.href=url;const node=lab&&typeof detailName==='string'?(lab.nodes||[]).find(x=>x.name===detailName):null,device=node?(node.short_name||node.name):typeof detailName==='string'?detailName:'';
+ link.download=diagExportName(lab&&lab.name,device,new Date());
  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
  return link.download;
 }
@@ -268,7 +269,7 @@ async function diagRun(name,replace){
   if(result.ok){
    if(name==='interfaces')diagApplyInterfaces(result.data,!!replace);else diagApplyLogsAnswer(result.data,!!replace);
    sec.shown=true;sec.message='';
-   if(sec.kind!=='ok')diagSay(name,'ok',diagIds[name].loaded);
+   if(sec.kind!=='ok'&&!(name==='logs'&&sec.kind==='follow'&&diagLog.follow))diagSay(name,'ok',diagIds[name].loaded);
   }else sec.message=result.message;
   const polling=diagWants(name),next=diagPollNext(sec.plan,result.ok?{ok:true}:{ok:false,status:result.status},Date.now());
   sec.plan=next.plan;

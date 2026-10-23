@@ -22,7 +22,7 @@ function harness({caps={diagnostics:true},visible=true}={}){
  const els=new Map(),requests=[],timers=[],handlers=[],clock={t:1000000};
  const get=id=>{if(!els.has(id))els.set(id,fakeElement(id));return els.get(id);};
  const downloads=[];
- const state={labs:[{id:'L1',name:'lab one',nodes:[{name:'r1'},{name:'r2'}]},{id:'L2',name:'lab two',nodes:[{name:'r1'}]}],operations:[]};
+ const state={labs:[{id:'L1',name:'lab one',nodes:[{name:'r1',short_name:'router-1'},{name:'r2'}]},{id:'L2',name:'lab two',nodes:[{name:'r1'}]}],operations:[]};
  const context=vm.createContext({$:get,esc,state,activeId:'L1',detailName:'r1',opCaps:caps,URLSearchParams,Blob,setTimeout:(fn,ms)=>{timers.push({fn,ms,live:true});return timers.length;},clearTimeout:id=>{if(timers[id-1])timers[id-1].live=false;},
   Date:class extends Date{static now(){return clock.t;}},
   current:()=>state.labs.find(l=>l.id===context.activeId),
@@ -351,7 +351,10 @@ test('Follow: aria-pressed, tail=2000 on every request, since = the last stamped
  assert.equal(h.get('diag-log-follow').getAttribute('aria-pressed'),'true');
  const second=h.requests[1];assert.match(second,/tail=2000/);assert.match(second,new RegExp('since='+encodeURIComponent(stamp(2))),'the cursor skips the stampless tail');
  assert.equal((h.get('diag-log-view').innerHTML.match(/two/g)||[]).length,1,'the repeated line is dropped');assert.match(h.get('diag-log-view').innerHTML,/three/);
+ assert.equal(h.get('diag-log-status').textContent,'Following the log.','the first answer under Follow does not rewrite the status');
  assert.equal(h.live().length,1);assert.equal(h.live()[0].ms,5000);
+ h.live()[0].fn();await tick();await tick();
+ assert.equal(h.get('diag-log-status').textContent,'Following the log.','a routine poll never rewrites the status');
  h.get('diag-log-follow').fire('click');
  assert.equal(h.get('diag-log-follow').getAttribute('aria-pressed'),'false');assert.equal(h.get('diag-log-status').textContent,'Follow stopped.');
 });
@@ -398,7 +401,7 @@ test('Export saves the shown lines with their full stamps under the dated file n
  h.context.renderDeviceDiagnostics({name:'r1'});h.open('logs');await tick();await tick();
  const before=h.requests.length;
  const name=h.context.diagExport();
- assert.match(name,/^lab-one-r1-logs-\d{8}T\d{6}Z\.txt$/);assert.deepEqual(h.downloads,[name]);assert.equal(h.requests.length,before);
+ assert.match(name,/^lab-one-router-1-logs-\d{8}T\d{6}Z\.txt$/);assert.deepEqual(h.downloads,[name]);assert.equal(h.requests.length,before);
 });
 
 test('Capture opens the capture dialog on the container interface name of this device',async()=>{

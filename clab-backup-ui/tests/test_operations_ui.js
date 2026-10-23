@@ -667,7 +667,7 @@ test('the inspect table keeps its six columns in order with the Lab column, then
  assert.match(table,/<td class="mono">—<\/td><td>—<\/td>/,'an empty id or owner reads as a dash');
  assert.equal((table.match(/aria-sort="none"/g)||[]).length,8,'every header carries aria-sort and holds a button');
  assert.match(table,/<label for="op-inspect-filter">Filter devices<\/label><input type="search" id="op-inspect-filter"/,'the filter box has a visible label');
- assert.match(table,/<caption>3 running devices<\/caption>/);
+ assert.match(table,/<caption>2 running devices<\/caption>/,'the exited row is listed but not counted');
 });
 test('inspect sort is stable, numeric-aware and reversible; aria-sort follows the state',()=>{
  const rows=context.opInspectionRows(inspectRaw),names=list=>Array.from(list,r=>r.node);
@@ -688,9 +688,11 @@ test('inspect filter is a case-insensitive substring over every column, the Lab 
  assert.deepEqual(names(context.opInspectionFilter(rows,'172.20.20.8')),['clab-alpha-r9']);
  assert.equal(context.opInspectionFilter(rows,'  ').length,3);assert.equal(context.opInspectionFilter(rows,'a*').length,0,'no wildcard grammar');
  const table=context.opInspectionTable(rows,{filter:'alpha'});
- assert.match(table,/<caption>2 of 3 running devices<\/caption>/);assert.match(table,/value="alpha"/);assert.doesNotMatch(table,/clab-beta-r2/);
+ assert.match(table,/<caption>1 of 2 running devices<\/caption>/);assert.match(table,/value="alpha"/);assert.doesNotMatch(table,/clab-beta-r2/);
  assert.match(context.opInspectionTable(rows,{filter:'"><b>'}),/value="&quot;&gt;&lt;b&gt;"/,'the filter text is escaped');
  assert.match(context.opInspectionTable([rows[0]]),/<caption>1 running device<\/caption>/);
+ const none=context.opInspectionTable(rows,{filter:'zzz'});
+ assert.match(none,/<caption>0 of 2 running devices<\/caption>/);assert.match(none,/<tbody><tr><td colspan="8" class="op-inspection-empty">No device matches\.<\/td><\/tr><\/tbody>/,'one row spanning the columns');
 });
 test('the inspect table redraws only its own parts when the filter or a header changes',()=>{
  const rows=context.opInspectionRows(inspectRaw),view={key:'',dir:'',filter:''},focused=[];
@@ -698,7 +700,7 @@ test('the inspect table redraws only its own parts when the filter or a header c
  const filter={value:'',addEventListener(type,fn){listeners['filter:'+type]=fn;}};
  const root={querySelector:sel=>sel==='table'?table:filter};
  context.opInspectionBind(root,rows,view);
- filter.value='beta';listeners['filter:input']();assert.equal(view.filter,'beta');assert.match(table.innerHTML,/<caption>1 of 3 running devices<\/caption>/);assert.deepEqual(focused,[],'typing never moves focus');
+ filter.value='beta';listeners['filter:input']();assert.equal(view.filter,'beta');assert.match(table.innerHTML,/<caption>1 of 2 running devices<\/caption>/);assert.deepEqual(focused,[],'typing never moves focus');
  const click=key=>listeners['table:click']({target:{closest:()=>({dataset:{opSort:key}})}});
  click('node');assert.deepEqual([view.key,view.dir],['node','asc']);click('node');assert.equal(view.dir,'desc');click('node');assert.deepEqual([view.key,view.dir],['','']);
  click('lab');assert.deepEqual([view.key,view.dir],['lab','asc']);assert.match(focused.at(-1),/data-op-sort="lab"/,'focus returns to the header button that was used');

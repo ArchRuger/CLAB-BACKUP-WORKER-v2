@@ -2639,6 +2639,8 @@ th[aria-sort=descending] > .op-sort::after { content: " ▼"; font-size: 10px; }
 .op-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .op-chip[aria-pressed=true] { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent); }
 #op-images .op-inspection td.mono { font-size: 12px; }
+.op-inspection td.mono { white-space: nowrap; overflow-wrap: normal; }
+.op-inspection td.op-inspection-empty { color: var(--muted); text-align: center; }
 @media (max-width: 480px) {
   .diag-table th, .diag-table td { padding: 6px; }
   .diag-table td:nth-child(n+2) { white-space: normal; overflow-wrap: anywhere; }
