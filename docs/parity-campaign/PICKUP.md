@@ -90,3 +90,14 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   1.31.2, `test_device_diagnostics_ui.js` joins the CI node line, the deferred Try again mapping for start, apply and
   restart lands with it), `/clab-review-changes`, a live pass on the parity lab, release 1.31.3; then C04 and C05
   builds from their answered designs.
+- 2026-10-23 05:50 UTC: after 1.31.2 (pull request 72, stacked on 71): the C03 UI slice is integrated on the branch
+  (`9d35cc1` cherry-picked from the worktree, assets at 1.31.2, `test_device_diagnostics_ui.js` in CI, the deferred Try
+  again mapping applied, `f2fd2ae`); the live manager was rebuilt with it (image only; helper unchanged). Running: its
+  `/clab-slice-verify` (from the worktree) and a read-only live pass on the parity lab. `C04-DESIGN.md` answered its
+  review (22 rows) and S1a is committed (`fd8da7f`: `console_gate`, the telnet codec, one console per device,
+  `test_node_console.py` in CI); S1b (discovery fields, the public row, the Start fresh guard) is in build.
+  `C05-DESIGN.md` answered its review (30 rows, `cc8d5ca`); S1 (the helper's lifecycle modes) is in build by
+  `clab-fable-specialist`. Next: C03 fixes from the verification and `/clab-review-changes` on `d303f38..`, release
+  1.31.3 with the C03 UI; then C04 S2 UI and S3 docs, `/clab-review-changes` with `risk-reviewer` and
+  `clab-network-specialist` on the console diff, the live console pass on `vrt`; C05 S2 manager after C04 S1b frees
+  `discovery.py` and `main.py`.
