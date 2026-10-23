@@ -72,3 +72,9 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   owns `browse` and `images`, whose old handlers were removed) committed as checkpoints; `fixture_manager.py` answers the
   new modes. The C03 UI slice (`device-diagnostics.js` and hooks) starts when the C02 verification finishes, because the
   fixture serves the tree. C02 live stop pass done (`evidence/c02-live-stop.md`).
+- 2026-10-23 03:50 UTC: C02 verified (`/clab-slice-verify`: all nine acceptance checks held in Chromium and Firefox over
+  plain http; five breaks, one medium) and code-reviewed (22 confirmed, none must-fix); every finding fixed and
+  committed (`fcde544` Python, `dd3a3b5` UI; answers in C02-DESIGN §8). Running: a second `/clab-review-changes`
+  (base `d00ccf1`, covering the fixes and the C03 helper and manager checkpoints), a QA re-check of the fixes, the
+  full Python suite. Next: release 1.31.2 (C01, C02, the C03 helper and API; records drafted in the session), rebuild
+  with `sudo bash deploy/start-manager.sh` because the helper changed, then the C03 UI slice.
