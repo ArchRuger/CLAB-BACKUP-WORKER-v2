@@ -48,7 +48,7 @@ function mapHistoryStep(history,delta){const index=history.index+delta;return in
 // editNode command is a topology command, so the adapter hands the look to applyLook() below and the page
 // writes it into the document. Values are the editor's (its NODE_TYPE_SET, NODE_LABEL_POSITION_OPTIONS with the
 // four corners, NODE_DIRECTION_OPTIONS).
-const MAP_ICONS=[['pe','Router'],['dcgw','Gateway router'],['leaf','Leaf switch'],['spine','Spine switch'],['super-spine','Super-spine switch'],['switch','Switch'],['bridge','Bridge'],['server','Server'],['client','Client'],['controller','Controller'],['cloud','Cloud'],['pon','PON'],['rgw','Residential gateway'],['ue','User equipment']];
+const MAP_ICONS=[['pe','Router'],['dcgw','Gateway router'],['leaf','Leaf switch'],['spine','Spine switch'],['super-spine','Super-spine switch'],['switch','Switch'],['host','Host'],['bridge','Bridge'],['server','Server'],['client','Client'],['controller','Controller'],['container','Container'],['cloud','Cloud'],['pon','PON'],['rgw','Residential gateway'],['ue','User equipment']];
 const MAP_LABEL_POSITIONS=[['bottom','Below the icon'],['top','Above the icon'],['left','Left of the icon'],['right','Right of the icon'],['center','Centered over the icon'],['top-left','Top left corner'],['top-right','Top right corner'],['bottom-left','Bottom left corner'],['bottom-right','Bottom right corner']];
 const MAP_LABEL_DIRECTIONS=[['right','Horizontal'],['down','Rotated 90°'],['left','Rotated 180°'],['up','Rotated 270°']];
 const MAP_LOOK_KEYS=['icon','iconColor','iconCornerRadius','labelPosition','direction','labelBackgroundColor'];

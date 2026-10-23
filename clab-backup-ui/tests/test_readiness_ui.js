@@ -466,6 +466,31 @@ test('showTab refreshes the capture sessions for the Tools view only, also throu
  assert.equal(refreshed,1,'ArrowRight from Devices shows Tools and refreshes once');
 });
 
+test('C09: the Devices search uses textMatch: case, address and platform still match, a trailing space no longer hides every device, the empty sentences keep their words',()=>{
+ const h=appHarness();
+ const nodes=[{name:'R1',address:'172.20.20.2',port:22,platform:'arista_ceos',readiness:'Ready',ssh_ready:true,enabled:true},{name:'sw2',port:22,platform:'juniper_vjunosrouter',readiness:'Ready',ssh_ready:true,enabled:true}];
+ vm.runInContext(`activeId='a';devicesTechnical=true;state={labs:[{id:'a',nodes:${JSON.stringify(nodes)},profiles:[],defaults:{}}],jobs:[],platforms:{juniper_vjunosrouter:{label:'Juniper vJunos-router'},arista_ceos:{label:'Arista cEOS'}}};`,h.context);
+ const table=term=>{h.document.getElementById('search').value=term;vm.runInContext('devicesTechnical=true;renderNodes();',h.context);const t=h.document.getElementById('nodes').innerHTML;return ['R1','sw2'].filter(n=>t.includes('data-enable="'+n+'"'));};
+ const list=term=>{h.document.getElementById('search').value=term;vm.runInContext('devicesTechnical=false;renderDeviceList();',h.context);return h.document.getElementById('device-list').innerHTML;};
+ assert.match(list('r1'),/R1/);assert.doesNotMatch(list('r1'),/sw2/,'R1 is found by r1');
+ assert.match(list('172.20'),/R1/,'an address matches');assert.doesNotMatch(list('172.20'),/sw2/);
+ assert.match(list('r1 '),/R1/,'a trailing space matches (the trim)');assert.match(list('   '),/sw2/);
+ assert.match(list('undefined'),/No devices match\. Try another name, address or platform\./,'a device with no address is not found by the word undefined');
+ assert.match(list('zzz'),/No devices match\. Try another name, address or platform\./);
+ assert.deepEqual(table('r1 '),['R1'],'the technical table matches by name with a trailing space');assert.deepEqual(table('JUNIPER'),['sw2'],'by platform label, any case');assert.deepEqual(table('172.20'),['R1']);assert.deepEqual(table(''),['R1','sw2']);assert.deepEqual(table('undefined'),[]);
+ vm.runInContext(`state={labs:[{id:'a',nodes:[],profiles:[],defaults:{}}],jobs:[],platforms:{}};`,h.context);
+ assert.match(list(''),/<li class="table-empty">|No devices|This lab has no devices/);
+});
+
+test('C09 fixes: the Student quick start menu item shows only when the manager serves the guide',()=>{
+ const h=appHarness();
+ const paint=flag=>{vm.runInContext(`state={labs:[],jobs:[],platforms:{},loaded:true${flag?',student_guide:true':''}};render();`,h.context);return h.document.getElementById('help-student-guide').hidden;};
+ h.document.getElementById('help-student-guide').hidden=true;
+ assert.equal(paint(false),true,'hidden without the flag');
+ assert.equal(paint(true),false,'shown with it');
+ assert.equal(paint(false),true,'and hidden again when the flag goes');
+});
+
 test('C05: Stop device and Start device buttons and the Save startup configuration button take their disabled state and title from the shared checks',async()=>{
  const h=appHarness();
  const n={name:'r1',short_name:'R1',ssh_ready:true,login_configured:true,readiness:'Ready',nos_login:{status:'ready'},discovered:true,runtime_state:'running'};

@@ -4,6 +4,43 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.31.6
+
+**Parity campaign, chunks C06 (Topology tab parity), C08 (builder YAML checks) and C09 (Help, shortcuts, Home filter, browser preferences)** ([LAB-OPERATIONS](LAB-OPERATIONS.md), [MAP-PARITY](ui-review-001/MAP-PARITY.md), [LAB-BUILDER](LAB-BUILDER.md), [TOUR](TOUR.md)).
+
+- **Link state on the map.** While a linked lab is running and the Topology tab is shown, the map asks the VM every
+  10 s (one lab-wide `containerlab inspect interfaces` through the existing `interfaces` helper mode, no Docker, no
+  per-container call) and draws a link whose end is not `up`, missing or on a stopped device **red and dotted**, with
+  the words in the chip under the tools (`Links: 4 connected · 1 down`), the wire's title and the hover line. Up
+  links keep their colour. The poll pauses while the device drawer is open or the page is hidden, backs off on
+  errors with **Retry** and **Resume**, and says in a sentence when the VM's helper or containerlab is too old or
+  the lab is not linked (never an error). Labs with VM-based devices (vJunos, XRv9k) say `connected` instead of
+  `up`, because such a device reports its container side only.
+- **Find a device**: a search field over the map (name, address or platform, the Devices search's haystack); the
+  other devices and their wires dim, the count is announced, Enter fits the matches, Escape clears.
+- **Link hover** lights the wire and its two devices and shows `a:ifA — b:ifB` with the state and C05's impairment
+  clause; a text, line and group styles the editor saves (arrows, rounded backgrounds, group level, node style, box
+  spacing, elbow links, the `host` and `container` glyphs) are now drawn.
+- **Download picture…** saves the map as SVG or PNG in the browser (whole map or current view, state badges on
+  request); **Export to draw.io…** offers the map layout or rows or columns and a print theme
+  (`GET /api/labs/{id}/drawio?layout=&theme=`); **Arrange devices…** (Rows, Columns, Ring) is a saved map change made
+  on the server (`POST /api/labs/{id}/arrange`) with one exact **Undo arrange** kept in memory until the map changes
+  again. All three live under the map's **More ▾** menu.
+- **Builder YAML checks (C08).** The lab builder's YAML panel checks the text against the vendored containerlab 0.79.0
+  JSON schema in the browser: structure, kinds, images, link endpoints (a `bridge` is a node, not a keyword), stages
+  with `wait-for` and `exec`; findings are listed with their line, the gutter marks them, a status line counts them,
+  and a bar note points at the first problem. The check is advisory: it never blocks Apply, publish or revise (the
+  VM's own plan stays the authority), and a limit of the check reads "Not checked: …", never as an error. The schema
+  ships with its licence and source and is pinned by hash; the embedded editor's adapter gains the line mapping.
+- **Help, shortcuts, Home filter, browser preferences (C09).** The menu gains a Help group with the documentation
+  links and a **Keyboard shortcuts** dialog whose rows are pinned to the real key handlers; Home gains a filter over
+  name, course and state; **Browser preferences** lists what this browser remembers (closed warnings, the Home tab,
+  the terminal text size, folder choices, …) with a Reset that says exactly what changes. Dark mode is not introduced
+  (the UI contract allows dark surfaces for the toast and the terminal only).
+- The helper's `interfaces` mode gains the lab-wide `all` option (fixed argv, trusted roots checked per row, four keys
+  per interface, capped). No other helper change; nothing new is persisted except the arranged positions a student
+  asked for.
+
 ## Changes in 1.31.5
 
 **Parity campaign, chunk C07: capture parity** ([CAPTURE](CAPTURE.md)).

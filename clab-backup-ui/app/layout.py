@@ -1,7 +1,8 @@
 """Validated visual annotations; never alters deployed nodes or topology wiring."""
 import hashlib
 import json
-from .topology import color, number
+import math
+from .topology import color, number, grid_position
 
 
 def revision(drawing):
@@ -43,7 +44,8 @@ def decorations(items):
     result = []
     ranges = {'width': (1,100000,200), 'height': (1,100000,100), 'fontSize': (6,160,14),
               'fillOpacity': (0,1,.22), 'borderWidth': (0,20,1), 'cornerRadius': (0,1000,8),
-              'paragraphMargin': (0,160,0), 'rotation': (-360,360,0), 'zIndex': (-100000,100000,0)}
+              'paragraphMargin': (0,160,0), 'rotation': (-360,360,0), 'zIndex': (-100000,100000,0),
+              'lineArrowSize': (4,40,10), 'level': (1,10,1)}
     choices = {'borderStyle': ('solid','dashed','dotted','double'), 'fontWeight': ('normal','bold'),
                'fontStyle': ('normal','italic'), 'textDecoration': ('none','underline'),
                'textAlign': ('left','center','right'), 'fontFamily': ('Arial','Verdana','Georgia','monospace','sans-serif','serif'),
@@ -70,6 +72,10 @@ def decorations(items):
             value=item.get(key,default)
             if color(value,None) is None: raise ValueError('Use a supported annotation color.')
             row[key]=value
+        # Booleans are exact: only `true` turns an arrow on; only `false` turns the rounded text background off.
+        row['lineStartArrow']=item.get('lineStartArrow') is True
+        row['lineEndArrow']=item.get('lineEndArrow') is True
+        row['roundedBackground']=item.get('roundedBackground') is not False
         row['x2']=number(item.get('x2'),min(100000,row['x']+row['width']))
         row['y2']=number(item.get('y2'),min(100000,row['y']+row['height']))
         result.append(row)
@@ -85,6 +91,11 @@ def annotations(drawing):
         out['nodeAnnotations'].append(item)
     for i,d in enumerate(drawing.get('decorations',[])):
         item={k:v for k,v in d.items() if k not in ('type','x','y','x2','y2')}
+        # Each style key belongs to one kind; the others never write it into the document.
+        for key in ('lineStartArrow','lineEndArrow','lineArrowSize'):
+            if d['type']!='line': item.pop(key,None)
+        if d['type']!='text': item.pop('roundedBackground',None)
+        if d['type']!='group': item.pop('level',None)
         item.update(id=f'annotation-{i}',position={'x':d['x'],'y':d['y']},
                     endPosition={'x':d.get('x2',d['x']+d['width']),'y':d.get('y2',d['y']+d['height'])})
         # The upstream format treats explicit opacity as replacing color alpha.
@@ -107,5 +118,80 @@ def annotations(drawing):
                 endpointLabelOffset=pair[0].get('label_offset',20)))
     s=drawing.get('settings',{})
     out['viewerSettings']=dict(gridBgColor=s.get('background','#fdf6e3'),gridColor=s.get('gridColor','#d2cbb5'),
-        linkLabelMode=s.get('labelMode','show-all'),endpointLabelOffset=s.get('endpointOffset',20))
+        linkLabelMode=s.get('labelMode','show-all'),endpointLabelOffset=s.get('endpointOffset',20),
+        nodeStyle=s.get('nodeStyle','icon'),boxSpacing=s.get('boxSpacing','default'),linkStyle=s.get('linkStyle','straight'))
     return out
+
+
+ARRANGE_MODES = ('rows', 'columns', 'ring')
+GAP_X, GAP_Y, LIMIT = 160, 120, 100000
+
+
+def _bounded(points):
+    """Scale a result down in whole numbers when a very large map would leave the coordinate range."""
+    reach = max((max(abs(x), abs(y)) for x, y in points.values()), default=0)
+    if reach <= LIMIT: return points
+    factor = LIMIT / reach
+    return {k: [int(x * factor), int(y * factor)] for k, (x, y) in points.items()}
+
+
+def arrange(drawing, mode):
+    """Positions for every node of a drawing: {node_id: [x, y]} of integers. Pure and deterministic.
+
+    rows: breadth-first layers of each connected component, one layer per row; columns: the same turned;
+    ring: every node on a circle in document order around the centre of the current positions.
+    Nothing else of the drawing is read or changed."""
+    if mode not in ARRANGE_MODES: raise ValueError('Choose rows, columns or a ring.')
+    nodes = drawing.get('nodes') or []
+    ids = [n['id'] for n in nodes]
+    if mode == 'ring':
+        count = len(ids)
+        if not count: return {}
+        radius = max(120, GAP_X * count / (2 * math.pi))
+        cx = (min(n['x'] for n in nodes) + max(n['x'] for n in nodes)) / 2
+        cy = (min(n['y'] for n in nodes) + max(n['y'] for n in nodes)) / 2
+        return _bounded({n['id']: [round(cx + radius * math.cos(2 * math.pi * i / count - math.pi / 2)),
+                                   round(cy + radius * math.sin(2 * math.pi * i / count - math.pi / 2))]
+                         for i, n in enumerate(nodes)})
+    known = set(ids)
+    neighbours = {i: set() for i in ids}
+    degree = dict.fromkeys(ids, 0)
+    for pair in drawing.get('links') or []:
+        if len(pair) != 2: continue
+        a, b = pair[0].get('node'), pair[1].get('node')
+        if a not in known or b not in known or a == b: continue
+        degree[a] += 1; degree[b] += 1
+        neighbours[a].add(b); neighbours[b].add(a)
+    seen = set(); components = []
+    for index, start in enumerate(ids):
+        if start in seen or not neighbours[start]: continue
+        members = [start]; seen.add(start)
+        for current in members:
+            for other in sorted(neighbours[current]):
+                if other not in seen: seen.add(other); members.append(other)
+        components.append((-len(members), index, members))
+    components.sort(key=lambda c: c[:2])
+    placed = {}; offset = 0; depth = 0
+    for _, _, members in components:
+        root = min(members, key=lambda i: (-degree[i], i))
+        layers = [[root]]; reached = {root}
+        while True:
+            following = []
+            for current in layers[-1]:
+                for other in sorted(neighbours[current]):
+                    if other not in reached: reached.add(other); following.append(other)
+            if not following: break
+            layers.append(following)
+        width = max(len(layer) for layer in layers)
+        for row, layer in enumerate(layers):
+            shift = (width - len(layer)) * GAP_X // 2
+            for column, ident in enumerate(layer):
+                placed[ident] = [offset + shift + column * GAP_X, row * GAP_Y]
+        offset += (width + 1) * GAP_X
+        depth = max(depth, len(layers))
+    # Nodes with no link wrap eight to a row, like the default grid, below everything else.
+    for index, ident in enumerate(i for i in ids if i not in seen):
+        x, y = grid_position(index)
+        placed[ident] = [x, y + depth * GAP_Y]
+    if mode == 'columns': placed = {k: [y, x] for k, (x, y) in placed.items()}
+    return _bounded({i: placed[i] for i in ids})

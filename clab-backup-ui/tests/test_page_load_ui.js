@@ -209,6 +209,23 @@ test('no page other than index.html loads device-diagnostics.js, and the standal
  assert.doesNotMatch(html,/style="/,'/ keeps no inline styles');
 });
 
+test('lab-builder.html loads its plain scripts into one context: the check script first, no name declared twice, the panel and the page find each other',()=>{
+ const builderHtml=fs.readFileSync(path.join(dir,'lab-builder.html'),'utf8');
+ const tags=[...builderHtml.matchAll(/<script[^>]*\ssrc="\/static\/([^"?]+\.js)\?v=([^"]*)"/g)].map(m=>[m[1],m[2]]);
+ const names=tags.map(t=>t[0]);
+ assert.ok(names.includes('lab-builder-check.js'),'the check script is on the page');
+ assert.ok(names.indexOf('lab-builder-check.js')<names.indexOf('lab-builder-yaml.js'),'before the panel');
+ assert.ok(tags.every(t=>t[1]===tags[0][1]),'one release marker on every script of the page');
+ assert.doesNotMatch(fs.readFileSync(path.join(dir,'map-editor.html'),'utf8'),/lab-builder-check\.js/,'the map editor does not load the check');
+ const page=loadPage();
+ // The editor bundle is a module (not a classic script); the builder's plain scripts share one fresh context, with the fake globals loadPage() builds.
+ const failures=[];
+ const own=vm.createContext({...Object.fromEntries(Object.getOwnPropertyNames(page.context).filter(k=>/^(document|console|URL|URLSearchParams|Date|Math|JSON|Promise|Set|Map|Error|TypeError|location|history|localStorage|sessionStorage|navigator|setTimeout|clearTimeout|fetch|crypto|matchMedia)$/.test(k)).map(k=>[k,page.context[k]])),window:{}});
+ own.window.localStorage=page.context.localStorage;own.globalThis=own;
+ for(const name of names.filter(n=>!n.startsWith('lab-builder/'))){try{vm.runInContext(fs.readFileSync(path.join(dir,name),'utf8'),own,{filename:name});}catch(error){failures.push(name+': '+error.message);}}
+ assert.deepEqual(failures,[]);
+ for(const name of ['builderCheck','builderCheckSummary','builderKeyHelp','builderSchemaChoice','builderYamlPanelInit','builderYamlContext','builderYamlSchema','builderYamlLocate','builderYamlRun','builderCheckStatus','builderNoteRun'])assert.equal(typeof get(own,name),'function',name);
+});
 test('C07: the capture dialog, the Tools card and the wire menu have the ids capture.js and shell.js use; the replaced ids are gone from page and scripts; the page keeps no inline style',()=>{
  for(const id of ['capture-ends','capture-ends-list','capture-openas','capture-openas-one','capture-openas-each','capture-all','capture-none','capture-presets','capture-launches','capture-end-all','capture-sessions-caption','tools-capture-end-all','link-context-menu'])assert.match(html,new RegExp('id="'+id+'"'),id);
  assert.match(html,/id="link-context-menu" class="node-context-menu" role="menu" aria-label="Link actions" tabindex="-1" hidden/);
@@ -222,7 +239,25 @@ test('C07: the capture dialog, the Tools card and the wire menu have the ids cap
  const page=loadPage();assert.deepEqual(page.failures,[]);
  for(const name of ['captureSummary','openLinkMenu','closeLinkMenu','endAllCaptureSessions','refreshCaptureSessions','captureMemory','rememberCapture','captureOpenAs','rememberOpenAs'])assert.equal(typeof get(page.context,name),'function',name);
 });
+test('C09: preferences.js loads once, after app.js, and the Browser preferences and shortcuts functions exist once the page is loaded',()=>{
+ assert.equal(scripts.filter(n=>n==='preferences.js').length,1);assert.equal(scripts.indexOf('preferences.js'),scripts.indexOf('app.js')+1);
+ const page=loadPage();assert.deepEqual(page.failures,[]);
+ for(const name of ['prefsMarkup','prefsRender','prefsOpen','shortcutsOpen','preferenceInventory','resetPreferences','mediaMatches','terminalFontPreference','setTerminalFontPreference','shellStorageKeys'])assert.equal(typeof get(page.context,name),'function',name);
+ for(const name of ['PREFERENCE_FAMILIES','EDITOR_VIEW_KEYS','SHORTCUT_EXCLUSIONS'])assert.ok(Array.isArray(get(page.context,name)),name);
+ assert.equal(typeof page.element('manager-shortcuts').onclick,'function','the Help item opens the dialog');assert.equal(typeof page.element('manager-preferences').onclick,'function');
+ assert.equal(get(page.context,'preferenceInventory')().blocked,true,'the fake storage of this harness cannot be listed: blocked, not a throw');
+});
 
+
+test('C06: map-tools.js loads with the page after topology.js and device-diagnostics.js, with ?v=, and the Tools card names where the exports are',()=>{
+ assert.match(html,/<script src="\/static\/map-tools\.js\?v=\d+\.\d+\.\d+" defer><\/script>/);
+ assert.ok(listed.indexOf('map-tools.js')>listed.indexOf('topology.js')&&listed.indexOf('map-tools.js')>listed.indexOf('device-diagnostics.js'));
+ const page=loadPage();assert.deepEqual(page.failures,[]);
+ for(const name of ['mapLinkSchedule','mapToolsRendered','mapLinkVisibility','mapLinkDrawerClosed','mapWireText','mapFindApply','mapPictureSvg'])assert.equal(typeof get(page.context,name),'function',name);
+ assert.match(html,/<p class="caption">Edit map also downloads the map file\. Download picture… and Export to draw\.io… are in the Topology tab's More ▾ menu\.<\/p>/);
+ assert.doesNotMatch(html,/export it to draw\.io from the editor/);
+ for(const file of fs.readdirSync(dir).filter(n=>n.endsWith('.html')&&n!=='index.html'))assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/map-tools\.js/,file);
+});
 test('device-impairments.js (C05) is listed once after operations.js and device-diagnostics.js, defines the two hooks app.js and shell.js call, and no standalone page loads it',()=>{
  assert.equal(listed.filter(n=>n==='device-impairments.js').length,1);
  for(const before of ['operations.js','device-diagnostics.js'])assert.ok(listed.indexOf('device-impairments.js')>listed.indexOf(before),'after '+before);

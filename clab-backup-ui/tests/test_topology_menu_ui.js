@@ -296,3 +296,37 @@ test('C05: when C06 provides mapWireText the badge hands it the clause in data-i
  assert.deepEqual(seen,['impaired at R1 Ethernet1 (traffic leaving R1): delay 20ms']);assert.equal(wire.title.textContent,'R1:eth1 — R2:eth1','the title is left to mapWireText');
  h.context.renderMapImpairments({devices:{},interfaces:0,complete:true});assert.equal(seen.at(-1),null);assert.equal(wire.getAttribute('data-impaired-text'),null);
 });
+
+test('C06: mapStage off disables Find and the three map-tool menu items with a visible reason and hides the chips; the map enables them again',()=>{
+ const h=harness({lab:lab()});
+ const item=id=>{const small=stub('small');small.hidden=true;const b=h.$(id);b.querySelector=sel=>sel==='.menu-reason'?small:null;return small;};
+ const reasons={'map-picture':item('map-picture'),'map-drawio-export':item('map-drawio-export'),'map-arrange':item('map-arrange')};
+ for(const kind of ['empty','loading']){
+  h.context.mapStage(kind);
+  assert.equal(h.$('map-find').disabled,true);
+  for(const [id,small] of Object.entries(reasons)){assert.equal(h.$(id).disabled,true,id);assert.equal(h.$(id).title,'No map yet');assert.equal(small.textContent,'No map yet');assert.equal(small.hidden,false);}
+  for(const id of ['map-links','map-find-count','map-link-hover'])assert.equal(h.$(id).hidden,true,id);
+ }
+ h.context.mapStage('map');
+ assert.equal(h.$('map-find').disabled,false);
+ for(const [id,small] of Object.entries(reasons)){assert.equal(h.$(id).disabled,false,id);assert.equal(small.hidden,true);}
+ assert.equal(h.$('map-links').hidden,false);
+});
+
+test('C06: mapWireText composes the title and the accessible name from the renderer\'s bases plus the state and impairment clauses, in that order',()=>{
+ const h=harness({lab:lab()});
+ const title=stub('t');title.textContent='a:eth1 — b:eth1';
+ const g=stub('g');g.querySelector=sel=>sel==='title'?title:null;
+ g.setAttribute('data-base','a:eth1 — b:eth1');g.setAttribute('data-aria-base','Capture a:eth1 to b:eth1');g.setAttribute('aria-label','Capture a:eth1 to b:eth1');
+ assert.equal(h.context.mapWireText(g),'a:eth1 — b:eth1');assert.equal(g.getAttribute('aria-label'),'Capture a:eth1 to b:eth1');
+ g.setAttribute('data-state-text','up');
+ assert.equal(h.context.mapWireText(g),'a:eth1 — b:eth1 · up');assert.equal(g.getAttribute('aria-label'),'Capture a:eth1 to b:eth1 · up');
+ g.setAttribute('data-impaired-text','impaired at a eth1 (traffic leaving a): delay 20ms');h.context.mapWireText(g);
+ assert.equal(title.textContent,'a:eth1 — b:eth1 · up · impaired at a eth1 (traffic leaving a): delay 20ms');
+ assert.equal(g.getAttribute('aria-label'),'Capture a:eth1 to b:eth1 · up · impaired at a eth1 (traffic leaving a): delay 20ms');
+ g.removeAttribute('data-state-text');g.removeAttribute('data-impaired-text');h.context.mapWireText(g);
+ assert.equal(title.textContent,'a:eth1 — b:eth1');assert.equal(g.getAttribute('aria-label'),'Capture a:eth1 to b:eth1');
+ // a wire from an older renderer (no bases) is captured on first use
+ const t2=stub('t2');t2.textContent='x — y';const old=stub('o');old.querySelector=()=>t2;old.setAttribute('aria-label','Capture x to y');old.setAttribute('data-state-text','down: x is not running');
+ h.context.mapWireText(old);assert.equal(t2.textContent,'x — y · down: x is not running');assert.equal(old.getAttribute('data-aria-base'),'Capture x to y');
+});

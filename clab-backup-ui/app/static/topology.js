@@ -65,6 +65,21 @@ function mapWireImpairedText(group,text){
  if(title&&baseTitle!==null)title.textContent=text?baseTitle+' · '+text:baseTitle;
  group.setAttribute('aria-label',text?baseLabel+' · '+text:baseLabel);
 }
+// One composition point for a wire's words (C06 3.0): <title> is the renderer's data-base plus the clauses, aria-label is its
+// data-aria-base ("Capture a:if to b:if") plus the same clauses. The clauses are two optional attributes: data-state-text (map-tools.js,
+// link state) and data-impaired-text (renderMapImpairments above). Either feature writes its attribute and calls this; neither rewrites
+// the other's words. Returns the title text.
+function mapWireText(group){
+ const title=typeof group.querySelector==='function'?group.querySelector('title'):null;
+ if(group.getAttribute('data-base')===null)group.setAttribute('data-base',title?title.textContent:'');
+ if(group.getAttribute('data-aria-base')===null)group.setAttribute('data-aria-base',group.getAttribute('aria-label')||'');
+ const clauses=[group.getAttribute('data-state-text'),group.getAttribute('data-impaired-text')].filter(Boolean);
+ const text=[group.getAttribute('data-base'),...clauses].join(' · ');
+ if(title&&title.textContent!==text)title.textContent=text;
+ const aria=[group.getAttribute('data-aria-base'),...clauses].join(' · ');
+ if(group.getAttribute('aria-label')!==aria)group.setAttribute('aria-label',aria);
+ return text;
+}
 function renderMapImpairments(answer){
  if(!map||typeof map.querySelectorAll!=='function'||typeof impairedWires!=='function')return 0;
  if(answer===undefined)answer=typeof opImpairmentCache!=='undefined'&&typeof activeId==='string'?opImpairmentCache[activeId]:null;
@@ -171,6 +186,10 @@ function mapStage(kind){
  const off=kind!=='map';
  for(const id of ['map-fit','map-in','map-out','map-expand'])if($(id)){$(id).disabled=off;$(id).title=off?'No map yet':'';}
  if($('map-edit')){$('map-edit').disabled=off;$('map-edit').title=off?'Import a map first.':'';}
+ // C06: Find, the three map-tool menu items (each with its visible reason) and the chips follow the stage.
+ if($('map-find')){$('map-find').disabled=off;$('map-find').title=off?'No map yet':'Name, address or platform';}
+ for(const id of ['map-picture','map-drawio-export','map-arrange']){const el=$(id);if(!el)continue;el.disabled=off;el.title=off?'No map yet':'';const small=typeof el.querySelector==='function'?el.querySelector('.menu-reason'):null;if(small){small.textContent=off?'No map yet':'';small.hidden=!off;}}
+ if(off){for(const id of ['map-links','map-find-count','map-link-hover'])if($(id))$(id).hidden=true;}else if($('map-links'))$('map-links').hidden=false;
  if(off&&$('topology-hint'))$('topology-hint').textContent=TOPOLOGY_HINT;
  if(typeof syncProxies==='function')syncProxies();
 }
@@ -187,13 +206,15 @@ function mapCaption(drawing){
 }
 async function refreshMap(force=false){
  const labId=activeId,request=++mapRequest;if(!labId)return;
+ // C06: re-check the link-state run conditions on every visit and render, before the unchanged-drawing early return (idempotent; it fetches nothing itself).
+ if(typeof mapLinkSchedule==='function')mapLinkSchedule();
  if(mapLab!==labId){mapLab=labId;mapKey='';mapStage('loading');$('map-status').textContent='';}
  try{const drawing=await(await api('/labs/'+labId+'/topology')).json();if(request!==mapRequest||activeId!==labId)return;
  const key=labId+JSON.stringify(drawing);if(!force&&key===mapKey)return;
  // A hidden panel (a map imported or saved from another tab, or a tab switched during the fetch) cannot be measured: getBBox() answers an empty box. Leave the key unset so showTab() renders and measures on the next visit.
  if($('topology-view')?.hidden){mapKey='';return;}
  mapKey=key;closeNodeMenu();
- if(!drawing){map.innerHTML='';$('map-status').textContent='';mapStage('empty');return;}
+ if(!drawing){map.innerHTML='';$('map-status').textContent='';mapStage('empty');if(typeof mapToolsRendered==='function')mapToolsRendered(null);return;}
  mapStage('map');
  const caption=mapCaption(drawing);$('map-status').textContent=caption.text;
  if($('topology-hint'))$('topology-hint').textContent=caption.notes.length?TOPOLOGY_HINT+' '+caption.notes.join(' '):TOPOLOGY_HINT;
@@ -201,6 +222,7 @@ async function refreshMap(force=false){
  map.classList.toggle('labels-on-select',drawing.settings?.labelMode==='on-select');
  mapBounds=measureTopology(map);mapBox=[...mapBounds];setMapBox();
  renderMapState();renderMapImpairments();
+ if(typeof mapToolsRendered==='function')mapToolsRendered(drawing);
  }catch(e){if(request===mapRequest){if($('map-loading'))$('map-loading').hidden=true;$('map-status').textContent='The map could not be loaded. '+e.message;}}
 }
 $('import-map').onclick=()=>{$('map-form').reset();$('map-form').querySelector('.form-error').textContent='';$('map-dialog').showModal();};

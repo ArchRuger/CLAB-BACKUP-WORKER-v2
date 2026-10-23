@@ -18,7 +18,7 @@ where one click adds them. A card's ⋯ menu has *Hide from Home*: the card goes
 and everything it has stays, and the same dialog (or adding the topology again from
 *Choose a file on the lab VM…*) brings it back. The **Manager ▾** menu holds everything that is not about one lab: the VM
 connection, importing lab files, deploying a new lab, the labs running on the VM,
-operation history, manager settings and Diagnostics.
+operation history, manager settings, browser preferences, a **Help** group (keyboard shortcuts and links to the containerlab documentation) and Diagnostics. With two or more labs, a **Find a lab** field above the cards narrows them by part of a lab or device name or by a state word such as *Running*; it is kept only while the page is open. See [Help, keyboard shortcuts and browser preferences](LAB-OPERATIONS.md#help-keyboard-shortcuts-and-browser-preferences).
 
 ![My labs](images/ui/00-home.png)
 

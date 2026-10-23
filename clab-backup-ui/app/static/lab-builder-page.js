@@ -236,7 +236,7 @@ const builderPage={
   if(!builderUnstored&&yaml===builderDraft.yaml&&annotations===(builderDraft.annotations||''))return;
   try{builderDraft=draftWrite(builderStore,builderNamed({...builderDraft,yaml,annotations}),builderDraft.revision);builderUnstored=null;}
   catch(e){builderUnstored={yaml,annotations};builderRenderBar();throw e;}
-  document.title=builderDraft.name+' · Lab builder · Containerlab Node Manager';builderRenderBar();builderImageStatus();
+  document.title=builderDraft.name+' · Lab builder · Containerlab Node Manager';builderRenderBar();builderImageStatus();builderCheckStatus();
  },
  templates(){const stored=builderTemplatesStored();return stored?{list:stored.list,defaultName:stored.defaultName||''}:{list:builderTemplateList(builderKnown,builderVmImages),defaultName:BUILDER_TEMPLATES[0].name};},
  saveTemplates(list,defaultName){try{builderStore.setItem(BUILDER_PREFIX+'templates',JSON.stringify({list,defaultName}));builderMarkTemplatesCurrent();}catch{notify('This browser could not keep the device template.');}},
@@ -248,7 +248,7 @@ const builderPage={
  problem(message,code){builderProblem(message,code);},
  ready(mount){builderMount=mount;if(builderDraft)builderOpenEditor();},
  // The editor's topology text handle (applyYaml, getYaml, checkYaml, subscribe): the YAML panel's engine.
- attach(editor){if(typeof builderYamlPanelInit==='function')builderYamlPanelInit(builderYamlOptions(editor));},
+ attach(editor){if(typeof builderYamlPanelInit==='function')builderYamlPanelInit(builderYamlOptions(editor));builderCheckStatus();},
 };
 if(typeof window!=='undefined')window.labBuilderPage=builderPage;
 let builderMounted=false;
@@ -268,7 +268,7 @@ function builderGo(values){
  location.hash=new URLSearchParams(values).toString();
  if(kept){document.querySelectorAll('dialog[open]').forEach(d=>d.close());builderUse(kept);}else location.reload();
 }
-function builderUse(draft){builderDraft=builderNamed(draft);builderRenderBar();document.title=draft.name+' · Lab builder · Containerlab Node Manager';builderOpenEditor();builderImageStatus();}
+function builderUse(draft){builderDraft=builderNamed(draft);builderRenderBar();document.title=draft.name+' · Lab builder · Containerlab Node Manager';builderOpenEditor();builderImageStatus();builderCheckStatus();}
 // The background image check: after every stored change (debounced) the draft's images are sent to the manager,
 // which asks the VM once per image and keeps the answers. The answer is dropped when the draft or the request
 // number changed while it was on its way. The editor is never waited on; a request that fails is shown too.
@@ -307,6 +307,74 @@ function builderImageStatus(){
  },builderDraft?1200:0);
 }
 if(typeof document!=='undefined'&&document.getElementById('builder-images-dismiss'))$('builder-images-dismiss').onclick=builderImageDismiss;
+// The topology check note (docs/parity-campaign/C08-DESIGN.md section 4.4): after a stored change, the errors in the stored text that
+// containerlab will refuse when the lab is deployed, in one line under the bar, so a student who never opens the YAML panel still learns
+// before saving. Advice only: it never changes builderBlocked(). builderCheckStatus() only arms a timer; the check runs inside the timer
+// and a throw anywhere in it hides the note and nothing else, so an advisory check can never pause the builder (persist() is untouched).
+let builderNoteTimer=null,builderNoteSeq=0,builderNoteDismissed='',builderNoteShown='',builderNoteLine=0;
+function builderNoteHash(text){let h=5381;for(let i=0;i<text.length;i++)h=((h<<5)+h+text.charCodeAt(i))|0;return (h>>>0).toString(36)+':'+text.length;}
+// The dismissed note is remembered for the browser tab's life (sessionStorage, per draft, text and count: the note's own key), so a reload keeps the same
+// problems dismissed until the text changes. A browser that refuses storage just forgets it.
+function builderNoteSession(){try{const s=window.sessionStorage;return s&&typeof s.getItem==='function'?s:null;}catch{return null;}}
+function builderNoteStored(){try{const s=builderNoteSession();return s?s.getItem(BUILDER_PREFIX+'note-dismissed')||'':'';}catch{return '';}}
+function builderNoteRemember(key){try{const s=builderNoteSession();if(s&&key)s.setItem(BUILDER_PREFIX+'note-dismissed',key);}catch{}}
+// `errors` counts what containerlab refuses; `first` is the first of them. The manager's own refusals (finding.refuser === 'manager') are counted apart.
+function builderNoteSentence(errors,first,manager){
+ let message=String(first.message||'').trim();if(!/[.!?]$/.test(message))message+='.';
+ if(!errors)return (manager===1?'1 error':manager+' errors')+' the manager’s import refuses: '+(manager===1?'':'the first is ')+'line '+first.line+', '+message+' Open YAML to see it.';
+ return errors+' error'+(errors===1?'':'s')+' containerlab will refuse when deploying: '+(errors===1?'':'the first is ')+'line '+first.line+', '+message+' Open YAML to see it.'
+  +(manager?' The manager’s import also refuses '+manager+' more.':'');
+}
+function builderNoteRender(result){
+ const slot=$('builder-check');if(!slot)return;
+ if(!result||result.key===builderNoteDismissed||result.key===builderNoteStored()){builderNoteShown='';builderNoteLine=0;slot.hidden=true;return;}
+ builderNoteShown=result.key;builderNoteLine=result.line;$('builder-check-text').textContent=result.text;slot.hidden=false;
+}
+// The note for a list of findings: every error, whatever the version match (a wait loop, an unknown endpoint, a missing kind are errors on any VM).
+function builderNoteFor(draft,text,list){
+ const errors=builderCheckSummary(list).errors,listed=list.filter(f=>f.severity==='error'&&f.code!=='more'&&f.line>0);
+ const manager=listed.filter(f=>f.refuser==='manager').length,mine=listed.filter(f=>f.refuser!=='manager'),first=mine[0]||listed[0];
+ if(!errors||!first)return null;
+ // The generic sentence counts containerlab's errors only; an error the manager's own import refuses is worded as that.
+ const clab=Math.max(0,errors-manager);
+ return {key:[draft.id,builderNoteHash(text),errors].join('|'),text:builderNoteSentence(clab,first,manager),line:first.line};
+}
+async function builderNoteRun(){
+ const seq=++builderNoteSeq;
+ try{
+  const draft=builderDraft;if(!draft||typeof builderYamlLocate!=='function'||typeof builderCheckSummary!=='function'){builderNoteRender(null);return;}
+  const text=builderYamlDraft(),located=builderYamlLocate(text);
+  if(!located||!located.tree){builderNoteRender(null);return;}
+  const wasLoaded=typeof builderYamlSchemaNow==='function'&&!!builderYamlSchemaNow();
+  const loading=typeof builderYamlSchema==='function'?builderYamlSchema():null;
+  builderNoteRender(builderNoteFor(draft,text,builderYamlRun(located.tree)));
+  // Until the schema arrives only the rules that need none have run; run again once it is here.
+  if(loading&&!wasLoaded&&!builderYamlSchemaNow()){
+   const data=await loading;
+   if(data&&seq===builderNoteSeq&&builderDraft&&builderDraft.id===draft.id&&builderYamlDraft()===text)builderNoteRender(builderNoteFor(draft,text,builderYamlRun(located.tree)));
+  }
+ }catch{try{builderNoteRender(null);}catch{}}
+}
+function builderCheckStatus(){
+ try{
+  if(!$('builder-check'))return;
+  if(builderNoteTimer)clearTimeout(builderNoteTimer);
+  builderNoteTimer=setTimeout(()=>{builderNoteTimer=null;builderNoteRun();},builderDraft?1200:0);
+ }catch{}
+}
+function builderNoteDismiss(){
+ builderNoteDismissed=builderNoteShown;builderNoteRemember(builderNoteDismissed);builderNoteShown='';const slot=$('builder-check');if(slot)slot.hidden=true;
+ const next=!$('builder-save').disabled?$('builder-save'):$('builder-yaml');if(next&&!next.disabled)next.focus();
+}
+// Show in YAML: opens the panel. A clean panel gets the caret on the finding's line; a panel with unapplied edits (its lines differ from the
+// stored text) opens at its own Problems list instead and moves nothing.
+function builderNoteShow(){
+ const state=typeof builderYamlPanelState==='function'?builderYamlPanelState():null,dirty=!!state&&(state.dirty||state.canvasChanged||state.applying),line=builderNoteLine;
+ builderYamlPanelToggle(true);
+ if(!dirty){builderYamlGoto(line,{select:false});return;}
+ const first=$('builder-yaml-list')&&$('builder-yaml-list').querySelector('button');if(first)first.focus();
+}
+if(typeof document!=='undefined'&&document.getElementById('builder-check-dismiss')){$('builder-check-dismiss').onclick=builderNoteDismiss;$('builder-check-show').onclick=builderNoteShow;}
 // The id of a new draft. A draft renamed in the editor keeps its first id, so that id can be taken by another name.
 function builderDraftId(name){const id='new:'+name;return draftRead(builderStore,id)?id+':'+draftToken():id;}
 function builderNewDialog(root){
@@ -514,6 +582,8 @@ async function builderOpenFromVm(path){
 async function builderConnect(){
  try{builderCaps=await opCapabilities();builderCapsError='';}catch(e){builderCaps=null;builderCapsError=e.message;}
  builderRenderBar();
+ // The VM's containerlab version picks the schema and the severities of the YAML check; the advice never blocks the page.
+ try{if(typeof builderYamlContext==='function')builderYamlContext(builderCaps);builderCheckStatus();}catch{}
 }
 async function builderStart(){
  const params=new URLSearchParams(location.hash.slice(1));

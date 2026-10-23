@@ -105,7 +105,7 @@ function initMenu(button){
  button.addEventListener('keydown',e=>{if(e.key==='ArrowDown'&&list.hidden){e.preventDefault();open();}});
  list.addEventListener('keydown',e=>{
   if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close(true);return;}
-  if(e.key==='Tab'){close(false);return;}
+  if(e.key==='Tab'){close(false);return;}   if(e.key===' '){const at=document.activeElement;if(at&&at.tagName==='A'&&typeof at.click==='function'&&shellContains(list,at)){e.preventDefault();at.click();}return;}   // a link activates on Enter only; Space would scroll the list
   if(e.key==='ArrowRight'||e.key==='ArrowLeft'){
    const at=document.activeElement,toggle=at&&typeof at.closest==='function'?(at.closest('[data-menu-group]')||toggles().find(t=>shellContains(panelOf(t),at))):null;
    if(toggle&&setGroup(toggle,e.key==='ArrowRight',true))e.preventDefault();
@@ -291,7 +291,7 @@ function dismissActionError(){shellActionError=null;}
 document.querySelectorAll('.menu-button').forEach(initMenu);
 document.querySelectorAll('.panel-button').forEach(initPanel);
 for(const id of ['nav-home','crumb-home']){const el=shellEl(id);if(el)el.addEventListener('click',e=>{e.preventDefault();goHome({push:true});});}
-{const dialog=shellEl('details-dialog');if(dialog)dialog.addEventListener('close',()=>{if(typeof resetDeviceDiagnostics==='function')resetDeviceDiagnostics();if(typeof resetDeviceImpairments==='function')resetDeviceImpairments();if(!shellApplying)writeRoute({...currentRoute(),device:''});});}
+{const dialog=shellEl('details-dialog');if(dialog)dialog.addEventListener('close',()=>{if(typeof resetDeviceDiagnostics==='function')resetDeviceDiagnostics();if(typeof resetDeviceImpairments==='function')resetDeviceImpairments();if(typeof mapLinkDrawerClosed==='function')mapLinkDrawerClosed();if(!shellApplying)writeRoute({...currentRoute(),device:''});});}
 // Whether this tab is on screen: the device drawer's polls (device-diagnostics.js) stop while it is hidden and
 // one fresh fetch runs when it returns.
 function pageVisible(){return typeof document==='undefined'||document.visibilityState!=='hidden';}
@@ -310,3 +310,51 @@ setTimeout(()=>{const skeleton=shellEl('home-skeleton');if(skeleton&&!(typeof st
 // (operations, Git, capture) have defined their renderers; those parts would then wait for the next poll.
 // One more render once every script is in keeps the menus and cards right from the first paint.
 if(typeof document!=='undefined'&&typeof document.addEventListener==='function')document.addEventListener('DOMContentLoaded',()=>{if(typeof state!=='undefined'&&state&&state.loaded&&typeof render==='function')render();});
+// Browser preferences (preferences.js; docs/parity-campaign/C09-DESIGN.md section 5): the manager's own storage keys by family, so
+// the dialog can count them and Reset can clear exactly the preferences. Drafts and in-flight requests are data and are never
+// cleared here. EDITOR_VIEW_KEYS are the exact keys the committed editor bundle writes (app/static/lab-builder/assets, clab-ui
+// 0.3.2) plus MUI's mode keys; a test reads the literals out of the bundle, so a pinned upgrade that renames one fails there.
+const EDITOR_VIEW_KEYS=['react-topoviewer-grid-line-width','react-topoviewer-grid-style','contextPanelSide','mui-mode','mui-color-scheme-light','mui-color-scheme-dark'];
+const PREFERENCE_FAMILIES=[
+ {kind:'localStorage',match:k=>k==='clab.terminal.fontSize',id:'terminal-font',reset:true},
+ {kind:'localStorage',match:k=>k.startsWith('clab.opened.'),id:'opened',reset:true},
+ {kind:'localStorage',match:k=>k.startsWith('clab.dismissed.'),id:'dismissed',reset:true},
+ {kind:'localStorage',match:k=>k.startsWith('clab.design.draft.'),id:'design-drafts',reset:false},
+ {kind:'localStorage',match:k=>k.startsWith('clab-builder:draft:'),id:'builder-drafts',reset:false},
+ {kind:'localStorage',match:k=>k==='clab-builder:templates'||k==='clab-builder:templates-version',id:'builder-templates',reset:false},
+ {kind:'localStorage',match:k=>EDITOR_VIEW_KEYS.includes(k),id:'editor-view',reset:true},
+ {kind:'localStorage',match:k=>k.startsWith('clab.capture.'),id:'capture',reset:true},
+ {kind:'sessionStorage',match:k=>k==='clab.homeTab',id:'home-tab',reset:true},
+ {kind:'sessionStorage',match:k=>k.startsWith('clab.notice.'),id:'notices',reset:true},
+ {kind:'sessionStorage',match:k=>k==='clab-builder:note-dismissed',id:'builder-note',reset:true},
+ {kind:'sessionStorage',match:k=>k==='activeLab',id:'active-lab',reset:false},
+ {kind:'sessionStorage',match:k=>k.startsWith('clab.request.'),id:'requests',reset:false},
+ {kind:'sessionStorage',match:k=>k.startsWith('git-save-request:'),id:'save-requests',reset:false},
+ {kind:'sessionStorage',match:k=>k==='op-return',id:'op-return',reset:false}];
+const TERMINAL_FONT_SIZES=[11,12,13,14,15,16,17,18],TERMINAL_FONT_DEFAULT=14;   // equal to terminal.js FONT_SIZES / FONT_DEFAULT (a test reads both files)
+// The keys of one store, or null when the store cannot be read at all (blocked site data throws on access).
+function shellStorageKeys(kind){try{const s=window[kind],out=[];if(!s||typeof s.length!=='number'||typeof s.key!=='function')return null;for(let i=0;i<s.length;i++){const k=s.key(i);if(k!==null&&k!==undefined)out.push(String(k));}return out;}catch{return null;}}
+// Whether a new value can be stored: a probe write that is removed again at once. clab.probe is never a preference.
+function shellStorageWritable(kind){return shellSet(kind,'clab.probe','1')&&shellRemove(kind,'clab.probe');}
+// {blocked, writable, families:[{id, kind, reset, count, keys}], terminalFont}. blocked: localStorage cannot be read at all;
+// writable: a probe write works (false on a full or read-only store, where removal still works). Keys are counted, never shown.
+function preferenceInventory(){
+ const local=shellStorageKeys('localStorage'),session=shellStorageKeys('sessionStorage');
+ const lists={localStorage:local||[],sessionStorage:session||[]};
+ const families=PREFERENCE_FAMILIES.map(f=>{const keys=lists[f.kind].filter(f.match);return {id:f.id,kind:f.kind,reset:f.reset,count:keys.length,keys};});
+ return {blocked:local===null,writable:local!==null&&shellStorageWritable('localStorage'),families,terminalFont:terminalFontPreference()};
+}
+// Removes every key of a reset:true family and counts the removals that worked; {cleared, blocked}. A reset:false family is never touched.
+function resetPreferences(){
+ if(shellStorageKeys('localStorage')===null)return {cleared:0,blocked:true};
+ let cleared=0;
+ for(const f of preferenceInventory().families){if(!f.reset)continue;for(const k of f.keys)if(shellRemove(f.kind,k))cleared++;}
+ return {cleared,blocked:false};
+}
+function mediaMatches(query){try{return !!(typeof window!=='undefined'&&typeof window.matchMedia==='function'&&window.matchMedia(query).matches);}catch{return false;}}
+// The size a terminal opens at: terminal.js clampFont() semantics (nothing stored or not a number: the default; any other number: rounded to the nearest of the eight).
+function terminalFontPreference(){
+ const raw=shellGet('localStorage','clab.terminal.fontSize');if(raw===null||raw===undefined)return TERMINAL_FONT_DEFAULT;
+ const v=Math.round(Number(raw));return Number.isFinite(v)?Math.max(TERMINAL_FONT_SIZES[0],Math.min(TERMINAL_FONT_SIZES[TERMINAL_FONT_SIZES.length-1],v)):TERMINAL_FONT_DEFAULT;
+}
+function setTerminalFontPreference(value){const v=Number(value);return TERMINAL_FONT_SIZES.includes(v)&&shellSet('localStorage','clab.terminal.fontSize',String(v));}

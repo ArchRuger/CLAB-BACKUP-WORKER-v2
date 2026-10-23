@@ -24,6 +24,7 @@ import app.lab_operations as lab_operations
 from app.host_operations import HostOperations, LIFECYCLE, digest, capture, stream
 from app.lab_operations import LabOperations, OutputWindow, scrub, drawio
 from app.discovery import stamp
+from app.topology import parse_drawing
 from app.main import create_app
 from app.store import Store
 import test_discovery as discovery_tests
@@ -1246,7 +1247,7 @@ class OperationAPITests(unittest.TestCase):
             lab=self.store.lab(self.lab_id);alias=lab['drawing']['nodes'][0]['alias']
             response=self.client.put('/api/labs/'+self.lab_id+'/layout',headers=self.auth,json={'positions':{alias:[600,300]}})
             self.assertEqual(response.status_code,200,response.text)
-            for layout in ('interactive',):
+            for layout in ('interactive','map&theme=manager'):
                 response=self.client.get('/api/labs/'+self.lab_id+'/drawio?layout='+layout,headers=self.auth)
                 self.assertEqual(response.status_code,200);root=ET.fromstring(response.content)
                 self.assertEqual(len(root.findall('.//mxCell[@id="node-0"]')),1)
@@ -1438,11 +1439,87 @@ class OperationAPITests(unittest.TestCase):
             keep_document(lab,b'');self.assertNotIn('annotations',lab);self.assertIn('nodeAnnotations',map_document(lab))
             keep_document(lab,'x'*(1024*1024+1));self.assertNotIn('annotations',lab,'an oversized text is not stored')
 
-    def test_removed_drawio_layouts_rejected(self):
-        with self.fixture():
-            for layout in ('horizontal','vertical'):
-                self.assertEqual(self.client.get('/api/labs/'+self.lab_id+'/drawio?layout='+layout).status_code,400)
+    def drawio_get(self,query):
+        return self.client.get('/api/labs/'+self.lab_id+'/drawio'+query,headers=self.auth)
 
+    def test_drawio_layouts_and_themes(self):
+        with self.fixture():
+            # The helper-run horizontal and vertical graph stays removed, beside any other unknown value.
+            for layout in ('horizontal','vertical','diagonal'):
+                response=self.drawio_get('?layout='+layout)
+                self.assertEqual(response.status_code,400,layout)
+                self.assertEqual(response.json()['detail'],'Choose a supported layout.')
+            for theme in ('neon','Print',''):
+                response=self.drawio_get('?theme='+theme)
+                self.assertEqual(response.status_code,400,theme)
+                self.assertEqual(response.json()['detail'],'Choose a supported theme.')
+            default=self.drawio_get('')
+            self.assertEqual(default.status_code,200)
+            for query in ('?layout=map','?layout=interactive','?theme=manager','?layout=map&theme=manager'):
+                self.assertEqual(self.drawio_get(query).content,default.content,query)
+            for layout in ('rows','columns'):
+                response=self.drawio_get('?layout='+layout)
+                self.assertEqual(response.status_code,200,response.text)
+                ids=[c.get('id') for c in ET.fromstring(response.content).findall('.//mxCell')]
+                self.assertTrue(any(i.startswith('node-') for i in ids));self.assertTrue(any(i.startswith('link-') for i in ids))
+                self.assertFalse([i for i in ids if i.startswith('annotation-')])
+                self.assertIn('-'+layout+'.drawio',response.headers['content-disposition'])
+            self.assertNotIn('-rows',default.headers['content-disposition'])
+            printed=self.drawio_get('?theme=print')
+            self.assertEqual(printed.status_code,200)
+            self.assertNotIn(b'#0066ff',printed.content)
+            self.assertEqual(ET.fromstring(printed.content).find('.//mxGraphModel').get('background'),'#ffffff')
+
+    def test_drawio_manager_map_is_byte_identical_to_the_golden_output(self):
+        fixture=Path(__file__).parent/'fixtures'/'drawio'
+        drawing=parse_drawing((fixture/'annotations.json').read_bytes(),(fixture/'topology.json').read_bytes())
+        self.assertFalse([d for d in drawing['decorations'] if d['type']=='text'],'the golden fixture has no text decorations')
+        golden=(fixture/'golden-map-manager.drawio').read_bytes()
+        lab={'name':'Golden','drawing':drawing}
+        self.assertEqual(drawio(lab),golden)
+        self.assertEqual(drawio(lab,'map','manager'),golden)
+        self.assertEqual(drawio(lab,'interactive','manager'),golden)
+        for layout in ('horizontal','vertical','diagonal'):
+            with self.assertRaises(ValueError):drawio(lab,layout)
+        with self.assertRaises(ValueError):drawio(lab,'map','neon')
+
+    def test_drawio_rows_columns_do_not_touch_the_stored_map_and_drop_decorations(self):
+        fixture=Path(__file__).parent/'fixtures'/'drawio'
+        drawing=parse_drawing((fixture/'annotations.json').read_bytes(),(fixture/'topology.json').read_bytes())
+        lab={'name':'Golden','drawing':drawing};before=copy.deepcopy(lab)
+        rows=ET.fromstring(drawio(lab,'rows'));columns=ET.fromstring(drawio(lab,'columns'))
+        self.assertEqual(lab,before)
+        for root in (rows,columns):
+            ids=[c.get('id') for c in root.findall('.//mxCell')]
+            self.assertFalse([i for i in ids if i.startswith('annotation-')])
+            self.assertEqual(len([i for i in ids if i.startswith('node-')]),4)
+        pos=lambda root:[(c.find('mxGeometry').get('x'),c.find('mxGeometry').get('y')) for c in root.findall('.//mxCell') if c.get('id','').startswith('node-')]
+        self.assertEqual(pos(rows),[(y,x) for x,y in pos(columns)])
+        self.assertEqual(drawio(lab,'rows'),drawio(lab,'rows'))
+
+    def test_drawio_print_theme_and_new_styles(self):
+        drawing={'nodes':[{'id':'a','alias':'a','label':'A','x':0,'y':0,'icon':'router','iconColor':'#0066ff'},
+                          {'id':'b','alias':'b','label':'B','x':300,'y':0,'icon':'switch'}],
+                 'links':[[{'node':'a','interface':'eth1'},{'node':'b','interface':'eth1'}]],
+                 'decorations':[dict(type='line',x=0,y=50,x2=100,y2=50,width=100,height=1,text='',lineStartArrow=True,lineEndArrow=True,lineArrowSize=14,borderColor='#ff0000'),
+                                dict(type='text',x=0,y=80,width=100,height=30,text='Note',roundedBackground=True,fontColor='#ff0000'),
+                                dict(type='text',x=0,y=120,width=100,height=30,text='Plain',roundedBackground=False)],
+                 'settings':{'nodeStyle':'boxed','boxSpacing':'narrow','linkStyle':'elbow','background':'#fdf6e3'}}
+        lab={'name':'Styles','drawing':drawing}
+        manager=drawio(lab).decode()
+        self.assertIn('startArrow=classic',manager);self.assertIn('endArrow=classic',manager)
+        self.assertIn('startSize=14',manager);self.assertIn('endSize=14',manager)
+        self.assertIn('edgeStyle=orthogonalEdgeStyle',manager)
+        root=ET.fromstring(drawio(lab))
+        cells={c.get('id'):c for c in root.findall('.//mxCell')}
+        self.assertIn('rounded=1',cells['annotation-1'].get('style'));self.assertNotIn('rounded=1',cells['annotation-2'].get('style'))
+        g=cells['node-0'].find('mxGeometry');self.assertEqual((g.get('width'),g.get('height')),('64','64'))
+        drawing['settings']['boxSpacing']='default'
+        self.assertEqual(ET.fromstring(drawio(lab)).find('.//mxCell[@id="node-0"]/mxGeometry').get('width'),'80')
+        printed=drawio(lab,'map','print').decode()
+        for forbidden in ('#0066ff','#ff0000','#79df87','#454545','#fdf6e3','#fff8e5'):self.assertNotIn(forbidden,printed)
+        self.assertIn('strokeColor=#000000',printed);self.assertIn('background="#ffffff"',printed)
+        self.assertIn('startArrow=classic',printed)
 
 class FakeStopChannel:
     """A helper session that answers from a script: bytes are stdout, ('hook', fn) runs fn first, b'' is end of output."""
@@ -2028,6 +2105,12 @@ class NodeActionAndOptionTests(unittest.TestCase):
             self.assertIn(self.lab_id, operations.plan_cache, 'a settings change without a path keeps it')
             operations.forget_plan(self.lab_id); self.assertNotIn(self.lab_id, operations.plan_cache); self.assertEqual(operations.plan_gen[self.lab_id], gen + 1)
 
+
+def stand_in_arrange(drawing, mode):
+    """Used only while layout.arrange (C06 S1a) is not in this tree: deterministic, integers, every node moved."""
+    if mode not in ('rows', 'columns', 'ring'): raise ValueError('Choose rows, columns or a ring.')
+    shift = {'rows': (1000, 500), 'columns': (500, 1000), 'ring': (700, 700)}[mode]
+    return {n['id']: [int(n['x']) + shift[0] + 10 * i, int(n['y']) + shift[1]] for i, n in enumerate(drawing['nodes'])}
     # Review follow-ups for C05: where the plan cache is dropped, per-action run options, the link counts and the settings path.
     def cache_states(self, effect, cancel_first=False, stopping_during=False, probe_effect=None, expect=None):
         """Run one confirmed Apply with the fake VM changed by `effect` (what the run does) and `probe_effect` (the follow-up preview);
@@ -2130,3 +2213,256 @@ class NodeActionAndOptionTests(unittest.TestCase):
             saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
             self.assertEqual(saved['status'], 'succeeded')
             self.assertIn('1 of 2 links restored (no link to r3: removed, its link was gone; the device waits for it before it boots)', saved['message'])
+
+
+class ArrangeTests(unittest.TestCase):
+    """C06 S1b: POST /api/labs/{id}/arrange {mode | undo, revision} (docs/parity-campaign/C06-DESIGN.md §2.6). The server
+    arranges the drawing and the stored document together through layout.keep_document, keeps the previous map state in
+    memory only, and its Undo restores exactly that state while the map has not changed since."""
+    setUp = OperationAPITests.setUp
+    register = OperationAPITests.register
+    host = OperationAPITests.host
+    tearDown = OperationAPITests.tearDown
+    fixture = OperationAPITests.fixture
+    STALE = 'The map changed since you looked at it. The map was reloaded; try again.'
+    KEYS = ('drawing', 'annotations', 'annotations_for', 'map_written_at')
+
+    def arrange_function(self):
+        import contextlib
+        import app.layout as layout
+        if hasattr(layout, 'arrange'): return layout.arrange, contextlib.nullcontext()
+        return stand_in_arrange, patch.object(layout, 'arrange', stand_in_arrange, create=True)
+
+    def post(self, **body):
+        return self.client.post('/api/labs/' + self.lab_id + '/arrange', headers=self.auth, json=body)
+
+    def lab(self): return self.store.lab(self.lab_id)
+
+    def rev(self):
+        from app.layout import revision
+        return revision(self.lab()['drawing'])
+
+    def events(self, message=None):
+        return [e['message'] for e in self.store.events() if e['action'] == 'topology.layout' and (message is None or e['message'] == message)]
+
+    def save_document(self, document):
+        url = '/api/labs/' + self.lab_id + '/map-document'
+        opened = self.client.get(url, headers=self.auth).json()
+        text = json.dumps(document, indent=1)
+        saved = self.client.put(url, headers=self.auth, json={'annotations': text, 'revision': opened['revision']})
+        self.assertEqual(saved.status_code, 200, saved.text)
+        return text
+
+    def document(self, ids):
+        return {'nodeAnnotations': [{'id': ids[0], 'position': {'x': 400, 'y': 120, 'zoomHint': 2}, 'groupId': 'core', 'futureField': {'kept': True}, 'icon': 'router'}],
+                'groupStyleAnnotations': [{'id': 'core', 'name': 'Core', 'parentId': 'site', 'level': 2, 'position': {'x': 300, 'y': 60}, 'width': 300, 'height': 200}],
+                'freeShapeAnnotations': [{'id': 's1', 'shapeType': 'line', 'position': {'x': 0, 'y': 0}, 'endPosition': {'x': 90, 'y': 40}, 'lineEndArrow': True, 'lineArrowSize': 12}],
+                'viewerSettings': {'gridStyle': 'quadratic', 'linkLabelMode': 'on-select'}, 'somethingNew': [1, 2, 3]}
+
+    def test_arrange_rows_moves_every_node_and_rewrites_the_stored_document(self):
+        from app.layout import revision
+        from app.topology import parse_drawing
+        arrange, stub = self.arrange_function()
+        with self.fixture() as remote, stub:
+            ids = [n['id'] for n in self.lab()['drawing']['nodes']]
+            original = self.document(ids); self.save_document(original)
+            old = copy.deepcopy(self.lab()['drawing']); old_rev = self.rev(); expected = arrange(copy.deepcopy(old), 'rows')
+            calls = remote.call_count
+            response = self.post(mode='rows', revision=old_rev)
+            self.assertEqual(response.status_code, 200, response.text)
+            lab = self.lab(); drawing = lab['drawing']
+            self.assertEqual(response.json(), {'saved': True, 'revision': revision(drawing), 'undo': True})
+            self.assertEqual({n['id']: [n['x'], n['y']] for n in drawing['nodes']}, {k: list(v) for k, v in expected.items()}, 'every node takes the arranged position')
+            self.assertNotEqual(drawing, old); self.assertTrue(drawing['placed'])
+            self.assertEqual({k: v for k, v in drawing.items() if k not in ('nodes', 'placed')}, {k: v for k, v in old.items() if k not in ('nodes', 'placed')},
+                             'links, decorations and settings are unchanged')
+            self.assertEqual(lab['annotations_for'], revision(drawing), 'the stored document belongs to the arranged drawing')
+            stored = json.loads(lab['annotations'])
+            first = next(a for a in stored['nodeAnnotations'] if a['id'] == ids[0])
+            self.assertEqual(first, {**original['nodeAnnotations'][0], 'position': {'x': expected[ids[0]][0], 'y': expected[ids[0]][1], 'zoomHint': 2}},
+                             'only x and y change; groupId, unknown keys and other position keys are kept')
+            self.assertEqual(next(a for a in stored['nodeAnnotations'] if a['id'] == ids[1]), {'id': ids[1], 'position': {'x': expected[ids[1]][0], 'y': expected[ids[1]][1]}},
+                             'a drawn device without an entry gets one')
+            for key in ('groupStyleAnnotations', 'freeShapeAnnotations', 'viewerSettings', 'somethingNew'): self.assertEqual(stored[key], original[key], key)
+            reparsed = parse_drawing(lab['annotations'].encode(), lab['definition_yaml'].encode())
+            self.assertEqual({n['id']: (n['x'], n['y']) for n in reparsed['nodes']}, {n['id']: (n['x'], n['y']) for n in drawing['nodes']}, 'the document and the drawing agree')
+            self.assertEqual(self.client.get('/api/labs/' + self.lab_id + '/map-document', headers=self.auth).json()['annotations'], lab['annotations'])
+            self.assertEqual(remote.call_count, calls, 'arranging calls no VM helper')
+            self.assertEqual(self.events('Devices arranged in rows'), ['Devices arranged in rows'])
+            disk = json.dumps(Store(self.tmp.name).state, default=str)
+            self.assertNotIn(old_rev, disk, 'the Undo memory is never written to the Store')
+            self.assertIn(revision(drawing), disk)
+
+    def test_arrange_then_undo_restores_the_lab_exactly(self):
+        from app.layout import revision
+        from app.runner import Runner
+        from app.topology import unplaced
+        arrange, stub = self.arrange_function()
+        with self.fixture() as remote, stub:
+            ids = [n['id'] for n in self.lab()['drawing']['nodes']]
+            for case in ('drawing only', 'stored document', 'synced document'):
+                with self.subTest(case=case):
+                    if case == 'stored document': self.save_document(self.document(ids))
+                    if case == 'synced document':
+                        self.lab()['vm_source'] = dict(self.lab().get('vm_source') or {}, synced_at='2026-10-23T01:00:00Z'); self.lab()['map_written_at'] = 'older-sync'
+                    before = copy.deepcopy(self.lab()); changed = Runner.map_changed_in_manager(self.lab()); grid = unplaced(self.lab()['drawing'])
+                    for mode, words in (('ring', 'in a ring'), ('columns', 'in columns')):
+                        start = len(self.events())
+                        arranged = self.post(mode=mode, revision=self.rev()); self.assertEqual(arranged.status_code, 200, arranged.text)
+                        self.assertTrue(self.lab()['drawing']['placed']); self.assertFalse(unplaced(self.lab()['drawing']))
+                        undone = self.post(undo=True, revision=arranged.json()['revision'])
+                        self.assertEqual(undone.status_code, 200, undone.text)
+                        self.assertEqual(undone.json(), {'saved': True, 'revision': revision(before['drawing']), 'undo': False})
+                        self.assertEqual(self.lab(), before, 'drawing with placed, annotations, annotations_for, map_written_at: all as before')
+                        self.assertEqual((Runner.map_changed_in_manager(self.lab()), unplaced(self.lab()['drawing'])), (changed, grid))
+                        events = self.events()   # newest first
+                        self.assertEqual((len(events) - start, events[:2]), (2, ['Device positions restored', 'Devices arranged ' + words]))
+                        self.assertEqual(Store(self.tmp.name).lab(self.lab_id)['drawing'], before['drawing'], 'the restored map is the saved one')
+                        again = self.post(undo=True, revision=self.rev())
+                        self.assertEqual((again.status_code, again.json()), (412, {'detail': self.STALE, 'reason': 'stale'}), 'Undo is offered once')
+            self.assertEqual(remote.call_count, 0)
+
+    def test_arrange_a_stale_revision_is_412_and_changes_nothing(self):
+        arrange, stub = self.arrange_function()
+        with self.fixture(), stub:
+            before = copy.deepcopy(self.lab())
+            for body in ({'mode': 'rows', 'revision': 'f' * 64}, {'undo': True, 'revision': self.rev()}):
+                response = self.post(**body)
+                self.assertEqual((response.status_code, response.json()), (412, {'detail': self.STALE, 'reason': 'stale'}), body)
+            self.assertEqual(self.lab(), before); self.assertEqual(self.events(), [])
+            # Undo with another revision than the arrangement's: refused and the entry dropped, so the right one is refused after it.
+            arranged = self.post(mode='rows', revision=self.rev()).json(); after = copy.deepcopy(self.lab())
+            self.assertEqual(self.post(undo=True, revision='e' * 64).status_code, 412)
+            self.assertEqual(self.post(undo=True, revision=arranged['revision']).status_code, 412)
+            self.assertEqual(self.lab(), after)
+
+    def test_arrange_undo_after_another_map_change_is_refused(self):
+        arrange, stub = self.arrange_function()
+        with self.fixture(), stub:
+            ids = [n['id'] for n in self.lab()['drawing']['nodes']]
+            for change in ('map-document', 'layout'):
+                arranged = self.post(mode='rows', revision=self.rev()).json()
+                if change == 'map-document': self.save_document(self.document(ids))
+                else: self.assertEqual(self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {ids[0]: [5, 5]}}).status_code, 200)
+                current = copy.deepcopy(self.lab())
+                for revision in (arranged['revision'], self.rev()):
+                    response = self.post(undo=True, revision=revision)
+                    self.assertEqual((response.status_code, response.json().get('reason')), (412, 'stale'), (change, revision))
+                self.assertEqual(self.lab(), current, 'Undo is never applied over a later change')
+
+    def test_arrange_undo_after_a_restart_is_refused(self):
+        arrange, stub = self.arrange_function()
+        with self.fixture(), stub:
+            arranged = self.post(mode='rows', revision=self.rev()).json()
+            fresh = create_app(self.tmp.name); client = TestClient(fresh)
+            try:
+                response = client.post('/api/labs/' + self.lab_id + '/arrange', headers={'Authorization': 'Bearer ' + fresh.state.store.token}, json={'undo': True, 'revision': arranged['revision']})
+                self.assertEqual((response.status_code, response.json()), (412, {'detail': self.STALE, 'reason': 'stale'}), 'the Undo memory does not survive a restart')
+            finally:
+                for name in ('git_progress', 'discovery', 'runner', 'node_services', 'operations'): getattr(fresh.state, name).close()
+                client.close()
+
+    def test_arrange_a_running_operation_is_409_for_both_and_keeps_the_undo(self):
+        arrange, stub = self.arrange_function()
+        with self.fixture(), stub:
+            arranged = self.post(mode='rows', revision=self.rev()).json(); after = copy.deepcopy(self.lab())
+            self.store.state['operations'].append(dict(id='busy', lab_id=self.lab_id, action='deploy', status='running', name='x'))
+            for body in ({'mode': 'ring', 'revision': arranged['revision']}, {'undo': True, 'revision': arranged['revision']}):
+                response = self.post(**body)
+                self.assertEqual((response.status_code, response.json()['detail']), (409, 'Wait for the current lab operation to finish.'), body)
+            self.assertEqual(self.lab(), after)
+            self.assertIn(self.lab_id, self.app.state.operations.arrange_undo, 'a busy refusal keeps the Undo')
+            self.store.state['operations'].pop()
+            self.assertEqual(self.post(undo=True, revision=arranged['revision']).status_code, 200, 'Undo works once the operation is over')
+
+    def test_arrange_requests_are_checked_before_anything_changes(self):
+        arrange, stub = self.arrange_function()
+        with self.fixture(), stub:
+            before = copy.deepcopy(self.lab()); rev = self.rev()
+            for body in ({'mode': 'rows', 'undo': True, 'revision': rev}, {'revision': rev}, {'undo': False, 'revision': rev}):
+                response = self.post(**body)
+                self.assertEqual((response.status_code, response.json()['detail']), (400, 'Choose an arrangement or undo, not both.'), body)
+            response = self.post(mode='diagonal', revision=rev)
+            self.assertEqual((response.status_code, response.json()['detail']), (400, 'Choose rows, columns or a ring.'))
+            for body in ({'mode': 'rows'}, {'mode': 'rows', 'revision': ''}, {'mode': 'rows', 'revision': 'x' * 65}, {'mode': 'rows', 'revision': rev, 'positions': {'r1': [1, 2]}}):
+                self.assertEqual(self.post(**body).status_code, 422, body)
+            self.assertEqual(self.client.post('/api/labs/nope/arrange', headers=self.auth, json={'mode': 'rows', 'revision': rev}).status_code, 404)
+            self.assertEqual(self.lab(), before)
+            lab = self.lab(); lab['drawing']['nodes'] = lab['drawing']['nodes'][:1]; lab['drawing']['links'] = []
+            response = self.post(mode='ring', revision=self.rev())
+            self.assertEqual((response.status_code, response.json()['detail']), (400, 'Nothing to arrange: this map has one device.'))
+            lab.pop('drawing')
+            response = self.post(mode='ring', revision=rev)
+            self.assertEqual((response.status_code, response.json()['detail']), (404, 'Import a topology map first.'))
+            self.assertEqual(self.events(), [])
+
+    def test_arrange_a_failed_save_restores_every_key_and_keeps_no_new_undo(self):
+        arrange, stub = self.arrange_function()
+        with self.fixture(), stub:
+            ids = [n['id'] for n in self.lab()['drawing']['nodes']]; self.save_document(self.document(ids))
+            before = copy.deepcopy(self.lab()); operations = self.app.state.operations
+            with patch.object(self.store, 'save', side_effect=OSError('disk fixture')):
+                response = self.post(mode='rows', revision=self.rev())
+            self.assertEqual((response.status_code, response.json()['detail']), (500, 'Could not save the map. Try again.'))
+            self.assertEqual(self.lab(), before); self.assertNotIn(self.lab_id, operations.arrange_undo); self.assertEqual(self.events('Devices arranged in rows'), [])
+            arranged = self.post(mode='rows', revision=self.rev()).json(); after = copy.deepcopy(self.lab())
+            with patch.object(self.store, 'save', side_effect=OSError('disk fixture')):
+                response = self.post(undo=True, revision=arranged['revision'])
+            self.assertEqual(response.status_code, 500)
+            self.assertEqual(self.lab(), after, 'a failed Undo leaves the arranged map'); self.assertIn(self.lab_id, operations.arrange_undo, 'and can be tried again')
+            self.assertEqual(self.post(undo=True, revision=arranged['revision']).status_code, 200)
+            self.assertEqual(self.lab(), before)
+
+    def test_arrange_a_document_that_would_outgrow_the_limit_indented_is_kept_compact(self):
+        from app.layout import MAX_DOCUMENT, revision
+        arrange, stub = self.arrange_function()
+        with self.fixture(), stub:
+            ids = [n['id'] for n in self.lab()['drawing']['nodes']]
+            document = dict(self.document(ids), somethingNew=[1] * 160000)
+            url = '/api/labs/' + self.lab_id + '/map-document'
+            opened = self.client.get(url, headers=self.auth).json()
+            self.assertEqual(self.client.put(url, headers=self.auth, json={'annotations': json.dumps(document, separators=(',', ':')), 'revision': opened['revision']}).status_code, 200)
+            self.assertGreater(len(json.dumps(document, indent=2).encode()), MAX_DOCUMENT)
+            self.assertEqual(self.post(mode='rows', revision=self.rev()).status_code, 200)
+            lab = self.lab()
+            self.assertEqual(lab['annotations_for'], revision(lab['drawing']), 'never dropped silently: the document is kept')
+            self.assertEqual(json.loads(lab['annotations'])['somethingNew'], [1] * 160000)
+
+    def test_arrange_undo_after_a_document_save_that_keeps_the_drawing_is_refused_and_the_save_survives(self):
+        # Risk review of C06: a map-document save that changes only what parse_drawing does not carry into the drawing (an
+        # unknown key, a groupId, geo coordinates) keeps the drawing's revision. Undo must still refuse to throw it away.
+        from app.layout import revision
+        arrange, stub = self.arrange_function()
+        with self.fixture() as remote, stub:
+            ids = [n['id'] for n in self.lab()['drawing']['nodes']]
+            for case in ('drawing only', 'stored document'):
+                with self.subTest(case=case):
+                    url = '/api/labs/' + self.lab_id + '/map-document'
+                    # A map saved from Edit map first, so the drawing is the one its document parses to (an imported drawing
+                    # lacks the editor's per-node defaults, and the first save after it would move the revision anyway).
+                    stored = self.document(ids); stored['nodeAnnotations'] += [{'id': i, 'position': {'x': 40, 'y': 300}} for i in ids[1:]]
+                    self.save_document(stored if case == 'stored document' else json.loads(self.client.get(url, headers=self.auth).json()['annotations']))
+                    before = copy.deepcopy(self.lab())
+                    arranged = self.post(mode='rows', revision=self.rev()); self.assertEqual(arranged.status_code, 200, arranged.text)
+                    opened = self.client.get(url, headers=self.auth).json()
+                    for change in ({'somethingElse': {'kept': case}}, {'nodeAnnotations': [dict(entry, groupId='edge', geoCoordinates={'lat': 1.5, 'lng': 2.5}) for entry in json.loads(opened['annotations'])['nodeAnnotations']]}):
+                        document = dict(json.loads(self.client.get(url, headers=self.auth).json()['annotations']), **change)
+                        saved = self.client.put(url, headers=self.auth, json={'annotations': json.dumps(document, indent=2), 'revision': self.rev()})
+                        self.assertEqual(saved.status_code, 200, saved.text)
+                    self.assertEqual(self.rev(), arranged.json()['revision'], 'the precondition: the drawing revision did not move')
+                    after = copy.deepcopy(self.lab())
+                    self.assertEqual(json.loads(after['annotations'])['somethingElse'], {'kept': case})
+                    for revision_sent in (arranged.json()['revision'], self.rev()):
+                        response = self.post(undo=True, revision=revision_sent)
+                        self.assertEqual((response.status_code, response.json()), (412, {'detail': self.STALE, 'reason': 'stale'}), revision_sent)
+                    self.assertEqual(self.lab(), after, 'the later save survives')
+                    self.assertNotIn(self.lab_id, self.app.state.operations.arrange_undo, 'the stale entry is dropped')
+                    self.assertEqual(Store(self.tmp.name).lab(self.lab_id)['annotations'], after['annotations'])
+                    self.assertNotEqual(self.lab(), before)
+                    # Nothing in between: Undo still restores the lab exactly.
+                    exact = copy.deepcopy(self.lab())
+                    arranged = self.post(mode='ring', revision=self.rev()).json()
+                    undone = self.post(undo=True, revision=arranged['revision'])
+                    self.assertEqual(undone.status_code, 200, undone.text)
+                    self.assertEqual(self.lab(), exact)
+            self.assertEqual(remote.call_count, 0)

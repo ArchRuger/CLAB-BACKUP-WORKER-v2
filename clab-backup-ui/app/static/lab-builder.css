@@ -29,6 +29,10 @@ body.lab-builder{display:flex;flex-direction:column}
 .builder-images.error .button{background:transparent;color:#fff;border-color:#fff}
 .builder-images.error .button:hover:not(:disabled){background:rgba(255,255,255,.18)}
 .builder-images.error .button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+/* The topology check note (lab-builder-page.js): errors containerlab will refuse when deploying, in the image notice's shape. */
+.builder-check{flex:none;display:flex;align-items:baseline;gap:var(--space-2);margin:0;padding:var(--space-2) var(--space-4);font-size:13px;line-height:1.5;color:var(--danger-strong);background:var(--danger-soft);border-bottom:1px solid var(--line);border-left:4px solid var(--danger);overflow-wrap:anywhere}
+.builder-check #builder-check-text{flex:1 1 auto}
+.builder-check .button{flex:none;padding:1px 10px;min-height:0;font-size:13px}
 .builder-stage{flex:1 1 auto;min-height:0;position:relative}
 .lab-builder #root{position:absolute;inset:0;width:auto;height:auto}
 .builder-welcome{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-5);text-align:center;background:var(--bg);z-index:3}
@@ -39,7 +43,7 @@ body.lab-builder{display:flex;flex-direction:column}
 #builder-welcome{margin:var(--space-4);border:2px dashed var(--line);border-radius:12px}
 .builder-drop{display:flex;flex-direction:column;align-items:center;gap:var(--space-2);margin-top:var(--space-2)}
 .builder-drop small{color:var(--muted);max-width:52ch}
-.builder-welcome[hidden],.builder-problem[hidden],.builder-note[hidden],.builder-images[hidden],.builder-hint[hidden]{display:none}
+.builder-welcome[hidden],.builder-problem[hidden],.builder-note[hidden],.builder-images[hidden],.builder-check[hidden],.builder-hint[hidden]{display:none}
 .builder-problem{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-5);text-align:center;background:rgba(244,246,248,.94);z-index:6}
 .builder-problem #builder-problem-text{font-weight:600;color:var(--ink)}
 /* Shown on an empty canvas only, left of the palette, and never in the way of the pointer. */
@@ -56,7 +60,7 @@ body.lab-builder{display:flex;flex-direction:column}
 .builder-yaml-head h2{flex:1;margin:0;font-size:15px;color:var(--ink)}
 .builder-yaml-head .button{padding:5px 12px;min-height:0}
 .builder-yaml-help{flex:none;margin:0;padding:var(--space-2) var(--space-3) 0;font-size:12.5px;color:var(--muted)}
-.builder-yaml-body{flex:1 1 auto;min-height:0;display:flex;margin:var(--space-2) var(--space-3) 0;border:1px solid var(--line-strong);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.builder-yaml-body{flex:1 1 auto;box-sizing:content-box;min-height:160px;display:flex;margin:var(--space-2) var(--space-3) 0;border:1px solid var(--line-strong);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
 .builder-yaml-gutter,.builder-yaml-editor{margin:0;padding:8px 8px 24px;font:13px/20px var(--mono);tab-size:2;border:0;box-sizing:border-box}
 .builder-yaml-gutter{flex:none;min-width:4ch;overflow:hidden;text-align:right;color:var(--muted);background:var(--surface-2);border-right:1px solid var(--line);user-select:none}
 .builder-yaml-editor{flex:1 1 auto;min-width:0;height:100%;resize:none;white-space:pre;overflow:auto;color:var(--ink);background:var(--surface)}
@@ -67,6 +71,32 @@ body.lab-builder{display:flex;flex-direction:column}
 .builder-yaml-status.is-error{color:var(--danger-strong);background:var(--danger-soft)}
 .builder-yaml-status.is-warn{color:var(--warn-strong);background:var(--warn-soft)}
 .builder-yaml-status.is-ok{color:var(--ok-strong)}
+.builder-yaml-panel{overflow-y:auto}
+.builder-yaml-example{flex:none;margin:0;padding:var(--space-1) var(--space-3) 0;font-size:12.5px}
+.builder-yaml-example summary{cursor:pointer;color:var(--accent-strong);font-weight:600}
+.builder-yaml-example[open]{max-height:45%;overflow:auto}
+.builder-yaml-example .form-help{padding:var(--space-1) 0}
+.builder-yaml-example-code{margin:0 0 var(--space-1);padding:8px;overflow:auto;font:12.5px/18px var(--mono);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius)}
+.builder-yaml-example-actions{padding-bottom:var(--space-2)}
+.builder-yaml-line.is-error{color:var(--danger-strong);font-weight:700;background:var(--danger-soft)}
+.builder-yaml-line.is-warning{color:var(--warn-strong);font-weight:700;background:var(--warn-soft)}
+.builder-yaml-problems{flex:none;display:flex;flex-direction:column;min-height:0;padding:0 var(--space-3) var(--space-2)}
+.builder-yaml-problems-title{margin:var(--space-2) 0 0;font-size:13px;color:var(--ink)}
+.builder-yaml-problems-note,.builder-yaml-schema,.builder-yaml-keyhelp{margin:0;padding:var(--space-1) 0 0;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.builder-yaml-schema-failed{margin:var(--space-1) 0 0;font-size:12.5px;color:var(--danger-strong);overflow-wrap:anywhere}
+.builder-yaml-schema-failed[hidden]{display:none}
+.builder-yaml-schema-failed .button{padding:1px 10px;min-height:0}
+.builder-yaml-list{flex:1 1 auto;min-height:84px;max-height:30vh;margin:var(--space-1) 0 0;padding:0;list-style:none;overflow:auto}
+.builder-yaml-list li{margin:0;overflow-wrap:anywhere;font-size:13px}
+.builder-yaml-problem{display:block;width:100%;padding:3px 6px;text-align:left;font:inherit;color:var(--ink);background:transparent;border:0;border-radius:4px;cursor:pointer;overflow-wrap:anywhere}
+.builder-yaml-problem:hover{background:var(--surface-2)}
+.builder-yaml-problem:focus-visible{outline:2px solid var(--focus-ring);outline-offset:1px}
+.builder-yaml-sev{font-weight:700}
+.builder-yaml-list li.is-error .builder-yaml-sev{color:var(--danger-strong)}
+.builder-yaml-list li.is-warning .builder-yaml-sev{color:var(--warn-strong)}
+.builder-yaml-more>summary{cursor:pointer;margin-top:var(--space-1);font-size:12.5px;color:var(--accent-strong)}
+/* Wider than 900 px the caption and the key help are always shown, so the disclosure's summary is not offered. */
+@media (min-width:901px){.builder-yaml-more>summary{display:none}}
 @media (max-width:900px){
  .builder-yaml-panel{top:auto;left:0;width:auto;height:55%;border-left:0;border-top:1px solid var(--line-strong)}
  .builder-stage.yaml-open #root{right:0;bottom:55%}

@@ -450,3 +450,6 @@ function saveChangeSentence(summary,also,job){
  if(job&&job.replaces_online===true)parts.push('The online copy held a newer save of this lab. This save replaces it.');
  return parts.join(' ');
 }
+// The one text matcher of the Devices search (app.js) and the Home filter (home.js): a trimmed, case-insensitive
+// substring of the joined non-empty parts. An empty term matches everything. No wildcards (C03 §1.9).
+function textMatch(term,parts){const t=String(term||'').trim().toLowerCase();if(!t)return true;return (parts||[]).filter(p=>p!==undefined&&p!==null&&p!=='').map(String).join(' ').toLowerCase().includes(t);}

@@ -29,7 +29,7 @@ Status: ☐ open · ◐ available in Edit map since that release but not yet dri
 | 12 | Grid style, line width, colours | yes (Lab settings › Appearance) | colours imported, not editable | ☑ 1.30.17 (browser: a grid setting stored) |
 | 13 | z-order | field `zIndex` kept; no control in either | field kept | n/a |
 | 14 | Zoom, pan, fit | yes | fit only | ☑ 1.30.14 (the editor's own viewer controls; no stored data) |
-| 15 | Export: SVG | yes | no | ☑ 1.30.17 (browser: downloads an SVG) |
+| 15 | Export: SVG | yes | no | ☑ 1.30.17 (browser: downloads an SVG). The Topology tab has its own **Download picture…** (SVG, PNG) since C06. |
 | 16 | Export: draw.io; download `.annotations.json`; import `.annotations.json` | no | **yes, must stay** | ☑ 1.30.14 (browser: download, draw.io, import) |
 | 17 | Save with a conflict check; cancel / discard question | draft revision check (`draftWrite`) | yes (`revision`, discard dialog) | ☑ 1.30.14 (browser and unit) |
 | — | Not map editing, stays out: add/remove devices and links, kinds, images, lab settings, deploy, Geo layout (hidden), traffic-rate widgets (need runtime statistics), raw YAML/JSON tabs (off: CSP) | | | |
@@ -40,8 +40,9 @@ The builder writes `<topology>.annotations.json`: `nodeAnnotations`, `networkNod
 `freeTextAnnotations`, `freeShapeAnnotations`, `groupStyleAnnotations`, `edgeAnnotations`,
 `aliasEndpointAnnotations`, `trafficRateAnnotations`, `viewerSettings`; every entry allows extra keys.
 The manager keeps **only its own normalised drawing**, not that document: on import it drops what it does
-not draw (`groupId`/`parentId`/`level`, `geoCoordinates`, line arrows, `roundedBackground`, alias and
-traffic-rate entries, most viewer settings, unknown keys). Any approach that edits the manager's drawing
+not draw (`groupId`/`parentId`, `geoCoordinates`, alias and traffic-rate entries, most viewer settings,
+unknown keys; until C06 also `level`, line arrows, `roundedBackground` and the viewer's node style, box spacing
+and link style, which the drawing now keeps and the Topology tab draws). Any approach that edits the manager's drawing
 therefore cannot reach parity and would lose data on a round trip.
 
 ## 3. Approach chosen: the builder itself, in map mode
@@ -68,10 +69,9 @@ Reuse the embedded editor instead of growing `diagram-editor.js` into a second o
 Known gaps of this approach, to be listed as incomplete unless solved: undo/redo is absent in the
 editor's view mode (row 8); the device look goes through a topology command (row 9) and needs either an
 adapter translation into `nodeAnnotations` or stays as today (both solved: 1.30.15, 1.30.16). The manager's
-Topology view draws less than the editor can store: **line arrows, rounded text backgrounds and nested group
-levels are kept in the document and shown by the editor, but not drawn on the lab's Topology tab** (rotation,
-colours, borders, corner radius, label offsets and the label mode are). That is a limit of the Topology
-view, not of Edit map.
+Topology view drew less than the editor can store: until C06 of the parity campaign the Topology tab did not draw
+line arrows, rounded text backgrounds and nested group levels (rotation, colours, borders, corner radius, label
+offsets and the label mode it did); it does since.
 
 ## 4. Increments
 

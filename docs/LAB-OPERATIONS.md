@@ -36,7 +36,10 @@ retired telemetry feature added, **Retired telemetry configuration…** (see [TE
 says why underneath it (the VM is not connected, the lab is not running, another
 operation is running, the lab has no topology file on the VM). The **Manager ▾** menu in
 the top bar holds the actions that are not about one lab: **Deploy a new lab…**,
-**Running labs on the VM…** and **Operation history…**.
+**Running labs on the VM…**, **Operation history…**, **Manager settings…**,
+**Browser preferences…**, a **Help** group (**Keyboard shortcuts…** and links to the
+containerlab documentation, which open in a new tab) and **Diagnostics**. See
+[Help, keyboard shortcuts and browser preferences](#help-keyboard-shortcuts-and-browser-preferences).
 
 | Action | Behaviour |
 |---|---|
@@ -63,7 +66,9 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 Removed in earlier releases: editing existing VM YAML as text (the lab builder's reviewed *Save changes to the VM…* is the only way the manager replaces a topology file, and only for a lab that is not deployed), copy topology path, manual
 Select/link VM project shortcut, Open VM folder lab shortcut, separate Edit
 layout, horizontal/vertical diagram exports, SSHX/GoTTY and SR Linux fcli. These
-commands are rejected by the current manager and installed helper. Upgrade the
+commands are rejected by the current manager and installed helper (`layout=horizontal` and `layout=vertical`
+of the draw.io route stay refused; the manager's own **Rows** and **Columns** arrangements in *Export to
+draw.io…* are a different feature and are not that removed helper-run graph). Upgrade the
 host helper as well as the image. Previously created sharing containers are not
 automatically stopped or deleted by an upgrade; manage those on the VM if present.
 
@@ -144,6 +149,74 @@ container from the lab's deployment name and refuses a container that is not lab
 - **containerlab version.** The Manager menu's footer and the Diagnostics page's *VM commands* row name the
   containerlab release when the manager has asked the VM for its capabilities.
 
+## Help, keyboard shortcuts and browser preferences
+
+All three live in the **Manager ▾** menu in the top bar and send nothing to the manager.
+
+**Help.** **Help** is a group at the bottom of the Manager menu, just above **Diagnostics**. It is
+folded every time the menu opens: click it, or press Enter, Space or ArrowRight, to unfold it, and
+ArrowLeft to fold it again. It holds **Keyboard shortcuts…** and four links that open in a new tab
+(they leave the manager, so a classroom without internet access sees the browser's own error):
+*containerlab documentation* (containerlab.dev), *Lab examples* (containerlab.dev),
+*Device kinds and their images* (the containerlab.dev kinds page, a pointer to the vendor image
+notes there and not a check of your own images; **Images on this VM…** in the same menu is that
+check) and *srl-labs lab repositories on GitHub*. The menu markup also carries a *Student quick
+start (PDF)* item, but the manager links the student guide only once it is served, and it is not
+served yet: the item stays hidden until the guide is revised for the current manager.
+
+**Keyboard shortcuts.** **Manager ▾ › Help › Keyboard shortcuts…** opens a dialog that lists the
+keys the manager's pages bind: the menus (ArrowDown, ArrowUp, Home, End, ArrowRight and ArrowLeft for
+groups, Escape, Tab), the tabs and lists, Shift+F10 or the Menu key for a lab's or device's menu, the
+topology map, the Save and Load panels, the folder chooser, the terminal page (Alt+ArrowUp,
+Alt+ArrowDown, Alt+0, Alt+T, Ctrl+Insert), undo and redo on the Edit map page and the lab builder's
+YAML panel. It lists only keys that exist, and everything in it can also be done with the mouse.
+There is deliberately no `?` key to open it: `?` is a character in every text field, and its position
+differs between keyboard layouts.
+
+**Browser preferences.** **Manager ▾ › Browser preferences…** shows what this browser remembers for
+the manager. Nothing in it is sent to the manager or shared with other browsers; it is stored by the
+browser only.
+
+- *Terminal text size* is the one setting you can change here (11 to 18 px, default 14). It applies to
+  terminals opened from then on; a terminal that is already open keeps its size.
+- *Remembered in this browser* lists the terminal text size, the *Last opened* times of labs, the
+  warnings about failed operations that you closed, the topology editor's view settings (grid style,
+  grid line width, which side its panel opens on, colour mode, in the lab builder and Edit map) and
+  the remembered capture choices.
+- *Remembered in this tab* lists the Home list tab (Recent labs or All labs) and the notices you
+  closed with ×. A different browser tab keeps its own.
+- *Kept by Reset* names what is never cleared: Network design drafts, lab builder drafts and
+  templates, the *Try again* requests, a save being sent, the return marker of the lab builder and the
+  lab that was open before a reload. Drafts exist only in this browser, so Reset leaves them alone;
+  discard them on the Network design card or with **Drafts…** in the lab builder.
+- *Not stored*: the open folders of the save chooser and the Home filter are kept only while the page
+  is open, and a reload forgets them.
+- *Display settings the manager follows* shows reduced motion, more contrast and forced colours as on
+  or off. They come from your system or browser and the manager stores nothing for them. The
+  appearance is light; there is no dark mode setting (the terminal page is dark by design).
+
+**Reset browser preferences…** asks first. The confirmation names what changes, with counts, and
+**Keep** is focused so that Enter changes nothing. **Reset** then forgets, in this browser, the terminal
+text size, the *Last opened* times, the editor view settings, the remembered capture choices and
+which warnings about failed operations you closed; those warnings show again and their labs read
+*Needs attention* until you close them again. In this tab only it forgets the Home list tab and the
+closed notices; other open tabs keep theirs. Drafts, templates and *Try again* requests are kept.
+If the browser blocks site storage (a private window, or site data blocked), the dialog says there is
+nothing to show or reset and **Reset** is disabled with that reason. If storage is full or
+read-only, the inventory still shows, the text size select is disabled with a sentence saying so, and
+**Reset** still works because removing items does not need free space.
+
+**Find a lab on Home.** With two or more labs, a **Find a lab** field sits above the cards. A lab
+matches when what you typed is part of its name or part of a device's name, or when it is exactly the
+lab's state word (*Running*, *Stopped*, *Starting*, *Needs attention*): `running` finds the running
+labs, while `run` matches only names. Case and surrounding spaces do not matter, and there are no
+wildcards. A card shown because of a device carries *has device <name>*. The count (*3 of 7 labs*)
+and, when nothing matches, a sentence that names what you typed appear beside the field; for a screen
+reader the result is announced once, half a second after you stop typing. **Clear** empties the field
+and keeps focus in it. The filter covers the labs Home lists (hidden labs stay hidden), is never
+stored and is not part of the address, so a reload starts without it; the page itself does not clear it on Escape. The
+Devices tab search uses the same matching.
+
 ## Device readiness after deployment
 
 A running container is not a network OS that accepts a login: cEOS, vJunos and XRv9k
@@ -188,9 +261,51 @@ something is unsaved. *Download map file* gives the full annotations document, *
 the saved map, and *Import map file…* replaces the map with a file from your computer. A map that was
 changed elsewhere since it was opened is not overwritten: reopen it. A lab without a topology file in the
 manager (imported from an inventory) opens a simpler dialog with text, boxes, circles, lines and Undo.
-The Topology tab draws less than the editor can store: line arrows, rounded text backgrounds and nested
-group levels are kept in the map document and shown by the editor, but are not drawn on the Topology tab
-(rotation, colours, borders, corner radius, label offsets and the label mode are).
+The Topology tab draws what the editor stores: line arrows, rounded note backgrounds and nested group
+levels, and a map saved by the VS Code extension in the boxed node style or with elbow links is drawn in that
+style (the per-device box colours of that newer editor are not drawn yet). Devices and links of a lab whose map
+was never placed sit on a grid; **More ▾ › Arrange devices…** lays them out in rows, columns or a ring and
+saves the map, with **Undo arrange** offered once (it puts the map back exactly as it was); Edit map's own
+layouts stay. The dialog says plainly that every device moves and the map is saved; notes, boxes and groups
+stay where they are, so a group no longer surrounds its devices (the dialog counts those groups). *Rows* and
+*Columns* lay the devices out by their links, one layer of neighbours at a time; *Ring* puts them on a circle;
+a device with no link goes below the rest. They are disabled, with the reason *This map has no links to arrange
+by*, when the map has no links, and a map with one device cannot be arranged. Arranging changes only the
+stored map, never the topology, the devices or the running lab. **Undo arrange** appears under the map after
+an arrangement and is kept only while the map is as the arrangement left it: if the map was changed by anyone
+else, or the manager restarted, it is removed and the map is reloaded. A lab whose map still sits on the
+default grid (two devices or more) says *Devices sit on the default grid.* under the map, with a button that
+opens the same dialog.
+
+**Link state on the map.** On a VM whose helper reports `link_state` (containerlab 0.64 or later), the Topology tab asks the VM every ten
+seconds which container links are up, while the lab is *Running* or *Partially running*, the Topology tab is
+shown, the browser tab is visible and the device panel is closed (opening the panel stops it; closing the panel
+asks once at once and carries on; returning to a hidden browser tab does the same). A link whose container
+interface is not up on either end (it went with a stopped neighbour, or the device set it down or dormant: a
+cEOS `shutdown` shows this way on the neighbour as well) is drawn **red and dotted**, so the colour is not the
+only sign; a working link keeps its normal stroke, and a link that is both down and impaired is drawn as down.
+The line at the bottom left of the map counts the links (`Links: 4 up · 1 down`, and `· 1 not checked` for links
+the manager cannot check, for example a device it cannot name a container for) and a legend line explains the
+dotted red stroke while the colours are on. Hover or focus a link and the line at the bottom right gives its
+words, for example `vrt:ge-0/0/1 — cjunos:et-0/0/0 · down: vrt ge-0/0/1 is dormant`, and the same words are the
+link's tooltip and accessible name. When both ends report the same state the line says
+`down at both ends (dormant: one side may be shut down)` without blaming a device. For a device that runs as a
+virtual machine inside its container (vJunos-switch, vJunosEvolved, vJunos-router, vQFX, XRv9k) the state is the
+container's link to the virtual machine, not the port inside it: a port shut down inside the device may still read
+connected, and the count says *connected* instead of *up* (`dotted red = down (container link)`) for such labs.
+Nothing of this is stored. When the answer is not available the links are drawn from the topology file, the
+colours are cleared and the line says why, once: `Link state off: …` for a VM helper that needs the update, a
+containerlab older than 0.64 (the VM's version is named), or a lab not linked to a lab on the VM; `Links are drawn
+from the topology file; the lab is not running.` for a lab that is not running (nothing is asked). If the manager
+gets no answer (the VM is busy or does not reply), the last colours stay under `Link state paused, retrying…`; after three failures the line reads
+`Link state stopped (as of 14:02).` with **Retry**, and after thirty minutes `Link state paused (as of 14:02).` with
+**Resume**, and the hover words of a kept colour carry the same time.
+
+**Find** above the map filters the devices as you type by name, address, platform or the label drawn on the map,
+dims the devices that do not match and the links between two of them, says `2 of 5 devices match` or `No device
+matches "…"` under the map and, on Enter, fits the view to the matches; Escape clears the field first and only
+then closes an expanded map. The filter is not stored and does not touch the Devices tab's search. Hovering or
+focusing a link also outlines its two devices.
 
 The editor changes device positions; connections follow the devices. The full export
 contains editable devices, connections, interface labels, groups/shapes, notes, colours
@@ -206,8 +321,9 @@ the exported file. This is the manager's layout editor, not an embedded copy of
 the full diagrams.net application. Structural topology changes are made in the
 original VM YAML and imported/synced separately.
 
-The map's **More ▾** menu (also in the expanded map) offers **Open all CLIs ↗** and
-**Back up all configurations**. Back up all covers every device that can be backed up
+The map's **More ▾** menu (also in the expanded map) offers **Import map…**, **Download picture…**,
+**Export to draw.io…**, **Arrange devices…**, **Open all CLIs ↗** and **Back up all configurations**; the three
+new items are disabled with the reason *No map yet* while a lab has no map. Back up all covers every device that can be backed up
 now, including devices not selected for scheduled backups. When every device is ready it
 starts at once; when some cannot be backed up, or a job is already running, it first lists
 the devices it will skip and why, and you confirm with **Back up N devices**. Right-click a device on the map for Open CLI, Console ↗ (the three kinds above; disabled with the reason while
@@ -216,6 +332,18 @@ up configuration, Restart device… and Device details. Right-click a link for C
 (a click on the link opens the capture dialog with both ends ticked, one Wireshark each); the Tools tab's
 Packet capture card says how many Wireshark sessions run from this browser and offers End all my sessions
 ([CAPTURE.md](CAPTURE.md)).
+
+**Download picture…** saves the map as SVG or PNG: the whole map or what is shown now, with or without the
+background colour, and with or without the devices' state and link colours (left out unless ticked, so a picture
+for a report does not carry one moment's colours). It is made in the browser and nothing is sent to the manager;
+the file is `<lab>-map.svg` or `<lab>-map.png`, and it holds the drawn map only: no hover, dimming, tooltips or
+capture hit areas. A PNG is drawn at up to twice the size; a map over 8192 px on its longest side, or a browser
+that cannot encode a PNG, says so in the dialog and the SVG stays available. **Export to draw.io…** offers the
+arrangement (*As on the map*, *Rows*, *Columns*) and a theme (*Manager colours*, or *Print (black and white)* for
+paper). *Rows* and *Columns* arrange the devices in the file only, your map is not changed, and notes, boxes and
+groups are left out of those two because they were placed for the saved positions; if the manager refuses, its
+sentence appears in the dialog instead of a downloaded error file. The editor's own *Export to draw.io* keeps the
+map's positions and the manager colours.
 
 ## Review and persistence
 

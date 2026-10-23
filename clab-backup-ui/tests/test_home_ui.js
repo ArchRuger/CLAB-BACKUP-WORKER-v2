@@ -169,3 +169,138 @@ test('Home leads with two equal starting choices: Deploy (a file on the lab VM, 
  const loading=harness({labs:[],loaded:false});loading.context.renderHome();assert.equal(loading.element('home-start').hidden,true,'nothing is offered before the state is known');
  const many=harness({labs:[running,stopped]});many.context.renderHome();assert.equal(many.element('home-start').hidden,false);
 });
+
+// C09 S2: the Home lab filter (docs/parity-campaign/C09-DESIGN.md section 4). The markup is S1's (index.html); the harness
+// supplies the ids it must carry: home-filter-row, home-filter (value), home-filter-clear, home-filter-count, home-filter-empty,
+// home-filter-live.
+function filterHarness(labs,opts={}){
+ const h=harness({labs,...(opts.state||{})},opts);
+ const timers=[];let active=null;
+ h.context.document={get activeElement(){return active;}};
+ h.context.setTimeout=(fn,ms)=>{timers.push({fn,ms,live:true});return timers.length;};
+ h.context.clearTimeout=id=>{if(timers[id-1])timers[id-1].live=false;};
+ const row=h.element('home-filter-row'),field=h.element('home-filter'),clear=h.element('home-filter-clear');
+ field.value='';field.focus=()=>{active=field;};clear.focus=()=>{active=clear;};
+ row.contains=el=>el===field||el===clear;
+ h.element('home-filter-live').textContent='';
+ const type=text=>{field.value=text;field.oninput();};
+ const fire=()=>{for(const t of timers.splice(0))if(t.live)t.fn();};
+ return {...h,field,clear,row,timers,type,fire,setActive:el=>{active=el;},active:()=>active,};
+}
+const labOf=(id,name,extra={})=>({...stopped,id,name,favorite:false,nodes:[{name:'clab-x-r1',short_name:'r1'},{name:'clab-x-sw9',short_name:'sw9'}],...extra});
+const cardNames=h=>[...h.element('lab-cards').innerHTML.matchAll(/<h3>([^<]*)<\/h3>/g)].map(m=>m[1]);
+
+test('C09: the filter narrows by name (substring, any case, trimmed), keeps the tab order and counts what it shows',()=>{
+ const labs=[labOf('a','BGP core',{deployment:{status:'Running'}}),labOf('b','OSPF area 0'),labOf('c','Bgp edge')];
+ const h=filterHarness(labs,{tab:'all'});
+ h.context.renderHome();assert.deepEqual(cardNames(h),['BGP core','Bgp edge','OSPF area 0']);assert.equal(h.element('home-filter-count').textContent,'');assert.equal(h.clear.hidden,true);
+ h.type('  bgp ');
+ assert.deepEqual(cardNames(h),['BGP core','Bgp edge'],'substring, case-insensitive, trimmed; the All labs order is kept');
+ assert.equal(h.element('home-filter-count').textContent,'2 of 3 labs');assert.equal(h.clear.hidden,false);assert.equal(h.element('home-filter-empty').hidden,true);assert.equal(h.element('lab-cards').hidden,false);
+ h.type('');assert.deepEqual(cardNames(h),['BGP core','Bgp edge','OSPF area 0']);assert.equal(h.element('home-filter-count').textContent,'');
+});
+
+test('C09: the state word matches by whole label only; a device short name matches by substring and the card says why',()=>{
+ const running=labOf('r','Alpha',{deployment:{status:'Running'},nodes:[{name:'clab-a-r1',short_name:'r1',ssh_ready:true}],nos_readiness:{status:'ready',total:1,ready:1}});
+ const q={nodes:[{name:'q',short_name:'q'}]},unlinked=labOf('u','Beta',{...q,deployment:{status:'Unlinked'}}),partial=labOf('p','Gamma',{deployment:{status:'Partially running'},nodes:[{name:'a',runtime_state:'running'},{name:'b',runtime_state:'exited'}]}),idle=labOf('s','Delta',q);
+ const h=filterHarness([running,unlinked,partial,idle],{tab:'all'});
+ h.context.renderHome();
+ h.type('running');assert.deepEqual(cardNames(h),['Alpha'],'running is the whole word: not "Not matched to a running lab", not "Some devices stopped"');
+ h.type('RUNNING ');assert.deepEqual(cardNames(h),['Alpha']);
+ h.type('stopped');assert.deepEqual(cardNames(h),['Delta'],'stopped matches the Stopped lab and not Some devices stopped');
+ h.type('not matched');assert.deepEqual(cardNames(h),[],'part of a longer state label is not a state match');
+ h.type('R1');assert.deepEqual(cardNames(h),['Alpha'],'a device short name');
+ assert.match(h.element('lab-cards').innerHTML,/<p class="caption lab-card-match">has device r1<\/p>/);
+ h.type('alp');assert.deepEqual(cardNames(h),['Alpha']);assert.doesNotMatch(h.element('lab-cards').innerHTML,/has device/,'a name match needs no explanation');
+ h.type('running');assert.doesNotMatch(h.element('lab-cards').innerHTML,/has device/,'nor does a state match');
+ const hostile=filterHarness([labOf('x','X',{nodes:[{name:'n',short_name:'<b>"r"</b>'}]})]);hostile.context.renderHome();hostile.type('<b>');
+ assert.match(hostile.element('lab-cards').innerHTML,/has device &lt;b&gt;&quot;r&quot;&lt;\/b&gt;/,'the device name is escaped');
+});
+
+test('C09: no match hides the cards, shows the visible sentence with the term and keeps Clear; hidden labs stay out whatever the term',()=>{
+ const h=filterHarness([labOf('a','Alpha'),labOf('b','Beta'),labOf('h','Hidden one',{hidden:true})]);
+ h.context.renderHome();h.type('zzz & <i>');
+ assert.equal(h.element('lab-cards').hidden,true);assert.equal(h.element('home-labs').hidden,false,'the row and the sentence stay while the cards are hidden');
+ assert.equal(h.element('home-filter-empty').hidden,false);assert.equal(h.element('home-filter-empty').textContent,'No lab matches “zzz & <i>”. Try part of a lab name, a state such as Running, or a device name.','textContent: the term needs no escaping');
+ assert.equal(h.element('home-filter-empty').attrs.role,undefined,'the visible sentence is not a live region');assert.equal(h.element('home-filter-count').textContent,'0 of 2 labs');assert.equal(h.clear.hidden,false);
+ h.type('hidden');assert.deepEqual(cardNames(h),[],'a hidden lab never matches');
+ h.type('');assert.equal(h.element('home-filter-empty').hidden,true);assert.equal(h.element('home-filter-empty').textContent,'');assert.deepEqual(cardNames(h).sort(),['Alpha','Beta']);
+});
+
+test('C09: the one live region is written once, 500 ms after the last input, never by the poll, and carries no term',()=>{
+ const labs=[labOf('a','Alpha'),labOf('b','Beta'),labOf('c','Alpine')];
+ const h=filterHarness(labs),live=()=>h.element('home-filter-live').textContent;
+ h.context.renderHome();h.type('a');h.type('al');h.type('alp');
+ assert.equal(live(),'','nothing is announced per keystroke');assert.equal(h.timers.filter(t=>t.live).length,1,'one pending timer: each keystroke cancels the previous');assert.equal(h.timers.find(t=>t.live).ms,500);
+ h.context.renderHome();h.context.renderHome();assert.equal(live(),'','the poll never writes it');
+ h.fire();assert.equal(live(),'2 of 3 labs shown');
+ h.context.renderHome();assert.equal(live(),'2 of 3 labs shown','and does not rewrite it');
+ h.type('zzz');h.fire();assert.equal(live(),'No lab matches. Try part of a lab name, a state or a device name.');assert.doesNotMatch(live(),/zzz/);
+ h.type('');h.fire();assert.equal(live(),'','an empty term empties it');
+ assert.equal(h.element('home-filter-live').hidden,false,'never hidden');
+});
+
+test('C09: the row shows with two labs, hides with one lab and an empty unfocused field, and a value or focus inside it keeps it',()=>{
+ const one=filterHarness([labOf('a','Alpha')]);one.context.renderHome();assert.equal(one.row.hidden,true);
+ one.type('al');assert.equal(one.row.hidden,false,'a typed term keeps the row');
+ one.type('');assert.equal(one.row.hidden,true,'empty and not focused: hidden again');
+ one.setActive(one.field);one.context.renderHome();assert.equal(one.row.hidden,false,'focus in the field keeps it');
+ one.setActive(one.clear);one.context.renderHome();assert.equal(one.row.hidden,false,'focus on Clear keeps it (focus anywhere inside the row)');
+ one.setActive(null);one.context.renderHome();assert.equal(one.row.hidden,true);
+ const two=filterHarness([labOf('a','Alpha'),labOf('b','Beta')]);two.context.renderHome();assert.equal(two.row.hidden,false);
+ const loading=filterHarness([labOf('a','Alpha'),labOf('b','Beta')],{state:{loaded:false}});loading.context.renderHome();assert.equal(loading.row.hidden,true,'hidden until the state is loaded');
+ const none=filterHarness([]);none.context.renderHome();assert.equal(none.element('home-labs').hidden,true);
+});
+
+test('C09: Clear empties the field, focuses it before rendering (so one lab keeps the row), and schedules the live sentence',()=>{
+ const h=filterHarness([labOf('a','Alpha')]);
+ h.context.renderHome();h.type('zzz');h.setActive(h.clear);
+ const order=[];const render=h.context.renderHome;
+ h.field.focus=()=>{order.push('focus');h.setActive(h.field);};
+ h.context.renderHome=()=>{order.push('render:'+(h.active()===h.field?'field focused':'not focused'));return render();};
+ h.clear.onclick();
+ assert.equal(h.field.value,'');assert.equal(h.active(),h.field,'focus is in the field');assert.equal(h.row.hidden,false,'one lab: the row is still there');assert.equal(h.clear.hidden,true);
+ assert.deepEqual(order.slice(0,2),['focus','render:field focused'],'focus first, then render');
+ assert.deepEqual(cardNames(h),['Alpha']);h.fire();assert.equal(h.element('home-filter-live').textContent,'');
+ h.setActive(null);h.context.renderHome=render;h.context.renderHome();assert.equal(h.row.hidden,true,'once focus leaves, the one-lab row goes away again');
+});
+
+test('C09: the field, its value and the markup of an unchanged list survive polls',()=>{
+ const h=filterHarness([labOf('a','Alpha'),labOf('b','Beta')]);
+ h.context.renderHome();h.type('alp');const field=h.element('home-filter'),html=h.element('lab-cards')._markup;
+ h.context.renderHome();h.context.renderHome();
+ assert.equal(h.element('home-filter'),field);assert.equal(field.value,'alp');assert.equal(h.element('lab-cards')._markup,html);assert.deepEqual(cardNames(h),['Alpha']);
+ assert.equal(h.tabStore.value,'','the filter is neither stored nor a route: the tab store is untouched');
+ const src=fs.readFileSync(path.join(__dirname,'../app/static/home.js'),'utf8');
+ assert.doesNotMatch(src,/localStorage|sessionStorage|location\.|history\.|addEventListener\('keydown',[^)]*Escape.*filter/,'no storage, no URL');
+});
+
+// C09 fixes
+test('C09 fixes: a whitespace-only term is empty for the count, Clear, the empty sentence and the live region',()=>{
+ const h=filterHarness([labOf('a','Alpha'),labOf('b','Beta')]);
+ h.context.renderHome();h.type('   ');
+ assert.equal(h.element('home-filter-count').textContent,'');assert.equal(h.clear.hidden,true);assert.equal(h.element('home-filter-empty').hidden,true);assert.deepEqual(cardNames(h).sort(),['Alpha','Beta']);
+ h.fire();assert.equal(h.element('home-filter-live').textContent,'');
+});
+test('C09 fixes: the count and the live sentence say "1 lab" for one lab',()=>{
+ const h=filterHarness([labOf('a','Alpha')]);
+ h.context.renderHome();h.field.focus();h.type('alp');
+ assert.equal(h.element('home-filter-count').textContent,'1 of 1 lab');h.fire();assert.equal(h.element('home-filter-live').textContent,'1 of 1 lab shown');
+ const two=filterHarness([labOf('a','Alpha'),labOf('b','Beta')]);two.context.renderHome();two.type('alp');
+ assert.equal(two.element('home-filter-count').textContent,'1 of 2 labs');two.fire();assert.equal(two.element('home-filter-live').textContent,'1 of 2 labs shown');
+});
+test('C09 fixes: Escape in the field is cancelled (the browser would clear a search field) and keeps the term; other keys are left alone',()=>{
+ const h=filterHarness([labOf('a','Alpha'),labOf('b','Beta')]);
+ h.context.renderHome();h.type('alp');
+ const press=key=>{const e={key,prevented:false,preventDefault(){this.prevented=true;}};h.field.onkeydown(e);return e.prevented;};
+ assert.equal(press('Escape'),true);assert.equal(h.field.value,'alp');assert.deepEqual(cardNames(h),['Alpha']);
+ assert.equal(press('a'),false);assert.equal(press('Tab'),false);
+});
+test('C09 fixes: a mousedown on the empty part of the filter row keeps the focus in the field; on a control it does nothing',()=>{
+ const h=filterHarness([labOf('a','Alpha'),labOf('b','Beta')]);
+ h.context.renderHome();h.setActive(h.field);
+ const down=target=>{const e={target,prevented:false,preventDefault(){this.prevented=true;}};h.row.onmousedown(e);return e.prevented;};
+ assert.equal(down(h.row),true,'the second click of a double-click on a vanished Clear');
+ assert.equal(down(h.field),false);assert.equal(down(h.clear),false);
+ h.setActive(null);assert.equal(down(h.row),false,'nothing to protect when the field is not focused');
+});

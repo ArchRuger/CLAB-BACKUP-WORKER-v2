@@ -157,3 +157,20 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   the A1 `vm`-wording check, release 1.31.6 with the draft in the session scratchpad), C08 `wt-c08-s3` (`2bdc9cf`:
   verified, CI entries added, bundle check clean; review, release), C09 `claude/c09-int` (`72334f5`: verified,
   shortcut rows repointed after the merge; review, release); C10 last; C11 blocked on upstream 0.4.0.
+- 2026-10-23 17:30 UTC, **release 1.31.6** (C06 Topology tab parity, C08 builder YAML checks, C09 Help, shortcuts,
+  Home filter and browser preferences, in one release for budget: the owner reported 75 % of the week's usage spent).
+  C06: `/clab-slice-verify` on `claude/c06-int` (every acceptance check held, eight breaks: one high, a merge that put
+  C05's tests in the wrong class; four medium; three low), a single `risk-reviewer` pass on the backend diff (three
+  should-fix) and the compact live pass on the parity lab (link state 5 of 5, cEOS `shutdown` → `dormant` in 12 s,
+  the A1 vJunos check left both ends `up` so the `connected` wording ships, arrange and Undo exact, a stale Undo 412,
+  the draw.io export), all answered in C06-DESIGN §10 to §12. C08 and C09: verified earlier on their branches
+  (§10 of each design), then one `clab-ui-reviewer` pass each instead of the full branch-review workflow (C08:
+  `bridge` is not a special endpoint, proven with `containerlab validate` on this VM; limits of the check are no
+  longer errors; the caption only when a check ran; C09: the Reset confirmation names Needs attention again, the
+  shortcut pin hardened, Space on Help links), fixed on their branches and merged (`cec09c1`, `6cf477e`); the
+  cross-chunk integration fixes (shortcut cites, the builder note as a preference family) in the following commit.
+  **Dropped or deferred by the revised plan**: the full `/clab-review-changes` workflow on C06, C08 and C09; C10
+  (the vJunos-router Load proof) and C11 (editor 0.4.0, blocked upstream) are not started; the low findings listed
+  in each design's answers stand as open points. Pull request 73 (`claude/parity-campaign` → `main`) carries
+  1.31.2 to 1.31.6; the owner merges it. The worktrees under `.claude/worktrees/` and the side branches are history
+  after this release and may be removed.
