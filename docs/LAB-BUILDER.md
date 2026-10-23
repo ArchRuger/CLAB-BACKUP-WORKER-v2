@@ -71,8 +71,9 @@ shows the editor's text again.
   line under the text names the first problem and its line after a short pause (a YAML syntax error,
   the same key twice, `topology.nodes` written as a list, no `topology:` section). Apply refuses such a
   text with the same message and puts the cursor on that line; your text stays in the panel to be
-  corrected. A link to a device that is not in `topology.nodes` is only a warning: the editor keeps it
-  in the file but cannot draw it, and containerlab would refuse it at deploy.
+  corrected. A link to a device that is not in `topology.nodes` is listed under *Problems* as an error
+  (see *What the panel checks*): the editor keeps it in the file but cannot draw it, and containerlab
+  would refuse it at deploy. It does not stop Apply.
 - **Drawing while the panel is open.** With no edits of your own in the panel, every change on the
   canvas shows in the text at once. While you have edits that are not applied, the text is never
   replaced: the panel says *Canvas changed · Revert to load it*. Applying then replaces the canvas
@@ -88,6 +89,109 @@ shows the editor's text again.
   only device renamed in that apply.
 - **Keyboard.** Escape closes the panel only when it holds no unapplied edits; the close button hides
   it and keeps them for the next opening. Tab moves to the next control (indent with spaces).
+
+### What the panel checks
+
+Under the text the panel lists **Problems** found in the topology, so a misspelt setting or a boot-order
+mistake shows up before the deploy and not as containerlab's message afterwards. The list is a check of
+the text, not a gate: **these do not stop Apply or Save**; containerlab refuses errors when the lab is
+deployed, and the review and the deploy keep their own refusals (containerlab's own message names the line).
+The panel says so in one sentence above the list.
+
+- **When it runs.** About 0.4 seconds after you stop typing, and also when the canvas changes the text,
+  after *Revert*, when the panel opens and after *Apply*. Each problem reads *Error* or *Warning* (a word,
+  not only a colour), then *Line 12:* and a sentence. Click a problem to put the cursor on that line, on the
+  key and with nothing selected, so the first key you type edits instead of replacing the line. The
+  line numbers beside the text are marked in the same way (an error beats a warning on the same line), with
+  the first message as a tooltip; the list is the form a screen reader gets.
+- **The count** beside *Problems* reads *2 errors, 1 warning*, *1 warning* or *No problems found*. While the
+  text has a syntax error or a shape the editor cannot use (the status line names it) the count reads *Not
+  checked: fix the error above first*; while the schema is still loading it adds *(settings not checked yet)*.
+- **What is reported.**
+  - A setting a section does not have, with a suggestion (*Did you mean `image`?*), and a setting that was
+    renamed but is still read (`mgmt_ipv4`, `username` and `password` on a device) as a warning that names the current form.
+  - A device without a kind, or with a kind containerlab does not know (with a suggestion); an old or short
+    kind name (`vr-xrv9k`, `ceos`) is accepted and noted once as a warning.
+  - A device without an image (except `bridge`, `ovs-bridge`, `host` and `ext-container`).
+  - A wrong type of value (`env` written as a list, `cpu: "2"` in quotes), a lab or device name with characters
+    containerlab refuses, a port mapping that is not one, a bind without a path pair, a value outside its
+    list (`restart-policy`, a stage name).
+  - Links: a link that does not have exactly two `device:interface` endpoints, an endpoint that names a device
+    that is not in `topology.nodes`, a long-form link missing a key its type needs, and the same interface
+    used by two links (warning).
+  - Boot order: a `wait-for` that names a device that does not exist, a device that waits for itself (also
+    through `topology.defaults`, `kinds` or `groups`), devices that wait for each other in a loop, a `wait-for`
+    entry without a valid `stage`, a wait for `healthy` on a device that has no health check (warning), and stage
+    commands (`exec`) written as `on-enter:` / `on-exit:` sections instead of a list of `- command:` entries.
+- **Error and Warning.** *Error* means containerlab is expected to refuse the deploy, *Warning* means the text
+  may work but probably is not what you meant, or the manager cannot be sure. A missing kind, an endpoint or
+  a `wait-for` target that does not exist, a wait loop and the stage-command form are errors on any VM. A
+  kind the schema does not list is an error only when the VM's containerlab is exactly the release the manager
+  carries the schema for; an unknown setting is an error only then too, and only in the sections containerlab
+  was seen to refuse one in (the top of the file, `mgmt`, a device, `stages` and a `wait-for` entry). Everywhere
+  else it is a warning.
+- **Which containerlab it checks against.** The manager carries containerlab's own topology schema for the
+  releases named in `clab-backup-ui/app/static/clab-schema/SOURCES.txt` and picks the one that matches the
+  containerlab version the VM reported (the VM must be connected; the page asks it when it opens). The line
+  under the list (under *About this check*, which is closed by default on a narrow window) says which:
+  *Checked against containerlab 0.79.0, the version on this VM.* when they are equal. When the VM runs another
+  release the line names both (*Checked against the containerlab 0.79.0 schema; this VM runs 0.81.0. A
+  setting added since then is shown as a warning, not an error.*), and unknown settings and kinds are only
+  warnings, because a newer containerlab may have added them. When the VM's version is older than every schema the manager
+  carries, the line says so; when it is not known yet (not connected, or the VM's manager tools are older) the
+  line says that too. The schema is downloaded from the manager once per page load, the first time a check needs
+  it; if that fails the panel says *The topology schema could not be loaded from the manager, so settings and
+  kinds are not checked; links and boot order still are.* and offers **Try again**.
+- **Key help.** With the cursor on a line that starts with a setting, the panel shows that setting's description
+  from the schema and a link *More about `<setting>`* to its page on containerlab.dev (only links to that site
+  are offered). It is not announced as you move, and it is shown only when the schema has loaded.
+- **The same errors without the panel.** A line under the bar (*1 error containerlab will refuse when deploying:
+  line 7, … Open YAML to see it.*, *2 errors …: the first is line 7, …*) appears a moment after a stored change, even when
+  the YAML panel was never opened. **Show in YAML** opens the panel (on the line when the panel holds no unapplied
+  edits, at its own list when it does) and **Dismiss** hides it for that text. It lists errors only and never
+  turns *Save to the VM…* off.
+- **After an Apply** with errors still in the list the status line reads *Applied · 2 errors remain (see
+  Problems)*; the text was applied all the same.
+
+What it does not check: that an image exists (the line under the bar does that, see *Device templates and
+images*), `startup-config` paths, whether a management address fits the `mgmt` subnet, whether the VM has memory
+for the devices, or anything containerlab only learns by running. There is no completion while you type;
+the key help is the nearest thing until the editor upgrade brings it. A warning is the manager's best
+reading of the schema, not containerlab's verdict.
+
+### Boot order (stages)
+
+A device can be told to wait for another before one of its own stages begins. The stages are `create`,
+`create-links`, `configure`, `healthy` and `exit`; `wait-for` under a stage names a device and the stage that
+device must have reached. This matters on a VM with little memory: the vJunos devices boot as virtual
+machines of several GB each, and starting them one after the other keeps the VM in bounds. The panel carries
+an example under **Boot order: start the router after the switch is healthy (stages)**, with **Copy example**
+(nothing is inserted into your text):
+
+```yaml
+name: juniper-pair
+topology:
+  nodes:
+    vsw:
+      kind: juniper_vjunosswitch
+      image: n24l/vjunos-switch:23.2R1.14
+    vrt:
+      kind: juniper_vjunosrouter
+      image: n24l/juniper_vjunos-router:26.2R1.7
+      stages:
+        create:
+          wait-for:
+            - node: vsw
+              stage: healthy
+  links:
+    - endpoints: ["vsw:ge-0/0/0", "vrt:ge-0/0/0"]
+```
+
+Here `vrt`'s container is created only once `vsw` reports healthy. Copy the `stages:` block under the device
+that should wait; the images in the example are this course's, use your own. `healthy` works for devices
+whose image defines a health check (vJunos-switch, vJunos-router and XRv9k on the course VM); a cEOS or
+cJunosEvolved device shows none there, so wait for `create-links` instead, or the wait never ends. The panel
+warns about that case for those kinds and for `linux` devices.
 
 ## Drafts live in this browser
 
@@ -196,6 +300,9 @@ identical content as already done. A save interrupted half way is completed by s
 ## Limits of this version
 
 - Topology only: no startup-configuration files, no Git destination, no image management.
+- No completion or hover in the YAML panel while you type: the Problems list and the key help on the cursor's
+  line are what it offers; completion and hover as in a code editor, and the editor's own *Stages* tab and
+  wait-for arrows, come with the editor upgrade.
 - The editor's own YAML and JSON tabs (the **YAML** panel replaces the first), Geo layout, split view, Grafana export and its own deploy menu are
   not available; the manager's review and deploy replace the last one.
 - Saving needs the VM helpers of the same release as the manager. After an upgrade run
@@ -210,3 +317,40 @@ unmodified under `clab-backup-ui/app/static/lab-builder/` with its licence and t
 [deploy/LAB-BUILDER-THIRD-PARTY-NOTICES.md](../deploy/LAB-BUILDER-THIRD-PARTY-NOTICES.md).
 Maintainers rebuild it with `npm ci && node build.mjs` in `clab-backup-ui/lab-builder/` (Node 24);
 it is never built on a lab VM, and CI checks that the committed files match a fresh build.
+
+The panel's check also uses containerlab's own topology schema (`schemas/clab.schema.json`, BSD-3-Clause),
+vendored verbatim per containerlab release in `clab-backup-ui/app/static/clab-schema/` with its `LICENSE` and
+a `SOURCES.txt` that records the tag, URL, SHA-256 digest and date of every file. The schema is data: the
+browser reads it with `JSON.parse` and never runs it.
+
+### Vendoring the schema of a newer containerlab (maintainers)
+
+The schema is not bundled into the editor: a refresh needs no `npm ci` and no bundle rebuild, but a new
+file is a code change, so it comes with a reviewed test diff.
+
+1. In `clab-backup-ui/lab-builder/` (Node, never on a VM) run
+   `node fetch-schema.mjs v0.80.0 --sha256 <digest>`, where the digest is the SHA-256 you computed yourself from
+   a separate download of `schemas/clab.schema.json` at that tag, or `--commit <40-hex commit>` to download by an immutable
+   commit instead (a tag can move). The tag must look like `vX.Y.Z`; the script refuses a digest that differs,
+   a file that is not containerlab's schema (`$id`, `definitions.node-config`, `properties.topology`), a `LICENSE` that
+   is not the BSD licence, and an existing vendored version whose bytes would change. It writes only
+   `<version>.json`, `LICENSE` and `SOURCES.txt` in `app/static/clab-schema/` and prints the digest.
+2. Add the version to `BUILDER_SCHEMA_VERSIONS` in `app/static/lab-builder-check.js` and its digest to `EXPECTED` in
+   `tests/test_clab_schema.py` (the test also requires `SOURCES.txt`, the files and the list to agree).
+3. Review the per-version tables beside the schema in `lab-builder-check.js` for the new release:
+   `BUILDER_SCHEMA_EXTRA_KEYS` (settings containerlab reads although the schema omits them),
+   `BUILDER_PROBED_LEVELS` (the sections where `containerlab validate` was seen to refuse an unknown setting),
+   `BUILDER_KIND_ALIASES` and `BUILDER_KIND_LONG`, `BUILDER_DEPRECATED_KEYS` and `BUILDER_NO_HEALTHCHECK_KINDS`.
+   Re-run the probes on a VM with that containerlab release: write a small topology that puts an unknown key into one section
+   and run `containerlab validate -t <file>` (it does not deploy); a section joins `BUILDER_PROBED_LEVELS`
+   only after the refusal is seen and noted in the constant's comment. Likewise check the kind aliases and the stage
+   graph: [the C08 design](parity-campaign/C08-DESIGN.md) (section 0) recorded that on the release the tables
+   were first made for `validate` and `deploy --dry-run` accepted a wait loop and an unknown wait-for target.
+4. Run `node --test tests/test_lab_builder_check_ui.js` (its self-test must still report zero schema patterns that fail to
+   compile) and, from `clab-backup-ui/`, `python3 -m unittest discover -s tests -t tests -p test_clab_schema.py`. Only a change to the adapter's `locateYaml` in
+   `lab-builder/src/main.tsx` (it builds the tree the check reads, and refuses a document nested deeper than 64 levels)
+   needs `node build.mjs` and `node build.mjs --check`; the entry bundle is cached `immutable`, so that reaches
+   browsers only with a new release number.
+
+The check is advisory by design (it never blocks Apply or Save), so a wrong table entry misleads but cannot
+lose work; keep errors for what a probe has shown containerlab refuses.
