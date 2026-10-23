@@ -313,20 +313,31 @@ if(typeof document!=='undefined'&&document.getElementById('builder-images-dismis
 // and a throw anywhere in it hides the note and nothing else, so an advisory check can never pause the builder (persist() is untouched).
 let builderNoteTimer=null,builderNoteSeq=0,builderNoteDismissed='',builderNoteShown='',builderNoteLine=0;
 function builderNoteHash(text){let h=5381;for(let i=0;i<text.length;i++)h=((h<<5)+h+text.charCodeAt(i))|0;return (h>>>0).toString(36)+':'+text.length;}
-function builderNoteSentence(errors,first){
+// The dismissed note is remembered for the browser tab's life (sessionStorage, per draft, text and count: the note's own key), so a reload keeps the same
+// problems dismissed until the text changes. A browser that refuses storage just forgets it.
+function builderNoteSession(){try{const s=window.sessionStorage;return s&&typeof s.getItem==='function'?s:null;}catch{return null;}}
+function builderNoteStored(){try{const s=builderNoteSession();return s?s.getItem(BUILDER_PREFIX+'note-dismissed')||'':'';}catch{return '';}}
+function builderNoteRemember(key){try{const s=builderNoteSession();if(s&&key)s.setItem(BUILDER_PREFIX+'note-dismissed',key);}catch{}}
+// `errors` counts what containerlab refuses; `first` is the first of them. The manager's own refusals (finding.refuser === 'manager') are counted apart.
+function builderNoteSentence(errors,first,manager){
  let message=String(first.message||'').trim();if(!/[.!?]$/.test(message))message+='.';
- return errors+' error'+(errors===1?'':'s')+' containerlab will refuse when deploying: '+(errors===1?'':'the first is ')+'line '+first.line+', '+message+' Open YAML to see it.';
+ if(!errors)return (manager===1?'1 error':manager+' errors')+' the manager’s import refuses: '+(manager===1?'':'the first is ')+'line '+first.line+', '+message+' Open YAML to see it.';
+ return errors+' error'+(errors===1?'':'s')+' containerlab will refuse when deploying: '+(errors===1?'':'the first is ')+'line '+first.line+', '+message+' Open YAML to see it.'
+  +(manager?' The manager’s import also refuses '+manager+' more.':'');
 }
 function builderNoteRender(result){
  const slot=$('builder-check');if(!slot)return;
- if(!result||result.key===builderNoteDismissed){builderNoteShown='';builderNoteLine=0;slot.hidden=true;return;}
+ if(!result||result.key===builderNoteDismissed||result.key===builderNoteStored()){builderNoteShown='';builderNoteLine=0;slot.hidden=true;return;}
  builderNoteShown=result.key;builderNoteLine=result.line;$('builder-check-text').textContent=result.text;slot.hidden=false;
 }
 // The note for a list of findings: every error, whatever the version match (a wait loop, an unknown endpoint, a missing kind are errors on any VM).
 function builderNoteFor(draft,text,list){
- const errors=builderCheckSummary(list).errors,first=list.find(f=>f.severity==='error'&&f.code!=='more'&&f.line>0);
+ const errors=builderCheckSummary(list).errors,listed=list.filter(f=>f.severity==='error'&&f.code!=='more'&&f.line>0);
+ const manager=listed.filter(f=>f.refuser==='manager').length,mine=listed.filter(f=>f.refuser!=='manager'),first=mine[0]||listed[0];
  if(!errors||!first)return null;
- return {key:[draft.id,builderNoteHash(text),errors].join('|'),text:builderNoteSentence(errors,first),line:first.line};
+ // The generic sentence counts containerlab's errors only; an error the manager's own import refuses is worded as that.
+ const clab=Math.max(0,errors-manager);
+ return {key:[draft.id,builderNoteHash(text),errors].join('|'),text:builderNoteSentence(clab,first,manager),line:first.line};
 }
 async function builderNoteRun(){
  const seq=++builderNoteSeq;
@@ -352,7 +363,7 @@ function builderCheckStatus(){
  }catch{}
 }
 function builderNoteDismiss(){
- builderNoteDismissed=builderNoteShown;builderNoteShown='';const slot=$('builder-check');if(slot)slot.hidden=true;
+ builderNoteDismissed=builderNoteShown;builderNoteRemember(builderNoteDismissed);builderNoteShown='';const slot=$('builder-check');if(slot)slot.hidden=true;
  const next=!$('builder-save').disabled?$('builder-save'):$('builder-yaml');if(next&&!next.disabled)next.focus();
 }
 // Show in YAML: opens the panel. A clean panel gets the caret on the finding's line; a panel with unapplied edits (its lines differ from the
