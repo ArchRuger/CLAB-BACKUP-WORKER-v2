@@ -597,6 +597,14 @@ a foreign origin, an expired or reused ticket (1008, unchanged); a frame over 20
 (session ends, unchanged). Kept: the legacy `container_name` field never reaches `/api/state`; `juniper_vqfx` has no
 console until proven.
 
+Live facts from the console pass on `vrt` (2026-10-23, the rebuilt manager): a bare carriage return is the Enter the
+device wants (`login:` 0.16 to 0.31 s after it; open question 2 settled); keystroke echo median about 20 ms; the second tab
+was refused in 1.7 s with the `CONSOLE_OPEN_HERE` sentence and one TCP connection existed throughout; an outside holder
+(`nc`) gave `CONSOLE_HELD` after 3.1 s with the manager's socket closed; eight sessions logged eight `console.open` and
+`console.close` pairs with lab and node only. Found: `parse_inspect` read the id under `id` while containerlab writes
+`container_id`, so the ID row read "Not reported" live (fixed with the C05 manager slice); the pager (`---(more)---`)
+needs Enter per page because a serial console has no window size (documented in NODE-FEATURES, no manager change).
+
 Residual risk, stated for the record: the gate reads discovery's view. (1) A relaunch of the VM inside a container
 that discovery still reports as healthy (vrnetlab restarts the VM in place when its bootstrap gives up): Docker's
 health interval plus up to one discovery pass (30 s) can elapse before `(health: starting)` reaches the manager, and

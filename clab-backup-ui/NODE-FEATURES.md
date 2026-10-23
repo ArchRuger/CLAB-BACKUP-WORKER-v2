@@ -208,7 +208,8 @@ Copy, Clear, Save) is the one of the SSH page; saved files carry `console` in th
 container's discovered management address and the kind's port; the browser sends only the lab, the device and the word
 `console`. It uses the same single-use ticket and WebSocket origin rules as SSH, but not Paramiko or a saved login:
 **no credentials are sent**, the device prompts for its own. A serial console has no window size, so a resize is
-ignored.
+ignored, and the device pages long output as on a real console (Junos shows `---(more)---`: press Enter or the space bar,
+or set `set cli screen-length 0` for the session; the manager never types that for you).
 
 **One console per device.** A second console for the same device from this manager is refused at once, and the sentence
 names when the first one opened (in UTC); at most 8 consoles are open at a time, counted apart from the 32 SSH
