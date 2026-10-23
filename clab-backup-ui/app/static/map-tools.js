@@ -491,3 +491,5 @@ function mapToolsWire(){
  for(const mode of ['rows','columns','ring'])on('map-arrange-'+mode,'click',()=>mapArrangeRun(mode));
 }
 mapToolsWire();
+// The page scripts run in order, but a /topology answer can land before this one has run: refreshMap then drew the map with no hook in place, and its unchanged-drawing early return would never call mapToolsRendered (no chip, no link-state poll, no Find). A drawn map (mapKey set) is drawn once more with the hooks present.
+if(typeof mapKey==='string'&&mapKey&&typeof refreshMap==='function')refreshMap(true);

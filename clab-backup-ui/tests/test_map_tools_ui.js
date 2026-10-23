@@ -33,7 +33,7 @@ const drawing=(over={})=>({revision:'r1',placed:true,nodes:[{id:'1',label:'a',in
  links:[[{node:'1',interface:'eth1',capture_interface:'eth1'},{node:'2',interface:'Ethernet1',capture_interface:'eth1'}],[{node:'2',interface:'ge-0/0/1',capture_interface:'eth2'},{node:'3',interface:'e1'}],[{node:'1',interface:'eth2',capture_interface:'eth2'},{node:'4',interface:'eth1',capture_interface:'eth1'}]],decorations:[],...over});
 const row=(name,state='up',extra={})=>({name,alias:'',state,port:'',role:'data',...extra});
 const answer=(over={})=>({available:true,devices:{a:{listed:true,interfaces:[row('eth1'),row('eth2')]},b:{listed:true,interfaces:[row('eth1',"up",{port:'Ethernet1'}),row('eth2','up',{port:'ge-0/0/1'})]},c:{listed:true,interfaces:[row('eth1')]}},listed:3,of:3,fetched_at:1,...over});
-function harness({dw=drawing(),status='Running',deployment_name='lab-x',tab='topology',visible=true}={}){
+function harness({dw=drawing(),status='Running',deployment_name='lab-x',tab='topology',visible=true,drawnBefore=false}={}){
  const els=new Map(),$=id=>{if(!els.has(id))els.set(id,new El('div',{id}));return els.get(id);};
  const svg=new El('svg',{id:'topology-map'});els.set('topology-map',svg);
  const bg=new El('rect',{class:'topology-bg'}),grid=new El('rect',{class:'topology-grid'}),scene=new El('g',{id:'topology-scene'});
@@ -62,7 +62,8 @@ function harness({dw=drawing(),status='Running',deployment_name='lab-x',tab='top
  vm.runInContext(src('status.js'),context);
  vm.runInContext(src('device-diagnostics.js'),context);
  vm.runInContext(src('topology.js'),context);
- ctx.refreshMap=async()=>{ctx.refreshes++;};
+ ctx.refreshMap=async force=>{ctx.refreshes++;ctx.refreshForce=force;};
+ if(drawnBefore)vm.runInContext("mapKey='L1'+JSON.stringify({})",context);
  const docBefore=docSpy.length;
  vm.runInContext(src('map-tools.js'),context,{filename:'map-tools.js'});
  const h={context,$,svg,scene,timers,requests,clock,downloads,labs,docSpy,docAdded:docSpy.length-docBefore,
@@ -388,4 +389,9 @@ test('S1b contract: a 409 helper sentence turns the colours off with that senten
  const wires=h.render();await h.fire();assert.ok(wires[0].classList.contains('link-up'));
  mode='409';await h.fire();
  assert.equal(classes(wires[0]),'topology-wire');assert.match(h.$('map-links').innerHTML,/Link state off: Link state needs the updated VM helper/);assert.equal(h.live().length,0);
+});
+
+test('script-load race: a map drawn before map-tools.js ran is drawn once more, forced, so the hooks run; a page with no map drawn yet is left to the first refresh',()=>{
+ const late=harness({drawnBefore:true});assert.equal(late.get('refreshes'),1);assert.equal(late.get('refreshForce'),true);
+ const early=harness();assert.equal(early.get('refreshes'),0);
 });
