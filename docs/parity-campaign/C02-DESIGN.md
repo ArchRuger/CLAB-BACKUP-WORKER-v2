@@ -313,3 +313,23 @@ must never drop a real empty line inside the session or a space at the wrap poin
 | F26 "ended now" promise without live evidence | Accepted: stop checked before `exec_command`; wording `asks the lab VM to end it now`; one live pass by `clab-devops-engineer` | §3 "`remote()` honours…", §5 last paragraph |
 | F27 shutdown ordering; IPv6 copy | Accepted: `close()` sets `self.stopping` first and `execute()` reads it first; `[address]:port` for IPv6 with a case | §3 "Per-job event", §2 "Device drawer", §5 |
 | Refuted (3): the `Empty` model and readiness on a queued stop; the null boundary finding; Reconnect discarding the buffer | No change; the Reconnect status hint is added as wording only | §1 "States" |
+
+## 8. Code review answers (`/clab-review-changes` on the built slice, 22 confirmed, 2 refuted, 0 must-fix)
+
+| Finding | Answer | Where |
+|---|---|---|
+| `remote()` raised `OperationStopped` while the helper's final line was already buffered (reproduced with a fake channel) | Accepted: a stop is honoured only when `channel.recv_ready()` is false, so a buffered result or error line is read first; test with queued bytes | §3 "`remote()` honours…" |
+| A stop during connect or open_session counted as `ran` and advised Redeploy | Accepted: the two pre-send raises carry `sent=False`; `execute()` takes the "before it started. Nothing was changed on the VM." path; execute-level test | §3 "Classification" |
+| The copy fallback left focus on nothing after removing the textarea (the plain-http path most students use) | Accepted: `copyText` remembers `document.activeElement` and restores it after the sink is removed; tests in `test_clipboard_ui.js` and `test_terminal_ui.js` | §2 "`copyText`" |
+| The Stop confirmation's question was not tied to its buttons for a screen reader | Accepted: the question and the actions sit in a `role="group"` labelled by `#op-stop-question`; pinned in `test_operations_ui.js` | §3 "UI" |
+| Try again for a stopped start, apply or restart repeated the action while the advice said Redeploy lab | Accepted: `opRetryRequest` maps a cancelled deploy, start, apply or restart to a redeploy review; test extended | §3 "One per-action table" |
+| The lock sentence used as stop proof is a copy that can drift; the probe was never run against the real helper | Accepted: a test pins `LOCK_SENTENCE` to the helper's string, a test runs the real helper in preview mode under a held flock, and a generic failure is proven not to count as proof | §5 Stop (Python) |
+| `test_page_load_ui.js` synthesised `clipboard.js` when `index.html` lacked it; the order check was conditional | Accepted: the fallback is gone, the order is asserted, and a page test checks that every page loading `operations.js` or `terminal.js` loads `clipboard.js` first | §5 Page load |
+| `terminal.html` markup was not tied to `terminal.js` or its harness | Accepted: a test parses `terminal.html` for every toolbar id, `tools-status`, one `tabindex="0"`, and `clipboard.js` before `terminal.js` | §5 Terminal |
+| The Python and JavaScript stop wording were only partly pinned; the `STOPPABLE` comparison could skip itself | Accepted: the skip is an assertion; every action's verb and repair is compared across `status.js` and `lab_operations.py` | §5 Stop (Python) |
+| No cross-origin test for the cancel route | Accepted: a foreign `Origin` and `Sec-Fetch-Site: cross-site` answer 403 and leave the job and its event untouched | §5 Stop (Python) |
+| Focus lost when a poll turns the confirmation into Stopping… | Accepted: the held focus moves to `#op-stop-status` | §3 "UI" |
+| `docs/LAB-OPERATIONS.md` named eight stoppable actions and a hard 20 s | Accepted: all eleven, the five refused, "about 20 seconds" | the guide |
+| A running job with `cancel_requested` across a manager restart was unpinned | Accepted: startup still marks it `interrupted`; test added | §5 Stop (Python) |
+| The Alt chords (Alt+T, Alt+0, Alt+Up, Alt+Down) no longer reach readline-style CLIs | Accepted as a recorded trade-off: the toolbar's buttons stay the primary path, the notice says the chords are the page's, and a Linux node's `M-t`/`M-0` are typed with Esc then the key | §1 "Keys", the notice |
+| Refuted (2): the proof arriving before the dying helper takes the lock; the queued-behind-another-lab wording | No change | |
