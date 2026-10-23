@@ -20,12 +20,25 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
   Each data interface has **Capture**, which opens the capture dialog on that container interface. Both are read-only
   and use the VM's operations helper, never the device's own session (see *Diagnostics* in
   [LAB-OPERATIONS.md](../docs/LAB-OPERATIONS.md)).
+- **Container facts** (device drawer, section *Container*) list what the manager already knows about the
+  device's container: its name, the first 12 characters of its id, the container kind, the image (with a line *topology
+  names …* when the running image differs from the one the topology names), the management IPv4 and IPv6 address, and
+  whether the device has a serial console, each with a **Copy** button; the *State* row shows the VM's last report
+  (for example *running · Up 2 hours (healthy)*, or *Not on the VM*). The section is built from the latest VM discovery
+  and never calls the VM when the drawer opens; process, health, start time and published ports appear in it only
+  while the Interfaces or Logs section is open and refreshing. A lab that is not linked to a running lab gets one sentence
+  instead (*Container facts come from the VM…*) plus the kind and image the topology names, and no stale values.
 - **Capture traffic…** opens the browser Wireshark dialog on that node with its wired ports
   listed first ([CAPTURE.md](../docs/CAPTURE.md)).
 - **Open CLI ↗** opens an independent interactive terminal in a new browser tab. It
   connects to the saved management address/port, not the container wrapper, with
   the assigned profile, the containerlab default login or the imported credentials.
   For linked labs it opens once the readiness monitor has seen the NOS answer.
+- **Console ↗** opens the device's serial console in a new tab (see *Serial console* below). It is offered only for
+  vJunos-switch, vJunos-router and XRv9k devices, in the device panel, the Devices view and the map's right-click menu.
+  It opens once the container reports healthy (the launcher uses the console during the first boot; if the device panel
+  has a Logs section, it shows that boot) and is the way in when SSH does not answer or the management configuration is
+  broken. Where it cannot open, the button stays visible and disabled and says why.
 - **Restart device…** (also in the device panel and the Devices technical view) restarts only this
   device through containerlab's own node-scoped restart on the VM (`containerlab restart --node`,
   what the VS Code extension's *Restart node* runs): the container stops and starts with its links
@@ -169,6 +182,59 @@ The frontend vendors xterm.js and its fit addon with their licences under
 terminal document permits inline styles in its Content Security Policy, as required
 by xterm's generated character-width, font and ANSI-colour rules. Scripts remain
 restricted to this origin; the dashboard retains its original CSP.
+
+## Serial console
+
+**Which devices.** Three kinds offer a serial console: `juniper_vjunosswitch`, `juniper_vjunosrouter` and
+`cisco_xrv9k` (their vrnetlab-based images expose the emulator's serial port on TCP port 5000 of the container). The
+manager decides by the topology kind of the device, not by the network OS chosen under *Edit connection*. A device
+whose kind is not in that list (cEOS, cJunosEvolved, vQFX and the rest) shows no **Console** button, and the drawer's
+Container section says *None for this kind*; a device the manager has no topology kind for (it came from an inventory
+file) says *Not known* there, and *Lab actions ▾ › Sync topology from VM* supplies the kind.
+
+**When the button is enabled.** The manager answers this itself, and the button, the Devices rows and the map menu all
+show the same answer; the button is disabled, with the reason as its hover text and a note in the device panel, while
+the lab is not linked to a running lab with this device in its topology, the device is not running or the VM's status
+is out of date, the VM reported no management address, a *Restart device…* job is running for it, its health check
+reads starting or unhealthy, or its container has run for less than two minutes. The reason is that a device's launcher
+holds the console while it boots, and a second client would disturb it. Open CLI and the SSH readiness states are not
+affected.
+
+**What the student sees.** The same terminal page as Open CLI, in console mode: the title and the header read *Serial
+console*, and the notice says that this is the same as a cable in the device's console port, that the device shows its
+own login prompt when it is ready (Enter is only for a prompt that is already there), that a console login stays open
+on the device until you log out, and that the session closes after 15 minutes without typing. The toolbar (font size,
+Copy, Clear, Save) is the one of the SSH page; saved files carry `console` in their names. The manager connects to the
+container's discovered management address and the kind's port; the browser sends only the lab, the device and the word
+`console`. It uses the same single-use ticket and WebSocket origin rules as SSH, but not Paramiko or a saved login:
+**no credentials are sent**, the device prompts for its own. A serial console has no window size, so a resize is
+ignored.
+
+**One console per device.** A second console for the same device from this manager is refused at once, and the sentence
+names when the first one opened (in UTC); at most 8 consoles are open at a time, counted apart from the 32 SSH
+sessions. A console that nothing in the browser types into closes after 15 minutes (output arriving does not keep it
+open), and no console lasts longer than 4 hours; a device that stops or restarts closes it with *The console closed: the
+device stopped or restarted.* **Reconnect** asks for a new ticket and meets the same checks as the first open. *Start
+fresh* (Manager settings) is refused while a console is open, as it is for open SSH sessions.
+
+**Refusals, and what each means.**
+
+- *… has no serial console* / *The manager has no topology kind for …*: the kind is not one of the three, or the
+  manager does not know it (see above).
+- *… is not running on the VM…*, *The VM has not reported a management address…*, *The console needs a lab linked to
+  the VM…*: the device, its address or the link to the running lab is missing; start or link the lab, or refresh.
+- *… is restarting*, *… is still starting*, *… has not finished booting*, *… started less than two minutes ago*: the
+  launcher still has the console. Try again once the device reports healthy; for a boot that never finishes, the Logs
+  section of the device panel (where it exists) shows why.
+- *Could not reach the console of …* and *The console of … is in use by its launcher … or by a client outside this
+  manager*: the connection failed, or it succeeded but the console stayed silent, which means another client holds it.
+- *The console of … is already open from this manager* and *Too many consoles are open*: the one-console and
+  eight-console rules above.
+
+**What is recorded.** Only `console.open` and `console.close` events with the lab and the device. Console output and
+keystrokes are not stored, logged or put in an event, and a refused ticket leaves nothing. The manager answers the
+telnet negotiation the emulator's port sends and removes the telnet control bytes from the output; the text you see is
+the device's.
 
 ## Deployment checks
 

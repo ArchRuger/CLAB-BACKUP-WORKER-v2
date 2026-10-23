@@ -124,6 +124,15 @@ container from the lab's deployment name and refuses a container that is not lab
   paused, retrying…*; three errors in a row stop it with **Retry**; after 30 minutes it pauses with **Resume**; a
   hidden browser tab stops asking and fetches once on return. Closing the drawer or moving to another device
   collapses both sections and clears their state.
+- **Device drawer › Container.** What the manager already knows about the device's container, from the latest VM
+  discovery (opening the drawer asks the VM for nothing): Container (name), ID (first 12 characters), Container kind,
+  Image (with *topology names …* when the running image differs), Addresses (IPv4 and IPv6), Console, and State (the
+  VM's last report, for example *running · Up 2 hours (healthy)*, or *Not on the VM*), most with a **Copy** button. While
+  Interfaces or Logs is open and refreshing, the section also shows the process id, health, start time and published
+  ports those calls return. For a lab that is not linked to a running lab it is one sentence (*Container facts come from
+  the VM. This lab is not linked to a running lab…*) with the kind and image the topology names. The Console row reads
+  *Serial, port 5000* for vJunos-switch, vJunos-router and XRv9k, *None for this kind* for the other kinds, and *Not
+  known* when the manager has no topology kind for the device.
 - **Running labs on the VM…** (Manager ▾) keeps its six columns (Topology, Lab, Device, Type / image, State /
   health, IPv4 / IPv6) and adds **ID** (the first 12 characters of the container id) and **Owner**. Each header
   sorts; **Filter devices** hides rows whose text lacks what you typed (a case-insensitive substring, any column);
@@ -144,7 +153,9 @@ kind) until the network OS answers. The lab header shows *Starting* and *n of m 
 ready*; each device carries a state pill (*Starting*, *Ready*, *Needs credentials*,
 *Needs attention*, *Unavailable*) with a sentence that says what to do, on the Devices
 tab, in the device panel and on the map. **Open CLI** and **Open all CLIs** enable as
-devices answer, and a login check runs once by itself when every device has answered,
+devices answer (vJunos-switch, vJunos-router and XRv9k devices also offer **Console ↗**, a serial console that opens
+once the container reports healthy and is the way in when SSH does not answer or the management configuration is
+broken; see [NODE-FEATURES.md](../clab-backup-ui/NODE-FEATURES.md#serial-console)), and a login check runs once by itself when every device has answered,
 so its `show version` result is under Tools › Configuration backups › *Login checks*
 without a click. A device that stops or restarts must answer again. A failed automatic
 check sends its devices back to *Starting* and is retried up to three times per boot. A
@@ -198,7 +209,8 @@ The map's **More ▾** menu (also in the expanded map) offers **Open all CLIs �
 **Back up all configurations**. Back up all covers every device that can be backed up
 now, including devices not selected for scheduled backups. When every device is ready it
 starts at once; when some cannot be backed up, or a job is already running, it first lists
-the devices it will skip and why, and you confirm with **Back up N devices**. Right-click a device on the map for Open CLI, Capture traffic, Back
+the devices it will skip and why, and you confirm with **Back up N devices**. Right-click a device on the map for Open CLI, Console ↗ (the three kinds above; disabled with the reason while
+the console cannot open), Capture traffic, Back
 up configuration, Restart device… and Device details.
 
 ## Review and persistence
