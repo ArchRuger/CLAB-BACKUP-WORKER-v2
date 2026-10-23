@@ -59,7 +59,9 @@ function prefsConfirmSentence(inventory){
 function prefsConfirmSummary(inventory){
  const n=['terminal-font','opened','editor-view','capture','dismissed','home-tab','notices'].reduce((a,id)=>a+prefsCount(inventory,id),0);
  if(!n)return 'Nothing is stored for the manager in this browser.';
- return `Reset forgets ${prefsPlural(n,'remembered item')} of this browser. Drafts, templates and Try again requests are kept.`;
+ const closed=prefsCount(inventory,'dismissed'),tab=prefsCount(inventory,'home-tab')+prefsCount(inventory,'notices');
+ const extra=(closed?` ${prefsPlural(closed,'closed warning shows','closed warnings show')} again and ${closed===1?'its lab reads':'their labs read'} Needs attention.`:'')+(tab?' Some items change in this tab only.':'');
+ return `Reset forgets ${prefsPlural(n,'remembered item')} of this browser.${extra} Drafts, templates and Try again requests are kept.`;
 }
 // inventory: shell.js preferenceInventory(); display: {motion, contrast, forced}; font: the effective terminal size;
 // homeWord: 'recent' | 'all' | '' (prefsHomeWord). Only the font number and that word are ever interpolated.

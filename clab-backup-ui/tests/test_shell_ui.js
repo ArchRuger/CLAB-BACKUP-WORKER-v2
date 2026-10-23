@@ -16,7 +16,7 @@ function dom(){
  const doc={listeners:{},activeElement:null,body:null,addEventListener(name,fn,capture){(this.listeners[name]=this.listeners[name]||[]).push({fn,capture:!!capture});},querySelectorAll(sel){return all(this.body).filter(n=>matches(n,sel));},querySelector(sel){return this.querySelectorAll(sel)[0]||null;},getElementById(id){return all(this.body).find(n=>n.id===id)||null;},createElement:tag=>el(tag)};
  function all(node){return node?[node,...node.children.flatMap(all)]:[];}
  function el(tag,attrs={},children=[]){
-  const node={tag,attrs:{},children:[],parentElement:null,listeners:{},hidden:!!attrs.hidden,disabled:!!attrs.disabled,open:false,textContent:attrs.text||'',className:attrs.class||'',
+  const node={tag,tagName:tag.toUpperCase(),attrs:{},children:[],parentElement:null,listeners:{},hidden:!!attrs.hidden,disabled:!!attrs.disabled,open:false,textContent:attrs.text||'',className:attrs.class||'',
    get id(){return this.attrs.id||'';},set id(v){this.attrs.id=v;},
    getAttribute(n){return n in this.attrs?String(this.attrs[n]):null;},setAttribute(n,v){this.attrs[n]=String(v);},hasAttribute(n){return n in this.attrs;},
    addEventListener(name,fn,capture){(this.listeners[name]=this.listeners[name]||[]).push({fn,capture:!!capture});},
@@ -146,6 +146,10 @@ test('initMenu: open focuses the first enabled item, arrows rove, Escape closes 
  h.managerList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,settings,'roving wraps');
  h.managerList.dispatch('keydown',{key:'End'});assert.equal(h.doc.activeElement,diagnostics,'Diagnostics stays the last item');
  h.managerList.dispatch('keydown',{key:'Home'});assert.equal(h.doc.activeElement,settings);
+ helpPanel.hidden=false;helpToggle.setAttribute('aria-expanded','true');const docsLink=helpPanel.children[2];docsLink.focus();let linkClicks=0;docsLink.addEventListener('click',()=>{linkClicks++;});
+ const space=h.managerList.dispatch('keydown',{key:' '});assert.equal(space.prevented,true,'Space on a Help link does not scroll the list');assert.equal(linkClicks,1,'Space activates the link as Enter does');assert.equal(h.managerList.hidden,true,'the menu closes as for a click');
+ h.managerButton.dispatch('click');settings.focus();const spaceButton=h.managerList.dispatch('keydown',{key:' '});assert.equal(spaceButton.prevented,false,'Space on a button is left to the browser');
+ helpPanel.hidden=true;helpToggle.setAttribute('aria-expanded','false');h.doc.activeElement=settings;
  const escape=settings.dispatch('keydown',{key:'Escape'});
  assert.equal(h.managerList.hidden,true);assert.equal(h.managerButton.getAttribute('aria-expanded'),'false');
  assert.equal(h.doc.activeElement,h.managerButton,'focus returns to the button');assert.equal(escape.stopped,true,'the map never sees the Escape');
@@ -985,6 +989,13 @@ test('reverse shortcut pin: every keydown site is a data-source of a shortcuts r
  for(const cite of [...rows,...exclusions]){
   const [file,line]=cite.split(':'),text=fs.readFileSync(path.join(STATIC,file),'utf8').split('\n')[Number(line)-1]||'';
   assert.ok(keyLine.test(text)||(file==='git-places.js'&&rows.includes(cite)&&folderKey.test(text)),cite+' is not a keydown site any more (a stale cite): '+text.trim().slice(0,80));
+  if(file==='git-places.js'&&rows.includes(cite)){   // a folder-chooser row must cite the line that decides its own (first) key, not any key line of folderKey
+   const dt=[...short.matchAll(/<dt>(.*?)<\/dt><dd data-source="([^"]+)"/g)].find(m=>m[2].split(/\s+/).includes(cite));
+   const kbd=dt?(dt[1].match(/<kbd>(.*?)<\/kbd>/)||[])[1]:'';
+   assert.ok(kbd,cite+' has no <kbd> in its row');
+   const literal=kbd==='A letter'?'key.length===1':`'${kbd}'`;
+   assert.ok(text.includes(literal),cite+' is the row for '+kbd+' but its line has no '+literal+': '+text.trim().slice(0,80));
+  }
  }
  for(const cite of exclusions)assert.ok(!rows.includes(cite),cite+' is a row already: drop the exclusion');
 });

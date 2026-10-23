@@ -134,10 +134,18 @@ test('C09 fixes: the confirmation is one short paragraph with the total and a co
  const inv={blocked:false,writable:true,families:fam({opened:2,dismissed:1,'design-drafts':4})};
  const m=run(h,`prefsMarkup(${JSON.stringify(inv)},{},14,'')`);
  const box=m.slice(m.indexOf('id="prefs-reset-confirm"'),m.indexOf('id="prefs-reset-go"'));
- assert.match(box,/<p>Reset forgets 3 remembered items of this browser\. Drafts, templates and Try again requests are kept\.<\/p><details><summary>What exactly<\/summary><p>In this browser this forgets the Last opened times of 2 labs/);
+ assert.match(box,/<p>Reset forgets 3 remembered items of this browser\. 1 closed warning shows again and its lab reads Needs attention\. Drafts, templates and Try again requests are kept\.<\/p><details><summary>What exactly<\/summary><p>In this browser this forgets the Last opened times of 2 labs/);
  assert.doesNotMatch(box,/<details open/,'collapsed');
  assert.equal(run(h,`prefsConfirmSummary({families:${JSON.stringify(fam({opened:1}))}})`),'Reset forgets 1 remembered item of this browser. Drafts, templates and Try again requests are kept.');
  assert.equal(run(h,`prefsConfirmSummary({families:${JSON.stringify(fam({'design-drafts':2}))}})`),'Nothing is stored for the manager in this browser.');
+});
+test('C09 review: the visible confirmation names the closed warnings that come back and the tab-scoped items (design 1.9)',()=>{
+ const h=harness();
+ const sum=f=>run(h,`prefsConfirmSummary({families:${JSON.stringify(fam(f))}})`);
+ assert.equal(sum({dismissed:3}),'Reset forgets 3 remembered items of this browser. 3 closed warnings show again and their labs read Needs attention. Drafts, templates and Try again requests are kept.');
+ assert.equal(sum({'home-tab':1}),'Reset forgets 1 remembered item of this browser. Some items change in this tab only. Drafts, templates and Try again requests are kept.');
+ assert.equal(sum({notices:2,dismissed:1}),'Reset forgets 3 remembered items of this browser. 1 closed warning shows again and its lab reads Needs attention. Some items change in this tab only. Drafts, templates and Try again requests are kept.');
+ assert.doesNotMatch(sum({opened:2}),/Needs attention|this tab only/);
 });
 test('C09 fixes: after Reset the page behind the dialog is rendered at once (a guarded call)',()=>{
  const h=harness({inventory:{blocked:false,writable:true,families:fam({dismissed:2})}});let renders=0;

@@ -105,7 +105,7 @@ function initMenu(button){
  button.addEventListener('keydown',e=>{if(e.key==='ArrowDown'&&list.hidden){e.preventDefault();open();}});
  list.addEventListener('keydown',e=>{
   if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close(true);return;}
-  if(e.key==='Tab'){close(false);return;}
+  if(e.key==='Tab'){close(false);return;}   if(e.key===' '){const at=document.activeElement;if(at&&at.tagName==='A'&&typeof at.click==='function'&&shellContains(list,at)){e.preventDefault();at.click();}return;}   // a link activates on Enter only; Space would scroll the list
   if(e.key==='ArrowRight'||e.key==='ArrowLeft'){
    const at=document.activeElement,toggle=at&&typeof at.closest==='function'?(at.closest('[data-menu-group]')||toggles().find(t=>shellContains(panelOf(t),at))):null;
    if(toggle&&setGroup(toggle,e.key==='ArrowRight',true))e.preventDefault();
