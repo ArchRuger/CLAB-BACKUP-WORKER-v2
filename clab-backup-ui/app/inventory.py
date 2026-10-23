@@ -83,6 +83,19 @@ ALIASES = {'junos': 'juniper_cjunosevolved', 'junipernetworks.junos.junos': 'jun
            'vr-vjunosrouter': 'juniper_vjunosrouter', 'vjunosrouter': 'juniper_vjunosrouter',
            'iosxr': 'cisco_xrv9k', 'cisco.iosxr.iosxr': 'cisco_xrv9k',
            'ceos': 'arista_ceos', 'vr-xrv9k': 'cisco_xrv9k', 'cjunosevolved': 'juniper_cjunosevolved', 'eos': 'arista_ceos', 'arista.eos.eos': 'arista_ceos', **{k:k for k in PLATFORMS}}
+# The serial console port of the vrnetlab-based kinds: qemu's telnet chardev on TCP 5000, the one fixed pass-through
+# vrnetlab's project documents. A kind joins only when the image's own project documents the console and it was
+# verified live on a VM (docs/parity-campaign/C04-DESIGN.md §1): juniper_vqfx waits for its live proof, and
+# juniper_cjunosevolved (not vrnetlab) and arista_ceos have none. Keyed by the topology kind, never by PLATFORMS,
+# which follows the student-editable platform.
+CONSOLE_PORTS = {'juniper_vjunosswitch': 5000, 'juniper_vjunosrouter': 5000, 'cisco_xrv9k': 5000}
+
+
+def console_port(kind):
+    """The serial console port of a vrnetlab-based kind, or None. Kinds proven live on a VM only (docs/parity-campaign/C04-DESIGN.md §1)."""
+    return CONSOLE_PORTS.get(ALIASES.get(kind or '', kind or ''))
+
+
 SAFE_FIELDS = {'ansible_host','ansible_port','ansible_user','ansible_password','ansible_ssh_pass','ansible_network_os','clab_kind','ansible_become_password'}
 
 def literal(value, label, maximum=4096):
