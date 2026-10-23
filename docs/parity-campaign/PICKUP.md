@@ -123,3 +123,16 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   `/clab-review-changes` for C05, the live pass (delay on `vsw`–`vrt` seen in a ping, Reset, Clear all, a filtered
   destroy and Apply of `ceos`, Stop and Start device), release 1.31.4; C07 likewise; then C06, C08, C09 builds; C10 when
   the VM is quiet.
+- 2026-10-23 08:30 UTC (usage limit reached mid-flight; durable checkpoint): C05 is integrated on the branch (`3b36667`,
+  the merge of `claude/c05-manager`: manager, drawer and map/reviews slices; node 934 pass, Python 2807 OK) and the
+  live manager runs it; `/clab-slice-verify`, `/clab-review-changes` (base `ce74255`) and the live pass on the parity
+  lab were running when the session stopped: read their results from the next session's `/workflows` or rerun them;
+  the 1.31.4 records are drafted in the session scratchpad (not in the repo: redraft from C05-DESIGN if lost). Built
+  and committed in worktrees, not yet integrated (branches pushed to origin): C07 S1 `worktree-agent-a87dbddcbea4e9020`
+  (`1682abe`, capture sets, sessions list, End all), C07 S3 `wt-c07-s3` (`6f424b4`, smoke and fixture capture stack),
+  C08 S1 `worktree-agent-af2508aa01d396b7d` (`50bfbf5`, `locateYaml` and the rebuilt bundle), C09 S3
+  `worktree-agent-af1a2ef97ccdf799f` (`d198b02`, `preferences.js`). Still in build when the session stopped: C07 S2
+  (UI), C08 S2 (validator and schema), C06 S0+S1b, S1a, S2 (agent worktrees under `.claude/worktrees/`). Next: finish
+  C05 (verification fixes, review answers in C05-DESIGN, release 1.31.4 with `test_impairments.py` and
+  `test_device_impairments_ui.js` already in CI), integrate C07 (S2 then S4 docs, review, live pass), C08 (S3 after S2),
+  C06 (S3 after S2, S4, S5), C09 (S1, S2 after C07 frees `index.html` and `shell.js`); C10 when the VM is quiet.
