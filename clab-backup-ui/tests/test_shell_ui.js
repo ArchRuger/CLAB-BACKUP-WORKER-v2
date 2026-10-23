@@ -721,3 +721,24 @@ test('a panel that would open past the left edge anchors to its opener; one that
  h.loadButton.dispatch('click');box={left:120,right:560};panel.getBoundingClientRect=()=>box;
  h.loadButton.dispatch('click');assert.equal(panel.classList.contains('menu-clamped'),false);assert.equal(wrapper.classList.contains('panel-anchored'),false,'both are measured again on the next open');
 });
+
+// C03: the device drawer's diagnostics hooks live here, so device-diagnostics.js stays free of window and document listeners.
+test('pageVisible reads document.visibilityState; a visibilitychange tells device-diagnostics.js, behind a typeof guard',()=>{
+ const h=harness();
+ assert.equal(h.context.pageVisible(),true,'a document without visibilityState counts as visible');
+ h.doc.visibilityState='visible';assert.equal(h.context.pageVisible(),true);
+ h.doc.visibilityState='hidden';assert.equal(h.context.pageVisible(),false);
+ const listeners=(h.doc.listeners.visibilitychange||[]);assert.equal(listeners.length,1,'one document listener');
+ assert.doesNotThrow(()=>listeners[0].fn(),'the script may not be loaded yet (other pages, tests)');
+ let heard=0;h.context.diagVisibilityChanged=()=>{heard++;};listeners[0].fn();assert.equal(heard,1);
+});
+test('closing the device drawer resets the diagnostics sections before the route is written',()=>{
+ const h=harness({hash:'#lab=a&view=devices&device=R1'});
+ const order=[];h.context.resetDeviceDiagnostics=()=>order.push('reset');
+ h.context.activeId='a';h.context.detailName='R1';h.dialog.open=true;
+ const before=h.history.length;
+ h.dialog.close();
+ assert.deepEqual(order,['reset'],'the close hook calls resetDeviceDiagnostics once');
+ assert.ok(h.history.length>before,'and the route still loses its device');
+ const bare=harness();bare.dialog.open=true;assert.doesNotThrow(()=>bare.dialog.close(),'without device-diagnostics.js the drawer still closes');
+});

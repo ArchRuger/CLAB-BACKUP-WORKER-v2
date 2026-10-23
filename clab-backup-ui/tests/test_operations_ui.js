@@ -45,7 +45,7 @@ test('inspection table handles grouped JSON surrounded by CLI log lines',()=>{
  const raw='INFO inspecting\n'+JSON.stringify({training:[{name:'clab-training-r1',absLabPath:'/etc/lab.clab.yaml',kind:'cisco_xrv9k',image:'router:1',state:'running',health_status:'healthy',ipv4_address:'172.20.20.2/24',ipv6_address:'2001:db8::2/64'}]},null,2)+'\nFinished\n';
  const rows=context.opInspectionRows(raw);assert.equal(rows.length,1);
  assert.equal(rows[0].lab,'training');assert.equal(rows[0].state,'running · healthy');assert.equal(rows[0].topology,'/etc/lab.clab.yaml');
- const table=context.opInspectionTable(rows);assert.match(table,/router:1/);assert.match(table,/2001:db8::2\/64/);assert.match(table,/<th>State \/ health<\/th>/);
+ const table=context.opInspectionTable(rows);assert.match(table,/router:1/);assert.match(table,/2001:db8::2\/64/);assert.match(table,/<th scope="col" aria-sort="none"><button type="button" class="op-sort" data-op-sort="state">State \/ health<\/button><\/th>/);
 });
 test('flat inspection rows use lab identity and escape untrusted output',()=>{
  const rows=context.opInspectionRows(JSON.stringify([{lab_name:'demo',name:'<script>bad</script>',labels:{'clab-topo-file':'/tmp/a.yaml'},state:'exited'}]));
@@ -646,4 +646,127 @@ test('C02: Copy output is disabled while the output is empty, copies the job out
  jobs.copyOk=false;await again.onclick();assert.deepEqual(h.log.feedback.at(-1),['op-copy-output',false],'a failed copy is reported, never shown as Copied');
  const bare=stopHarness({current:stopJob({output:'x'})},{clipboard:false});await bare.c.opShowJob('a');
  assert.doesNotMatch(bare.log.html,/op-copy-output/,'a page without clipboard.js has no dead button');
+});
+
+// ---- C03 (docs/parity-campaign/C03-DESIGN.md 4.2 to 4.5) ----------------------------------------------------------------------
+const inspectRaw=JSON.stringify([
+ {lab_name:'beta',name:'clab-beta-r2',kind:'ceos',image:'ceos:4.35',state:'running',health_status:'healthy',ipv4_address:'172.20.20.3/24',container_id:'0123456789abcdef0123',owner:'student',labels:{'clab-topo-file':'/p/beta.clab.yaml'}},
+ {lab_name:'alpha',name:'clab-alpha-r10',kind:'linux',image:'alpine',state:'running',ipv4_address:'172.20.20.9/24',container_id:'ffffffffffffffff',owner:'root',labels:{'clab-topo-file':'/p/alpha.clab.yaml'}},
+ {lab_name:'alpha',name:'clab-alpha-r9',kind:'linux',image:'alpine',state:'exited',ipv4_address:'172.20.20.8/24',container_id:'',labels:{}}]);
+test('the inspect table keeps its six columns in order with the Lab column, then appends ID and Owner',()=>{
+ const rows=context.opInspectionRows(inspectRaw);
+ assert.equal(rows[0].id,'0123456789ab','the first 12 characters of the container id');assert.equal(rows[0].owner,'student');assert.equal(rows[2].id,'');assert.equal(rows[2].owner,'');
+ const table=context.opInspectionTable(rows);
+ const heads=[...table.matchAll(/data-op-sort="(\w+)">([^<]+)<\/button>/g)].map(m=>m[2]);
+ assert.deepEqual(heads,['Topology','Lab','Device','Type / image','State / health','IPv4 / IPv6','ID','Owner']);
+ assert.match(table,/<td class="mono">0123456789ab<\/td><td>student<\/td>/);
+ assert.match(table,/<td class="mono">—<\/td><td>—<\/td>/,'an empty id or owner reads as a dash');
+ assert.equal((table.match(/aria-sort="none"/g)||[]).length,8,'every header carries aria-sort and holds a button');
+ assert.match(table,/<label for="op-inspect-filter">Filter devices<\/label><input type="search" id="op-inspect-filter"/,'the filter box has a visible label');
+ assert.match(table,/<caption>3 running devices<\/caption>/);
+});
+test('inspect sort is stable, numeric-aware and reversible; aria-sort follows the state',()=>{
+ const rows=context.opInspectionRows(inspectRaw),names=list=>Array.from(list,r=>r.node);
+ assert.deepEqual(names(context.opInspectionSort(rows,'node','asc')),['clab-alpha-r9','clab-alpha-r10','clab-beta-r2'],'r9 before r10');
+ assert.deepEqual(names(context.opInspectionSort(rows,'node','desc')),['clab-beta-r2','clab-alpha-r10','clab-alpha-r9']);
+ assert.deepEqual(names(context.opInspectionSort(rows,'lab','asc')),['clab-alpha-r10','clab-alpha-r9','clab-beta-r2'],'equal keys keep their order');
+ assert.deepEqual(names(context.opInspectionSort(rows,'','asc')),names(rows),'no key keeps the order given');assert.deepEqual(names(context.opInspectionSort(rows,'node','')),names(rows));
+ assert.deepEqual(names(rows),['clab-beta-r2','clab-alpha-r10','clab-alpha-r9'],'sorting copies, never reorders the input');
+ const table=context.opInspectionTable(rows,{key:'lab',dir:'desc',filter:''});
+ assert.match(table,/aria-sort="descending"><button type="button" class="op-sort" data-op-sort="lab">/);assert.equal((table.match(/aria-sort="none"/g)||[]).length,7);
+ assert.match(context.opInspectionTable(rows,{key:'lab',dir:'asc'}),/aria-sort="ascending"><button[^>]*data-op-sort="lab"/);
+});
+test('inspect filter is a case-insensitive substring over every column, the Lab included; the caption says n of m',()=>{
+ const rows=context.opInspectionRows(inspectRaw),names=list=>Array.from(list,r=>r.node);
+ assert.deepEqual(names(context.opInspectionFilter(rows,'ALPHA')),['clab-alpha-r10','clab-alpha-r9'],'the Lab column is searched');
+ assert.deepEqual(names(context.opInspectionFilter(rows,'0123456789AB')),['clab-beta-r2'],'the new ID column is searched');
+ assert.deepEqual(names(context.opInspectionFilter(rows,'student')),['clab-beta-r2']);
+ assert.deepEqual(names(context.opInspectionFilter(rows,'172.20.20.8')),['clab-alpha-r9']);
+ assert.equal(context.opInspectionFilter(rows,'  ').length,3);assert.equal(context.opInspectionFilter(rows,'a*').length,0,'no wildcard grammar');
+ const table=context.opInspectionTable(rows,{filter:'alpha'});
+ assert.match(table,/<caption>2 of 3 running devices<\/caption>/);assert.match(table,/value="alpha"/);assert.doesNotMatch(table,/clab-beta-r2/);
+ assert.match(context.opInspectionTable(rows,{filter:'"><b>'}),/value="&quot;&gt;&lt;b&gt;"/,'the filter text is escaped');
+ assert.match(context.opInspectionTable([rows[0]]),/<caption>1 running device<\/caption>/);
+});
+test('the inspect table redraws only its own parts when the filter or a header changes',()=>{
+ const rows=context.opInspectionRows(inspectRaw),view={key:'',dir:'',filter:''},focused=[];
+ const listeners={},table={innerHTML:'',addEventListener(type,fn){listeners['table:'+type]=fn;},querySelector:sel=>sel.includes('data-op-sort')?{focus(){focused.push(sel);}}:null};
+ const filter={value:'',addEventListener(type,fn){listeners['filter:'+type]=fn;}};
+ const root={querySelector:sel=>sel==='table'?table:filter};
+ context.opInspectionBind(root,rows,view);
+ filter.value='beta';listeners['filter:input']();assert.equal(view.filter,'beta');assert.match(table.innerHTML,/<caption>1 of 3 running devices<\/caption>/);assert.deepEqual(focused,[],'typing never moves focus');
+ const click=key=>listeners['table:click']({target:{closest:()=>({dataset:{opSort:key}})}});
+ click('node');assert.deepEqual([view.key,view.dir],['node','asc']);click('node');assert.equal(view.dir,'desc');click('node');assert.deepEqual([view.key,view.dir],['','']);
+ click('lab');assert.deepEqual([view.key,view.dir],['lab','asc']);assert.match(focused.at(-1),/data-op-sort="lab"/,'focus returns to the header button that was used');
+});
+
+test('sizes read like Docker (kB, MB) and the files-mode labels carry them',()=>{
+ assert.equal(context.opSize(0),'0 B');assert.equal(context.opSize(2100),'2.1 kB');assert.equal(context.opSize(3400000),'3.4 MB');assert.equal(context.opSize('x'),'');
+ assert.equal(context.opFileLabel({name:'startup-config',size:2100}),'◇ startup-config · 2.1 kB');assert.equal(context.opFileLabel({name:'a.yaml'}),'◇ a.yaml');
+ const entries=[{name:'notes.md',kind:'file',directory:false},{name:'clab-lab',kind:'directory',directory:true},{name:'lab.clab.yaml',kind:'topology',directory:false},{name:'lab.clab.yaml.annotations.json',kind:'file'}];
+ assert.deepEqual(Array.from(context.opFileEntries(entries),e=>e.name),['lab.clab.yaml','clab-lab','notes.md','lab.clab.yaml.annotations.json'],'topology files first, then folders, then the other files in the order given');
+});
+
+function browseHarness({diagnostics=true}={}){
+ const calls=[];
+ const element=tag=>({tag,children:[],className:'',textContent:'',open:false,isConnected:true,disabled:false,append(...c){this.children.push(...c);},replaceChildren(){this.children=[];}});
+ const nodes={};
+ const get=id=>{if(!nodes[id])nodes[id]=Object.assign(element('x'),{id});return nodes[id];};
+ const listing={'/srv/p/lab':[{name:'clab-lab',path:'/srv/p/lab/clab-lab',directory:true,kind:'directory'},{name:'lab.clab.yaml',path:'/srv/p/lab/lab.clab.yaml',kind:'topology',size:900},{name:'map.annotations.json',path:'/srv/p/lab/map.annotations.json',kind:'file',size:120}],
+  '/srv/p/lab/clab-lab':[{name:'r1',path:'/srv/p/lab/clab-lab/r1',directory:true,kind:'directory'}],'/srv/p/lab/clab-lab/r1':[{name:'startup-config',path:'/srv/p/lab/clab-lab/r1/startup-config',kind:'file',size:2100}],'/srv/p':[{name:'lab',path:'/srv/p/lab',directory:true,kind:'directory'}],'':[{name:'projects',path:'/srv/p',directory:true,kind:'directory'}]};
+ const c=vm.createContext({$:id=>/^(op-|help$|err$)/.test(id)?get(id):null,esc:v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])),state:{labs:[{id:'L1',name:'lab one',vm_project_path:'/srv/p/lab/lab.clab.yaml'}]},document:{createElement:element},
+  json:async(url,method,body)=>{calls.push([url,JSON.parse(JSON.stringify(body))]);return {path:body.path,parent:body.path&&body.path!=='/srv/p'?'/srv/p':'',entries:listing[body.path]||[]};}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ const dialog={querySelector:sel=>sel==='.form-help'?get('help'):get('err'),querySelectorAll:()=>[],open:true,close(){}};
+ const dialogs=[];
+ c.opDialog=(id,title,body)=>{dialogs.push({id,title,body});return dialog;};
+ c.opCapabilities=async()=>{vm.runInContext('opCaps='+JSON.stringify({diagnostics,network:false,actions:{}}),c);return c.opCaps;};
+ c.opViewed=[];c.opView=async(p,l)=>{c.opViewed.push([p,l]);};c.opEdit=async(p,l)=>{c.opViewed.push(['edit',p,l]);};
+ return {c,calls,dialogs,get};
+}
+test('Lab files mode: every listing sends files:true with the lab, keeps the title and help, and reaches nested folders',async()=>{
+ const h=browseHarness();
+ await h.c.opBrowse('','L1');
+ assert.deepEqual(h.calls[0],['/operations/browse',{path:'/srv/p/lab',files:true,lab_id:'L1'}],'the first listing starts in the lab folder');
+ assert.equal(h.dialogs[0].title,'Lab files · lab one');assert.match(h.dialogs[0].body,/Files the manager can show \(text and configuration files\)\. Other files on the VM are not listed\./);
+ const tree=h.get('op-file-tree');
+ assert.equal(tree.children.length,3);
+ const [topology,folder,other]=tree.children;
+ assert.equal(topology.textContent,'◇ lab.clab.yaml · 900 B','topology files first');assert.equal(folder.tag,'details');assert.equal(other.textContent,'◇ map.annotations.json · 120 B');
+ folder.open=true;await folder.ontoggle();
+ assert.deepEqual(h.calls.at(-1),['/operations/browse',{path:'/srv/p/lab/clab-lab',files:true,lab_id:'L1'}],'folder expansion keeps files mode');
+ const nested=folder.children[1].children[0];nested.open=true;await nested.ontoggle();
+ const file=nested.children[1].children[0];
+ assert.equal(file.textContent,'◇ startup-config · 2.1 kB','a node folder\'s startup configuration is reachable');
+ await file.onclick();assert.deepEqual(Array.from(h.c.opViewed.at(-1)),['/srv/p/lab/clab-lab/r1/startup-config','L1'],'a non-topology file opens the read-only viewer');
+ await topology.onclick();assert.deepEqual(Array.from(h.c.opViewed.at(-1)),['edit','/srv/p/lab/lab.clab.yaml','L1'],'a topology file opens as before');
+ await h.get('op-up').onclick();assert.deepEqual(h.calls.at(-1),['/operations/browse',{path:'/srv/p',files:true,lab_id:'L1'}],'Up one folder keeps files mode');
+ assert.equal(h.dialogs.at(-1).title,'Lab files · lab one');
+ await h.get('op-roots').onclick();assert.deepEqual(h.calls.at(-1),['/operations/browse',{path:'',files:true,lab_id:'L1'}],'All lab folders keeps files mode and shows the roots');
+ assert.equal(h.dialogs.at(-1).title,'Lab files · lab one');
+});
+test('without the diagnostics flag, or without a lab, Lab files is today\'s topology browser',async()=>{
+ const old=browseHarness({diagnostics:false});await old.c.opBrowse('','L1');
+ assert.deepEqual(old.calls[0],['/operations/browse',{path:'/srv/p/lab'}],'no files option for an older helper');
+ assert.match(old.dialogs[0].body,/Only topology files are listed, up to 500 per folder\./);
+ const none=browseHarness();await none.c.opBrowse('/srv/p');
+ assert.deepEqual(none.calls[0],['/operations/browse',{path:'/srv/p'}],'no lab, no files mode');assert.equal(none.dialogs[0].title,'Deploy a new lab');
+});
+
+test('Images on this VM: rows from details, used_by and missing; chips and filter',()=>{
+ const data={available:true,images:['alpine:latest','n24l/ceos:4.35.0F'],details:[{reference:'alpine:latest',id:'a',size:'7.8MB',created:'2026-10-23 02:03:42 +0000 UTC'},{reference:'n24l/ceos:4.35.0F',id:'b',size:'2.1GB',created:'2026-09-01T10:00:00Z'}],used_by:{'alpine:latest':['lab one','lab two'],'vrnetlab/xrv:1':['lab one']},missing:['vrnetlab/xrv:1']};
+ const rows=context.opImageRows(data);
+ assert.equal(rows.length,3);assert.deepEqual(Array.from(rows[0].labs),['lab one','lab two']);assert.equal(rows[2].missing,true);assert.equal(rows[2].size,'');assert.deepEqual(Array.from(rows[2].labs),['lab one']);
+ assert.deepEqual(Array.from(context.opImageFilter(rows,'','used'),r=>r.reference),['alpine:latest','vrnetlab/xrv:1']);
+ assert.deepEqual(Array.from(context.opImageFilter(rows,'','missing'),r=>r.reference),['vrnetlab/xrv:1']);
+ assert.deepEqual(Array.from(context.opImageFilter(rows,'LAB TWO','all'),r=>r.reference),['alpine:latest'],'the filter also searches the lab names');
+ assert.deepEqual(Array.from(context.opImageFilter(rows,'ceos','used'),r=>r.reference),[]);
+ const old=context.opImageRows({available:true,images:['alpine:latest'],used_by:{}});
+ assert.equal(old.length,1);assert.equal(old[0].size,'','a helper without details still lists the references');
+ assert.equal(context.opImageRows(null).length,0);
+ assert.equal(context.opCreatedDate('2026-10-23 02:03:42 +0000 UTC').toISOString(),'2026-10-23T02:03:42.000Z');assert.equal(context.opCreatedDate('nope'),null);assert.equal(context.opCreatedDate(''),null);
+ const body=context.opImageTableBody(rows);
+ assert.match(body,/<span class="pill danger">Missing<\/span>/);assert.match(body,/lab one, lab two/);assert.match(body,/title="2026-10-23 02:03:42 UTC"/);
+ assert.match(context.opImageTableBody([{reference:'<i>x</i>',size:'',created:'',labs:['<b>'],missing:false}]),/&lt;i&gt;x&lt;\/i&gt;.*&lt;b&gt;/);
+ assert.match(context.opImageTableBody([]),/No images match\./);
 });

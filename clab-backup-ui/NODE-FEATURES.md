@@ -15,6 +15,11 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
 
 ## Node actions
 
+- **Interfaces** and **Logs** in the device drawer (closed until opened; they need a VM helper that reports
+  `diagnostics`) show the container's interfaces with one traffic counter sample per poll, and its redacted output.
+  Each data interface has **Capture**, which opens the capture dialog on that container interface. Both are read-only
+  and use the VM's operations helper, never the device's own session (see *Diagnostics* in
+  [LAB-OPERATIONS.md](../docs/LAB-OPERATIONS.md)).
 - **Capture traffic…** opens the browser Wireshark dialog on that node with its wired ports
   listed first ([CAPTURE.md](../docs/CAPTURE.md)).
 - **Open CLI ↗** opens an independent interactive terminal in a new browser tab. It

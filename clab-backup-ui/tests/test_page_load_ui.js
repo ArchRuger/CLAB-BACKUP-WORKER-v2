@@ -186,3 +186,25 @@ test('the differences of a load carry Load’s own Back: the drawer’s head sho
  assert.equal(vm.runInContext('saveDrawer.kind',context),'different');assert.equal(vm.runInContext('saveDrawer.back',context),null);
  assert.match(vm.runInContext('loadDifferentMarkup({labId:"lab",name:"Final",review:{source:{},targets:[]},chosen:new Set(),sending:false,error:""}).html',context),/id="load-diff-back" data-load-action="diff-back">Back</);
 });
+
+test('device-diagnostics.js (C03) loads after shell.js, app.js and operations.js and defines the hooks shell.js and app.js call',async()=>{
+ for(const before of ['shell.js','app.js','operations.js','capture.js'])assert.ok(listed.includes(before));
+ assert.ok(listed.indexOf('device-diagnostics.js')>listed.indexOf('operations.js'),'index.html lists device-diagnostics.js after operations.js');
+ assert.equal(listed.filter(n=>n==='device-diagnostics.js').length,1);
+ const page=loadPage();
+ assert.deepEqual(page.failures,[]);
+ for(const name of ['renderDeviceDiagnostics','resetDeviceDiagnostics','diagVisibilityChanged','diagPollNext','diagRate','pageVisible','opInspectionSort','opInspectionFilter','opImages','opView'])assert.equal(typeof get(page.context,name),'function',name);
+ assert.match(fs.readFileSync(path.join(dir,'app.js'),'utf8'),/if\(typeof renderDeviceDiagnostics==='function'\)renderDeviceDiagnostics\(n\);/,'renderDetails calls the one hook');
+ assert.match(fs.readFileSync(path.join(dir,'shell.js'),'utf8'),/resetDeviceDiagnostics\(\)/);
+ // The hook is safe on the page's own scripts: no capabilities yet, then a helper that cannot do diagnostics, then one that can.
+ assert.doesNotThrow(()=>vm.runInContext('renderDeviceDiagnostics({name:"r1"})',page.context));
+ vm.runInContext('opCaps={diagnostics:false}',page.context);vm.runInContext('renderDeviceDiagnostics({name:"r1"})',page.context);
+ assert.equal(page.element('details-diagnostics').hidden,true);
+ vm.runInContext('opCaps={diagnostics:true}',page.context);vm.runInContext('renderDeviceDiagnostics({name:"r1"})',page.context);
+ assert.equal(page.element('details-diagnostics').hidden,false);
+ assert.equal(vm.runInContext('pageVisible()',page.context),true);
+});
+test('no page other than index.html loads device-diagnostics.js, and the standalone pages stay free of it',()=>{
+ for(const file of fs.readdirSync(dir).filter(n=>n.endsWith('.html')&&n!=='index.html'))assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/device-diagnostics\.js/,file);
+ assert.doesNotMatch(html,/style="/,'/ keeps no inline styles');
+});

@@ -492,6 +492,7 @@ function renderDetails(){
  const entries=backups.flatMap(j=>j.nodes.map((node,index)=>({j,node,index}))).filter(x=>x.node.name===n.name&&x.node.status==='succeeded'&&x.node.download_name);
  const historyHtml=entries.length?entries.map(({j,node,index},i)=>`<div class="device-download"><div><strong>${i===0?'Latest successful backup':'Backup'}</strong><small>${esc(utcDisplay(node.captured_at||j.finished||j.created))}</small><code>${esc(node.download_name)}</code></div><button class="button secondary" data-download="${esc(j.id)}" data-node-index="${index}" data-filename="${esc(node.download_name)}">Download configuration</button></div>`).join(''):'<p>No configuration backups for this device yet. Back up configuration creates one.</p>';
  setListMarkup($('node-history'),historyHtml,()=>historyHtml);
+ if(typeof renderDeviceDiagnostics==='function')renderDeviceDiagnostics(n);
  syncDownloadButtons();
 }
 $('node-history').addEventListener('click',handleDownload);

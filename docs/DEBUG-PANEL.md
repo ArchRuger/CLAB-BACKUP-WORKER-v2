@@ -25,7 +25,9 @@ The command check bypasses the normal cache to detect stale helpers after setup.
 Only one check runs at a time. Each of its two helper responses has a 90-second
 timeout, in addition to SSH connection setup time; the command check runs several
 containerlab help commands on the VM, so a slow VM is reported as slow rather than as
-missing. A failed row leads with a sentence in plain words (the VM refused the saved
+missing. The *VM commands* row also names the containerlab release installed on the VM (for example
+`containerlab 0.79.0`) next to the helper version, and the same version shows in the footer of the Manager menu.
+A failed row leads with a sentence in plain words (the VM refused the saved
 password; the VM account cannot run lab operations; this folder is outside the allowed
 lab folders; …) followed by the manager's exact hint, which names the launcher command
 that repairs it. A helper that is a different release than the manager is reported as

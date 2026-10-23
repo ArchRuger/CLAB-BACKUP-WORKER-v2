@@ -52,6 +52,7 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Edit map | Move devices and notes, add text, boxes, circles, lines and groups, style, undo and redo, save and export the map as JSON or draw.io; never changes devices, links or the topology file (see *The map and its editor*). |
 | Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the file is deployed, also when it is deployed under another lab name (found by its topology path). |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
+| Lab files (Lab actions ▾, and the Advanced tab) | The same dialog opened for one lab, titled *Lab files · <lab>*. On a VM whose helper reports `diagnostics` it is in *files mode*: every listing it makes (the first, a folder you expand, **Up one folder**, **All lab folders**) also shows the text and configuration files the manager can read (`.yaml`, `.yml`, `.json`, `.drawio`, `.txt`, `.cfg`, `.conf`, `.set`, `.md`, and the containerlab files named `startup-config` and `juniper.conf`) with their sizes, topology files first, so a device's startup configuration under `clab-<lab>/<device>/` is reachable. A topology file opens as before; any other file opens a read-only *File on the VM* viewer that hides lines with passwords, secrets or SNMP communities, says so, and shows at most the last 512 KiB of a longer file (**Copy** when the browser can copy). Keys, certificates, `.env` files and binaries are never listed. Without the flag (an older helper) the dialog is the topology browser above. |
 | Upload a file from this computer… (Home › Deploy, and the link in the topology browser) | For a topology file that is on your computer: the browser reads it, the manager checks that it is a topology it can read, you see the text and where it will be written, **Create file on the VM…** runs as a reviewed operation, and **Deploy or add this lab…** continues as for any file on the VM. Only that one file is uploaded (up to 1 MiB); files it refers to must be on the VM. A copied lab's saved map (`<topology>.annotations.json`, up to 1 MiB) can be added at the same time so devices keep their positions; it travels through the same review and is written beside the topology under its own name regardless of what the file on your computer was called, with a notice when that name differs and, if a map file is already there, a "Replaces the existing map file" notice in the review. |
 | Build a lab visually… / Open in Lab Builder… | Opens the [lab builder](LAB-BUILDER.md): draw devices and links, then save the lab folder to the VM through a review. *Open in Lab Builder…* opens an existing topology file; saving again is only possible while the lab is not deployed and keeps a copy of the previous version. Opened from the topology file dialog, the builder's **← My labs** link and the browser Back button return to that same dialog (read fresh from the VM); opening it directly from the Build card returns to My labs as usual. |
 | Write a new topology… | Creates a new topology file on the VM after a structure preview and confirmation; never replaces an existing file. |
@@ -95,6 +96,43 @@ something to read, such as *Show running devices*. The same banner also carries 
 notices that are not tied to one operation, such as configuration lines the retired
 telemetry feature left on a device, with a **Review and remove…** action (see
 [TELEMETRY.md](TELEMETRY.md)).
+
+## Diagnostics: logs, interfaces, inspect and images
+
+Everything here is read-only. None of it starts, stops, writes, pulls or runs anything inside a device; the manager
+asks the VM's operations helper (new modes `logs`, `interfaces`, `netem-show`, an extended `browse`, `images`) and
+shows the answer. The sections need a helper that reports `diagnostics: true` in `/api/operations/capabilities`;
+after upgrading the manager, refresh the helper (`sudo bash deploy/start-manager.sh --enable-operations`) or the
+device drawer shows neither section. The browser sends only the lab id and the device name; the manager derives the
+container from the lab's deployment name and refuses a container that is not labelled for that lab and device.
+
+- **Device drawer › Interfaces** (closed until opened). Name, Port (the device's own name, for example `ge-0/0/0`),
+  State, RX and TX, with MAC, MTU and type as a second line. Data interfaces come first and carry **Capture**, which
+  opens the capture dialog on that container interface; the management interface (`eth0`) is labelled; internal
+  ones (cEOS `cpu`/`fabric`, cJunosEvolved `eth1`–`eth3`) sit under *Other interfaces*. RX and TX show bytes and,
+  from the second sample of the same container run, a rate. Impairments set on an interface show as a line under it.
+  A stopped container says so (*Interfaces exist only while it runs; Logs shows its last output.*); a device with no
+  container yet says *No container for this device yet (deploy the lab, or wait for the deploy to create it).*
+- **Device drawer › Logs.** The container's output: **Tail** (200, 1000, 2000), **Refresh**, **Follow**, **Find**
+  and **Export**. Lines show `HH:MM:SS` with the full stamp on hover. Lines with passwords, passphrases, private
+  keys, community strings or secrets are replaced before they reach the browser, terminal escape codes are removed,
+  and nothing is stored, logged or written to an event; **Export** saves what is shown as
+  `<lab>-<device>-logs-<UTC stamp>.txt` from the browser. **Follow** adds new lines every few seconds and scrolls
+  only while you are at the bottom.
+- **How the sections poll.** One request at a time, the next only after the answer; every 5 s, backing off to 30 s
+  while the manager is busy (it serves three diagnostics calls at once) with the last data kept under *Updating
+  paused, retrying…*; three errors in a row stop it with **Retry**; after 30 minutes it pauses with **Resume**; a
+  hidden browser tab stops asking and fetches once on return. Closing the drawer or moving to another device
+  collapses both sections and clears their state.
+- **Running labs on the VM…** (Manager ▾) keeps its six columns (Topology, Lab, Device, Type / image, State /
+  health, IPv4 / IPv6) and adds **ID** (the first 12 characters of the container id) and **Owner**. Each header
+  sorts; **Filter devices** hides rows whose text lacks what you typed (a case-insensitive substring, any column);
+  the caption reads *n of m running devices* while a filter is set.
+- **Images on this VM…** (Manager ▾) lists the Docker images with size and age and the labs whose topologies name
+  each one; **Used by my labs** and **Missing** (a reference a lab names that the VM does not have) filter the
+  list. Nothing is pulled or removed. Without the updated helper only the references appear.
+- **containerlab version.** The Manager menu's footer and the Diagnostics page's *VM commands* row name the
+  containerlab release installed on the VM.
 
 ## Device readiness after deployment
 

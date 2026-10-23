@@ -279,11 +279,53 @@ function opInspectionRows(output){
  for(const [lab,nodes] of groups){if(!Array.isArray(nodes))continue;for(const n of nodes){
   if(!n||typeof n!=='object'||!n.name)continue;
   const label=n.labels||{};
-  rows.push({topology:n.absLabPath||n.labPath||label['clab-topo-file']||'',lab:n.lab_name||lab,node:n.name,kind:n.kind||'',image:n.image||'',state:[n.state||n.status||'unknown',n.health_status||n.health||''].filter(v=>typeof v==='string'&&v).join(' · '),ipv4:n.ipv4_address||'',ipv6:n.ipv6_address||''});
+  rows.push({topology:n.absLabPath||n.labPath||label['clab-topo-file']||'',lab:n.lab_name||lab,node:n.name,kind:n.kind||'',image:n.image||'',state:[n.state||n.status||'unknown',n.health_status||n.health||''].filter(v=>typeof v==='string'&&v).join(' · '),ipv4:n.ipv4_address||'',ipv6:n.ipv6_address||'',id:typeof n.container_id==='string'?n.container_id.slice(0,12):'',owner:typeof n.owner==='string'?n.owner:''});
   if(rows.length>=10000)return rows;
  }}return rows;
 }
-function opInspectionTable(rows){return `<div class="op-inspection"><table><caption>${rows.length} running ${rows.length===1?'device':'devices'}</caption><thead><tr>${['Topology','Lab','Device','Type / image','State / health','IPv4 / IPv6'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.topology)||'—'}</td><td>${esc(r.lab)}</td><td>${esc(r.node)}</td><td>${esc(r.kind)}<small>${esc(r.image)}</small></td><td>${esc(r.state)}</td><td>${esc(r.ipv4)}<small>${esc(r.ipv6)}</small></td></tr>`).join('')}</tbody></table></div>`;}
+// The six columns of the table keep their names and order (the Lab column included); ID and Owner are appended.
+const OP_INSPECT_COLUMNS=[['topology','Topology'],['lab','Lab'],['node','Device'],['kind','Type / image'],['state','State / health'],['ipv4','IPv4 / IPv6'],['id','ID'],['owner','Owner']];
+function opInspectionValue(row,key){return key==='kind'?row.kind+' '+row.image:key==='ipv4'?row.ipv4+' '+row.ipv6:String(row[key]??'');}
+// Pure: a sorted copy (dir 'asc' or 'desc'; anything else keeps the order given), numbers compared as numbers.
+function opInspectionSort(rows,key,dir){
+ const list=rows.slice();if(!key||(dir!=='asc'&&dir!=='desc'))return list;
+ const sign=dir==='desc'?-1:1;
+ return list.map((row,index)=>({row,index})).sort((a,b)=>sign*opInspectionValue(a.row,key).localeCompare(opInspectionValue(b.row,key),undefined,{numeric:true,sensitivity:'base'})||a.index-b.index).map(x=>x.row);
+}
+// Pure: a case-insensitive substring over every column, the Lab included. No wildcard grammar.
+function opInspectionFilter(rows,text){
+ const needle=String(text||'').trim().toLowerCase();if(!needle)return rows;
+ return rows.filter(row=>OP_INSPECT_COLUMNS.map(([key])=>opInspectionValue(row,key)).join(' ').toLowerCase().includes(needle));
+}
+function opInspectionCaption(shown,total){const word=(total===1?'device':'devices');return (shown===total?String(total):shown+' of '+total)+' running '+word;}
+function opInspectionHead(view){
+ return '<tr>'+OP_INSPECT_COLUMNS.map(([key,label])=>{const sorted=view.key===key&&view.dir;return `<th scope="col" aria-sort="${sorted==='asc'?'ascending':sorted==='desc'?'descending':'none'}"><button type="button" class="op-sort" data-op-sort="${key}">${label}</button></th>`;}).join('')+'</tr>';
+}
+function opInspectionBody(rows){
+ return rows.map(r=>`<tr><td>${esc(r.topology)||'—'}</td><td>${esc(r.lab)}</td><td>${esc(r.node)}</td><td>${esc(r.kind)}<small>${esc(r.image)}</small></td><td>${esc(r.state)}</td><td>${esc(r.ipv4)}<small>${esc(r.ipv6)}</small></td><td class="mono">${esc(r.id)||'—'}</td><td>${esc(r.owner)||'—'}</td></tr>`).join('');
+}
+// view: {key, dir, filter} kept by the dialog that shows the table, so a repeated render keeps the person's sort and filter.
+function opInspectionTable(rows,view={}){
+ const shown=opInspectionSort(opInspectionFilter(rows,view.filter),view.key,view.dir);
+ return `<div class="op-inspection-tools"><label for="op-inspect-filter">Filter devices</label><input type="search" id="op-inspect-filter" value="${esc(view.filter||'')}" autocomplete="off"></div><div class="op-inspection"><table><caption>${opInspectionCaption(shown.length,rows.length)}</caption><thead>${opInspectionHead(view)}</thead><tbody>${opInspectionBody(shown)}</tbody></table></div>`;
+}
+// Wire the filter box and the header buttons of a rendered table; only the table's own parts are redrawn, so typing keeps focus.
+function opInspectionBind(root,rows,view){
+ const filter=root&&root.querySelector?root.querySelector('#op-inspect-filter'):null,table=root&&root.querySelector?root.querySelector('table'):null;
+ if(!filter||!table)return;
+ const redraw=refocus=>{
+  const shown=opInspectionSort(opInspectionFilter(rows,view.filter),view.key,view.dir);
+  table.innerHTML=`<caption>${opInspectionCaption(shown.length,rows.length)}</caption><thead>${opInspectionHead(view)}</thead><tbody>${opInspectionBody(shown)}</tbody>`;
+  if(refocus){const back=table.querySelector('[data-op-sort="'+refocus+'"]');if(back&&typeof back.focus==='function')back.focus();}
+ };
+ filter.addEventListener('input',()=>{view.filter=filter.value;redraw('');});
+ table.addEventListener('click',event=>{
+  const button=event.target&&event.target.closest?event.target.closest('[data-op-sort]'):null;if(!button)return;
+  const key=button.dataset.opSort;
+  if(view.key!==key){view.key=key;view.dir='asc';}else if(view.dir==='asc')view.dir='desc';else{view.key='';view.dir='';}
+  redraw(key);
+ });
+}
 // The outcome is what a reader looks for first: a large green (or red) banner names
 // the action, the lab and the result before the raw command output; the exit code is a detail.
 // A failure a student can act on, in words. Image references are shown as the topology names them
@@ -319,8 +361,8 @@ function opStopMarkup(mode,job){
 }
 // The Copy output button: a click of its own (this page may not load shell.js), the Copied flip and announcement from
 // clipboard.js (copyFeedback), and nothing to copy while the output is still "Waiting for the VM…".
-function opBindCopyOutput(getOutput){
- const button=$('op-copy-output');if(!button)return null;
+function opBindCopyOutput(getOutput,id='op-copy-output'){
+ const button=$(id);if(!button)return null;
  button.onclick=async()=>{
   const text=getOutput();if(!text||typeof copyText!=='function')return;
   const ok=await copyText(text,button);
@@ -383,7 +425,9 @@ async function opShowJob(id,{auto=false,stop=false}={}){
    const inspected=inspectAction&&job.status==='succeeded'&&rows.length;
    const emptyInspection=inspectAction&&job.status==='succeeded'&&/(^|\n)\s*(?:\[\s*\]|\{\s*\})\s*(?=\n|$)/.test(job.output||'');
    pre.hidden=!!inspected||emptyInspection;
-   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p>${opOnBuilder()?'<div id="op-published-block"></div>':'<button class="button primary" id="op-open-published">Deploy or add this lab…</button>'}`:'');
+   const inspectView=dialog._inspectView||(dialog._inspectView={key:'',dir:'',filter:''});
+   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows,inspectView):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p>${opOnBuilder()?'<div id="op-published-block"></div>':'<button class="button primary" id="op-open-published">Deploy or add this lab…</button>'}`:'');
+   if(inspected)opInspectionBind($('op-job-result'),rows,inspectView);
    if(opPublishedPath(job)&&opOnBuilder())opRenderPublished(dialog,opPublishedPath(job));
    $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(opPublishedPath(job))));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
@@ -501,27 +545,48 @@ function opReopenReturn(value){
 function openDeploy(){return opTask(null,()=>opBrowse());}
 function opNewTab(values){const url='/static/workspace.html#'+new URLSearchParams(values);if(!window.open(url,'_blank'))opDialog('op-open-tab','Open the CLI launcher',`<p>Your browser blocked the new tab. Use this button instead:</p><a class="button primary" href="${esc(url)}" target="_blank" rel="opener">Open CLI launcher <span aria-hidden="true">↗</span></a>`);}
 function opTopologyEntries(entries){return entries.filter(entry=>entry.directory||/\.clab\.ya?ml$/i.test(entry.name));}
-// path: the folder to open; labId: opened as "Lab files · <lab>" starting in the lab's own folder.
-async function opBrowse(path='',labId=''){
+// Sizes in the file tree and the images table: Docker-style decimal units, one decimal.
+function opSize(bytes){
+ const n=Number(bytes);if(!Number.isFinite(n)||n<0)return '';
+ if(n<1000)return Math.round(n)+' B';
+ const units=['kB','MB','GB','TB'];let size=n/1000,i=0;
+ while(size>=1000&&i<units.length-1){size/=1000;i++;}
+ return size.toFixed(1)+' '+units[i];
+}
+// Files mode (C03 4.4): the dialog opened for a lab on a VM whose helper reports `diagnostics`. It is a property of the dialog:
+// every listing it makes sends files:true with the lab, keeps the title and help line, and lists the files the manager can show,
+// so the node folders under clab-<lab>/ and their startup configurations are reachable. Topology files first.
+function opFileEntries(entries){
+ const rank=entry=>entry.kind==='topology'||(!entry.kind&&!entry.directory&&/\.clab\.ya?ml$/i.test(entry.name))?0:entry.directory?1:2;
+ return entries.map((entry,index)=>({entry,index})).sort((a,b)=>rank(a.entry)-rank(b.entry)||a.index-b.index).map(x=>x.entry);
+}
+function opFileLabel(entry){return '◇ '+entry.name+(typeof entry.size==='number'?' · '+opSize(entry.size):'');}
+// path: the folder to open; labId: opened as "Lab files · <lab>" starting in the lab's own folder (options.root: at the roots instead).
+async function opBrowse(path='',labId='',options={}){
  const lab=labId?(state.labs||[]).find(l=>l.id===labId):null,labPath=opPath(lab);
- if(lab&&!path&&labPath)path=labPath.includes('/')?labPath.slice(0,labPath.lastIndexOf('/')):'';
- const result=await json('/operations/browse','POST',{path});
- const dialog=opDialog('op-browser',lab?'Lab files · '+lab.name:'Deploy a new lab',`<p class="op-path">${esc(result.path||'Lab folders on the VM')}</p><div class="actions"><button class="button secondary" id="op-roots">All lab folders</button><button class="button secondary" id="op-up">Up one folder</button><button class="button secondary" id="op-build">Build a lab visually…</button><button class="button secondary" id="op-create">Write a new topology…</button><button class="button secondary" id="op-clone">Download a lab from GitHub…</button><button class="button secondary" id="op-popular">Browse popular labs…</button></div><div class="op-file-tree" id="op-file-tree" aria-label="Lab topology files"></div><p class="form-help">Open a folder and pick a topology file (.clab.yaml) to view or deploy it. Only topology files are listed, up to 500 per folder.</p>${lab?'':'<p class="form-help">These are files on the lab VM. Is the topology file on your computer instead? <button type="button" class="link-button" id="op-browse-upload">Upload it from this computer…</button></p>'}`);
+ if(lab&&!opCaps){try{await opCapabilities();}catch{/* the dialog stays the topology browser */}}
+ const files=!!lab&&opCaps?.diagnostics===true;
+ if(lab&&!path&&!options.root&&labPath)path=labPath.includes('/')?labPath.slice(0,labPath.lastIndexOf('/')):'';
+ const listing=folder=>json('/operations/browse','POST',files?{path:folder,files:true,lab_id:labId}:{path:folder});
+ const result=await listing(path);
+ const dialog=opDialog('op-browser',lab?'Lab files · '+lab.name:'Deploy a new lab',`<p class="op-path">${esc(result.path||'Lab folders on the VM')}</p><div class="actions"><button class="button secondary" id="op-roots">All lab folders</button><button class="button secondary" id="op-up">Up one folder</button><button class="button secondary" id="op-build">Build a lab visually…</button><button class="button secondary" id="op-create">Write a new topology…</button><button class="button secondary" id="op-clone">Download a lab from GitHub…</button><button class="button secondary" id="op-popular">Browse popular labs…</button></div><div class="op-file-tree" id="op-file-tree" aria-label="${files?'Lab files':'Lab topology files'}"></div><p class="form-help">${files?'Files the manager can show (text and configuration files). Other files on the VM are not listed.':'Open a folder and pick a topology file (.clab.yaml) to view or deploy it. Only topology files are listed, up to 500 per folder.'}</p>${lab?'':'<p class="form-help">These are files on the lab VM. Is the topology file on your computer instead? <button type="button" class="link-button" id="op-browse-upload">Upload it from this computer…</button></p>'}`);
  {const upload=$('op-browse-upload');if(upload)upload.onclick=()=>{dialog.close();opUpload();};}
  const addEntries=(container,entries)=>{
-  entries=opTopologyEntries(entries);
-  if(!entries.length){container.textContent='No topology files in this folder.';return;}
+  entries=files?opFileEntries(entries):opTopologyEntries(entries);
+  if(!entries.length){container.textContent=files?'No files the manager can show in this folder.':'No topology files in this folder.';return;}
   for(const entry of entries){
    if(entry.directory){
     const folder=document.createElement('details'),summary=document.createElement('summary'),children=document.createElement('div');
     summary.textContent=entry.name;children.className='op-tree-children';folder.append(summary,children);container.append(folder);
     let loaded=false,loading=false;
-    folder.ontoggle=async()=>{if(!folder.open||loaded||loading)return;loading=true;children.textContent='Loading…';try{const listing=await json('/operations/browse','POST',{path:entry.path});children.replaceChildren();addEntries(children,listing.entries);loaded=true;}catch(e){children.textContent=e.message+' Close and reopen this folder to retry.';}finally{loading=false;}};
-   }else{const button=document.createElement('button');button.className='op-tree-file';button.textContent='◇ '+entry.name;button.onclick=()=>opTask(dialog,()=>opEdit(entry.path,lab?lab.id:''));container.append(button);}
+    folder.ontoggle=async()=>{if(!folder.open||loaded||loading)return;loading=true;children.textContent='Loading…';try{const answer=await listing(entry.path);children.replaceChildren();addEntries(children,answer.entries);loaded=true;}catch(e){children.textContent=e.message+' Close and reopen this folder to retry.';}finally{loading=false;}};
+   }else{const button=document.createElement('button');button.className='op-tree-file';button.textContent=files?opFileLabel(entry):'◇ '+entry.name;
+    const topology=!files||entry.kind==='topology'||(!entry.kind&&/\.clab\.ya?ml$/i.test(entry.name));
+    button.onclick=()=>opTask(dialog,()=>topology?opEdit(entry.path,lab?lab.id:''):opView(entry.path,labId));container.append(button);}
   }
  };
  addEntries($('op-file-tree'),result.entries);
- $('op-roots').onclick=()=>opTask(dialog,()=>opBrowse());$('op-up').onclick=()=>opTask(dialog,()=>opBrowse(result.parent||''));
+ $('op-roots').onclick=()=>opTask(dialog,()=>files?opBrowse('',labId,{root:true}):opBrowse());$('op-up').onclick=()=>opTask(dialog,()=>opBrowse(result.parent||'',files?labId:'',{root:!result.parent}));
  $('op-build').onclick=()=>opBuilderOpen({root:opBuilderRoot(result.path,opCaps?.roots)});
  $('op-create').onclick=()=>opEdit('','',(result.path||'/srv/containerlab-node-manager/projects')+'/new-lab.clab.yaml');$('op-clone').onclick=()=>opClone();$('op-popular').onclick=()=>opTask(dialog,()=>opPopular());
  // Listing files does not depend on Containerlab's command help probes. Render
@@ -536,6 +601,14 @@ async function opBrowse(path='',labId=''){
   if(!clone.isConnected)return;
   help.textContent+=' Files are available, but the VM command check failed — open Diagnostics for details. Online downloads stay off.';
  });
+}
+// A file of the lab's folder that is not a topology (a startup configuration, a map file): read-only, hidden lines said.
+// The manager redacts lines with passwords, secrets and SNMP communities and shows at most the last 512 KiB.
+async function opView(path,labId){
+ const value=await json('/operations/view','POST',{lab_id:labId,path});
+ const dialog=opDialog('op-editor','File on the VM',`<p class="op-path">${esc(value.name||path)}</p><p class="form-help">Lines with passwords, secrets or SNMP communities are hidden. This copy is for reading, not for loading onto a device.</p>${value.truncated?'<p class="op-notice">Showing the last 512 KiB of this file.</p>':''}${typeof copyText==='function'?'<div class="op-output-tools"><button type="button" id="op-copy-view" class="button ghost small" data-label="Copy" aria-label="Copy the file text" data-copy-target="op-view-text">Copy</button><span class="copy-status" role="status"></span></div>':''}<label for="op-view-text">File contents</label><textarea class="op-code" id="op-view-text" spellcheck="false" readonly></textarea>`);
+ $('op-view-text').value=value.text||'';
+ opBindCopyOutput(()=>value.text||'','op-copy-view');
 }
 // upload: {text, file} for a topology the student chose on their own computer (opUpload); it goes
 // through the same review as a topology typed here.
@@ -706,6 +779,46 @@ function opMenuState(button,disabled,reason,label,hint=''){
  const text=button.querySelector('span');if(text&&label!==undefined)text.textContent=label;
  const small=button.querySelector('.menu-reason');if(small){small.textContent=disabled?reason||'':'';small.hidden=!(disabled&&reason);}
 }
+// Images on this VM (C03 4.5): what Docker holds, how big and how old, and which of the student's labs name each image. Nothing is pulled or removed.
+// Docker's CreatedAt ("2026-10-23 02:03:42 +0000 UTC") is not an ISO stamp; the manager may pass either.
+function opCreatedDate(value){
+ const text=String(value||'').trim();if(!text)return null;
+ const m=/^(\d{4}-\d\d-\d\d)[ T](\d\d:\d\d:\d\d)/.exec(text);
+ const date=new Date(m?m[1]+'T'+m[2]+'Z':text);
+ return Number.isNaN(date.getTime())?null:date;
+}
+// Pure: the table rows. `missing` references are named by a lab but not on the VM; they carry no size or age.
+function opImageRows(data){
+ const used=data&&data.used_by&&typeof data.used_by==='object'?data.used_by:{},rows=[];
+ const details=Array.isArray(data&&data.details)?data.details:[];
+ const known=details.length?details:(Array.isArray(data&&data.images)?data.images:[]).map(reference=>({reference,size:'',created:''}));
+ for(const item of known)rows.push({reference:String(item.reference||''),size:String(item.size||''),created:String(item.created||''),labs:Array.isArray(used[item.reference])?used[item.reference]:[],missing:false});
+ for(const reference of Array.isArray(data&&data.missing)?data.missing:[])rows.push({reference:String(reference),size:'',created:'',labs:Array.isArray(used[reference])?used[reference]:[],missing:true});
+ return rows;
+}
+function opImageFilter(rows,text,chip){
+ const needle=String(text||'').trim().toLowerCase();
+ return rows.filter(r=>(chip==='used'?r.labs.length>0:chip==='missing'?r.missing:true)&&(!needle||(r.reference+' '+r.labs.join(' ')).toLowerCase().includes(needle)));
+}
+function opImageTableBody(rows){
+ if(!rows.length)return '<tr><td colspan="4">No images match.</td></tr>';
+ return rows.map(r=>{const date=opCreatedDate(r.created);return `<tr><td class="mono">${esc(r.reference)}${r.missing?' <span class="pill danger">Missing</span>':''}</td><td>${esc(r.size)||'—'}</td><td${date?` title="${esc(date.toISOString().replace('T',' ').slice(0,19)+' UTC')}"`:''}>${date?esc(opWhen(date.toISOString())):esc(r.created)||'—'}</td><td>${r.labs.length?esc(r.labs.join(', ')):'—'}</td></tr>`;}).join('');
+}
+async function opImages(){
+ const data=await(await api('/operations/images')).json();
+ const rows=opImageRows(data),hasDetails=Array.isArray(data.details)&&data.details.length>0,view={text:'',chip:'all'};
+ const chips=[['all','All'],['used','Used by my labs'],['missing','Missing']];
+ const dialog=opDialog('op-images','Images on this VM',data.available===false?'<p>This VM has no Docker client the manager can ask, so its images cannot be listed.</p>':`<p class="form-help">The Docker images on the lab VM. Nothing is pulled or removed here.</p>${hasDetails||!rows.length?'':'<p class="form-help">Size and age need the updated VM helper.</p>'}<div class="op-inspection-tools"><label for="op-images-filter">Filter images</label><input type="search" id="op-images-filter" autocomplete="off"></div><div class="op-chips" role="group" aria-label="Show">${chips.map(([key,label])=>`<button type="button" class="button secondary small op-chip" data-op-chip="${key}" aria-pressed="${key==='all'}">${label}</button>`).join('')}</div><div class="op-inspection"><table><caption id="op-images-caption"></caption><thead><tr><th scope="col">Reference</th><th scope="col">Size</th><th scope="col">Created</th><th scope="col">Used by</th></tr></thead><tbody id="op-images-body"></tbody></table></div>`);
+ if(data.available===false)return;
+ const redraw=()=>{
+  const shown=opImageFilter(rows,view.text,view.chip);
+  $('op-images-body').innerHTML=opImageTableBody(shown);
+  $('op-images-caption').textContent=shown.length===rows.length?rows.length+(rows.length===1?' image':' images'):shown.length+' of '+rows.length+' images';
+ };
+ redraw();
+ $('op-images-filter').addEventListener('input',event=>{view.text=event.target.value;redraw();});
+ for(const button of dialog.querySelectorAll('[data-op-chip]'))button.addEventListener('click',()=>{view.chip=button.dataset.opChip;for(const other of dialog.querySelectorAll('[data-op-chip]'))other.setAttribute('aria-pressed',String(other===button));redraw();});
+}
 function renderLabOperations(){
  const lab=current(),quick=opQuickActions(lab,state.discovery,busy()),status=lab?.deployment?.status,running=['Running','Partially running'].includes(status);
  if($('lab-start'))opMenuState($('lab-start'),!quick.canStart,quick.reason,quick.startAction==='deploy'?'Start lab':'Start stopped devices',quick.startAction==='deploy'?'Deploy this topology and start its devices':'Start stopped devices in this lab');
@@ -719,6 +832,7 @@ function renderLabOperations(){
   opMenuState(b,!ok,unavailable?'Not available on this VM — see Diagnostics':quick.available?'The lab is not running':quick.reason);
  }
  if($('vm-projects')){const connected=!!state.discovery?.connected;opMenuState($('vm-projects'),!connected,'Connect the VM to browse its lab topologies');}
+ if($('manager-images')){const connected=!!state.discovery?.connected;opMenuState($('manager-images'),!connected,'Connect the VM to see its images');}
  // The banner (app.js) is the lowest-priority notice and a student can hide it for the session, so
  // this menu item is a second, always-reachable way to the same dialog: shown only while the lab has
  // something recorded, hidden (not merely disabled, so keyboard and pointer navigation both skip it).
@@ -735,6 +849,7 @@ if($('import-top')){
  // Operation history for THIS lab from its menu and its Advanced tab; Manager ▾ keeps the history of every lab.
  for(const id of ['menu-operation-history','advanced-operation-history'])if($(id))$(id).onclick=()=>{if(typeof closeMenus==='function')closeMenus();opTask(null,()=>opHistory(activeId));};
  if($('menu-telemetry-retired'))$('menu-telemetry-retired').onclick=()=>{if(typeof closeMenus==='function')closeMenus();opTask(null,()=>openTelemetryRetired(activeId));};
+ if($('manager-images'))$('manager-images').onclick=()=>opTask(null,()=>opImages());
  $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>openDeploy();$('lab-start').onclick=()=>opTask(null,()=>opQuickRun('start'));$('lab-destroy').onclick=()=>opTask(null,()=>opQuickRun('destroy'));$('operations-history').onclick=()=>opTask(null,()=>opHistory());$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
  // Lab actions ▾ lifecycle items go through the same preview/confirm flow as the operations dialog.
  const menu=$('lab-actions-menu');
@@ -743,6 +858,9 @@ if($('import-top')){
    opTask(null,async()=>{const lab=current();if(!lab)return;try{await opCapabilities();}catch{opCaps=null;}renderLabOperations();await opReview({lab_id:lab.id,action:b.dataset.opAction,options:JSON.parse(b.dataset.opOptions||'{}')});});});
   menu.addEventListener('menuopen',()=>{if(opCaps)return;opCapabilities().then(()=>renderLabOperations()).catch(()=>{});});
  }
+ // The Manager menu's footer names the VM's containerlab; the capabilities answer is cached for a minute on the server.
+ {const managerMenu=$('manager-menu-list');
+  if(managerMenu)managerMenu.addEventListener('menuopen',()=>{opCapabilities().then(caps=>{const span=$('clab-version'),version=typeof caps?.containerlab==='string'&&/^\d+\.\d+\.\d+/.test(caps.containerlab)?caps.containerlab:'';if(span){span.textContent=version?' · containerlab '+version:'';span.hidden=!version;}}).catch(()=>{});});}
  $('labs').addEventListener('contextmenu',e=>{const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}});
  $('labs').addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}}});
  // Coming back from the lab builder (its "← My labs" link, or the browser Back button): both are a

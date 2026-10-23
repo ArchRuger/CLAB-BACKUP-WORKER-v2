@@ -55,3 +55,11 @@ test('debug flags audit write failures without displaying exception details',asy
  const f=fixture(async()=>({ok:true,json:async()=>({...snapshot,audit_log_available:false})}));await tick();
  assert.equal(f.get('debug-summary').children[0].children[1].children[7].textContent,'Failed — check storage');
 });
+
+test('the capabilities check line names the VM helper and the containerlab version as text',()=>{
+ const f=fixture(async()=>({ok:true,json:async()=>snapshot}));
+ const line=f.context.debugCheckLine({check:'capabilities',status:'pass',helper_version:'1.31.1',containerlab_version:'0.79.0',duration_ms:20});
+ assert.equal(line,'VM commands — PASSED · VM helper 1.31.1 · containerlab 0.79.0 · 20 ms');
+ assert.equal(f.context.debugCheckLine({check:'capabilities',status:'pass',helper_version:'1.31.1',duration_ms:20}),'VM commands — PASSED · VM helper 1.31.1 · 20 ms','an older answer without the version reads as before');
+ assert.match(f.context.debugCheckLine({check:'capabilities',status:'pass',containerlab_version:'<b>0</b>',duration_ms:1}),/<b>0<\/b>/,'it is placed as text (the page uses textContent), never as markup');
+});
