@@ -164,9 +164,11 @@ async function mapLinkRun(){
  const labId=activeId,epoch=poll.epoch;poll.inFlight=true;poll.fresh=false;
  let result;
  try{result={ok:true,data:await mapLinkFetch(labId)};}
- catch(e){result={ok:false,status:e&&e.status?e.status:0};}
+ catch(e){result={ok:false,status:e&&e.status?e.status:0,message:e&&e.message?e.message:''};}
  poll.inFlight=false;
  if(epoch!==poll.epoch||activeId!==labId)return;
+ // 409 is the manager's own helper sentence (an old helper): colours off with that sentence, no more polling, like available:false.
+ if(!result.ok&&result.status===409&&result.message){poll.mode='unavailable';poll.timer=0;delete mapLinkCache[labId];mapLinkClear();mapLinkSay(MAP_LINK_OFF+result.message,null);return;}
  const next=typeof diagPollNext==='function'?diagPollNext(poll.plan||mapLinkPlan(),result.ok?{ok:true}:{ok:false,status:result.status},Date.now()):{plan:poll.plan,delay:MAP_LINK_INTERVAL,stop:''};
  poll.plan=next.plan;
  if(result.ok){

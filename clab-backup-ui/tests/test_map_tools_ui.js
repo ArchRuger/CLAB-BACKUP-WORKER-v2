@@ -381,3 +381,11 @@ test('mapToolsReset and the markup: no inline style, esc() on every interpolatio
  const h=harness();h.render();h.$('map-find').value='b';h.context.mapToolsReset();
  assert.equal(h.$('map-find').value,'');
 });
+
+test('S1b contract: a 409 helper sentence turns the colours off with that sentence and stops the poll; a 404 counts as an error',async()=>{
+ const h=harness();let mode='ok';
+ h.on('/operations/link-state',async()=>{if(mode==='409')throw Object.assign(new Error('Link state needs the updated VM helper (ask your instructor or administrator).'),{status:409});return {json:async()=>answer()};});
+ const wires=h.render();await h.fire();assert.ok(wires[0].classList.contains('link-up'));
+ mode='409';await h.fire();
+ assert.equal(classes(wires[0]),'topology-wire');assert.match(h.$('map-links').innerHTML,/Link state off: Link state needs the updated VM helper/);assert.equal(h.live().length,0);
+});
