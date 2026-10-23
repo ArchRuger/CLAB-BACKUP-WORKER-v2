@@ -9,13 +9,13 @@
 // Pills are ok | warn | danger | neutral | busy (busy = something is in progress right now).
 // "Devices", never "routers"; "Not connected" is reserved for the VM. Nothing here touches the DOM,
 // so the harness tests call these functions directly. operations.js keeps its own imperative table.
-const STATUS_OPERATION_LABELS={deploy:'Starting lab',redeploy:'Redeploying lab',destroy:'Destroying lab',start:'Starting devices',stop:'Stopping devices',restart:'Restarting all devices','restart-node':'Restarting device',apply:'Updating the lab from its topology file',save:'Saving device configurations',inspect:'Checking lab status','inspect-all':'Checking running labs',create:'Creating topology file',delete:'Deleting topology file',clone:'Downloading lab files'};
+const STATUS_OPERATION_LABELS={deploy:'Starting lab',redeploy:'Redeploying lab',destroy:'Destroying lab',start:'Starting devices',stop:'Stopping devices',restart:'Restarting all devices','restart-node':'Restarting device','start-node':'Starting device','stop-node':'Stopping device',apply:'Updating the lab from its topology file',save:'Saving device configurations',inspect:'Checking lab status','inspect-all':'Checking running labs',create:'Creating topology file',delete:'Deleting topology file',clone:'Downloading lab files'};
 const STATUS_OPERATION_BUSY=['queued','running'];
 const STATUS_OPERATION_FAILED=['failed','interrupted','cancelled'];
 // The actions that run through the VM helper's stream and so end when the manager closes the channel (lab_operations.STOPPABLE; a test pins the two equal).
-const STATUS_STOPPABLE=['deploy','redeploy','destroy','apply','start','stop','restart','restart-node','save','clone','inspect-all'];
+const STATUS_STOPPABLE=['deploy','redeploy','destroy','apply','start','stop','restart','restart-node','start-node','stop-node','save','clone','inspect-all'];
 // What a student does after stopping each action (the Python STOP_AFTERMATH holds the same words). verb: how far the lab may have got, '' when the action leaves nothing half done.
-const STATUS_STOP_AFTERMATH={deploy:{verb:'started',repair:'Redeploy lab'},redeploy:{verb:'started',repair:'Redeploy lab'},apply:{verb:'started',repair:'Redeploy lab'},start:{verb:'started',repair:'Redeploy lab'},restart:{verb:'started',repair:'Redeploy lab'},destroy:{verb:'removed',repair:'run Destroy lab again'},stop:{verb:'stopped',repair:'run Stop devices again'},'restart-node':{verb:'started',repair:'Restart device again (Redeploy lab also works but clears unsaved configuration on every device)'},save:{verb:'',repair:'run Save device configurations again'},clone:{verb:'',repair:'run Download lab again'},'inspect-all':{verb:'',repair:'run it again'}};
+const STATUS_STOP_AFTERMATH={deploy:{verb:'started',repair:'Redeploy lab'},redeploy:{verb:'started',repair:'Redeploy lab'},apply:{verb:'started',repair:'Redeploy lab'},start:{verb:'started',repair:'Redeploy lab'},restart:{verb:'started',repair:'Redeploy lab'},destroy:{verb:'removed',repair:'run Destroy lab again'},stop:{verb:'stopped',repair:'run Stop devices again'},'restart-node':{verb:'started',repair:'Restart device again (Redeploy lab also works but clears unsaved configuration on every device)'},'start-node':{verb:'started',repair:'Start device again'},'stop-node':{verb:'stopped',repair:'Stop device again (or Start device if it should run)'},save:{verb:'',repair:'run Save device configurations again'},clone:{verb:'',repair:'run Download lab again'},'inspect-all':{verb:'',repair:'run it again'}};
 // The question before Stop: names the command and the device or lab, then what may be left half done and the way back. Pure.
 function statusStopQuestion(action,label,name){
  const a=STATUS_STOP_AFTERMATH[action]||{verb:'',repair:'run it again'};
@@ -46,7 +46,19 @@ function statusDesignRechecking(job){return job?.status==='interrupted'&&Array.i
 const STATUS_BADGE_LABELS={reachable:'Login OK',unreachable:'Login failed',booting:'Starting',checking:'Testing login…',succeeded:'Succeeded',failed:'Failed',interrupted:'Interrupted',cancelled:'Stopped by you',partial:'Partly succeeded',queued:'Queued',running:'Running',Ready:'Ready'};
 function plural(count,word,pluralWord){const n=Number(count)||0;return n+' '+(n===1?word:(pluralWord||word+'s'));}
 // Restart device names its one device when the job is at hand ("Restarting ceos"); the table's word otherwise.
-function operationLabel(action,job){if(action==='restart-node'&&job?.node_label)return 'Restarting '+job.node_label;return STATUS_OPERATION_LABELS[action]||'Lab operation';}
+// Wherever a job record is at hand the device is named, never the bare verb ("Stopping ceos", not "Stopping device"), and a job
+// limited to chosen devices (its public `nodes`) names them ("Destroying ceos"), so a one-device action is never read as the lab-wide one.
+const STATUS_NODE_ACTIONS=['restart-node','start-node','stop-node'];
+const STATUS_NODE_VERBS={'restart-node':'Restarting','start-node':'Starting','stop-node':'Stopping'};
+const STATUS_FILTERABLE=['destroy','save','deploy'];
+function statusJobNodes(job){return Array.isArray(job?.nodes)?job.nodes.filter(n=>typeof n==='string'&&n):[];}
+function statusNodeNames(names){return names.length<=3?names.join(', '):names.slice(0,3).join(', ')+' and '+(names.length-3)+' more';}
+function operationLabel(action,job){
+ if(STATUS_NODE_ACTIONS.includes(action)&&job?.node_label)return STATUS_NODE_VERBS[action]+' '+job.node_label;
+ const names=STATUS_FILTERABLE.includes(action)?statusJobNodes(job):[];
+ if(names.length){const word={destroy:'Destroying',save:'Saving',deploy:'Starting'}[action];return word+' '+statusNodeNames(names);}
+ return STATUS_OPERATION_LABELS[action]||'Lab operation';
+}
 function statusDeviceName(node){return node?.short_name||node?.definition_node||node?.name||'This device';}
 // Timestamps arrive as ISO strings (manager jobs) or Unix seconds (Git); both become epoch ms, invalid → 0.
 function statusEpoch(value){if(!value)return 0;const time=typeof value==='number'?value*(value<1e12?1000:1):new Date(value).getTime();return Number.isNaN(time)?0:time;}
@@ -126,6 +138,8 @@ function deviceState(node){
  // Restart device is running for this one device (the server says so while its job is queued or running):
  // it is neither ready nor merely booting, whatever the container state of the moment says.
  if(login==='restarting')return {key:'working',label:'Restarting',detail:`${name} is restarting on the VM. Its CLI opens again once it accepts a login.`,next:'',cli:false,pill:'busy'};
+ if(login==='starting')return {key:'working',label:'Starting',detail:`${name} is being started on the VM. Its CLI opens again once it accepts a login.`,next:'',cli:false,pill:'busy'};
+ if(login==='stopping')return {key:'working',label:'Stopping',detail:`${name} is being stopped on the VM. Start device brings it back.`,next:'',cli:false,pill:'busy'};
  if(node.ssh_ready)return {key:'ready',label:'Ready',detail:login==='unmonitored'?'Connected with the saved address.':`${name} is accepting SSH logins.`,next:'',cli:true,pill:'ok'};
  if(statusNotRunning(node))return {key:'unavailable',label:'Unavailable',detail:`${name} is not running, or the lab status is out of date.`,next:'Start lab',cli:false,pill:'neutral'};
  // A refresh (Test logins, or this device's own Test login) is answering right now; only a

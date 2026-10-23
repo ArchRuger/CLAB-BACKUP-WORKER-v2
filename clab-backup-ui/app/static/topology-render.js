@@ -95,3 +95,31 @@ function measureTopology(svg){
  }
  const box=svg.querySelector('#topology-scene').getBBox();return [box.x-35,box.y-35,Math.max(200,box.width+70),Math.max(150,box.height+70)];
 }
+// Impairments on the map (C05 4.3). Pure: which wires carry a configured impairment, from the wires' own endpoints (the
+// data-capture-endpoints JSON: [{node, label, interface}]) and the manager's answer (`devices`: {node: {impairments: [{interface,
+// port, delay, jitter, loss, rate, corruption}]}}). An end is impaired when its device matches the node name and its interface equals
+// the row's interface or its port; the impairment acts on traffic leaving that end's device.
+function impairmentSummary(row){
+ const parts=[];
+ if(row.delay&&row.delay!=='0ms')parts.push('delay '+row.delay);
+ if(row.jitter&&row.jitter!=='0ms')parts.push('jitter '+row.jitter);
+ if(Number(row.loss)>0)parts.push('loss '+row.loss+'%');
+ if(Number(row.rate)>0)parts.push('rate '+row.rate+' kbit');
+ if(Number(row.corruption)>0)parts.push('corruption '+row.corruption+'%');
+ return parts.join(', ');
+}
+function impairedWires(wires,devices){
+ const found=[],byNode=devices&&typeof devices==='object'?devices:{};
+ (wires||[]).forEach((wire,index)=>{
+  const ends=[];
+  (wire&&Array.isArray(wire.ends)?wire.ends:[]).forEach((end,side)=>{
+   const device=end&&byNode[end.node];
+   const row=device&&Array.isArray(device.impairments)?device.impairments.find(r=>r&&(r.interface===end.interface||r.port===end.interface)):null;
+   if(!row)return;
+   const label=String(end.label||end.node||''),port=String(row.port||row.interface||end.interface||'');
+   ends.push({side,node:end.node,label,interface:end.interface,port,summary:impairmentSummary(row)});
+  });
+  if(ends.length)found.push({index,ends,text:'impaired at '+ends.map(e=>`${e.label} ${e.port} (traffic leaving ${e.label})${e.summary?': '+e.summary:''}`).join('; ')});
+ });
+ return found;
+}
