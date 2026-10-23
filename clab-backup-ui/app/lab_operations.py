@@ -14,7 +14,7 @@ from urllib.parse import quote
 
 import paramiko
 from fastapi import HTTPException
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from .discovery import PinnedHostKey, vm_password, parse_definition, stamp, expected_container, lab_status, discovery_fresh
@@ -448,6 +448,9 @@ class LabOperations:
         # One image question on the VM at a time: tabs and reviews that miss the cache together queue here
         # instead of each opening an SSH session and four Docker processes.
         self.image_flight = threading.Lock()
+        # Undo of Arrange devices (C06): lab id -> (the arranged drawing's revision, the lab's map keys before it). Process
+        # memory only, never persisted: one entry per lab, read and written under the store lock, gone on restart.
+        self.arrange_undo = {}
         with store.lock:
             for job in store.state.setdefault('operations', []):
                 if job['status'] in BUSY:
@@ -960,6 +963,110 @@ class LabOperations:
                 saved = revision(drawing)
             self.store.event('topology.layout', 'Map saved from the map editor', lab_id=lab_id)
             return {'saved': True, 'revision': saved}
+
+        # Arrange devices (C06 §2.6): one explicit, saved map change outside Edit map, with one exact Undo kept on the server.
+        # The drawing and the stored document move together and the document is kept through keep_document, as the
+        # map-document save does; the map state before it stays in process memory (arrange_undo), never in the Store.
+        class Arrange(BaseModel):
+            model_config = ConfigDict(extra="forbid")
+            mode: str | None = Field(default=None, max_length=20)
+            undo: bool = False
+            revision: str = Field(min_length=1, max_length=64)
+
+        arranged_messages = {'rows': 'Devices arranged in rows', 'columns': 'Devices arranged in columns', 'ring': 'Devices arranged in a ring'}
+        map_keys = ('drawing', 'annotations', 'annotations_for', 'map_written_at')
+        not_saved = 'Could not save the map. Try again.'
+
+        def map_state(lab):
+            """The lab's map keys as they are, deep-copied; a key the lab does not have is left out (and so removed on restore)."""
+            return {k: copy.deepcopy(lab[k]) for k in map_keys if k in lab}
+
+        def put_back(lab, state):
+            for key in map_keys: lab.pop(key, None)
+            lab.update(state)
+
+        def fitting(document):
+            """The document's text: indented like the map-document answers, compact when only that fits the 1 MiB a stored
+            document may have (keep_document would drop a larger one, and the map would then lose what it kept)."""
+            for options in ({'indent': 2}, {'separators': (',', ':')}):
+                text = json.dumps(document, ensure_ascii=False, **options)
+                if len(text.encode()) <= MAX_DOCUMENT: return text
+            raise HTTPException(400, 'The map is larger than 1 MiB.')
+
+        def arranged_document(lab, old, new):
+            """The stored document with the arranged positions, every other key as it was, when it belongs to the drawing
+            being arranged; else the document the map editor would open for the arranged drawing."""
+            if not (lab.get('annotations') and lab.get('annotations_for') == revision(old)): return fitting(annotations(new))
+            try: document = json.loads(lab['annotations'])
+            except ValueError: document = None
+            if not isinstance(document, dict): raise HTTPException(500, not_saved)   # it parsed when it was kept; nothing is changed
+            where = {n['id']: (n['x'], n['y']) for n in new['nodes']}; placed = set()
+            for key in ('nodeAnnotations', 'networkNodeAnnotations'):
+                for entry in document.get(key) if isinstance(document.get(key), list) else []:
+                    ident = entry.get('id') if isinstance(entry, dict) else None
+                    if not isinstance(ident, str) or ident not in where: continue
+                    x, y = where[ident]
+                    if isinstance(entry.get('position'), dict): entry['position'].update(x=x, y=y)
+                    else: entry['position'] = {'x': x, 'y': y}
+                    placed.add(ident)
+            missing = [{'id': n['id'], 'position': {'x': n['x'], 'y': n['y']}} for n in new['nodes'] if n['id'] not in placed]
+            if missing:
+                if not isinstance(document.get('nodeAnnotations'), list): document['nodeAnnotations'] = []
+                document['nodeAnnotations'].extend(missing)
+            return fitting(document)
+
+        def stale():
+            return JSONResponse({'detail': 'The map changed since you looked at it. The map was reloaded; try again.', 'reason': 'stale'}, status_code=412)
+
+        @app.post('/api/labs/{lab_id}/arrange')
+        def arrange_map(lab_id: str, data: Arrange):
+            if (data.mode is not None) == data.undo: raise HTTPException(400, 'Choose an arrangement or undo, not both.')
+            if data.mode is not None and data.mode not in arranged_messages: raise HTTPException(400, 'Choose rows, columns or a ring.')
+            from .layout import arrange   # C06 S1a: the pure, deterministic arrangement of a drawing's nodes
+            with self.store.lock:
+                self.guard(lab_id); lab = self.store.lab(lab_id)
+                if not lab:
+                    self.arrange_undo.pop(lab_id, None); raise HTTPException(404, 'Lab not found.')
+                if not lab.get('drawing'): raise HTTPException(404, 'Import a topology map first.')
+                current = revision(lab['drawing'])
+                if data.undo:
+                    entry = self.arrange_undo.get(lab_id)
+                    if not entry or entry[0] != data.revision or entry[0] != current:
+                        self.arrange_undo.pop(lab_id, None); return stale()
+                    now = map_state(lab)
+                    put_back(lab, copy.deepcopy(entry[1]))
+                    try: self.store.save()
+                    except OSError:
+                        put_back(lab, now)   # nothing changed: the Undo stays offered
+                        raise HTTPException(500, not_saved)
+                    self.arrange_undo.pop(lab_id, None)
+                    answer = {'saved': True, 'revision': revision(lab['drawing']), 'undo': False}; message = 'Device positions restored'
+                else:
+                    if data.revision != current: return stale()
+                    old = lab['drawing']
+                    if len(old.get('nodes') or []) < 2: raise HTTPException(400, 'Nothing to arrange: this map has one device.')
+                    try: positions = arrange(copy.deepcopy(old), data.mode)
+                    except ValueError as exc: raise HTTPException(400, str(exc)[:200])
+                    new = copy.deepcopy(old)
+                    for node in new['nodes']:
+                        point = positions.get(node['id']) if isinstance(positions, dict) else None
+                        if not isinstance(point, (list, tuple)) or len(point) != 2 or any(type(v) is not int or not -100000 <= v <= 100000 for v in point):
+                            raise HTTPException(500, not_saved)
+                        node['x'], node['y'] = point
+                    # An arrangement a person chose is theirs: discovery never replaces it with the VM annotations.
+                    new['placed'] = True
+                    text = arranged_document(lab, old, new)
+                    previous = map_state(lab)
+                    lab['drawing'] = new; keep_document(lab, text)
+                    try: self.store.save()
+                    except OSError:
+                        put_back(lab, previous)
+                        raise HTTPException(500, not_saved)
+                    saved = revision(new)
+                    self.arrange_undo[lab_id] = (saved, previous)
+                    answer = {'saved': True, 'revision': saved, 'undo': True}; message = arranged_messages[data.mode]
+            self.store.event('topology.layout', message, lab_id=lab_id)
+            return answer
 
         @app.post('/api/labs/{lab_id}/annotations')
         def export_annotations(lab_id: str, data: Layout):

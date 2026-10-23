@@ -357,6 +357,139 @@ class InterfacesModeTests(DiagnosticsHarness):
         self.assertEqual(found['eth4'], {'rx_bytes': 1, 'rx_packets': 2, 'rx_errors': 3, 'rx_dropped': 4, 'tx_bytes': 9, 'tx_packets': 10, 'tx_errors': 11, 'tx_dropped': 12})
 
 
+class LinkStateModeTests(DiagnosticsHarness):
+    """C06 S0: the `all` option of `interfaces` (docs/parity-campaign/C06-DESIGN.md §2.1). The lab is bound once per
+    call by one fixed `containerlab inspect --name <lab> -f json` whose every row must name a topology inside the
+    trusted roots; then the same lab-wide interface listing, reduced to {name, alias, state, type} per row."""
+    def setUp(self):
+        super().setUp()
+        self.log = []
+        self.bind_answer = (0, json.dumps({LAB: [self.bind_row(CONTAINER), self.bind_row('clab-parity-r2')]}))
+        self.list_answer = None   # None: the harness's interfaces_output with exit 0
+        def run(argv, **bounds):
+            self.log.append((argv, bounds))
+            if argv[:3] == [self.clab, 'inspect', '--name']: return self.bind_answer
+            if argv[:3] == [self.clab, 'inspect', 'interfaces']: return self.list_answer or (0, self.interfaces_output)
+            raise AssertionError('unexpected argv ' + ' '.join(argv))
+        self.host.run = run
+
+    def bind_row(self, name, path=None, key='labPath'):
+        """One row of `containerlab inspect --name <lab> -f json` as containerlab 0.79 prints it (fact 0.3)."""
+        row = {'lab_name': LAB, 'name': name, 'container_id': 'd9401619bc97', 'kind': 'ceos', 'state': 'running', 'owner': 'archtop'}
+        row[key] = self.topo if path is None else path
+        if key == 'labPath': row['absLabPath'] = row['labPath']
+        return row
+
+    def argvs(self): return [argv for argv, _ in self.log]
+
+    def test_two_fixed_argvs_in_order_and_never_docker(self):
+        result = self.host.interfaces(LAB, {'all': True})
+        bounds = {'timeout': host_operations.INSPECT_TIMEOUT, 'limit': host_operations.INSPECT_LIMIT}
+        self.assertEqual(self.log, [([self.clab, 'inspect', '--name', LAB, '-f', 'json'], bounds),
+                                    ([self.clab, 'inspect', 'interfaces', '--name', LAB, '-f', 'json'], bounds)])
+        self.assertEqual((self.probes, self.merged), ([], []), 'no docker inspect, no docker logs: nothing Docker runs')
+        self.assertEqual(result, {'present': True, 'nodes': [
+            {'name': 'clab-parity-r2', 'interfaces': [{'name': 'eth0', 'alias': '', 'state': 'up', 'type': 'veth'}]},
+            {'name': CONTAINER, 'interfaces': [{'name': 'eth0', 'alias': '', 'state': 'up', 'type': 'veth'},
+                                               {'name': 'eth1', 'alias': 'Ethernet1', 'state': 'up', 'type': 'veth'},
+                                               {'name': 'cpu', 'alias': '', 'state': 'unknown', 'type': 'dummy'}]}]})
+        self.assertNotIn('facts', result); self.assertNotIn('counters', result)
+        source = Path(host_operations.__file__).read_text()
+        start = source.index('    def lab_links(')
+        body = source[start:source.index('\n    def ', start + 1)]
+        for word in ('DOCKER', 'self.counters(', 'self.container_of(', 'self.probe(', 'self.run_merged(', "'set'", "'reset'"): self.assertNotIn(word, body, word)
+        self.assertEqual(body.count('self.run('), 2, 'two fixed argvs, nothing else runs')
+
+    def test_a_binding_row_outside_the_trusted_roots_stops_before_the_listing(self):
+        sentence = 'This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.'
+        outside = [self.bind_row('clab-parity-r9', path='/tmp/elsewhere/parity.clab.yml'), self.bind_row('clab-parity-r9', path='relative/parity.clab.yml'),
+                   self.bind_row('clab-parity-r9', path=str(self.root / '..' / 'x.clab.yml')), self.bind_row('clab-parity-r9', path=''),
+                   {k: v for k, v in self.bind_row('clab-parity-r9').items() if k not in ('labPath', 'absLabPath')}, 'junk']
+        for row in outside:
+            for shape in (lambda rows: {LAB: rows}, lambda rows: rows):
+                self.log.clear()
+                self.bind_answer = (0, json.dumps(shape([self.bind_row(CONTAINER), row])))
+                with self.assertRaises(ValueError, msg=repr(row)) as raised: self.host.interfaces(LAB, {'all': True})
+                self.assertEqual(str(raised.exception), sentence)
+                self.assertEqual(self.argvs(), [[self.clab, 'inspect', '--name', LAB, '-f', 'json']], 'the interfaces listing never runs')
+        self.assertEqual(self.probes, [])
+
+    def test_a_binding_that_is_not_json_empty_or_failed_is_not_present_and_runs_nothing_more(self):
+        for answer in ((1, ''), (1, json.dumps({LAB: [self.bind_row(CONTAINER)]})), (0, 'no containers found'), (0, '{}'), (0, '[]'), (0, json.dumps({LAB: []})), (0, '"text"')):
+            self.log.clear(); self.bind_answer = answer
+            self.assertEqual(self.host.interfaces(LAB, {'all': True}), {'nodes': [], 'present': False}, repr(answer))
+            self.assertEqual(len(self.log), 1, repr(answer))
+
+    def test_the_listing_failing_is_the_existing_sentence_and_text_is_not_present(self):
+        self.list_answer = (1, 'Error: unknown command "interfaces" for "containerlab inspect"')
+        with self.assertRaisesRegex(ValueError, '^Containerlab on the VM did not list the interfaces of this lab.$'): self.host.interfaces(LAB, {'all': True})
+        self.list_answer = (0, 'no containers found\n')
+        self.assertEqual(self.host.interfaces(LAB, {'all': True}), {'nodes': [], 'present': False})
+        self.list_answer = (0, '{"not": "a list"}')
+        self.assertEqual(self.host.interfaces(LAB, {'all': True}), {'nodes': [], 'present': True})
+
+    def test_only_containers_the_binding_listed_are_answered(self):
+        self.bind_answer = (0, json.dumps({LAB: [self.bind_row(CONTAINER)]}))
+        result = self.host.interfaces(LAB, {'all': True})
+        self.assertEqual([n['name'] for n in result['nodes']], [CONTAINER], 'a container that appeared after the binding is not listed')
+        self.bind_answer = (0, json.dumps([self.bind_row(CONTAINER, key='absLabPath'), self.bind_row('clab-parity-r2')]))
+        self.assertEqual([n['name'] for n in self.host.interfaces(LAB, {'all': True})['nodes']], ['clab-parity-r2', CONTAINER], 'a list and absLabPath alone bind too')
+
+    def test_rows_are_reduced_to_four_bounded_strings(self):
+        rows = [{'name': 'e' * 100, 'alias': 'a' * 100, 'state': 's' * 100, 'type': 't' * 100, 'mac': '02:00:00:00:00:01', 'mtu': 1500, 'ifindex': 3, 'extra': 'x'},
+                {'name': 'eth2', 'alias': None, 'state': 7, 'type': ['veth']}, {'name': 42}, {'name': ''}, 'junk', {'alias': 'no name'}]
+        self.interfaces_output = json.dumps([{'name': CONTAINER, 'interfaces': rows, 'pid': 9}, {'name': 'x' * 254, 'interfaces': []}, 'junk', {'name': 7}])
+        self.bind_answer = (0, json.dumps({LAB: [self.bind_row(CONTAINER), self.bind_row('x' * 254)]}))
+        result = self.host.interfaces(LAB, {'all': True})
+        self.assertEqual(result['nodes'], [{'name': CONTAINER, 'interfaces': [{'name': 'e' * 64, 'alias': 'a' * 64, 'state': 's' * 64, 'type': 't' * 64},
+                                                                             {'name': 'eth2', 'alias': '', 'state': '', 'type': ''}]}],
+                         'no mac, mtu or ifindex; a container name over 253 characters is left out')
+
+    def test_513_containers_of_300_rows_are_cut_to_512_by_256_and_the_answer_is_smaller_than_the_listing(self):
+        # S0 acceptance check (4): a fake runner that bypasses capture()'s 4 MiB bound; the reduction alone keeps the answer small.
+        names = ['clab-parity-n%03d' % i for i in range(513)]
+        row = {'alias': 'ge-0/0/0', 'state': 'up', 'mac': 'aa:c1:ab:00:00:01', 'mtu': 9500, 'ifindex': 1234, 'type': 'veth'}
+        listing = json.dumps([{'name': n, 'interfaces': [dict(row, name='eth%d' % i) for i in range(300)]} for n in names])
+        self.interfaces_output = listing
+        self.bind_answer = (0, json.dumps({LAB: [self.bind_row(n) for n in names]}))
+        result = self.host.interfaces(LAB, {'all': True})
+        self.assertEqual(len(result['nodes']), 512)
+        self.assertEqual({len(n['interfaces']) for n in result['nodes']}, {256})
+        self.assertEqual({tuple(sorted(r)) for n in result['nodes'] for r in n['interfaces']}, {('alias', 'name', 'state', 'type')})
+        self.assertLess(len(json.dumps({'result': result}, separators=(',', ':'))), len(listing))
+
+    def test_the_option_whitelist_is_exact_and_refusals_run_nothing(self):
+        for options in ({'all': 1}, {'all': True, 'node': 'x'}, {'all': True, 'container': CONTAINER}, {'all': False}, {'all': 'true'}, {'all': None},
+                        {'all': True, 'node': NODE, 'container': CONTAINER}):
+            with self.assertRaisesRegex(ValueError, '^Unsupported interface options.$', msg=repr(options)): self.host.interfaces(LAB, options)
+        for name in (None, '', '../x', '-x', 'a b'):
+            with self.assertRaisesRegex(ValueError, 'literal lab/project name', msg=repr(name)): self.host.interfaces(name, {'all': True})
+        self.assertEqual((self.log, self.probes, self.merged), ([], [], []), 'a refused request runs nothing')
+
+    def test_the_per_device_form_is_unchanged(self):
+        result = self.host.interfaces(LAB, self.options)
+        self.assertEqual(self.argvs(), [[self.clab, 'inspect', 'interfaces', '--name', LAB, '-f', 'json']], 'no binding listing on the per-device path')
+        self.assertEqual(result['facts']['id'], ID); self.assertEqual(set(result['interfaces'][0]), {'name', 'alias', 'state', 'mac', 'type', 'mtu', 'ifindex'})
+
+    def test_capabilities_report_link_state_from_containerlab_s_own_help(self):
+        answers = {}
+        def run(argv, **bounds):
+            self.log.append((argv, bounds))
+            if argv == [self.clab, 'inspect', 'interfaces', '--help']: return answers['help']
+            if argv == [self.clab, 'version', '--short']: return 0, '0.79.0\n'
+            if '--help' in argv: return 0, '--name --cleanup --graceful --node help'
+            return 1, ''
+        self.host.run = run
+        answers['help'] = (0, 'USAGE\n  containerlab inspect interfaces [--flags]\n --name Lab/Topology name\n')
+        self.assertIs(self.host.capabilities()['link_state'], True)
+        self.assertIn([self.clab, 'inspect', 'interfaces', '--help'], self.argvs())
+        # A containerlab before 0.64 has no `inspect interfaces`: an error, or cobra printing the help of `inspect` itself (exit 0).
+        for answer in ((1, ''), (0, 'Error: unknown command "interfaces" for "containerlab inspect"'),
+                       (0, 'Usage:\n  containerlab inspect [flags]\n\nFlags:\n  --name string   lab name\n')):
+            answers['help'] = answer
+            self.assertIs(self.host.capabilities()['link_state'], False, repr(answer))
+
+
 class NetemShowModeTests(DiagnosticsHarness):
     def test_argv_is_fixed_and_null_means_no_impairments(self):
         result = self.host.netem_show(LAB, self.options)
