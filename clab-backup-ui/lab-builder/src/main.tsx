@@ -9,7 +9,7 @@ import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-
 import { TopologySessionCore, mergeCustomNodeTemplates, parseCustomNodeTemplatesExport } from "@containerlab/clab-ui/session";
 import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 import { applyThemeVars } from "@containerlab/clab-ui/theme";
-import { LineCounter, isAlias, isMap, isSeq, isScalar, parseDocument } from "yaml";
+import { LineCounter, isAlias, isMap, isSeq, isScalar, parseDocument, visit } from "yaml";
 import type { Document as YamlDocument, Node as YamlNode } from "yaml";
 import "@containerlab/clab-ui/styles/global.css";
 
@@ -123,7 +123,7 @@ function yamlFlaw(text: string): YamlFlaw | null {
 // The located tree for the page's validator. Depth (nested maps and lists) is capped at 64 and the number of nodes
 // at 200,000 (aliases are copied, so a document of aliases could otherwise grow without bound); both, and any
 // exception, are returned as `error` and never thrown.
-const LOCATE_MAX_DEPTH = 64, LOCATE_MAX_NODES = 200000;
+const LOCATE_MAX_DEPTH = 64, LOCATE_MAX_NODES = 200000, LOCATE_MAX_MS = 1500;
 const LOCATE_TOO_DEEP = `The topology nests deeper than ${LOCATE_MAX_DEPTH} levels, which no lab file needs.`;
 function locateYaml(text: string): { tree?: YamlLocated; error?: YamlFlaw } {
   try {
@@ -136,18 +136,49 @@ function locateYaml(text: string): { tree?: YamlLocated; error?: YamlFlaw } {
       return { line: p?.line ?? 1, col: p?.col ?? 1 };
     };
     let count = 0;
+    const deadline = Date.now() + LOCATE_MAX_MS;
+    // Every alias is resolved once, in one pass in document order (the last anchor of that name before the alias,
+    // as the library defines it). The library's own resolve() lists the whole document again for each alias.
+    const anchored = new Map<string, unknown>(), resolved = new Map<unknown, unknown>();
+    visit(doc, { Node: (_key, node) => {
+      if (isAlias(node)) resolved.set(node, anchored.get(node.source) ?? null);
+      else if ((node as YamlNode).anchor) anchored.set((node as YamlNode).anchor as string, node);
+    } });
+    const resolveAlias = (alias: unknown) => resolved.get(alias) ?? null;
+    // A merge key (`<<: *base`, a list of them, or an inline map) is applied the way containerlab's YAML reader
+    // does: the map's own keys win, earlier merged maps win over later ones, and a merged key stands where
+    // the `<<` line is. The validator never sees a `<<` key.
+    const isMergeKey = (key: unknown) => isScalar(key) && key.value === "<<" && key.type === "PLAIN";
+    const mergeSources = (value: unknown): unknown[] => {
+      const one = (v: unknown) => isAlias(v) ? resolveAlias(v) : v;
+      if (isSeq(value)) return value.items.map(one).filter(isMap);
+      const m = one(value);
+      return isMap(m) ? [m] : [];
+    };
     const walk = (node: unknown, depth: number, at?: { line: number; col: number }): YamlLocated => {
       if (++count > LOCATE_MAX_NODES) throw Object.assign(new Error("The topology has too many entries to check."), { located: true });
-      const n = isAlias(node) ? node.resolve(doc) ?? null : node;
+      if ((count & 255) === 0 && Date.now() > deadline) throw Object.assign(new Error("The topology is too large to check."), { located: true });
+      const n = isAlias(node) ? resolveAlias(node) : node;
       const here = isAlias(node) ? pos(node) : at ?? pos(n);
       if (isMap(n) || isSeq(n)) {
         if (depth > LOCATE_MAX_DEPTH) throw Object.assign(new Error(LOCATE_TOO_DEEP), { located: true, line: here.line });
         if (isSeq(n)) return { kind: "seq", ...here, items: n.items.map((item) => walk(item, depth + 1)) };
-        return { kind: "map", ...here, items: n.items.map((pair) => {
+        const keyText = (key: unknown) => isScalar(key) ? String(key.value) : key === null || key === undefined ? "" : String(key);
+        const own = new Set(n.items.filter((pair) => !isMergeKey(pair.key)).map((pair) => keyText(pair.key)));
+        const items: Extract<YamlLocated, { kind: "map" }>["items"] = [];
+        const taken = new Set<string>();
+        const add = (pair: { key: unknown; value: unknown }, k: { line: number; col: number }, merged: boolean) => {
+          const key = keyText(pair.key);
+          if (merged ? own.has(key) || taken.has(key) : false) return;
+          if (merged) taken.add(key);
+          items.push({ key, keyLine: k.line, keyCol: k.col, value: walk(pair.value, depth + 1, pair.value && !merged ? undefined : k) });
+        };
+        for (const pair of n.items) {
           const k = pos(pair.key);
-          const key = isScalar(pair.key) ? String(pair.key.value) : pair.key === null || pair.key === undefined ? "" : String(pair.key);
-          return { key, keyLine: k.line, keyCol: k.col, value: walk(pair.value, depth + 1, pair.value ? undefined : k) };
-        }) };
+          if (!isMergeKey(pair.key)) { add(pair, k, false); continue; }
+          for (const source of mergeSources(pair.value)) for (const inner of source.items) if (!isMergeKey(inner.key)) add(inner, k, true);
+        }
+        return { kind: "map", ...here, items };
       }
       const v = isScalar(n) ? n.value : null;
       if (v === null || v === undefined) return { kind: "scalar", ...here, value: null, tag: "null" };
