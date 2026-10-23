@@ -1,3 +1,42 @@
+# Parity campaign, chunk C07: capture parity — 1.31.5
+
+Preserve (C07-DESIGN §1, §2, §9):
+
+1. **The service is unchanged.** "One Wireshark for all" is one session whose validated interface list the service
+   already accepts; "one per interface" is a manager-side fan-out; the HMAC identity still excludes the interface
+   list; nothing about captures is persisted (`Captures.known` is memory, capped, pruned per browser).
+2. **Per-entry session ids are derived by the manager** (`BrowserSessions.session_id(who, request_id)` with the
+   request id content-derived from `request_id`, `target_id` and `interfaces`, pinned equal to the real service's),
+   so a lost reply is recovered by one re-list and a narrowed retry keeps the set form and never duplicates a desktop.
+3. **The wire menu is handled like the node menu**, through the three explicit exceptions in `shell.js`
+   (`shellPointerDown`, `shellEscape`, the resize and blur listeners), never through `closeMenus()`.
+4. **Memory is written only** when the dialog was opened without a hint, `options.end` or a preset, and only after a
+   full success; the per-release check scripts under the history folders still name the old ids and are frozen.
+5. **Open points.** (a) an owner cookie minted on a request that then raises is lost (pre-existing, the dialog lists sessions first so it does not bite in practice); (b) the scripted capture fixture's id derivation is a third copy with no automated equality check against `BrowserSessions.session_id`; (c) two sessions on the same end share a row label (§11); (d) the relay logs a `WebSocketDisconnect` traceback when a viewer closes first.
+
+# Parity campaign, chunk C05: impairments and the mutating lifecycle — 1.31.4
+
+Preserve (C05-DESIGN §1, §2, §3, §9, §10 carry the reasons):
+
+1. **An impairment change is bound three ways**: the browser sends `lab_id`, the manager's node name, the interface
+   and the `expected_id` it was shown; the manager checks the data role and takes its per-lab lock and the in-flight
+   set that `LabOperations.guard()` consults both ways; the helper takes the host flock without waiting, recomputes the
+   request digest and compares `expected_id` with `container_of()`. `eth0`, `lo`, host-network and `container:*`
+   devices are refused in the helper. Nothing about impairments is persisted.
+2. **The drawer's Impairments section rebuilds its markup only when (lab, device, answer) changes**, so the 4-second
+   poll never loses typed values, focus or an open question; `resetDeviceImpairments()` runs from the drawer's close hook.
+3. **The map badge reads `data-capture-endpoints`** and writes `data-impaired-text`, composing the title through
+   `mapWireText` when C06's hook exists; never a stroke rule on `.topology-wire path` that swallows `path.capture-hit`.
+4. **`start-node` and `stop-node` are preview/run like `restart-node`**, refused by state from fresh discovery; the
+   node filter never reaches `cleanup`, deploys only an undeployed lab, and a filtered destroy or save never records a
+   deployment; `STOPPABLE` and the stop tables are mirrored in `status.js` and `operations.js` (two tests pin it).
+5. **The apply plan is inside the review digest**; the pending-changes cache is dropped before the terminal job
+   update and on the sync route; the UI's dismissal identity is a digest of the public plan.
+6. **Open points.** Apply after a node-filtered destroy recreates neighbours whose kind cannot add links live (vJunos-switch, XRv9k
+   here): the review names them and the Run with options help says so, but a student still loses two VMs' uptime;
+   a future chunk could offer a filtered deploy of the destroyed device alone when containerlab allows it. The
+   impairment lifetime across device restarts is unverified (the guide's wording is neutral).
+
 # Parity campaign: C03 drawer sections, C04 console and facts, the C05 helper — 1.31.3
 
 Preserve (the designs under `docs/parity-campaign/` carry the reasons and the review answers):

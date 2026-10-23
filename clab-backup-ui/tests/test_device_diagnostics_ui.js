@@ -27,7 +27,7 @@ function harness({caps={diagnostics:true},visible=true}={}){
   Date:class extends Date{static now(){return clock.t;}},
   current:()=>state.labs.find(l=>l.id===context.activeId),
   pageVisible:()=>context.visible,visible,
-  captureActionAttrs:()=>'',captureStatusLine:()=>'',openCapture(node,hint){context.opened=[node,hint];},
+  captureActionAttrs:()=>'',captureStatusLine:()=>'',openCapture(node,hint,ends,options){context.opened=[node,hint];context.openedFull=[node,hint,ends,options];},
   URL:{createObjectURL:()=>'blob:x',revokeObjectURL(){}},
   document:{activeElement:null,body:{append(){}},createElement:()=>({click(){downloads.push(this.download);},remove(){}})},
   api:async url=>{
@@ -559,4 +559,30 @@ test('hiding Retry or Resume while it holds focus moves focus to the section sum
   assert.equal(summary.focused,1,name+': focus moved to the summary');assert.equal(button.hidden,true);
   h.context.document.activeElement=null;h.context.diagRetryButton(name,'resume');h.context.diagRetryButton(name,'');assert.equal(summary.focused,1,'focus elsewhere is left alone');
  }
+});
+
+test('Capture all connected: only with two or more data rows, carrying the capture attributes, opening the dialog with the data rows as the preset',async()=>{
+ const h=harness(),c=h.context;
+ const ctx={device:'r1',rates:{},impair:{},captureAttrs:'',captureReason:'',otherOpen:false};
+ assert.doesNotMatch(c.diagInterfacesMarkup(answer(),ctx),/data-diag-capture-all/,'one data row: nothing to capture "all" of');
+ const two=answer({interfaces:[iface({name:'eth0',port:'',role:'management'}),iface({name:'eth1'}),iface({name:'eth2',port:'ge-0/0/1'}),iface({name:'cpu',port:'',role:'internal'})]});
+ const out=c.diagInterfacesMarkup(two,ctx);
+ assert.equal((out.match(/data-diag-capture-all=/g)||[]).length,1,'one button, in the main table');
+ assert.match(out,/<button type="button" class="button ghost small" data-diag-capture-all="\[&quot;eth1&quot;,&quot;eth2&quot;\]"[^>]*>Capture all connected<\/button>/);
+ assert.match(out,/<th scope="col">Name<\/th>/,'the column header stays plain: the button is not part of its accessible name');
+ assert.ok(out.indexOf('data-diag-capture-all=')<out.indexOf('<table'),'the button is a line above the table, inside the same scroll region');
+ assert.ok(out.indexOf('data-diag-capture-all=')>out.indexOf('data-diag-key="region:main"'));
+ const off=c.diagInterfacesMarkup(two,{...ctx,captureAttrs:'disabled title="Packet capture is not set up on this VM. See Tools › Packet capture for details."'});
+ assert.match(off,/data-diag-capture-all="[^"]*"[^>]*disabled title="Packet capture is not set up/,'captureActionAttrs() reaches the button');
+ const hostile=c.diagInterfacesMarkup(answer({interfaces:[iface({name:'<img onerror=x>'}),iface({name:'eth2'})]}),ctx);
+ assert.doesNotMatch(hostile,/<img/);
+ // the click
+ h.on('/operations/netem',()=>({present:true,impairments:[]}));h.on('/operations/interfaces',()=>two);
+ c.renderDeviceDiagnostics({name:'r1'});h.open('interfaces');await tick();await tick();
+ c.openedFull=null;
+ const button={disabled:false,dataset:{diagCaptureAll:'["eth1","eth2"]'}};
+ h.get('diag-if-body').fire('click',{target:{closest:sel=>sel==='[data-diag-capture-all]'?button:null}});
+ assert.equal(JSON.stringify(c.openedFull),JSON.stringify(['r1','',null,{preset:['eth1','eth2']}]));
+ c.openedFull=null;button.disabled=true;h.get('diag-if-body').fire('click',{target:{closest:sel=>sel==='[data-diag-capture-all]'?button:null}});
+ assert.equal(c.openedFull,null,'a disabled button does nothing');
 });

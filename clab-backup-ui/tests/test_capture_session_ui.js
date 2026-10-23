@@ -108,3 +108,9 @@ test('an invalid session link never contacts the manager',async()=>{
  await settle();assert.equal(fetched.length,0);assert.match($('viewer-status').textContent,/Invalid session link/);
  assert.equal($('capture-download').hidden,false);assert.equal($('capture-end').disabled,false);
 });
+
+test('the tab title tells up to four viewers apart; the toolbar text is unchanged',async()=>{
+ const {c,$}=harness({...live});
+ await settle();
+ assert.equal(c.document.title,'clab-demo-r1 · eth2 — Wireshark');assert.equal($('capture-name').textContent,'clab-demo-r1 · eth2');
+});

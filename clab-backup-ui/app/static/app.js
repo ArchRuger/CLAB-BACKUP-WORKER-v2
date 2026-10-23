@@ -6,7 +6,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 // names (inventory, git, progress, backups, credentials, logs) are normalised by setTab() so old callers and old links
 // still work. The Progress tab is gone (owner decision D1): its names open the lab's default tab with the header's save
 // chip panel, Save settings or All versions (SAVE_ROUTES), once, after the lab has been rendered.
-let state={labs:[],jobs:[],platforms:{}}, activeId='', tab='topology', toastTimer, subview='', devicesTechnical=false, devicesPainted=null, scrollTarget='', routeApplied=false;
+let state={labs:[],jobs:[],platforms:{}}, activeId='', tab='topology', toastTimer, subview='', devicesTechnical=false, devicesPainted=null, scrollTarget='', routeApplied=false, shownTab='';
 const PANELS=['topology','devices','tools','advanced'];
 const TAB_ALIAS={inventory:'devices',git:'topology',progress:'topology',backups:'tools',credentials:'advanced',logs:'advanced',design:'advanced'};
 // What an old address of the Progress tab opens: the chip panel (a lab without a save location gets its first-save view there),
@@ -144,7 +144,7 @@ function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.31.3';$('app-version').textContent='v'+version;
+ const version=state.version||'1.31.5';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;
@@ -165,7 +165,7 @@ function render(){
  if(typeof loadRender==='function')loadRender();
  if(typeof renderNetworkDesign==='function')renderNetworkDesign();
  if(typeof renderHome==='function')renderHome();
- if(!lab){renderLabBanner();syncProxies();syncRoute();return;}
+ if(!lab){shownTab='';renderLabBanner();syncProxies();syncRoute();return;}   // no lab on screen: Tools is asked for again when a lab is opened on it
  renderLabHeader(lab);renderTechnical(lab);
  $('node-count').textContent=lab.nodes.length;
  const sshReady=lab.nodes.some(n=>n.ssh_ready);
@@ -368,6 +368,10 @@ function showTab(value){
  if($('devices-technical'))$('devices-technical').textContent=devicesTechnical?'Standard view':'Technical view';   // the swapping label is the toggle's state and the way back; no aria-pressed on top of it
  document.querySelectorAll('[data-tab]').forEach(b=>{const active=b.dataset.tab===tab;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;if(active&&typeof b.scrollIntoView==='function'&&($('lab-tabs')?.scrollWidth||0)>($('lab-tabs')?.clientWidth||0))b.scrollIntoView({block:'nearest',inline:'nearest'});});
  if(tab==='topology'&&typeof refreshMap==='function')refreshMap();
+ // The sessions list is asked for when Tools is newly shown, never on the state poll that calls showTab again (it would rewrite the list under a focused button).
+ const asksSessions=tab==='tools'&&typeof refreshCaptureSessions==='function';   // before capture.js has run nothing is asked, so Tools does not count as shown yet
+ if(asksSessions&&shownTab!=='tools')refreshCaptureSessions();
+ shownTab=tab==='tools'&&!asksSessions?'':tab;
  // Old #view=design links land on Advanced with Network design (Experimental) opened; nothing restores a Design tab.
  if(scrollTarget==='experimental-design'&&$(scrollTarget)&&!$(scrollTarget).open)$(scrollTarget).open=true;
  if(typeof renderNetworkDesign==='function')renderNetworkDesign();

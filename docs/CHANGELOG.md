@@ -4,6 +4,55 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.31.5
+
+**Parity campaign, chunk C07: capture parity** ([CAPTURE](CAPTURE.md)).
+
+- **One Wireshark for all connected interfaces of a device, or one per interface.** The capture dialog gains **All
+  connected** and **None**, and **Open as** (one Wireshark for the ticked interfaces, or one per interface). A set of
+  up to four captures is one request: every entry is validated before anything starts, a partial start is reported
+  with the refused entries named by position and **Start the remaining n** retries only those, and a repeated start
+  of the same set returns the same viewers.
+- **Both ends of a link.** A link's left click opens the dialog with both ends ticked (one Wireshark per end); its
+  right-click menu (also Shift+F10) offers both ends or one; an end the manager cannot map offers **Choose the
+  interface on <device>…**; both ends on the same device become one Wireshark.
+- **Remembered selection** per lab and device or link, in this browser only, restored for live interfaces and
+  written only after a full success; a hint from the map or the Interfaces table wins over memory.
+- **Your capture sessions**: the Tools card lists this browser's sessions with the time left as an upper bound and
+  **End all my sessions** (one confirmation); the viewer tab's title names the device and interfaces; the Interfaces
+  section of the device drawer offers **Capture all connected**.
+- The session service, the compose files and the Docker socket holder are unchanged; the manager derives the
+  service's session ids itself, keeps its own session list in memory only and never stores anything about captures.
+  New routes `GET /api/capture/sessions` and `POST /api/capture/sessions/end-all`; `POST /api/capture/launch`
+  accepts `{captures: […], request_id}` beside today's body. The loopback smoke gains the two-desktops check and the
+  fixture a scripted capture stack.
+
+## Changes in 1.31.4
+
+**Parity campaign, chunk C05: link impairments and the mutating lifecycle through the helper.** The helper half shipped
+in 1.31.3; this release adds the manager and the UI ([LAB-OPERATIONS](LAB-OPERATIONS.md)).
+
+- **Link impairments.** The device drawer gains an **Impairments** section: one row per data interface with delay,
+  jitter, loss, rate and corruption, **Apply** and **Reset** per row after a one-line question, and **Clear
+  impairments** for the device; the map shows a badge on an impaired link with the end named in the wire's title, a
+  caption "N links impaired" and **Clear all**. Every change names the lab, the device, the interface and the
+  container id the drawer was shown; the helper refuses the management interface and host-network devices, takes the
+  host lock without waiting and checks the request's digest. Typed values and focus survive the drawer's polling.
+- **Stop device and Start device** beside Restart device, with their own reviews (the affected device, its neighbours'
+  links, a destroyed neighbour named as such), device-named job titles, and Try again that knows a filtered job.
+- **Apply topology changes… shows containerlab's dry-run plan** (devices to create, start, restart, recreate or
+  remove, links to connect or disconnect, with containerlab's reasons), says "Nothing to apply" with Apply anyway, and
+  is now in Lab actions ▾ for a running or partly running lab. A **pending-changes line** appears once per open and
+  after every operation or sync when the topology file differs from the running lab; a dismissed plan stays dismissed
+  until the plan changes; a partly running lab whose plan would create, recreate or reconnect offers Review changes….
+- **Run with options** in the deploy, redeploy, destroy and save reviews: a device filter (deploy only while the lab
+  is not deployed; never with Clean up), Max workers, Skip post-deploy, Keep management network and the Graceful stop
+  note; the review is previewed again on every change with its fold disabled while the VM answers. **Save this
+  device's configuration** in the drawer runs containerlab's save for one device.
+- New routes: `GET /api/operations/impairments`, `POST /api/operations/impairments/set`, `/reset`, `/clear`,
+  `GET /api/operations/apply-plan`; `start-node`, `stop-node`, the `nodes` option and the run flags on the operation
+  preview; jobs carry the devices a filtered job touched; a filtered destroy or save never records a deployment.
+
 ## Changes in 1.31.3
 
 **Parity campaign: the C03 drawer sections, C04 (serial console and container facts) and the helper half of C05.**

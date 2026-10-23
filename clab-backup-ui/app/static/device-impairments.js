@@ -131,7 +131,8 @@ function impClearHtml(){
  return `<button type="button" class="button secondary small" id="imp-clear" data-imp-act="clear" disabled>${imp.flight==='clear'?'Clearing…':'Clear impairments on this device'}</button>`;
 }
 function impRowHtml(row,i){
- return `<tr><td><strong>${esc(row.label)}</strong>${row.label!==row.name?`<small class="mono">${esc(row.name)}</small>`:''}</td>${IMP_FIELDS.map(f=>impInput(i,row,f)).join('')}<td><div id="imp-act-${i}">${impButtons(i)}</div><small class="form-help" id="imp-hint-${i}"></small></td></tr>`;
+ // Apply and Reset sit under the interface name (no Actions column), so five narrow inputs plus one slim column fit a 390 px drawer.
+ return `<tr><td class="imp-first"><strong>${esc(row.label)}</strong>${row.label!==row.name?`<small class="mono">${esc(row.name)}</small>`:''}<div id="imp-act-${i}">${impButtons(i)}</div><small class="form-help" id="imp-hint-${i}"></small></td>${IMP_FIELDS.map(f=>impInput(i,row,f)).join('')}</tr>`;
 }
 function impBodyHtml(){
  const s=imp;
@@ -144,7 +145,7 @@ function impBodyHtml(){
  if(!s.rows.length)return `<p class="diag-empty">${esc(IMP_NO_LINKS)}</p>`;
  const head=IMP_FIELDS.map(f=>`<th scope="col">${esc(IMP_LABELS[f])}</th>`).join('');
  return `<div id="imp-clear-zone" class="actions">${impClearHtml()}</div><div id="imp-question-zone">${imp.question?impQuestion(imp.question):''}</div>`
-  +`<div class="table-wrap diag-wrap impairments-table" id="imp-region" tabindex="0" role="region" aria-label="${esc('Impairments of '+s.title)}"><table class="diag-table"><caption class="sr-only">${esc('Impairments of '+s.title)}</caption><thead><tr><th scope="col">Interface</th>${head}<th scope="col">Actions</th></tr></thead><tbody>${s.rows.map(impRowHtml).join('')}</tbody></table></div>`
+  +`<div class="table-wrap diag-wrap impairments-table" id="imp-region" tabindex="0" role="region" aria-label="${esc('Impairments of '+s.title)}"><table class="diag-table"><caption class="sr-only">${esc('Impairments of '+s.title)}</caption><thead><tr><th scope="col">Interface</th>${head}</tr></thead><tbody>${s.rows.map(impRowHtml).join('')}</tbody></table></div>`
   +(s.partial?`<p class="caption">${esc(IMP_PARTIAL)}</p>`:'');
 }
 function impPaintBody(){
@@ -160,7 +161,7 @@ function impPaintActions(){
  if(zone)zone.innerHTML=impClearHtml();
 }
 function impFocus(ids){
- for(const id of ids.concat(['imp-status'])){const el=$(id);if(el&&!el.disabled&&typeof el.focus==='function'){el.focus();return;}}
+ for(const id of ids.concat(['imp-status'])){const el=$(id);if(el&&!el.disabled&&!el.hidden&&typeof el.focus==='function'){el.focus();return;}}
 }
 function impSay(text){const el=$('imp-status');if(el&&el.textContent!==text)el.textContent=text;}
 function impError(text){const el=$('imp-error');if(el)el.textContent=text;}
@@ -205,7 +206,9 @@ function impAdopt(interfaces,impairments,keep){
  for(const row of imp.rows)if(!imp.base[row.name]){imp.base[row.name]=impZero();imp.typed[row.name]=impDisplay(impZero());}
  impApplyValues(device&&device.impairments||[],'');
 }
-async function impLoad(){
+// `force` is the person's own Refresh: it replaces typed text. A background reload that finds the person editing or an open
+// question when its answer arrives drops the answer and shows the Refresh line instead (typed text, focus and question stay).
+async function impLoad(force){
  const me=imp;if(me.loading)return;
  me.loading=true;me.loadFailed=false;me.stale=false;me.stamp=impOperationStamp();
  impError('');
@@ -214,6 +217,7 @@ async function impLoad(){
  try{
   const [ifs,imps]=await Promise.all([api('/operations/interfaces?'+query).then(r=>r.json()),api('/operations/impairments?'+query).then(r=>r.json())]);
   if(imp!==me)return;
+  if(!force&&me.answer&&(impEditing()||me.question)){me.stale=true;me.loading=false;impSync();return;}
   me.question=null;impAdopt(ifs,imps,false);me.loaded=true;impSay('');
  }catch(e){
   if(imp!==me)return;
@@ -252,14 +256,15 @@ async function impConfirm(){
    focus=['imp-clear','imp-region'];
   }
   me.flight='';impPaintBody();impSay(said);
-  if(typeof refreshDeviceDiagnostics==='function')refreshDeviceDiagnostics('netem');
+  if(typeof opLoadImpairments==='function'&&me.lab)opLoadImpairments(me.lab);
   impFocus(focus);
  }catch(e){
   if(imp!==me)return;
   const message=e&&e.message?e.message:'The manager did not answer. Try again.';
   me.flight='';
   if(IMP_BUSY.includes(message)){me.blocked=message;me.sawBusy=typeof busyReason==='function'&&!!busyReason();}
-  impPaintBody();impSay(message);impError(message);
+  // A busy sentence is shown once, in the busy line; any other refusal in the status and the error line.
+  impPaintBody();if(IMP_BUSY.includes(message))impSay('');else{impSay(message);impError(message);}
   impFocus(q.kind==='clear'?['imp-clear']:['imp-apply-'+q.i,'imp-reset-'+q.i]);
  }
 }
@@ -296,9 +301,10 @@ function impOnInput(event){
  imp.typed[row.name]={...imp.typed[row.name],[input.dataset.impF]:input.value};
  impSync();
 }
+function impRetryFocus(){return imp.rows.flatMap((row,i)=>['imp-apply-'+i,'imp-reset-'+i]).concat(['imp-clear','imp-retry','imp-region']);}
 function impRetry(){
- if(imp.blocked){imp.blocked='';imp.sawBusy=false;impSay('');impError('');impSync();return;}
- if(imp.loadFailed)impLoad();
+ if(imp.blocked){imp.blocked='';imp.sawBusy=false;impSay('');impError('');impSync();impFocus(impRetryFocus());return;}
+ if(imp.loadFailed)impLoad(true).then(()=>impFocus(impRetryFocus()));
 }
 // ---- Opening, refreshing, closing --------------------------------------------------------------------------------------
 async function impOpen(){
@@ -332,8 +338,10 @@ function impEnsure(){
   if(!String(el.innerHTML||'').includes('id="imp-body"'))el.innerHTML=IMP_SKELETON;
   if(typeof el.addEventListener==='function'){
    el.addEventListener('toggle',impOnToggle);
-   el.addEventListener('click',event=>{const t=event.target;if(t&&t.id==='imp-retry')impRetry();else if(t&&t.id==='imp-refresh')impLoad();else impOnClick(event);});
+   el.addEventListener('click',event=>{const t=event.target;if(t&&t.id==='imp-retry')impRetry();else if(t&&t.id==='imp-refresh')impLoad(true);else impOnClick(event);});
    el.addEventListener('input',impOnInput);
+   // Escape inside an open question closes the question only, never the drawer around it.
+   el.addEventListener('keydown',event=>{if(event&&event.key==='Escape'&&imp.question){if(event.preventDefault)event.preventDefault();if(event.stopPropagation)event.stopPropagation();impCancel();}});
   }
   el._impWired=true;
  }

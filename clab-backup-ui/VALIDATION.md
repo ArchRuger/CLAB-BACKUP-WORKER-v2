@@ -1,3 +1,104 @@
+# Parity campaign, chunk C07: capture parity — 1.31.5
+
+Evidence by kind (this checkout on the owner's development VM; the `parity` lab; the real session service).
+
+**Static and unit**
+
+- `node --test tests/*.js`: 982 tests pass; `PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests`: 2848 tests, OK, 2 skipped (new `CaptureSetTests` in `test_capture.py`, the derivation pin in `test_capture_sessions.py`, cases in `test_capture_ui.js`, `test_shell_ui.js`, `test_readiness_ui.js`, `test_capture_session_ui.js`, `test_device_diagnostics_ui.js`, `test_page_load_ui.js`).
+- The S1 builder's mutation run: 14 of 14 applied mutations caught by the tests.
+- `node --check`, `py_compile`, `verify-release.py`, `check_links.py`, `git diff --check`.
+
+**Fixture and browser**
+
+- The builders' smokes: the dialog's modes, the wire menu by mouse and keyboard, memory, the partial set and End all, 71 checks at 1440 and 760 three times over; the fixture's scripted capture stack driven by curl (single, set, idempotent retry, narrowed retry, mid-set refusal, lost reply, slot limits).
+- `/clab-slice-verify` on the integrated chunk: six workers (the exact test commands, an Opus attack of the eleven acceptance checks, QA at 1440, 760 and 390 in Chromium and Firefox on the scripted capture stack): 10 of 11 checks held; the four blocking findings (a 4 s poll of the capture service from the Tools tab, the wire menu not dismissable from the keyboard with capture disabled, End all confirming a stale count, the narrow-width layout) and the lower ones were fixed and re-run before the live pass; the record and the answers are C07-DESIGN §10.
+
+**Live**
+
+- The extended smoke's two-desktops check against the real session service on this VM (two sessions on one namespace with two request ids, ids equal to the HMAC derivation, an idempotent repeat, both ended; run through a driver because the full smoke refuses to run beside the live stack).
+- The parity lab through the rebuilt manager (`claude/c07-int`, the real session service, Chromium at 1440 and 760):
+  a left click on the vsw–vrt wire opened link mode with both ends ticked and Start 2 captures sent one set request
+  (`captures` with two entries and a `request_id`) answered with two sessions and two Open Wireshark links; a viewer
+  tab loaded the Wireshark desktop with the title `clab-parity-vsw · eth1 — Wireshark`; the wire's right-click menu
+  offered both ends and each end, one end started a single-form session; Capture traffic on `ceos` with All connected
+  and Open as one started one session on `eth1` and `eth2` (four sessions, four containers); a fifth capture was
+  refused by the page before any request with the single-variant sentence and a both-ends set with the link variant;
+  End all my sessions confirmed four, answered `{ended: 4, failed: []}`, emptied the list and removed the containers
+  (the open viewer read "Capture session ended" within 20 s); memory restored both ends after a full success, one
+  end after a one-end start, and the menu's both-ends item ignored it; with three sessions a two-end set was refused
+  with the link-variant sentence and nothing started; zero console errors and zero failed requests; the final state
+  held no session and no capture container. Cosmetic: two sessions on the same end share a row label; the relay logs
+  a `WebSocketDisconnect` traceback when a viewer closes first (harmless); an optional viewer asset probe answers 404.
+
+**Independent review**
+
+- `/clab-design-review` of C07 (28 confirmed, five must-fix, answered in C07-DESIGN §9); `/clab-review-changes` on the integrated chunk: 29 agents, 10 confirmed (4 should-fix, 6 optional), 2 refuted; the should-fix and four of the optional findings are fixed in this release (the Tools card asks for the session list again after Home and after a first render that ran before `capture.js`; untried set entries never carry a refused entry's reason; a just-made session record survives a concurrent prune; Capture all connected leaves the column header; the re-list failure after a lost reply and the Advanced target in link mode are tested; small `capture.js` branches pinned), the two remaining optional findings are recorded as open points; the answers are C07-DESIGN §12. After the fixes: `node --test tests/*.js` 982 pass; the full Python suite as above.
+
+**Not run.** No real-device packet content was inspected beyond the viewer loading (the smoke covers loopback packets in CI); no multi-browser live pass (Chromium only on the VM; Firefox on the fixture); no pass on a VM without the capture stack beyond the fixture's disabled mode.
+
+# Parity campaign, chunk C05: impairments and the mutating lifecycle — 1.31.4
+
+Evidence by kind (this checkout on the owner's development VM; the `parity` lab; containerlab 0.79.0).
+
+**Static and unit**
+
+- `node --test tests/*.js`: 945 tests pass (889 at 1.31.3; new `test_device_impairments_ui.js` and cases in
+  `test_operations_ui.js`, `test_topology_ui.js`, `test_topology_menu_ui.js`, `test_status_ui.js`, `test_shell_ui.js`,
+  `test_readiness_ui.js`).
+- `PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests`: 2821 tests, OK, 2 skipped
+  (2761 at 1.31.3; new `test_impairments.py` (32) and cases in `test_lab_operations.py`, `test_discovery.py`).
+- `node --check` on every changed script, `py_compile`, `verify-release.py`, `check_links.py`, `git diff --check`.
+
+**Fixture and browser**
+
+- The builders' fixture smokes: the drawer section 24 of 24 checks at 1440 and 760 (typed values and focus surviving
+  nine seconds of polling, the question, Apply, Reset, Clear, validation, the busy state); the map badge, Clear all,
+  the apply review with and without a plan, the pending line and its dismissal identity, Stop then Start device, a
+  filtered destroy with Max workers and Save this device's configuration, 35 of 35 at 1440 and 760.
+- `/clab-slice-verify` on the integrated chunk: six workers that did not write it: the eight slice test files 255/255 and `node --test tests/*.js` 934/934,
+  `test_impairments.py` 32 and `test_lab_operations.py` 129 OK; the attack held 9 of 11 acceptance checks and found
+  seven breaks, one high (Confirm stayed live while Run with options previewed a changed selection again, so the
+  previous, broader request could run), two medium (the map badge not re-read after a change made in the drawer; the
+  Impairments table clipped at 390 and 1280) and four low; the fixture passes at 1440, 760 and 390 in Chromium and
+  Firefox found the same three plus the map toolbar and caption clipped at 760 and below, Escape in an open question
+  closing the drawer, the busy sentence repeated and no completion toast for Stop and Start device. Every finding
+  was fixed and re-checked (C05-DESIGN §12).
+
+**Live (the `parity` lab through the manager)**
+
+- Impairments: Apply `delay 20ms` on `vsw` ge-0/0/0 created the qdisc (`containerlab tools netem show` listed
+  `eth1 (ge-0/0/0) 20ms`) but the row read back empty and Reset stayed disabled: containerlab prints a VM interface
+  with its NOS name, which the helper's row parser and the manager's role check took as the whole name; fixed in
+  `2d8afde` (the Linux name and an `alias`, the alias shown as the port) and re-checked on `ceos`: Apply 20 ms (the
+  caption "1 link impaired", the wire title "impaired at ceos Ethernet1 (traffic leaving ceos): delay 20ms"), Reset
+  clean, Apply 15 ms / 2 ms / 1 % then Clear all from the map (clean in 1.6 s). Apply topology changes… on an unchanged
+  lab read "Nothing to apply" with Apply anyway. Stop device on `ceos` (review "Stop ceos?", one device affected),
+  then Start device restored both links and the device was Ready about a minute later. A node-filtered destroy of
+  `ceos` with Max workers 2 (`containerlab destroy … --node-filter ceos --max-workers 2`) left the four others running
+  with the lab Partially running and the banner's Review changes…; the plan read "ceos to create · vsw, xrv9k to
+  recreate · 4 links to connect" and Apply recreated the two neighbours as well (containerlab: their kind declares no
+  live link support), `ceos` Ready after Test login, `vsw` and `xrv9k` back in about four minutes. Save this device's
+  configuration on `vrt` ran `containerlab save … --node-filter vrt`. Zero console errors and zero failed requests;
+  every body carried `lab_id`, the node, the interface and the `expected_id` only. The lab ended with five nodes
+  Ready and no impairment. The design's §6 step 7 (impairment lifetime across Restart, Stop and Start, Redeploy) was
+  not run.
+
+**Independent review**
+
+- `/clab-design-review` of C05 (30 confirmed, three must-fix, answered in C05-DESIGN §9); `/clab-review-changes` on
+  the helper slice with 1.31.3 (C05-DESIGN §10); `/clab-review-changes` on the manager and UI (`ce74255..`):
+  23 confirmed (1 must-fix, 11 should-fix, 11 optional; none refuted; 51 agents). The must-fix is the
+  verification's high break (Confirm live during a re-preview); every should-fix and optional finding was applied
+  (a reload during a drawer edit no longer wipes typed values or an open question, the map re-read after a drawer
+  change, Clear's in-flight token per helper call and its read timeout above the helper's deadline, the sync trigger
+  refreshing the plan, per-action run-option validation, the console gate's sentence for Start and Stop device jobs,
+  the plan cache dropped on link and after the settings path is stored, the absent neighbours in the link counts, the
+  per-lab lock created only for an existing lab, the cross-language pin of the busy sentences, the page-load seam test
+  and the `app.js` wiring tests). Answers in C05-DESIGN §11.
+
+**Not run.** The impairment lifetime across Restart device, Stop and Start device and Redeploy (C05-DESIGN §6 step 7).
+No image was published; nothing was deployed outside the parity lab's own devices.
+
 # Parity campaign: C03 drawer sections, C04 console and facts, the C05 helper — 1.31.3
 
 Evidence by kind (this checkout on the owner's development VM; the `parity` lab; containerlab 0.79.0; Docker 27.5.1).

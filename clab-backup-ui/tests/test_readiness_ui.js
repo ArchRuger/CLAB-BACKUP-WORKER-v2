@@ -420,3 +420,79 @@ test('C05: the lab banner offers Review changes… for a pending plan on a Runni
  assert.ok(vm.runInContext('BANNER_BUTTONS["lab-banner"]',h.context).includes('banner-review'));
  assert.ok(typeof identity==='string'&&identity.length>0);
 });
+
+test('C07 fix: the state poll calls showTab(tools) again and must not ask for the sessions again; leaving Tools and coming back does',()=>{
+ const h=appHarness();let refreshed=0;
+ vm.runInContext("state={labs:[{id:'l',name:'L',nodes:[],jobs:[]}],jobs:[],platforms:{},loaded:true};activeId='l';",h.context);
+ h.context.syncRoute=()=>{};h.context.refreshCaptureSessions=()=>{refreshed++;};
+ vm.runInContext("showTab('tools')",h.context);assert.equal(refreshed,1);
+ for(let i=0;i<5;i++)vm.runInContext("showTab('tools')",h.context);
+ assert.equal(refreshed,1,'five polls while Tools stays shown ask nothing more');
+ vm.runInContext("showTab('devices');showTab('tools')",h.context);assert.equal(refreshed,2,'a real tab change asks once');
+});
+test('C07 fix: showTab(tools) before capture.js has run, then again after, asks for the sessions once capture.js exists',()=>{
+ const h=appHarness();let refreshed=0;
+ vm.runInContext("state={labs:[{id:'l',name:'L',nodes:[],jobs:[]}],jobs:[],platforms:{},loaded:true};activeId='l';",h.context);
+ h.context.syncRoute=()=>{};
+ vm.runInContext("showTab('tools')",h.context);   // the first /api/state render of a reload at #view=tools
+ h.context.refreshCaptureSessions=()=>{refreshed++;};   // capture.js has run by the DOMContentLoaded render
+ vm.runInContext("showTab('tools')",h.context);assert.equal(refreshed,1,'the re-render asks, it was not asked before');
+ for(let i=0;i<3;i++)vm.runInContext("showTab('tools')",h.context);
+ assert.equal(refreshed,1,'polls afterwards ask nothing');
+});
+test('C07 fix: going Home and opening a lab on Tools again asks for the sessions',()=>{
+ const h=appHarness();let refreshed=0;
+ vm.runInContext("state={labs:[{id:'l',name:'L',nodes:[],jobs:[]}],jobs:[],platforms:{},loaded:true};activeId='l';",h.context);
+ h.context.syncRoute=()=>{};h.context.refreshCaptureSessions=()=>{refreshed++;};
+ vm.runInContext("showTab('tools')",h.context);assert.equal(refreshed,1);
+ vm.runInContext("activeId='';render();",h.context);   // goHome(): render() returns at the no-lab branch, before showTab
+ assert.equal(vm.runInContext('shownTab',h.context),'','no lab on screen, no view shown');
+ vm.runInContext("activeId='l';showTab('tools')",h.context);
+ assert.equal(refreshed,2,'Tools newly shown after Home asks again');
+});
+test('showTab refreshes the capture sessions for the Tools view only, also through the arrow keys and when the function is absent',()=>{
+ const h=appHarness();let refreshed=0;
+ vm.runInContext("state={labs:[{id:'l',name:'L',nodes:[],jobs:[]}],jobs:[],platforms:{},loaded:true};activeId='l';",h.context);
+ h.context.syncRoute=()=>{};
+ assert.doesNotThrow(()=>vm.runInContext("showTab('tools')",h.context),'the page loads and shows Tools without capture.js');
+ h.context.refreshCaptureSessions=()=>{refreshed++;};
+ vm.runInContext("showTab('devices')",h.context);assert.equal(refreshed,0,'other views do not ask');
+ vm.runInContext("showTab('tools')",h.context);assert.equal(refreshed,1);
+ // ArrowRight from the Devices tab lands on Tools: the keyboard path asks too
+ for(const name of ['topology','devices','tools','advanced']){const el=h.document.getElementById('tab-'+name);el.dataset.tab=name;el.focus=function(){h.document.activeElement=this;};}
+ h.document.activeElement=h.document.getElementById('tab-devices');
+ vm.runInContext("showTab('devices')",h.context);refreshed=0;
+ h.context.tabKeydown({key:'ArrowRight',preventDefault(){}});
+ assert.equal(refreshed,1,'ArrowRight from Devices shows Tools and refreshes once');
+});
+
+test('C05: Stop device and Start device buttons and the Save startup configuration button take their disabled state and title from the shared checks',async()=>{
+ const h=appHarness();
+ const n={name:'r1',short_name:'R1',ssh_ready:true,login_configured:true,readiness:'Ready',nos_login:{status:'ready'},discovered:true,runtime_state:'running'};
+ const html=()=>vm.runInContext('nodeActions('+JSON.stringify(n)+',true)',h.context);
+ assert.match(html(),/data-node-action="stop-node" data-node="r1" disabled title="Not available on this page">Stop device…/,'without operations.js each button explains itself');
+ assert.match(html(),/data-node-action="start-node" data-node="r1" disabled title="Not available on this page">Start device…/);
+ h.context.opNodeActionState=(action)=>action==='stop-node'?{ok:true,reason:''}:{ok:false,reason:'R1 is already running',own:true};
+ const live=html();
+ assert.match(live,/<button class="danger-action" data-node-action="stop-node" data-node="r1" >Stop device…<\/button>/);
+ assert.match(live,/<button data-node-action="start-node" data-node="r1" disabled title="R1 is already running">Start device…<\/button>/);
+ assert.ok(live.indexOf('data-restart')<live.indexOf('data-node-action="stop-node"')&&live.indexOf('data-node-action="stop-node"')<live.indexOf('data-node-action="start-node"'),'Restart, Stop, Start');
+ // the notes: an own:true reason is not repeated under the buttons; another reason is
+ h.context.captureStatusLine=()=>'';h.context.nodeBackupReason=()=>'';
+ assert.equal(h.context.nodeActionNotes(n),'');
+ h.context.opNodeActionState=(action)=>action==='start-node'?{ok:false,reason:'Connect the VM first'}:{ok:true,reason:''};
+ assert.equal(h.context.nodeActionNotes(n),'Start device… is not available: Connect the VM first.');
+ h.context.opSaveNodeState=()=>({ok:false,reason:'R1 is not running',own:true});
+ assert.match(vm.runInContext('nodeDrawerActions('+JSON.stringify(n)+')',h.context),/data-save-node="r1" disabled title="R1 is not running">Save startup configuration…/);
+ assert.equal(h.context.nodeActionNotes(n),'Start device… is not available: Connect the VM first.','an own reason is not repeated');
+ h.context.opSaveNodeState=()=>({ok:false,reason:'Not available on this VM'});
+ assert.match(h.context.nodeActionNotes(n),/Save startup configuration… is not available: Not available on this VM\./);
+ h.context.opSaveNodeState=()=>({ok:true,reason:''});
+ assert.match(vm.runInContext('nodeDrawerActions('+JSON.stringify(n)+')',h.context),/data-save-node="r1" >Save startup configuration…/);
+ // the click handler
+ const ran=[];h.context.opTask=async(d,fn)=>{await fn();};h.context.opNodeAction=async(...a)=>{ran.push(['node',...a]);};h.context.opSaveNode=async(...a)=>{ran.push(['save',...a]);};vm.runInContext("activeId='lab-a'",h.context);
+ const b1={disabled:false,dataset:{nodeAction:'stop-node',node:'r1'},closest:()=>null},b2={disabled:false,dataset:{saveNode:'r1'},closest:()=>null};
+ await h.context.handleNodeAction({target:{closest:()=>b1}});await h.context.handleNodeAction({target:{closest:()=>b2}});
+ assert.deepEqual(ran,[['node','stop-node','lab-a','r1',b1],['save','lab-a','r1',b2]]);
+ await h.context.handleNodeAction({target:{closest:()=>({disabled:true,dataset:{nodeAction:'stop-node',node:'r1'}})}});assert.equal(ran.length,2,'a disabled button does nothing');
+});

@@ -10,14 +10,13 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
 
 ## State
 
-- **Branch**: `claude/parity-campaign`, stacked on `claude/agent-routing-embed` (pull request 71, release 1.31.1,
-  the agent routing in `.claude/`). Merge 71 first; this branch's pull request will be opened against `main` and
-  carries 71's commits until then.
+- **Branch**: `claude/parity-campaign`, pull request 73 against `main` (the routing release, pull request 71, and the
+  campaign up to the C05 checkpoint, pull request 72, were merged into `main` on 2026-10-23; the owner merges 73 when
+  the lead says it is ready; worker and integration branches are never merged on their own).
 - **Research**: done (`RESEARCH.md`, `PARITY.md`); the plan with the chunk order is `README.md`.
-- **VM**: 72 GB RAM, 24 CPUs, 98 GB free disk, KVM present; the five images are pulled; two labs from the Git
-  redesign stream exist with their containers exited (`git-redesign`, `git-redesign-b`); the manager and the capture
-  stack run (release image 1.31.0 at the time of writing).
-- **Chunk in progress**: C02 built (checkpoint `d00ccf1`, not released) and under verification; C03 helper slice in build; see the log.
+- **VM**: 72 GB RAM, 24 CPUs, KVM present; the five images are pulled; the `parity` lab (vsw, vrt, cjunos, xrv9k, ceos)
+  runs; the manager and the capture stack run the release named in the last log entry.
+- **Chunk in progress**: see the last log entry.
 
 ## How to continue after an interruption
 
@@ -136,3 +135,25 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   C05 (verification fixes, review answers in C05-DESIGN, release 1.31.4 with `test_impairments.py` and
   `test_device_impairments_ui.js` already in CI), integrate C07 (S2 then S4 docs, review, live pass), C08 (S3 after S2),
   C06 (S3 after S2, S4, S5), C09 (S1, S2 after C07 frees `index.html` and `shell.js`); C10 when the VM is quiet.
+- 2026-10-23 11:30 UTC, **release 1.31.4** (C05: impairments, Stop and Start device, the apply plan and pending
+  changes, Run with options, per-device save; the helper half shipped in 1.31.3): `/clab-slice-verify` (9 of 11 held,
+  seven breaks), `/clab-review-changes` (23 confirmed, one must-fix: Confirm live during a re-preview) and the live
+  pass on the parity lab (two breaks: vJunos rows printed as `eth1 (ge-0/0/0)`, the map not re-read after a drawer
+  change) all answered in C05-DESIGN §11 and §12 and every finding applied (`2d8afde`, `698c63e`, `28a7afa`). Built,
+  verified and waiting their turn on integration branches (all pushed): C07 `claude/c07-int` (slices, fixes from its
+  verification, C07-DESIGN §10; the live capture pass running against a manager rebuilt from that tree), C06
+  `claude/c06-int` (four slices and docs; its fixture slice `wt-c06-s4` in build, then `/clab-slice-verify`), C08
+  `wt-c08-s3` (three slices, docs, fixes, C08-DESIGN §10; CI needs `test_lab_builder_check_ui.js` and
+  `test_clab_schema.py`), C09 `claude/c09-int` (three slices and docs; `/clab-slice-verify` running). Next, in
+  order: merge C07 onto the branch, `/clab-review-changes`, release 1.31.5 (records drafted in the session
+  scratchpad); then C06 (verification, review, live pass), C08 and C09 (reviews), each a release; C10 last.
+- 2026-10-23 15:40 UTC, **release 1.31.5** (C07: capture parity; built on `claude/c07-int`, fast-forwarded onto the
+  branch, then `/clab-review-changes` with base `6c3f5d5`: 10 confirmed, 2 refuted, the fixes in `f2e6e1e` and the
+  answers in C07-DESIGN §12; the verification §10 and the live pass §11 were done on the integration branch).
+  `main` was merged back into the branch (`541e3ac`, merge commits only) after pull requests 71 and 72 landed.
+  Waiting their turn (all pushed, each with the campaign head `61ccce5` merged in): C06 `claude/c06-int` (`c733849`:
+  the four slices, the S4 fixture slice and `check_c06.py`, the docs, the lead's fix for the script-load race;
+  `/clab-slice-verify` running on the fixture; then merge onto the branch, `/clab-review-changes`, the live pass with
+  the A1 `vm`-wording check, release 1.31.6 with the draft in the session scratchpad), C08 `wt-c08-s3` (`2bdc9cf`:
+  verified, CI entries added, bundle check clean; review, release), C09 `claude/c09-int` (`72334f5`: verified,
+  shortcut rows repointed after the merge; review, release); C10 last; C11 blocked on upstream 0.4.0.

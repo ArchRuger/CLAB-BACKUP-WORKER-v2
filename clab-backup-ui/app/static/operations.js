@@ -277,13 +277,14 @@ function opGracefulNotice(options,count){
  const seconds=120*Math.ceil(count/workers);
  return seconds>OP_RUN_LIMIT_SECONDS?`With these options the command may take longer than the manager waits for it (about ${Math.ceil(seconds/60)} minutes); choose more workers or leave Graceful stop off.`:'';
 }
+const OP_APPLY_RECREATE_HELP='Apply may also recreate the neighbours of a re-created device when their kind cannot add links live; the review lists them.';
 function opOptionsForm(action,caps,lab,options={},open=false){
  const cap=caps&&caps.actions&&caps.actions[action];if(!cap)return '';
  const devices=(lab&&lab.nodes||[]).map(n=>({name:n.definition_node||n.short_name||n.name,label:n.short_name||n.definition_node||n.name}));
  const chosen=Array.isArray(options.nodes)?options.nodes:[];
  const parts=[];
  if(['deploy','destroy','save'].includes(action)&&cap.node_filter===true&&devices.length&&(action!=='deploy'||lab?.deployment?.status==='Not deployed')){
-  const help={deploy:'Only possible before the lab is deployed; add the rest later with Apply topology changes.',destroy:'The devices you leave out keep running; the lab folder is kept.',save:'Only the chosen devices save their configuration.'}[action];
+  const help={deploy:'Only possible before the lab is deployed; add the rest later with Apply topology changes.',destroy:'The devices you leave out keep running; the lab folder is kept. '+OP_APPLY_RECREATE_HELP,save:'Only the chosen devices save their configuration.'}[action];
   parts.push(`<fieldset class="op-opt-devices"><legend>Choose devices</legend>${devices.map((d,i)=>`<label class="checkbox-label" for="op-opt-node-${i}"><input type="checkbox" id="op-opt-node-${i}" data-opt-node="${esc(d.name)}" ${chosen.includes(d.name)?'checked':''}> ${esc(d.label)}</label>`).join('')}<p class="form-help">${esc(help)}</p></fieldset>`);
  }
  if(['deploy','redeploy','destroy'].includes(action)&&cap.max_workers===true)parts.push(`<div class="op-opt-row"><label for="op-opt-workers">Max workers</label><input type="number" id="op-opt-workers" min="1" max="64" step="1" inputmode="numeric" value="${Number.isInteger(options.max_workers)?options.max_workers:''}"><p class="form-help">How many devices containerlab creates at once. Leave empty for containerlab's default; 1 or 2 spares memory when devices are VMs.</p></div>`);
@@ -305,6 +306,8 @@ async function opOptionsChanged(dialog,request,opener,plain,target){
  const form=opReadForm(dialog),problem=opMaxWorkersProblem(form.maxWorkers);
  if(problem){if(error)error.textContent=problem;if(confirm){confirm.disabled=true;confirm.title='Fix the options above first';}return;}
  if(error)error.textContent='';
+ // The old Confirm still holds the previous preview's token: it stays off until the new preview has replaced the dialog.
+ if(confirm){confirm.disabled=true;confirm.title='Checking the new options…';}
  if(set)set.disabled=true;if(status)status.textContent='Checking…';
  try{await opReview({...request,options:opMergeOptions(request.action,plain,form)},opener,{keepOptionsOpen:true,focusId:target&&target.id||'',plain});}
  catch(e){
@@ -358,7 +361,8 @@ async function opReview(request,opener,extra={}){
  const commandBlock=`${value.affected.length?`<h4>Devices</h4><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul>`:''}${command?`<h4>Command run on the VM</h4><pre class="op-output">${esc(command)}</pre>`:''}${technicalWarnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}`;
  const images=Array.isArray(value.images)?value.images.filter(i=>i&&typeof i.reference==='string'):[];
  const imageBlock=images.length?`<p class="form-help" id="op-review-images-status" role="status" aria-live="polite">Checking images…</p><details open class="op-images" id="op-review-images-section" hidden><summary>Images needing attention</summary><p class="form-help" id="op-review-images-fix" hidden></p><ul id="op-review-images"></ul></details>`:'';
- const kept=Array.isArray(value.kept)?value.kept.map(String):[];
+ const keptShort=Object.fromEntries((labOf&&labOf.nodes||[]).map(n=>[n.name,n.short_name||n.definition_node||n.name]));
+ const kept=Array.isArray(value.kept)?value.kept.map(k=>keptShort[String(k)]||String(k)):[];
  const keptLine=kept.length&&(value.action==='destroy'||value.action==='save')?`<p class="op-kept">${value.action==='destroy'?'Left running':'Not saved'}: ${esc(kept.join(', '))}</p>`:'';
  const affectedVerb={'restart-node':'restarted','start-node':'started','stop-node':'stopped'}[value.action];
  const affectedLine=copy.readonly||copy.quiet||value.action==='deploy'?'':isNode?`<p>1 device affected: ${esc(value.node_label||'')} (${esc(value.affected[0]?.name||'')}, ${esc(value.affected[0]?.state||'')}). The other devices of ${esc(value.name)} are not ${affectedVerb}.</p>`:planKnown?'':`<p>${value.affected.length} running ${value.affected.length===1?'device':'devices'} affected</p>`;
@@ -366,7 +370,7 @@ async function opReview(request,opener,extra={}){
  const fold=withOptions?opOptionsForm(value.action,opCaps,labOf,request.options||{},!!extra.keepOptionsOpen):'';
  const deviceCount=chosen.length||(labOf&&labOf.nodes?labOf.nodes.length:value.affected.length);
  const graceful=opGracefulNotice(request.options,deviceCount);
- const confirmLabel=planEmpty||value.plan_failed==='error'?'Apply anyway':copy.confirm||label;
+ const confirmLabel=planEmpty||value.plan_failed==='error'?'Apply anyway':value.action==='destroy'&&chosen.length?`Destroy ${chosenText}`:copy.confirm||label;
  const confirmClass=planEmpty?'secondary':copy.danger||value.plan_failed==='error'?'danger':'primary';
  const generic=disruptive&&!planEmpty;
  const dialog=opDialog('operation-review',title,`${copy.hideName?'':`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All labs on the VM')}</p>`}
@@ -393,10 +397,11 @@ async function opReview(request,opener,extra={}){
  if(foldElement&&typeof foldElement.addEventListener==='function')foldElement.addEventListener('change',event=>{opOptionsChanged(dialog,request,opener,plainOptions,event.target);});
  if(extra.focusId){const back=dialog.querySelector('#'+extra.focusId);if(back&&typeof back.focus==='function')back.focus();}
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};
- $('op-confirm').onclick=()=>opTask(dialog,async()=>{
+ $('op-confirm').onclick=()=>{if($('op-confirm').disabled)return undefined;return opTask(dialog,async()=>{
   const job=await json('/operations/confirm','POST',{token:value.token});dialog.close();
   if(typeof rememberJobRequest==='function')rememberJobRequest(job.id,{...request,lab_id:request.lab_id||labId});
   if(typeof opJobStarted==='function')opJobStarted(job);
+  if(['start-node','stop-node'].includes(value.action))opNodeJobsSeen.add(job.id);
   // The file has been chosen and the operation runs: the file dialogs are done, and the folder browser
   // must not stay open over the lab page that now reports how the operation goes.
   for(const id of ['op-editor','op-browser'])if($(id)?.open)$(id).close();
@@ -413,7 +418,7 @@ async function opReview(request,opener,extra={}){
    notify(named+'…');return;
   }
   await opShowJob(job.id);
- });
+ });};
  return dialog;
 }
 function opInspectionRows(output){
@@ -946,7 +951,7 @@ function opNodeChecks(lab,n,discovery,isBusy=false){
 function opNodeActionState(action,lab,n,discovery,isBusy=false){
  const shared=opNodeChecks(lab,n,discovery,isBusy);if(shared)return shared;
  const dev=n.short_name||n.name||'This device',verb=OP_NODE_VERBS[action]||'restart';
- if(action==='stop-node'&&n.runtime_state!=='running')return {ok:false,reason:`${dev} is not running`,own:true};
+ if(action==='stop-node'&&n.runtime_state!=='running'&&n.runtime_state!=='unknown')return {ok:false,reason:`${dev} is not running`,own:true};
  if(action==='start-node'&&(!n.runtime_state||n.runtime_state==='running'))return {ok:false,reason:n.runtime_state==='running'?`${dev} is already running`:`${dev} is not deployed on the VM`,own:n.runtime_state==='running'};
  if(opCaps&&opCaps.actions&&opCaps.actions[action]?.available!==true)return {ok:false,reason:`Not available on this VM — its containerlab or helper cannot ${verb} one device (see Diagnostics)`};
  return {ok:true,reason:''};
@@ -1088,7 +1093,20 @@ async function opLoadImpairments(labId){
  }catch{return opImpairmentCache[labId]||null;}
 }
 // Called by every render of the lab page (renderLabOperations): looks at the state and asks the VM only when a trigger fired.
+// A Start device or Stop device job that finishes while the page is open says so in a toast (the banner and output stay).
+const opNodeJobsSeen=new Set();
+function opNodeJobToasts(lab,jobs){
+ if(!lab)return;
+ for(const job of jobs||[]){
+  if(job.lab_id!==lab.id||!['start-node','stop-node'].includes(job.action))continue;
+  if(['queued','running'].includes(job.status)){opNodeJobsSeen.add(job.id);continue;}
+  if(!opNodeJobsSeen.has(job.id))continue;
+  opNodeJobsSeen.delete(job.id);
+  if(['succeeded','failed','interrupted'].includes(job.status))notify(opJobBanner(job).title);
+ }
+}
 function opWatchLab(lab){
+ opNodeJobToasts(lab,state.operations);
  const {reason,memo}=opPlanDue(opWatchMemo,lab,state.operations);opWatchMemo=memo;
  if(!lab)return;
  if(!memo.active){
@@ -1097,7 +1115,7 @@ function opWatchLab(lab){
  }
  if(!reason)return;
  const id=lab.id;
- if(state.discovery?.connected&&opPath(lab)&&lab.deployment_name)opLoadPlan(id);
+ if(state.discovery?.connected&&opPath(lab)&&lab.deployment_name)opLoadPlan(id,reason==='sync');
  (opCaps?Promise.resolve():opCapabilities().catch(()=>{opCaps=null;})).then(()=>opLoadImpairments(id));
 }
 async function opReviewChanges(labId){
@@ -1143,10 +1161,18 @@ function opImpairmentCount(answer){
  const devices=answer&&answer.devices&&typeof answer.devices==='object'?Object.values(answer.devices):[];
  return {interfaces:devices.reduce((sum,d)=>sum+((d&&d.impairments)||[]).length,0),devices:devices.filter(d=>d&&(d.impairments||[]).length).length};
 }
+// The port label the Interfaces answer showed for a failed row's Linux interface (Ethernet1 for eth1), from the cached lab-wide read.
+function opImpairmentPort(answer,failedRow){
+ const devices=answer&&answer.devices&&typeof answer.devices==='object'?answer.devices:{};
+ const entry=devices[failedRow&&failedRow.node]||Object.values(devices).find(d=>d&&(d.impairments||[]).some(i=>i.interface===(failedRow&&failedRow.interface)));
+ const row=entry&&(entry.impairments||[]).find(i=>i.interface===(failedRow&&failedRow.interface));
+ return row&&typeof row.port==='string'&&row.port?row.port:'';
+}
 async function opClearImpairments(labId=activeId){
- const lab=(state.labs||[]).find(l=>l.id===labId),count=opImpairmentCount(opImpairmentCache[labId]);
+ const lab=(state.labs||[]).find(l=>l.id===labId),count=opImpairmentCount(opImpairmentCache[labId]),shownBefore=opImpairmentCache[labId];
  if(!lab||!count.interfaces)return;
- const dialog=opDialog('op-clear-impairments',`Remove every impairment in ${lab.name} (${opPlural(count.interfaces,'interface')} on ${opPlural(count.devices,'device')})?`,'<p>Delay, jitter, loss, rate and corruption are removed from those interfaces. Nothing else on the devices changes.</p><p class="form-help" id="op-clear-status" role="status" aria-live="polite"></p><div class="dialog-actions"><button class="button secondary" id="op-clear-cancel">Cancel</button><button class="button danger" id="op-clear-confirm">Clear all</button></div>');
+ // Focus returns to the map's Fit button: the Clear impairments button is hidden once nothing is impaired.
+ const dialog=opDialog('op-clear-impairments',`Remove every impairment in ${lab.name} (${opPlural(count.interfaces,'interface')} on ${opPlural(count.devices,'device')})?`,'<p>Delay, jitter, loss, rate and corruption are removed from those interfaces. Nothing else on the devices changes.</p><p class="form-help" id="op-clear-status" role="status" aria-live="polite"></p><div class="dialog-actions"><button class="button secondary" id="op-clear-cancel">Cancel</button><button class="button danger" id="op-clear-confirm">Clear all</button></div>',$('map-fit')||undefined);
  $('op-clear-cancel').onclick=()=>dialog.close();
  $('op-clear-confirm').onclick=async()=>{
   const confirm=$('op-clear-confirm'),status=$('op-clear-status'),error=dialog.querySelector('.form-error');
@@ -1156,8 +1182,8 @@ async function opClearImpairments(labId=activeId){
    await opLoadImpairments(labId);
    const failed=Array.isArray(result.failed)?result.failed:[];
    if(!failed.length&&!(result.remaining||[]).length){dialog.close();notify(`${opPlural(result.cleared||0,'interface')} cleared.`);return;}
-   const first=failed[0]||{},shown=(lab.nodes||[]).find(n=>n.name===first.node);
-   status.textContent=`${result.cleared||0} of ${result.total||count.interfaces} interfaces cleared${failed.length?`; ${shown?.short_name||first.node||'a device'} ${first.interface||''}: ${String(first.reason||'not cleared').replace(/\.+$/,'')}`:''}. Try again.`;
+   const first=failed[0]||{},shown=(lab.nodes||[]).find(n=>n.name===first.node||n.definition_node===first.node),port=opImpairmentPort(opImpairmentCache[labId],first)||opImpairmentPort(shownBefore,first)||first.interface||'';
+   status.textContent=`${result.cleared||0} of ${result.total||count.interfaces} interfaces cleared${failed.length?`; ${shown?.short_name||first.node||'a device'} ${port}: ${String(first.reason||'not cleared').replace(/\.+$/,'')}`:''}. Try again.`;
    confirm.disabled=false;confirm.textContent='Clear all';
   }catch(e){if(error)error.textContent=e.message;confirm.disabled=false;confirm.textContent='Clear all';}
  };

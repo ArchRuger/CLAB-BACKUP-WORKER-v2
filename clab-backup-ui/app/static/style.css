@@ -2196,6 +2196,20 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 .capture-more, .capture-advanced { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 10px 14px; }
 .capture-more summary, .capture-advanced summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent-strong); }
 .capture-more .capture-interfaces, .capture-advanced .capture-controls { margin-top: 10px; }
+.capture-openas label { display: block; margin: 6px 0; font-size: 13px; font-weight: 400; }
+.capture-openas input { width: auto; margin-right: 8px; }
+.capture-presets { display: flex; gap: 8px; margin-bottom: 8px; }
+.capture-end .form-help { margin: 0 0 6px; }
+.capture-dialog[data-mode="link"] .capture-device-only { display: none; }
+/* C07 fixes: a row wraps instead of squeezing its label to a character; the link ends use one column on a phone; the launch
+   links start at the content edge and wrap their label. */
+.capture-interface { flex-wrap: wrap; }
+.capture-end { min-width: 0; }
+#capture-ends-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+#capture-ends-list .button { white-space: normal; max-width: 100%; text-align: left; height: auto; }
+#capture-launches { justify-content: flex-start; }
+#capture-launches .button { white-space: normal; max-width: 100%; text-align: left; height: auto; }
+@media (max-width: 420px) { #capture-ends-list { grid-template-columns: minmax(0, 1fr); } }
 
 /* viewer page (body.capture-viewer) */
 body.capture-viewer { height: 100vh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; margin: 0; }
@@ -2408,7 +2422,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   #devices-view #search { flex: 1 1 160px; }
   .device-row .node-actions, .device-rail .device-row { justify-content: flex-start; grid-template-columns: 1fr; }
   .topology-stage { height: clamp(360px, calc(100dvh - 240px), 600px); min-height: 360px; }
-  .topology-stage .map-tools { position: static; max-width: none; justify-content: flex-start; margin: 8px; }
+  /* The toolbar (with the impairment caption and Clear impairments) sits above the map in a column; as a static block after a 100%-high map it fell outside the clipped stage. */
+  .topology-stage { display: flex; flex-direction: column; }
+  .topology-stage .map-tools { position: static; order: -1; flex: none; max-width: none; justify-content: flex-start; margin: 8px; }
+  .topology-stage > svg, .topology-stage #topology-map { flex: 1 1 0; height: auto; min-height: 0; }
   .topology-stage #map-status, .topology-stage .map-status { left: 8px; bottom: 8px; max-width: calc(100% - 16px); }
   .map-tools #map-edit { margin-left: 0; }
   .map-expanded { inset: 0; border-radius: 0; padding: 10px; }
@@ -2430,7 +2447,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .op-inspection th { white-space: normal; }
   .op-inspection td { min-width: 80px; }
   .workspace-choice { padding: 20px; min-height: 140px; }
-  .capture-interfaces { grid-template-columns: 1fr 1fr; }
+  .capture-interfaces { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   .side-button { margin: 10px 0 0; width: 100%; }
 }
@@ -2668,11 +2685,15 @@ th[aria-sort=descending] > .op-sort::after { content: " ▼"; font-size: 10px; }
 .op-plan-empty { padding: 8px 12px; border-left: 3px solid var(--ok); background: var(--ok-soft); }
 .op-kept { font-size: 13px; color: var(--muted); }
 
-/* The drawer's Impairments table (device-impairments.js): inputs wide enough for "20ms", the actions wrapping under the row in a narrow drawer */
-.impairments-table input { width: 6ch; min-width: 0; }
+/* The drawer's Impairments table (device-impairments.js): the five inputs are narrow (values like "20ms" fit), the Actions wrap under the row whenever the drawer is narrow, and a validation hint wraps inside its cell instead of widening the table */
+.impairments-table table { min-width: 0; width: 100%; }
+.impairments-table input { width: 5.5ch; min-width: 0; padding-inline: 4px; }
+.impairments-table th, .impairments-table td { padding-inline: 4px; }
 .impairments-table td { vertical-align: top; }
-.impairments-table td:first-child { min-width: 7ch; }
+.impairments-table td:first-child { min-width: 0; width: 1%; }
+.impairments-table td.imp-first { white-space: normal; }
+.impairments-table td.imp-first .button { margin-top: 4px; }
 .impairments-table td .actions, .impairments-table td > div { display: flex; flex-wrap: wrap; gap: 6px; }
-@media (max-width: 520px) { .impairments-table table { min-width: 0; } .impairments-table th, .impairments-table td { padding-inline: 4px; } }
+.impairments-table td small.form-help { display: block; max-width: 14ch; white-space: normal; overflow-wrap: anywhere; }
 .imp-question { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-left: 3px solid var(--danger); border-radius: var(--radius); background: var(--surface-2); }
 .imp-question .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

@@ -17,7 +17,9 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
 
 - **Interfaces** and **Logs** in the device drawer (closed until opened; they need a VM helper that reports
   `diagnostics`) show the container's interfaces with one traffic counter sample per poll, and its redacted output.
-  Each data interface has **Capture**, which opens the capture dialog on that container interface. Both are read-only
+  Each data interface has **Capture**, which opens the capture dialog on that container interface; **Capture all
+  connected** in the table opens it with every data interface ticked (shown from two data interfaces), and the
+  dialog's *Open as* chooses one Wireshark for them or one per interface. Both sections are read-only
   and use the VM's operations helper, never the device's own session (see *Diagnostics* in
   [LAB-OPERATIONS.md](../docs/LAB-OPERATIONS.md)).
 - **Container facts** (device drawer, section *Container*) list what the manager already knows about the
@@ -252,7 +254,7 @@ After an upgrade, verify on a lab:
 5. A node drawer shows its connection settings and saved backup downloads.
 6. Right-click on the map offers Open CLI, Capture traffic, Back up configuration, Restart
    device… and Device details; a link opens the
-   capture dialog on either endpoint.
+   capture dialog with both ends ticked, and right-click on a link offers Capture both ends or one end.
 
 See `VALIDATION.md` for what was actually tested for each release.
 
@@ -281,7 +283,7 @@ reconstructed from an export. Schema 3 records the corrected drawing metadata; a
 map imported by an older importer shows a reminder to reimport the original files.
 
 Right-click a matched device for **Open CLI ↗**, **Capture traffic…**, **Back up
-configuration**, **Restart device…** and **Device details**; click a link to capture either end. The menu
+configuration**, **Restart device…** and **Device details**; click a link to capture both of its ends, or right-click it for both ends or one. The menu
 header shows the device's state, and an action that is not available says why under
 its label. Keyboard users can focus a device and press Shift+F10, navigate with arrow
 keys, and press Escape to close the menu. Actions have the same credential/readiness

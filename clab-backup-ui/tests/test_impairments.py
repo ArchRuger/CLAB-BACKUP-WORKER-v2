@@ -4,6 +4,7 @@ The helper is patched at `app.lab_operations.remote`; a temporary Store is used,
 """
 import json
 from pathlib import Path
+import re
 import threading
 import time
 import unittest
@@ -36,6 +37,10 @@ class PureTests(unittest.TestCase):
         bare = public_impairment({'interface': 'eth1'}, 'linux')
         self.assertEqual(bare, {'interface': 'eth1', 'port': 'eth1', 'delay': '', 'jitter': '', 'loss': 0, 'rate': 0, 'corruption': 0})
         self.assertEqual(public_impairment({'interface': 'eth1', 'loss': True, 'rate': 'x'}, 'linux')['loss'], 0)
+
+    def test_a_helper_alias_names_the_port_so_a_vjunos_row_reads_back(self):
+        rows = public_rows([{'interface': 'eth1', 'alias': 'ge-0/0/0', 'delay': '20ms'}, {'interface': 'eth2', 'delay': '1ms'}], 'juniper_vjunosswitch')
+        self.assertEqual([(r['interface'], r['port']) for r in rows], [('eth1', 'ge-0/0/0'), ('eth2', 'ge-0/0/1')])
 
     def test_rows_on_management_and_internal_interfaces_are_dropped(self):
         rows = [{'interface': n, 'delay': '1ms'} for n in ('eth0', 'cpu', 'fabric', 'eth1', 'eth2')]
@@ -372,6 +377,71 @@ class ClearTests(ImpairmentBase):
         self.start(); self.show_all(set())
         body = self.post('clear', {'lab_id': self.lab_id}).json()
         self.assertEqual((body['cleared'], body['total'], body['devices']), (0, 0, {})); self.assertNotIn('netem-reset', self.modes())
+
+    def test_clear_holds_the_in_flight_token_for_one_helper_call_at_a_time_and_a_refusal_between_resets_is_a_partial_result(self):
+        self.start(); self.many(5); self.show_all({'r1', 'n0'})
+        operations = self.app.state.operations; held = []; resets = []
+        self.answers['netem-reset'] = {'changed': True, 'impairments': []}
+        def watch(req):
+            held.append((req['mode'], len(operations.in_flight_impairments)))
+            if req['mode'] == 'netem-reset':
+                resets.append(req)
+                if len(resets) == 1: self.store.state['jobs'].append({'id': 'b', 'lab_id': self.lab_id, 'status': 'running'})   # a backup starts between two resets
+        self.hold = watch
+        body = self.post('clear', {'lab_id': self.lab_id}).json()
+        self.assertEqual({count for _, count in held}, {1}, 'a helper call runs under exactly one token: %r' % held)
+        self.assertEqual(len(resets), 1, 'the second reset was refused by the guard and never reached the helper')
+        self.assertEqual((body['cleared'], body['total']), (1, 4))
+        self.assertEqual(body['failed'], [{'node': self.node, 'interface': 'eth2', 'reason': 'Wait for the lab backup or login job to finish.'}])
+        self.assertEqual(body['remaining'], [{'node': 'clab-training-n0', 'interface': 'eth1'}, {'node': 'clab-training-n0', 'interface': 'eth2'}])
+        self.assertEqual(operations.in_flight_impairments, set())
+        # Between two helper calls another lab's work is not shut out: a guard call made then is answered.
+        self.store.state['jobs'].clear(); self.hold = None
+        with self.store.lock: operations.guard('other')
+
+    def test_clear_reads_with_the_long_timeout_and_resets_with_the_mutating_one(self):
+        self.start(); self.show_all({'r1'}); self.answers['netem-reset'] = {'changed': True, 'impairments': []}
+        self.answers['netem-show'] = {'facts': {'present': True, 'id': OTHER}, 'impairments': []}
+        self.assertEqual(self.post('clear', {'lab_id': self.lab_id}).status_code, 200)
+        timeouts = {mode: {t for r, t in self.requests if r['mode'] == mode} for mode in ('netem-show-all', 'netem-reset')}
+        self.assertEqual(timeouts, {'netem-show-all': {imp.READ_TIMEOUT}, 'netem-reset': {imp.MUTATING_TIMEOUT}})
+        # The order that makes it work: the helper's lab-wide read may take its whole deadline, and a set or reset is shorter.
+        self.assertLess(imp.MUTATING_TIMEOUT, host_operations.SHOW_ALL_DEADLINE); self.assertGreater(imp.READ_TIMEOUT, host_operations.SHOW_ALL_DEADLINE)
+        self.assertEqual(self.post('clear', {'lab_id': self.lab_id}).status_code, 200)
+        lock = lab_operations.LOCK_SENTENCE; self.answers['netem-show-all'] = ValueError(lock)
+        self.assertEqual(self.post('clear', {'lab_id': self.lab_id}).json()['detail'], imp.BUSY_ELSEWHERE, 'the lock sentence mapping is kept on the read')
+
+    def test_a_posted_lab_id_the_manager_does_not_know_never_grows_the_lock_table(self):
+        self.start(); table = self.app.state.impairments.locks
+        before = len(table)
+        for i in range(20):
+            lab_id = 'random-%d' % i
+            self.assertEqual(self.post('clear', {'lab_id': lab_id}).status_code, 404)
+            self.assertIn(self.post('set', self.set_body(lab_id=lab_id)).status_code, (404, 409))
+            self.assertIn(self.post('reset', self.reset_body(lab_id=lab_id)).status_code, (404, 409))
+        self.assertEqual(len(table), before)
+        self.show_all(set()); self.assertEqual(self.post('clear', {'lab_id': self.lab_id}).status_code, 200)
+        self.assertIn(self.lab_id, table, 'a known lab keeps its lock')
+
+
+class BusySentenceMirrorTests(ImpairmentBase):
+    def test_the_drawers_busy_sentences_are_the_ones_the_manager_says(self):
+        source = (Path(__file__).resolve().parents[1] / 'app' / 'static' / 'device-impairments.js').read_text()
+        match = re.search(r"const IMP_BUSY\s*=\s*\[([^\]]*)\]", source)
+        self.assertIsNotNone(match, 'device-impairments.js carries IMP_BUSY')
+        shown = re.findall(r"'([^']*)'", match.group(1))
+        self.start(); operations = self.app.state.operations
+        said = []
+        for setup, teardown in ((lambda: operations.in_flight_impairments.add('t'), lambda: operations.in_flight_impairments.discard('t')),
+                                (lambda: self.store.state['jobs'].append({'id': 'b', 'lab_id': self.lab_id, 'status': 'running'}), lambda: self.store.state['jobs'].clear())):
+            setup()
+            try:
+                with self.store.lock:
+                    try: operations.guard(self.lab_id)
+                    except imp.HTTPException as exc: said.append(exc.detail)
+            finally: teardown()
+        said.append(imp.BUSY_ELSEWHERE)
+        self.assertEqual(len(said), 3); self.assertEqual(shown, said, 'IMP_BUSY mirrors guard()\'s two sentences and BUSY_ELSEWHERE, in that order')
 
 
 class PlanTests(ImpairmentBase):
