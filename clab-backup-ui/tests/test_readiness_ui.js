@@ -403,3 +403,20 @@ test('C04: focus survives the poll: a status change rewrites only the live rows,
  const liveBefore=writes.live;h.context.renderDetails();assert.equal(writes.live,liveBefore,'an unchanged render writes nothing');
  vm.runInContext(`state.labs[0].nodes[0].discovered_ipv4='172.20.20.99';`,h.context);h.context.renderDetails();assert.ok(writes.info>infoWrites,'a changed static value does rebuild the static rows');
 });
+
+test('C05: the lab banner offers Review changes… for a pending plan on a Running lab, replaces Start on a Partially running lab with a device to create, and keeps Start for a started-only plan',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),h.context);
+ const lab=status=>({id:'lab',name:'L',nodes:[],profiles:[],defaults:{},deployment:{status},nos_readiness:{status:'idle'}});
+ const paint=(status,plan,dismissed=[])=>{h.context.noticeDismissed=key=>dismissed.some(d=>key.includes(d));vm.runInContext(`state=${JSON.stringify({labs:[lab(status)],jobs:[],platforms:{},operations:[]})};activeId='lab';opPlanCache=${JSON.stringify(plan?{lab:{answer:{changed:true,plan,failed:''},error:'',at:1}}:{})};renderLabBanner();`,h.context);};
+ paint('Running',{added:['r3'],reasons:{}});
+ assert.equal(get('banner-review').hidden,false);assert.equal(get('banner-review').textContent,'Review changes…');assert.equal(get('lab-banner-text').textContent,'The topology file differs from the running lab.');assert.equal(get('lab-banner-detail-text').textContent,'r3 to create');
+ paint('Running',null);assert.equal(get('lab-banner').hidden,true,'no differences: no notice');
+ const identity=h.context.opPlanIdentity({added:['r3'],reasons:{}});
+ paint('Partially running',{added:['r3'],reasons:{}});
+ assert.equal(get('banner-review').hidden,false,'a destroyed device needs the plan\'s review');assert.equal(get('banner-start').hidden,true,'Start cannot recreate it');assert.equal(get('lab-banner-detail-text').textContent,'r3 to create');
+ paint('Partially running',{started:['r2'],reasons:{}});
+ assert.equal(get('banner-start').hidden,false,'a stopped device is started');assert.equal(get('banner-review').hidden,true);
+ assert.ok(vm.runInContext('BANNER_BUTTONS["lab-banner"]',h.context).includes('banner-review'));
+ assert.ok(typeof identity==='string'&&identity.length>0);
+});

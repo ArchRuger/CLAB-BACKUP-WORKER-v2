@@ -805,6 +805,7 @@ class Discovery:
                 lab.clear(); lab.update(candidate)
                 reconcile(self.store.state); self.store.save()
                 self.store.event('lab.sync', 'Synced VM files; saved node settings and backup history retained', lab_id=lab_id)
+                app.state.operations.forget_plan(lab_id)   # the cached pending-changes plan compared the old file
                 return public_lab(lab)
 
         class Binding(BaseModel):

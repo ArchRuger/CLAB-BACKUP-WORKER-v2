@@ -98,3 +98,30 @@ test('legacy un-sized notes retain paragraph spacing inside their imported group
  assert.match(svg,/y="-61.400000000000006"|y="-61.4"/);
  assert.match(svg,/font-family="Arial"/);
 });
+test('C05: impairedWires matches an end by interface or by port and returns the impaired ends; a wire impaired at both ends is one wire',()=>{
+ const devices={ceos:{impairments:[{interface:'eth1',port:'Ethernet1',delay:'20ms',jitter:'5ms',loss:1.5,rate:1000,corruption:0.5}]},vsw:{impairments:[{interface:'eth3',port:'Ethernet3',delay:'',jitter:'',loss:10,rate:0,corruption:0}]}};
+ const wires=[
+  {ends:[{node:'ceos',label:'ceos',interface:'eth1'},{node:'vsw',label:'vsw',interface:'eth1'}]},
+  {ends:[{node:'ceos',label:'ceos',interface:'Ethernet1'},{node:'vsw',label:'vsw',interface:'Ethernet3'}]},
+  {ends:[{node:'vsw',label:'vsw',interface:'eth2'},{node:'other',label:'other',interface:'eth1'}]},
+ ];
+ const found=context.impairedWires(wires,devices);
+ assert.deepEqual([...found.map(f=>f.index)],[0,1],'by interface name and by port name');
+ assert.deepEqual(JSON.parse(JSON.stringify(found[0].ends.map(e=>[e.side,e.node,e.port]))),[[0,'ceos','Ethernet1']]);
+ assert.equal(found[0].text,'impaired at ceos Ethernet1 (traffic leaving ceos): delay 20ms, jitter 5ms, loss 1.5%, rate 1000 kbit, corruption 0.5%');
+ assert.deepEqual([...found[1].ends.map(e=>e.side)],[0,1],'both ends of one wire');assert.match(found[1].text,/; vsw Ethernet3 \(traffic leaving vsw\): loss 10%$/);
+ assert.equal(context.impairedWires(wires,{}).length,0);assert.equal(context.impairedWires(null,null).length,0);
+ assert.equal(context.impairmentSummary({delay:'0ms',jitter:'',loss:0,rate:0,corruption:0}),'','zero values say nothing');
+});
+test('C05: a wire keeps its endpoints in data-capture-endpoints and gains no extra attribute from the badge (C06 owns data-link-ends)',()=>{
+ const nodes=new Map([['a',{id:'a',label:'a',inventory_name:'clab-x-a',x:0,y:0}],['b',{id:'b',label:'b',inventory_name:'clab-x-b',x:200,y:0}]]);
+ const svg=context.topologyLink([{node:'a',interface:'eth1'},{node:'b',interface:'eth1'}],nodes,0,{});
+ assert.match(svg,/data-capture-endpoints="\[\{&quot;node&quot;:&quot;clab-x-a&quot;,&quot;label&quot;:&quot;a&quot;,&quot;interface&quot;:&quot;eth1&quot;\}/);assert.doesNotMatch(svg,/data-link-ends|impaired/);
+});
+test('C05: every stroke rule on a topology wire path excludes the capture hit area, so an impaired link still opens Capture',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8');
+ const rules=[...css.matchAll(/([^{}]*\.topology-wire[^{}]*)\{([^{}]*)\}/g)].filter(m=>/stroke/.test(m[2]));
+ assert.ok(rules.some(m=>/\.impaired/.test(m[1])),'the impaired rule exists');
+ for(const m of rules)for(const selector of m[1].split(',').map(x=>x.trim()).filter(x=>/path/.test(x)))assert.match(selector,/path:not\(\.capture-hit\)/,selector+' must exclude path.capture-hit');
+ assert.match(css,/path\.capture-hit \{ stroke: transparent; stroke-width: 16; pointer-events: stroke; \}/);
+});

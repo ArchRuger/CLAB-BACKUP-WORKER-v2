@@ -742,3 +742,11 @@ test('closing the device drawer resets the diagnostics sections before the route
  assert.ok(h.history.length>before,'and the route still loses its device');
  const bare=harness();bare.dialog.open=true;assert.doesNotThrow(()=>bare.dialog.close(),'without device-diagnostics.js the drawer still closes');
 });
+test('C05: closing the device drawer also resets the Impairments section, and a page without device-impairments.js still closes',()=>{
+ const h=harness({hash:'#lab=a&view=devices&device=R1'});
+ const order=[];h.context.resetDeviceDiagnostics=()=>order.push('diagnostics');h.context.resetDeviceImpairments=()=>order.push('impairments');
+ h.context.activeId='a';h.context.detailName='R1';h.dialog.open=true;
+ h.dialog.close();
+ assert.deepEqual(order,['diagnostics','impairments'],'both resets run once, diagnostics first');
+ const bare=harness();bare.context.resetDeviceDiagnostics=()=>{};bare.dialog.open=true;assert.doesNotThrow(()=>bare.dialog.close());
+});

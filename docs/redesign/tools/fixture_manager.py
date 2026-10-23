@@ -281,15 +281,22 @@ def build(data_dir, port, classic=False):
         store.save()
     roots = ['/etc/containerlab', '/srv/containerlab-node-manager/projects']
 
+    # C05 scripted VM state: per-container overrides of a node action ('exited' after Stop device, 'absent' after a
+    # filtered destroy), the netem table, the pending-changes plan (set by the `pending_changes` action: none | changes |
+    # failed) and how many scripted runs are in flight (the helper's host lock is held while one is).
+    from app import host_operations as ho
+    ops_state = {'device': {}, 'netem': {}, 'seeded': set(), 'plan': 'none', 'busy': 0}
+
     def ops_lab_rows(name):
         running = {d['name'] for d in discovery.public().get('discovered', []) if d.get('running')}
         with store.lock:
             lab = next((l for l in store.state['labs'] if (l.get('deployment_name') or l['name']) == name), None)
             if not lab or name not in running:
                 return []
-            return [dict(name=n['name'], container_id='f1x7ur3' + str(i), state='running', kind=n.get('platform') or 'linux',
+            return [dict(name=n['name'], container_id='f1x7ur3' + str(i), state=ops_state['device'].get(n['name'], 'running'), kind=n.get('platform') or 'linux',
                          image=(n.get('platform') or 'linux') + ':fixture', ipv4_address=n.get('address', '') + '/24',
-                         lab_name=name, labPath=lab.get('vm_project_path', '')) for i, n in enumerate(lab['nodes'])]
+                         lab_name=name, labPath=lab.get('vm_project_path', '')) for i, n in enumerate(lab['nodes'])
+                    if ops_state['device'].get(n['name']) != 'absent']
 
     def ops_browse(path):
         if not path:
@@ -369,10 +376,10 @@ def build(data_dir, port, classic=False):
         node = next((n for n in nodes if n.get('definition_node') == options.get('node')), None)
         if not lab or not node or options.get('container') != f"{lab.get('container_prefix', 'clab')}-{name}-{node['definition_node']}":
             raise ValueError('This container does not belong to lab ' + name + '.')
-        if not ops_lab_rows(name):
+        if not ops_lab_rows(name) or ops_state['device'].get(options['container']) == 'absent':
             return {'present': False}, node
         digest = hashlib.sha256(options['container'].encode()).hexdigest()
-        return {'present': True, 'id': digest, 'pid': 4000 + len(options['container']), 'status': 'running', 'health': 'healthy',
+        return {'present': True, 'id': digest, 'pid': 4000 + len(options['container']), 'status': ops_state['device'].get(options['container'], 'running'), 'health': 'healthy',
                 'started': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(boot)), 'kind': node.get('platform') or 'linux',
                 'ports': [{'container': '22/tcp', 'host': '2201'}]}, node
 
@@ -404,9 +411,76 @@ def build(data_dir, port, classic=False):
                                     tx_bytes=1200 * ticks + 5 * i, tx_packets=11 * ticks, tx_errors=0, tx_dropped=0) for i, r in enumerate(rows)}
         return {'facts': facts, 'interfaces': rows, 'counters': counters, 'sampled_at': time.time()}
 
+    def netem_rows(container):
+        # The first read of a container shows the one impairment the fixture always had (eth1); set and reset change the table.
+        if container not in ops_state['seeded']:
+            ops_state['seeded'].add(container)
+            ops_state['netem'].setdefault((container, 'eth1'), dict(delay='15ms', jitter='2ms', loss=5.0))
+        return [dict(interface=i, **row) for (c, i), row in sorted(ops_state['netem'].items()) if c == container]
+
     def ops_netem(request):
         facts, node = ops_device(request)
-        return {'facts': facts, 'impairments': [dict(interface='eth1', delay='15ms', jitter='2ms', loss=5.0)] if facts['present'] else []}
+        running = facts['present'] and facts['status'] == 'running'
+        return {'facts': facts, 'impairments': netem_rows(request['options']['container']) if running else []}
+
+    def go_duration(ms):
+        # containerlab prints a Go duration back: 60s reads 1m0s, 1500ms reads 1.5s.
+        if ms == 0:
+            return '0s'
+        if ms < 1000:
+            return '%dms' % ms
+        minutes, rest = int(ms // 60000), (ms % 60000) / 1000
+        return (('%dm' % minutes) if minutes else '') + ('%g' % rest) + 's'
+
+    def ops_netem_all(request):
+        pairs = (request.get('options') or {}).get('nodes')
+        if not isinstance(pairs, list) or not 1 <= len(pairs) <= ho.NODE_FILTER_LIMIT:
+            raise ValueError('Name 1 to %d devices.' % ho.NODE_FILTER_LIMIT)
+        devices = []
+        for pair in pairs:
+            answer = ops_netem({'name': request.get('name'), 'options': pair})
+            devices.append({'node': pair['node'], 'container': pair['container'], 'present': answer['facts']['present'], 'impairments': answer['impairments']})
+        return {'devices': devices, 'complete': True}
+
+    def ops_netem_change(request):
+        """netem-set and netem-reset as the helper answers them: the host lock, the request digest, the container id the drawer showed."""
+        reset = request['mode'] == 'netem-reset'
+        if ops_state['busy'] or (stopped_at['t'] is not None and time.monotonic() - stopped_at['t'] < LOCK_WINDOW):
+            raise ValueError(LOCK_SENTENCE)
+        options = request.get('options') or {}
+        if set(options) != set(ho.IMPAIRMENT_RESET_KEYS if reset else ho.IMPAIRMENT_SET_KEYS):
+            raise ValueError('Unsupported impairment options.')
+        if request.get('digest') != ho.digest({k: request.get(k) for k in ('mode', 'name', 'options', 'expected_id')}):
+            raise ValueError('Review the impairment again.')
+        facts, node = ops_device({'name': request.get('name'), 'options': {k: options[k] for k in ('node', 'container')}})
+        if not facts['present'] or facts['status'] != 'running':
+            raise ValueError('Device %s is not running; impairments exist only on a running device.' % options['container'])
+        if request.get('expected_id') != facts['id']:
+            raise ValueError(ho.CHANGED_SENTENCE)
+        interface = options['interface']
+        if interface == 'eth0':
+            raise ValueError('The management interface eth0 cannot be impaired: the manager reaches the device through it.')
+        if interface == 'lo' or not ho.IMPAIRMENT_INTERFACE.fullmatch(str(interface)):
+            raise ValueError('lo cannot be impaired.' if interface == 'lo' else 'Choose an interface by its literal name.')
+        key = (options['container'], interface)
+        netem_rows(options['container'])
+        if reset:
+            changed = ops_state['netem'].pop(key, None) is not None
+            return {'facts': facts, 'changed': changed, 'impairments': netem_rows(options['container'])}
+        ho.impairment_values(options)
+        ops_state['netem'][key] = dict(delay=go_duration(ho.duration_ms(options['delay'])), jitter=go_duration(ho.duration_ms(options['jitter'])),
+                                       loss=float(options['loss']), rate=options['rate'], corruption=float(options['corruption']))
+        return {'facts': facts, 'impairments': netem_rows(options['container'])}
+
+    def ops_plan():
+        # What a dry run would plan. `none` is a lab that matches its file; `changes` and `failed` are put there by the
+        # `pending_changes` action. (The design called it a control switch; the shared switch table is not this file's.)
+        if ops_state['plan'] == 'failed':
+            return None, 'error', 'Failed to read topology file: yaml: line 3: did not find expected key'
+        plan = dict(deploys_lab=False, added=[], removed=[], recreated=[], started=[], restarted=[], links_added=[], endpoints_removed=[], reasons={})
+        if ops_state['plan'] == 'changes':
+            plan.update(added=['r3'], recreated=['r2'], links_added=['r2:eth1 -- r3:eth1'], reasons={'r2': 'config drift: Env'})
+        return plan, '', ''
 
     def ops_preview(req):
         action, options, name, path = req['action'], req.get('options') or {}, req.get('name', 'manager'), req.get('path', '')
@@ -450,12 +524,59 @@ def build(data_dir, port, classic=False):
                 if opened.get('yaml') != source_hash or (options.get('annotations') is not None and opened.get('annotations', '') != current):
                     raise ValueError('The topology changed on the VM after it was opened. Open it again before saving.')
                 extra = {'annotations_hash': current}
+            elif action in ho.NODE_ACTIONS:
+                # Restart, Start and Stop device as the helper plans them: one literal node bound to one deployed container.
+                if set(options) != {'node', 'container'}:
+                    raise ValueError('Unsupported operation options.')
+                command = action[:-5]
+                targets = [r for r in rows if r['name'] == options['container']]
+                if len(targets) != 1:
+                    raise ValueError('Device ' + str(options['container']) + ' is not deployed in lab ' + name + '. Refresh the lab list and review again.')
+                state = targets[0]['state']
+                if action == 'stop-node' and state != 'running':
+                    raise ValueError('Device ' + options['container'] + ' is ' + state + '; there is nothing to stop.')
+                if action == 'start-node' and state == 'running':
+                    raise ValueError('Device ' + options['container'] + ' is already running.')
+                affected = [{'name': targets[0]['name'], 'id': targets[0]['container_id'], 'state': state}]
+                argv = ['/usr/bin/containerlab', command, '-t', path, '--name', name, '--node', options['node']]
+                extra = {'node': options['node'], 'container': options['container']}
             elif action != 'delete':
                 argv = ['/usr/bin/containerlab', action, '-t', path, '--name', name]
                 if action == 'inspect':
                     argv += ['--format', 'json']
-                if options.get('cleanup'):
-                    argv.append('--cleanup')
+                for key, allowed in ho.OPTION_ACTIONS.items():
+                    if key in options and action not in allowed:
+                        raise ValueError('Unsupported operation options.')
+                nodes = options.get('nodes')
+                if nodes is not None:
+                    if not isinstance(nodes, list) or not 1 <= len(nodes) <= ho.NODE_FILTER_LIMIT or len(set(map(str, nodes))) != len(nodes):
+                        raise ValueError('Choose devices by their literal topology node names.')
+                    if action == 'deploy' and rows:
+                        raise ValueError('This lab is already deployed, so a deploy limited to chosen devices is not possible (containerlab would remove the devices left out). Use Apply topology changes to add the missing devices.')
+                    if options.get('cleanup'):
+                        raise ValueError('Clean up cannot be combined with chosen devices: containerlab would delete the whole lab folder, which the devices left running still use.')
+                    if action in ('destroy', 'save'):
+                        chosen = []
+                        for node in nodes:
+                            matched = [r for r in rows if ho.container_matches(r['name'], name, node)]
+                            if len(matched) != 1:
+                                raise ValueError('Device ' + str(node) + ' is not deployed in lab ' + name + '. Refresh the lab list and review again.')
+                            chosen.append(matched[0])
+                        affected = [{'name': r['name'], 'id': r['container_id'], 'state': r['state']} for r in chosen]
+                        extra = {'kept': [r['name'] for r in rows if r not in chosen]}
+                    argv += ['--node-filter', ','.join(nodes)]
+                if 'max_workers' in options:
+                    if type(options['max_workers']) is not int or not 1 <= options['max_workers'] <= ho.MAX_WORKERS_LIMIT:
+                        raise ValueError('Max workers must be a whole number from 1 to 64.')
+                    argv += ['--max-workers', str(options['max_workers'])]
+                for flag in ('skip_post_deploy', 'cleanup', 'graceful', 'keep_mgmt_net'):
+                    if options.get(flag):
+                        argv.append('--' + flag.replace('_', '-'))
+                if action == 'apply':
+                    plan, failed, error = ops_plan()
+                    extra = {'plan': plan, 'plan_failed': failed}
+                    if failed == 'error':
+                        warnings.append('containerlab could not plan this change: ' + error)
                 if action in ('deploy', 'redeploy', 'apply'):
                     warnings.append('Runs this trusted topology with host privileges, including its configured hooks, mounts and image pulls.')
                 if options.get('cleanup'):
@@ -512,7 +633,32 @@ def build(data_dir, port, classic=False):
         with store.lock:
             lab = next((l for l in store.state['labs'] if (l.get('deployment_name') or l['name']) == name), None)
             groups = store.state['discovery'].setdefault('labs', {})
-            if action in ('deploy', 'redeploy', 'start') and lab:
+            chosen_nodes = (req.get('options') or {}).get('nodes')
+            if lab and action in ('deploy', 'redeploy', 'start', 'destroy') and not chosen_nodes:
+                for n in lab['nodes']:
+                    ops_state['device'].pop(n['name'], None)
+                    for key in [k for k in ops_state['netem'] if k[0] == n['name']]:
+                        ops_state['netem'].pop(key)   # a recreated device has no impairments
+            if action in ho.NODE_ACTIONS and lab:
+                container = req['options']['container']
+                new_state = 'exited' if action == 'stop-node' else 'running'
+                ops_state['device'][container] = new_state
+                if new_state == 'running':
+                    ops_state['device'].pop(container, None)
+                for row in groups.get(name, []):
+                    if row['name'] == container:
+                        row['state'] = new_state
+            elif action == 'destroy' and chosen_nodes and lab:
+                gone = {r['name'] for r in ops_lab_rows(name) if any(ho.container_matches(r['name'], name, n) for n in chosen_nodes)}
+                for container in gone:
+                    ops_state['device'][container] = 'absent'
+                groups[name] = [r for r in groups.get(name, []) if r['name'] not in gone]
+                if not groups[name]:
+                    groups.pop(name)
+            elif action == 'deploy' and chosen_nodes and lab:
+                groups[name] = [dict(name=n['name'], address=f'172.20.21.{10 + i}', state='running', kind=n.get('kind', ''))
+                                for i, n in enumerate(lab['nodes']) if any(ho.container_matches(n['name'], name, c) for c in chosen_nodes)]
+            elif action in ('deploy', 'redeploy', 'start') and lab:
                 groups[name] = [dict(name=n['name'], address=f'172.20.21.{10 + i}', state='running', kind=n.get('kind', '')) for i, n in enumerate(lab['nodes'])]
             elif action == 'destroy':
                 groups.pop(name, None)
@@ -523,11 +669,16 @@ def build(data_dir, port, classic=False):
     def fake_remote(host, request, output=None, stopping=None, timeout=None):
         mode = request.get('mode')
         if mode == 'capabilities':
-            actions = {a: {'available': True, 'cleanup': a in ('deploy', 'redeploy', 'destroy')} for a in
+            actions = {a: {'available': True, 'cleanup': a in ('deploy', 'redeploy', 'destroy'), 'graceful': a in ('redeploy', 'destroy', 'stop', 'restart'),
+                           'node_filter': a in ('deploy', 'destroy', 'save'), 'max_workers': a in ('deploy', 'redeploy', 'destroy'),
+                           'skip_post_deploy': a in ('deploy', 'redeploy'), 'keep_mgmt_net': a in ('redeploy', 'destroy'), 'dry_run': a in ('deploy', 'apply')} for a in
                        ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect', 'inspect-all', 'create', 'delete', 'publish', 'revise')}
             actions['clone'] = {'available': False}
+            for a in ho.NODE_ACTIONS:
+                actions[a] = {'available': True}
+            actions['impairments'] = {'available': True}
             return {'protocol': 'clab-manager-operations-v1', 'version': __version__, 'actions': actions, 'roots': roots, 'network': False,
-                    'diagnostics': True, 'containerlab': '0.79.0'}
+                    'diagnostics': True, 'lifecycle_options': True, 'containerlab': '0.79.0'}
         if mode == 'browse':
             if (request.get('options') or {}).get('files'):
                 return ops_files_browse(str(request.get('path', '')))
@@ -538,6 +689,13 @@ def build(data_dir, port, classic=False):
             return ops_interfaces(request)
         if mode == 'netem-show':
             return ops_netem(request)
+        if mode == 'netem-show-all':
+            return ops_netem_all(request)
+        if mode in ('netem-set', 'netem-reset'):
+            return ops_netem_change(request)
+        if mode == 'apply-plan':
+            plan, failed, error = ops_plan()
+            return {'plan': plan, 'failed': failed, 'error': error}
         if mode == 'read':
             return ops_read(str(request.get('path', '')))
         if mode == 'popular':
@@ -559,7 +717,11 @@ def build(data_dir, port, classic=False):
                 raise ValueError(LOCK_SENTENCE)
             return ops_preview(request)
         if mode == 'run':
-            return ops_run(request, output or (lambda chunk: None), stopping)
+            ops_state['busy'] += 1   # the helper's host lock is held for the whole run
+            try:
+                return ops_run(request, output or (lambda chunk: None), stopping)
+            finally:
+                ops_state['busy'] -= 1
         raise ValueError('Unsupported helper mode: ' + str(mode))
     lo.remote = fake_remote
 
@@ -588,9 +750,20 @@ def build(data_dir, port, classic=False):
         with fake_git.lock:
             return {'commit': checkout.add_commit(message, {'by-hand.txt': ('edited on the VM at %s\n' % time.time()).encode()})}
 
+    def pending_changes(plan='changes'):
+        """What the pending-changes check and an apply review find: none (the lab matches its file), changes (r3 to create, r2 recreated) or failed (an error line)."""
+        if plan not in ('none', 'changes', 'failed'):
+            raise ValueError('plan is none, changes or failed')
+        ops_state['plan'] = plan
+        for lab in list(store.state['labs']):
+            app.state.operations.forget_plan(lab['id'])
+        return {'plan': plan}
+
     def reset():
         control.reset()
         devices.reset()
+        ops_state['plan'] = 'none'
+        ops_state['device'].clear(); ops_state['netem'].clear(); ops_state['seeded'].clear()
         return {'switches': {}, 'devices': 'reset'}
 
     def helper(request, repository=''):
@@ -630,7 +803,7 @@ def build(data_dir, port, classic=False):
         return {'lab': lab, 'repository': repository}
 
     actions = {'helper': helper, 'edit_device': devices.edit, 'device_config': devices.set_tag, 'lab_state': lab_state, 'hand_commit': hand_commit, 'reset': reset,
-               'remote_readme': remote_readme, 'prefer_repository': prefer_repository}
+               'remote_readme': remote_readme, 'prefer_repository': prefer_repository, 'pending_changes': pending_changes}
 
     def describe():
         with store.lock:
