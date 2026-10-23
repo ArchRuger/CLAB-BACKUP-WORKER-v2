@@ -222,3 +222,13 @@ test('C07: the capture dialog, the Tools card and the wire menu have the ids cap
  const page=loadPage();assert.deepEqual(page.failures,[]);
  for(const name of ['captureSummary','openLinkMenu','closeLinkMenu','endAllCaptureSessions','refreshCaptureSessions','captureMemory','rememberCapture','captureOpenAs','rememberOpenAs'])assert.equal(typeof get(page.context,name),'function',name);
 });
+
+test('C06: map-tools.js loads with the page after topology.js and device-diagnostics.js, with ?v=, and the Tools card names where the exports are',()=>{
+ assert.match(html,/<script src="\/static\/map-tools\.js\?v=\d+\.\d+\.\d+" defer><\/script>/);
+ assert.ok(listed.indexOf('map-tools.js')>listed.indexOf('topology.js')&&listed.indexOf('map-tools.js')>listed.indexOf('device-diagnostics.js'));
+ const page=loadPage();assert.deepEqual(page.failures,[]);
+ for(const name of ['mapLinkSchedule','mapToolsRendered','mapLinkVisibility','mapLinkDrawerClosed','mapWireText','mapFindApply','mapPictureSvg'])assert.equal(typeof get(page.context,name),'function',name);
+ assert.match(html,/<p class="caption">Edit map also downloads the map file\. Download picture… and Export to draw\.io… are in the Topology tab's More ▾ menu\.<\/p>/);
+ assert.doesNotMatch(html,/export it to draw\.io from the editor/);
+ for(const file of fs.readdirSync(dir).filter(n=>n.endsWith('.html')&&n!=='index.html'))assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/map-tools\.js/,file);
+});

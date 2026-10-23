@@ -17,9 +17,12 @@ function diagPlan(now){return {interval:DIAG_INTERVAL,errors:0,startedAt:now};}
 // The one poll plan for both sections: the next request is scheduled only after the previous answer; a 503 doubles the
 // wait up to 30 s and a success halves it back; three errors stop it (Retry); 30 minutes pause it (Resume). "Three errors"
 // means three without a success between them: a 503 is a back-off and neither counts as an error nor resets the count.
+// `plan.floor` (optional, default DIAG_INTERVAL) is the shortest wait a success may halve back to: the drawer keeps its 5 s, the
+// map's link state (map-tools.js) seeds 10 s so two successes in a row still wait 10 s.
 function diagPollNext(plan,answer,now){
  const next={interval:plan.interval,errors:plan.errors,startedAt:plan.startedAt};let stop='';
- if(answer&&answer.ok){next.errors=0;next.interval=Math.max(DIAG_INTERVAL,next.interval/2);}
+ if(plan.floor!==undefined)next.floor=plan.floor;
+ if(answer&&answer.ok){next.errors=0;next.interval=Math.max(plan.floor||DIAG_INTERVAL,next.interval/2);}
  else if(answer&&answer.status===503){next.interval=Math.min(DIAG_SLOWEST,next.interval*2);}
  else{next.errors+=1;if(next.errors>=DIAG_ERRORS)stop='retry';}
  if(!stop&&now-next.startedAt>=DIAG_PAUSE)stop='resume';
@@ -368,6 +371,7 @@ function diagRefreshLogs(){
 // fresh fetch replaces the content and the 30 minutes start again.
 function diagVisibilityChanged(){
  if(!diagPageVisible())return;
+ if(typeof mapLinkVisibility==='function')mapLinkVisibility();
  for(const name of ['interfaces','logs']){
   const sec=diagSec[name];
   if(!sec.open||sec.stopped||!(sec.hidden||diagWants(name)))continue;

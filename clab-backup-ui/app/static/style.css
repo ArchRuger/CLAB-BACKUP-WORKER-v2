@@ -1717,8 +1717,10 @@ dialog.drawer, dialog.node-details {
 /* the editor and the deploy preview draw layout, not live state */
 .op-layout-map .device-state-dot, .op-layout-map .device-state-glyph { display: none; }
 /* Note: the absolutely positioned toolbar is a stacking context inside an overflow:hidden stage,
-   so its More ▾ .menu-list is clipped by the stage edge; fine for three items — render a longer
-   menu outside the stage (section heading) instead of growing this one. */
+   so its More ▾ .menu-list is clipped by the stage edge. The menu now has seven items and a separator
+   (about 270 px against a stage minimum of 420 px, 360 px below 760 px); the limit is to be measured in
+   the fixture pass at 1440, 1280, 760 and 390 with the wrapped tool bar. If an item is cut off, render the
+   menu position: fixed from the button's rectangle rather than trimming it. */
 .topology-stage .map-tools {
   position: absolute;
   top: 12px;
@@ -1744,6 +1746,30 @@ dialog.drawer, dialog.node-details {
   overflow-wrap: anywhere;
 }
 #map-status:empty { display: none; }
+/* link state, find count and link hover: chips like #map-status, stacked above it (bottom-left) or at the bottom-right */
+.topology-stage #map-links, .topology-stage #map-find-count, .topology-stage #map-link-hover {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  padding: 4px 10px;
+  max-width: calc(100% - 24px);
+  background: rgba(255, 255, 255, .92);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.topology-stage #map-links { left: 12px; bottom: 44px; }
+.topology-stage #map-find-count { left: 12px; bottom: 76px; }
+.topology-stage #map-link-hover { right: 12px; bottom: 12px; max-width: min(60%, 520px); color: var(--text); }
+#map-links:empty, #map-find-count:empty, #map-link-hover:empty, #map-links[hidden], #map-find-count[hidden], #map-link-hover[hidden] { display: none; }
+.map-legend { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
+.map-legend svg { width: 24px; height: 8px; flex: none; }
+.map-legend .legend-down { fill: none; stroke: var(--danger); stroke-width: 3; stroke-dasharray: 2 4; }
+.map-legend .legend-impaired { fill: none; stroke: var(--warn); stroke-width: 2; stroke-dasharray: 7 4; }
+.map-tools .map-find-label { font-size: 12px; color: var(--muted); }
+.map-tools .map-find { width: 11em; max-width: 100%; }
 .topology-hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
 
 /* stand-alone map (legacy markup without a stage) */
@@ -1792,12 +1818,19 @@ dialog.drawer, dialog.node-details {
 .interface-label text { fill: var(--muted); font-size: 11px; }
 .map-device { cursor: pointer; }
 .device-body { stroke: var(--surface); stroke-width: 1; }
+/* boxed node style: the box, the name inside it, the badge on its corner */
+.device-box { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.5; }
+.map-device:hover .device-box, .map-device:focus-visible .device-box, .map-device.hover-end .device-box { stroke: var(--accent); stroke-width: 3; }
+.map-device.unmatched:hover .device-box { stroke: var(--line-strong); stroke-width: 1.5; }
+.line-arrow { stroke: none; }
 /* defaults for when the renderer omits fill (no iconColor / labelBackgroundColor); attribute fills still win */
 .device-body:not([fill]) { fill: var(--accent); }
 .device-label-bg:not([fill]) { fill: var(--ink); }
 .device-symbol { stroke: #fff; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .device-label text { fill: #fff; font-size: 11px; font-weight: 400; }
 .device-label-bg { fill-opacity: .95; }
+.device-label-boxed .device-label-bg:not([fill]), .device-label-boxed .device-label-bg { fill: transparent; fill-opacity: 0; }
+.device-label.device-label-boxed text { fill: var(--ink); font-size: 12px; }
 .unmatched-label { font-size: 11px; fill: var(--muted); }
 .map-device.unmatched { cursor: default; }
 .map-device.unmatched .device-body { stroke: var(--line-strong); stroke-dasharray: 3 2; }
@@ -1831,7 +1864,9 @@ dialog.drawer, dialog.node-details {
 .map-device.state-credentials .device-state-glyph .glyph-bang, .map-device.state-credentials .device-state-glyph [data-glyph="bang"] { display: inline; }
 .map-device.state-unavailable .device-state-glyph .glyph-hollow, .map-device.state-unavailable .device-state-glyph [data-glyph="hollow"] { display: inline; }
 .map-device.state-neutral .device-state-glyph .glyph-hollow, .map-device.state-neutral .device-state-glyph [data-glyph="hollow"] { display: inline; stroke: var(--neutral); }
-.map-device:hover .device-body, .map-device:focus-visible .device-body { stroke: var(--accent); stroke-width: 3; }
+.map-device:hover .device-body, .map-device:focus-visible .device-body, .map-device.hover-end .device-body { stroke: var(--accent); stroke-width: 3; }
+/* Find (dimmed keeps pointer events and focus) */
+.map-device.dimmed, .topology-wire.dimmed { opacity: .25; }
 .map-device.unmatched:hover .device-body { stroke: var(--line-strong); stroke-width: 1; }
 .diagram-selected { filter: drop-shadow(0 0 3px var(--accent)); }
 
@@ -1840,8 +1875,13 @@ dialog.drawer, dialog.node-details {
 path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke; }
 .topology-wire[role="button"] { cursor: pointer; }
 .topology-wire[role="button"]:hover path:not(.capture-hit), .topology-wire[role="button"]:focus-visible path:not(.capture-hit) { stroke: var(--accent); stroke-width: 4; }
+/* link hover (class set by map-tools.js) mirrors the :hover rule; a state colour keeps the stroke and the width shows the hover */
+.topology-wire.hover path:not(.capture-hit) { stroke: var(--accent); stroke-width: 4; }
 /* an impaired link (C05 4.3): dashed in the warning colour; the capture hit area keeps its 16 px transparent stroke, so right-click and click still open Capture */
 .topology-wire.impaired path:not(.capture-hit) { stroke: var(--warn); stroke-dasharray: 7 4; }
+/* a down link (C06): red and dotted, so it is not told by colour alone; written after .impaired so down wins the stroke */
+.topology-wire.link-down path:not(.capture-hit) { stroke: var(--danger); stroke-width: 3; stroke-dasharray: 2 4; }
+.topology-wire.link-down.hover path:not(.capture-hit) { stroke-width: 4; }
 .map-tools .map-impaired { color: var(--warn-strong); font-weight: 600; }
 
 /* expanded map (class toggled on #topology-view) */
@@ -2415,6 +2455,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .topology-stage { height: clamp(360px, calc(100dvh - 240px), 600px); min-height: 360px; }
   .topology-stage .map-tools { position: static; max-width: none; justify-content: flex-start; margin: 8px; }
   .topology-stage #map-status, .topology-stage .map-status { left: 8px; bottom: 8px; max-width: calc(100% - 16px); }
+  .topology-stage #map-links { left: 8px; bottom: 40px; max-width: calc(100% - 16px); }
+  .topology-stage #map-find-count { left: 8px; bottom: 72px; max-width: calc(100% - 16px); }
+  .topology-stage #map-link-hover { right: 8px; bottom: 104px; max-width: calc(100% - 16px); }
+  .map-tools .map-find { width: 100%; flex: 1 1 100%; }
   .map-tools #map-edit { margin-left: 0; }
   .map-expanded { inset: 0; border-radius: 0; padding: 10px; }
 
