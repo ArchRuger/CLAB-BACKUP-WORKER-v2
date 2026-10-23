@@ -33,4 +33,11 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
 
 ## Log
 
-- 2026-10-23 01:40 UTC: branch created; research workflow started at 01:33 UTC.
+- 2026-10-23 01:40 UTC: branch created; research workflow started at 01:21 UTC.
+- 2026-10-23 01:50 UTC: the `parity` lab deployed from `/srv/containerlab-node-manager/projects/parity/parity.clab.yaml`
+  (five nodes, management 172.20.20.111 to .115, published default logins); cJunosEvolved, cEOS, vJunos-switch and
+  XRv9k answer on SSH with their versions, vJunos-router still booting. Memory with all five up: about 29 GB used.
+- 2026-10-23 01:50 UTC: first slice committed: the kind `juniper_vjunosrouter` is known to the manager for backups,
+  downloads, saves, the lab-builder catalog and the labels; restore and network design stay off for it until the
+  live proof on `vrt` (then: `restore_junos.SUPPORTED_KINDS`, the `restore*` keys in `inventory.PLATFORMS`, and the
+  two tests that pin the absence). `docs/parity-campaign/` is history-exempt in `verify-release.py`.

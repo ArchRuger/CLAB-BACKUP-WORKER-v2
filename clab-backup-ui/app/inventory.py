@@ -16,12 +16,17 @@ JUNOS_DRIVER = {'os': 'junipernetworks.junos.junos', 'command': 'show configurat
                 'suffix': 'set', 'snapshot_suffix': 'cfg',
                 'restore': 'show configuration | no-more', 'restore_format': 'junos-hierarchical', 'restore_suffix': 'jcfg'}
 JUNOS_SWITCHES = ('juniper_vqfx', 'juniper_vjunosswitch')
-JUNOS_PLATFORMS = ('juniper_cjunosevolved', *JUNOS_SWITCHES)
+JUNOS_ROUTERS = ('juniper_vjunosrouter',)
+JUNOS_PLATFORMS = ('juniper_cjunosevolved', *JUNOS_SWITCHES, *JUNOS_ROUTERS)
 GENERIC_JUNOS = ('junos', 'junipernetworks.junos.junos')
 PLATFORMS = {
     'juniper_cjunosevolved': {'label': 'Junos', **JUNOS_DRIVER},
     'juniper_vqfx': {'label': 'Junos (vQFX)', **JUNOS_DRIVER},
     'juniper_vjunosswitch': {'label': 'Junos (vJunos-switch)', **JUNOS_DRIVER},
+    # vJunos-router: backups, downloads and saves only. No restore keys until the restore driver is proven live
+    # on this kind (restore_drivers.py lists the supported kinds), so no restore-grade candidate is captured.
+    'juniper_vjunosrouter': {'label': 'Junos (vJunos-router)',
+                             **{k: v for k, v in JUNOS_DRIVER.items() if not k.startswith('restore')}},
     # IOS XR and EOS: the running-config itself is a complete, loadable candidate; the companion artifact
     # is the same capture kept under its own name and hash so a restore never relabels backup text.
     'cisco_xrv9k': {'label': 'IOS-XR', 'os': 'cisco.iosxr.iosxr', 'command': 'show running-config', 'suffix': 'cfg',
@@ -37,6 +42,7 @@ DEFAULT_CREDENTIALS = {
     'juniper_cjunosevolved': ('admin', 'admin@123'),
     'juniper_vqfx': ('admin', 'admin@123'),
     'juniper_vjunosswitch': ('admin', 'admin@123'),
+    'juniper_vjunosrouter': ('admin', 'admin@123'),
     'cisco_xrv9k': ('clab', 'clab@123'),
     'arista_ceos': ('admin', 'admin'),
 }
@@ -74,6 +80,7 @@ def image_default_credentials(node):
 ALIASES = {'junos': 'juniper_cjunosevolved', 'junipernetworks.junos.junos': 'juniper_cjunosevolved',
            'vr-vqfx': 'juniper_vqfx', 'vqfx': 'juniper_vqfx',
            'vr-vjunosswitch': 'juniper_vjunosswitch', 'vjunosswitch': 'juniper_vjunosswitch',
+           'vr-vjunosrouter': 'juniper_vjunosrouter', 'vjunosrouter': 'juniper_vjunosrouter',
            'iosxr': 'cisco_xrv9k', 'cisco.iosxr.iosxr': 'cisco_xrv9k',
            'ceos': 'arista_ceos', 'vr-xrv9k': 'cisco_xrv9k', 'cjunosevolved': 'juniper_cjunosevolved', 'eos': 'arista_ceos', 'arista.eos.eos': 'arista_ceos', **{k:k for k in PLATFORMS}}
 SAFE_FIELDS = {'ansible_host','ansible_port','ansible_user','ansible_password','ansible_ssh_pass','ansible_network_os','clab_kind','ansible_become_password'}

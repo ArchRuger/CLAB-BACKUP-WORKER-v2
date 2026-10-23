@@ -86,7 +86,7 @@ unavailable, since this image has no backup driver.
 
 A device's configuration downloads as `<type>_<device>_<YYYY-MM-DD>_<HH-mm>UTC.<ext>`,
 for example `cjunosevo_GTW-2_2026-09-10_01-04UTC.cfg`: the type and extension come from
-the platform (`cjunosevo`, `vJunos-switch` and `vQFX` → `.cfg`, `IOS-XR` → `.txt`,
+the platform (`cjunosevo`, `vJunos-switch`, `vJunos-router` and `vQFX` → `.cfg`, `IOS-XR` → `.txt`,
 `CEOS` → `.conf`; an unknown platform reads `Device` and keeps the stored extension), the
 device is the short name frozen with that backup, and the time is when the device was
 captured, in UTC, never the download time. **Download all (ZIP)** is

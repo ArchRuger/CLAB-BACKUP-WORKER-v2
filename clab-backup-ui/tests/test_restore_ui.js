@@ -100,7 +100,7 @@ test('badge classes reflect status and escape the label text',()=>{
 test('restorePlatformLabel shows a short device-type label for known containerlab kinds only',()=>{
  const c=ctx();
  assert.equal(c.restorePlatformLabel('juniper_cjunosevolved'),'Junos Evolved');
- assert.equal(c.restorePlatformLabel('juniper_vjunosswitch'),'Junos');
+ assert.equal(c.restorePlatformLabel('juniper_vjunosswitch'),'Junos');assert.equal(c.restorePlatformLabel('juniper_vjunosrouter'),'Junos');
  assert.equal(c.restorePlatformLabel('juniper_vqfx'),'Junos');
  assert.equal(c.restorePlatformLabel('arista_ceos'),'EOS');
  assert.equal(c.restorePlatformLabel('cisco_xrv9k'),'IOS XR');

@@ -7,6 +7,7 @@ FORMATS = {
     'juniper_cjunosevolved': ('cjunosevo', 'cfg'),
     'juniper_vqfx': ('vQFX', 'cfg'),
     'juniper_vjunosswitch': ('vJunos-switch', 'cfg'),
+    'juniper_vjunosrouter': ('vJunos-router', 'cfg'),
     'cisco_xrv9k': ('IOS-XR', 'txt'),
     'arista_ceos': ('CEOS', 'conf'),
 }
