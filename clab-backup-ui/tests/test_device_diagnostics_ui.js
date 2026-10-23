@@ -560,3 +560,16 @@ test('hiding Retry or Resume while it holds focus moves focus to the section sum
   h.context.document.activeElement=null;h.context.diagRetryButton(name,'resume');h.context.diagRetryButton(name,'');assert.equal(summary.focused,1,'focus elsewhere is left alone');
  }
 });
+
+test('C06: diagPollNext with plan.floor 10000 keeps 10 s after two successes; without a floor the drawer behaves as before (5 s)',()=>{
+ const h=harness(),next=(plan,answer)=>h.context.diagPollNext(plan,answer,1);
+ let r=next({interval:10000,errors:0,startedAt:0,floor:10000},{ok:true});assert.equal(r.delay,10000);
+ r=next(r.plan,{ok:true});assert.equal(r.delay,10000,'two successes in a row still wait 10 s');assert.equal(r.plan.floor,10000,'the floor travels with the plan');
+ r=next(r.plan,{ok:false,status:503});assert.equal(r.delay,20000);r=next(r.plan,{ok:true});assert.equal(r.delay,10000,'a success halves back only to the floor');
+ const drawer=next(h.context.diagPlan(0),{ok:true});assert.equal(drawer.delay,5000);assert.equal('floor' in drawer.plan,false,'the drawer plan keeps its shape');
+});
+test('C06: diagVisibilityChanged tells the map once the page is visible, and not while it is hidden',()=>{
+ const h=harness({visible:false});let calls=0;h.context.mapLinkVisibility=()=>{calls++;};
+ h.context.diagVisibilityChanged();assert.equal(calls,0);
+ h.context.visible=true;h.context.diagVisibilityChanged();assert.equal(calls,1);
+});
