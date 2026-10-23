@@ -1,3 +1,27 @@
+# Parity campaign, chunks C06, C08 and C09: Topology tab, builder checks, Help and preferences — 1.31.6
+
+Preserve (C06-DESIGN §1, §2, §9):
+
+1. **Link state is one lab-wide helper call** (`interfaces` with `{all: true}`: the binding listing first, every
+   row's `labPath` trusted, then one fixed `containerlab inspect interfaces` argv, a reducer that keeps `name`,
+   `alias`, `state`, `type` only, capped at 512 containers × 256 rows). The manager route
+   `GET /api/operations/link-state` answers 200 with `available: false` and a sentence when the helper is old or the
+   lab unlinked, never a 409. No per-node fallback.
+2. **A wire's state is a class swap** (`link-up`, `link-down`, neither), decided by `mapLinkStates()` in
+   `map-tools.js`; every stroke rule is `.topology-wire.link-down path:not(.capture-hit)`; down wins over C05's
+   impaired; `mapWireText()` in `topology.js` composes the title and the accessible name from `data-base`,
+   `data-aria-base`, `data-state-text` and `data-impaired-text`, and neither feature rewrites the other's words.
+3. **One poll plan, C03's `diagPollNext` with a floor of 10 s**, run only while the Topology tab shows a `map` stage,
+   the page is visible, the drawer is closed and the lab is linked and Running or Partially running; it is scheduled
+   from the top of `refreshMap` and fetches nothing on a render. A map drawn before `map-tools.js` ran is drawn once
+   more by the script's last line (the script-load race: keep that line).
+4. **Arrange is a server-side saved map change** with the stored document and the drawing kept in step through
+   `keep_document`; its Undo memory lives in `LabOperations` only (never the Store), is keyed by the new revision,
+   is dropped by a 412 and kept by a busy 409. Download picture never posts to the manager and builds a `data:` URL
+   (the CSP refuses `blob:` images).
+5. **Builder check and preferences (C08, C09).** The YAML check is advisory and browser-only: it never blocks Apply, publish or revise and names no VM fact it did not fetch; the schema folder holds exactly the pinned files (`test_clab_schema.py`); the adapter change reaches browsers only through the `?v=` tag, so a bundle change always rides a release. The shortcuts dialog documents keys, it adds none; its rows cite `file:line` and `test_shell_ui.js`'s reverse pin fails on drift (refresh the cites, never loosen the pin). Preferences are per-browser conveniences read and written only through `shell.js`'s guarded helpers; Reset touches only the families marked `reset: true`.
+6. **Open points.** C06: the helper's link-state output is bounded but can exceed its input for non-ASCII aliases (fails closed as a 409; a byte-measured cut if it bites); Undo entries of removed labs are never dropped; the capabilities cache is not compared with the host revision. C08: findings inside an anchor or merge point at the anchor's lines (documented). C09: Reset is disabled whenever `localStorage` is blocked even if `sessionStorage` works. Campaign: C10 (the vJunos-router Load proof) and C11 (the editor 0.4.0 upgrade) are not started; the C07 open points stand.
+
 # Parity campaign, chunk C07: capture parity — 1.31.5
 
 Preserve (C07-DESIGN §1, §2, §9):

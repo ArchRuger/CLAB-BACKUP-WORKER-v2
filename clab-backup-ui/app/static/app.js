@@ -144,7 +144,7 @@ function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.31.5';$('app-version').textContent='v'+version;
+ const version=state.version||'1.31.6';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  if($('help-student-guide'))$('help-student-guide').hidden=!state.student_guide;

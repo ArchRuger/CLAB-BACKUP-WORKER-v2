@@ -1,3 +1,29 @@
+# Parity campaign, chunks C06, C08 and C09: Topology tab, builder checks, Help and preferences — 1.31.6
+
+Evidence by kind (this checkout on the owner's development VM; the `parity` lab). Three chunks in one release, each built, independently verified and fixed on its own branch (`claude/c06-int`, `wt-c08-s3`, `claude/c09-int`) before the merge.
+
+**Static and unit**
+
+- `node --test tests/*.js`: 1147 tests pass; `PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests`: 2906 tests, OK, 2 skipped (new `test_layout.py`, `test_map_tools_ui.js`, `test_clab_schema.py` (stdlib, the system-python group), `test_lab_builder_check_ui.js`, `test_preferences_ui.js`; cases in `test_host_diagnostics.py`, `test_device_diagnostics.py`, `test_lab_operations.py`, `test_topology.py`, `test_topology_ui.js`, `test_topology_menu_ui.js`, `test_page_load_ui.js`, `test_device_diagnostics_ui.js`; the golden draw.io fixture under `tests/fixtures/drawio/`).
+- `node --check`, `py_compile`, `verify-release.py`, `check_links.py`, `git diff --check`.
+
+**Fixture and browser**
+
+- `docs/parity-campaign/tools/check_c06.py` on a fresh fixture (scripted link state, old and containerlab helper
+  sentences, busy and stale arrange answers): exit 0 at 1440, 760 and 390 by its author (162 ok lines) and at 1440 by the verifier (54 ok lines); the 390 px menu fix re-checked in a browser on the fixture (the last item hit at top, middle and bottom).
+- `/clab-slice-verify` on C06 (six workers, three viewports, `check_c06.py` at 1440 with 54 checks): every acceptance check held, eight breaks (one high: a merge placed C05's tests in the wrong class; four medium: the script-load race fix, a transient 409 switching link state off, the poll mode kept across labs, the 390 px menu under the chip; three low), all but one fixed in this release, the eighth an open point; answers in C06-DESIGN §10.
+- `/clab-slice-verify` on C08 and on C09 earlier on their branches (answers in C08-DESIGN §10 and C09-DESIGN §10); C08's `node build.mjs --check` clean after the merge.
+
+**Live**
+
+- C06 on the parity lab through the manager rebuilt from the merged tree (C06-DESIGN §12): the lab-wide link state answered 5 of 5 devices; a `shutdown` of cEOS Ethernet1 over SSH read `dormant` within 12 s and `up` again after `no shutdown`; the A1 check (`set interfaces ge-0/0/0 disable` on vJunos-switch) left both ends `up`, so the `connected` wording for VM-based devices ships as designed; arrange (rows) moved five devices and rewrote the map document, Undo restored positions and revision exactly, a stale second Undo answered 412; the draw.io export answered rows/print and map/manager and refused a bogus layout with 400. C08 and C09 touch no device: no live pass.
+
+**Independent review**
+
+- `/clab-design-review` of C06, C08 and C09 (answered in each design's §9). For budget the full branch-review workflow was replaced by single read-only passes: `risk-reviewer` on C06's backend diff (no must-fix, three should-fix, all fixed: an old containerlab reported as a sentence, Undo refusing after a map save that left the drawing unchanged, a lab outside the trusted roots getting a sentence; C06-DESIGN §11), `clab-ui-reviewer` on C08 (no must-fix; `bridge` removed from the special endpoints after a `containerlab validate` probe on this VM, check limits no longer blocking errors, the caption only when a check ran, the gutter signature; C08-DESIGN §11) and on C09 (no must-fix; the Reset confirmation names Needs attention again, the shortcut pin hardened, Space on Help links; C09-DESIGN §11).
+
+**Not run.** The full `/clab-review-changes` workflow on C06, C08 and C09 (replaced as above); the browser chip, Find, hover and Download picture on the live lab (fixture evidence only); the link-state helper against a VM with a containerlab older than 0.64 (unit evidence only); no multi-browser live pass.
+
 # Parity campaign, chunk C07: capture parity — 1.31.5
 
 Evidence by kind (this checkout on the owner's development VM; the `parity` lab; the real session service).
