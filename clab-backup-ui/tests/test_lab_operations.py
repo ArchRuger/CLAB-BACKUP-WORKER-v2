@@ -813,7 +813,7 @@ class OperationAPITests(unittest.TestCase):
         def remote(host,req,*args):
             if req['mode']=='read':return dict(text=self.raw.decode(),sha256=hashlib.sha256(self.raw).hexdigest())
             if req['mode']=='preview':
-                affected=[dict(name=req['options']['container'],id='c1',state='running')] if req['action']=='restart-node' else []
+                affected=[dict(name=req['options']['container'],id='c1',state='running')] if req['action'] in lab_operations.NODE_ACTIONS else []
                 return dict(action=req['action'],name=req['name'],path=req['path'],source_hash=hashlib.sha256(self.raw).hexdigest(),digest=digest(req),warnings=[],affected=affected,argv=[],steps=[])
             if req['mode']=='run':args[0]('first line\nhost-secret\npassword: should-not-persist\n'+self.store.token+'\n');return dict(exit_code=0)
             return {}
@@ -1082,6 +1082,7 @@ class OperationAPITests(unittest.TestCase):
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
             lab=self.store.lab(self.lab_id);node=lab['nodes'][0]['name']
             short=lab['nodes'][0].get('definition_node') or lab['nodes'][0].get('short_name')
+            del lab['nodes'][1:]   # the fixture's own r2 is absent (destroyed): a different neighbour sentence, tested apart
             lab['nodes'].append({'name':'clab-training-r2','short_name':'r2','definition_node':'r2','kind':'juniper_vjunosswitch','discovered':True,'runtime_state':'exited'})
             lab['nodes'].append({'name':'clab-training-r3','short_name':'r3','definition_node':'r3','kind':'arista_ceos','discovered':True,'runtime_state':'running'})
             lab['drawing']={'nodes':[],'links':[[{'node':short,'interface':'eth1'},{'node':'r2','interface':'eth1'}],[{'node':short,'interface':'eth2'},{'node':'r3','interface':'eth1'}],[{'node':'r2','interface':'eth2'},{'node':'r3','interface':'eth2'}]]}
@@ -1793,3 +1794,233 @@ class OperationStopTests(unittest.TestCase):
         ident, _ = self.run_stopped(preview_answers=[generic, self.locked(), {'steps': []}])
         self.assertEqual(len(self.during), 3, 'the generic error did not end the follow-up')
         self.assertIn('only partly started', self.record(ident)['message'])
+
+
+class NodeActionAndOptionTests(unittest.TestCase):
+    """C05 S2: Start device and Stop device beside Restart device, the run options, the public `nodes` field, the plan cache drop."""
+    setUp = discovery_tests.DiscoveryTests.setUp
+    register = discovery_tests.DiscoveryTests.register
+    host = discovery_tests.DiscoveryTests.host
+    fixture = OperationAPITests.fixture
+    preview = OperationAPITests.preview
+    confirm = OperationAPITests.confirm
+    tearDown = OperationAPITests.tearDown
+
+    def post_preview(self, **body):
+        return self.client.post('/api/operations/preview', headers=self.auth, json=body)
+
+    def node(self, index=0): return self.store.lab(self.lab_id)['nodes'][index]['name']
+
+    def test_neighbour_note_words_a_stopped_and_a_destroyed_neighbour_apart_per_action(self):
+        note = lab_operations.neighbour_note
+        stopped = note('start-node', 'r1', 2, ['r2'], [])
+        self.assertEqual(len(stopped), 1); self.assertIn('comes back with this start', stopped[0]); self.assertIn('(Start device on it takes the start/restore path)', stopped[0])
+        self.assertIn('only 1 of 2 links', stopped[0])
+        again = note('restart-node', 'r1', 2, ['r2'], [])
+        self.assertIn('comes back with this restart', again[0]); self.assertIn('(Restart device… on it takes the start/restore path)', again[0])
+        gone = note('start-node', 'r1', 1, [], ['r2'])
+        self.assertEqual(gone, ['r2 was removed from the VM (destroyed, not stopped): its link to r1 is gone until Apply topology changes recreates r2; r1 may wait for that interface before it boots. '
+                                'Apply topology changes first (Lab actions ▾), then start this device.'])
+        self.assertIn('then restart this device', note('restart-node', 'r1', 2, [], ['r2', 'r3'])[0]); self.assertIn('r2, r3 were removed', note('restart-node', 'r1', 2, [], ['r2', 'r3'])[0])
+        both = note('start-node', 'r1', 2, ['r2'], ['r3']); self.assertEqual(len(both), 2)
+        self.assertEqual(note('start-node', 'r1', 1, [], []), [])
+        parked = note('stop-node', 'r1', 2, ['r2'], ['r3'])
+        self.assertEqual(parked, ['Its links are parked, not removed: Start device or Restart device brings them back; a neighbour that restarts meanwhile keeps waiting for this link.'])
+
+    def test_restart_links_splits_absent_neighbours_from_stopped_ones(self):
+        lab = {'nodes': [{'definition_node': 'r1', 'name': 'a'}, {'definition_node': 'r2', 'name': 'b', 'runtime_state': 'absent'},
+                         {'definition_node': 'r3', 'name': 'c', 'runtime_state': 'exited'}, {'definition_node': 'r4', 'name': 'd', 'runtime_state': 'running'}],
+               'drawing': {'links': [[{'node': 'r1'}, {'node': 'r2'}], [{'node': 'r1'}, {'node': 'r3'}], [{'node': 'r1'}, {'node': 'r4'}]]}}
+        self.assertEqual(lab_operations.restart_links(lab, 'r1'), (3, ['r3'], ['r2']))
+
+    def test_the_three_node_actions_resolve_one_device_and_refuse_the_same_bad_inputs(self):
+        with self.fixture() as remote, patch.object(self.service, 'refresh'):
+            node = self.node(); self.assertEqual(node, 'clab-training-r1')
+            for action in lab_operations.NODE_ACTIONS:
+                preview = self.preview(action, node=node)
+                sent = [c.args[1] for c in remote.call_args_list if c.args[1]['mode'] == 'preview'][-1]
+                self.assertEqual((sent['action'], sent['options']), (action, {'node': 'r1', 'container': 'clab-training-r1'}))
+                self.assertEqual((preview['node'], preview['node_label']), (node, 'r1'))
+            calls = len(remote.call_args_list)
+            label = lambda action: lab_operations.STOP_LABELS[action]
+            for action in lab_operations.NODE_ACTIONS:
+                for body, code, text in ((dict(action=action, lab_id=self.lab_id), 400, 'Choose the device to ' + action[:-5] + '.'),
+                                         (dict(action=action, lab_id=self.lab_id, node='clab-training-r9'), 404, 'not in the lab'),
+                                         (dict(action=action, lab_id=self.lab_id, node=node, options={'cleanup': True}), 400, label(action) + ' takes no options.'),
+                                         (dict(action=action, node=node), 400, label(action) + ' needs a lab from My labs.'),
+                                         (dict(action=action, lab_id=self.lab_id, node=node, options={'node': 'r2'}), 400, 'resolved by the manager')):
+                    refused = self.post_preview(**body); self.assertEqual(refused.status_code, code, (action, refused.text)); self.assertIn(text, refused.text)
+            refused = self.post_preview(action='deploy', lab_id=self.lab_id, node=node)
+            self.assertEqual((refused.status_code, refused.json()['detail']), (400, 'Only Restart device, Start device and Stop device name a single device.'))
+            self.assertFalse(any(c.args[1]['mode'] == 'preview' for c in remote.call_args_list[calls:]), 'nothing reached the helper')
+
+    def test_stop_device_and_start_device_are_refused_by_the_known_state_before_the_helper_is_asked(self):
+        with self.fixture() as remote, patch('app.lab_operations.discovery_fresh', return_value=True):
+            lab = self.store.lab(self.lab_id); node = self.node()
+            calls = len(remote.call_args_list)
+            lab['nodes'][0].update(discovered=True, runtime_state='exited')
+            refused = self.post_preview(action='stop-node', lab_id=self.lab_id, node=node)
+            self.assertEqual((refused.status_code, refused.json()['detail']), (409, 'Device clab-training-r1 is exited; there is nothing to stop.'))
+            self.assertEqual(self.post_preview(action='start-node', lab_id=self.lab_id, node=node).status_code, 200)
+            lab['nodes'][0].update(discovered=True, runtime_state='running')
+            refused = self.post_preview(action='start-node', lab_id=self.lab_id, node=node)
+            self.assertEqual((refused.status_code, refused.json()['detail']), (409, 'Device clab-training-r1 is already running.'))
+            lab['nodes'][0].update(discovered=False, runtime_state='absent')
+            for action, tail in (('stop-node', ''), ('start-node', ' Apply topology changes (Lab actions ▾) recreates it.')):
+                refused = self.post_preview(action=action, lab_id=self.lab_id, node=node)
+                self.assertEqual((refused.status_code, refused.json()['detail']), (409, 'r1 is not deployed on the VM, so there is nothing to ' + action[:-5] + '.' + tail))
+            self.assertEqual([c.args[1]['action'] for c in remote.call_args_list[calls:] if c.args[1]['mode'] == 'preview'], ['start-node'], 'only the one allowed review reached the helper')
+
+    def test_known_limits_and_neighbour_notes_reach_the_review_per_action(self):
+        with self.fixture():
+            lab = self.store.lab(self.lab_id); lab['nodes'][0]['kind'] = 'cisco_xrv9k'
+            del lab['nodes'][1:]
+            lab['nodes'].append({'name': 'clab-training-r2', 'short_name': 'r2', 'definition_node': 'r2', 'kind': 'arista_ceos', 'discovered': False, 'runtime_state': 'absent'})
+            lab['drawing'] = {'nodes': [], 'links': [[{'node': 'r1', 'interface': 'eth1'}, {'node': 'r2', 'interface': 'eth1'}]]}
+            node = self.node()
+            start = self.preview('start-node', node=node)['warnings']
+            self.assertTrue(any('factory configuration' in w for w in start)); self.assertTrue(any('r2 was removed from the VM' in w and 'then start this device' in w for w in start))
+            stop = self.preview('stop-node', node=node)['warnings']
+            self.assertTrue(any('fresh disk' in w and 'Back up the configuration first' in w for w in stop), stop)
+            self.assertTrue(any(w.startswith('Its links are parked') for w in stop)); self.assertFalse(any('removed from the VM' in w for w in stop))
+            lab['nodes'][0]['kind'] = 'juniper_vjunosswitch'
+            self.assertTrue(any('only Redeploy lab brings the device back' in w for w in self.preview('stop-node', node=node)['warnings']))
+
+    def test_the_stale_review_rule_holds_for_start_device_and_names_the_action(self):
+        with self.fixture(), patch.object(self.service, 'refresh'), patch.object(self.app.state.operations.pool, 'submit') as submit:
+            node = self.node()
+            first = self.preview('start-node', node=node); second = self.preview('start-node', node=node)
+            self.confirm(first['token']); args = submit.call_args.args; args[0](*args[1:])
+            stale = self.confirm(second['token']); self.assertEqual(stale.status_code, 409); self.assertIn('ran after this review. Review the start again.', stale.text)
+            third = self.preview('stop-node', node=node); self.store.lab(self.lab_id)['nodes'][0]['definition_node'] = 'r9'
+            changed = self.confirm(third['token']); self.assertEqual(changed.status_code, 409); self.assertIn('device changed after this review. Review the stop again.', changed.text)
+
+    def test_jobs_labels_and_the_device_state_for_start_and_stop(self):
+        with self.fixture(), patch.object(self.service, 'refresh'), patch.object(self.app.state.operations.pool, 'submit') as submit:
+            node = self.node()
+            for action, status, text in (('start-node', 'starting', 'containerlab start --node'), ('stop-node', 'stopping', 'containerlab stop --node')):
+                job = self.confirm(self.preview(action, node=node)['token']).json()
+                self.assertEqual((job['action'], job['node'], job['node_label'], job['neighbours_absent']), (action, node, 'r1', ['r2']))   # the fixture's r2 is not deployed
+                public = next(l for l in self.client.get('/api/state', headers=self.auth).json()['labs'] if l['id'] == self.lab_id)
+                row = public['nodes'][0]; self.assertEqual(row['nos_login']['status'], status); self.assertIn(text, row['nos_login']['message']); self.assertFalse(row['ssh_ready'])
+                self.assertEqual(public['nodes'][1]['nos_login']['status'] not in ('starting', 'stopping', 'restarting'), True)
+                self.assertEqual(lab_operations.restarting_nodes(self.store.state, self.lab_id), {node: action})
+                args = submit.call_args.args; args[0](*args[1:])
+                self.assertEqual(lab_operations.restarting_nodes(self.store.state, self.lab_id), {})
+            self.assertEqual(self.store.lab(self.lab_id).get('last_deployed', ''), '', 'a device start or stop is not a deployment')
+
+    def test_start_device_counts_restored_links_and_says_started_when_the_container_exits(self):
+        with self.fixture(), patch.object(self.service, 'refresh'), patch.object(self.app.state.operations.pool, 'submit') as submit:
+            lab = self.store.lab(self.lab_id); node = self.node()
+            lab['drawing'] = {'nodes': [], 'links': [[{'node': 'r1', 'interface': 'eth1'}, {'node': 'r2', 'interface': 'eth1'}]]}
+            job = self.confirm(self.preview('start-node', node=node)['token']).json()
+            def remote(host, req, *args): args[0]('Restored link r1:eth1 <-> r2:eth1\n'); return dict(exit_code=0)
+            def exited(wait=False): lab['nodes'][0].update(discovered=True, runtime_state='exited', runtime_status='Exited (1) 1 second ago')
+            with patch('app.lab_operations.remote', side_effect=remote), patch.object(self.service, 'refresh', side_effect=exited), patch('app.lab_operations.time.sleep'):
+                args = submit.call_args.args; args[0](*args[1:])
+            saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
+            self.assertEqual(saved['status'], 'failed'); self.assertTrue(saved['message'].startswith('containerlab started the device, but its container is exited'), saved['message'])
+
+    def test_stop_device_forgets_the_proven_login_once_and_runs_no_settle_check(self):
+        with self.fixture(), patch.object(self.service, 'refresh'), patch.object(self.app.state.operations.pool, 'submit') as submit:
+            node = self.node(); key = (self.lab_id, node)
+            job = self.confirm(self.preview('stop-node', node=node)['token']).json()
+            readiness = self.app.state.readiness
+            with patch.object(readiness, 'forget', wraps=readiness.forget) as forget, patch.object(self.app.state.operations, 'settled_after_restart') as settle:
+                args = submit.call_args.args; args[0](*args[1:])
+            self.assertEqual([c.args for c in forget.call_args_list], [(key,)]); settle.assert_not_called()
+            self.assertEqual(next(j for j in self.store.state['operations'] if j['id'] == job['id'])['message'], 'Operation completed')
+
+    def test_stopping_start_and_stop_device_jobs_reads_cancelled_with_their_aftermath(self):
+        self.assertEqual(lab_operations.stop_message('start-node'), 'You stopped Start device. The lab may be only partly started: Start device again.')
+        self.assertEqual(lab_operations.stop_message('stop-node'), 'You stopped Stop device. The lab may be only partly stopped: Stop device again (or Start device if it should run).')
+        with self.fixture(), patch.object(self.service, 'refresh'), patch.object(self.app.state.operations.pool, 'submit') as submit:
+            node = self.node()
+            for action in ('start-node', 'stop-node'):
+                job = self.confirm(self.preview(action, node=node)['token']).json()
+                self.assertEqual(self.client.post('/api/operations/' + job['id'] + '/cancel', headers=self.auth, json={}).status_code, 202)
+                args = submit.call_args.args; args[0](*args[1:])
+                saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
+                self.assertEqual(saved['status'], 'cancelled'); self.assertIn('before it started', saved['message'])
+        for action in ('start-node', 'stop-node'): self.assertIn(action, lab_operations.STOPPABLE); self.assertIn(action, lab_operations.LIFECYCLE_JOBS)
+
+    def test_run_options_are_validated_by_the_manager_and_reach_the_helper_exactly(self):
+        with self.fixture() as remote, patch.object(self.app.state.operations.pool, 'submit') as submit:
+            lab = self.store.lab(self.lab_id); lab['deployment_name'] = 'training'
+            calls = len(remote.call_args_list)
+            for options, text in (({'nodes': ['r9']}, "Choose devices from this lab's topology file: r9 is not in it."),
+                                  ({'nodes': ['r1', 'r8', 'r9']}, 'r8, r9 are not in it.'), ({'nodes': 'r1'}, 'literal topology node names'), ({'nodes': []}, 'literal topology node names'),
+                                  ({'nodes': ['r1', 'r1']}, 'literal topology node names'), ({'nodes': [1]}, 'literal topology node names'),
+                                  ({'nodes': ['r1'], 'cleanup': True}, 'Clean up cannot be combined with chosen devices'),
+                                  ({'max_workers': '4'}, 'Max workers must be a whole number from 1 to 64.'), ({'max_workers': 0}, 'Max workers'), ({'max_workers': 65}, 'Max workers'),
+                                  ({'max_workers': True}, 'Max workers'), ({'skip_post_deploy': 1}, 'Invalid boolean option.'), ({'keep_mgmt_net': 'yes'}, 'Invalid boolean option.')):
+                refused = self.post_preview(action='destroy', lab_id=self.lab_id, options=options)
+                self.assertEqual(refused.status_code, 400, (options, refused.text)); self.assertIn(text, refused.text)
+            for action in ('start', 'stop', 'restart', 'apply', 'inspect', 'restart-node'):
+                body = dict(action=action, lab_id=self.lab_id, options={'max_workers': 2})
+                if action == 'restart-node': body['node'] = self.node()
+                refused = self.post_preview(**body)
+                self.assertEqual(refused.status_code, 400, action)
+                self.assertIn('This action takes no run options.', refused.text)
+            self.assertFalse(any(c.args[1]['mode'] == 'preview' for c in remote.call_args_list[calls:]), 'no refusal reached the helper')
+            lab_status_patch = patch('app.lab_operations.lab_status', return_value={'status': 'Running'})
+            with lab_status_patch:
+                refused = self.post_preview(action='deploy', lab_id=self.lab_id, options={'nodes': ['r1']})
+            self.assertEqual(refused.status_code, 409); self.assertIn('already deployed', refused.text)
+            options = {'nodes': ['r1', 'r2'], 'max_workers': 4, 'skip_post_deploy': True, 'keep_mgmt_net': True}
+            with patch('app.lab_operations.lab_status', return_value={'status': 'Not deployed'}):
+                self.assertEqual(self.post_preview(action='deploy', lab_id=self.lab_id, options={'nodes': ['r1'], 'max_workers': 4}).status_code, 200)
+            sent = [c.args[1] for c in remote.call_args_list if c.args[1]['mode'] == 'preview'][-1]
+            self.assertEqual(sent['options'], {'nodes': ['r1'], 'max_workers': 4}, 'the helper is sent exactly the options the page sent')
+            ok = self.preview('destroy', options={'nodes': ['r1'], 'keep_mgmt_net': True})
+            sent = [c.args[1] for c in remote.call_args_list if c.args[1]['mode'] == 'preview'][-1]
+            self.assertEqual(sent['options'], {'nodes': ['r1'], 'keep_mgmt_net': True})
+
+    def test_a_filtered_job_carries_the_public_nodes_and_a_filtered_destroy_or_save_records_no_deployment(self):
+        with self.fixture(), patch.object(self.service, 'refresh'), patch.object(self.app.state.operations.pool, 'submit') as submit:
+            self.store.lab(self.lab_id)['deployment_name'] = 'training'
+            for action in ('destroy', 'save'):
+                job = self.confirm(self.preview(action, options={'nodes': ['r2', 'r1']})['token']).json()
+                self.assertEqual(job['nodes'], ['r2', 'r1'])
+                args = submit.call_args.args; args[0](*args[1:])
+                saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
+                self.assertEqual((saved['status'], saved['nodes']), ('succeeded', ['r2', 'r1']))
+                self.assertEqual(self.store.lab(self.lab_id).get('last_deployed', ''), '', 'a filtered ' + action + ' never records a deployment')
+                listed = next(j for j in self.client.get('/api/state', headers=self.auth).json()['operations'] if j['id'] == job['id'])
+                self.assertEqual(listed['nodes'], ['r2', 'r1']); self.assertNotIn('output', listed)
+                self.assertEqual(next(j for j in self.client.get('/api/operations', headers=self.auth).json() if j['id'] == job['id'])['nodes'], ['r2', 'r1'])
+            plain = self.confirm(self.preview('destroy')['token']).json(); self.assertNotIn('nodes', plain)
+            args = submit.call_args.args; args[0](*args[1:])
+            with patch('app.lab_operations.lab_status', return_value={'status': 'Not deployed'}):
+                job = self.confirm(self.preview('deploy', options={'nodes': ['r1']})['token']).json()
+            args = submit.call_args.args; args[0](*args[1:])
+            self.assertTrue(self.store.lab(self.lab_id)['last_deployed'], 'the filtered deploy is the deployment that created the lab')
+
+    def test_an_impairment_in_flight_refuses_a_preview_and_a_confirm_and_never_reaches_the_helper(self):
+        with self.fixture() as remote, patch.object(self.app.state.operations.pool, 'submit'):
+            token = self.preview('deploy')['token']; calls = len(remote.call_args_list)
+            with self.app.state.operations.impairing(self.lab_id):
+                for refused in (self.post_preview(action='deploy', lab_id=self.lab_id), self.confirm(token)):
+                    self.assertEqual((refused.status_code, refused.json()['detail']), (409, 'Wait for the current lab operation to finish.'))
+            self.assertEqual(len(remote.call_args_list), calls, 'the helper was not asked'); self.assertEqual(self.store.state['operations'], [])
+            self.assertEqual(self.confirm(token).status_code, 200); self.assertEqual(self.app.state.operations.in_flight_impairments, set())
+
+    def test_the_plan_cache_is_dropped_before_the_job_reads_terminal_and_by_settings_and_sync(self):
+        operations = self.app.state.operations
+        with self.fixture(), patch.object(self.service, 'refresh'), patch.object(operations.pool, 'submit') as submit:
+            job = self.confirm(self.preview('apply')['token']).json()
+            seen = []
+            real_save = self.store.save
+            def watching():
+                terminal = [j for j in self.store.state['operations'] if j['status'] in ('succeeded', 'failed', 'cancelled', 'interrupted')]
+                if terminal: seen.append(self.lab_id in operations.plan_cache)
+                return real_save()
+            operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})
+            with patch.object(self.store, 'save', side_effect=watching):
+                args = submit.call_args.args; args[0](*args[1:])
+            self.assertTrue(seen and not any(seen), 'the cache was already empty at every write that showed the job terminal: %r' % seen)
+            gen = operations.plan_gen.get(self.lab_id, 0)
+            operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})
+            self.assertEqual(self.client.put('/api/labs/' + self.lab_id + '/operations-settings', headers=self.auth, json={'favorite': True}).status_code, 200)
+            self.assertIn(self.lab_id, operations.plan_cache, 'a settings change without a path keeps it')
+            operations.forget_plan(self.lab_id); self.assertNotIn(self.lab_id, operations.plan_cache); self.assertEqual(operations.plan_gen[self.lab_id], gen + 1)

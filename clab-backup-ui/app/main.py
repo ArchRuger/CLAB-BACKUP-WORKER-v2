@@ -23,8 +23,9 @@ from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
 from .discovery import Discovery, expected_container, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path, stored_file, topology_names
-from .lab_operations import LabOperations, design_rechecking, last_deployed, operation_busy, restarting_nodes
+from .lab_operations import LabOperations, NODE_ACTION_STATUS, design_rechecking, last_deployed, operation_busy, restarting_nodes
 from .device_diagnostics import DeviceDiagnostics
+from .impairments import Impairments
 from .git_progress import GitProgress
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
@@ -50,6 +51,7 @@ def create_app(data_dir=None):
     runner.topology_source=lambda lab: discovery.sources.get(lab.get('deployment_name') or '')
     operations=LabOperations(store,discovery,readiness_monitor)
     device_diagnostics=DeviceDiagnostics(store,operations,discovery)
+    impairments=Impairments(store,operations,device_diagnostics)
     git_progress=GitProgress(store,runner)
     restore=RestoreService(store,runner,git_progress)
     telemetry_retirement=TelemetryRetirement(store,services)
@@ -84,6 +86,8 @@ def create_app(data_dir=None):
     app.state.operations=operations
     app.state.device_diagnostics=device_diagnostics
     device_diagnostics.install(app)   # before operations.install: its GET /api/operations/{job_id} would take /logs, and these routes supersede its images and browse
+    app.state.impairments=impairments
+    impairments.install(app)   # after device_diagnostics and before operations.install: its GET /api/operations/{job_id} would take /impairments and /apply-plan
     operations.install(app)
     app.state.git_progress=git_progress
     git_progress.install(app)
@@ -180,7 +184,7 @@ def create_app(data_dir=None):
             row['nos_login']=login_state(lab,n,row['available'],checks.get((lab['id'],n['name'])))
             # A device with a Restart device job queued or running is neither ready nor merely booting:
             # its login is proven again only after the restart has run (the job drops the old proof).
-            if n['name'] in restarting: row['nos_login']={'status':'restarting','message':'Restarting on the VM (containerlab restart --node); its login is checked again afterwards.'}
+            if n['name'] in restarting: row['nos_login']=dict(zip(('status','message'),NODE_ACTION_STATUS[restarting[n['name']]]))
             row['ssh_ready']=row['login_configured'] and row['nos_login']['status'] in ('ready','unmonitored')
             result['nodes'].append(row)
         result['deployment']=lab_status(store.state,lab)
