@@ -1,3 +1,35 @@
+# Parity campaign: C03 drawer sections, C04 console and facts, the C05 helper — 1.31.3
+
+Preserve (the designs under `docs/parity-campaign/` carry the reasons and the review answers):
+
+1. **The diagnostics poll plan** (`diagPollNext` in `device-diagnostics.js`, C03-DESIGN §4.1, §11): one request in
+   flight per section, a 503 is a back-off never an error, three errors without a success stop with Retry, nothing
+   while the tab is hidden or the drawer is closed, the resume replaces the content with `tail=2000`; the browser sends
+   `lab_id` and the manager's node name only; Export and Copy never reach the manager; the Logs status announces the
+   first load, an error and a stopped follow, never a routine poll.
+2. **The console is gated on the server** (`console_gate` in `node_services.py`, C04-DESIGN §1.6, §2.2): kind from the
+   topology never the editable platform, a linked running container, not restarting, health not starting or unhealthy,
+   not younger than the floor, an address; the UI's `consoleState` only mirrors `console_hold`; one console per device
+   keyed `(lab_id, name)`, the slot reserved in the locked block; the idle clock counts browser input only; the probe
+   (no byte within 3 s) is the second defence against vrnetlab's launcher; the manager never sends credentials; only
+   `console.open` and `console.close` with lab and node are logged. `CONSOLE_PORTS` lists only kinds documented by
+   their image's project and proven live (`juniper_vqfx` waits).
+3. **Discovery's four container fields** are copied into the node as `discovered_*` and cleared when the container is
+   absent; `container_name` stays private; the public row's `container`, `console` and `console_hold` are computed under
+   the store lock.
+4. **The helper's lifecycle modes** (C05-DESIGN §2, §9): `netem-set` and `netem-reset` take the host flock
+   non-blocking through the one `locked()` helper that preview and run use, carry `digest({mode, name, options,
+   expected_id})` and refuse a container whose id changed; `eth0`, `lo`, host-network and `container:*` nodes are
+   refused; `start-node` and `stop-node` are preview/run like `restart-node`; the node filter never reaches `cleanup`
+   and never records a deployment for a filtered destroy or save; `INSPECT_FORMAT` reads optional map keys with
+   `index`. The manager side (`impairments.py`) and the UI are the next release.
+5. **Open points.** On Linux `O_DIRECTORY|O_NOFOLLOW` on a symlinked parent fails with `ENOTDIR`, so the helper's
+   "Symlink paths are not supported" sentence is unreachable for that case (the open is still refused). The impairment
+   line's live JSON shape is confirmed with C05's manager slice. The C05 manager slice is built on the side branch `claude/c05-manager` (its two Python tests expect the UI
+   slices' vocabulary mirror, in build); C06 to C09 designs are answered and their builds follow; the student guide
+   is not served until the owner revises it (C09-DESIGN §8). A `1×1` terminal resize on the console ends the session
+   like the SSH branch (in-range sizes are accepted and ignored).
+
 # Parity campaign, chunks C01 and C02, the C03 helper and API — 1.31.2
 
 The campaign's plan, research and the per-chunk designs with their review answers are under

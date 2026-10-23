@@ -113,3 +113,13 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   on `d303f38..` (the whole 1.31.3 scope). Next: its fixes, the Python suite, release 1.31.3 (records drafted in the
   session's scratchpad), `start-manager.sh`; then C05 S3/S4 UI from the manager slice's route report, the C06/C07
   builds from their answered designs.
+- 2026-10-23 07:40 UTC, **release 1.31.3** (the C03 drawer sections and the rest of its UI, C04 serial console and
+  container facts, the C05 helper): the `/clab-review-changes` on `d303f38..cd91e2d` (17 confirmed, 1 must-fix already
+  fixed) answered in C03-DESIGN §12, C04-DESIGN §10, C05-DESIGN §10 and every finding applied (`c741320`); the C03 UI
+  verified and passed live, the console passed live on `vrt`. In flight, not in this release: the C05 manager slice on
+  branch `claude/c05-manager` (`0cd4225`) with its drawer (S3) and map/reviews (S4) UI slices in the worktrees
+  `c05-s3` and `c05-s4`; C07 S1 and S2 in agent worktrees; the C06, C07, C08 (amendment in progress) and C09 designs
+  answered. Next: merge `claude/c05-manager` with S3 and S4 onto the branch, `/clab-slice-verify` and
+  `/clab-review-changes` for C05, the live pass (delay on `vsw`–`vrt` seen in a ping, Reset, Clear all, a filtered
+  destroy and Apply of `ceos`, Stop and Start device), release 1.31.4; C07 likewise; then C06, C08, C09 builds; C10 when
+  the VM is quiet.

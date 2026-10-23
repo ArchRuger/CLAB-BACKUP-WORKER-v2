@@ -1,3 +1,69 @@
+# Parity campaign: C03 drawer sections, C04 console and facts, the C05 helper — 1.31.3
+
+Evidence by kind (this checkout on the owner's development VM; the `parity` lab; containerlab 0.79.0; Docker 27.5.1).
+
+**Static and unit**
+
+- `node --test tests/*.js`: 889 tests pass (817 at 1.31.2; new `test_device_diagnostics_ui.js` and cases in
+  `test_operations_ui.js`, `test_page_load_ui.js`, `test_shell_ui.js`, `test_debug_ui.js`, `test_terminal_ui.js`,
+  `test_readiness_ui.js`, `test_topology_menu_ui.js`, `test_status_ui.js`).
+- `PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests`: 2761 tests, OK, 2 skipped
+  (2689 at 1.31.2; new `test_node_console.py`, `test_host_lifecycle.py`, cases in `test_nodes.py`, `test_discovery.py`,
+  `test_manager_reset.py`, `test_diagnostics.py`, `test_host_diagnostics.py`, `test_gateway_whitelist.py`).
+- `node --check` on every changed script, `python3 -m py_compile` on the changed modules, `python3 deploy/verify-release.py`,
+  `python3 docs/maintenance-audit/tools/check_links.py`, `git diff --check`.
+
+**Fixture and browser**
+
+- `/clab-slice-verify` on the C03 UI slice (six workers that did not write it, from its worktree): the seven slice test
+  files 177/177, `node --test tests/*.js` 859/859; the attack held 12 of 16 acceptance checks and found two medium
+  breaks (the Diagnostics page's containerlab version that no backend emitted; Lab files offering other labs' files the
+  viewer refused) and eleven low ones; the fixture pass at 1440, 760 and 390 in Chromium and Firefox (poll plan with
+  injected 503s and errors, hidden-tab resume, Follow cursor, Export, the inspect table, Lab files, Images). Every
+  medium and low finding was fixed and re-checked in a fixture smoke at 1280 and 390 (answers in C03-DESIGN §11).
+- C04 UI: the builder's fixture smoke with a seeded vJunos-router container whose health could be flipped, 52 of 52
+  checks at 1440 and 760 (the Container section and its unlinked form, Console enabled only while healthy with the
+  server's reason otherwise, Copy focus surviving the poll, the terminal page's console mode and its refusals).
+- C03 UI fixes from the live pass re-checked in Chromium (running-only caption, empty-filter row, ID cell).
+
+**Live (the `parity` lab through the manager)**
+
+- C03 UI, read-only, Chromium and Firefox at 1440 and 760: on `vrt`, `vsw` and `xrv9k` the Interfaces table (roles, Junos
+  port aliases, rates from the second sample, no sideways scroll), Logs (tail 200 and 2000, Find, Follow with the cursor
+  every 5 s, Export equal to the shown redacted text, vrnetlab's launcher lines), request discipline (`lab_id` and `node`
+  only, nothing before a section opens, nothing after the drawer closes), the inspect table with Owner `archtop`, Lab
+  files down to `ceos/flash/startup-config` in the viewer, Images with the five parity images used by `parity`, the
+  containerlab version in the menu. On `ceos` and `cjunos` both sections answered 409: the helper's inspect format was
+  refused by Docker for a container without a HEALTHCHECK; fixed in the helper (`index .State "Health"`), re-checked after the VM rebuild and helper refresh: `GET /api/operations/interfaces` answered 16 interfaces for `ceos` and 15 for
+  `cjunos` with the three roles, `logs` answered on both, `vrt` unchanged with health `healthy`; the capabilities answer
+  reports the new lifecycle options and the `start-node` and `impairments` actions available.
+- C04 console on `vrt`: Chromium at 1440 and 760 and Firefox for the drawer: the Container section (name, kind, the running image beside
+  the topology's, IPv4, the Console row, State `running · healthy`, seven Copy buttons with the shown values), Console
+  enabled; the console connected 1.2 s after the click, a bare Enter brought `login:` within 0.3 s, `admin` logged in,
+  `show version` answered Model vmx and Junos 26.2R1.7 (the pager needs Enter per page: a serial console has no window
+  size), `exit` returned to `login:`; keystroke echo median about 20 ms; a second tab was refused in 1.7 s with the
+  "already open from this manager (since …)" sentence and one TCP connection to port 5000 existed throughout; after
+  Disconnect the second tab reconnected; an outside holder (`nc` on port 5000) gave the held sentence after 3.1 s and
+  the manager's socket closed; eight sessions logged eight `console.open` and `console.close` pairs with lab and node
+  only, the manager's logs held neither the typed input nor the address; `ceos` and `cjunos` show no Console button.
+  Break found and fixed: discovery read the container id under `id` while containerlab writes `container_id`, so the
+  ID row read "Not reported" live.
+- C01 and C02 evidence stands as recorded at 1.31.2.
+
+**Independent review**
+
+- `/clab-design-review` of C04 (22 confirmed: two must-fix on the console being taken while vrnetlab's launcher still
+  needs it, answered with the server-side gate; C04-DESIGN §9) and of C05 (30 confirmed, three must-fix; C05-DESIGN §9).
+- `/clab-review-changes` on `d303f38..` (the C03 UI with its fixes, C04, the C05 helper): 17 confirmed (1 must-fix, 7 should-fix, 9 optional; 1 refuted; 42 agents). The must-fix (discovery's
+  container id under the wrong key) had been fixed from the live pass before the review ended; every should-fix and
+  optional finding was applied (keyboard focus kept across polls and when Retry hides, Lab files bounded on the
+  server as well as in the browser, the console kind table and the session loop's limits pinned, a test that every
+  test file is in the CI lists, the lab-wide impairment read tolerating one device's failed show and carrying the
+  container id, the digest's docstring, the guides and CLAUDE.md naming the console and the diagnostics). Answers in
+  C03-DESIGN §12, C04-DESIGN §10, C05-DESIGN §10.
+
+**Not run.** The C05 manager and UI (next release); no restore onto vJunos-router (C10); no image published.
+
 # Parity campaign, chunks C01 and C02, the C03 helper and API — 1.31.2
 
 Evidence by kind (this checkout on the owner's development VM; the `parity` lab of five nodes: vJunos-switch

@@ -22,7 +22,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.31.2'
+VERSION = '1.31.3'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024

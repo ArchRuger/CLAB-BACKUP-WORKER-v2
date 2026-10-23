@@ -4,6 +4,45 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.31.3
+
+**Parity campaign: the C03 drawer sections, C04 (serial console and container facts) and the helper half of C05.**
+The campaign record is [`docs/parity-campaign/`](parity-campaign/README.md).
+
+- **Interfaces and Logs in the device drawer** ([LAB-OPERATIONS](LAB-OPERATIONS.md) "Diagnostics"). Two sections,
+  closed by default, ask the VM nothing until opened. Interfaces lists the container's interfaces with the NOS port
+  name, state, MAC, MTU, byte counters and, from the second sample, rates, with a Capture button per data interface and
+  the impairment line; Logs shows the container's last lines with a Tail choice, Find, Follow (appending with a cursor,
+  never a repeated stamped line), Refresh and a text Export built in the browser. One poll plan governs both: chained
+  requests, 5 s, a busy VM doubles the interval up to 30 s and never counts as an error, three errors without a success
+  stop with Retry, a 30-minute pause with Resume, nothing while the tab is hidden or the drawer is closed. Private keys,
+  passwords and key-style lines are redacted by the manager before anything reaches the browser.
+- **The inspect table** gains ID and Owner, sortable headers, a "Filter devices" box and a caption counting running
+  devices; **Lab files** opens the lab's folder in the topology browser's dialog, bounded to that folder, with a
+  read-only viewer for configuration and text files; **Images on this VM** (Manager menu) lists the VM's images with
+  size, age and the labs that use them; the Manager menu footer and the Diagnostics page name the containerlab release.
+- **A serial console for the vrnetlab kinds** ([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md) "Serial console"):
+  vJunos-switch, vJunos-router and XRv9k offer **Console ↗** beside Open CLI in the device drawer, the Devices view and
+  the map's menu. It is the console port of the virtual machine (TCP 5000 of the container, reached directly like SSH,
+  no helper), so it works when SSH does not answer or the management configuration is broken. The manager sends no
+  credentials: the device shows its own login. The console opens only once the container reports healthy (vrnetlab's
+  launcher uses it during the first boot), never while a restart runs or within two minutes of the container's start,
+  one session per device at a time (a second tab is told when the first opened), 15 minutes without typing or 4 hours
+  end it, and the terminal page's toolbar, exports and chords apply. Only `console.open` and `console.close` are logged.
+- **Container facts in the drawer**: a Container section with the container's name, id, kind, the running image beside
+  the topology's, both addresses and the console state, from discovery alone (containerlab's inspect now keeps the id,
+  both addresses and the image); an unlinked lab reads one sentence. **Start fresh** waits for open consoles as it does
+  for SSH sessions.
+- **The operations helper** gains the mutating modes C05 builds on (the manager and UI follow in the next release):
+  `netem-set` and `netem-reset` per interface under the host lock with a review digest bound to the request and the
+  container id the drawer showed, a lab-wide `netem-show-all`, `start-node` and `stop-node` (containerlab's own node
+  selector, refused by state), the apply dry-run plan inside the apply review and a read-only `apply-plan`, a validated
+  node filter for deploy, destroy and save, and the `max_workers`, `skip_post_deploy` and `keep_mgmt_net` flags probed
+  from containerlab's help; management and host-network interfaces are refused in the helper. The container binding
+  reads the optional health field in a form Docker accepts for containers without a HEALTHCHECK (the live pass found
+  cEOS and cJunosEvolved refused by the previous form).
+- Try again on a stopped Start, Apply or Restart without a stored request opens a redeploy review (a C02 follow-up).
+
 ## Changes in 1.31.2
 
 **Parity campaign, chunks C01 and C02, and the helper and API half of C03.** The campaign (feature parity with
