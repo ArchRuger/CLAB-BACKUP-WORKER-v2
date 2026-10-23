@@ -885,16 +885,16 @@ test('the Manager menu Help group: the toggle never closes the menu, collapsed i
  toggle.dispatch('click');const link=containerlab.dispatch('click');assert.equal(link.prevented,false,'a link is never prevented: the browser opens its tab');assert.equal(h.managerList.hidden,true);
 });
 const FAMILY_SEED={local:{'clab.terminal.fontSize':'16','clab.opened.l':'t','clab.dismissed.j':'t','clab.design.draft.l':'{}','clab-builder:draft:x':'{}','clab-builder:templates':'{}','clab-builder:templates-version':'1','react-topoviewer-grid-style':'dots','contextPanelSide':'left','mui-mode':'light','clab.capture.l.node:r1':'[]','clab.capture.openas':'one','other.thing':'1'},
- session:{'clab.homeTab':'all','clab.notice.k':'1','activeLab':'l','clab.request.j':'{}','git-save-request:l':'{}','op-return':'{}'}};
+ session:{'clab.homeTab':'all','clab.notice.k':'1','clab-builder:note-dismissed':'k','activeLab':'l','clab.request.j':'{}','git-save-request:l':'{}','op-return':'{}'}};
 const plain=value=>JSON.parse(JSON.stringify(value));
 test('preferenceInventory counts every family once, ignores foreign keys and leaves no probe behind',()=>{
  const h=harness(FAMILY_SEED);const inv=plain(h.context.preferenceInventory());
  assert.equal(inv.blocked,false);assert.equal(inv.writable,true);assert.equal(h.context.localStorage.getItem('clab.probe'),null);
  const count=Object.fromEntries(inv.families.map(f=>[f.id,f.count]));
- assert.deepEqual(count,{'terminal-font':1,opened:1,dismissed:1,'design-drafts':1,'builder-drafts':1,'builder-templates':2,'editor-view':3,capture:2,'home-tab':1,notices:1,'active-lab':1,requests:1,'save-requests':1,'op-return':1});
+ assert.deepEqual(count,{'terminal-font':1,opened:1,dismissed:1,'design-drafts':1,'builder-drafts':1,'builder-templates':2,'editor-view':3,capture:2,'home-tab':1,notices:1,'builder-note':1,'active-lab':1,requests:1,'save-requests':1,'op-return':1});
  assert.ok(!inv.families.some(f=>f.keys.includes('other.thing')||f.keys.includes('clab.probe')));assert.equal(inv.terminalFont,16);
  assert.deepEqual(inv.families.filter(f=>!f.reset).map(f=>f.id),['design-drafts','builder-drafts','builder-templates','active-lab','requests','save-requests','op-return']);
- const families=vm.runInContext('PREFERENCE_FAMILIES',h.context);assert.equal(families.length,14);
+ const families=vm.runInContext('PREFERENCE_FAMILIES',h.context);assert.equal(families.length,15);
  for(const f of families)assert.equal(f.match('clab.opened'),false,'a prefix family needs its trailing dot: '+f.id);
 });
 test('preferenceInventory: a blocked store is blocked with empty families; a full store is not blocked but not writable',()=>{
@@ -909,7 +909,7 @@ test('preferenceInventory: a blocked store is blocked with empty families; a ful
 });
 test('resetPreferences removes exactly the reset:true keys and never a draft, template, request or consumed marker',()=>{
  const h=harness(FAMILY_SEED);const r=plain(h.context.resetPreferences());
- assert.deepEqual(r,{cleared:10,blocked:false});
+ assert.deepEqual(r,{cleared:11,blocked:false});   // the dismissed lab builder note (C08) is a reset:true tab item
  const left=[...h.context.localStorage.map.keys()].sort();
  assert.deepEqual(left,['clab-builder:draft:x','clab-builder:templates','clab-builder:templates-version','clab.design.draft.l','other.thing']);
  assert.deepEqual([...h.context.sessionStorage.map.keys()].sort(),['activeLab','clab.request.j','git-save-request:l','op-return']);

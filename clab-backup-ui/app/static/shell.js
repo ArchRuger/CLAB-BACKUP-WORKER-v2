@@ -326,6 +326,7 @@ const PREFERENCE_FAMILIES=[
  {kind:'localStorage',match:k=>k.startsWith('clab.capture.'),id:'capture',reset:true},
  {kind:'sessionStorage',match:k=>k==='clab.homeTab',id:'home-tab',reset:true},
  {kind:'sessionStorage',match:k=>k.startsWith('clab.notice.'),id:'notices',reset:true},
+ {kind:'sessionStorage',match:k=>k==='clab-builder:note-dismissed',id:'builder-note',reset:true},
  {kind:'sessionStorage',match:k=>k==='activeLab',id:'active-lab',reset:false},
  {kind:'sessionStorage',match:k=>k.startsWith('clab.request.'),id:'requests',reset:false},
  {kind:'sessionStorage',match:k=>k.startsWith('git-save-request:'),id:'save-requests',reset:false},

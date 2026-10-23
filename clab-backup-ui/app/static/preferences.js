@@ -9,7 +9,7 @@
 // and each cited line (row or exclusion) to be a keydown site, so a stale cite fails.
 const SHORTCUT_EXCLUSIONS=[
  {source:'home.js:124',reason:'Escape in Find a lab only cancels the browser’s own clearing of a search field: the term is kept, Clear empties it.'},
- {source:'lab-builder-page.js:323',reason:'Enter in the new-lab name field submits a form field: a browser default.'},
+ {source:'lab-builder-page.js:391',reason:'Enter in the new-lab name field submits a form field: a browser default.'},
  {source:'save-drawers.js:1020',reason:'The save drawer’s keydown delegate carries the folder chooser rows and Enter on a form control.'},
  {source:'save-header.js:667',reason:'The Save chip panel’s keydown delegate carries the folder chooser rows and Enter on a form control.'}];
 
@@ -48,6 +48,7 @@ function prefsConfirmSentence(inventory){
  const tab=[];
  if(c('home-tab'))tab.push('the Home list tab');
  if(c('notices'))tab.push('the closed notices');
+ if(c('builder-note'))tab.push('the dismissed lab builder note');
  if(!here.length&&!tab.length)return 'Nothing is stored for the manager in this browser.';
  const parts=[];
  if(here.length)parts.push(`In this browser this forgets ${prefsJoin(here)}.`);
@@ -57,9 +58,9 @@ function prefsConfirmSentence(inventory){
 }
 // The short line above the buttons: only the totals; the family list is the collapsed "What exactly".
 function prefsConfirmSummary(inventory){
- const n=['terminal-font','opened','editor-view','capture','dismissed','home-tab','notices'].reduce((a,id)=>a+prefsCount(inventory,id),0);
+ const n=['terminal-font','opened','editor-view','capture','dismissed','home-tab','notices','builder-note'].reduce((a,id)=>a+prefsCount(inventory,id),0);
  if(!n)return 'Nothing is stored for the manager in this browser.';
- const closed=prefsCount(inventory,'dismissed'),tab=prefsCount(inventory,'home-tab')+prefsCount(inventory,'notices');
+ const closed=prefsCount(inventory,'dismissed'),tab=prefsCount(inventory,'home-tab')+prefsCount(inventory,'notices')+prefsCount(inventory,'builder-note');
  const extra=(closed?` ${prefsPlural(closed,'closed warning shows','closed warnings show')} again and ${closed===1?'its lab reads':'their labs read'} Needs attention.`:'')+(tab?' Some items change in this tab only.':'');
  return `Reset forgets ${prefsPlural(n,'remembered item')} of this browser.${extra} Drafts, templates and Try again requests are kept.`;
 }
@@ -92,6 +93,7 @@ function prefsMarkup(inventory,display,font,homeWord){
  const tab=`<section><h3>Remembered in this tab</h3><dl class="kv">`
   +prefsRow('Home list tab',esc(word))
   +prefsRow('Closed notices',String(c('notices')))
+  +prefsRow('Dismissed lab builder note',c('builder-note')?'yes':'no')
   +`</dl><h4>Kept by Reset</h4><dl class="kv">`
   +prefsRow('Try again requests',String(c('requests')))
   +prefsRow('A save being sent',String(c('save-requests')))
