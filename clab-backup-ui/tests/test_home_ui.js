@@ -274,3 +274,33 @@ test('C09: the field, its value and the markup of an unchanged list survive poll
  const src=fs.readFileSync(path.join(__dirname,'../app/static/home.js'),'utf8');
  assert.doesNotMatch(src,/localStorage|sessionStorage|location\.|history\.|addEventListener\('keydown',[^)]*Escape.*filter/,'no storage, no URL');
 });
+
+// C09 fixes
+test('C09 fixes: a whitespace-only term is empty for the count, Clear, the empty sentence and the live region',()=>{
+ const h=filterHarness([labOf('a','Alpha'),labOf('b','Beta')]);
+ h.context.renderHome();h.type('   ');
+ assert.equal(h.element('home-filter-count').textContent,'');assert.equal(h.clear.hidden,true);assert.equal(h.element('home-filter-empty').hidden,true);assert.deepEqual(cardNames(h).sort(),['Alpha','Beta']);
+ h.fire();assert.equal(h.element('home-filter-live').textContent,'');
+});
+test('C09 fixes: the count and the live sentence say "1 lab" for one lab',()=>{
+ const h=filterHarness([labOf('a','Alpha')]);
+ h.context.renderHome();h.field.focus();h.type('alp');
+ assert.equal(h.element('home-filter-count').textContent,'1 of 1 lab');h.fire();assert.equal(h.element('home-filter-live').textContent,'1 of 1 lab shown');
+ const two=filterHarness([labOf('a','Alpha'),labOf('b','Beta')]);two.context.renderHome();two.type('alp');
+ assert.equal(two.element('home-filter-count').textContent,'1 of 2 labs');two.fire();assert.equal(two.element('home-filter-live').textContent,'1 of 2 labs shown');
+});
+test('C09 fixes: Escape in the field is cancelled (the browser would clear a search field) and keeps the term; other keys are left alone',()=>{
+ const h=filterHarness([labOf('a','Alpha'),labOf('b','Beta')]);
+ h.context.renderHome();h.type('alp');
+ const press=key=>{const e={key,prevented:false,preventDefault(){this.prevented=true;}};h.field.onkeydown(e);return e.prevented;};
+ assert.equal(press('Escape'),true);assert.equal(h.field.value,'alp');assert.deepEqual(cardNames(h),['Alpha']);
+ assert.equal(press('a'),false);assert.equal(press('Tab'),false);
+});
+test('C09 fixes: a mousedown on the empty part of the filter row keeps the focus in the field; on a control it does nothing',()=>{
+ const h=filterHarness([labOf('a','Alpha'),labOf('b','Beta')]);
+ h.context.renderHome();h.setActive(h.field);
+ const down=target=>{const e={target,prevented:false,preventDefault(){this.prevented=true;}};h.row.onmousedown(e);return e.prevented;};
+ assert.equal(down(h.row),true,'the second click of a double-click on a vanished Clear');
+ assert.equal(down(h.field),false);assert.equal(down(h.clear),false);
+ h.setActive(null);assert.equal(down(h.row),false,'nothing to protect when the field is not focused');
+});

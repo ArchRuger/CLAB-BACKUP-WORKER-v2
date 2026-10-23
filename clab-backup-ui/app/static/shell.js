@@ -350,5 +350,9 @@ function resetPreferences(){
  return {cleared,blocked:false};
 }
 function mediaMatches(query){try{return !!(typeof window!=='undefined'&&typeof window.matchMedia==='function'&&window.matchMedia(query).matches);}catch{return false;}}
-function terminalFontPreference(){const v=Number(shellGet('localStorage','clab.terminal.fontSize'));return TERMINAL_FONT_SIZES.includes(v)?v:TERMINAL_FONT_DEFAULT;}
+// The size a terminal opens at: terminal.js clampFont() semantics (nothing stored or not a number: the default; any other number: rounded to the nearest of the eight).
+function terminalFontPreference(){
+ const raw=shellGet('localStorage','clab.terminal.fontSize');if(raw===null||raw===undefined)return TERMINAL_FONT_DEFAULT;
+ const v=Math.round(Number(raw));return Number.isFinite(v)?Math.max(TERMINAL_FONT_SIZES[0],Math.min(TERMINAL_FONT_SIZES[TERMINAL_FONT_SIZES.length-1],v)):TERMINAL_FONT_DEFAULT;
+}
 function setTerminalFontPreference(value){const v=Number(value);return TERMINAL_FONT_SIZES.includes(v)&&shellSet('localStorage','clab.terminal.fontSize',String(v));}

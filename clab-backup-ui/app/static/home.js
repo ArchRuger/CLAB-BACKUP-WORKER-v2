@@ -71,11 +71,12 @@ function homeLabMatch(lab,ls,term){
  const hit=(lab.nodes||[]).map(n=>n.short_name||n.name).find(n=>n&&textMatch(t,[n]));
  return {match:byName||byState||!!hit,device:!byName&&!byState&&hit?String(hit):''};
 }
+const homeLabsCount=n=>n===1?'1 lab':n+' labs';
 let homeFilterTimer=null;
 function homeFilterSentence(){
  const term=homeFilterTerm();if(!String(term).trim())return '';
  const labs=(state.labs||[]).filter(l=>!l.hidden),shown=labs.filter(l=>homeLabMatch(l,homeLabState(l),term).match).length;
- return shown?`${shown} of ${labs.length} labs shown`:'No lab matches. Try part of a lab name, a state or a device name.';
+ return shown?`${shown} of ${homeLabsCount(labs.length)} shown`:'No lab matches. Try part of a lab name, a state or a device name.';
 }
 // The one live region (#home-filter-live) is written here only: once, 500 ms after the last input or Clear. The poll never writes it.
 function homeFilterAnnounce(){homeFilterTimer=null;const live=$('home-filter-live');if(live)live.textContent=homeFilterSentence();}
@@ -94,12 +95,12 @@ function renderHome(){
  if($('home-hidden-note')){const note=loaded?homeHiddenNote(all):'';$('home-hidden-note').textContent=note;$('home-hidden-note').hidden=!note;}
  for(const name of Object.keys(HOME_TABS)){const button=$('home-tab-'+name);if(!button)continue;const on=name===tab;if(typeof button.setAttribute==='function'){button.setAttribute('aria-selected',on?'true':'false');button.setAttribute('tabindex',on?'0':'-1');}if(button.classList&&typeof button.classList.toggle==='function')button.classList.toggle('active',on);}
  if($('home-tab-note'))$('home-tab-note').textContent=HOME_TABS[tab].note;
- const term=homeFilterTerm(),matches=labs.map(l=>({lab:l,...homeLabMatch(l,homeLabState(l),term)})).filter(m=>m.match),viaDevice=new Map(matches.map(m=>[m.lab.id,m.device]));
+ const term=homeFilterTerm().trim(),matches=labs.map(l=>({lab:l,...homeLabMatch(l,homeLabState(l),term)})).filter(m=>m.match),viaDevice=new Map(matches.map(m=>[m.lab.id,m.device]));
  const row=$('home-filter-row');
  if(row){const focused=typeof document!=='undefined'&&!!document&&!!row.contains&&row.contains(document.activeElement);row.hidden=!loaded||(labs.length<2&&!term&&!focused);}
  if($('home-filter-clear'))$('home-filter-clear').hidden=!term;
- if($('home-filter-count'))$('home-filter-count').textContent=term?`${matches.length} of ${labs.length} labs`:'';
- const none=$('home-filter-empty');if(none){const show=!!String(term).trim()&&labs.length>0&&!matches.length;none.textContent=show?`No lab matches \u201c${String(term).trim()}\u201d. Try part of a lab name, a state such as Running, or a device name.`:'';none.hidden=!show;}
+ if($('home-filter-count'))$('home-filter-count').textContent=term?`${matches.length} of ${homeLabsCount(labs.length)}`:'';
+ const none=$('home-filter-empty');if(none){const show=!!term&&labs.length>0&&!matches.length;none.textContent=show?`No lab matches \u201c${term}\u201d. Try part of a lab name, a state such as Running, or a device name.`:'';none.hidden=!show;}
  const cards=$('lab-cards');if(cards){homeMarkup(cards,homeOrder(matches.map(m=>m.lab),tab).map(l=>homeCard(l,viaDevice.get(l.id))).join(''));cards.hidden=!matches.length;if(typeof cards.setAttribute==='function')cards.setAttribute('aria-labelledby','home-tab-'+tab);}
 }
 if($('home')){
@@ -117,7 +118,13 @@ if($('home')){
   $('home-tabs').addEventListener('click',e=>{const b=e.target&&typeof e.target.closest==='function'?e.target.closest('[data-home-tab]'):null;if(b)homeSelectTab(b.dataset.homeTab);});
   $('home-tabs').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const names=Object.keys(HOME_TABS),i=names.indexOf(homeCurrentTab()),next=e.key==='Home'?0:e.key==='End'?names.length-1:(i+(e.key==='ArrowRight'?1:-1)+names.length)%names.length;homeSelectTab(names[next]);const button=$('home-tab-'+names[next]);if(button&&typeof button.focus==='function')button.focus();});
  }
- if($('home-filter'))$('home-filter').oninput=()=>{renderHome();homeFilterSchedule();};
+ if($('home-filter')){
+  $('home-filter').oninput=()=>{renderHome();homeFilterSchedule();};
+  // A type=search input clears itself on Escape in Chromium and Firefox; the design keeps the term (only Clear empties it), so the element's own handler cancels that default.
+  $('home-filter').onkeydown=e=>{if(e.key==='Escape')e.preventDefault();};
+ }
+ // A second click of a double-click on Clear lands where Clear was: keep the focus in the field instead of dropping it to the page.
+ if($('home-filter-row'))$('home-filter-row').onmousedown=e=>{const f=$('home-filter');if(e.target===$('home-filter-row')&&f&&typeof document!=='undefined'&&document.activeElement===f)e.preventDefault();};
  if($('home-filter-clear'))$('home-filter-clear').onclick=()=>{const f=$('home-filter');if(f){f.value='';if(typeof f.focus==='function')f.focus();}renderHome();homeFilterSchedule();};
  if($('home-deploy'))$('home-deploy').onclick=()=>{if(typeof openDeploy==='function')openDeploy();};
  if($('home-upload'))$('home-upload').onclick=()=>{if(typeof opUpload==='function')opUpload();};

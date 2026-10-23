@@ -120,11 +120,30 @@ test('the dialog reads storage only through the shell.js helpers: no stand-ins, 
 });
 test('SHORTCUT_EXCLUSIONS lists each file:line with a reason',()=>{
  const h=harness();const list=run(h,'SHORTCUT_EXCLUSIONS');
- assert.ok(list.length>=8);
+ assert.ok(list.length>=4);   // only real keydown sites that are not rows (the stale non-site entries were dropped; the pin in test_shell_ui.js checks each cite)
  for(const e of list){assert.match(e.source,/^[a-z-]+\.js:\d+$/);assert.ok(e.reason.length>10);}
  assert.equal(new Set(list.map(e=>e.source)).size,list.length);
 });
 test('source pins: no network, Store, storage names, global listeners or inline styles; one call of resetPreferences, in the helper',()=>{
  for(const re of [/\bfetch\(/,/\bapi\(/,/\bjson\(/,/document\.addEventListener/,/window\.addEventListener/,/localStorage/,/sessionStorage/,/===\s*['"]\?['"]/,/style=/])assert.doesNotMatch(source,re,String(re));
  assert.equal((source.match(/resetPreferences\(/g)||[]).length,1);
+});
+
+test('C09 fixes: the confirmation is one short paragraph with the total and a collapsed "What exactly" holding the family list',()=>{
+ const h=harness();
+ const inv={blocked:false,writable:true,families:fam({opened:2,dismissed:1,'design-drafts':4})};
+ const m=run(h,`prefsMarkup(${JSON.stringify(inv)},{},14,'')`);
+ const box=m.slice(m.indexOf('id="prefs-reset-confirm"'),m.indexOf('id="prefs-reset-go"'));
+ assert.match(box,/<p>Reset forgets 3 remembered items of this browser\. Drafts, templates and Try again requests are kept\.<\/p><details><summary>What exactly<\/summary><p>In this browser this forgets the Last opened times of 2 labs/);
+ assert.doesNotMatch(box,/<details open/,'collapsed');
+ assert.equal(run(h,`prefsConfirmSummary({families:${JSON.stringify(fam({opened:1}))}})`),'Reset forgets 1 remembered item of this browser. Drafts, templates and Try again requests are kept.');
+ assert.equal(run(h,`prefsConfirmSummary({families:${JSON.stringify(fam({'design-drafts':2}))}})`),'Nothing is stored for the manager in this browser.');
+});
+test('C09 fixes: after Reset the page behind the dialog is rendered at once (a guarded call)',()=>{
+ const h=harness({inventory:{blocked:false,writable:true,families:fam({dismissed:2})}});let renders=0;
+ h.context.render=()=>{renders++;};
+ h.els['manager-preferences'].onclick();h.els['prefs-reset'].onclick();h.els['prefs-reset-go'].onclick();
+ assert.equal(renders,1);
+ const bare=harness({inventory:{blocked:false,writable:true,families:fam({dismissed:2})}});bare.els['manager-preferences'].onclick();bare.els['prefs-reset'].onclick();
+ assert.doesNotThrow(()=>bare.els['prefs-reset-go'].onclick(),'no render() in a bare context');
 });

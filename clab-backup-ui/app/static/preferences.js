@@ -5,13 +5,10 @@
 // setTerminalFontPreference); the dialogs' buttons are wired on their own elements. It sends nothing to the manager.
 
 // Every keydown listener of the page scripts that is deliberately not a row of the shortcuts dialog, with its reason (section 3).
-// The reverse pin in tests/test_shell_ui.js requires each keydown site to be a data-source of a row in index.html or to be listed here.
+// The reverse pin in tests/test_shell_ui.js requires each keydown site to be a data-source of a row in index.html or to be listed here,
+// and each cited line (row or exclusion) to be a keydown site, so a stale cite fails.
 const SHORTCUT_EXCLUSIONS=[
- {source:'app.js:547',reason:'Previous and Next device in the device panel are buttons without a key.'},
- {source:'shell.js:190',reason:'The lab switcher is a details element: Escape closing it is the dialog’s first sentence.'},
- {source:'shell.js:269',reason:'The Escape handler itself is the dialog’s first sentence.'},
- {source:'shell.js:159',reason:'The Escape handler of the Save chip and Load panels is the dialog’s first sentence.'},
- {source:'topology.js:111',reason:'The Escape handler of the map and its device menu is the dialog’s first sentence.'},
+ {source:'home.js:124',reason:'Escape in Find a lab only cancels the browser’s own clearing of a search field: the term is kept, Clear empties it.'},
  {source:'lab-builder-page.js:323',reason:'Enter in the new-lab name field submits a form field: a browser default.'},
  {source:'save-drawers.js:1020',reason:'The save drawer’s keydown delegate carries the folder chooser rows and Enter on a form control.'},
  {source:'save-header.js:667',reason:'The Save chip panel’s keydown delegate carries the folder chooser rows and Enter on a form control.'}];
@@ -58,6 +55,12 @@ function prefsConfirmSentence(inventory){
  parts.push('Drafts, templates and Try again requests are kept.');
  return parts.join(' ');
 }
+// The short line above the buttons: only the totals; the family list is the collapsed "What exactly".
+function prefsConfirmSummary(inventory){
+ const n=['terminal-font','opened','editor-view','capture','dismissed','home-tab','notices'].reduce((a,id)=>a+prefsCount(inventory,id),0);
+ if(!n)return 'Nothing is stored for the manager in this browser.';
+ return `Reset forgets ${prefsPlural(n,'remembered item')} of this browser. Drafts, templates and Try again requests are kept.`;
+}
 // inventory: shell.js preferenceInventory(); display: {motion, contrast, forced}; font: the effective terminal size;
 // homeWord: 'recent' | 'all' | '' (prefsHomeWord). Only the font number and that word are ever interpolated.
 function prefsMarkup(inventory,display,font,homeWord){
@@ -66,7 +69,7 @@ function prefsMarkup(inventory,display,font,homeWord){
  const displayHtml=`<section><h3>Display settings the manager follows</h3><p class="caption">From your system or browser; the manager stores nothing for them.</p><dl class="kv">${prefsRow('Reduced motion',prefsOnOff(d.motion))}${prefsRow('More contrast',prefsOnOff(d.contrast))}${prefsRow('Forced colours',prefsOnOff(d.forced))}</dl><p class="caption">${PREFS_APPEARANCE}</p></section>`;
  const resetBtn=`<button type="button" class="button secondary" id="prefs-reset"${blocked?` disabled title="${esc(PREFS_BLOCKED_RESET)}"`:''}>Reset browser preferences…</button>`;
  const resetHtml=`<section><div class="dialog-actions">${blocked?`<span class="caption">${PREFS_BLOCKED_RESET}</span>`:''}${resetBtn}</div>`
-  +(blocked?'':`<div id="prefs-reset-confirm" class="banner warn" role="group" aria-label="Confirm reset" hidden><p>${esc(prefsConfirmSentence(inv))}</p><div class="dialog-actions"><button type="button" class="button secondary" id="prefs-reset-keep">Keep</button><button type="button" class="button danger" id="prefs-reset-go">Reset</button></div></div>`)+'</section>';
+  +(blocked?'':`<div id="prefs-reset-confirm" class="banner warn" role="group" aria-label="Confirm reset" hidden><div><p>${esc(prefsConfirmSummary(inv))}</p><details><summary>What exactly</summary><p>${esc(prefsConfirmSentence(inv))}</p></details></div><div class="dialog-actions"><button type="button" class="button secondary" id="prefs-reset-keep">Keep</button><button type="button" class="button danger" id="prefs-reset-go">Reset</button></div></div>`)+'</section>';
  if(blocked)return `<p>${PREFS_BLOCKED_BODY}</p>${displayHtml}${resetHtml}`;
  const options=PREFS_FONT_SIZES.map(n=>`<option value="${n}"${n===size?' selected':''}>${n} px${n===PREFS_FONT_DEFAULT?' (default)':''}</option>`).join('');
  const terminal=`<section><h3>Terminal</h3><div class="field"><label for="pref-terminal-font">Terminal text size</label><select id="pref-terminal-font"${writable?'':' disabled'}>${options}</select></div>${writable?'':`<p class="caption">${PREFS_FULL}</p>`}</section>`;
@@ -118,6 +121,7 @@ function prefsRender(){
 function prefsReset(){
  const result=resetPreferences()||{cleared:0};
  prefsRender();prefsFocus('prefs-reset');
+ if(typeof render==='function')render();   // Home cards and lab banners read the dismissed warnings again now, not at the next poll
  if(result.blocked){prefsStatus(PREFS_BLOCKED_RESET);return result;}
  prefsStatus(`Browser preferences reset: ${prefsPlural(Number(result.cleared)||0,'item')} cleared. Terminals opened from now on use the default text size.`);
  return result;

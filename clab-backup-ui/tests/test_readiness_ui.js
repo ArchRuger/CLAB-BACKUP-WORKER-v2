@@ -452,3 +452,12 @@ test('C09: the Devices search uses textMatch: case, address and platform still m
  vm.runInContext(`state={labs:[{id:'a',nodes:[],profiles:[],defaults:{}}],jobs:[],platforms:{}};`,h.context);
  assert.match(list(''),/<li class="table-empty">|No devices|This lab has no devices/);
 });
+
+test('C09 fixes: the Student quick start menu item shows only when the manager serves the guide',()=>{
+ const h=appHarness();
+ const paint=flag=>{vm.runInContext(`state={labs:[],jobs:[],platforms:{},loaded:true${flag?',student_guide:true':''}};render();`,h.context);return h.document.getElementById('help-student-guide').hidden;};
+ h.document.getElementById('help-student-guide').hidden=true;
+ assert.equal(paint(false),true,'hidden without the flag');
+ assert.equal(paint(true),false,'shown with it');
+ assert.equal(paint(false),true,'and hidden again when the flag goes');
+});

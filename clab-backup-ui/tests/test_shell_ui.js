@@ -916,7 +916,7 @@ test('terminalFontPreference and setTerminalFontPreference stay inside the eight
  const h=harness();assert.equal(h.context.terminalFontPreference(),14);
  assert.equal(h.context.setTerminalFontPreference(16),true);assert.equal(h.context.localStorage.getItem('clab.terminal.fontSize'),'16');assert.equal(h.context.terminalFontPreference(),16);
  assert.equal(h.context.setTerminalFontPreference(19),false);assert.equal(h.context.setTerminalFontPreference('abc'),false);assert.equal(h.context.localStorage.getItem('clab.terminal.fontSize'),'16','nothing written');
- for(const bad of ['9','abc','']){h.context.localStorage.setItem('clab.terminal.fontSize',bad);assert.equal(h.context.terminalFontPreference(),14,bad);}
+ for(const [bad,want] of [['abc',14],['9',11],['',11],['20',18],['15.4',15],['-3',11]]){h.context.localStorage.setItem('clab.terminal.fontSize',bad);assert.equal(h.context.terminalFontPreference(),want,'terminal.js clampFont semantics: '+bad);}   // C09 fixes: a foreign number is clamped like the terminal page does, not reported as the default
  const blocked=harness({throwStorage:true});assert.equal(blocked.context.terminalFontPreference(),14);assert.equal(blocked.context.setTerminalFontPreference(15),false);
 });
 test('mediaMatches answers false without matchMedia or when it throws, and the query result otherwise',()=>{
@@ -972,7 +972,7 @@ test('bundle pin: the editor bundle writes only keys that EDITOR_VIEW_KEYS lists
  assert.deepEqual([...keys].filter(k=>!listed.includes(k)),[],'an editor upgrade wrote a key the dialog does not know');
 });
 // Every keyboard handler of the page scripts is either a row of the shortcuts dialog (data-source) or an exclusion with its reason.
-test('reverse shortcut pin: every keydown site is a data-source of a shortcuts row or a SHORTCUT_EXCLUSIONS entry, and every cited line exists',()=>{
+test('reverse shortcut pin: every keydown site is a data-source of a shortcuts row or a SHORTCUT_EXCLUSIONS entry, and every cited line is a keydown site',()=>{
  const sites=[];
  for(const [name,src] of pageScripts())src.split('\n').forEach((line,i)=>{if(!line.trim().startsWith('//')&&/addEventListener\('keydown'|\.onkeydown=|attachCustomKeyEventHandler\(/.test(line))sites.push(`${name}:${i+1}`);});
  assert.ok(sites.length>=20,sites.join(' '));
@@ -981,5 +981,10 @@ test('reverse shortcut pin: every keydown site is a data-source of a shortcuts r
  const exclusions=[...fs.readFileSync(path.join(STATIC,'preferences.js'),'utf8').matchAll(/source:'([\w-]+\.js:\d+)'/g)].map(m=>m[1]);
  const covered=new Set([...rows,...exclusions]);
  assert.deepEqual(sites.filter(s=>!covered.has(s)),[],'a keyboard handler with no row in the shortcuts dialog and no exclusion: add its row to index.html or its reason to SHORTCUT_EXCLUSIONS');
- for(const cite of rows){const [file,line]=cite.split(':'),src=fs.readFileSync(path.join(STATIC,file),'utf8');assert.ok(Number(line)<=src.split('\n').length,cite+' exists');}
+ const keyLine=/addEventListener\('keydown'|\.onkeydown=|attachCustomKeyEventHandler\(/,folderKey=/case '|\bkey\b/;   // the folder chooser's rows cite the key decisions of its pure intent function
+ for(const cite of [...rows,...exclusions]){
+  const [file,line]=cite.split(':'),text=fs.readFileSync(path.join(STATIC,file),'utf8').split('\n')[Number(line)-1]||'';
+  assert.ok(keyLine.test(text)||(file==='git-places.js'&&rows.includes(cite)&&folderKey.test(text)),cite+' is not a keydown site any more (a stale cite): '+text.trim().slice(0,80));
+ }
+ for(const cite of exclusions)assert.ok(!rows.includes(cite),cite+' is a row already: drop the exclusion');
 });

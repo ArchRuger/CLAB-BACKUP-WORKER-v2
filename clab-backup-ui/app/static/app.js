@@ -147,6 +147,7 @@ function render(){
  const version=state.version||'1.31.3';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
+ if($('help-student-guide'))$('help-student-guide').hidden=!state.student_guide;
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;
  if($('home'))$('home').hidden=!home;
  if($('home-skeleton'))$('home-skeleton').hidden=loaded;
