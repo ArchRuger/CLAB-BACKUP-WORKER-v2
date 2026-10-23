@@ -36,7 +36,7 @@ function homeOrder(labs,tab){
 let homeTabFallback='recent';
 function homeCurrentTab(){const stored=typeof homeTab==='function'?homeTab():homeTabFallback;return HOME_TABS[stored]?stored:'recent';}
 function homeSelectTab(tab){if(!HOME_TABS[tab])return;homeTabFallback=tab;if(typeof rememberHomeTab==='function')rememberHomeTab(tab);renderHome();}
-function homeCard(lab){
+function homeCard(lab,viaDevice=''){
  const ls=homeLabState(lab),id=esc(lab.id),name=esc(lab.name),favourite=!!lab.favorite;
  const quick=typeof opQuickActions==='function'?opQuickActions(lab,state.discovery,typeof busy==='function'&&busy()):null;
  const showStart=!!quick&&lab.deployment?.status!=='Running'&&ls.key!=='working';
@@ -44,7 +44,7 @@ function homeCard(lab){
  const start=showStart?`<button type="button" class="button secondary" data-lab-start="${id}" ${quick.canStart?'':`disabled title="${esc(reason)}"`}>${quick.startAction==='deploy'?'Start lab':'Start stopped devices'}</button>${reason?`<small class="caption">${esc(reason)}</small>`:''}`:'';
  const opened=typeof openedAt==='function'?openedAt(lab.id):'',openedLine=opened&&typeof relativeTime==='function'?relativeTime(opened):'',times=[homeDeployedLine(lab),openedLine?'Last opened '+openedLine:''].filter(Boolean).join(' · ');
  const favLabel=favourite?'Remove from favourites':'Add to favourites';
- return `<article class="lab-card" data-lab-id="${id}"><div class="lab-card-head"><div><h3>${name}</h3></div><div class="lab-card-tools"><button type="button" class="icon-button" data-lab-favorite="${id}" aria-pressed="${favourite?'true':'false'}" aria-label="${favLabel}" title="${favLabel}"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-star"></use></svg></button><button type="button" class="icon-button" data-lab-more="${id}" aria-label="More actions for ${name}" title="More actions">⋯</button></div></div><p class="lab-status-line"><span class="pill ${esc(ls.pill||'neutral')}">${esc(ls.label)}</span><span>${esc(homeReadyLine(lab,ls))}</span></p><p>${esc(homeSavedLine(lab))}</p><p class="caption lab-card-times">${esc(times)}</p><div class="actions"><button type="button" class="button primary" data-lab="${id}">Open lab</button>${start}</div></article>`;
+ return `<article class="lab-card" data-lab-id="${id}"><div class="lab-card-head"><div><h3>${name}</h3></div><div class="lab-card-tools"><button type="button" class="icon-button" data-lab-favorite="${id}" aria-pressed="${favourite?'true':'false'}" aria-label="${favLabel}" title="${favLabel}"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-star"></use></svg></button><button type="button" class="icon-button" data-lab-more="${id}" aria-label="More actions for ${name}" title="More actions">⋯</button></div></div><p class="lab-status-line"><span class="pill ${esc(ls.pill||'neutral')}">${esc(ls.label)}</span><span>${esc(homeReadyLine(lab,ls))}</span></p><p>${esc(homeSavedLine(lab))}</p><p class="caption lab-card-times">${esc(times)}</p>${viaDevice?`<p class="caption lab-card-match">has device ${esc(viaDevice)}</p>`:''}<div class="actions"><button type="button" class="button primary" data-lab="${id}">Open lab</button>${start}</div></article>`;
 }
 function homeMarkup(el,html){if(!el)return;if(typeof setMarkup==='function')setMarkup(el,html);else el.innerHTML=html;}
 // What Manager ▾ › Labs found on the VM… has to offer: labs the VM reports that are not in My labs, labs
@@ -61,6 +61,25 @@ function homeHiddenNote(labs){
  const n=homeHiddenLabs(labs).length;if(!n)return '';
  return (n===1?'1 lab is hidden from Home':n+' labs are hidden from Home')+'. Show it again under Manager ▾ › Labs found on the VM…, or add it again from Choose a file on the lab VM….';
 }
+// The Home filter (design C09 §4): a lab matches when the trimmed term is a substring of its name, equals its whole state
+// word (the label changes on every poll and is also a sentence, so only an exact word is stable) or is a substring of a
+// device's short name. `device` is the first device name that matched, shown on the card when nothing else explains it.
+function homeFilterTerm(){const f=$('home-filter');return f&&typeof f.value==='string'?f.value:'';}
+function homeLabMatch(lab,ls,term){
+ const t=String(term||'').trim().toLowerCase();if(!t)return {match:true,device:''};
+ const byName=textMatch(t,[lab.name]),byState=String((ls&&ls.label)||'').toLowerCase()===t;
+ const hit=(lab.nodes||[]).map(n=>n.short_name||n.name).find(n=>n&&textMatch(t,[n]));
+ return {match:byName||byState||!!hit,device:!byName&&!byState&&hit?String(hit):''};
+}
+let homeFilterTimer=null;
+function homeFilterSentence(){
+ const term=homeFilterTerm();if(!String(term).trim())return '';
+ const labs=(state.labs||[]).filter(l=>!l.hidden),shown=labs.filter(l=>homeLabMatch(l,homeLabState(l),term).match).length;
+ return shown?`${shown} of ${labs.length} labs shown`:'No lab matches. Try part of a lab name, a state or a device name.';
+}
+// The one live region (#home-filter-live) is written here only: once, 500 ms after the last input or Clear. The poll never writes it.
+function homeFilterAnnounce(){homeFilterTimer=null;const live=$('home-filter-live');if(live)live.textContent=homeFilterSentence();}
+function homeFilterSchedule(){if(typeof setTimeout!=='function')return;if(homeFilterTimer!==null)clearTimeout(homeFilterTimer);homeFilterTimer=setTimeout(homeFilterAnnounce,500);}
 // Called from render() on every poll; cheap because the list is diffed (setMarkup), which also keeps
 // the focus. The order depends only on the chosen tab and the labs' own fields.
 function renderHome(){
@@ -75,7 +94,13 @@ function renderHome(){
  if($('home-hidden-note')){const note=loaded?homeHiddenNote(all):'';$('home-hidden-note').textContent=note;$('home-hidden-note').hidden=!note;}
  for(const name of Object.keys(HOME_TABS)){const button=$('home-tab-'+name);if(!button)continue;const on=name===tab;if(typeof button.setAttribute==='function'){button.setAttribute('aria-selected',on?'true':'false');button.setAttribute('tabindex',on?'0':'-1');}if(button.classList&&typeof button.classList.toggle==='function')button.classList.toggle('active',on);}
  if($('home-tab-note'))$('home-tab-note').textContent=HOME_TABS[tab].note;
- const cards=$('lab-cards');if(cards){homeMarkup(cards,homeOrder(labs,tab).map(homeCard).join(''));cards.hidden=!labs.length;if(typeof cards.setAttribute==='function')cards.setAttribute('aria-labelledby','home-tab-'+tab);}
+ const term=homeFilterTerm(),matches=labs.map(l=>({lab:l,...homeLabMatch(l,homeLabState(l),term)})).filter(m=>m.match),viaDevice=new Map(matches.map(m=>[m.lab.id,m.device]));
+ const row=$('home-filter-row');
+ if(row){const focused=typeof document!=='undefined'&&!!document&&!!row.contains&&row.contains(document.activeElement);row.hidden=!loaded||(labs.length<2&&!term&&!focused);}
+ if($('home-filter-clear'))$('home-filter-clear').hidden=!term;
+ if($('home-filter-count'))$('home-filter-count').textContent=term?`${matches.length} of ${labs.length} labs`:'';
+ const none=$('home-filter-empty');if(none){const show=!!String(term).trim()&&labs.length>0&&!matches.length;none.textContent=show?`No lab matches \u201c${String(term).trim()}\u201d. Try part of a lab name, a state such as Running, or a device name.`:'';none.hidden=!show;}
+ const cards=$('lab-cards');if(cards){homeMarkup(cards,homeOrder(matches.map(m=>m.lab),tab).map(l=>homeCard(l,viaDevice.get(l.id))).join(''));cards.hidden=!matches.length;if(typeof cards.setAttribute==='function')cards.setAttribute('aria-labelledby','home-tab-'+tab);}
 }
 if($('home')){
  $('home').addEventListener('click',async e=>{
@@ -92,6 +117,8 @@ if($('home')){
   $('home-tabs').addEventListener('click',e=>{const b=e.target&&typeof e.target.closest==='function'?e.target.closest('[data-home-tab]'):null;if(b)homeSelectTab(b.dataset.homeTab);});
   $('home-tabs').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const names=Object.keys(HOME_TABS),i=names.indexOf(homeCurrentTab()),next=e.key==='Home'?0:e.key==='End'?names.length-1:(i+(e.key==='ArrowRight'?1:-1)+names.length)%names.length;homeSelectTab(names[next]);const button=$('home-tab-'+names[next]);if(button&&typeof button.focus==='function')button.focus();});
  }
+ if($('home-filter'))$('home-filter').oninput=()=>{renderHome();homeFilterSchedule();};
+ if($('home-filter-clear'))$('home-filter-clear').onclick=()=>{const f=$('home-filter');if(f){f.value='';if(typeof f.focus==='function')f.focus();}renderHome();homeFilterSchedule();};
  if($('home-deploy'))$('home-deploy').onclick=()=>{if(typeof openDeploy==='function')openDeploy();};
  if($('home-upload'))$('home-upload').onclick=()=>{if(typeof opUpload==='function')opUpload();};
 }

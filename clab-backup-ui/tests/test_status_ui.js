@@ -753,3 +753,13 @@ test('C05: Start device and Stop device are stoppable with their aftermath words
  const stopping=c.deviceState({name:'clab-x-r1',short_name:'R1',ssh_ready:false,nos_login:{status:'stopping'}});
  assert.deepEqual([stopping.key,stopping.label,stopping.cli,stopping.pill],['working','Stopping',false,'busy']);
 });
+
+test('C09: textMatch is the one text matcher: trimmed, case-insensitive substring of the joined non-empty parts',()=>{
+ const c=makeContext(),m=(t,p)=>c.textMatch(t,p);
+ assert.equal(m('',['r1']),true);assert.equal(m('   ',['r1']),true,'a blank term matches everything');assert.equal(m(undefined,['r1']),true);assert.equal(m(null,[]),true);
+ assert.equal(m('R1',['r1','10.0.0.1']),true,'case is ignored on both sides');assert.equal(m('ARISTA',['r1','10.0.0.1','arista ceos']),true);
+ assert.equal(m('r1 ',['r1']),true,'a trailing space is trimmed');assert.equal(m(' r1',['r1']),true);
+ assert.equal(m('undefined',['r1',undefined,'ceos']),false,'a missing part is skipped, never printed');assert.equal(m('null',['r1',null]),false);assert.equal(m('r1  ceos',['r1','','ceos']),false,'an empty part leaves no double space');
+ assert.equal(m('r1 ceos',['r1','ceos']),true,'the substring spans a boundary only through the single joining space');assert.equal(m('r1ceos',['r1','ceos']),false);
+ assert.equal(m('r*',['r1']),false,'no wildcards');assert.equal(m('x',undefined),false);assert.equal(m('1',[1]),true,'numbers are matched as text');
+});
