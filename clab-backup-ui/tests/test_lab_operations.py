@@ -17,11 +17,14 @@ import xml.etree.ElementTree as ET
 
 import threading
 
+from fastapi.testclient import TestClient
+
 import app.host_operations as host_operations
 import app.lab_operations as lab_operations
 from app.host_operations import HostOperations, LIFECYCLE, digest, capture, stream
 from app.lab_operations import LabOperations, OutputWindow, scrub, drawio
 from app.discovery import stamp
+from app.main import create_app
 from app.store import Store
 import test_discovery as discovery_tests
 from test_discovery import YAML
@@ -1442,10 +1445,13 @@ class OperationAPITests(unittest.TestCase):
 
 class FakeStopChannel:
     """A helper session that answers from a script: bytes are stdout, ('hook', fn) runs fn first, b'' is end of output."""
-    def __init__(self, script, log):
-        self.script = list(script); self.log = log
+    def __init__(self, script, log, on_exec=None):
+        self.script = list(script); self.log = log; self.on_exec = on_exec
     def settimeout(self, value): pass
-    def exec_command(self, command): self.log.append('exec')
+    def exec_command(self, command):
+        self.log.append('exec')
+        if self.on_exec: self.on_exec()
+    def recv_ready(self): return bool(self.script) and isinstance(self.script[0], bytes) and bool(self.script[0])
     def sendall(self, data): self.log.append('send')
     def shutdown_write(self): pass
     def recv_stderr_ready(self): return False
@@ -1461,15 +1467,15 @@ class FakeStopChannel:
 
 
 class FakeStopClient:
-    def __init__(self, script, log, on_connect=None):
-        self.script = script; self.log = log; self.on_connect = on_connect
+    def __init__(self, script, log, on_connect=None, on_exec=None):
+        self.script = script; self.log = log; self.on_connect = on_connect; self.on_exec = on_exec
     def set_missing_host_key_policy(self, policy): pass
     def connect(self, **options):
         self.log.append('connect')
         if self.on_connect: self.on_connect()
     def get_transport(self): return self
     def set_keepalive(self, seconds): pass
-    def open_session(self, timeout=None): return FakeStopChannel(self.script, self.log)
+    def open_session(self, timeout=None): return FakeStopChannel(self.script, self.log, self.on_exec)
     def close(self): self.log.append('close')
 
 
@@ -1617,13 +1623,13 @@ class OperationStopTests(unittest.TestCase):
         with patch('app.lab_operations.vm_password', return_value='p'), patch('app.lab_operations.paramiko.SSHClient', return_value=FakeStopClient(script, log)):
             with self.assertRaises(lab_operations.OperationStopped): lab_operations.remote(host, req, None, stop)
 
-    def execute_over_fake_ssh(self, make_script, action='deploy'):
+    def execute_over_fake_ssh(self, make_script, action='deploy', where='script'):
         """Run the real remote() (not the fixture's fake VM) over a scripted helper session; returns (record, ssh log)."""
         with self.fixture(), patch.object(self.service, 'refresh'):
             job, args = self.queued(action); self.job_id = job['id']; log = []
             self.script_hook = lambda: self.app.state.operations.cancels[self.job_id].set()
             with patch('app.lab_operations.remote', REAL_REMOTE), \
-                 patch('app.lab_operations.paramiko.SSHClient', return_value=FakeStopClient(make_script(self.script_hook), log)), patch('app.lab_operations.vm_password', return_value='p'), \
+                 patch('app.lab_operations.paramiko.SSHClient', return_value=FakeStopClient(make_script(self.script_hook), log, **({} if where == 'script' else {where: self.script_hook}))), patch('app.lab_operations.vm_password', return_value='p'), \
                  patch.object(lab_operations.time, 'sleep'):
                 args[0](*args[1:])
             return self.record(job['id']), log
@@ -1646,6 +1652,43 @@ class OperationStopTests(unittest.TestCase):
         with patch('app.lab_operations.vm_password', return_value='p'), patch('app.lab_operations.paramiko.SSHClient', return_value=FakeStopClient([b''], log, on_connect=event.set)):
             with self.assertRaises(lab_operations.OperationStopped): lab_operations.remote(host, dict(mode='run', action='deploy'), None, event)
         self.assertEqual(log, ['connect', 'close'], 'no exec_command, no stdin')
+
+    def test_a_result_or_error_already_buffered_when_the_stop_is_set_is_the_answer(self):
+        record, log = self.execute_over_fake_ssh(lambda hook: [b'{"output": "ok\\n"}\n{"result": {"exit_code": 0}}\n', b''], where='on_exec')
+        self.assertEqual(record['status'], 'succeeded'); self.assertTrue(self.store.lab(self.lab_id)['last_deployed'])
+        self.assertEqual(log.count('exec'), 1)
+
+    def test_a_helper_error_already_buffered_when_the_stop_is_set_keeps_the_helpers_message(self):
+        record, log = self.execute_over_fake_ssh(lambda hook: [b'{"error": "Review changed. Preview again."}\n'], where='on_exec')
+        self.assertEqual((record['status'], record['message']), ('failed', 'Review changed. Preview again.'))
+
+    def test_a_stop_during_connect_through_execute_is_the_queued_wording_and_asks_nothing(self):
+        record, log = self.execute_over_fake_ssh(lambda hook: [b''], where='on_connect')
+        self.assertEqual(record['status'], 'cancelled')
+        self.assertEqual(record['message'], 'You stopped Start lab before it started. Nothing was changed on the VM.')
+        self.assertEqual(log, ['connect', 'close'], 'nothing sent, no follow-up probe')
+
+    def test_a_cross_origin_stop_is_refused_and_changes_nothing(self):
+        with self.fixture(), patch.object(self.service, 'refresh'):
+            job, args = self.queued()
+            for headers in ({'Origin': 'https://other.example'}, {'Sec-Fetch-Site': 'cross-site'}):
+                response = self.client.post('/api/operations/' + job['id'] + '/cancel', headers={**self.auth, **headers}, json={})
+                self.assertEqual(response.status_code, 403, headers)
+                self.assertEqual(self.record(job['id'])['status'], 'queued'); self.assertNotIn('cancel_requested', self.record(job['id']))
+                self.assertFalse(self.app.state.operations.cancels[job['id']].is_set())
+
+    def test_a_restart_turns_a_running_job_with_a_stop_request_into_interrupted_and_offers_no_stop(self):
+        with self.fixture():
+            job = self.inject('deploy'); job['cancel_requested'] = stamp(); self.store.save()
+            second = create_app(self.tmp.name)
+            try:
+                saved = next(j for j in second.state.store.state['operations'] if j['id'] == job['id'])
+                self.assertEqual(saved['status'], 'interrupted')
+                late = TestClient(second).post('/api/operations/' + job['id'] + '/cancel', headers={'Authorization': 'Bearer ' + second.state.store.token}, json={})
+                self.assertEqual((late.status_code, late.json()['detail']), (409, 'This operation has already finished.'))
+            finally:
+                second.state.operations.close(); second.state.git_progress.close(); second.state.discovery.close()
+                second.state.runner.close(); second.state.node_services.close()
 
     def test_close_before_execute_reads_interrupted_and_never_connects(self):
         with self.fixture() as fixture, patch.object(self.service, 'refresh'):
@@ -1696,5 +1739,49 @@ class OperationStopTests(unittest.TestCase):
             self.assertEqual(row['status'], 'cancelled'); self.assertTrue(row['cancel_requested']); self.assertNotIn('output', row)
         source = (Path(__file__).resolve().parents[1] / 'app' / 'static' / 'status.js').read_text()
         match = re.search(r"const STATUS_STOPPABLE\s*=\s*\[([^\]]*)\]", source)
-        if match is None: self.skipTest('status.js does not carry STATUS_STOPPABLE yet')
+        self.assertIsNotNone(match, 'status.js carries STATUS_STOPPABLE')
         self.assertEqual(tuple(re.findall(r"'([^']+)'", match.group(1))), lab_operations.STOPPABLE)
+
+    def test_the_python_and_javascript_stop_wording_are_the_same_words(self):
+        static = Path(__file__).resolve().parents[1] / 'app' / 'static'
+        status = (static / 'status.js').read_text()
+        table = re.search(r"const STATUS_STOP_AFTERMATH\s*=\s*\{(.*?)\};\n", status, re.S)
+        self.assertIsNotNone(table, 'status.js carries STATUS_STOP_AFTERMATH')
+        found = {m.group(1): (m.group(2), m.group(3)) for m in re.finditer(r"'?([\w-]+)'?:\{verb:'([^']*)',repair:'([^']*)'\}", table.group(1))}
+        self.assertEqual(found, lab_operations.STOP_AFTERMATH, 'every action: same verb and same repair')
+        listed = re.search(r"const STATUS_STOPPABLE\s*=\s*\[([^\]]*)\]", status)
+        self.assertIsNotNone(listed); self.assertEqual(set(found), set(re.findall(r"'([^']+)'", listed.group(1))))
+        labels = re.search(r"const opLabels\s*=\s*\{(.*?)\};", (static / 'operations.js').read_text(), re.S)
+        self.assertIsNotNone(labels, 'operations.js carries opLabels')
+        shown = {m.group(1): m.group(2) for m in re.finditer(r"'?([\w-]+)'?:'([^']*)'", labels.group(1))}
+        self.assertEqual({a: shown.get(a) for a in lab_operations.STOPPABLE}, lab_operations.STOP_LABELS)
+
+    def test_the_lock_sentence_is_the_helpers_and_the_real_helper_says_it_while_the_lock_is_held(self):
+        source = Path(host_operations.__file__).read_text()
+        self.assertIn("raise ValueError('" + lab_operations.LOCK_SENTENCE + "')", source)
+        self.assertIn("'" + lab_operations.GENERIC_HELPER_ERROR + "'", source)
+        import fcntl
+        root = Path(tempfile.mkdtemp()); self.addCleanup(lambda: __import__('shutil').rmtree(root, ignore_errors=True))
+        config = dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', roots=[str(root)], projects=str(root))
+        real_path, real_open = host_operations.Path, open
+        class ConfigFile:
+            def read_text(self): return json.dumps(config)
+        def fake_path(value): return ConfigFile() if value == '/etc/clab-manager/operations.json' else real_path(value)
+        lock_file = root / 'operations.lock'
+        def fake_open(name, *args, **kwargs): return real_open(lock_file if name == '/run/clab-manager-operations.lock' else name, *args, **kwargs)
+        request = dict(mode='preview', action='deploy', name='training', path=str(root / 'training.clab.yaml'), options={})   # no digest
+        stdin = SimpleNamespace(buffer=io.BytesIO(json.dumps(request).encode() + b'\n')); output = io.StringIO()
+        with open(lock_file, 'a') as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with patch.object(host_operations, 'Path', side_effect=fake_path), patch.object(host_operations, 'signal'), \
+                 patch.object(host_operations.sys, 'stdin', stdin), patch.object(host_operations, 'open', fake_open, create=True), \
+                 patch.object(host_operations.subprocess, 'Popen') as popen, redirect_stdout(output):
+                code = host_operations.main()
+        self.assertEqual(code, 1); popen.assert_not_called()
+        answer = json.loads(output.getvalue()); self.assertEqual(answer, {'error': lab_operations.LOCK_SENTENCE})
+
+    def test_the_helpers_generic_failure_is_not_proof_that_the_command_ended(self):
+        generic = ValueError(lab_operations.GENERIC_HELPER_ERROR); generic.from_helper = True
+        ident, _ = self.run_stopped(preview_answers=[generic, self.locked(), {'steps': []}])
+        self.assertEqual(len(self.during), 3, 'the generic error did not end the follow-up')
+        self.assertIn('only partly started', self.record(ident)['message'])

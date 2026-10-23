@@ -41,12 +41,17 @@ STOP_LABELS = {'deploy': 'Start lab', 'redeploy': 'Redeploy lab', 'destroy': 'De
                'clone': 'Download lab', 'inspect-all': 'Running labs on the VM'}
 STOP_ASKED = 'Stopping… the manager has asked the lab VM to end the command'
 STOP_UNPROVEN = 'The lab VM is still ending the command; wait a moment before the next operation.'
-LOCK_SENTENCE = 'Another host lab operation is running.'
+LOCK_SENTENCE = 'Another host lab operation is running.'   # the helper's sentence (host_operations.main); a test pins the two equal
+# What host_operations.main() answers for any error it did not word itself (a missing config, a bad request, a crash):
+# it can come from before the host lock was taken, so it proves nothing about the command having ended.
+GENERIC_HELPER_ERROR = 'Host operation failed. Check setup, paths and installed tools.'
 FOLLOW_UP_LIMIT = 20
 
 
 class OperationStopped(ValueError):
-    """A person (or the shutdown) ended the operation while the helper had not yet answered: the outcome is not known."""
+    """A person (or the shutdown) ended the operation while the helper had not yet answered: the outcome is not known.
+    `sent` is False when the stop came before the request was handed to the VM (nothing can have run)."""
+    sent = True
 
 
 def stop_message(action):
@@ -128,6 +133,11 @@ def operation_connection_error(status, stderr):
             'Run sudo bash deploy/check-install.sh on the VM and review the operations checks.')
 
 
+def unsent_stop():
+    failure = OperationStopped('Operation stopped. Inspect the lab before retrying.'); failure.sent = False
+    return failure
+
+
 def remote(host, request, output=None, stopping=None, timeout=None):
     if not host or not host.get('enabled'): raise ValueError('Configure and enable the VM connection first.')
     if not host.get('fingerprint'): raise ValueError('Refresh discovery to establish the VM fingerprint first.')
@@ -138,10 +148,10 @@ def remote(host, request, output=None, stopping=None, timeout=None):
     opts['password'] = password
     try:
         client.connect(**opts)
-        if stopping and stopping.is_set(): raise OperationStopped('Operation stopped. Inspect the lab before retrying.')
+        if stopping and stopping.is_set(): raise unsent_stop()
         client.get_transport().set_keepalive(15)
         channel = client.get_transport().open_session(timeout=8); channel.settimeout(15)
-        if stopping and stopping.is_set(): raise OperationStopped('Operation stopped. Inspect the lab before retrying.')
+        if stopping and stopping.is_set(): raise unsent_stop()
         channel.exec_command('clab-manager-operations')
         channel.sendall((json.dumps(request) + '\n').encode()); channel.shutdown_write()
         channel.settimeout(.2)
@@ -151,7 +161,8 @@ def remote(host, request, output=None, stopping=None, timeout=None):
             if time.monotonic() > until: raise ValueError('Operation connection interrupted. Inspect the lab before retrying.')
             # Only while the helper has said nothing final: once its result line is in, the loop runs to EOF and
             # exit status, and a command that completed is never relabelled as stopped.
-            if result is None and stopping and stopping.is_set(): raise OperationStopped('Operation stopped. Inspect the lab before retrying.')
+            # What has already arrived is read first: a result or error line waiting in the channel is the answer, not a stop.
+            if result is None and stopping and stopping.is_set() and not channel.recv_ready(): raise OperationStopped('Operation stopped. Inspect the lab before retrying.')
             if channel.recv_stderr_ready():
                 chunk = channel.recv_stderr(65536)
                 stderr = (stderr + chunk)[:8192]
@@ -924,9 +935,9 @@ class LabOperations:
                 proven = True
             except OperationStopped: continue   # the shutdown flag: the next pass ends the job as interrupted
             except ValueError as exc:
-                # The helper's own answer other than the lock sentence means it took the lock: the command is gone.
+                # The helper's own answer other than the lock sentence or its generic failure (which can predate the lock) means it took the lock: the command is gone.
                 # A connection failure (ours or the gateway's) proves nothing.
-                proven = bool(getattr(exc, 'from_helper', False)) and str(exc) != LOCK_SENTENCE
+                proven = bool(getattr(exc, 'from_helper', False)) and str(exc) not in (LOCK_SENTENCE, GENERIC_HELPER_ERROR)
             except Exception: proven = False
             if proven or time.monotonic() >= deadline: break
             time.sleep(1)
@@ -1007,7 +1018,7 @@ class LabOperations:
             add('', True); text = window.text()
             with self.store.lock: clean = scrub(text, self.store.state); message = scrub(message, self.store.state)
             try:
-                if stopped and not self.stopping.is_set(): self.finish_stopped(ident, host, req, ran, clean)
+                if stopped and not self.stopping.is_set(): self.finish_stopped(ident, host, req, ran and getattr(exc, 'sent', True), clean)
                 else: update(status='interrupted' if self.stopping.is_set() else 'failed', finished=stamp(), output=clean, message=message)
             except OSError:
                 pass  # update retained the terminal state in memory; restart reconciles disk.
