@@ -127,6 +127,18 @@ class ContainerBindingTests(DiagnosticsHarness):
         # `logs` answered "did not answer about this container". `index` yields nil there and `with` skips it.
         self.assertIn('{{with index .State "Health"}}{{.Status}}{{end}}', host_operations.INSPECT_FORMAT)
         self.assertNotIn('.State.Health', host_operations.INSPECT_FORMAT)
+        # Every template action may read only keys every container has (a missing key fails the whole inspect on Docker 27.5.1),
+        # or reach an optional key through `index`; any other dotted .State.* or .Config.* access is the break that happened live.
+        import re
+        always = {'.Id', '.State.Pid', '.State.Status', '.State.StartedAt', '.HostConfig.NetworkMode', '.NetworkSettings.Ports'}
+        actions = re.findall(r'\{\{(.*?)\}\}', host_operations.INSPECT_FORMAT)
+        self.assertEqual(len(actions), 13, 'eleven fields; the health field is three actions (with, .Status, end)')
+        for action in actions:
+            words = action.split()
+            indexed = words[0] == 'index' or words[:2] == ['with', 'index']   # `index .Config.Labels "key"`: nil, never an error
+            for word in re.findall(r'\.(?:State|Config)\.\w+', action):
+                if indexed and word == '.Config.Labels': continue
+                self.assertIn(word, always, f'{word} may be absent in the raw JSON: read it with index')
         self.assertEqual(host_operations.INSPECT_FORMAT.split('\t')[4], '{{with index .State "Health"}}{{.Status}}{{end}}', 'the fifth field, as inspect_line() lays it out')
         self.containers[CONTAINER] = self.line(health='')
         facts = self.host.container_of(self.options, LAB)

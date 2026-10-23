@@ -307,15 +307,15 @@ class NetemShowAllTests(LifecycleHarness):
     def test_reads_each_bound_pair_and_answers_rows_per_device(self):
         result = self.host.netem_show_all(LAB, {'nodes': [{'node': NODE, 'container': CONTAINER}, {'node': 'r2', 'container': OTHER}]})
         self.assertEqual(result, {'complete': True, 'devices': [
-            {'node': NODE, 'container': CONTAINER, 'present': True, 'impairments': []},
-            {'node': 'r2', 'container': OTHER, 'present': True, 'impairments': [{'interface': 'eth1', 'delay': '20ms', 'jitter': '5ms', 'loss': 1.5, 'rate': 1000, 'corruption': 0.5}]}]})
+            {'node': NODE, 'container': CONTAINER, 'present': True, 'id': ID, 'impairments': []},
+            {'node': 'r2', 'container': OTHER, 'present': True, 'id': OTHER_ID, 'impairments': [{'interface': 'eth1', 'delay': '20ms', 'jitter': '5ms', 'loss': 1.5, 'rate': 1000, 'corruption': 0.5}]}]})
         self.assertEqual([a[-1] for a, _ in self.probes], [CONTAINER, OTHER], 'one docker inspect per pair')
         self.assertEqual([a for a, _ in self.calls if a[:4] == [self.clab, 'tools', 'netem', 'show']], [[self.clab, 'tools', 'netem', 'show', '-n', c, '-f', 'json'] for c in (CONTAINER, OTHER)])
 
     def test_stopped_and_absent_devices_answer_an_empty_list_without_a_show(self):
         self.containers[CONTAINER] = self.line(status='exited', pid=0); del self.containers[OTHER]
         result = self.host.netem_show_all(LAB, {'nodes': [{'node': NODE, 'container': CONTAINER}, {'node': 'r2', 'container': OTHER}]})
-        self.assertEqual(result['devices'], [{'node': NODE, 'container': CONTAINER, 'present': True, 'impairments': []}, {'node': 'r2', 'container': OTHER, 'present': False, 'impairments': []}])
+        self.assertEqual(result['devices'], [{'node': NODE, 'container': CONTAINER, 'present': True, 'id': ID, 'impairments': []}, {'node': 'r2', 'container': OTHER, 'present': False, 'id': '', 'impairments': []}])
         self.assertEqual([a for a, _ in self.calls if a[:4] == [self.clab, 'tools', 'netem', 'show']], [])
 
     def test_one_to_sixty_four_pairs_each_well_formed(self):
@@ -334,6 +334,18 @@ class NetemShowAllTests(LifecycleHarness):
         self.containers[OTHER] = self.line(id=OTHER_ID, node='r2', lab='other')
         with self.assertRaisesRegex(ValueError, 'does not belong to lab parity'):
             self.host.netem_show_all(LAB, {'nodes': [{'node': NODE, 'container': CONTAINER}, {'node': 'r2', 'container': OTHER}]})
+
+    def test_one_devices_failed_show_comes_back_unread_and_the_rest_are_read(self):
+        real = self.host.netem_rows
+        def rows(container):
+            if container == OTHER: raise ValueError('Containerlab on the VM refused the impairment: boom')
+            return real(container)
+        with patch.object(self.host, 'netem_rows', rows):
+            result = self.host.netem_show_all(LAB, {'nodes': [{'node': 'r2', 'container': OTHER}, {'node': NODE, 'container': CONTAINER}]})
+        self.assertEqual(result['complete'], False)
+        self.assertEqual(result['devices'], [{'node': 'r2', 'container': OTHER, 'present': True, 'unread': True},
+                                             {'node': NODE, 'container': CONTAINER, 'present': True, 'id': ID, 'impairments': []}])
+        self.assertEqual([a[-1] for a, _ in self.probes], [OTHER, CONTAINER], 'both pairs were bound; only the failed show is unread')
 
     def test_the_deadline_returns_the_rest_as_unread(self):
         clock = iter([100.0, 100.0, 170.0, 170.0])   # started, r1 checked in time, r2 and r3 past the deadline

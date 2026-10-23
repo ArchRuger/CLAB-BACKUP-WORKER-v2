@@ -780,6 +780,60 @@ class ConsoleTests(unittest.TestCase):
         logs = self.logs()
         self.assertNotIn('console.', logs)
 
+    def wait_released(self):
+        deadline = time.monotonic() + 3
+        while self.services.consoles and time.monotonic() < deadline: time.sleep(0.02)
+        self.assertEqual(self.services.consoles, {}, 'the slot is released')
+
+    def test_console_total_time_cap_ends_the_session_while_the_device_keeps_sending(self):
+        self.serve(chatty=0.05)
+        key = self.key()
+        with patch.object(console_module, 'CONSOLE_TOTAL', 0.8):
+            with self.client.websocket_connect('/api/terminal', headers=self.ORIGIN) as ws:
+                ws.send_json({'ticket': key})
+                self.assertEqual(ws.receive_json()['message'], 'Connected')
+                frame = None
+                deadline = time.monotonic() + 8
+                while time.monotonic() < deadline:
+                    message = ws.receive()
+                    if message.get('text') and json.loads(message['text']).get('type') == 'status':
+                        frame = json.loads(message['text']); break
+                self.assertEqual(frame, {'type': 'status', 'message': 'Session timeout. Reconnect to continue.'})
+        self.wait_released()
+
+    def test_console_bad_frames_end_the_session_generically_and_write_nothing(self):
+        bad = {'input that is not text': {'type': 'input', 'data': 5},
+               'input over 16384 bytes': {'type': 'input', 'data': 'x' * 16385},
+               'a message over 20000 characters': {'type': 'input', 'data': 'y' * 20001},
+               'a resize outside the limits': {'type': 'resize', 'cols': 1, 'rows': 1},
+               'an unknown type': {'type': 'bogus'}}
+        for label, payload in bad.items():
+            with self.subTest(label):
+                self.serve(); self.services.consoles.clear()
+                key = self.key()
+                with self.client.websocket_connect('/api/terminal', headers=self.ORIGIN) as ws:
+                    ws.send_json({'ticket': key})
+                    self.assertEqual(ws.receive_json()['message'], 'Connected')
+                    ws.send_json(payload)
+                    frame = ws.receive_json()
+                    while frame.get('type') == 'status': frame = ws.receive_json()
+                    self.assertEqual(frame, {'type': 'error', 'message': 'Session ended.'})
+                self.wait_released()
+                time.sleep(0.2)
+                self.assertEqual(self.console.received[1], LIVE_REPLIES, 'only the negotiation answers reached the device, nothing from the bad frame')
+                self.console.stop(); self.console = None
+                self.services.tickets.clear()
+
+    def test_console_valid_resize_is_accepted_and_ignored_at_the_bounds(self):
+        self.serve()
+        key = self.key()
+        with self.client.websocket_connect('/api/terminal', headers=self.ORIGIN) as ws:
+            ws.send_json({'ticket': key})
+            self.assertEqual(ws.receive_json()['message'], 'Connected')
+            for cols, rows in ((20, 5), (400, 150)): ws.send_json({'type': 'resize', 'cols': cols, 'rows': rows})
+            ws.send_json({'type': 'input', 'data': 'ok\r'})
+            self.assertEqual(self.console.wait_received(1, len(LIVE_REPLIES) + 3), LIVE_REPLIES + b'ok\r', 'only the input was written')
+
     def test_console_nine_concurrent_opens_never_exceed_the_cap(self):
         self.serve(delay=0.8)   # the negotiation arrives late: every socket is inside the connect-and-probe window at once
         for i in range(2, 10): self.lab['nodes'].append(self.device(f'r{i}', 'juniper_vjunosswitch'))

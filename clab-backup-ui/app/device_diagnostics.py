@@ -185,7 +185,7 @@ class BrowseRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     path: str = Field(default='', max_length=4096)
     files: bool = False
-    lab_id: str = Field(default='', max_length=64)   # the dialog's lab; the listing itself is not bound to it
+    lab_id: str = Field(default='', max_length=64)   # required with `files`: the listing is bound to the lab's folder
 
 
 class DeviceDiagnostics:
@@ -367,7 +367,12 @@ class DeviceDiagnostics:
         @app.post('/api/operations/browse')
         def browse(data: BrowseRequest):
             if not data.files: return self.ask({'mode': 'browse', 'path': data.path}, None)
-            result = self.ask({'mode': 'browse', 'path': data.path, 'options': {'files': True}}, None)
+            if not data.lab_id: raise HTTPException(400, OUTSIDE_FOLDER_SENTENCE)
+            folder = self.folder_of(data.lab_id)   # Lab files mode is bound to the lab's folder here, as view() binds a file
+            if any(ord(c) < 32 for c in data.path): raise HTTPException(400, OUTSIDE_FOLDER_SENTENCE)
+            given = PurePosixPath(data.path) if data.path else folder
+            if '..' in given.parts or not given.is_absolute() or (given != folder and folder not in given.parents): raise HTTPException(400, OUTSIDE_FOLDER_SENTENCE)
+            result = self.ask({'mode': 'browse', 'path': str(given), 'options': {'files': True}}, None)
             entries = []
             for entry in result.get('entries') if isinstance(result.get('entries'), list) else []:
                 if not isinstance(entry, dict) or not isinstance(entry.get('name'), str) or not isinstance(entry.get('path'), str): continue

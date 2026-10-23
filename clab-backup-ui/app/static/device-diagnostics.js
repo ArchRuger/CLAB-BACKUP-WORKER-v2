@@ -144,7 +144,7 @@ function diagInterfacesMarkup(answer,ctx){
  if(!list.length)return `<p class="diag-empty">${esc(diagEmptySentence(answer))}</p>`;
  const groups=diagGroups(list),main=groups.data.concat(groups.management),withCounters={...ctx,counters:answer.counters};
  let html=main.length?diagInterfaceTable(main,withCounters,'Interfaces of '+ctx.device,'region:main'):'';
- if(groups.internal.length)html+=`<details class="diag-other" data-diag-other ${ctx.otherOpen?'open':''}><summary>Other interfaces (${groups.internal.length})</summary>${diagInterfaceTable(groups.internal,withCounters,'Other interfaces of '+ctx.device,'region:other')}</details>`;
+ if(groups.internal.length)html+=`<details class="diag-other" data-diag-other ${ctx.otherOpen?'open':''}><summary data-diag-key="other-summary">Other interfaces (${groups.internal.length})</summary>${diagInterfaceTable(groups.internal,withCounters,'Other interfaces of '+ctx.device,'region:other')}</details>`;
  if(answer.counters_reason)html+='<p class="caption">Traffic counters are not available for this device right now.</p>';
  if(ctx.captureReason)html+=`<p class="caption">${esc(ctx.captureReason)}</p>`;
  return html;
@@ -163,6 +163,11 @@ function diagSay(name,kind,text){
 }
 function diagRetryButton(name,stopped){
  const sec=diagSec[name],button=$(diagIds[name].retry);sec.stopped=stopped;
+ if(button&&!stopped&&typeof document!=='undefined'&&document.activeElement===button){
+  // Hiding the focused button would drop focus to the page: park it on the section's summary first.
+  const box=$(diagIds[name].box),summary=box&&typeof box.querySelector==='function'?box.querySelector('summary'):null;
+  if(summary&&typeof summary.focus==='function')summary.focus();
+ }
  if(button){button.hidden=!stopped;if(stopped)button.textContent=stopped==='resume'?'Resume':'Retry';}
 }
 // Replace a region's markup only when it changed, and give focus back to the Capture button or scroll region that held it.
@@ -170,7 +175,9 @@ function diagSet(el,html){
  if(!el||el._diagHtml===html)return false;
  const active=typeof document!=='undefined'?document.activeElement:null;
  const held=active&&active.dataset&&typeof el.contains==='function'&&el.contains(active)?active.dataset.diagKey:undefined;
+ const scrolls=typeof el.querySelectorAll==='function'?Array.from(el.querySelectorAll('.diag-wrap[data-diag-key]'),r=>[r.dataset.diagKey,r.scrollLeft]):[];
  el.innerHTML=html;el._diagHtml=html;
+ for(const [key,left] of scrolls){if(!left||typeof el.querySelector!=='function')continue;const region=el.querySelector('[data-diag-key="'+String(key).replace(/["\\]/g,'\\$&')+'"]');if(region)region.scrollLeft=left;}
  if(held&&typeof el.querySelector==='function'){const back=el.querySelector('[data-diag-key="'+String(held).replace(/["\\]/g,'\\$&')+'"]');if(back&&!back.disabled&&typeof back.focus==='function')back.focus();}
  return true;
 }

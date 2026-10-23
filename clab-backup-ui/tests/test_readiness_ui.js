@@ -400,6 +400,6 @@ test('C04: focus survives the poll: a status change rewrites only the live rows,
  assert.equal(h.document.activeElement,copyButton,'the same element is still focused');
  assert.equal(info.innerHTML,staticBefore);assert.equal(writes.info,infoWrites,'the static markup was not rewritten');
  assert.match(live.innerHTML,/Up 3 hours \(healthy\)/);assert.ok(writes.live>liveWrites,'the volatile rows were');
- h.context.renderDetails();assert.equal(writes.live,writes.live,'an unchanged render writes nothing');
+ const liveBefore=writes.live;h.context.renderDetails();assert.equal(writes.live,liveBefore,'an unchanged render writes nothing');
  vm.runInContext(`state.labs[0].nodes[0].discovered_ipv4='172.20.20.99';`,h.context);h.context.renderDetails();assert.ok(writes.info>infoWrites,'a changed static value does rebuild the static rows');
 });

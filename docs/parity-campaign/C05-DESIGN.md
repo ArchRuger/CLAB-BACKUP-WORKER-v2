@@ -1003,3 +1003,13 @@ now moot (lists are sorted before hashing, §2.6) and the second is carried into
 | 27 | optional: Clear all's partial failure and in-progress states are unsaid | Accepted: `2 of 3 interfaces cleared; Ethernet3: <reason>. Try again.` (and the budget variant), `Clearing…` while it runs, `/clear` runs inside the guard and the per-lab lock, the button reads **Clear impairments** | §3.4, §4.1, §4.3 |
 | 28 | optional: §2.10 and §3.4 disagree on whether the impairments read is guarded | Accepted: `GET /impairments` is a read, unguarded like C03's reads, so the fetch after a job turns terminal is answered while `finally` still holds `self.active` | §2.10, §3.4, §4.3, §5 manager |
 | 29 | optional: Graceful stop plus low Max workers can outrun the job's time limit | Accepted: the Graceful help says the wait is per device and adds up; a review notice appears when graceful with `max_workers` below the device count puts the estimate past the run limit | §4.5, §5 UI |
+
+## 10. Code review answers for the helper slice (`/clab-review-changes` on `d303f38..cd91e2d`, the 1.31.3 scope; the C05 rows)
+
+| Finding | Answer | Where |
+|---|---|---|
+| The netem request digest is self-attested; its docstring overstated what it binds (optional) | Accepted: the docstring says the digest is an integrity check of the manager's own request and the binding to the live container is `expected_id` against `container_of()`; §2.2 reads the same | §2.2; `host_operations.py` |
+| One device's failed `netem show` failed the whole lab-wide answer (optional) | Accepted: the pair comes back `unread` with `complete: False`, like a pair the deadline did not reach; a binding failure stays fatal; tested | §2.4 |
+| The apply review digest includes the dry-run outcome, so a transient dry-run failure refuses an unchanged apply (optional) | Accepted as designed: the review's warning names it ("containerlab could not plan this change: …"); the student previews again | §2.6 |
+| The INSPECT_FORMAT live break was pinned by string only (optional) | Accepted: the test scans every action of the format and allows only the always-present keys and the `index`/`json` forms | `test_host_diagnostics.py` |
+| The manager slice (S2) found `netem-show-all` without the container id | Accepted: each present device now carries the bound `id` (64 hex) so the manager's calls can send it back as `expected_id`; `test_host_lifecycle.py` pins it | §2.4 |

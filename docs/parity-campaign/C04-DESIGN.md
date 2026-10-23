@@ -664,3 +664,15 @@ healthy, never during bootstrap") is answered by [0] and [12]: the design now do
 | 19 | should-fix: the inventory-import and unlinked empty state reads as waiting or as a contradiction | Accepted as proposed: one sentence "Container facts come from the VM. This lab is not linked to a running lab (Advanced › Link to a running lab…)." plus kind and image when known; "yet" dropped from the address row; "Not known" for a kindless Console row | §4.3 |
 | 20 | optional: an abandoned probe can fill qemu's one-slot backlog, so a later click reads "unreachable" | Accepted as proposed: `CONSOLE_UNREACHABLE` names both causes; the live pass holds a console from the VM and clicks three times; the per-device refusal removes most repeat probes | §2.3 connect, §7 live pass |
 | 21 | optional: the device closing the console ends in a bare "Disconnected" | Accepted as proposed: on device EOF the manager sends the status "The console closed: the device stopped or restarted." before breaking; the page keeps it after "Disconnected —" | §2.3 loop, §3, §5 roundtrip test |
+
+## 10. Code review answers (`/clab-review-changes` on `d303f38..cd91e2d`, the 1.31.3 scope; the C04 rows)
+
+| Finding | Answer | Where |
+|---|---|---|
+| Discovery read the container id under `id`; containerlab writes `container_id` (must-fix; also the live pass's break) | Fixed before the review's end (`31c48d0`): `container_id` first, `id` kept for older output; the tests carry `container_id` and one row with only `id` | §2.5; `discovery.py` |
+| ARCHITECTURE.md and CLAUDE.md still stated the old boundary (should-fix) | Accepted: the manager row names the serial console, the helper row the diagnostics outside the lock and the impairments bound by the shown container id and the lock; module-map rows for `node_console.py` and `device_diagnostics.py`; CLAUDE.md path 2 names the console and the Rules sentence reads "the direct node path: SSH or the serial console" | the guides |
+| NODE-FEATURES said the Console button stays visible for an unlinked lab, but the code hides it (should-fix) | Accepted: the button appears once the lab is linked to a running lab with the device in its topology, then stays visible and disabled with the reason | NODE-FEATURES |
+| The console kind allow-list was unpinned (should-fix) | Accepted: `CONSOLE_PORTS` and `console_port()` through the aliases are pinned | `test_node_console.py` |
+| The console loop's input validation and the 4-hour cap were untested (should-fix) | Accepted: the cap, each invalid frame ending the session with nothing written to the device and the slot released, valid resizes accepted and ignored; a `1×1` resize is refused like the SSH branch (the design's "accepted and ignored" applies to in-range sizes) | `test_nodes.py` |
+| `consoleState` sat between `credentialsNeeded` and its comment (optional) | Accepted: moved above with its own comment | `status.js` |
+| An abandoned console login in configuration mode blocks Load without naming the cause (optional, NOS) | Accepted as a guide sentence: leave configuration mode or log out of the console; no driver change | NODE-FEATURES "Serial console" |

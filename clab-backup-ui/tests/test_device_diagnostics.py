@@ -415,23 +415,43 @@ class DiagnosticsAPITests(unittest.TestCase):
         response = post(path='/etc/containerlab')
         self.assertEqual(self.requests[-1][0], {'mode': 'browse', 'path': '/etc/containerlab'})
         self.assertEqual(response.json(), self.answers['browse'])
-        self.answers['browse'] = {'path': '/e/t', 'parent': '/e', 'entries': [
-            {'name': 'clab-t', 'path': '/e/t/clab-t', 'directory': True, 'kind': 'directory'},
-            {'name': 't.clab.yaml', 'path': '/e/t/t.clab.yaml', 'directory': False, 'kind': 'topology', 'size': 120},
-            {'name': 'startup-config', 'path': '/e/t/startup-config', 'directory': False, 'kind': 'file', 'size': 2100, 'owner': 'root'}, 'junk', {'name': 5}]}
-        response = post(path='/e/t', files=True, lab_id=self.lab_id)
-        self.assertEqual(self.requests[-1][0], {'mode': 'browse', 'path': '/e/t', 'options': {'files': True}})
+        F = '/etc/containerlab/training'
+        self.answers['browse'] = {'path': F, 'parent': '/etc/containerlab', 'entries': [
+            {'name': 'clab-t', 'path': F + '/clab-t', 'directory': True, 'kind': 'directory'},
+            {'name': 't.clab.yaml', 'path': F + '/t.clab.yaml', 'directory': False, 'kind': 'topology', 'size': 120},
+            {'name': 'startup-config', 'path': F + '/startup-config', 'directory': False, 'kind': 'file', 'size': 2100, 'owner': 'root'}, 'junk', {'name': 5}]}
+        response = post(path=F + '/sub', files=True, lab_id=self.lab_id)
+        self.assertEqual(self.requests[-1][0], {'mode': 'browse', 'path': F + '/sub', 'options': {'files': True}})
         self.assertEqual(response.json()['entries'], [
-            {'name': 'clab-t', 'path': '/e/t/clab-t', 'directory': True, 'kind': 'directory'},
-            {'name': 't.clab.yaml', 'path': '/e/t/t.clab.yaml', 'directory': False, 'kind': 'topology', 'size': 120},
-            {'name': 'startup-config', 'path': '/e/t/startup-config', 'directory': False, 'kind': 'file', 'size': 2100}])
-        self.answers['browse'] = {'path': '/e', 'parent': '', 'entries': [
-            {'name': 'd', 'path': '/e/d', 'directory': True}, {'name': 'f.clab.yaml', 'path': '/e/f.clab.yaml', 'directory': False}]}
-        self.assertEqual(post(path='/e', files=True).json()['entries'], [
-            {'name': 'd', 'path': '/e/d', 'directory': True, 'kind': 'directory'}, {'name': 'f.clab.yaml', 'path': '/e/f.clab.yaml', 'directory': False, 'kind': 'topology'}],
+            {'name': 'clab-t', 'path': F + '/clab-t', 'directory': True, 'kind': 'directory'},
+            {'name': 't.clab.yaml', 'path': F + '/t.clab.yaml', 'directory': False, 'kind': 'topology', 'size': 120},
+            {'name': 'startup-config', 'path': F + '/startup-config', 'directory': False, 'kind': 'file', 'size': 2100}])
+        self.answers['browse'] = {'path': F, 'parent': '', 'entries': [
+            {'name': 'd', 'path': F + '/d', 'directory': True}, {'name': 'f.clab.yaml', 'path': F + '/f.clab.yaml', 'directory': False}]}
+        self.assertEqual(post(path=F, files=True, lab_id=self.lab_id).json()['entries'], [
+            {'name': 'd', 'path': F + '/d', 'directory': True, 'kind': 'directory'}, {'name': 'f.clab.yaml', 'path': F + '/f.clab.yaml', 'directory': False, 'kind': 'topology'}],
             'a helper without `kind` is read by its `directory` flag')
         self.assertEqual(post(path='/e', files='yes please').status_code, 422)
         self.assertEqual(post(path='/e', options={}).status_code, 422)
+
+    def test_lab_files_browse_is_bound_to_the_labs_folder_on_the_server(self):
+        self.start()
+        F = '/etc/containerlab/training'
+        self.answers['browse'] = {'path': F, 'parent': '', 'entries': []}
+        post = lambda **body: self.client.post('/api/operations/browse', headers=self.auth, json={'files': True, **body})
+        self.assertEqual(post(path=F + '/a/b', lab_id=self.lab_id).status_code, 200)
+        self.assertEqual(self.requests[-1][0]['path'], F + '/a/b')
+        self.assertEqual(post(path=F, lab_id=self.lab_id).status_code, 200)
+        self.assertEqual(post(path='', lab_id=self.lab_id).status_code, 200)
+        self.assertEqual(self.requests[-1][0], {'mode': 'browse', 'path': F, 'options': {'files': True}}, 'an empty path is the lab folder itself')
+        sent = len(self.requests)
+        for bad in ('/etc/containerlab', '/etc', '/etc/containerlab/other', F + 'x', F + '/../other', 'relative', F + '/a\nb'):
+            response = post(path=bad, lab_id=self.lab_id)
+            self.assertEqual((response.status_code, response.json()['detail']), (400, dd.OUTSIDE_FOLDER_SENTENCE), bad)
+        response = post(path=F)   # no lab_id
+        self.assertEqual((response.status_code, response.json()['detail']), (400, dd.OUTSIDE_FOLDER_SENTENCE))
+        self.assertEqual(post(path=F, lab_id='missing').status_code, 404)
+        self.assertEqual(len(self.requests), sent, 'a refused listing never reaches the helper')
 
     def test_images_tolerate_an_old_helper_and_build_used_by_and_missing_through_image_key(self):
         self.start()

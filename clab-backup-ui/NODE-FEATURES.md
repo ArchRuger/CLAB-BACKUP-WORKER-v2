@@ -38,7 +38,8 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
   vJunos-switch, vJunos-router and XRv9k devices, in the device panel, the Devices view and the map's right-click menu.
   It opens once the container reports healthy (the launcher uses the console during the first boot; if the device panel
   has a Logs section, it shows that boot) and is the way in when SSH does not answer or the management configuration is
-  broken. Where it cannot open, the button stays visible and disabled and says why.
+  broken. The button appears once the lab is linked to a running lab with this device in its topology; from then on it
+  stays visible and, where the console cannot open, disabled with the reason.
 - **Restart device…** (also in the device panel and the Devices technical view) restarts only this
   device through containerlab's own node-scoped restart on the VM (`containerlab restart --node`,
   what the VS Code extension's *Restart node* runs): the container stops and starts with its links
@@ -193,8 +194,9 @@ Container section says *None for this kind*; a device the manager has no topolog
 file) says *Not known* there, and *Lab actions ▾ › Sync topology from VM* supplies the kind.
 
 **When the button is enabled.** The manager answers this itself, and the button, the Devices rows and the map menu all
-show the same answer; the button is disabled, with the reason as its hover text and a note in the device panel, while
-the lab is not linked to a running lab with this device in its topology, the device is not running or the VM's status
+show the same answer; the button appears once the lab is linked to a running lab with this device in its topology, and
+from then on it stays visible and is disabled, with the reason as its hover text and a note in the device panel, while
+the device is not running or the VM's status
 is out of date, the VM reported no management address, a *Restart device…* job is running for it, its health check
 reads starting or unhealthy, or its container has run for less than two minutes. The reason is that a device's launcher
 holds the console while it boots, and a second client would disturb it. Open CLI and the SSH readiness states are not
@@ -203,7 +205,9 @@ affected.
 **What the student sees.** The same terminal page as Open CLI, in console mode: the title and the header read *Serial
 console*, and the notice says that this is the same as a cable in the device's console port, that the device shows its
 own login prompt when it is ready (Enter is only for a prompt that is already there), that a console login stays open
-on the device until you log out, and that the session closes after 15 minutes without typing. The toolbar (font size,
+on the device until you log out, and that the session closes after 15 minutes without typing. A console login left in
+configuration mode keeps holding the device's configuration: a later Load refuses that device until you leave
+configuration mode or log out of the console. The toolbar (font size,
 Copy, Clear, Save) is the one of the SSH page; saved files carry `console` in their names. The manager connects to the
 container's discovered management address and the kind's port; the browser sends only the lab, the device and the word
 `console`. It uses the same single-use ticket and WebSocket origin rules as SSH, but not Paramiko or a saved login:

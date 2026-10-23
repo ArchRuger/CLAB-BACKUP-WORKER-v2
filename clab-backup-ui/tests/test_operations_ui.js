@@ -803,3 +803,39 @@ test('an inspect run starts with a clean sort and filter on the reused dialog',a
  await c.opShowJob('j');
  assert.deepEqual({...dialog._inspectView},{key:'',dir:'',filter:''},'the next inspect run does not inherit the earlier view');
 });
+
+function managerMenuHarness(caps){
+ const els=new Map();
+ const get=id=>{if(!els.has(id)){const listeners={};els.set(id,{id,hidden:true,textContent:'',innerHTML:'',value:'',dataset:{},listeners,isConnected:true,classList:{toggle(){},add(){},remove(){}},
+  addEventListener(type,fn){(listeners[type]=listeners[type]||[]).push(fn);},insertAdjacentHTML(){},querySelector:()=>null,querySelectorAll:()=>[],setAttribute(){},getAttribute:()=>null,removeAttribute(){}});}return els.get(id);};
+ const c=vm.createContext({$:get,esc:v=>String(v??''),state:{labs:[],discovery:{connected:false}},document:{createElement:()=>({}),addEventListener(){},getElementById:()=>null},console,setTimeout:()=>1,clearTimeout(){},addEventListener(){},
+  api:async()=>({json:async()=>({})}),json:async()=>({}),refresh:async()=>{}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opCapabilities=async()=>caps();
+ const open=async()=>{for(const fn of get('manager-menu-list').listeners.menuopen||[])fn();await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));};
+ return {c,get,open};
+}
+test('Manager menu: opening it shows the VM\'s containerlab only for a well-formed version',async()=>{
+ const good=managerMenuHarness(()=>({containerlab:'0.79.0'}));await good.open();
+ assert.equal(good.get('clab-version').textContent,' · containerlab 0.79.0');assert.equal(good.get('clab-version').hidden,false);
+ for(const [label,answer] of [['a malformed version',{containerlab:'bad'}],['a number',{containerlab:7}],['a non-object answer',7],['no answer',null]]){
+  const h=managerMenuHarness(()=>answer);h.get('clab-version').textContent='stale';h.get('clab-version').hidden=false;await h.open();
+  assert.equal(h.get('clab-version').textContent,'',label+' shows nothing');assert.equal(h.get('clab-version').hidden,true,label+' hides the span');
+ }
+ const failing=managerMenuHarness(()=>{throw new Error('no VM');});failing.get('clab-version').textContent='stale';await failing.open();
+ assert.equal(failing.get('clab-version').textContent,'stale','a failed capabilities call leaves the footer as it was and throws nothing');
+});
+test('Images on this VM with no Docker client says so and wires nothing; the file viewer says when only the tail is shown',async()=>{
+ const dialogs=[];
+ const element=()=>({value:'',textContent:'',innerHTML:'',addEventListener(){},querySelectorAll:()=>[]});
+ const els=new Map(),get=id=>{if(!els.has(id))els.set(id,element());return els.get(id);};
+ const data={available:false};
+ const c=vm.createContext({$:get,esc:v=>String(v??''),state:{labs:[]},document:{createElement:element},api:async()=>({json:async()=>data}),json:async()=>({name:'startup-config',text:'hostname r1',truncated:true})});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opDialog=(id,title,body)=>{dialogs.push({id,title,body});return {querySelector:()=>null,querySelectorAll:()=>[]};};
+ c.opBindCopyOutput=()=>{};
+ await c.opImages();
+ assert.equal(dialogs[0].title,'Images on this VM');assert.match(dialogs[0].body,/no Docker client the manager can ask/);assert.doesNotMatch(dialogs[0].body,/op-images-filter/,'no filter or table is drawn');
+ await c.opView('/srv/p/lab/clab-lab/r1/startup-config','L1');
+ assert.match(dialogs[1].body,/Showing the last 512 KiB of this file\./);assert.equal(get('op-view-text').value,'hostname r1');
+});

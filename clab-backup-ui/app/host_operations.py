@@ -619,8 +619,9 @@ class HostOperations:
     def impairment_request(self, req, keys):
         """The shape and the binding of a mutating netem request `{mode, name, options, expected_id, digest}`: the
         option keys exactly `keys`, `expected_id` a 64-hex container id, and `digest` the helper's own digest over
-        `{mode, name, options, expected_id}` (recomputed here, so nothing the student was shown can differ from what
-        runs). Returns (options, expected_id)."""
+        `{mode, name, options, expected_id}`, recomputed here. The digest is an integrity check of the manager's own
+        request (the options the student confirmed are the options that run); the binding to the live container is
+        `expected_id` compared with `container_of()` at execution, not the digest. Returns (options, expected_id)."""
         options = req.get('options')
         if not isinstance(options, dict) or set(options) != set(keys): raise ValueError('Unsupported impairment options.')
         expected_id = req.get('expected_id')
@@ -685,8 +686,10 @@ class HostOperations:
 
     def netem_show_all(self, name, options):
         """`netem-show-all` (read-only, outside the lock): the impairments of 1..64 devices of one lab in one call,
-        each pair bound like the single read; a stopped or absent device answers `[]`. Pairs not reached within
-        SHOW_ALL_DEADLINE come back as `unread` and the answer says `complete: False`."""
+        each pair bound like the single read and carrying the bound container `id` (64 hex, '' when absent) so the
+        manager's impairment calls can send it back as `expected_id`; a stopped or absent device answers `[]`. Pairs not
+        reached within SHOW_ALL_DEADLINE, or whose own `netem show` failed, come back as `unread` and the answer says
+        `complete: False`."""
         lab = identity(name)
         if not isinstance(options, dict) or set(options) != {'nodes'}: raise ValueError('Unsupported impairment options.')
         pairs = options['nodes']
@@ -699,9 +702,14 @@ class HostOperations:
         for node, container in selected:
             if time.monotonic() - started >= SHOW_ALL_DEADLINE:
                 devices.append({'node': node, 'container': container, 'unread': True}); complete = False; continue
-            facts = self.container_of({'node': node, 'container': container}, lab)
-            rows = self.netem_rows(container) if facts['present'] and facts['status'] == 'running' else []
-            devices.append({'node': node, 'container': container, 'present': facts['present'], 'impairments': rows})
+            facts = self.container_of({'node': node, 'container': container}, lab)   # a binding failure stays fatal
+            try:
+                rows = self.netem_rows(container) if facts['present'] and facts['status'] == 'running' else []
+            except ValueError:
+                # One device's failed `netem show` (a container stopping mid-call, an odd answer) must not fail the
+                # lab-wide read: it comes back unread, like a pair the deadline did not reach.
+                devices.append({'node': node, 'container': container, 'present': True, 'unread': True}); complete = False; continue
+            devices.append({'node': node, 'container': container, 'present': facts['present'], 'id': facts.get('id', ''), 'impairments': rows})
         return {'devices': devices, 'complete': complete}
 
     def dry_run_argv(self, path, name, help_text):

@@ -2,12 +2,29 @@
 import time
 import unittest
 
+import app.inventory as inventory
 from app.node_console import (ACCEPT_DO, ACCEPT_WILL, BINARY, DO, DONT, ECHO, IAC, SB, SE, SGA, TelnetCodec, WILL, WONT,
                               container_age, health_part, telnet_escape)
 
 # What qemu's telnet chardev sends at once on a free console (verified live): WILL ECHO, WILL SGA, WILL BINARY, DO BINARY.
 NEGOTIATION = bytes([IAC, WILL, ECHO, IAC, WILL, SGA, IAC, WILL, BINARY, IAC, DO, BINARY])
 REPLIES = bytes([IAC, DO, ECHO, IAC, DO, SGA, IAC, DO, BINARY, IAC, WILL, BINARY])
+
+
+class ConsoleKindTableTests(unittest.TestCase):
+    def test_the_console_kind_allow_list_is_exactly_the_kinds_proven_live(self):
+        self.assertEqual(inventory.CONSOLE_PORTS, {'juniper_vjunosswitch': 5000, 'juniper_vjunosrouter': 5000, 'cisco_xrv9k': 5000})
+        for kind in ('juniper_vqfx', 'juniper_cjunosevolved', 'arista_ceos', 'linux', '', None):
+            self.assertIsNone(inventory.console_port(kind), repr(kind))
+        for kind in ('juniper_vjunosswitch', 'juniper_vjunosrouter', 'cisco_xrv9k'):
+            self.assertEqual(inventory.console_port(kind), 5000, kind)
+        # Every alias that resolves to a listed kind answers 5000; every alias of another kind answers None.
+        for alias, kind in inventory.ALIASES.items():
+            self.assertEqual(inventory.console_port(alias), 5000 if kind in inventory.CONSOLE_PORTS else None, alias)
+        for alias in ('vr-vjunosswitch', 'vjunosswitch', 'vr-vjunosrouter', 'vjunosrouter', 'iosxr', 'vr-xrv9k', 'cisco.iosxr.iosxr'):
+            self.assertEqual(inventory.console_port(alias), 5000, alias)
+        for alias in ('vr-vqfx', 'vqfx', 'junos', 'cjunosevolved', 'ceos', 'eos'):
+            self.assertIsNone(inventory.console_port(alias), alias)
 
 
 class CodecTests(unittest.TestCase):

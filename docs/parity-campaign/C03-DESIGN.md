@@ -396,3 +396,14 @@ One row per confirmed finding (risk R1–R8, UI U1–U17); the refuted ones need
 | L15 the Logs toolbar wrapped between the Find label and its input | Accepted: one inline-flex group | `style.css` |
 | Inspect filter and sort persisted into later inspect runs | Accepted: the view state is reset at the start of every run | §4.2 |
 | Live, low: the drawer's Image row and Images "used by" show the topology's tag while `vrt` runs the local nested-virtualization derivative | No change here: C04's Container section shows the running image from discovery beside the topology's | C04-DESIGN §4.3 |
+
+## 12. Code review answers for the UI slice (`/clab-review-changes` on `d303f38..cd91e2d`, the 1.31.3 scope; 17 confirmed in all, the C03 rows here)
+
+| Finding | Answer | Where |
+|---|---|---|
+| Keyboard focus on the "Other interfaces" summary is lost on every Interfaces poll (should-fix) | Accepted: the summary carries a `data-diag-key`, so `diagSet` focuses it again; the region's `scrollLeft` survives the rebuild; tested | §4.1; `device-diagnostics.js` |
+| Retry and Resume hide themselves while focused, so focus drops to the body (should-fix) | Accepted: when the button being hidden holds focus, focus moves to the section's summary first; tested for both sections | §4.1 |
+| A test claim compared a value with itself (should-fix) | Accepted: the write count is recorded before the second render | `test_readiness_ui.js` |
+| Lab files mode was bounded to the lab folder only in the browser (optional) | Accepted: `browse()` with `files` requires `lab_id` and refuses a path outside `folder_of(lab_id)` with the viewer's sentence; an empty path lists the lab folder; tested | §4.4; `device_diagnostics.py` |
+| The Manager-menu items' client code had no behavioural test (optional) | Accepted: `menuopen` with good, bad and non-object capability answers; `opImages` with `available:false`; `opView` with `truncated:true` | `test_operations_ui.js` |
+| Nothing checked that every test file is in the explicit CI lists (optional) | Accepted: `test_release_consistency.py` checks every `tests/test_*.py` (`-p`, the capture glob) and every `tests/test_*.js` against the workflow; the opt-in `test_eos_ssh.py` is exempt | `test_release_consistency.py` |

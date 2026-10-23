@@ -149,7 +149,7 @@ test('interfaces: data first with a Capture button on the container interface na
  assert.match(out,/Packet capture is not set up on this VM\. Ask your instructor/,'the caption gives the reason');
  assert.match(out,/<strong>eth0<\/strong> · management \(the manager reaches the device through it\)/);
  assert.doesNotMatch(out,/impaired/i,'the management label does not say impaired');
- assert.match(out,/<summary>Other interfaces \(1\)<\/summary>/);assert.ok(out.indexOf('eth1')<out.indexOf('eth0'),'data rows come first');assert.ok(out.indexOf('eth0')<out.indexOf('cpu'));
+ assert.match(out,/<summary data-diag-key="other-summary">Other interfaces \(1\)<\/summary>/);assert.ok(out.indexOf('eth1')<out.indexOf('eth0'),'data rows come first');assert.ok(out.indexOf('eth0')<out.indexOf('cpu'));
  assert.match(out,/ge-0\/0\/0/,'the Port column');assert.match(out,/delay 15ms · loss 5%/);
  assert.match(out,/1\.0 kB\/s/);assert.match(out,/2\.0 kB\/s/);assert.match(out,/5\.00 kB/);
  assert.equal((out.match(/class="table-wrap diag-wrap" tabindex="0"/g)||[]).length,2,'each table scrolls in a focusable, labelled region');
@@ -535,4 +535,28 @@ test('the Find label and field are wrapped in one group that never splits; the n
  const narrow=css.slice(css.indexOf('@media (max-width: 480px)'));
  assert.doesNotMatch(narrow.slice(0,narrow.indexOf('}\n}')),/diag-table td:nth-child\(n\+2\)/,'the narrow rule no longer lets RX, TX and Port wrap');
  assert.match(css,/\.diag-table td:nth-child\(n\+2\) \{ white-space: nowrap; overflow-wrap: normal; \}/);
+});
+
+test('the Other interfaces summary carries a key, so a poll rebuild gives it focus back and keeps the region scroll',()=>{
+ const h=harness();
+ assert.match(h.context.diagInterfacesMarkup(answer(),{device:'r1',withCounters:true}),/<summary data-diag-key="other-summary">Other interfaces \(1\)<\/summary>/);
+ const body=h.get('diag-if-body'),summary={disabled:false,dataset:{diagKey:'other-summary'},focused:0,focus(){this.focused++;}};
+ const region={dataset:{diagKey:'region:other'},scrollLeft:0};
+ body.contains=node=>node===summary;body.querySelectorAll=()=>[{dataset:{diagKey:'region:other'},scrollLeft:120}];
+ body.querySelector=sel=>sel==='[data-diag-key="other-summary"]'?summary:sel==='[data-diag-key="region:other"]'?region:null;
+ h.context.document.activeElement=summary;
+ assert.equal(h.context.diagSet(body,'<p>one</p>'),true);
+ assert.equal(summary.focused,1,'the summary that held focus is focused again after the rebuild');assert.equal(region.scrollLeft,120,'the region keeps its horizontal scroll');
+ assert.equal(h.context.diagSet(body,'<p>one</p>'),false,'unchanged markup is not rebuilt');assert.equal(summary.focused,1);
+});
+
+test('hiding Retry or Resume while it holds focus moves focus to the section summary first',()=>{
+ for(const [name,box,retry] of [['interfaces','diag-interfaces','diag-if-retry'],['logs','diag-logs','diag-log-retry']]){
+  const h=harness(),button=h.get(retry),summary={focused:0,focus(){this.focused++;}};
+  h.get(box).querySelector=sel=>sel==='summary'?summary:null;
+  h.context.diagRetryButton(name,'retry');assert.equal(button.hidden,false);
+  h.context.document.activeElement=button;h.context.diagRetryButton(name,'');
+  assert.equal(summary.focused,1,name+': focus moved to the summary');assert.equal(button.hidden,true);
+  h.context.document.activeElement=null;h.context.diagRetryButton(name,'resume');h.context.diagRetryButton(name,'');assert.equal(summary.focused,1,'focus elsewhere is left alone');
+ }
 });
