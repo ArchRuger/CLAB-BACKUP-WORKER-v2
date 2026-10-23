@@ -234,3 +234,17 @@ test('a map fetched while the Topology panel is hidden is not measured or cached
  assert.equal($('topology-map').innerHTML,'<g data-nodes="1"></g>');assert.equal($('topology-map').attrs.viewBox,'0 0 100 50');
  await h.context.refreshMap();assert.equal(measured,1,'once measured, an unchanged drawing is still not re-rendered');
 });
+
+test('C04: the menu gains Console after Open CLI only for a kind that has one; held, it is disabled with the server reason',()=>{
+ const l=lab();
+ l.nodes.push({name:'vrt',short_name:'vrt',ssh_ready:false,login_configured:true,readiness:'Ready',nos_login:{status:'booting'},kind:'juniper_vjunosrouter',container:'clab-x-vrt',console:true,console_hold:''});
+ l.nodes.push({name:'vsw',short_name:'vsw',ssh_ready:true,readiness:'Ready',nos_login:{status:'ready'},console:true,console_hold:{key:'starting',text:'vsw is still starting: its launcher uses the console until the device reports healthy.'}});
+ const h=harness({lab:l});
+ h.context.openNodeMenu(element('r1'),0,0);assert.equal(items(h.nodeMenu.innerHTML).some(i=>i.kind==='console'),false,'no item for a kind without a console');
+ h.context.openNodeMenu(element('vrt'),0,0);const ok=items(h.nodeMenu.innerHTML);
+ assert.deepEqual(ok.map(i=>i.kind),['terminal','console','capture','backup','restart','details']);
+ assert.doesNotMatch(ok[1].attrs,/disabled/);assert.match(ok[1].body,/^Console <span class="external" aria-hidden="true">↗<\/span>$/);
+ h.context.openNodeMenu(element('vsw'),0,0);const held=items(h.nodeMenu.innerHTML)[1];
+ assert.equal(held.kind,'console');assert.match(held.attrs,/disabled title="vsw is still starting: its launcher uses the console/);assert.match(held.body,/<small>vsw is still starting: its launcher/,'the reason is visible text under the item');
+ assert.match(h.nodeMenu.innerHTML,/role="menuitem" data-console="vsw"/);
+});

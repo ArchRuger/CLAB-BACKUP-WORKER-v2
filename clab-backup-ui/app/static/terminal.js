@@ -1,9 +1,19 @@
 'use strict';
 const params=new URLSearchParams(location.hash.slice(1)),lab=params.get('lab'),name=params.get('node'),labLabel=params.get('label')||'Lab';
 const get=id=>document.getElementById(id);
-document.title=(name||'Device')+' · '+labLabel+' · Containerlab Node Manager';get('title').textContent=(name||'Unknown device')+' · '+labLabel;
+// Console mode (docs/parity-campaign/C04-DESIGN.md section 3): the same page, a serial console of a vrnetlab device instead of an SSH shell.
+const protocol=params.get('protocol')==='console'?'console':'ssh',consoleMode=protocol==='console';
+const pageTitle=consoleMode?(name||'Device')+' · Console · '+labLabel:(name||'Device')+' · '+labLabel;
+document.title=pageTitle+' · Containerlab Node Manager';get('title').textContent=consoleMode?(name||'Unknown device')+' · Console · '+labLabel:(name||'Unknown device')+' · '+labLabel;
+if(consoleMode){
+ if(get('brand-label'))get('brand-label').textContent='Serial console';
+ if(get('terminal'))get('terminal').setAttribute('aria-label','Serial console terminal');
+}
 if(get('back')){get('back').href='/#'+new URLSearchParams({lab:lab||'',device:name||''});get('back').textContent='← '+labLabel;get('back').hidden=!lab;}
-if(get('notice-text'))get('notice-text').textContent=`Logged in with the credentials saved for ${name||'this device'}. The session closes after 15 minutes without activity. Alt+T moves to the terminal tools; Alt+Up, Alt+Down and Alt+0 change the text size; on a Linux node type Esc then the key for the shell's own Alt shortcuts.`;
+const CONSOLE_NOTICE=device=>`Serial console of ${device}: the same as a cable in its console port. The device shows its login prompt when it is ready; Enter is only for a prompt that is already there. The manager sends no credentials. Log out before you disconnect, because a console login stays open on the device. The session closes after 15 minutes without typing, and a console open in another tab blocks this one until then. Alt+T moves to the terminal tools; Alt+Up, Alt+Down and Alt+0 change the text size.`;
+const CONSOLE_DETAILS='The console opens once the device reports healthy: during a boot its launcher uses the console. One console per device at a time; output is not recorded by the manager. A session ends after 4 hours at most.';
+if(get('notice-text'))get('notice-text').textContent=consoleMode?CONSOLE_NOTICE(name||'this device'):`Logged in with the credentials saved for ${name||'this device'}. The session closes after 15 minutes without activity. Alt+T moves to the terminal tools; Alt+Up, Alt+Down and Alt+0 change the text size; on a Linux node type Esc then the key for the shell's own Alt shortcuts.`;
+if(consoleMode&&get('details-text'))get('details-text').textContent=CONSOLE_DETAILS;
 const FONT_SIZES=[11,12,13,14,15,16,17,18],FONT_DEFAULT=14,FONT_KEY='clab.terminal.fontSize',SCROLLBACK=3000;
 // Browser storage may be blocked or absent: the size is then simply not remembered.
 function prefGet(key){try{return localStorage.getItem(key);}catch{return null;}}
@@ -14,9 +24,12 @@ const terminal=new Terminal({cursorBlink:true,scrollback:SCROLLBACK,fontSize,fon
 const fit=new FitAddon.FitAddon();terminal.loadAddon(fit);terminal.open(get('terminal'));
 let socket=null,generation=0,opened=false;
 // The visible status is a student sentence; the manager's exact message stays in the title attribute.
+// In console mode a sentence the server wrote for the console is shown verbatim, so no SSH rewrite (credentials, discovery, CLI limit) can read it.
+const CONSOLE_VERBATIM=/serial console|console of |console is closed|console closed|limit 8|topology kind|linked to the VM|management address|launcher|started less than|has no serial/;
 function statusText(raw){
  const device=name||'the device',text=String(raw||'');
- const map=[[/^Connecting/,`Connecting to ${device}…`],[/^Connected$/,'Connected'],[/^Disconnected$/,'Disconnected'],[/^Session timeout/,'Closed after 15 minutes without activity. Click Reconnect to continue.'],[/^Session ended/,`The session ended. Check the device's saved credentials, or close other CLIs if too many are open.`],[/^Connection failed/,`Could not connect to ${device}.`],[/refresh VM discovery/,`${device} is not running or the lab status is stale. Refresh the lab list and try again.`],[/Assign SSH credentials/,`${device} needs login credentials. Add them in the lab under Advanced › Credentials.`],[/session limit|Too many pending/,'Too many CLIs are open (limit 32). Close one and try again.'],[/^(Lab|Node) not found/,'This lab or device is no longer in the manager.']];
+ const consoleMap=consoleMode?[[/^Connecting/,`Connecting to the console of ${device}…`],[/^Session ended\.$/,'The console session ended.'],[/Too many pending/,'Too many sessions are starting at once. Try again in a moment.'],[CONSOLE_VERBATIM,text]]:[];
+ const map=[...consoleMap,[/^Connecting/,`Connecting to ${device}…`],[/^Connected$/,'Connected'],[/^Disconnected$/,'Disconnected'],[/^Session timeout/,'Closed after 15 minutes without activity. Click Reconnect to continue.'],[/^Session ended/,`The session ended. Check the device's saved credentials, or close other CLIs if too many are open.`],[/^Connection failed/,`Could not connect to ${device}.`],[/refresh VM discovery/,`${device} is not running or the lab status is stale. Refresh the lab list and try again.`],[/Assign SSH credentials/,`${device} needs login credentials. Add them in the lab under Advanced › Credentials.`],[/session limit|Too many pending/,'Too many CLIs are open (limit 32). Close one and try again.'],[/^(Lab|Node) not found/,'This lab or device is no longer in the manager.']];
  const hit=map.find(([re])=>re.test(text));return hit?hit[1]:text;
 }
 function setStatus(raw){const el=get('status'),text=statusText(raw);el.textContent=text;if(text===raw)el.removeAttribute('title');else el.title=raw;}
@@ -27,10 +40,10 @@ terminal.onData(data=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.s
 function disconnect(){generation++;if(socket)socket.close();socket=null;setStatus('Disconnected');setConnectEnabled(true);}
 async function connect(){
  disconnect();const request=++generation;
- if(!lab||!name){setStatus('Open this CLI from a device in the lab.');return;}
+ if(!lab||!name){setStatus(consoleMode?'Open this console from a device in the lab.':'Open this CLI from a device in the lab.');return;}
  setConnectEnabled(false);setStatus('Connecting…');
  try{
-  const response=await fetch('/api/labs/'+encodeURIComponent(lab)+'/terminal-ticket',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+  const response=await fetch('/api/labs/'+encodeURIComponent(lab)+'/terminal-ticket',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(consoleMode?{name,protocol}:{name})});
   if(request!==generation)return;
   const data=await response.json();if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Connection failed');
   get('endpoint').textContent=data.endpoint||'';
@@ -103,7 +116,7 @@ function download(text,filename){
 }
 function exportText(kind){
  const parts=kind==='session'?sessionParts():null,text=(parts?parts.text:screenText())+'\n';
- download(text,exportName(labLabel,name,new Date(),kind==='session'?'session':'screen'));
+ download(text,exportName(labLabel,name,new Date(),(consoleMode?'console-':'')+(kind==='session'?'session':'screen')));
  const limited=!!parts&&(clearedLimited||parts.cut||terminal.buffer.normal.length>=SCROLLBACK);
  toolsStatus('Saved on this computer only. The manager keeps no copy of this session.'+(limited?' The file holds the last 3,000 lines.':''));
 }

@@ -91,8 +91,10 @@ function openNodeMenu(element,x,y){
  const ds=mapDeviceState(n),captureAttrs=typeof captureActionAttrs==='function'?captureActionAttrs():'',captureOff=/\bdisabled\b/.test(captureAttrs),backupReason=nodeBackupReason(n);
  // Restart device (one node, operations.js): the same eligibility the Devices view uses, with its reason.
  const restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};
+ const consoleItem=typeof consoleState==='function'?consoleState(n):{offered:false};
  nodeMenu.innerHTML=`<div class="context-node-name">${esc(n.short_name||n.name)}<span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span></div>`
  +`<button type="button" role="menuitem" data-terminal="${esc(n.name)}" ${n.ssh_ready?'':`disabled title="${esc(ds.detail)}"`}>Open CLI <span class="external" aria-hidden="true">↗</span>${n.ssh_ready?'':nodeMenuReason(ds.detail)}</button>`
+ +(consoleItem.offered?`<button type="button" role="menuitem" data-console="${esc(n.name)}" ${consoleItem.ok?'':`disabled title="${esc(consoleItem.reason)}"`}>Console <span class="external" aria-hidden="true">↗</span>${consoleItem.ok?'':nodeMenuReason(consoleItem.reason)}</button>`:'')
  +`<button type="button" role="menuitem" data-capture="${esc(n.name)}" ${captureAttrs}>Capture traffic…${captureOff?nodeMenuReason('Packet capture isn’t set up on this VM yet — see Tools › Packet capture.'):''}</button>`
  +`<button type="button" role="menuitem" data-backup="${esc(n.name)}" ${backupReason?`disabled title="${esc(backupReason)}"`:''}>Back up configuration${nodeMenuReason(backupReason)}</button>`
  +`<button type="button" role="menuitem" data-restart="${esc(n.name)}" class="danger" ${restart.ok?'':`disabled title="${esc(restart.reason)}"`}>Restart device…${restart.ok?'':nodeMenuReason(restart.reason)}</button>`

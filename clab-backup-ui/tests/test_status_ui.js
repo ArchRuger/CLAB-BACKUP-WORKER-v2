@@ -727,3 +727,12 @@ test('C02: STATUS_STOPPABLE names the actions that die with the helper channel, 
  }
  assert.doesNotMatch([...Object.values(g('STATUS_STOP_AFTERMATH'))].map(a=>a.repair).join(' '),/rolled back/i);
 });
+
+test('C04: consoleState reads the server decision: offered only with console, ok only without a hold sentence, the reason is the server text',()=>{
+ const c=makeContext();
+ assert.deepEqual({...c.consoleState({name:'ceos',console:false,console_hold:''})},{offered:false,ok:false,reason:'',key:''});
+ assert.equal(c.consoleState(undefined).offered,false);assert.equal(c.consoleState({}).offered,false);
+ assert.deepEqual({...c.consoleState({console:true,console_hold:''})},{offered:true,ok:true,reason:'',key:''});
+ assert.deepEqual({...c.consoleState({console:true,console_hold:{key:'young',text:'x started less than two minutes ago; its launcher takes the console first. Try again in a moment.'}})},{offered:true,ok:false,reason:'x started less than two minutes ago; its launcher takes the console first. Try again in a moment.',key:'young'});
+ assert.equal(c.consoleState({console:false,console_hold:{key:'none',text:'t'}}).offered,false,'a hold without a console is no offer');
+});

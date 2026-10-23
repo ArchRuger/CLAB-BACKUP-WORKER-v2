@@ -293,11 +293,15 @@ function renderNodes(){const lab=current();if(!lab||!devicesTechnical)return;con
 // The per-device actions of the Devices view (its technical table and the device panel): Open CLI,
 // Capture traffic…, Back up configuration, Restart device… (operations.js decides its eligibility, the
 // same way the map's right-click menu does) and, outside the panel, Details.
-function nodeActions(n,details=false){const hint=sshHint(n),restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button><button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button><button class="danger-action" data-restart="${esc(n.name)}" ${restart.ok?'':`disabled title="${esc(restart.reason)}"`}>Restart device…</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}`;}
+// The serial console button (docs/parity-campaign/C04-DESIGN.md section 4.2): only for a kind that has one, disabled with the
+// server's own reason (consoleState in status.js) while the device is starting, restarting or not running.
+function consoleButton(n){const c=typeof consoleState==='function'?consoleState(n):{offered:false};if(!c.offered)return '';return `<button class="console-action" data-console="${esc(n.name)}" ${c.ok?'':`disabled title="${esc(c.reason)}"`}>Console <span aria-hidden="true">↗</span></button>`;}
+function nodeActions(n,details=false){const hint=sshHint(n),restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button>${consoleButton(n)}<button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button><button class="danger-action" data-restart="${esc(n.name)}" ${restart.ok?'':`disabled title="${esc(restart.reason)}"`}>Restart device…</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}`;}
 // The device panel's line under its actions: why a disabled action is unavailable, in words a keyboard or touch
 // user can reach (a disabled button's title is hover-only), plus the capture caption when there is one.
 function nodeActionNotes(n){
  const notes=[];const capture=typeof captureStatusLine==='function'?captureStatusLine():'';if(capture)notes.push(capture);
+ const con=typeof consoleState==='function'?consoleState(n):{offered:false};if(con.offered&&!con.ok)notes.push('Console is not available: '+con.reason);
  const restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:true};if(!restart.ok)notes.push('Restart device… is not available: '+restart.reason+'.');
  const backup=typeof nodeBackupReason==='function'?nodeBackupReason(n):'';if(backup)notes.push('Back up configuration is not available: '+backup+'.');
  return notes.join(' ');
@@ -312,7 +316,7 @@ function deviceRow(n,rail){
  const ds=typeof deviceState==='function'?deviceState(n):{key:n.ssh_ready?'ready':'unknown',label:n.ssh_ready?'Ready':'Not ready',detail:n.ssh_ready?'':sshHint(n),cli:!!n.ssh_ready,pill:n.ssh_ready?'ok':'neutral'};
  const why=(rail?'why-rail-':'why-')+deviceSlug(n.name),reason=!ds.cli&&ds.detail?`<small class="row-reason" id="${esc(why)}">${esc(ds.detail)}</small>`:'';
  const open=$('details-dialog').open&&detailName===n.name;
- return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span></div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}</div></li>`;
+ return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span></div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':consoleButton(n)}${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}</div></li>`;
 }
 function renderDeviceList(){
  const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();
@@ -393,6 +397,7 @@ async function handleNodeAction(e){const b=e.target.closest('button');if(!b||b.d
  if(b.dataset.profile!==undefined){profileFromDrawer=detailName;$('details-dialog').close();openProfile();}
  if(b.dataset.details)openDetails(b.dataset.details);
  if(b.dataset.terminal){const url='/static/terminal.html#'+new URLSearchParams({lab:activeId,node:b.dataset.terminal,label:current().name});window.open(url,'_blank');}
+ if(b.dataset.console){const url='/static/terminal.html#'+new URLSearchParams({lab:activeId,node:b.dataset.console,label:current().name,protocol:'console'});window.open(url,'_blank');}
  if(b.dataset.backup){$('details-dialog').close();startJob('backup',[b.dataset.backup]);}
  // Restart device: the map menu, the Devices table and the device panel all end up here, and here in
  // one reviewed operation (operations.js) that names the device and the lab.
@@ -472,6 +477,48 @@ function detailsEndpoint(n){const a=String(n.address??'');return (a.includes(':'
 function detailsEndpointMarkup(n){const a=String(n.address??''),v6=a.includes(':');return (v6?'[':'')+(a?`<span id="details-fact-address">${esc(a)}</span>`:'')+(v6?']':'')+':'+esc(n.port);}
 // Copy buttons come from clipboard.js; a page without it shows the facts as before.
 function copyIf(value,what,targetId,visible){return typeof copyButton==='function'?copyButton(value,what,targetId,visible):'';}
+// The device panel's Container section (docs/parity-campaign/C04-DESIGN.md section 4.3), built from discovery alone: it never
+// calls the VM. The static rows (with the Copy buttons) and the volatile rows (#details-container-live) are written by
+// separate setMarkup calls, so a focused Copy button and its "Copied" feedback survive the 4-second poll.
+const DETAILS_CONTAINER_UNLINKED='Container facts come from the VM. This lab is not linked to a running lab (Advanced › Link to a running lab…).';
+function detailsFactRow(label,html){return `<dt>${esc(label)}</dt><dd>${html}</dd>`;}
+function detailsKindImageRows(n){
+ const image=n.discovered_image||n.image||'',differs=n.discovered_image&&n.image&&n.discovered_image!==n.image;
+ return (n.kind?detailsFactRow('Container kind',`<span class="mono" id="details-fact-kind">${esc(n.kind)}</span>${copyIf(n.kind,'the container kind','details-fact-kind')}`):'')
+  +(image?detailsFactRow('Image',`<span class="mono" id="details-fact-image">${esc(image)}</span>${copyIf(image,'the image','details-fact-image')}${differs?`<small class="secondary-text">topology names ${esc(n.image)}</small>`:''}`):'');
+}
+function detailsConsoleWord(n){
+ if(typeof consoleState==='function'&&consoleState(n).offered)return 'Serial, port 5000 (Console ↗ above)';
+ return n.kind?'None for this kind':'Not known: the manager has no topology kind for this device';
+}
+function detailsAddressRows(n){
+ const lines=[['IPv4',n.discovered_ipv4,'details-fact-ipv4','the IPv4 address'],['IPv6',n.discovered_ipv6,'details-fact-ipv6','the IPv6 address']].filter(l=>l[1]);
+ return detailsFactRow('Addresses',lines.length?lines.map(([family,value,id,what])=>`<div><span class="secondary-text">${family}</span><span class="mono" id="${id}">${esc(value)}</span>${copyIf(value,what,id)}</div>`).join(''):'No address reported');
+}
+// Everything with a Copy button; rebuilt only when one of these values changes.
+function detailsContainerStatic(n){
+ // An older manager sends no container field at all: say nothing about linking, show the topology facts alone.
+ if(typeof n.container!=='string'){const rows=detailsKindImageRows(n);return rows?`<section class="drawer-section"><h3>Container</h3><dl class="health-grid">${rows}</dl></section>`:'';}
+ if(!n.container){const rows=detailsKindImageRows({kind:n.kind,image:n.image});return `<section class="drawer-section"><h3>Container</h3><p class="caption">${esc(DETAILS_CONTAINER_UNLINKED)}</p>${rows?`<dl class="health-grid">${rows}</dl>`:''}</section>`;}
+ const id=n.discovered_id||'';
+ return `<section class="drawer-section"><h3>Container</h3><dl class="health-grid">`
+  +detailsFactRow('Container',`<span class="mono" id="details-fact-container">${esc(n.container)}</span>${copyIf(n.container,'the container name','details-fact-container')}`)
+  +detailsFactRow('ID',id?`<span class="mono" id="details-fact-id">${esc(id)}</span>${copyIf(id,'the container id','details-fact-id')}`:'Not reported')
+  +detailsKindImageRows(n)+detailsAddressRows(n)+detailsFactRow('Console',esc(detailsConsoleWord(n)))
+  +`</dl><dl class="health-grid" id="details-container-live"></dl></section>`;
+}
+// The volatile rows: State from discovery, and the diagnostics facts only while a diagnostics section of this device is open and polling.
+function detailsContainerLive(n,facts){
+ if(typeof n.container!=='string'||!n.container)return '';
+ const state=n.runtime_state||'',status=n.runtime_status||'';
+ let html=state||status?detailsFactRow('State',esc(state==='absent'?'Not on the VM':[state,status].filter(Boolean).join(' · '))):'';
+ if(facts&&facts.present){
+  const ports=(facts.ports||[]).map(p=>`<div class="mono">${esc(p.host)} → ${esc(p.container)}</div>`).join('');
+  html+=detailsFactRow('Process',esc(facts.pid||'—'))+detailsFactRow('Health',esc(facts.health||'no health check'))+detailsFactRow('Started',esc(facts.started?utcDisplay(facts.started):'—'))+detailsFactRow('Published ports',ports||'none')
+   +detailsFactRow('Source','<small class="secondary-text">From the Interfaces or Logs section while it is open.</small>');
+ }
+ return html;
+}
 function renderDetails(){
  const lab=current(),n=lab?.nodes.find(n=>n.name===detailName);if(!n){if($('details-dialog').open)$('details-dialog').close();return;}
  const h=nodeHealth(n.name),ds=typeof deviceState==='function'?deviceState(n):null;
@@ -486,7 +533,8 @@ function renderDetails(){
  if($('details-status-text'))$('details-status-text').textContent=recheckPending(n)?`Checking ${n.short_name||n.name} again… (automatic within a minute — or Test login now)`:ds?ds.detail:(h?.ssh?.message||'');
  setMarkup($('details-status-actions'),statusActions(n,ds));
  setMarkup($('details-status-raw-body'),`<div class="connection-result">${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<p>${esc(h?.ssh?.message||'No login check yet.')}</p>${h?.ssh?.at?`<time>${esc(utcDisplay(h.ssh.at))}${h.ssh.source==='automatic'?' · automatic check':''}</time>`:''}</div><p class="form-help">${detailsLoginHelp(lab,n)}</p>`);
- setMarkup($('details-info'),`<section class="drawer-section"><h3>Connection</h3><dl class="health-grid"><dt>Name in lab files</dt><dd><span class="mono" id="details-fact-name">${esc(n.name)}</span>${copyIf(n.name,'the name in the lab files','details-fact-name')}</dd><dt>Network OS</dt><dd>${esc(platformLabel(n.platform))}</dd><dt>Login credentials</dt><dd>${esc(profileName(lab,n))}</dd><dt>Address</dt><dd><span class="mono" id="details-fact-endpoint">${detailsEndpointMarkup(n)}</span>${copyIf(detailsEndpoint(n),'the address and port','details-fact-endpoint')}${n.address?copyIf(n.address,'address only','details-fact-address','Copy address'):''}</dd>${n.kind?`<dt>Container kind</dt><dd><span class="mono" id="details-fact-kind">${esc(n.kind)}</span>${copyIf(n.kind,'the container kind','details-fact-kind')}</dd>`:''}${n.image?`<dt>Image</dt><dd><span class="mono" id="details-fact-image">${esc(n.image)}</span>${copyIf(n.image,'the image','details-fact-image')}</dd>`:''}</dl></section>`);
+ setMarkup($('details-info'),`<section class="drawer-section"><h3>Connection</h3><dl class="health-grid"><dt>Name in lab files</dt><dd><span class="mono" id="details-fact-name">${esc(n.name)}</span>${copyIf(n.name,'the name in the lab files','details-fact-name')}</dd><dt>Network OS</dt><dd>${esc(platformLabel(n.platform))}</dd><dt>Login credentials</dt><dd>${esc(profileName(lab,n))}</dd><dt>Address</dt><dd><span class="mono" id="details-fact-endpoint">${detailsEndpointMarkup(n)}</span>${copyIf(detailsEndpoint(n),'the address and port','details-fact-endpoint')}${n.address?copyIf(n.address,'address only','details-fact-address','Copy address'):''}</dd></dl></section>${detailsContainerStatic(n)}`);
+ setMarkup($('details-container-live'),detailsContainerLive(n,typeof diagnosticsFacts==='function'?diagnosticsFacts(activeId+'/'+detailName):null));
  setMarkup($('details-advanced-body'),`<dl class="health-grid"><dt>Included in backups</dt><dd><label class="checkbox-label"><input type="checkbox" data-enable="${esc(n.name)}" ${n.enabled?'checked':''} ${!n.platform?'disabled title="Choose a network OS first (Edit connection)"':''}> Include ${esc(n.short_name||n.name)} in backups</label></dd><dt>Can be backed up</dt><dd>${n.readiness==='Ready'?'Yes':'No'+(n.readiness?' — '+esc(readinessWord(n.readiness)):'')}</dd></dl>`);
  const backups=state.jobs.filter(j=>j.lab_id===activeId&&j.operation==='backup'&&!['queued','running'].includes(j.status));
  const entries=backups.flatMap(j=>j.nodes.map((node,index)=>({j,node,index}))).filter(x=>x.node.name===n.name&&x.node.status==='succeeded'&&x.node.download_name);

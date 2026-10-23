@@ -291,3 +291,71 @@ test('terminal.html carries every id the script drives, one tab stop, a toolbar 
  const order=[...page.matchAll(/<script src="\/static\/([^"?]+\.js)\?v=[^"]*"/g)].map(m=>m[1]);
  assert.ok(order.indexOf('clipboard.js')>=0&&order.indexOf('clipboard.js')<order.indexOf('terminal.js'));
 });
+
+// ---- console mode (C04 section 3): the same page, a serial console instead of an SSH shell ----
+const CONSOLE_HASH='#lab=l1&node=vrt&label=parity&protocol=console';
+test('console mode: title, brand label, notice, details, aria-label, the ticket body and the endpoint',async()=>{
+ const h=harness({hash:CONSOLE_HASH,reply:()=>({ok:true,body:{ticket:'T1',endpoint:'172.20.20.112:5000',protocol:'console'}})}),{$,fetched,document}=h;
+ assert.equal(document.title,'vrt · Console · parity · Containerlab Node Manager');assert.equal($('title').textContent,'vrt · Console · parity');
+ assert.equal($('brand-label').textContent,'Serial console');assert.equal($('terminal').getAttribute('aria-label'),'Serial console terminal');
+ const notice=$('notice-text').textContent;
+ assert.match(notice,/^Serial console of vrt: the same as a cable in its console port\./);assert.match(notice,/shows its login prompt when it is ready; Enter is only for a prompt that is already there/);
+ assert.match(notice,/Log out before you disconnect/);assert.match(notice,/15 minutes without typing/);assert.match(notice,/a console open in another tab blocks this one until then/);
+ assert.doesNotMatch(notice,/credentials saved/,'no SSH sentence in console mode');
+ assert.match($('details-text').textContent,/opens once the device reports healthy/);assert.match($('details-text').textContent,/One console per device at a time/);
+ await settle();assert.equal(fetched.length,1);assert.deepEqual(JSON.parse(fetched[0].options.body),{name:'vrt',protocol:'console'});
+ assert.equal($('endpoint').textContent,'172.20.20.112:5000');
+ assert.equal($('status').textContent,'Connecting to the console of vrt…');
+});
+test('console mode: the SSH hash still posts the name only and keeps the SSH page strings',async()=>{
+ const h=harness();await settle();assert.deepEqual(JSON.parse(h.fetched[0].options.body),{name:'r1'});
+ assert.equal(h.$('brand-label').textContent,'');assert.equal(h.$('terminal').getAttribute('aria-label'),null);
+ assert.doesNotMatch(h.document.title,/Console/);
+ const odd=harness({hash:'#lab=l1&node=r1&label=Demo&protocol=ssh'});await settle();assert.deepEqual(JSON.parse(odd.fetched[0].options.body),{name:'r1'});
+ const junk=harness({hash:'#lab=l1&node=r1&label=Demo&protocol=telnet'});await settle();assert.deepEqual(JSON.parse(junk.fetched[0].options.body),{name:'r1'},'only the word console selects console mode');
+});
+test('console mode: the server sentences are shown verbatim, the SSH rewrites never fire, a device close is kept after Disconnected',async()=>{
+ const sentences=[
+  'The manager has no topology kind for vrt (it came from an inventory file), so it cannot tell whether it has a serial console. Link the lab and use Lab actions ▾ › Sync topology from VM.',
+  'vrt has no serial console: its kind (arista_ceos) does not expose one. Open CLI is the way in.',
+  'The console needs a lab linked to the VM with this device in its topology. Link it under Advanced › Link to a running lab…, or sync the topology from the VM.',
+  'vrt is not running on the VM (or the lab status is out of date), so its console is closed. Start the lab, then try again.',
+  'The VM has not reported a management address for vrt. Refresh the lab list and try again.',
+  'vrt is restarting on the VM. Its launcher takes the console first; the console opens once the device reports healthy.',
+  'vrt is still starting: its launcher uses the console until the device reports healthy. Try again once it is healthy; if the device panel has a Logs section, it shows the boot.',
+  'vrt has not finished booting (its health check fails), so its launcher keeps the console. If the device panel has a Logs section, it shows why.',
+  'vrt started less than two minutes ago; its launcher takes the console first. Try again in a moment.',
+  'Too many consoles are open (limit 8). Close one and try again.',
+  'The console of vrt is already open from this manager (since 04:15 UTC), in another tab or browser. Close that tab, or wait: it closes after 15 minutes without typing.',
+  'Could not reach the console of vrt (port 5000 on its management address). The device may be stopping or restarting, or its console is in use by another client; if the device panel has a Logs section, it shows what the device prints.',
+  'The console of vrt is in use by its launcher (while the device boots or its boot fails) or by a client outside this manager. If the device panel has a Logs section, it shows the boot; try again once the device reports healthy.',
+  'The console closed: the device stopped or restarted.'];
+ const {$,sockets}=harness({hash:CONSOLE_HASH});await settle();sockets[0].onopen();
+ for(const text of sentences){sockets[0].onmessage({data:JSON.stringify({message:text})});assert.equal($('status').textContent,text,text);assert.equal($('status').title,'','a verbatim sentence has no second text');}
+ sockets[0].onmessage({data:JSON.stringify({message:'Session ended.'})});assert.equal($('status').textContent,'The console session ended.');assert.equal($('status').title,'Session ended.');
+ sockets[0].onmessage({data:JSON.stringify({message:'Too many pending tickets'})});assert.equal($('status').textContent,'Too many sessions are starting at once. Try again in a moment.');
+ sockets[0].onmessage({data:JSON.stringify({message:'Session timeout after 900 seconds'})});assert.match($('status').textContent,/Closed after 15 minutes/);
+ sockets[0].onmessage({data:JSON.stringify({message:'The console closed: the device stopped or restarted.'})});
+ sockets[0].onclose();assert.equal($('status').textContent,'Disconnected — The console closed: the device stopped or restarted.');
+ // the same texts in SSH mode keep their rewrites
+ const ssh=harness();await settle();ssh.sockets[0].onopen();
+ ssh.sockets[0].onmessage({data:JSON.stringify({message:'Session ended.'})});assert.match(ssh.$('status').textContent,/Check the device's saved credentials/);
+ ssh.sockets[0].onmessage({data:JSON.stringify({message:'Too many pending tickets'})});assert.match(ssh.$('status').textContent,/limit 32/);
+});
+test('console mode: a refused ticket shows the 400/409 sentence, keeps Reconnect usable and the next try mints a new ticket',async()=>{
+ const text='vrt is still starting: its launcher uses the console until the device reports healthy. Try again once it is healthy; if the device panel has a Logs section, it shows the boot.';
+ let n=0;const h=harness({hash:CONSOLE_HASH,reply:()=>(++n===1?{ok:false,body:{detail:text}}:{ok:true,body:{ticket:'T2',endpoint:'172.20.20.112:5000'}})});
+ await settle();assert.equal(h.sockets.length,0);assert.equal(h.$('status').textContent,text);assert.equal(h.$('connect').disabled,false);
+ h.$('connect').onclick();await settle();assert.equal(h.fetched.length,2);assert.deepEqual(JSON.parse(h.fetched[1].options.body),{name:'vrt',protocol:'console'});assert.equal(h.sockets.length,1);
+});
+test('console mode: exports carry a console- prefix, SSH names are unchanged; without a device the console sentence names the console',async()=>{
+ const h=harness({hash:CONSOLE_HASH,store:{}}),t=h.term();await settle();h.sockets[0].readyState=1;h.sockets[0].onopen();
+ t.rows=2;t.buffer.active=fakeBuffer([['a'],['b']]);t.buffer.normal=fakeBuffer([['a'],['b']]);
+ h.$('export-screen').onclick({detail:0});h.$('export-session').onclick({detail:0});
+ assert.match(h.downloads[0].download,/^parity-vrt-\d{8}T\d{6}Z-console-screen\.txt$/);assert.match(h.downloads[1].download,/^parity-vrt-\d{8}T\d{6}Z-console-session\.txt$/);
+ const bare=harness({hash:'#protocol=console'});assert.equal(bare.$('status').textContent,'Open this console from a device in the lab.');
+});
+test('terminal.html carries the console-mode ids (brand label, details text)',()=>{
+ const page=fs.readFileSync(path.join(__dirname,'../app/static/terminal.html'),'utf8');
+ assert.match(page,/<span id="brand-label" class="brand-label">SSH session<\/span>/);assert.match(page,/<span id="details-text">/);
+});

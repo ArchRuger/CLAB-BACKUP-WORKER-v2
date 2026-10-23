@@ -144,7 +144,7 @@ function diagLineMarkup(line){return `<span class="diag-line"${line.at?` title="
 function diagSectionNew(){return {open:false,timer:0,flight:false,queued:null,plan:diagPlan(0),stopped:'',hidden:false,kind:'',message:'',shown:false,token:0};}
 function diagIfNew(){return {sample:null,answer:null,rates:{},impair:{},impairStamp:null,otherOpen:false};}
 function diagLogNew(){return {lines:[],cursor:'',tail:200,follow:false,find:'',older:false,missing:false,truncated:false,present:true,loaded:false};}
-let diagKey='', diagEpoch=0, diagCapsAsked=0, diagSec={interfaces:diagSectionNew(),logs:diagSectionNew()}, diagIf=diagIfNew(), diagLog=diagLogNew();
+let diagKey='', diagFacts=null, diagFactsSeen='', diagEpoch=0, diagCapsAsked=0, diagSec={interfaces:diagSectionNew(),logs:diagSectionNew()}, diagIf=diagIfNew(), diagLog=diagLogNew();
 const diagIds={interfaces:{box:'diag-interfaces',status:'diag-if-status',retry:'diag-if-retry',loaded:'Interfaces loaded.',pause:'Interface updates paused after 30 minutes.'},logs:{box:'diag-logs',status:'diag-log-status',retry:'diag-log-retry',loaded:'Logs loaded.',pause:'Follow paused after 30 minutes.'}};
 function diagWants(name){return diagSec[name].open&&(name==='interfaces'||diagLog.follow);}
 function diagSay(name,kind,text){
@@ -168,6 +168,24 @@ function diagOperationStamp(){
  if(typeof state==='undefined'||!state||typeof activeId==='undefined')return '';
  return (state.operations||[]).filter(job=>job.lab_id===activeId&&job.finished).map(job=>String(job.finished)).sort().pop()||'';
 }
+// ---- Container facts for the drawer (docs/parity-campaign/C04-DESIGN.md section 4.3, pull model) ---------------------
+// The Container section of the device panel shows pid, health, start time and published ports only while a diagnostics
+// section of this device is open and its poll is running; otherwise null, so the caption "from the Interfaces or Logs
+// section while it is open" is never false. Nothing here fetches for it.
+function diagnosticsFacts(key){
+ if(!diagFacts||!diagFacts.present||key!==diagKey)return null;
+ for(const name of ['interfaces','logs']){const sec=diagSec[name];if(sec.open&&!sec.stopped&&diagWants(name))return diagFacts;}
+ return null;
+}
+// Called whenever what diagnosticsFacts would answer may have changed (new facts, a section opened or closed, Follow
+// toggled, a poll stopped or restarted): the panel is drawn again only when the answer really differs.
+function diagSyncFacts(){
+ const now=diagnosticsFacts(diagKey),seen=now?JSON.stringify(now):'';
+ if(seen===diagFactsSeen)return;
+ diagFactsSeen=seen;
+ const dialog=$('details-dialog');
+ if(dialog&&dialog.open&&typeof renderDetails==='function')renderDetails();
+}
 // ---- Interfaces -------------------------------------------------------------------------------------------------
 function diagPaintInterfaces(){
  const body=$('diag-if-body');if(!body)return;
@@ -182,7 +200,7 @@ function diagApplyInterfaces(data,replace){
   for(const item of data.interfaces||[]){const rate=diagRate(prev,data,item.name);if(rate)ifs.rates[item.name]=rate;}
   ifs.sample=data;
  }
- ifs.answer=data;diagPaintInterfaces();
+ ifs.answer=data;diagFacts=data.facts&&typeof data.facts==='object'?data.facts:null;diagPaintInterfaces();
 }
 async function diagFetchInterfaces(){
  const ifs=diagIf,query=new URLSearchParams({lab_id:activeId,node:detailName}).toString();
@@ -225,6 +243,7 @@ function diagApplyLogsAnswer(data,replace){
  const view=$('diag-log-view'),log=diagLog;
  const near=view?diagNearBottom(view):true;
  log.loaded=true;log.present=data.present!==false;log.truncated=!!data.truncated;
+ if(data.facts&&typeof data.facts==='object')diagFacts=data.facts;
  if(!log.present){log.lines=[];log.cursor='';log.older=false;log.missing=false;diagPaintLogs();return;}
  const result=diagApplyLogs(log,data.lines,replace);
  if(result.replaced||!view){diagPaintLogs();if(view)view.scrollTop=view.scrollHeight;return;}
@@ -283,6 +302,7 @@ async function diagRun(name,replace){
    if(polling){if(diagPageVisible())sec.timer=setTimeout(()=>diagRun(name,false),next.delay);else sec.hidden=true;}
   }
  }
+ diagSyncFacts();
  if(sec.queued&&sec.open){const queued=sec.queued;sec.queued=null;diagRun(name,queued.replace);}
  else sec.queued=null;
 }
@@ -297,12 +317,14 @@ function diagOnToggle(name){
  if(!box||box.open===sec.open)return;
  sec.open=box.open;sec.token++;clearTimeout(sec.timer);sec.timer=0;sec.hidden=false;
  if(sec.open){sec.kind='';diagStartSection(name);}
+ diagSyncFacts();
 }
 function diagRetry(name){
  const sec=diagSec[name];
  sec.plan=diagPlan(Date.now());sec.hidden=false;diagRetryButton(name,'');
  diagSay(name,'wait','Loading…');
  diagRun(name,name==='logs'&&!diagLog.follow);
+ diagSyncFacts();
 }
 function diagToggleFollow(){
  const log=diagLog,sec=diagSec.logs,button=$('diag-log-follow');
@@ -311,11 +333,13 @@ function diagToggleFollow(){
  diagRetryButton('logs','');
  if(log.follow){sec.plan=diagPlan(Date.now());diagSay('logs','follow','Following the log.');diagRun('logs',false);}
  else diagSay('logs','follow','Follow stopped.');
+ diagSyncFacts();
 }
 function diagRefreshLogs(){
  const sec=diagSec.logs;
  sec.plan=diagPlan(Date.now());sec.hidden=false;diagRetryButton('logs','');
  diagRun('logs',true);
+ diagSyncFacts();
 }
 // shell.js calls this on a visibilitychange: a hidden tab stops asking the VM (the timers see it); on return one
 // fresh fetch replaces the content and the 30 minutes start again.
@@ -329,7 +353,7 @@ function diagVisibilityChanged(){
 }
 // shell.js calls this when the drawer closes: both sections collapse and every timer, follow and sample is cleared.
 function resetDeviceDiagnostics(){
- diagEpoch++;diagKey='';
+ diagEpoch++;diagKey='';diagFacts=null;diagFactsSeen='';
  for(const sec of Object.values(diagSec))clearTimeout(sec.timer);
  diagSec={interfaces:diagSectionNew(),logs:diagSectionNew()};diagIf=diagIfNew();diagLog=diagLogNew();
  for(const name of ['interfaces','logs']){const box=$(diagIds[name].box),status=$(diagIds[name].status),retry=$(diagIds[name].retry);if(box)box.open=false;if(status)status.textContent='';if(retry)retry.hidden=true;}

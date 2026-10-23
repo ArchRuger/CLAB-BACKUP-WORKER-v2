@@ -138,6 +138,15 @@ function deviceState(node){
  return {key:'unknown',label:'Unknown',detail:'',next:'',cli:false,pill:'neutral'};
 }
 // How many devices of the lab cannot open a CLI until login credentials are added.
+// Whether this device offers a serial console and whether it can open now. The server decides (console_hold in the
+// public row is the answer of the same function the ticket route runs); the drawer, the Devices rows and the map menu
+// all read this and never derive a reason of their own, so the words beside the button and in the terminal page agree.
+function consoleState(node){
+ if(!node||!node.console)return {offered:false,ok:false,reason:'',key:''};
+ const hold=node.console_hold;
+ if(hold&&hold.text)return {offered:true,ok:false,reason:String(hold.text),key:String(hold.key||'')};
+ return {offered:true,ok:true,reason:'',key:''};
+}
 function credentialsNeeded(lab){return (lab?.nodes||[]).filter(statusNeedsCredentials).length;}
 // The lab's Git jobs, newest first, without repository update markers (the save chip reads them: saveChipState below).
 function statusLabGitJobs(lab,gitJobs){return (gitJobs||[]).filter(j=>j.lab_id===lab?.id&&j.target!=='update').sort((a,b)=>String(b.created||'').localeCompare(String(a.created||'')));}

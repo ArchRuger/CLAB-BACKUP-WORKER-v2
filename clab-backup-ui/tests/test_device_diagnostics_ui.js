@@ -422,6 +422,38 @@ test('the tail choice reloads the log; the stopped container still gets its last
  assert.match(h.requests[1],/tail=1000/);assert.match(h.get('diag-log-view').innerHTML,/last words/);
 });
 
+test('C04: diagnosticsFacts gives the open device\'s facts only while a section is open and polling, and the drawer is drawn again when that changes',async()=>{
+ const h=harness();let redraws=0;
+ h.context.renderDetails=()=>{redraws++;};h.get('details-dialog').open=true;
+ h.on('/operations/netem',()=>({container:'c',present:true,impairments:[]}));
+ h.on('/operations/interfaces',()=>answer());h.on('/operations/logs',()=>logAnswer([logLine(stamp(1),'a')]));
+ const facts=key=>h.context.diagnosticsFacts(key);
+ assert.equal(facts('L1/r1'),null,'nothing before a section was opened');
+ h.context.renderDeviceDiagnostics({name:'r1'});assert.equal(facts('L1/r1'),null);
+ h.open('interfaces');await tick();await tick();
+ assert.equal(facts('L1/r1').pid,5);assert.equal(facts('L1/r1').health,'');assert.equal(facts('L1/r2'),null,'another device\'s key never answers');assert.equal(facts('L2/r1'),null);
+ assert.ok(redraws>=1,'the drawer was drawn again when the facts appeared');
+ const before=redraws;await h.run();assert.equal(redraws,before,'an unchanged answer redraws nothing');
+ h.get('diag-interfaces').open=false;h.get('diag-interfaces').fire('toggle');
+ assert.equal(facts('L1/r1'),null,'closing the section drops the live rows');assert.equal(redraws,before+1,'and the drawer is drawn again at once');
+ // Logs counts only while Follow polls: a one-shot Refresh would leave stale facts under a caption that says they are live
+ h.open('logs');await tick();await tick();assert.equal(facts('L1/r1'),null,'Logs without Follow is not polling');
+ h.get('diag-log-follow').fire('click');await tick();await tick();assert.equal(facts('L1/r1').status,'running','Follow polls');
+ h.get('diag-log-follow').fire('click');assert.equal(facts('L1/r1'),null,'Follow stopped');
+ h.get('diag-log-follow').fire('click');await tick();await tick();assert.ok(facts('L1/r1'));
+ h.context.resetDeviceDiagnostics();assert.equal(facts('L1/r1'),null,'the drawer closing clears the cache');
+});
+test('C04: a stopped poll and a not-present container show no live facts',async()=>{
+ const h=harness();let fail=false,absent=false;h.context.renderDetails=()=>{};
+ h.on('/operations/netem',()=>({present:true,impairments:[]}));
+ h.on('/operations/interfaces',()=>{if(fail)throw Object.assign(new Error('x'),{status:409});return absent?{container:'c',present:false,facts:{present:false},interfaces:[]}:answer();});
+ h.context.renderDeviceDiagnostics({name:'r1'});h.open('interfaces');await tick();await tick();
+ assert.ok(h.context.diagnosticsFacts('L1/r1'));
+ fail=true;await h.run();await h.run();await h.run();
+ assert.equal(h.get('diag-if-retry').hidden,false);assert.equal(h.context.diagnosticsFacts('L1/r1'),null,'a stopped poll is not live');
+ fail=false;absent=true;h.get('diag-if-retry').fire('click');await tick();await tick();
+ assert.equal(h.context.diagnosticsFacts('L1/r1'),null,'a container the VM does not have has no facts to show');
+});
 test('this script declares only diag and DIAG names and keeps document and window listeners out (shell.js owns them)',()=>{
  const names=[...source.matchAll(/^(?:const|let|function|async function) +([A-Za-z0-9_]+)/gm)].map(m=>m[1]);
  for(const name of names)assert.match(name,/^(diag|DIAG_|renderDeviceDiagnostics$|resetDeviceDiagnostics$)/i,name);
