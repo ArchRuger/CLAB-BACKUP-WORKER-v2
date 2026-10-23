@@ -100,5 +100,16 @@ class GateHelperTests(unittest.TestCase):
         self.assertIsNone(container_age('', now, now))
 
 
+class JobSentenceTests(unittest.TestCase):
+    def test_every_node_job_but_restart_has_its_own_console_sentence_and_none_says_restarting(self):
+        from app.host_operations import NODE_ACTIONS
+        from app.node_services import CONSOLE_JOB_SENTENCES, CONSOLE_RESTARTING
+        self.assertEqual(set(CONSOLE_JOB_SENTENCES), set(NODE_ACTIONS) - {'restart-node'})
+        shown = [s.format(device='r1') for s in CONSOLE_JOB_SENTENCES.values()] + [CONSOLE_RESTARTING.format(device='r1')]
+        self.assertEqual(len(set(shown)), 3)
+        for action, sentence in CONSOLE_JOB_SENTENCES.items():
+            self.assertNotIn('restarting', sentence, action); self.assertIn('{device}', sentence)
+
+
 if __name__ == '__main__':
     unittest.main()

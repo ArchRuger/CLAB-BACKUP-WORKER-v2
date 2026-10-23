@@ -183,6 +183,17 @@ class DiscoveryTests(unittest.TestCase):
         with patch('app.discovery.inspect_host',side_effect=change):self.service.refresh()
         self.assertFalse(self.store.state['discovery']['ok'])
 
+    def test_linking_to_another_deployment_drops_the_cached_pending_changes_plan(self):
+        lab=self.register();operations=self.app.state.operations
+        operations.plan_cache[lab['id']]=(time.monotonic()+60,{'changed':True});generation=operations.plan_gen.get(lab['id'],0)
+        r=self.client.put('/api/labs/'+lab['id']+'/deployment',headers=self.auth,json={'deployed_name':'renamed','prefix':'clab'})
+        self.assertEqual(r.status_code,200)
+        self.assertNotIn(lab['id'],operations.plan_cache,'a plan computed against the previous deployment is not served for 60 s')
+        self.assertEqual(operations.plan_gen[lab['id']],generation+1)
+        operations.plan_cache[lab['id']]=(time.monotonic()+60,{'changed':True})
+        self.assertEqual(self.client.put('/api/labs/'+lab['id']+'/deployment',headers=self.auth,json={'deployed_name':'bad name!','prefix':'clab'}).status_code,400)
+        self.assertIn(lab['id'],operations.plan_cache,'a refused link keeps it')
+
     def test_link_existing_inventory_and_custom_name(self):
         lab=self.register()
         r=self.client.put('/api/labs/'+lab['id']+'/deployment',headers=self.auth,json={'deployed_name':'renamed','prefix':'clab'})

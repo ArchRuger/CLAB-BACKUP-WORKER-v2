@@ -225,6 +225,8 @@ STOP_KNOWN_LIMITS = {
     'cisco_xrv9k': 'Known limit of the XRv9k image: the next start boots the device from a fresh disk, so it comes back with its factory '
                    'configuration and everything configured since the deploy is gone. Back up the configuration first.',
 }
+# The run options as a person names them, for the refusal of an option an action does not take.
+OPTION_LABELS = {'nodes': 'Choose devices', 'max_workers': 'Max workers', 'skip_post_deploy': 'Skip post-deploy', 'keep_mgmt_net': 'Keep the management network'}
 # The node actions and what a device shows while one of them is queued or running: (nos_login status, message).
 NODE_ACTION_STATUS = {
     'restart-node': ('restarting', 'Restarting on the VM (containerlab restart --node); its login is checked again afterwards.'),
@@ -273,7 +275,7 @@ def neighbour_note(action, shown, expected, down, absent):
         notes.append('%s is not running. If it was stopped by the manager, the VS Code extension or containerlab stop, its link to %s is parked and comes back with this %s. '
                      'If it exited on its own or was stopped with docker stop, that link is gone: containerlab restores %s%s, and the device then waits for all its interfaces before it boots (cEOS gives up waiting after five minutes, a VM-based image waits for good) and stays at Starting until %s runs again. '
                      'Start %s first (%s on it takes the start/restore path), then this device, or redeploy the lab.'
-                     % (who, shown, verb, 'only %d of %d links' % (expected - len(down), expected) if expected > len(down) else 'no link',
+                     % (who, shown, verb, 'only %d of %d links' % (expected - len(down) - len(absent), expected) if expected > len(down) + len(absent) else 'no link',
                         ' and the job says so', who, who, 'Start device' if action == 'start-node' else 'Restart device…'))
     if absent:
         who = ', '.join(absent)
@@ -619,7 +621,9 @@ class LabOperations:
                 review_stamp = stamp()
             if data.action in NODE_ACTIONS and data.path: raise HTTPException(400, STOP_LABELS[data.action] + " uses the lab's own topology file.")
             run_options = [k for k in OPTION_ACTIONS if k in data.options]
-            if run_options and data.action not in ('deploy', 'redeploy', 'destroy', 'save'): raise HTTPException(400, 'This action takes no run options.')
+            if run_options and not any(data.action in actions for actions in OPTION_ACTIONS.values()): raise HTTPException(400, 'This action takes no run options.')
+            refused_options = [OPTION_LABELS[k] for k in run_options if data.action not in OPTION_ACTIONS[k]]
+            if refused_options: raise HTTPException(400, 'This action does not take: ' + ', '.join(refused_options) + '.')
             path = data.path or (lab.get('vm_project_path') or lab.get('vm_source', {}).get('files', {}).get('definition', {}).get('path', '') if lab else '')
             name = (lab.get('deployment_name') or lab['name']) if lab else data.name or 'manager'
             options = copy.deepcopy(data.options)
@@ -651,6 +655,8 @@ class LabOperations:
                     if options.get('cleanup'): raise HTTPException(400, 'Clean up cannot be combined with chosen devices: containerlab would delete the whole lab folder, which the devices left running still use.')
                     if data.action == 'deploy' and lab:
                         with self.store.lock: deployment = lab_status(self.store.state, lab)['status']
+                        if deployment in ('Unknown', 'Unlinked'):
+                            raise HTTPException(409, 'The manager cannot tell whether this lab is deployed (the VM was not reached recently, or the lab is not linked). Refresh the lab list, then try again.')
                         if deployment != 'Not deployed':
                             raise HTTPException(409, 'This lab is already deployed, so a deploy limited to chosen devices is not possible (containerlab would remove the devices left out). Use Apply topology changes to add the missing devices.')
                     chosen_nodes = list(names)
@@ -849,7 +855,7 @@ class LabOperations:
                 name = parse_definition(lab['definition_yaml'].encode())['name'] if lab.get('definition_yaml') else lab['name']
                 revision = self.store.state.get('host', {}).get('revision')
             if data.path:
-                self.forget_plan(lab_id)
+                self.forget_plan(lab_id)   # and again after the new path is stored: an answer computed meanwhile read the old file
                 value = self.invoke({'mode': 'read', 'path': data.path})
                 try:
                     parsed = parse_definition(value['text'].encode())
@@ -865,6 +871,7 @@ class LabOperations:
                     else: lab.pop('hidden', None)
                 if data.path is not None: lab['vm_project_path'] = data.path
                 self.store.save()
+                if data.path: self.forget_plan(lab_id)
                 if data.hidden is not None:
                     self.store.event('lab.hide' if data.hidden else 'lab.show', 'Hidden from Home' if data.hidden else 'Shown on Home again', lab_id=lab_id)
             return {'saved': True}
@@ -1110,9 +1117,10 @@ class LabOperations:
                 # containerlab names each dataplane link it restores; a device stopped outside containerlab
                 # has none to restore, and the student should see that rather than a bare success.
                 restored = len(re.findall(r'Restored link ', text))
-                expected = job.get('links_expected') or 0; down = job.get('neighbours_down') or []
+                expected = job.get('links_expected') or 0; down = job.get('neighbours_down') or []; gone = job.get('neighbours_absent') or []
                 if restored and expected > restored:
-                    message += ' · %d of %d links restored' % (restored, expected) + (' (no link to ' + ', '.join(down) + ': not running, its link was gone; the device waits for it before it boots)' if down else '')
+                    reason = 'not running' if not gone else 'removed' if not down else 'not running or removed'
+                    message += ' · %d of %d links restored' % (restored, expected) + (' (no link to ' + ', '.join(down + gone) + ': ' + reason + ', its link was gone; the device waits for it before it boots)' if down or gone else '')
                 else:
                     message += ' · ' + (str(restored) + (' link' if restored == 1 else ' links') + ' restored' if restored else 'no links restored (none were parked by containerlab; redeploy the lab if this device should have links)')
                 # A successful command is not a running device: the container is looked at once more.

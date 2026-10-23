@@ -120,12 +120,16 @@ class Impairments:
     # Shared pieces -----------------------------------------------------------------------------------------------
 
     def lab_lock(self, lab_id):
-        with self.locks_guard: return self.locks.setdefault(lab_id, threading.Lock())
+        """The lab's change lock. A lab id the manager does not know gets a throwaway lock, so a posted random id never grows the table."""
+        with self.store.lock: known = self.store.lab(lab_id) is not None
+        with self.locks_guard:
+            if known: return self.locks.setdefault(lab_id, threading.Lock())
+            return self.locks.get(lab_id) or threading.Lock()
 
-    def helper(self, request):
+    def helper(self, request, timeout=MUTATING_TIMEOUT):
         """One mutating or reading helper call (read to stream EOF in lab_operations.remote); the helper's lock sentence is worded for
         a person, because the lock may be held by another lab's job."""
-        try: return self.diagnostics.ask(request, MUTATING_TIMEOUT)
+        try: return self.diagnostics.ask(request, timeout)
         except HTTPException as exc:
             if exc.detail == LOCK_SENTENCE: raise HTTPException(409, BUSY_ELSEWHERE) from None
             raise
@@ -259,46 +263,50 @@ class Impairments:
             lock = self.lab_lock(data.lab_id)
             if not lock.acquire(blocking=False): raise HTTPException(409, CHANGE_IN_PROGRESS)
             try:
-                with self.operations.impairing(data.lab_id):
-                    started = time.monotonic()
-                    deployment, found = self.pairs(data.lab_id, data.node)
-                    devices, complete = self.read_all(deployment, found, self.helper) if found else ({}, True)
-                    with self.store.lock:
-                        lab = self.store.lab(data.lab_id) or {}
-                        names = {n['name']: n.get('short_name') or n.get('definition_node') or n['name'] for n in lab.get('nodes', [])}
-                        scope = names.get(data.node, data.node) if data.node else lab.get('name', '')
-                    work = [(name, row['interface']) for name, item in devices.items() for row in item['impairments']]
-                    rows_now = {name: list(item['impairments']) for name, item in devices.items() if item['impairments']}
-                    ids = {}; cleared = 0; failed = []; done = 0
-                    for index, (name, interface) in enumerate(work):
-                        if time.monotonic() - started >= CLEAR_BUDGET: break
-                        item = devices[name]
-                        try:
-                            if name not in ids:
-                                ids[name] = item['id']
-                                if not ids[name]:
-                                    # The read carried no container id: take it from a single-device read (the helper checks it again at execution).
-                                    one = self.helper({'mode': 'netem-show', 'name': deployment, 'options': {'node': item['topo'], 'container': item['container']}})
-                                    facts = one.get('facts') if isinstance(one.get('facts'), dict) else {}
-                                    ids[name] = facts.get('id') if isinstance(facts.get('id'), str) and HEX64.fullmatch(facts['id']) else ''
-                            if not ids[name]: raise HTTPException(409, "The manager could not read this device's container; try again in a moment.")
-                            request = {'mode': 'netem-reset', 'name': deployment, 'options': {'node': item['topo'], 'container': item['container'], 'interface': interface},
-                                       'expected_id': ids[name]}
-                            request['digest'] = digest({k: request[k] for k in ('mode', 'name', 'options', 'expected_id')})
-                            result = self.helper(request)
-                        except HTTPException as exc:
-                            failed.append({'node': name, 'interface': interface, 'reason': str(exc.detail)[:300]}); done = index + 1
-                            break
-                        cleared += 1; done = index + 1
-                        rows_now[name] = public_rows(result.get('impairments'), item['kind'])
-                    remaining = [{'node': n, 'interface': i} for n, i in work[done:]]
-                    with self.store.lock:
-                        lab = self.store.lab(data.lab_id) or {}
-                        names = {n['name']: n.get('short_name') or n.get('definition_node') or n['name'] for n in lab.get('nodes', [])}
-                        scope = names.get(data.node, data.node) if data.node else lab.get('name', '')
-                    self.store.event('lab.impairment', 'Impairments cleared on %s: %d of %d interfaces' % (scope, cleared, len(work)), lab_id=data.lab_id, node=names.get(data.node, '') if data.node else '')
-                    return {'cleared': cleared, 'total': len(work), 'failed': failed, 'remaining': remaining, 'complete': complete,
-                            'devices': {name: {'impairments': rows} for name, rows in rows_now.items()}}
+                # The in-flight token is held for one helper call at a time, never for the whole loop: a lab operation another student
+                # starts between two resets is refused for exactly one call and lands in `failed`/`remaining`; until then it is not shut out.
+                def held(request, timeout=MUTATING_TIMEOUT):
+                    with self.operations.impairing(data.lab_id): return self.helper(request, timeout)
+                started = time.monotonic()
+                deployment, found = self.pairs(data.lab_id, data.node)
+                # The lab-wide read has the helper's own 60 s deadline (SHOW_ALL_DEADLINE); the mutating timeout would cut it short.
+                devices, complete = self.read_all(deployment, found, lambda request: held(request, READ_TIMEOUT)) if found else ({}, True)
+                with self.store.lock:
+                    lab = self.store.lab(data.lab_id) or {}
+                    names = {n['name']: n.get('short_name') or n.get('definition_node') or n['name'] for n in lab.get('nodes', [])}
+                    scope = names.get(data.node, data.node) if data.node else lab.get('name', '')
+                work = [(name, row['interface']) for name, item in devices.items() for row in item['impairments']]
+                rows_now = {name: list(item['impairments']) for name, item in devices.items() if item['impairments']}
+                ids = {}; cleared = 0; failed = []; done = 0
+                for index, (name, interface) in enumerate(work):
+                    if time.monotonic() - started >= CLEAR_BUDGET: break
+                    item = devices[name]
+                    try:
+                        if name not in ids:
+                            ids[name] = item['id']
+                            if not ids[name]:
+                                # The read carried no container id: take it from a single-device read (the helper checks it again at execution).
+                                one = held({'mode': 'netem-show', 'name': deployment, 'options': {'node': item['topo'], 'container': item['container']}})
+                                facts = one.get('facts') if isinstance(one.get('facts'), dict) else {}
+                                ids[name] = facts.get('id') if isinstance(facts.get('id'), str) and HEX64.fullmatch(facts['id']) else ''
+                        if not ids[name]: raise HTTPException(409, "The manager could not read this device's container; try again in a moment.")
+                        request = {'mode': 'netem-reset', 'name': deployment, 'options': {'node': item['topo'], 'container': item['container'], 'interface': interface},
+                                   'expected_id': ids[name]}
+                        request['digest'] = digest({k: request[k] for k in ('mode', 'name', 'options', 'expected_id')})
+                        result = held(request)
+                    except HTTPException as exc:
+                        failed.append({'node': name, 'interface': interface, 'reason': str(exc.detail)[:300]}); done = index + 1
+                        break
+                    cleared += 1; done = index + 1
+                    rows_now[name] = public_rows(result.get('impairments'), item['kind'])
+                remaining = [{'node': n, 'interface': i} for n, i in work[done:]]
+                with self.store.lock:
+                    lab = self.store.lab(data.lab_id) or {}
+                    names = {n['name']: n.get('short_name') or n.get('definition_node') or n['name'] for n in lab.get('nodes', [])}
+                    scope = names.get(data.node, data.node) if data.node else lab.get('name', '')
+                self.store.event('lab.impairment', 'Impairments cleared on %s: %d of %d interfaces' % (scope, cleared, len(work)), lab_id=data.lab_id, node=names.get(data.node, '') if data.node else '')
+                return {'cleared': cleared, 'total': len(work), 'failed': failed, 'remaining': remaining, 'complete': complete,
+                        'devices': {name: {'impairments': rows} for name, rows in rows_now.items()}}
             finally: lock.release()
 
         @app.get('/api/operations/apply-plan')

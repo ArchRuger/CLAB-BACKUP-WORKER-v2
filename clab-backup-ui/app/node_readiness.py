@@ -74,7 +74,7 @@ def summarize(states):
     alongside 'booting' so the deployment bar's total keeps every monitored device
     while a "Test logins" refresh is in flight, instead of the total briefly shrinking.
     """
-    bucket = lambda s: 'booting' if s['status'] in ('checking', 'restarting') else s['status']
+    bucket = lambda s: 'booting' if s['status'] in ('checking', 'restarting', 'starting', 'stopping') else s['status']
     monitored = [s for s in states if bucket(s) in ('ready', 'booting', 'failed')]
     counts = {key: sum(bucket(s) == key for s in monitored) for key in ('ready', 'booting', 'failed')}
     if not monitored: status = 'idle'
