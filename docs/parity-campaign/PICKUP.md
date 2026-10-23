@@ -136,3 +136,15 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   C05 (verification fixes, review answers in C05-DESIGN, release 1.31.4 with `test_impairments.py` and
   `test_device_impairments_ui.js` already in CI), integrate C07 (S2 then S4 docs, review, live pass), C08 (S3 after S2),
   C06 (S3 after S2, S4, S5), C09 (S1, S2 after C07 frees `index.html` and `shell.js`); C10 when the VM is quiet.
+- 2026-10-23 11:30 UTC, **release 1.31.4** (C05: impairments, Stop and Start device, the apply plan and pending
+  changes, Run with options, per-device save; the helper half shipped in 1.31.3): `/clab-slice-verify` (9 of 11 held,
+  seven breaks), `/clab-review-changes` (23 confirmed, one must-fix: Confirm live during a re-preview) and the live
+  pass on the parity lab (two breaks: vJunos rows printed as `eth1 (ge-0/0/0)`, the map not re-read after a drawer
+  change) all answered in C05-DESIGN §11 and §12 and every finding applied (`2d8afde`, `698c63e`, `28a7afa`). Built,
+  verified and waiting their turn on integration branches (all pushed): C07 `claude/c07-int` (slices, fixes from its
+  verification, C07-DESIGN §10; the live capture pass running against a manager rebuilt from that tree), C06
+  `claude/c06-int` (four slices and docs; its fixture slice `wt-c06-s4` in build, then `/clab-slice-verify`), C08
+  `wt-c08-s3` (three slices, docs, fixes, C08-DESIGN §10; CI needs `test_lab_builder_check_ui.js` and
+  `test_clab_schema.py`), C09 `claude/c09-int` (three slices and docs; `/clab-slice-verify` running). Next, in
+  order: merge C07 onto the branch, `/clab-review-changes`, release 1.31.5 (records drafted in the session
+  scratchpad); then C06 (verification, review, live pass), C08 and C09 (reviews), each a release; C10 last.

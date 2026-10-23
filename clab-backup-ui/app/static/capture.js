@@ -8,7 +8,9 @@ let captureRequest=0,captureTargets=[],captureLab='',captureNode='',captureHint=
 // started (interface names in device mode, end indexes in link mode); captureLinks are the viewer links on show.
 let captureMode='device',captureEnds=[],captureEndInfo=[],captureOptions={},captureLimit=4,captureConnected=[];
 let captureStarted=[],captureFirstPlan=null,captureLinks=[],captureEnding=false;
-let captureSessionsState={rows:[],fetched:false};
+let captureSessionsState={rows:[],fetched:false},captureSessionsHtml=null;
+// captureDone: a full success is on screen, so Start waits for a changed selection. captureOpener: where focus returns when the dialog closes.
+let captureDone=false,captureOpener=null;
 // The saved topology map decides which interfaces a node shows first: the ports it is
 // wired with. Every other live Linux interface waits behind a toggle.
 let captureDrawing,captureMapInterfaces=[],captureMapCapture={};
@@ -28,8 +30,15 @@ function captureMessage(text){return String(text||'').replace(/All host targets/
 function captureAdvancedLabel(){const el=$('capture-advanced-label');if(el)el.textContent=captureMode==='link'||captureSelected()?'Advanced: capture somewhere else':'Choose a device';}
 function setCaptureMode(mode){captureMode=mode;if(typeof captureDialog.setAttribute==='function')captureDialog.setAttribute('data-mode',mode);$('capture-ends').hidden=mode!=='link';}
 function clearCaptureLaunch(){captureLinks=[];const el=$('capture-launches');el.innerHTML='';el.hidden=true;}
-function invalidateCapture(){captureRequest++;captureLaunchId='';captureStarted=[];captureFirstPlan=null;clearCaptureLaunch();}
-captureDialog.addEventListener('close',invalidateCapture);
+function invalidateCapture(){captureRequest++;captureDone=false;captureLaunchId='';captureStarted=[];captureFirstPlan=null;clearCaptureLaunch();}
+// Closing the dialog returns focus to what opened it: the wire (found again by its ends when the map was redrawn) for a wire or a menu item.
+function restoreCaptureFocus(){
+ const opener=captureOpener;captureOpener=null;if(!opener)return;
+ let el=opener.el;
+ if(el&&el.isConnected===false&&opener.key&&typeof map.querySelectorAll==='function')el=[...map.querySelectorAll('[data-capture-endpoints]')].find(e=>e.dataset.captureEndpoints===opener.key)||null;
+ if(el&&typeof el.focus==='function')el.focus();
+}
+captureDialog.addEventListener('close',()=>{invalidateCapture();restoreCaptureFocus();});
 $('capture-close').onclick=()=>captureDialog.close();
 function captureSelected(){return captureTargets.find(t=>t.id===$('capture-target').value);}
 function captureChecked(){return ['capture-interfaces','capture-interfaces-all'].flatMap(id=>[...$(id).querySelectorAll('input:checked')].map(el=>el.value));}
@@ -79,7 +88,7 @@ function capturePlan(ticked){
 // (the boxes are not in the DOM yet in a harness), otherwise the DOM decides. Returns the plan.
 function updateCapturePrepare(initial){
  const link=captureMode==='link',ticked=Array.isArray(initial)?initial:link?captureTickedEnds():captureTickedNames(),plan=capturePlan(ticked);
- $('capture-prepare').disabled=captureStarting||!ticked.length||(!link&&!captureSelected());
+ $('capture-prepare').disabled=captureStarting||captureDone||!ticked.length||(!link&&!captureSelected());
  $('capture-prepare').textContent=captureStarted.length?`Start the remaining ${plan.sessions}`:plan.button;
  $('capture-openas').hidden=!plan.openAs;
  return plan;
@@ -102,7 +111,7 @@ function mapCaptureInterfacesFor(drawing,node){
 }
 // A remembered selection applies only when the dialog was opened without a specific port in mind: a hint, a chosen end or a
 // preset is the student's current intent and wins. The same condition governs writing it (a one-time choice never rewrites it).
-function captureMemoryAllowed(){return !captureHint&&!captureOptions.preset&&captureOptions.end==null;}
+function captureMemoryAllowed(){return !captureHint&&!captureOptions.preset&&!captureOptions.both&&captureOptions.end==null;}
 // A box carries the container interface (what the capture runs on) and, when the diagram names that
 // port differently (ge-0/0/0 on eth1), the device's own port name beside it. A started one (after a partial result) is disabled.
 function captureBox(name,checked,port,done){return `<label class="capture-interface"><input type="checkbox" value="${esc(name)}"${checked&&!done?' checked':''}${done?' disabled':''}> <span>${esc(name)}</span>${port&&port!==name?` <small>${esc(port)}</small>`:''}${done?' <small>started (open it above)</small>':''}</label>`;}
@@ -194,8 +203,9 @@ function renderCaptureEnds(opts){
   if(kept.length){ticked=kept;restored=true;}else{memory=null;ticked=okIndexes;}
  }
  const row=(x,i)=>{
-  const done=captureStarted.includes(i),text=done?'':x.ok?x.reason:x.reason;
-  return `<div class="capture-end"><label class="capture-interface"><input type="checkbox" data-capture-end="${i}"${ticked.includes(i)&&!done?' checked':''}${x.ok&&!done?'':' disabled'}> <span>${esc(x.ep.label)}: ${esc(x.ep.interface)}</span>${x.ok?` <small>${esc(x.veth)}</small>`:''}${done?' <small>started (open it above)</small>':''}</label>`
+  // The veth is printed only when it differs from the port (as captureBox does); a live end needs no sentence, a started one is a line of its own.
+  const done=captureStarted.includes(i),text=done?'Started: open it with the link below.':x.ok?'':x.reason;
+  return `<div class="capture-end"><label class="capture-interface"><input type="checkbox" data-capture-end="${i}"${ticked.includes(i)&&!done?' checked':''}${x.ok&&!done?'':' disabled'}> <span>${esc(x.ep.label)}: ${esc(x.ep.interface)}</span>${x.ok&&x.veth!==x.ep.interface?` <small>${esc(x.veth)}</small>`:''}</label>`
    +(text?`<p class="form-help">${esc(text)}</p>`:'')
    +(x.ok||done?'':`<button type="button" class="button secondary small" data-capture-choose="${i}">Choose the interface on ${esc(x.ep.label)}…</button>`)+'</div>';
  };
@@ -358,6 +368,7 @@ $('capture-form').onsubmit=async event=>{
    const first=captureFirstPlan||plan,wasPartial=captureStarted.length>0;
    captureRememberNow(first);captureLaunchId='';captureStarted=[];captureFirstPlan=null;
    if(wasPartial)link?renderCaptureEnds({keep:true,ticked:first.ticked}):renderCaptureInterfaces({keep:true,ticked:first.ticked});
+   captureDone=true;   // another Start waits for a changed selection: a second press would silently start another set
   }else{
    // A partial result: the request id stays (the remaining entries answer idempotently); what started is marked and unticked.
    const refusedAt=refused.map(r=>captureRefusedIndex(r,plan.entries));
@@ -366,7 +377,8 @@ $('capture-form').onsubmit=async event=>{
    const remaining=plan.ticked.filter(x=>!startedNow.includes(x));
    if(link)renderCaptureEnds({keep:true,ticked:remaining});else renderCaptureInterfaces({keep:true,ticked:remaining});
   }
-  $('capture-status').textContent=result.message;
+  // Whatever is listed is what is running: after a narrowed retry the single-session sentence would undercount.
+  $('capture-status').textContent=captureDone?(captureLinks.length>1?`${captureLinks.length} Wireshark sessions started on the VM. Open each with its link below.`:result.message)+' Change the selection to start another capture.':result.message;
  }catch(error){if(request===captureRequest&&captureDialog.open)$('capture-status').textContent=error.message;}
  finally{captureStarting=false;updateCapturePrepare();}
 };
@@ -386,6 +398,8 @@ function captureRowLabel(s){
 }
 function captureTimeLeft(seconds){const minutes=Math.floor((Number(seconds)||0)/60);if(minutes<1)return 'less than 1 min';return minutes<60?`${minutes} min`:`${Math.floor(minutes/60)} h${minutes%60?` ${minutes%60} min`:''}`;}
 // The Tools card's caption and button, and the dialog's End all my sessions, follow one list.
+// The list is rewritten only when its markup changed, so a focused End session button survives a refresh that found nothing new.
+function paintCaptureSessionList(html){if(html===captureSessionsHtml)return;captureSessionsHtml=html;$('capture-sessions').innerHTML=html;}
 function paintCaptureCard(){
  const n=captureSessionsState.rows.length,show=captureEnabled!==false&&n>0,caption=$('capture-sessions-caption');
  if(caption){caption.textContent=show?`${plural(n,'Wireshark session')} running from this browser.`:'';caption.hidden=!show;}
@@ -393,17 +407,24 @@ function paintCaptureCard(){
 }
 async function refreshCaptureSessions(){
  const request=++captureSessionRequest;
- if(captureEnabled===false){captureSessionsState={rows:[],fetched:true};paintCaptureCard();$('capture-sessions').innerHTML='<li>Packet capture is not set up on this VM, so there are no sessions to list.</li>';return;}
+ if(captureEnabled===false){captureSessionsState={rows:[],fetched:true};paintCaptureCard();paintCaptureSessionList('<li>Packet capture is not set up on this VM, so there are no sessions to list.</li>');return true;}
  try{
   const data=await(await api('/capture/sessions')).json();
   if(request!==captureSessionRequest)return;
   captureSessionsState={rows:(data.sessions||[]).filter(s=>/^[0-9a-f]{64}$/.test(s.id)),fetched:true};
-  $('capture-sessions').innerHTML=captureSessionsState.rows.map(s=>{
+  paintCaptureSessionList(captureSessionsState.rows.map(s=>{
    const time=typeof s.remaining_seconds==='number'?` <span class="caption">at most ${esc(captureTimeLeft(s.remaining_seconds))} left (15 min once its viewer is closed)</span>`:'';
    return `<li><a href="/static/capture-session.html#${s.id}" target="_blank" rel="noopener">${esc(captureRowLabel(s))}</a>${time} <button type="button" class="button secondary" data-end-capture="${s.id}">End session</button></li>`;
-  }).join('')||'<li>No capture sessions yet.</li>';
-  paintCaptureCard();
- }catch{captureSessionsState={rows:[],fetched:true};paintCaptureCard();$('capture-sessions').textContent='Could not list capture sessions — packet capture may not be set up on this VM. See Setup and troubleshooting.';}
+  }).join('')||'<li>No capture sessions yet.</li>');
+  paintCaptureCard();return true;
+ }catch{captureSessionsState={rows:[],fetched:true};paintCaptureCard();paintCaptureSessionList('Could not list capture sessions — packet capture may not be set up on this VM. See Setup and troubleshooting.');return false;}
+}
+// Where focus goes when an action removed the control that had it (a row's End session, End all): the next row, else Refresh list.
+function settleCaptureFocus(){
+ const active=typeof document!=='undefined'?document.activeElement:null;if(active&&active!==document.body)return;
+ if(!captureDialog.open)return;
+ const next=typeof $('capture-sessions').querySelector==='function'?$('capture-sessions').querySelector('[data-end-capture]'):null,target=next||$('capture-sessions-refresh');
+ if(target&&typeof target.focus==='function')target.focus();
 }
 // While the service is reported missing, Refresh list asks the manager again instead of repeating the local note.
 $('capture-sessions-refresh').onclick=()=>captureEnabled===false?refreshCaptureTargets():refreshCaptureSessions();
@@ -411,7 +432,7 @@ $('capture-sessions').onclick=async event=>{
  const button=event.target.closest('[data-end-capture]');if(!button)return;
  if(!confirm('End this Wireshark session and delete its capture files? Download saved files first.'))return;
  button.disabled=true;
- try{await json('/capture/sessions/'+button.dataset.endCapture+'/end','POST',{});await refreshCaptureSessions();}
+ try{await json('/capture/sessions/'+button.dataset.endCapture+'/end','POST',{});await refreshCaptureSessions();settleCaptureFocus();}
  catch(error){$('capture-status').textContent=error.message;button.disabled=false;}
 };
 // End all my sessions: one confirmation, one manager route (the owner's sessions only); the result is said in the dialog's
@@ -419,16 +440,26 @@ $('capture-sessions').onclick=async event=>{
 function captureSay(text){$('capture-status').textContent=text;if(!captureDialog.open&&typeof notify==='function')notify(text);}
 async function endAllCaptureSessions(button){
  if(captureEnding)return;
- const n=captureSessionsState.rows.length;
- if(!n){captureSay('No capture sessions to end.');return;}
- if(!confirm(n===1?'End the 1 Wireshark session started from this browser and delete its capture files? Download saved files first.':`End all ${n} Wireshark sessions started from this browser and delete their capture files? Download saved files first.`))return;
- const label=button.textContent;captureEnding=true;button.disabled=true;button.textContent='Ending…';
+ captureEnding=true;button.disabled=true;
+ const label=button.textContent;
  try{
-  const result=await json('/capture/sessions/end-all','POST',{}),ended=Number(result.ended)||0,failed=Array.isArray(result.failed)?result.failed:[];
-  captureSay(failed.length?`Ended ${plural(ended,'session')}; ${failed.length} could not be ended: ${failed[0].detail||`Could not end ${failed[0].label}; try End session on its row.`}`:ended?`Ended ${plural(ended,'session')}.`:'No capture sessions to end.');
- }catch(error){captureSay(error.message);}
- finally{captureEnding=false;button.textContent=label;button.disabled=false;}
- await refreshCaptureSessions();
+  // The list is read again before asking: the confirmation names what will be ended now, not what the Tools tab listed earlier.
+  if(await refreshCaptureSessions()===false){captureSay('Could not list capture sessions, so none were ended. Try Refresh list.');return;}
+  const n=captureSessionsState.rows.length;
+  if(!n){captureSay('No capture sessions to end.');return;}
+  if(!confirm(n===1?'End the 1 Wireshark session started from this browser and delete its capture files? Download saved files first.':`End all ${n} Wireshark sessions started from this browser and delete their capture files? Download saved files first.`))return;
+  button.textContent='Ending…';
+  try{
+   const result=await json('/capture/sessions/end-all','POST',{}),ended=Number(result.ended)||0,failed=Array.isArray(result.failed)?result.failed:[];
+   captureSay(failed.length?`Ended ${plural(ended,'session')}; ${failed.length} could not be ended: ${failed[0].detail||`Could not end ${failed[0].label}; try End session on its row.`}`:ended?`Ended ${plural(ended,'session')}.`:'No capture sessions to end.');
+  }catch(error){captureSay(error.message);}
+  await refreshCaptureSessions();
+ }
+ finally{
+  captureEnding=false;button.textContent=label;button.disabled=false;
+  // The button hides when nothing is left; focus goes to a control that is still there instead of the page body.
+  if(button.hidden){const next=captureDialog.open?$('capture-sessions-refresh'):$('capture-open');if(next&&typeof next.focus==='function')next.focus();}
+ }
 }
 for(const id of ['capture-end-all','tools-capture-end-all'])if($(id))$(id).onclick=()=>endAllCaptureSessions($(id));
 // The wire menu (#link-context-menu, handled like the node menu): shell.js closes it on an outside pointerdown, on resize,
@@ -443,7 +474,12 @@ function captureEndsOf(element){
  try{const ends=JSON.parse(element.dataset.captureEndpoints);if(Array.isArray(ends)&&ends.length===2)return ends;}catch{}
  notify('Could not read this link. Open Tools › Packet capture and choose the interface there.');return null;
 }
-function openLinkCapture(element,options){const ends=captureEndsOf(element);if(ends)openCapture('','',ends,options);}
+function openLinkCapture(element,options){
+ const ends=captureEndsOf(element);if(!ends)return;
+ closeLinkMenu();   // Enter on a wire while its menu is open closes the menu first
+ captureOpener={el:element,key:element.dataset&&element.dataset.captureEndpoints};
+ openCapture('','',ends,options);
+}
 function openLinkMenu(element,x,y){
  const ends=captureEndsOf(element);if(!ends||!linkMenu)return;
  if(typeof closeNodeMenu==='function')closeNodeMenu();
@@ -456,14 +492,17 @@ function openLinkMenu(element,x,y){
  linkMenuLab=activeId;linkMenuWire=element;linkMenuEnds=ends;
  linkMenu.hidden=false;
  if(linkMenu.style&&typeof window!=='undefined'){linkMenu.style.left=Math.max(8,Math.min(x,window.innerWidth-linkMenu.offsetWidth-8))+'px';linkMenu.style.top=Math.max(8,Math.min(y,window.innerHeight-linkMenu.offsetHeight-8))+'px';}
- const first=linkMenu.querySelector('button:not(:disabled)');if(first&&typeof first.focus==='function')first.focus();
+ // With every item off the menu itself takes focus, so its own keydown can close it with Escape or Tab.
+ const first=linkMenu.querySelector('button:not(:disabled)'),target=first||linkMenu;if(typeof target.focus==='function')target.focus();
 }
 if(linkMenu){
  linkMenu.addEventListener('click',event=>{
   const button=event.target&&typeof event.target.closest==='function'?event.target.closest('button'):null;if(!button||button.disabled)return;
   if(linkMenuLab!==activeId){closeLinkMenu();return;}
-  const ends=linkMenuEnds;closeLinkMenu();if(!ends)return;
-  if(button.dataset.linkEnd!==undefined)openCapture('','',ends,{end:Number(button.dataset.linkEnd)});else openCapture('','',ends);
+  const ends=linkMenuEnds,wire=linkMenuWire;closeLinkMenu();if(!ends)return;
+  captureOpener=wire?{el:wire,key:wire.dataset&&wire.dataset.captureEndpoints}:null;
+  // A menu item is a hint, not a click on the wire: it ignores the remembered selection (design 3.6).
+  if(button.dataset.linkEnd!==undefined)openCapture('','',ends,{end:Number(button.dataset.linkEnd)});else openCapture('','',ends,{both:true});
  });
  linkMenu.addEventListener('keydown',event=>{
   if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeLinkMenu(true);return;}

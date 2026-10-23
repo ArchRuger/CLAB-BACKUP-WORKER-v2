@@ -988,3 +988,13 @@ test('reverse shortcut pin: every keydown site is a data-source of a shortcuts r
  }
  for(const cite of exclusions)assert.ok(!rows.includes(cite),cite+' is a row already: drop the exclusion');
 });
+
+test('C07 fix: a route change (applyRoute, so also a hashchange) closes the wire menu through a typeof-guarded closeLinkMenu, and works without capture.js',()=>{
+ const none=harness({hash:'#lab=a'});assert.equal(typeof none.context.closeLinkMenu,'undefined');assert.doesNotThrow(()=>none.context.applyRoute(),'the page loads and routes without capture.js');
+ const h=harness({hash:'#lab=a'});const closed=[];
+ h.context.closeLinkMenu=()=>{closed.push(1);h.linkMenu.hidden=true;};
+ h.linkMenu.hidden=false;h.context.applyRoute();
+ assert.equal(closed.length,1);assert.equal(h.linkMenu.hidden,true);
+ h.linkMenu.hidden=false;h.location.hash='#lab=b';h.context.windowListeners.hashchange();
+ assert.equal(closed.length,2,'the hashchange route closes it too');assert.equal(h.linkMenu.hidden,true);
+});

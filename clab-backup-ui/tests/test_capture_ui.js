@@ -143,7 +143,7 @@ test('a link opens in link mode with both ends ticked and the veth of each shown
  assert.equal(h.$('capture-ends').hidden,false);assert.equal(h.$('capture-dialog').attrs['data-mode'],'link');
  const ends=h.$('capture-ends-list').innerHTML;
  assert.equal((ends.match(/data-capture-end="\d" checked/g)||[]).length,2,'both ends ticked');
- assert.match(ends,/<span>r1: eth2<\/span> <small>eth2<\/small>/);assert.match(ends,/<span>r2: eth2<\/span> <small>eth2<\/small>/);
+ assert.match(ends,/<span>r1: eth2<\/span><\/label>/);assert.match(ends,/<span>r2: eth2<\/span><\/label>/);assert.doesNotMatch(ends,/<small>|eth2 live/,'a veth equal to the port is not printed again (as captureBox does)');
  assert.equal(h.$('capture-prepare').disabled,false);assert.equal(h.$('capture-prepare').textContent,'Start 2 captures');
  assert.equal(h.$('capture-advanced').open,false,'link mode never unfolds Advanced');assert.equal(h.$('capture-advanced-label').textContent,'Advanced: capture somewhere else');
  assert.ok(h.calls.includes('/capture/targets?lab_id=lab'),'one lab-wide lookup, no node filter');
@@ -343,7 +343,7 @@ test('a refused answer keeps the request id and the started links, narrows to th
  assert.equal(first.captures.length,2);
  assert.match(h.$('capture-launches').innerHTML,/Open Wireshark: r1 eth1/);assert.equal((h.$('capture-launches').innerHTML.match(/<a /g)||[]).length,1);
  assert.match(h.$('capture-status').textContent,/not for r2 eth1: All browser capture slots are in use/);
- assert.match(h.$('capture-ends-list').innerHTML,/data-capture-end="0" disabled>[^]*started \(open it above\)/);assert.doesNotMatch(h.$('capture-ends-list').innerHTML,/data-capture-end="0" checked/);
+ assert.match(h.$('capture-ends-list').innerHTML,/data-capture-end="0" disabled>[^]*<p class="form-help">Started: open it with the link below\.<\/p>/);assert.doesNotMatch(h.$('capture-ends-list').innerHTML,/data-capture-end="0" checked/);
  assert.equal(h.$('capture-prepare').textContent,'Start the remaining 1');assert.equal(h.$('capture-prepare').disabled,false);
  h.state.sessions=Array.from({length:4},(_,i)=>({id:String(i).repeat(64).slice(0,64)}));   // a full listing would refuse a fresh Start, never the retry
  await h.$('capture-form').onsubmit({preventDefault(){}});
@@ -496,4 +496,103 @@ test('untrusted labels in the ends, the session rows, the links and the wire men
  assert.doesNotMatch(menu.innerHTML,/<img|<b>/);
  h.c.api=async()=>({json:async()=>({sessions:[{id:A64,name:hostile,interfaces:[hostile],device:hostile,ports:[hostile],lab:hostile,remaining_seconds:60}]})});
  await h.c.refreshCaptureSessions();assert.doesNotMatch(h.$('capture-sessions').innerHTML,/<img/);
+});
+test('C07 fix: an unchanged sessions list rewrites nothing (so a focused End session button keeps focus), a changed one does, and the failure and disabled notes use the same cache',async()=>{
+ const h=harness();const hex=n=>String(n).repeat(64).slice(0,64);let writes=0,html='';const list=h.$('capture-sessions');
+ Object.defineProperty(list,'innerHTML',{get:()=>html,set:v=>{writes++;html=v;}});
+ let rows=[{id:hex(1),name:'c1',interfaces:['eth1'],remaining_seconds:3000}];
+ h.c.api=async()=>({json:async()=>({sessions:rows})});
+ await h.c.refreshCaptureSessions();assert.equal(writes,1);
+ for(let i=0;i<3;i++)await h.c.refreshCaptureSessions();
+ assert.equal(writes,1,'three more refreshes of an unchanged list wrote nothing');
+ rows=rows.concat([{id:hex(2),name:'c2',interfaces:['eth2'],remaining_seconds:3000}]);await h.c.refreshCaptureSessions();assert.equal(writes,2);
+ h.c.api=async()=>{throw new Error('x');};await h.c.refreshCaptureSessions();await h.c.refreshCaptureSessions();assert.equal(writes,3,'the failure note is written once');
+ assert.match(html,/Could not list capture sessions/);
+ assert.equal(await h.c.refreshCaptureSessions(),false,'a failed listing says so to End all');
+});
+test('C07 fix: End all my sessions lists again before it asks and names the current count; a failed listing ends nothing; the focus leaves a hidden button for a live control',async()=>{
+ const h=harness();const hex=n=>String(n).repeat(64).slice(0,64);
+ let rows=[{id:hex(1),name:'c',interfaces:['eth1']}];
+ h.c.api=async()=>({json:async()=>({sessions:rows})});
+ await h.c.refreshCaptureSessions();
+ rows=rows.concat([{id:hex(2),name:'d',interfaces:['eth2']},{id:hex(3),name:'e',interfaces:['eth3']}]);   // two more started elsewhere since the Tools tab listed
+ const asked=[];h.c.confirm=m=>{asked.push(m);return false;};
+ const button={textContent:'End all my sessions',disabled:false,hidden:false};
+ await h.c.endAllCaptureSessions(button);
+ assert.match(asked[0],/^End all 3 Wireshark sessions/,'the confirmation names the current count, not the stale 1');
+ assert.equal(button.disabled,false);assert.equal(button.textContent,'End all my sessions');
+ let called=false;h.c.json=async()=>{called=true;return {};};h.c.api=async()=>{throw new Error('down');};asked.length=0;
+ await h.c.endAllCaptureSessions(button);assert.equal(asked.length,0);assert.equal(called,false);assert.match(h.$('capture-status').textContent,/Could not list capture sessions, so none were ended/);
+ // double press: the second is ignored while the first is checking
+ h.c.api=async()=>({json:async()=>({sessions:rows})});h.c.confirm=m=>{asked.push(m);return true;};
+ const done=hex(4);let ended=0;h.c.json=async()=>{ended++;rows=[];return {ended:3,failed:[]};};
+ const dialogRefresh=h.$('capture-sessions-refresh');dialogRefresh.focused=false;const endAll=h.$('capture-end-all');
+ const first=h.c.endAllCaptureSessions(endAll),second=h.c.endAllCaptureSessions(endAll);await Promise.all([first,second]);
+ assert.equal(ended,1,'one end-all request');assert.equal(asked.length,1);
+ assert.equal(endAll.hidden,true);assert.equal(dialogRefresh.focused,true,'with the dialog open focus lands on Refresh list');
+ h.$('capture-dialog').open=false;const open=h.$('capture-open');open.focused=false;rows=[{id:hex(5),name:'f',interfaces:['eth1']}];await h.c.refreshCaptureSessions();
+ h.c.json=async()=>{rows=[];return {ended:1,failed:[]};};const tools=h.$('tools-capture-end-all');await h.c.endAllCaptureSessions(tools);
+ assert.equal(open.focused,true,'from the Tools card focus lands on Capture traffic…');
+});
+test('C07 fix: the wire menu with every item off takes focus itself, closes on Escape and Tab, and Enter on the wire closes it before the dialog opens',async()=>{
+ const h=linkHarness(['eth1'],['eth1'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}]]);
+ const menu=h.$('link-context-menu'),w=wire(LINK_ENDS('eth1','eth1'));menu.querySelector=()=>null;
+ vm.runInContext('captureEnabled=false',h.c);
+ h.$('map').listeners.keydown({key:'ContextMenu',target:{closest:()=>w},preventDefault(){}});
+ assert.equal(menu.hidden,false);assert.equal(menu.focused,true,'no enabled item: the menu element is focused');
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');assert.match(html,/id="link-context-menu"[^>]*tabindex="-1"/,'the menu element can take focus');
+ menu.focused=false;w.focused=false;menu.listeners.keydown({key:'Escape',preventDefault(){},stopPropagation(){}});assert.equal(menu.hidden,true);assert.equal(w.focused,true,'Escape returns focus to the wire');
+ h.$('map').listeners.keydown({key:'ContextMenu',target:{closest:()=>w},preventDefault(){}});menu.listeners.keydown({key:'Tab'});assert.equal(menu.hidden,true);
+ vm.runInContext('captureEnabled=null',h.c);
+ h.$('map').listeners.keydown({key:'ContextMenu',target:{closest:()=>w},preventDefault(){}});assert.equal(menu.hidden,false);
+ h.$('map').listeners.keydown({key:'Enter',target:{closest:()=>w},preventDefault(){}});assert.equal(menu.hidden,true,'Enter on the wire closes the open menu first');
+ await settle();assert.equal(h.$('capture-context').textContent,'Link: r1: eth1 — r2: eth1');
+});
+test('C07 fix: Capture both ends… from the menu ignores the remembered selection; the wire itself still restores it; the one-end item and a success under it are unchanged',async()=>{
+ const lm=new Map([['lab|link:clab-demo-r1:eth1|clab-demo-r2:eth1',JSON.stringify({interfaces:['eth1'],separate:false,ends:[false,true]})]]);
+ const h=linkHarness(['eth1'],['eth1'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}]],{store:lm});
+ const menu=h.$('link-context-menu'),w=wire(LINK_ENDS('eth1','eth1'));menu.querySelector=()=>null;
+ h.$('map').listeners.click({target:{closest:()=>w}});await settle();
+ assert.doesNotMatch(h.$('capture-ends-list').innerHTML,/data-capture-end="0" checked/,'the wire click restores the memory');
+ h.$('capture-dialog').close();
+ h.$('map').listeners.contextmenu({target:{closest:()=>w},preventDefault(){},clientX:1,clientY:1});
+ menu.listeners.click({target:{closest:()=>({disabled:false,dataset:{linkBoth:''}})}});await settle();
+ assert.match(h.$('capture-ends-list').innerHTML,/data-capture-end="0" checked/);assert.match(h.$('capture-ends-list').innerHTML,/data-capture-end="1" checked/,'both ends ticked');
+ assert.doesNotMatch(h.$('capture-status').textContent,/restored/);
+ h.$('capture-ends-list').checked=[{dataset:{captureEnd:'0'}},{dataset:{captureEnd:'1'}}];await h.$('capture-form').onsubmit({preventDefault(){}});
+ assert.equal(JSON.parse(lm.get('lab|link:clab-demo-r1:eth1|clab-demo-r2:eth1')).ends[0],false,'a menu item is a hint: it writes nothing');
+});
+test('C07 fix: closing the dialog returns focus to the wire (found again by its ends after a redraw), from a click, a menu item and Enter',async()=>{
+ const h=linkHarness(['eth1'],['eth1'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}]]);
+ const menu=h.$('link-context-menu'),ends=LINK_ENDS('eth1','eth1'),w=wire(ends);menu.querySelector=()=>null;
+ h.$('map').listeners.click({target:{closest:()=>w}});await settle();
+ h.$('capture-dialog').close();assert.equal(w.focused,true,'click: the wire gets focus back');
+ w.focused=false;h.$('map').listeners.contextmenu({target:{closest:()=>w},preventDefault(){},clientX:1,clientY:1});
+ menu.listeners.click({target:{closest:()=>({disabled:false,dataset:{linkEnd:'0'}})}});await settle();
+ h.$('capture-dialog').close();assert.equal(w.focused,true,'menu item: the opener is the wire, not the hidden menu');
+ // the map was redrawn while the dialog was open: the old node is detached, the new one has the same ends
+ const fresh=wire(ends);w.isConnected=false;w.focused=false;
+ h.$('map').listeners.click({target:{closest:()=>w}});await settle();
+ h.$('map').querySelectorAll=()=>[fresh];h.$('capture-dialog').close();
+ assert.equal(fresh.focused,true,'the redrawn wire is found by its ends');assert.equal(w.focused,false);
+ h.$('capture-dialog').close();   // no opener left: nothing throws
+});
+test('C07 fix: after a full success Start waits for a changed selection and the status says what is listed; a narrowed retry says two sessions, not one',async()=>{
+ const h=linkHarness(['lo','eth1'],['lo','eth1'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}]]);
+ h.c.openCapture('','',LINK_ENDS('eth1','eth1'));await settle();
+ const u1='/static/capture-session.html#'+A64,u2='/static/capture-session.html#'+B64;let n=0;
+ h.c.json=async(url,method,data)=>{n++;return n===1
+  ?{sessions:[{id:A64,url:u1,label:'r1 eth1'}],refused:[{position:'Capture 2 of 2',label:'r2 eth1',interfaces:['eth1'],detail:'busy'}],message:'part'}
+  :{sessions:[{id:B64,url:u2,label:'r2 eth1'}],refused:[],message:'Wireshark session started on the VM. Open the browser viewer.'};};
+ h.$('capture-ends-list').checked=[{dataset:{captureEnd:'0'}},{dataset:{captureEnd:'1'}}];
+ await h.$('capture-form').onsubmit({preventDefault(){}});assert.equal(h.$('capture-prepare').disabled,false,'a partial result keeps Start for the remaining one');
+ await h.$('capture-form').onsubmit({preventDefault(){}});
+ assert.equal(h.$('capture-prepare').disabled,true,'Start waits after a full success');
+ assert.match(h.$('capture-status').textContent,/^2 Wireshark sessions started on the VM\. Open each with its link below\. Change the selection to start another capture\.$/);
+ h.$('capture-ends').onchange();assert.equal(h.$('capture-prepare').disabled,false,'a changed selection releases Start');
+});
+test('C07 fix: a link end prints the veth only when it differs from the port, a started end is a readable line of its own, and the style sheet wraps the ends, the rows and the launch links',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8');
+ assert.match(css,/@media \(max-width: 420px\) \{ #capture-ends-list \{ grid-template-columns: minmax\(0, 1fr\); \} \}/);
+ assert.match(css,/\.capture-interface \{ flex-wrap: wrap; \}/);assert.match(css,/#capture-launches \.button \{ white-space: normal;/);assert.match(css,/#capture-launches \{ justify-content: flex-start; \}/);
 });

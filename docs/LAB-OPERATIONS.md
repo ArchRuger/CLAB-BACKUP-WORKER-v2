@@ -111,7 +111,8 @@ container from the lab's deployment name and refuses a container that is not lab
 
 - **Device drawer › Interfaces** (closed until opened). Name, Port (the device's own name, for example `ge-0/0/0`),
   State, RX and TX, with MAC, MTU and type as a second line. Data interfaces come first and carry **Capture**, which
-  opens the capture dialog on that container interface; the management interface (`eth0`) is labelled; internal
+  opens the capture dialog on that container interface (**Capture all connected** in the table header ticks every data
+  interface); the management interface (`eth0`) is labelled; internal
   ones (cEOS `cpu`/`fabric`, cJunosEvolved `eth1`–`eth3`) sit under *Other interfaces*. RX and TX show bytes and,
   from the second sample of the same container run, a rate. Impairments set on an interface show as a line under it.
   A stopped container says so (*Interfaces exist only while it runs; Logs shows its last output.*); a device with no
@@ -282,7 +283,10 @@ now, including devices not selected for scheduled backups. When every device is 
 starts at once; when some cannot be backed up, or a job is already running, it first lists
 the devices it will skip and why, and you confirm with **Back up N devices**. Right-click a device on the map for Open CLI, Console ↗ (the three kinds above; disabled with the reason while
 the console cannot open), Capture traffic, Back
-up configuration, Restart device… and Device details.
+up configuration, Restart device… and Device details. Right-click a link for Capture both ends or one end
+(a click on the link opens the capture dialog with both ends ticked, one Wireshark each); the Tools tab's
+Packet capture card says how many Wireshark sessions run from this browser and offers End all my sessions
+([CAPTURE.md](CAPTURE.md)).
 
 ## Review and persistence
 
