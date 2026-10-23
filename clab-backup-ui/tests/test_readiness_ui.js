@@ -420,3 +420,34 @@ test('C05: the lab banner offers Review changes… for a pending plan on a Runni
  assert.ok(vm.runInContext('BANNER_BUTTONS["lab-banner"]',h.context).includes('banner-review'));
  assert.ok(typeof identity==='string'&&identity.length>0);
 });
+
+test('C05: Stop device and Start device buttons and the Save startup configuration button take their disabled state and title from the shared checks',async()=>{
+ const h=appHarness();
+ const n={name:'r1',short_name:'R1',ssh_ready:true,login_configured:true,readiness:'Ready',nos_login:{status:'ready'},discovered:true,runtime_state:'running'};
+ const html=()=>vm.runInContext('nodeActions('+JSON.stringify(n)+',true)',h.context);
+ assert.match(html(),/data-node-action="stop-node" data-node="r1" disabled title="Not available on this page">Stop device…/,'without operations.js each button explains itself');
+ assert.match(html(),/data-node-action="start-node" data-node="r1" disabled title="Not available on this page">Start device…/);
+ h.context.opNodeActionState=(action)=>action==='stop-node'?{ok:true,reason:''}:{ok:false,reason:'R1 is already running',own:true};
+ const live=html();
+ assert.match(live,/<button class="danger-action" data-node-action="stop-node" data-node="r1" >Stop device…<\/button>/);
+ assert.match(live,/<button data-node-action="start-node" data-node="r1" disabled title="R1 is already running">Start device…<\/button>/);
+ assert.ok(live.indexOf('data-restart')<live.indexOf('data-node-action="stop-node"')&&live.indexOf('data-node-action="stop-node"')<live.indexOf('data-node-action="start-node"'),'Restart, Stop, Start');
+ // the notes: an own:true reason is not repeated under the buttons; another reason is
+ h.context.captureStatusLine=()=>'';h.context.nodeBackupReason=()=>'';
+ assert.equal(h.context.nodeActionNotes(n),'');
+ h.context.opNodeActionState=(action)=>action==='start-node'?{ok:false,reason:'Connect the VM first'}:{ok:true,reason:''};
+ assert.equal(h.context.nodeActionNotes(n),'Start device… is not available: Connect the VM first.');
+ h.context.opSaveNodeState=()=>({ok:false,reason:'R1 is not running',own:true});
+ assert.match(vm.runInContext('nodeDrawerActions('+JSON.stringify(n)+')',h.context),/data-save-node="r1" disabled title="R1 is not running">Save startup configuration…/);
+ assert.equal(h.context.nodeActionNotes(n),'Start device… is not available: Connect the VM first.','an own reason is not repeated');
+ h.context.opSaveNodeState=()=>({ok:false,reason:'Not available on this VM'});
+ assert.match(h.context.nodeActionNotes(n),/Save startup configuration… is not available: Not available on this VM\./);
+ h.context.opSaveNodeState=()=>({ok:true,reason:''});
+ assert.match(vm.runInContext('nodeDrawerActions('+JSON.stringify(n)+')',h.context),/data-save-node="r1" >Save startup configuration…/);
+ // the click handler
+ const ran=[];h.context.opTask=async(d,fn)=>{await fn();};h.context.opNodeAction=async(...a)=>{ran.push(['node',...a]);};h.context.opSaveNode=async(...a)=>{ran.push(['save',...a]);};vm.runInContext("activeId='lab-a'",h.context);
+ const b1={disabled:false,dataset:{nodeAction:'stop-node',node:'r1'},closest:()=>null},b2={disabled:false,dataset:{saveNode:'r1'},closest:()=>null};
+ await h.context.handleNodeAction({target:{closest:()=>b1}});await h.context.handleNodeAction({target:{closest:()=>b2}});
+ assert.deepEqual(ran,[['node','stop-node','lab-a','r1',b1],['save','lab-a','r1',b2]]);
+ await h.context.handleNodeAction({target:{closest:()=>({disabled:true,dataset:{nodeAction:'stop-node',node:'r1'}})}});assert.equal(ran.length,2,'a disabled button does nothing');
+});
