@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import __version__, lab_operations
 from .discovery import expected_container
-from .host_operations import LOGS_SINCE, LOGS_TAIL_LIMIT
+from .host_operations import INTERFACES_LISTING_SENTENCE, LOGS_SINCE, LOGS_TAIL_LIMIT, TRUSTED_ROOTS_SENTENCE
 from .lab_operations import secret_values, topology_images
 from .topology import PORT_RULES, displayed_interface
 
@@ -285,6 +285,11 @@ class DeviceDiagnostics:
         except HTTPException as exc:
             # A helper before C03 does not know the mode; one before C06 refuses the option. Either is the helper to update.
             if exc.status_code == 409 and exc.detail in (OLD_HELPER_SENTENCE, 'Unsupported interface options.'): return off('helper', LINK_HELPER_SENTENCE)
+            # A containerlab before 0.64 seen by the helper itself (the capabilities answer was not fresh enough to say so).
+            if exc.status_code == 409 and exc.detail == INTERFACES_LISTING_SENTENCE:
+                return off('containerlab', LINK_CONTAINERLAB_SENTENCE % '')
+            # A lab deployed outside the trusted roots: no poll can ever succeed, so it is a state with its way out, not a 409.
+            if exc.status_code == 409 and exc.detail == TRUSTED_ROOTS_SENTENCE: return off('roots', TRUSTED_ROOTS_SENTENCE)
             raise
         if result.get('present') is not True: return off('not running', LINK_NOT_RUNNING_SENTENCE)
         listing = {}

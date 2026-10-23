@@ -64,6 +64,8 @@ INTERFACE_LIMIT = 256
 # The `all` option of `interfaces` (C06 link state): at most this many containers of one lab are answered.
 LINK_CONTAINER_LIMIT = 512
 TRUSTED_ROOTS_SENTENCE = 'This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.'
+# lab_links: a containerlab before 0.64 has no `inspect interfaces`; it answers the plain `inspect` JSON (an object), not a list.
+INTERFACES_LISTING_SENTENCE = 'Containerlab on the VM cannot list interfaces (0.64 or later is needed).'
 # The text files the lab browser lists beside the topologies (`files` option) and the viewer reads:
 # what containerlab and its users write into a lab folder. Keys, certificates, `.env`, binaries and
 # hooks are never listed or read.
@@ -598,8 +600,9 @@ class HostOperations:
         if code: raise ValueError('Containerlab on the VM did not list the interfaces of this lab.')
         try: listing = json.loads(out)
         except ValueError: return {'nodes': [], 'present': False}   # "no containers found" is text with exit 0
+        if not isinstance(listing, list): raise ValueError(INTERFACES_LISTING_SENTENCE)
         nodes = []
-        for entry in listing if isinstance(listing, list) else []:
+        for entry in listing:
             if not isinstance(entry, dict) or not isinstance(entry.get('name'), str) or len(entry['name']) > 253 or entry['name'] not in bound: continue
             nodes.append({'name': entry['name'], 'interfaces': link_rows(entry.get('interfaces'))})
             if len(nodes) >= LINK_CONTAINER_LIMIT: break

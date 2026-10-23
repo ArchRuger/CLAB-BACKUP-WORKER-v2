@@ -198,6 +198,10 @@ before it), stopped and started with Docker, admin-shut over SSH, and destroyed 
   trusted topology path stays literal for the `all` path.
 - Then the argv as today (`[self.clab, 'inspect', 'interfaces', '--name', lab, '-f', 'json']`, `INSPECT_TIMEOUT`,
   `INSPECT_LIMIT`); a non-zero exit raises the existing sentence; non-JSON output → `{'nodes': [], 'present': False}`.
+  JSON that is not a list (a containerlab before 0.64 takes `interfaces` as an ignored argument and prints the plain
+  `inspect` object) raises `ValueError('Containerlab on the VM cannot list interfaces (0.64 or later is needed).')`,
+  which the manager answers as `{available: false, reason: 'containerlab'}`, as it answers the trusted-roots sentence
+  as `{available: false, reason: 'roots', text: <that sentence>}` (both 200; risk review of the backend).
 - Result `{'nodes': [{'name': <container ≤ 253>, 'interfaces': [{'name', 'alias', 'state', 'type'}]}], 'present':
   True}`: a reducer of its own (`link_rows(entry['interfaces'])`: the four strings cut at 64, at most 256 rows per
   container, at most 512 containers). No `mac`, `mtu`, `ifindex`, `facts`, `counters`, `docker inspect`. Bound: the
@@ -296,6 +300,9 @@ end}]}]` plus `counts: {up, down, unknown}`.
   message `Devices arranged in rows` / `… in columns` / `… in a ring`.
 - Undo (`undo: true`): the entry for `lab_id` must exist and its revision must equal both the request's `revision`
   and `revision(lab['drawing'])`, else 412 with the stale sentence and `reason: 'stale'` (and the entry dropped);
+  the entry also keeps a digest of the lab's map keys right after the arrangement (`revision()` of `drawing`,
+  `annotations`, `annotations_for`, `map_written_at`) and that digest must still match, so a map-document save that
+  keeps the drawing's revision (an unknown key, a `groupId`, geo coordinates) is refused the same way (risk review);
   then every key of `previous` is restored exactly (a key that was `None` is popped, as the map-document rollback
   does), `store.save()` with the same OSError rollback, the entry dropped, event `Device positions restored`. So
   `placed`, the default-grid caption, discovery's adoption of the VM's annotations file (`unplaced()`) and

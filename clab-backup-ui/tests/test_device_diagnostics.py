@@ -629,11 +629,29 @@ class LinkStateAPITests(unittest.TestCase):
         self.answers['interfaces'] = ValueError('Containerlab on the VM did not list the interfaces of this lab.')
         response = self.get('link-state', lab_id=self.lab_id)
         self.assertEqual((response.status_code, response.json()['detail']), (409, 'Containerlab on the VM did not list the interfaces of this lab.'))
+        # A lab outside the trusted roots is a state with its way out (200, reason `roots`), not a 409 no Retry can clear.
         self.answers['interfaces'] = ValueError('This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.')
-        self.assertEqual(self.get('link-state', lab_id=self.lab_id).status_code, 409)
+        self.assertEqual(self.link_state(), {'available': False, 'reason': 'roots',
+                                             'text': 'This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.'})
         self.answers['interfaces'] = RuntimeError('socket detail 10.0.0.1')
         response = self.get('link-state', lab_id=self.lab_id)
         self.assertEqual((response.status_code, response.json()['detail']), (409, dd.UNREACHABLE_SENTENCE))
+
+    def test_link_state_an_old_containerlab_and_a_lab_outside_the_roots_seen_by_the_helper_are_answers(self):
+        # Risk review of C06: with no fresh capabilities the helper itself finds a containerlab before 0.64 (its fixed
+        # sentence) or a lab deployed outside the trusted roots. Both are 200 `available: false`, never every wire down or a 409.
+        self.start()
+        for cache in (None, ('rev', time.monotonic() - 1, self.CAPS)):
+            self.app.state.operations.cap_cache = cache
+            self.answers['interfaces'] = ValueError('Containerlab on the VM cannot list interfaces (0.64 or later is needed).')
+            self.assertEqual(self.link_state(), {'available': False, 'reason': 'containerlab',
+                                                 'text': 'Link state needs containerlab 0.64 or later on the VM. Links are drawn from the topology file.'}, cache)
+            self.answers['interfaces'] = ValueError(dd.TRUSTED_ROOTS_SENTENCE)
+            self.assertEqual(self.link_state(), {'available': False, 'reason': 'roots', 'text': dd.TRUSTED_ROOTS_SENTENCE}, cache)
+        self.assertEqual(len(self.requests), 4)
+        # The two sentences are the helper's own, matched exactly: a sentence that merely contains them stays a 409.
+        self.answers['interfaces'] = ValueError('Containerlab on the VM cannot list interfaces (0.64 or later is needed). Extra')
+        self.assertEqual(self.get('link-state', lab_id=self.lab_id).status_code, 409)
 
     def test_link_state_twenty_polls_leave_events_and_the_store_untouched(self):
         self.start(); self.cache(self.CAPS)

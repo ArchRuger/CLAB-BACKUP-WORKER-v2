@@ -2111,6 +2111,108 @@ def stand_in_arrange(drawing, mode):
     if mode not in ('rows', 'columns', 'ring'): raise ValueError('Choose rows, columns or a ring.')
     shift = {'rows': (1000, 500), 'columns': (500, 1000), 'ring': (700, 700)}[mode]
     return {n['id']: [int(n['x']) + shift[0] + 10 * i, int(n['y']) + shift[1]] for i, n in enumerate(drawing['nodes'])}
+    # Review follow-ups for C05: where the plan cache is dropped, per-action run options, the link counts and the settings path.
+    def cache_states(self, effect, cancel_first=False, stopping_during=False, probe_effect=None, expect=None):
+        """Run one confirmed Apply with the fake VM changed by `effect` (what the run does) and `probe_effect` (the follow-up preview);
+        return the final job and, for every store write that showed a terminal job, whether the plan cache still held an entry."""
+        operations = self.app.state.operations; seen = []
+        with self.fixture() as fixture, patch.object(self.service, 'refresh'), patch.object(operations.pool, 'submit') as submit, patch.object(lab_operations.time, 'sleep', lab_operations.time.sleep if isinstance(lab_operations.time, SimpleNamespace) else (lambda seconds: None)):
+            inner = fixture.side_effect; ran = []
+            def remote(host, req, *args, **kwargs):
+                if req['mode'] == 'run': ran.append(1); return effect(host, req, *args, **kwargs)
+                if req['mode'] == 'preview' and ran and probe_effect:
+                    operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})   # a plan read while the stop is being followed up is cached again
+                    return probe_effect()
+                return inner(host, req, *args, **kwargs)
+            fixture.side_effect = remote
+            job = self.confirm(self.preview('apply')['token']).json()
+            if cancel_first: self.assertEqual(self.client.post('/api/operations/' + job['id'] + '/cancel', headers=self.auth, json={}).status_code, 202)
+            real_save = self.store.save
+            def watching():
+                if any(j['id'] == job['id'] and j['status'] in ('succeeded', 'failed', 'cancelled', 'interrupted') for j in self.store.state['operations']): seen.append(self.lab_id in operations.plan_cache)
+                return real_save()
+            operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})
+            with patch.object(self.store, 'save', side_effect=watching):
+                args = submit.call_args.args; args[0](*args[1:])
+            saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
+        self.assertTrue(seen, 'a terminal write happened'); self.assertFalse(any(seen), 'the cache was empty at every write that showed the job terminal: %r' % seen)
+        if expect: self.assertEqual(saved['status'], expect, saved)
+        operations.stopping.clear(); return saved
+
+    def test_the_plan_cache_is_dropped_before_a_failed_cancelled_or_interrupted_job_reads_terminal(self):
+        def fails(*a, **k): raise ValueError('The VM said no.')
+        self.cache_states(fails, expect='failed')
+        self.cache_states(fails, cancel_first=True, expect='cancelled')          # a stop before the run started
+        def stopped(*a, **k): raise lab_operations.OperationStopped('Operation stopped. Inspect the lab before retrying.')
+        proven = self.cache_states(stopped, probe_effect=lambda: {'steps': []}, expect='cancelled')   # the lock is free: the stop is proven
+        self.assertNotEqual(proven['message'], lab_operations.STOP_UNPROVEN)
+        clock = [1000.0]; fake = SimpleNamespace(monotonic=lambda: clock[0], sleep=lambda seconds: clock.__setitem__(0, clock[0] + seconds), time=time.time)
+        def silent(): raise OSError('network')
+        with patch('app.lab_operations.time', fake):
+            unproven = self.cache_states(stopped, probe_effect=silent, expect='cancelled')                  # nothing proves it: the cache is dropped as well
+        self.assertEqual(unproven['message'], lab_operations.STOP_UNPROVEN)
+        operations = self.app.state.operations
+        def manager_stops(*a, **k): operations.stopping.set(); raise lab_operations.OperationStopped('Operation stopped. Inspect the lab before retrying.')
+        self.cache_states(manager_stops, expect='interrupted')                    # the manager itself stopping
+        def stops_meanwhile():
+            operations.stopping.set(); raise lab_operations.OperationStopped('Operation stopped. Inspect the lab before retrying.')
+        self.cache_states(stopped, probe_effect=stops_meanwhile, expect='interrupted')   # ... while the follow-up probes
+
+    def test_a_settings_path_drops_the_plan_before_and_after_it_is_stored(self):
+        operations = self.app.state.operations
+        with self.fixture() as fixture:
+            url = '/api/labs/' + self.lab_id + '/operations-settings'
+            inner = fixture.side_effect; start = operations.plan_gen.get(self.lab_id, 0)
+            def remote(host, req, *args, **kwargs):
+                if req['mode'] == 'read': operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})   # an answer computed from the old file, stored mid-change
+                return inner(host, req, *args, **kwargs)
+            fixture.side_effect = remote
+            response = self.client.put(url, headers=self.auth, json={'path': '/etc/containerlab/other/training.clab.yaml'})
+            self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.store.lab(self.lab_id)['vm_project_path'], '/etc/containerlab/other/training.clab.yaml')
+        self.assertNotIn(self.lab_id, operations.plan_cache, 'the late answer did not survive the stored path')
+        self.assertEqual(operations.plan_gen[self.lab_id], start + 2, 'dropped before the read and again after the path was stored')
+        operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})
+        self.assertEqual(self.client.put(url, headers=self.auth, json={'favorite': True}).status_code, 200)
+        self.assertIn(self.lab_id, operations.plan_cache, 'a settings change without a path keeps it')
+
+    def test_run_options_are_checked_against_the_action_and_an_unknown_status_is_not_called_deployed(self):
+        with self.fixture() as remote:
+            self.store.lab(self.lab_id)['deployment_name'] = 'training'; calls = len(remote.call_args_list)
+            for action, options, text in (('redeploy', {'nodes': ['r1']}, 'This action does not take: Choose devices.'),
+                                          ('save', {'max_workers': 2}, 'This action does not take: Max workers.'),
+                                          ('destroy', {'skip_post_deploy': True}, 'This action does not take: Skip post-deploy.'),
+                                          ('deploy', {'keep_mgmt_net': True, 'max_workers': 2}, 'This action does not take: Keep the management network.'),
+                                          ('start', {'nodes': ['r1']}, 'This action takes no run options.')):
+                refused = self.post_preview(action=action, lab_id=self.lab_id, options=options)
+                self.assertEqual(refused.status_code, 400, (action, refused.text)); self.assertIn(text, refused.text)
+            self.assertFalse(any(c.args[1]['mode'] == 'preview' for c in remote.call_args_list[calls:]), 'nothing reached the helper')
+            for status in ('Unknown', 'Unlinked'):
+                with patch('app.lab_operations.lab_status', return_value={'status': status}):
+                    refused = self.post_preview(action='deploy', lab_id=self.lab_id, options={'nodes': ['r1']})
+                self.assertEqual(refused.status_code, 409, status); self.assertIn('cannot tell whether this lab is deployed', refused.text); self.assertNotIn('already deployed', refused.text)
+
+    def test_destroyed_neighbours_are_not_counted_as_restorable_links_and_the_job_names_them(self):
+        note = lab_operations.neighbour_note
+        self.assertIn('containerlab restores only 1 of 3 links', note('restart-node', 'r1', 3, ['r2'], ['r3'])[0])
+        self.assertIn('containerlab restores no link', note('restart-node', 'r1', 2, ['r2'], ['r3'])[0])
+        self.assertIn('containerlab restores only 1 of 2 links', note('start-node', 'r1', 2, ['r2'], [])[0], 'a stopped neighbour alone counts as before')
+        with self.fixture(), patch.object(self.app.state.operations.pool, 'submit') as submit:
+            lab = self.store.lab(self.lab_id); node = lab['nodes'][0]['name']; short = lab['nodes'][0].get('definition_node') or lab['nodes'][0].get('short_name')
+            del lab['nodes'][1:]
+            lab['nodes'].append({'name': 'clab-training-r3', 'short_name': 'r3', 'definition_node': 'r3', 'kind': 'arista_ceos', 'discovered': True, 'runtime_state': 'absent'})
+            lab['nodes'].append({'name': 'clab-training-r4', 'short_name': 'r4', 'definition_node': 'r4', 'kind': 'arista_ceos', 'discovered': True, 'runtime_state': 'running'})
+            lab['drawing'] = {'nodes': [], 'links': [[{'node': short, 'interface': 'eth1'}, {'node': 'r3', 'interface': 'eth1'}], [{'node': short, 'interface': 'eth2'}, {'node': 'r4', 'interface': 'eth1'}]]}
+            job = self.confirm(self.preview('restart-node', node=node)['token']).json()
+            self.assertEqual((job.get('links_expected'), job.get('neighbours_absent')), (2, ['r3']))
+            def remote(host, req, *args):
+                args[0]('Restored link r1:eth2 <-> r4:eth1\n'); return dict(exit_code=0)
+            def running(wait=False): lab['nodes'][0].update(discovered=True, runtime_state='running', runtime_status='Up 2 seconds')
+            with patch('app.lab_operations.remote', side_effect=remote), patch.object(self.service, 'refresh', side_effect=running), patch('app.lab_operations.time.sleep'):
+                args = submit.call_args.args; args[0](*args[1:])
+            saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
+            self.assertEqual(saved['status'], 'succeeded')
+            self.assertIn('1 of 2 links restored (no link to r3: removed, its link was gone; the device waits for it before it boots)', saved['message'])
 
 
 class ArrangeTests(unittest.TestCase):
@@ -2325,105 +2427,42 @@ class ArrangeTests(unittest.TestCase):
             lab = self.lab()
             self.assertEqual(lab['annotations_for'], revision(lab['drawing']), 'never dropped silently: the document is kept')
             self.assertEqual(json.loads(lab['annotations'])['somethingNew'], [1] * 160000)
-    # Review follow-ups for C05: where the plan cache is dropped, per-action run options, the link counts and the settings path.
-    def cache_states(self, effect, cancel_first=False, stopping_during=False, probe_effect=None, expect=None):
-        """Run one confirmed Apply with the fake VM changed by `effect` (what the run does) and `probe_effect` (the follow-up preview);
-        return the final job and, for every store write that showed a terminal job, whether the plan cache still held an entry."""
-        operations = self.app.state.operations; seen = []
-        with self.fixture() as fixture, patch.object(self.service, 'refresh'), patch.object(operations.pool, 'submit') as submit, patch.object(lab_operations.time, 'sleep', lab_operations.time.sleep if isinstance(lab_operations.time, SimpleNamespace) else (lambda seconds: None)):
-            inner = fixture.side_effect; ran = []
-            def remote(host, req, *args, **kwargs):
-                if req['mode'] == 'run': ran.append(1); return effect(host, req, *args, **kwargs)
-                if req['mode'] == 'preview' and ran and probe_effect:
-                    operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})   # a plan read while the stop is being followed up is cached again
-                    return probe_effect()
-                return inner(host, req, *args, **kwargs)
-            fixture.side_effect = remote
-            job = self.confirm(self.preview('apply')['token']).json()
-            if cancel_first: self.assertEqual(self.client.post('/api/operations/' + job['id'] + '/cancel', headers=self.auth, json={}).status_code, 202)
-            real_save = self.store.save
-            def watching():
-                if any(j['id'] == job['id'] and j['status'] in ('succeeded', 'failed', 'cancelled', 'interrupted') for j in self.store.state['operations']): seen.append(self.lab_id in operations.plan_cache)
-                return real_save()
-            operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})
-            with patch.object(self.store, 'save', side_effect=watching):
-                args = submit.call_args.args; args[0](*args[1:])
-            saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
-        self.assertTrue(seen, 'a terminal write happened'); self.assertFalse(any(seen), 'the cache was empty at every write that showed the job terminal: %r' % seen)
-        if expect: self.assertEqual(saved['status'], expect, saved)
-        operations.stopping.clear(); return saved
 
-    def test_the_plan_cache_is_dropped_before_a_failed_cancelled_or_interrupted_job_reads_terminal(self):
-        def fails(*a, **k): raise ValueError('The VM said no.')
-        self.cache_states(fails, expect='failed')
-        self.cache_states(fails, cancel_first=True, expect='cancelled')          # a stop before the run started
-        def stopped(*a, **k): raise lab_operations.OperationStopped('Operation stopped. Inspect the lab before retrying.')
-        proven = self.cache_states(stopped, probe_effect=lambda: {'steps': []}, expect='cancelled')   # the lock is free: the stop is proven
-        self.assertNotEqual(proven['message'], lab_operations.STOP_UNPROVEN)
-        clock = [1000.0]; fake = SimpleNamespace(monotonic=lambda: clock[0], sleep=lambda seconds: clock.__setitem__(0, clock[0] + seconds), time=time.time)
-        def silent(): raise OSError('network')
-        with patch('app.lab_operations.time', fake):
-            unproven = self.cache_states(stopped, probe_effect=silent, expect='cancelled')                  # nothing proves it: the cache is dropped as well
-        self.assertEqual(unproven['message'], lab_operations.STOP_UNPROVEN)
-        operations = self.app.state.operations
-        def manager_stops(*a, **k): operations.stopping.set(); raise lab_operations.OperationStopped('Operation stopped. Inspect the lab before retrying.')
-        self.cache_states(manager_stops, expect='interrupted')                    # the manager itself stopping
-        def stops_meanwhile():
-            operations.stopping.set(); raise lab_operations.OperationStopped('Operation stopped. Inspect the lab before retrying.')
-        self.cache_states(stopped, probe_effect=stops_meanwhile, expect='interrupted')   # ... while the follow-up probes
-
-    def test_a_settings_path_drops_the_plan_before_and_after_it_is_stored(self):
-        operations = self.app.state.operations
-        with self.fixture() as fixture:
-            url = '/api/labs/' + self.lab_id + '/operations-settings'
-            inner = fixture.side_effect; start = operations.plan_gen.get(self.lab_id, 0)
-            def remote(host, req, *args, **kwargs):
-                if req['mode'] == 'read': operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})   # an answer computed from the old file, stored mid-change
-                return inner(host, req, *args, **kwargs)
-            fixture.side_effect = remote
-            response = self.client.put(url, headers=self.auth, json={'path': '/etc/containerlab/other/training.clab.yaml'})
-            self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(self.store.lab(self.lab_id)['vm_project_path'], '/etc/containerlab/other/training.clab.yaml')
-        self.assertNotIn(self.lab_id, operations.plan_cache, 'the late answer did not survive the stored path')
-        self.assertEqual(operations.plan_gen[self.lab_id], start + 2, 'dropped before the read and again after the path was stored')
-        operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})
-        self.assertEqual(self.client.put(url, headers=self.auth, json={'favorite': True}).status_code, 200)
-        self.assertIn(self.lab_id, operations.plan_cache, 'a settings change without a path keeps it')
-
-    def test_run_options_are_checked_against_the_action_and_an_unknown_status_is_not_called_deployed(self):
-        with self.fixture() as remote:
-            self.store.lab(self.lab_id)['deployment_name'] = 'training'; calls = len(remote.call_args_list)
-            for action, options, text in (('redeploy', {'nodes': ['r1']}, 'This action does not take: Choose devices.'),
-                                          ('save', {'max_workers': 2}, 'This action does not take: Max workers.'),
-                                          ('destroy', {'skip_post_deploy': True}, 'This action does not take: Skip post-deploy.'),
-                                          ('deploy', {'keep_mgmt_net': True, 'max_workers': 2}, 'This action does not take: Keep the management network.'),
-                                          ('start', {'nodes': ['r1']}, 'This action takes no run options.')):
-                refused = self.post_preview(action=action, lab_id=self.lab_id, options=options)
-                self.assertEqual(refused.status_code, 400, (action, refused.text)); self.assertIn(text, refused.text)
-            self.assertFalse(any(c.args[1]['mode'] == 'preview' for c in remote.call_args_list[calls:]), 'nothing reached the helper')
-            for status in ('Unknown', 'Unlinked'):
-                with patch('app.lab_operations.lab_status', return_value={'status': status}):
-                    refused = self.post_preview(action='deploy', lab_id=self.lab_id, options={'nodes': ['r1']})
-                self.assertEqual(refused.status_code, 409, status); self.assertIn('cannot tell whether this lab is deployed', refused.text); self.assertNotIn('already deployed', refused.text)
-
-    def test_destroyed_neighbours_are_not_counted_as_restorable_links_and_the_job_names_them(self):
-        note = lab_operations.neighbour_note
-        self.assertIn('containerlab restores only 1 of 3 links', note('restart-node', 'r1', 3, ['r2'], ['r3'])[0])
-        self.assertIn('containerlab restores no link', note('restart-node', 'r1', 2, ['r2'], ['r3'])[0])
-        self.assertIn('containerlab restores only 1 of 2 links', note('start-node', 'r1', 2, ['r2'], [])[0], 'a stopped neighbour alone counts as before')
-        with self.fixture(), patch.object(self.app.state.operations.pool, 'submit') as submit:
-            lab = self.store.lab(self.lab_id); node = lab['nodes'][0]['name']; short = lab['nodes'][0].get('definition_node') or lab['nodes'][0].get('short_name')
-            del lab['nodes'][1:]
-            lab['nodes'].append({'name': 'clab-training-r3', 'short_name': 'r3', 'definition_node': 'r3', 'kind': 'arista_ceos', 'discovered': True, 'runtime_state': 'absent'})
-            lab['nodes'].append({'name': 'clab-training-r4', 'short_name': 'r4', 'definition_node': 'r4', 'kind': 'arista_ceos', 'discovered': True, 'runtime_state': 'running'})
-            lab['drawing'] = {'nodes': [], 'links': [[{'node': short, 'interface': 'eth1'}, {'node': 'r3', 'interface': 'eth1'}], [{'node': short, 'interface': 'eth2'}, {'node': 'r4', 'interface': 'eth1'}]]}
-            job = self.confirm(self.preview('restart-node', node=node)['token']).json()
-            self.assertEqual((job.get('links_expected'), job.get('neighbours_absent')), (2, ['r3']))
-            def remote(host, req, *args):
-                args[0]('Restored link r1:eth2 <-> r4:eth1\n'); return dict(exit_code=0)
-            def running(wait=False): lab['nodes'][0].update(discovered=True, runtime_state='running', runtime_status='Up 2 seconds')
-            with patch('app.lab_operations.remote', side_effect=remote), patch.object(self.service, 'refresh', side_effect=running), patch('app.lab_operations.time.sleep'):
-                args = submit.call_args.args; args[0](*args[1:])
-            saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
-            self.assertEqual(saved['status'], 'succeeded')
-            self.assertIn('1 of 2 links restored (no link to r3: removed, its link was gone; the device waits for it before it boots)', saved['message'])
+    def test_arrange_undo_after_a_document_save_that_keeps_the_drawing_is_refused_and_the_save_survives(self):
+        # Risk review of C06: a map-document save that changes only what parse_drawing does not carry into the drawing (an
+        # unknown key, a groupId, geo coordinates) keeps the drawing's revision. Undo must still refuse to throw it away.
+        from app.layout import revision
+        arrange, stub = self.arrange_function()
+        with self.fixture() as remote, stub:
+            ids = [n['id'] for n in self.lab()['drawing']['nodes']]
+            for case in ('drawing only', 'stored document'):
+                with self.subTest(case=case):
+                    url = '/api/labs/' + self.lab_id + '/map-document'
+                    # A map saved from Edit map first, so the drawing is the one its document parses to (an imported drawing
+                    # lacks the editor's per-node defaults, and the first save after it would move the revision anyway).
+                    stored = self.document(ids); stored['nodeAnnotations'] += [{'id': i, 'position': {'x': 40, 'y': 300}} for i in ids[1:]]
+                    self.save_document(stored if case == 'stored document' else json.loads(self.client.get(url, headers=self.auth).json()['annotations']))
+                    before = copy.deepcopy(self.lab())
+                    arranged = self.post(mode='rows', revision=self.rev()); self.assertEqual(arranged.status_code, 200, arranged.text)
+                    opened = self.client.get(url, headers=self.auth).json()
+                    for change in ({'somethingElse': {'kept': case}}, {'nodeAnnotations': [dict(entry, groupId='edge', geoCoordinates={'lat': 1.5, 'lng': 2.5}) for entry in json.loads(opened['annotations'])['nodeAnnotations']]}):
+                        document = dict(json.loads(self.client.get(url, headers=self.auth).json()['annotations']), **change)
+                        saved = self.client.put(url, headers=self.auth, json={'annotations': json.dumps(document, indent=2), 'revision': self.rev()})
+                        self.assertEqual(saved.status_code, 200, saved.text)
+                    self.assertEqual(self.rev(), arranged.json()['revision'], 'the precondition: the drawing revision did not move')
+                    after = copy.deepcopy(self.lab())
+                    self.assertEqual(json.loads(after['annotations'])['somethingElse'], {'kept': case})
+                    for revision_sent in (arranged.json()['revision'], self.rev()):
+                        response = self.post(undo=True, revision=revision_sent)
+                        self.assertEqual((response.status_code, response.json()), (412, {'detail': self.STALE, 'reason': 'stale'}), revision_sent)
+                    self.assertEqual(self.lab(), after, 'the later save survives')
+                    self.assertNotIn(self.lab_id, self.app.state.operations.arrange_undo, 'the stale entry is dropped')
+                    self.assertEqual(Store(self.tmp.name).lab(self.lab_id)['annotations'], after['annotations'])
+                    self.assertNotEqual(self.lab(), before)
+                    # Nothing in between: Undo still restores the lab exactly.
+                    exact = copy.deepcopy(self.lab())
+                    arranged = self.post(mode='ring', revision=self.rev()).json()
+                    undone = self.post(undo=True, revision=arranged['revision'])
+                    self.assertEqual(undone.status_code, 200, undone.text)
+                    self.assertEqual(self.lab(), exact)
+            self.assertEqual(remote.call_count, 0)

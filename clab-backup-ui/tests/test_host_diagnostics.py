@@ -425,8 +425,24 @@ class LinkStateModeTests(DiagnosticsHarness):
         with self.assertRaisesRegex(ValueError, '^Containerlab on the VM did not list the interfaces of this lab.$'): self.host.interfaces(LAB, {'all': True})
         self.list_answer = (0, 'no containers found\n')
         self.assertEqual(self.host.interfaces(LAB, {'all': True}), {'nodes': [], 'present': False})
+        # An object is not "no interfaces": it is a containerlab before 0.64 answering the plain `inspect` (the next test).
         self.list_answer = (0, '{"not": "a list"}')
+        with self.assertRaisesRegex(ValueError, '^Containerlab on the VM cannot list interfaces'): self.host.interfaces(LAB, {'all': True})
+        self.list_answer = (0, '[]')
         self.assertEqual(self.host.interfaces(LAB, {'all': True}), {'nodes': [], 'present': True})
+
+    def test_a_containerlab_before_0_64_answering_the_plain_inspect_is_its_own_sentence_and_nothing_more_runs(self):
+        # Risk review of C06: an old containerlab takes `interfaces` as an ignored argument and prints `inspect`'s own
+        # JSON, an object. That is never `present: True` with no nodes (every wire drawn down) but a fixed sentence.
+        sentence = 'Containerlab on the VM cannot list interfaces (0.64 or later is needed).'
+        self.assertEqual(host_operations.INTERFACES_LISTING_SENTENCE, sentence)
+        for answer in (json.dumps({LAB: [self.bind_row(CONTAINER)]}), json.dumps({'containers': [{'name': CONTAINER}]}), '{}', 'null', '"text"', '7'):
+            self.log.clear(); self.list_answer = (0, answer)
+            with self.assertRaises(ValueError, msg=answer) as raised: self.host.interfaces(LAB, {'all': True})
+            self.assertEqual(str(raised.exception), sentence, answer)
+            self.assertEqual(self.argvs(), [[self.clab, 'inspect', '--name', LAB, '-f', 'json'], [self.clab, 'inspect', 'interfaces', '--name', LAB, '-f', 'json']],
+                             'the two fixed argvs and nothing else')
+        self.assertEqual((self.probes, self.merged), ([], []))
 
     def test_only_containers_the_binding_listed_are_answered(self):
         self.bind_answer = (0, json.dumps({LAB: [self.bind_row(CONTAINER)]}))

@@ -450,8 +450,9 @@ class LabOperations:
         # One image question on the VM at a time: tabs and reviews that miss the cache together queue here
         # instead of each opening an SSH session and four Docker processes.
         self.image_flight = threading.Lock()
-        # Undo of Arrange devices (C06): lab id -> (the arranged drawing's revision, the lab's map keys before it). Process
-        # memory only, never persisted: one entry per lab, read and written under the store lock, gone on restart.
+        # Undo of Arrange devices (C06): lab id -> (the arranged drawing's revision, the lab's map keys before it, a digest
+        # of the map keys right after it). Process memory only, never persisted: one entry per lab, read and written under
+        # the store lock, gone on restart.
         self.arrange_undo = {}
         with store.lock:
             for job in store.state.setdefault('operations', []):
@@ -989,6 +990,11 @@ class LabOperations:
             """The lab's map keys as they are, deep-copied; a key the lab does not have is left out (and so removed on restore)."""
             return {k: copy.deepcopy(lab[k]) for k in map_keys if k in lab}
 
+        def map_digest(lab):
+            """One digest of every map key as it is now: a later save that keeps the drawing's revision (a document change
+            parse_drawing does not carry into the drawing: a groupId, geo coordinates, an unknown key) still changes it."""
+            return revision({k: lab[k] for k in map_keys if k in lab})
+
         def put_back(lab, state):
             for key in map_keys: lab.pop(key, None)
             lab.update(state)
@@ -1039,7 +1045,7 @@ class LabOperations:
                 current = revision(lab['drawing'])
                 if data.undo:
                     entry = self.arrange_undo.get(lab_id)
-                    if not entry or entry[0] != data.revision or entry[0] != current:
+                    if not entry or entry[0] != data.revision or entry[0] != current or entry[2] != map_digest(lab):
                         self.arrange_undo.pop(lab_id, None); return stale()
                     now = map_state(lab)
                     put_back(lab, copy.deepcopy(entry[1]))
@@ -1071,7 +1077,7 @@ class LabOperations:
                         put_back(lab, previous)
                         raise HTTPException(500, not_saved)
                     saved = revision(new)
-                    self.arrange_undo[lab_id] = (saved, previous)
+                    self.arrange_undo[lab_id] = (saved, previous, map_digest(lab))   # Undo only while the map is exactly this
                     answer = {'saved': True, 'revision': saved, 'undo': True}; message = arranged_messages[data.mode]
             self.store.event('topology.layout', message, lab_id=lab_id)
             return answer
