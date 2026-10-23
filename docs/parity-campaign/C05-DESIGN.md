@@ -582,6 +582,12 @@ wrap under the row at ≤ 520 px via a `.impairments-table` rule).
 
 ### 4.3 The map badge (`topology.js`, `topology-render.js`, `index.html`, `style.css`)
 
+**Amendment (C06 review, row 16; one wire-attribute contract):** `topologyLink` emits no `data-link-ends` of its own;
+`impairedWires()` reads each wire's endpoints from the existing `data-capture-endpoints` JSON (`[{node, label, interface}]`),
+and `renderMapImpairments` writes its clause into `data-impaired-text` and calls `mapWireText(group)` (C06-DESIGN §3.0)
+instead of restoring titles itself; the device-only `data-link-ends` is C06's attribute for Find and hover. Where the
+paragraph below says otherwise, this amendment binds.
+
 - `topology-render.js` already writes `data-capture-endpoints` (`[{node: inventory_name, interface}]`) on every wire
   group; nothing in the markup changes except that `topologyLink` also emits `data-link-ends="<node>:<if>|<node>:<if>"`
   (escaped) so matching needs no JSON parse per render.
