@@ -133,6 +133,8 @@ levels, which no lab file needs.', line, severity: 'error'}}` and no tree. `loca
 inside it (a `RangeError` included) becomes that `{error}` shape with the exception's first line, so a caller on the
 page's persist path cannot be tripped by it (finding 0).
 
+An `{error}` that `checkYaml` does not also report (the depth, size and time limits) is a limit of the advisory check, not a parse error: the panel writes it into the count as a warning-toned `Not checked: <sentence>` and never into the status line or `aria-invalid`.
+
 The panel passes `tree` to the validator together with the schema and the context; the fake editor in the tests
 builds trees by hand or with the test helper of §6.
 
@@ -231,7 +233,7 @@ with its source in a comment):
 | `binds` (R6c) | `binds[]` | Not a string, or a string without `:`. | error (P for a number) / warning (S) | *Line 8: a bind is `host-path:container-path[:ro]`; `1` is not one.* |
 | `link-brief` (R7a) | a link without `type` | `endpoints` missing, not two items, an item not `node:interface`, the two items equal. | error (P) | *Line 14: a link needs exactly two endpoints as `device:interface`.* |
 | `link-type` (R7b) | a link with `type` | `type` outside veth, veth-stitch, mgmt-net, host, macvlan, vxlan, vxlan-stitch, dummy; a required key of that form missing (`endpoint`, `host-interface`, `remote`, `vni`, `dst-port` per form); a key the form does not take (R1 at that level). | error when `exact` (P/S), else warning | *Line 16: a `host` link needs `endpoint` and `host-interface`.* |
-| `link-node` (R7c) | each endpoint `node` (brief `node:iface` or long `node:`), except `host`, `mgmt-net`, `macvlan`, `vxlan`, `vxlan-stitch`, `dummy`, `bridge` | Not in `topology.nodes`. | error (P: `Unable to find node zz`) | *Line 15: the link endpoint `zz` is not a device in topology.nodes.* (the list carries this error whenever a tree exists; the `checkYaml` warning is written to the status line only when no tree exists, §4.1) |
+| `link-node` (R7c) | each endpoint `node` (brief `node:iface` or long `node:`), except `host`, `mgmt-net`, `macvlan` (`containerlab validate` 0.79.0: `bridge`, `vxlan`, `vxlan-stitch` and `dummy` as a brief endpoint fail with `Unable to find node`; a bridge is a `kind: bridge` node that must be listed) | Not in `topology.nodes`. | error (P: `Unable to find node zz`) | *Line 15: the link endpoint `zz` is not a device in topology.nodes.* (the list carries this error whenever a tree exists; the `checkYaml` warning is written to the status line only when no tree exists, §4.1) |
 | `link-duplicate` (R7d) | all endpoints | The same `node:interface` used twice in the lab. | warning (S) | *Line 17: `vsw:ge-0/0/0` is already used by the link on line 14.* |
 | `wait-node` (R8a) | each effective `wait-for` entry (own and inherited) | `node` not in `topology.nodes`. | error (U) | *Line 12: There is no device named `vws`. Did you mean `vsw`?* |
 | `wait-self` (R8b) | same | `node` equals the waiting node (also through `defaults`/`kinds`/`groups`). | error (U) | *Line 12: A device cannot wait for itself (`vsw` waits for `vsw` through topology.defaults).* |

@@ -412,3 +412,39 @@ test('the Problems list keeps at least three items visible; the panel scrolls fo
  assert.doesNotMatch(/\.builder-yaml-problems\{([^}]*)\}/.exec(css)[1],/max-height/,'the section no longer squeezes the list');
  assert.match(css,/\.builder-yaml-panel\{overflow-y:auto\}/);
 });
+
+// ---- C08 review fixes ----------------------------------------------------------------------------------------
+test('a limit of locateYaml is a warning-toned "Not checked" in the count, never a blocking error',async()=>{
+ const c=loadCheck(),limit={message:'The topology is nested more than 64 levels deep',line:1,severity:'error'};
+ const e=openWith(c,GOOD,{locate:t=>t===GOOD?{tree:located(GOOD_DOC)}:{error:limit}});await settle();
+ type(c,GOOD+'# more\n');c.runTimers();await settle();
+ const count=c.els['builder-yaml-count'];
+ assert.equal(count.textContent,'Not checked: The topology is nested more than 64 levels deep');
+ assert.match(count.className,/\bis-warn\b/,'warning tone');
+ assert.notEqual(c.builderYamlPanelState().tone,'error','the status line stays calm');assert.equal(c.builderYamlPanelState().status,'Edited · not applied');
+ assert.equal(c.els['builder-yaml-editor'].attrs['aria-invalid'],'false');
+ assert.equal(c.els['builder-yaml-schema'].textContent,'','nothing was checked, so no caption');
+ // A text that locates again clears the tone.
+ type(c,GOOD);c.runTimers();await settle();assert.equal(count.className,'');assert.match(count.textContent,/^No problems found/);
+});
+test('the caption and the status line follow what ran: no tree, no locateYaml or a throwing check says nothing about a check',async()=>{
+ const warn={message:'a link names an unknown device',line:5,severity:'warning'};
+ const noLocate=loadCheck(),e1=fakeEditor(GOOD,{check:()=>warn});noLocate.builderYamlPanelInit({editor:e1});noLocate.builderYamlPanelToggle(true);
+ assert.equal(noLocate.els['builder-yaml-schema'].textContent,'','no locateYaml: no caption');
+ type(noLocate,GOOD+'# x\n');noLocate.runTimers();await settle();
+ assert.match(noLocate.builderYamlPanelState().status,/a link names an unknown device/,'no list check ran: the checkYaml warning stays visible');
+ const boom=loadCheck(),e2=openWith(boom,GOOD,{check:()=>warn});await settle();
+ assert.match(boom.els['builder-yaml-schema'].textContent,/^Checked against containerlab 0\.79\.0/);
+ vm.runInContext("builderCheck=function(){throw new Error('x');}",boom);
+ type(boom,GOOD+'# y\n');boom.runTimers();await settle();
+ assert.equal(boom.els['builder-yaml-schema'].textContent,'','the check threw: no caption');
+ assert.match(boom.builderYamlPanelState().status,/a link names an unknown device/,'the warning is not hidden when the list did not run');
+ const fine=loadCheck(),e3=openWith(fine,GOOD,{check:()=>warn});await settle();type(fine,GOOD+'# z\n');fine.runTimers();await settle();
+ assert.equal(fine.builderYamlPanelState().status,'Edited · not applied','the list ran: the list carries the warning');
+});
+test('the gutter title follows a new message of the same length on the same line',()=>{
+ const c=load();
+ c.builderYamlMarks([{line:3,severity:'error',message:'aaaa'}]);const sig=()=>vm.runInContext('builderYaml.markSig',c),first=sig();
+ c.builderYamlMarks([{line:3,severity:'error',message:'bbbb'}]);
+ assert.notEqual(sig(),first);
+});

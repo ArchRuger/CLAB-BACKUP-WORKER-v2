@@ -18,7 +18,7 @@ const BUILDER_YAML_TEXT={edited:'Edited · not applied',applying:'Applying…',a
 const BUILDER_YAML_EXAMPLE=['name: juniper-pair','topology:','  nodes:','    vsw:','      kind: juniper_vjunosswitch','      image: n24l/vjunos-switch:23.2R1.14','    vrt:','      kind: juniper_vjunosrouter','      image: n24l/juniper_vjunos-router:26.2R1.7','      stages:','        create:','          wait-for:','            - node: vsw','              stage: healthy','  links:','    - endpoints: ["vsw:ge-0/0/0", "vrt:ge-0/0/0"]',''].join('\n');
 const builderYaml={open:false,dirty:false,applying:false,canvasChanged:false,base:'',status:'',tone:'',editor:null,getDraftYaml:null,onApplied:null,onToggle:null,unsubscribe:null,timer:null,lines:0,
  // The Problems list: the newest located tree and its text, the gutter marks (line -> {severity,message}), the errors listed, the count sentence last written.
- tree:null,treeText:'',marks:new Map(),markSig:'',builtSig:'',listErrors:0,countText:'',keyTimer:null,
+ tree:null,treeText:'',marks:new Map(),markSig:'',builtSig:'',listErrors:0,countText:'',countTone:'',keyTimer:null,
  // The containerlab version the VM reported (builderYamlContext) and the schema fetch: idle (null), loading, ready or failed, per schema version.
  vmVersion:'',schemaState:null,bound:false};
 function builderYamlEscape(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -89,7 +89,7 @@ function builderYamlGutter(){
 function builderYamlMarks(list){
  const marks=new Map();
  for(const f of Array.isArray(list)?list:[]){if(!(f.line>0))continue;const old=marks.get(f.line);if(!old||(old.severity!=='error'&&f.severity==='error'))marks.set(f.line,{severity:f.severity,message:f.message});}
- builderYaml.marks=marks;builderYaml.markSig=[...marks].map(([line,m])=>line+m.severity[0]+m.message.length).join(',');
+ builderYaml.marks=marks;builderYaml.markSig=[...marks].map(([line,m])=>line+m.severity[0]+m.message).join('\u0000');
 }
 function builderYamlSet(text){
  const box=builderYamlEl('builder-yaml-editor');if(box)box.value=text;
@@ -138,26 +138,27 @@ function builderYamlTick(){
  const wantStatus=builderYaml.dirty&&!builderYaml.applying&&!!builderYaml.editor&&typeof builderYaml.editor.checkYaml==='function';
  if(!wantStatus&&!builderYaml.open)return;
  const analysis=builderYamlAnalyse(builderYamlText());
- if(wantStatus)builderYamlValidate(analysis);
- builderYamlCheckList(undefined,analysis);
+ const done=builderYamlCheckList(undefined,analysis);
+ if(wantStatus)builderYamlValidate(analysis,!!(done&&done.checked));
 }
 // The adapter's answers for one text: checkYaml's flaw (the parser and shape check) and locateYaml's tree (section 2.1).
 function builderYamlAnalyse(text){
- const e=builderYaml.editor,a={flaw:null,tree:null,located:null,checkFailed:false};
+ const e=builderYaml.editor,a={flaw:null,tree:null,located:null,limit:null,checkFailed:false};
  if(e&&typeof e.checkYaml==='function'){try{a.flaw=e.checkYaml(text)||null;}catch{a.checkFailed=true;}}
  if(e&&typeof e.locateYaml==='function'){try{a.located=e.locateYaml(text)||null;}catch{a.located=null;}}
  a.tree=a.located&&a.located.tree?a.located.tree:null;
- if(!a.flaw&&!a.tree&&a.located&&a.located.error)a.flaw=a.located.error;
+ // locateYaml's own limits (depth, size, time) are not a parse error: they only mean the advisory check did not run.
+ if(!a.flaw&&!a.tree&&a.located&&a.located.error&&typeof a.located.error.message==='string')a.limit=a.located.error.message;
  return a;
 }
 // Parser and shape check only; the engine is not asked until Apply. A checkYaml warning (an endpoint naming an unknown device) is
-// written here only when no tree exists: with a tree the list carries it as an error of its own.
-function builderYamlValidate(known){
+// written here unless the list check ran on this text: then the list carries it as an error of its own.
+function builderYamlValidate(known,listed){
  const e=builderYaml.editor;
  if(!builderYaml.dirty||builderYaml.applying||!e||typeof e.checkYaml!=='function')return null;
  const a=known||builderYamlAnalyse(builderYamlText());
  if(a.checkFailed)return null;
- const flaw=a.flaw,quiet=!flaw||(flaw.severity==='warning'&&!!a.tree);
+ const flaw=a.flaw,quiet=!flaw||(flaw.severity==='warning'&&!!listed);
  if(quiet)builderYamlShow(builderYaml.canvasChanged?BUILDER_YAML_TEXT.canvas:BUILDER_YAML_TEXT.edited,builderYaml.canvasChanged?'warn':'');
  else builderYamlShow((flaw.line?'Line '+flaw.line+': ':'')+flaw.message,flaw.severity==='warning'?'warn':'error');
  return flaw||null;
@@ -208,9 +209,10 @@ function builderYamlCheckContext(choice){return {version:builderYaml.vmVersion,s
 // and the findings for a tree with whatever schema has arrived.
 function builderYamlLocate(text){const e=builderYaml.editor;if(!e||typeof e.locateYaml!=='function')return null;return e.locateYaml(String(text??''))||null;}
 function builderYamlRun(tree){const choice=builderYamlChoice();return builderCheck(tree,builderYamlSchemaNow(),builderYamlCheckContext(choice));}
-function builderYamlCount(text){
- if(text===builderYaml.countText)return;builderYaml.countText=text;
- const count=builderYamlEl('builder-yaml-count');if(count)count.textContent=text;
+function builderYamlCount(text,warn){
+ const tone=warn?'builder-yaml-status is-warn':'';
+ if(text===builderYaml.countText&&tone===builderYaml.countTone)return;builderYaml.countText=text;builderYaml.countTone=tone;
+ const count=builderYamlEl('builder-yaml-count');if(count){count.textContent=text;count.className=tone;}
 }
 // Where keyboard focus sits in the list before it is redrawn: the item (by its line and code), or the list itself.
 function builderYamlFocusIn(ol){
@@ -247,7 +249,6 @@ function builderYamlCheckList(text,known){
  text=text===undefined?builderYamlText():text;
  const a=known||builderYamlAnalyse(text),choice=builderYamlChoice();
  builderYaml.tree=a.tree;builderYaml.treeText=text;
- builderYamlCaption(builderYamlReady()&&choice?choice.caption:'');
  const blocking=!!a.flaw&&a.flaw.severity!=='warning';
  let list=[],checked=false;
  if(a.tree){
@@ -260,8 +261,10 @@ function builderYamlCheckList(text,known){
  let sentence='';
  if(checked)sentence=blocking&&!list.length?BUILDER_YAML_TEXT.notChecked:summary.text+(state&&state.status==='loading'?' '+BUILDER_YAML_TEXT.settingsPending:'');
  else if(blocking)sentence=BUILDER_YAML_TEXT.notChecked;
+ else if(a.limit)sentence='Not checked: '+a.limit;
+ builderYamlCaption(checked&&builderYamlReady()&&choice?choice.caption:'');
  builderYamlRenderList(list);builderYamlMarks(list);builderYaml.listErrors=summary.errors;
- builderYamlCount(sentence);builderYamlInvalid();builderYamlGutter();
+ builderYamlCount(sentence,!checked&&!blocking&&!!a.limit);builderYamlInvalid();builderYamlGutter();
  const failed=builderYamlEl('builder-yaml-schema-failed');if(failed)failed.hidden=!(state&&state.status==='failed'&&checked);
  builderYamlKeyHelpNow();
  return {errors:summary.errors,warnings:summary.warnings,checked};

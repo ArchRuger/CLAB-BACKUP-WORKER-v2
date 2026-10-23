@@ -15,8 +15,9 @@ const BUILDER_CHECK_TEXT_LIMIT=1024;
 const BUILDER_CHECK_DEPTH=64;
 const BUILDER_CHECK_STAGES=['create','create-links','configure','healthy','exit'];
 const BUILDER_CHECK_LINK_TYPES=['veth','veth-stitch','mgmt-net','host','macvlan','vxlan','vxlan-stitch','dummy'];
-// Endpoint names that are containerlab's special endpoints, not devices (the list main.tsx yamlFlaw uses, plus bridge).
-const BUILDER_CHECK_LINK_SPECIAL=['host','mgmt-net','macvlan','vxlan','vxlan-stitch','dummy','bridge'];
+// Endpoint names that are special in the brief `node:iface` form. `containerlab validate` 0.79.0 proved these three pass without a node of
+// that name; `vxlan`, `vxlan-stitch`, `dummy` and `bridge` fail with `Unable to find node` (a bridge is a `kind: bridge` node that must be listed).
+const BUILDER_CHECK_LINK_SPECIAL=['host','mgmt-net','macvlan'];
 // The enums §3 R4 names: an error when the schema matches the VM exactly, otherwise a warning; every other enum is a warning.
 const BUILDER_CHECK_ENUM_KEYS=['restart-policy','image-pull-policy','runtime'];
 // Keys containerlab accepts although its schema omits them, per schema version (§3).

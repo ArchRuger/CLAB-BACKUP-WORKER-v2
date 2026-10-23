@@ -303,7 +303,10 @@ test('R7b: every long link form names its required keys; an unknown type has a s
 });
 test('R7c: an endpoint that names no device is an error; host:, mgmt-net: and the other special endpoints pass',()=>{
  assert.deepEqual(brief(only(lab({},two,{links:[{endpoints:['a:e1','zz:e1']}]}),LOOSE)),[13,'error','link-node','the link endpoint `zz` is not a device in topology.nodes.']);
- for(const special of ['host:eth1','mgmt-net:x','macvlan:eno1','bridge:br0'])assert.deepEqual(check(lab({},two,{links:[{endpoints:['a:e1',special]}]})),[],special);
+ for(const special of ['host:eth1','mgmt-net:x','macvlan:eno1'])assert.deepEqual(check(lab({},two,{links:[{endpoints:['a:e1',special]}]})),[],special);
+ // containerlab validate 0.79.0: these names are not special endpoints; "Unable to find node ..." unless a node carries the name.
+ for(const name of ['bridge','vxlan','vxlan-stitch','dummy'])assert.deepEqual(brief(only(lab({},two,{links:[{endpoints:['a:e1',name+':br0']}]}),LOOSE)),[13,'error','link-node','the link endpoint `'+name+'` is not a device in topology.nodes.'],name);
+ assert.deepEqual(check(lab({},{...two,bridge:{kind:'bridge'}},{links:[{endpoints:['a:e1','bridge:br0']}]})),[],'a listed bridge node is a device');
  assert.deepEqual(brief(only(lab({},two,{links:[{type:'host',endpoint:{node:'zz',interface:'e1'},'host-interface':'h'}]}))),[13,'error','link-node','the link endpoint `zz` is not a device in topology.nodes.']);
 });
 test('R7d: the same device:interface twice is a warning naming the first link',()=>{
