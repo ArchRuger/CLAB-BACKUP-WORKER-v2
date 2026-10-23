@@ -222,3 +222,14 @@ test('C07: the capture dialog, the Tools card and the wire menu have the ids cap
  const page=loadPage();assert.deepEqual(page.failures,[]);
  for(const name of ['captureSummary','openLinkMenu','closeLinkMenu','endAllCaptureSessions','refreshCaptureSessions','captureMemory','rememberCapture','captureOpenAs','rememberOpenAs'])assert.equal(typeof get(page.context,name),'function',name);
 });
+
+test('device-impairments.js (C05) is listed once after operations.js and device-diagnostics.js, defines the two hooks app.js and shell.js call, and no standalone page loads it',()=>{
+ assert.equal(listed.filter(n=>n==='device-impairments.js').length,1);
+ for(const before of ['operations.js','device-diagnostics.js'])assert.ok(listed.indexOf('device-impairments.js')>listed.indexOf(before),'after '+before);
+ const page=loadPage();
+ assert.deepEqual(page.failures,[]);
+ for(const name of ['renderDeviceImpairments','resetDeviceImpairments','impairmentProblem'])assert.equal(typeof get(page.context,name),'function',name);
+ assert.match(fs.readFileSync(path.join(dir,'app.js'),'utf8'),/if\(typeof renderDeviceImpairments==='function'\)renderDeviceImpairments\(n\);/,'renderDetails calls the one hook');
+ assert.match(fs.readFileSync(path.join(dir,'shell.js'),'utf8'),/resetDeviceImpairments\(\)/);
+ for(const file of fs.readdirSync(dir).filter(n=>n.endsWith('.html')&&n!=='index.html'))assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/device-impairments\.js/,file);
+});

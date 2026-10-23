@@ -118,6 +118,10 @@ CONSOLE_UNLINKED = ('The console needs a lab linked to the VM with this device i
 CONSOLE_NOT_RUNNING = '{device} is not running on the VM (or the lab status is out of date), so its console is closed. Start the lab, then try again.'
 CONSOLE_NO_ADDRESS = 'The VM has not reported a management address for {device}. Refresh the lab list and try again.'
 CONSOLE_RESTARTING = '{device} is restarting on the VM. Its launcher takes the console first; the console opens once the device reports healthy.'
+CONSOLE_JOB_SENTENCES = {
+    'start-node': '{device} has a Start device job running on the VM. Its launcher takes the console first; the console opens once the device reports healthy.',
+    'stop-node': '{device} has a Stop device job running on the VM, so its console is closed. Start device brings it back; the console opens once it reports healthy.',
+}
 CONSOLE_STARTING = ('{device} is still starting: its launcher uses the console until the device reports healthy. Try again once it is '
                     'healthy; if the device panel has a Logs section, it shows the boot.')
 CONSOLE_UNHEALTHY = ('{device} has not finished booting (its health check fails), so its launcher keeps the console. If the device panel '
@@ -159,7 +163,9 @@ def console_gate(state, lab, node):
     if not discovery_fresh(state) or not node.get('discovered') or node.get('runtime_state') != 'running':
         return 409, 'not_running', CONSOLE_NOT_RUNNING.format(device=device)
     if not node.get('discovered_address'): return 409, 'no_address', CONSOLE_NO_ADDRESS.format(device=device)
-    if node.get('name') in restarting_nodes(state, lab.get('id')): return 409, 'restarting', CONSOLE_RESTARTING.format(device=device)
+    job_action = restarting_nodes(state, lab.get('id')).get(node.get('name'))
+    # One key for the page; the sentence names the job that holds the device (a restart, a start or a stop).
+    if job_action: return 409, 'restarting', CONSOLE_JOB_SENTENCES.get(job_action, CONSOLE_RESTARTING).format(device=device)
     health = health_part(node.get('runtime_status'))
     if health == 'starting': return 409, 'starting', CONSOLE_STARTING.format(device=device)
     if health == 'unhealthy': return 409, 'unhealthy', CONSOLE_UNHEALTHY.format(device=device)

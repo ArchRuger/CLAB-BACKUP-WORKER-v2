@@ -2422,7 +2422,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   #devices-view #search { flex: 1 1 160px; }
   .device-row .node-actions, .device-rail .device-row { justify-content: flex-start; grid-template-columns: 1fr; }
   .topology-stage { height: clamp(360px, calc(100dvh - 240px), 600px); min-height: 360px; }
-  .topology-stage .map-tools { position: static; max-width: none; justify-content: flex-start; margin: 8px; }
+  /* The toolbar (with the impairment caption and Clear impairments) sits above the map in a column; as a static block after a 100%-high map it fell outside the clipped stage. */
+  .topology-stage { display: flex; flex-direction: column; }
+  .topology-stage .map-tools { position: static; order: -1; flex: none; max-width: none; justify-content: flex-start; margin: 8px; }
+  .topology-stage > svg, .topology-stage #topology-map { flex: 1 1 0; height: auto; min-height: 0; }
   .topology-stage #map-status, .topology-stage .map-status { left: 8px; bottom: 8px; max-width: calc(100% - 16px); }
   .map-tools #map-edit { margin-left: 0; }
   .map-expanded { inset: 0; border-radius: 0; padding: 10px; }
@@ -2682,11 +2685,15 @@ th[aria-sort=descending] > .op-sort::after { content: " ▼"; font-size: 10px; }
 .op-plan-empty { padding: 8px 12px; border-left: 3px solid var(--ok); background: var(--ok-soft); }
 .op-kept { font-size: 13px; color: var(--muted); }
 
-/* The drawer's Impairments table (device-impairments.js): inputs wide enough for "20ms", the actions wrapping under the row in a narrow drawer */
-.impairments-table input { width: 6ch; min-width: 0; }
+/* The drawer's Impairments table (device-impairments.js): the five inputs are narrow (values like "20ms" fit), the Actions wrap under the row whenever the drawer is narrow, and a validation hint wraps inside its cell instead of widening the table */
+.impairments-table table { min-width: 0; width: 100%; }
+.impairments-table input { width: 5.5ch; min-width: 0; padding-inline: 4px; }
+.impairments-table th, .impairments-table td { padding-inline: 4px; }
 .impairments-table td { vertical-align: top; }
-.impairments-table td:first-child { min-width: 7ch; }
+.impairments-table td:first-child { min-width: 0; width: 1%; }
+.impairments-table td.imp-first { white-space: normal; }
+.impairments-table td.imp-first .button { margin-top: 4px; }
 .impairments-table td .actions, .impairments-table td > div { display: flex; flex-wrap: wrap; gap: 6px; }
-@media (max-width: 520px) { .impairments-table table { min-width: 0; } .impairments-table th, .impairments-table td { padding-inline: 4px; } }
+.impairments-table td small.form-help { display: block; max-width: 14ch; white-space: normal; overflow-wrap: anywhere; }
 .imp-question { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-left: 3px solid var(--danger); border-radius: var(--radius); background: var(--surface-2); }
 .imp-question .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

@@ -994,11 +994,11 @@ test('C05: option merging: chosen devices drop Clean up, no devices bring the pl
 });
 test('C05: a node-filtered destroy review names the devices, says what keeps running, offers no Clean up and shows the exact command; the fold re-previews the exact request',async()=>{
  const requests=[];
- const h=c05Context({caps:c05Caps,preview:async r=>{requests.push(plainJson(r));return c05Value({action:'destroy',kept:['vsw'],argv:['containerlab','destroy','-t','x','--node-filter','ceos'],affected:[{name:'clab-square-ceos',state:'running'}]});}});
+ const h=c05Context({caps:c05Caps,preview:async r=>{requests.push(plainJson(r));return c05Value({action:'destroy',kept:['clab-square-vsw'],argv:['containerlab','destroy','-t','x','--node-filter','ceos'],affected:[{name:'clab-square-ceos',state:'running'}]});}});
  await h.c.opReview({lab_id:'a',action:'destroy',options:{nodes:['ceos'],max_workers:2}});
  const body=h.shown.at(-1).body;
  assert.equal(h.shown.at(-1).title,'Destroy ceos in square?');assert.match(body,/The chosen devices are removed from the VM; the other devices and the lab folder stay\./);
- assert.match(body,/<p class="op-kept">Left running: vsw<\/p>/);assert.match(body,/--node-filter/);assert.doesNotMatch(body,/lab folder is deleted|Clean up/);
+ assert.match(body,/<p class="op-kept">Left running: vsw<\/p>/);assert.doesNotMatch(body,/clab-square-vsw/,'the review names short names, not containers');assert.match(body,/id="op-confirm">Destroy ceos</,'the button names the device of a filtered destroy');assert.match(body,/--node-filter/);assert.doesNotMatch(body,/lab folder is deleted|Clean up/);
  assert.match(body,/data-opt-node="ceos" checked/);assert.ok(h.calls.some(x=>x[0]==='api'&&x[1]==='/operations/capabilities'),'capabilities are read before the review');
  // a toast after confirming names the devices
  await h.el('op-confirm').onclick();assert.deepEqual(h.calls.filter(x=>x[0]==='notify').map(x=>x[1]),['Destroying ceos…']);
@@ -1112,4 +1112,68 @@ test('C05: Clear impairments asks once, shows Clearing… while it runs, and rep
  release();await pending;
  assert.equal(status.textContent,'2 of 3 interfaces cleared; vsw eth1: Link not found. Try again.');
  assert.equal(confirm.disabled,false);assert.equal(confirm.textContent,'Clear all');assert.deepEqual(plainJson(h.calls.filter(x=>x[0]==='json'&&x[1].endsWith('/clear')).map(x=>x[2])),[{lab_id:'a'}]);
+});
+
+test('C05: a whole-lab destroy keeps the Destroy lab button; Save lists short names; the destroy device help pins the recreate sentence',async()=>{
+ const h=c05Context({caps:c05Caps,preview:async r=>c05Value({action:r.action,kept:['clab-square-vsw'],affected:[]})});
+ await h.c.opReview({lab_id:'a',action:'destroy',options:{}});
+ assert.match(h.shown.at(-1).body,/id="op-confirm">Destroy lab</);
+ await h.c.opReview({lab_id:'a',action:'save',options:{nodes:['ceos']}});
+ assert.match(h.shown.at(-1).body,/<p class="op-kept">Not saved: vsw<\/p>/);
+ const html=h.c.opOptionsForm('destroy',c05Caps,c05.lab,{});
+ assert.match(html,/Apply may also recreate the neighbours of a re-created device when their kind cannot add links live; the review lists them\./);
+});
+test('C05 B1: Confirm is disabled with a reason while a Run-with-options re-preview is pending, and a click in that window sends nothing',async()=>{
+ const els={err:{textContent:''},set:{disabled:false},status:{textContent:''},confirm:{disabled:false,title:''}};
+ const map={'.form-error':'err','#op-options-set':'set','#op-options-status':'status','#op-confirm':'confirm'};
+ const dialog={querySelector:sel=>els[map[sel]]||null,querySelectorAll:()=>[]};
+ const h=c05Context({caps:c05Caps,preview:async()=>c05Value({action:'destroy',token:'old'})});
+ await h.c.opReview({lab_id:'a',action:'destroy',options:{cleanup:true}});
+ const confirmButton=h.el('op-confirm');
+ let release;const during=[];
+ h.c.opReview=()=>new Promise(res=>{during.push([els.confirm.disabled,els.confirm.title]);release=res;});
+ const pending=h.c.opOptionsChanged(dialog,{lab_id:'a',action:'destroy',options:{}},null,{},{id:'op-opt-node-0'});
+ assert.deepEqual(during,[[true,'Checking the new options…']],'Confirm is already off when the new preview starts');
+ confirmButton.disabled=true;
+ const before=h.calls.length;await confirmButton.onclick();
+ assert.equal(h.calls.slice(before).filter(x=>x[0]==='json').length,0,'a click during the window sends nothing');
+ release();await pending;
+ confirmButton.disabled=false;await confirmButton.onclick();
+ assert.deepEqual(plainJson(h.calls.filter(x=>x[0]==='json'&&x[1]==='/operations/confirm').map(x=>x[2])),[{token:'old'}],'a live button confirms');
+});
+test('C05: the sync trigger asks the apply plan with refresh; Stop device allows running and unknown',async()=>{
+ const h=c05Context({caps:c05Caps});const asked=[];
+ h.c.apiImpl=url=>{asked.push(url);return url.startsWith('/operations/apply-plan')?{changed:false,plan:null,failed:'',checked_at:1}:{devices:{},interfaces:0,complete:true};};
+ const before={...c05.lab,vm_source:{status:'Updates available',synced_digest:'d1',digest:'d2'}},after={...c05.lab,vm_source:{status:'Up to date',synced_digest:'d2',digest:'d2'}};
+ h.c.opWatchLab(before);await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+ assert.ok(asked.includes('/operations/apply-plan?lab_id=a'),'open: from the cache');
+ asked.length=0;h.c.opWatchLab(after);await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+ assert.ok(asked.includes('/operations/apply-plan?lab_id=a&refresh=1'),'sync: the server cache is bypassed');
+ const d={connected:true},[ceos]=c05.lab.nodes;
+ assert.equal(h.c.opNodeActionState('stop-node',c05.lab,{...ceos,runtime_state:'unknown'},d).ok,true);
+ assert.equal(h.c.opNodeActionState('stop-node',c05.lab,{...ceos,runtime_state:'exited'},d).ok,false);
+});
+test('C05: a partial Clear names the port, and the dialog returns focus to the map Fit button',async()=>{
+ const h=c05Context({caps:c05Caps});const openers=[];
+ const base=h.c.opDialog;h.c.opDialog=(id,title,body,opener)=>{openers.push(opener);return base(id,title,body,opener);};
+ h.el('map-fit').marker='fit';
+ vm.runInContext("opImpairmentCache={a:{devices:{'clab-square-vsw':{impairments:[{interface:'eth3',port:'Ethernet3'}]}},interfaces:1,complete:true}}",h.c);
+ h.c.json=async()=>({cleared:0,total:1,failed:[{node:'clab-square-vsw',interface:'eth3',reason:'Link not found.'}],remaining:[]});
+ h.c.opLoadImpairments=async()=>null;
+ await h.c.opClearImpairments('a');
+ assert.equal(openers[0].marker,'fit');
+ await h.el('op-clear-confirm').onclick();
+ assert.equal(h.el('op-clear-status').textContent,'0 of 1 interfaces cleared; vsw Ethernet3: Link not found. Try again.');
+});
+test('C05: a Start device or Stop device job that finishes while the page is open raises one toast; one already finished at load does not',()=>{
+ const h=c05Context();const jobs=[{id:'j0',lab_id:'a',action:'stop-node',status:'succeeded',node_label:'vsw'}];
+ h.c.opWatchLab(c05.lab);
+ const toasts=()=>h.calls.filter(x=>x[0]==='notify').map(x=>x[1]);
+ const run=list=>{h.c.state.operations=list;h.c.opWatchLab(c05.lab);};
+ run(jobs);assert.deepEqual(toasts(),[],'finished before this page saw it running');
+ run([{id:'j1',lab_id:'a',action:'stop-node',status:'running',node_label:'ceos'}]);assert.deepEqual(toasts(),[]);
+ run([{id:'j1',lab_id:'a',action:'stop-node',status:'succeeded',node_label:'ceos'}]);assert.deepEqual(toasts(),['✔ ceos stopped']);
+ run([{id:'j1',lab_id:'a',action:'stop-node',status:'succeeded',node_label:'ceos'}]);assert.equal(toasts().length,1,'once');
+ run([{id:'j2',lab_id:'a',action:'start-node',status:'queued',node_label:'ceos'}]);
+ run([{id:'j2',lab_id:'a',action:'start-node',status:'failed',node_label:'ceos'}]);assert.match(toasts()[1],/^✖ Start device failed|^✖ .*failed/);
 });

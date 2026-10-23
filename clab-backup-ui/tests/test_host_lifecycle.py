@@ -297,6 +297,16 @@ class NetemResetTests(LifecycleHarness):
         with self.assertRaisesRegex(ValueError, 'did not show the impairments'): self.host.netem_reset(self.netem_request('netem-reset'))
 
 
+class ImpairmentRowAliasTests(unittest.TestCase):
+    def test_a_vm_interface_printed_with_its_nos_name_is_split_into_interface_and_alias(self):
+        rows = host_operations.impairment_rows([
+            {'interface': 'eth1 (ge-0/0/0)', 'delay': '20ms', 'jitter': '0s', 'packet_loss': 0, 'rate': 0, 'corruption': 0},
+            {'interface': 'eth2 (ge-0/0/1)'}, {'interface': 'eth3', 'delay': '1ms'}, {'interface': 'odd (name'}, {'interface': ' (x)'}])
+        self.assertEqual([(r['interface'], r.get('alias')) for r in rows],
+                         [('eth1', 'ge-0/0/0'), ('eth2', 'ge-0/0/1'), ('eth3', None), ('odd (name', None)])
+        self.assertEqual(rows[0]['delay'], '20ms'); self.assertEqual(rows[0]['loss'], 0)
+
+
 class NetemShowAllTests(LifecycleHarness):
     def pairs(self, count):
         pairs = [{'node': 'r%d' % i, 'container': 'clab-parity-r%d' % i} for i in range(1, count + 1)]
