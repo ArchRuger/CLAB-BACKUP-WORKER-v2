@@ -215,6 +215,7 @@ CAPACITY_SECONDS = 60
 CHANGED = 'Capture target changed or disappeared. Refresh interfaces and select it again.'
 NOT_LISTED = 'Select interfaces from the refreshed live list.'
 LISTED_TWICE = 'The same interface is listed twice. Refresh interfaces and select again.'
+PRUNE_GRACE_SECONDS = 10  # A listing and a launch are not atomic: a just-made record may be missing from a listing taken meanwhile.
 NOT_ATTEMPTED = 'Not attempted: an earlier capture of this set failed.'
 MAY_HAVE_STARTED = 'This capture may have started; see Your capture sessions. '
 STARTED_ONE = 'Wireshark session started on the VM. Open the browser viewer to inspect packets.'
@@ -365,8 +366,11 @@ class Captures:
 
     def prune(self, who, listed):
         """Drop this browser's records the service no longer lists; other browsers' records stay."""
+        now = time.time()
         with self.known_lock:
-            for sid in [s for s, owner in self.known_owner.items() if owner == who and s not in listed]:
+            # A record younger than the grace is kept: its launch may still be answering, and a retry must find it.
+            for sid in [s for s, owner in self.known_owner.items() if owner == who and s not in listed
+                        and not 0 <= now - self.known.get(s, {}).get('started', 0) < PRUNE_GRACE_SECONDS]:
                 self.known.pop(sid, None)
                 self.known_owner.pop(sid, None)
 
@@ -502,18 +506,17 @@ class Captures:
                 except HTTPException as error:
                     if not sets:
                         raise  # The single form keeps today's path exactly.
-                    detail = head = str(error.detail)
+                    head = str(error.detail)
                     if error.status_code == 502:
                         # The container may exist although its reply was lost: look once, by this entry's id only.
                         sid = self.relisted(who, data.request_id, rid)
                         if sid:
                             begin(sid, rid, entry, target, record)
                             continue  # Recovered: the set goes on with the entries not yet tried.
-                        head = MAY_HAVE_STARTED + detail
-                        detail = NOT_ATTEMPTED  # The untried entries were never sent, whatever the transport said.
+                        head = MAY_HAVE_STARTED + head
                     for j in range(i, total):
                         refused.append({'position': position(j), 'label': resolved[j][2]['label'],
-                                        'interfaces': list(entries[j].interfaces), 'detail': head if j == i else detail})
+                                        'interfaces': list(entries[j].interfaces), 'detail': head if j == i else NOT_ATTEMPTED})  # Untried entries were never sent: never entry i's reason.
                     if not started:
                         raise  # Nothing started: a plain error, as a single launch.
                     break

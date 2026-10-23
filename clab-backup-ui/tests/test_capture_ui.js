@@ -459,6 +459,9 @@ test('the wire menu opens from the keyboard (ContextMenu, Shift+F10), click/Ente
 });
 test('the sessions list, the upper-bound time, End all my sessions and the Tools caption',async()=>{
  const h=harness();const hex=n=>String(n).repeat(64).slice(0,64);
+ assert.equal(h.c.captureTimeLeft(30),'less than 1 min');assert.equal(h.c.captureTimeLeft(0),'less than 1 min');assert.equal(h.c.captureTimeLeft(3600),'1 h','the exact hour has no minutes part');assert.equal(h.c.captureTimeLeft(3660),'1 h 1 min');assert.equal(h.c.captureTimeLeft(59*60+59),'59 min');
+ h.c.current=()=>({nodes:[{name:'clab-demo-r1',short_name:'r1'},{name:'clab-demo-r2'}]});
+ assert.equal(h.c.captureDeviceName('clab-demo-r1'),'r1','the short name when the inventory has one');assert.equal(h.c.captureDeviceName('clab-demo-r2'),'clab-demo-r2','the container name when it has none');assert.equal(h.c.captureDeviceName('clab-other'),'clab-other','unknown to the inventory: the name as given');
  let rows=[{id:hex(1),name:'clab-demo-r1',interfaces:['eth1'],ports:['ge-0/0/0'],device:'vsw',lab:'parity',remaining_seconds:7199,idle_seconds:900},{id:hex(2),name:'clab-x',interfaces:['eth2'],remaining_seconds:3000}];
  h.c.api=async url=>({json:async()=>url.includes('/status')?{enabled:true}:{sessions:rows}});
  await h.c.refreshCaptureSessions();
@@ -595,4 +598,38 @@ test('C07 fix: a link end prints the veth only when it differs from the port, a 
  const css=fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8');
  assert.match(css,/@media \(max-width: 420px\) \{ #capture-ends-list \{ grid-template-columns: minmax\(0, 1fr\); \} \}/);
  assert.match(css,/\.capture-interface \{ flex-wrap: wrap; \}/);assert.match(css,/#capture-launches \.button \{ white-space: normal;/);assert.match(css,/#capture-launches \{ justify-content: flex-start; \}/);
+});
+test('C07 fix: a refusal is matched to its entry by position, else by its interfaces, else to none',()=>{
+ const h=harness(),entries=[{interfaces:['eth1']},{interfaces:['eth2','eth3']}];
+ assert.equal(h.c.captureRefusedIndex({position:'Capture 2 of 2',interfaces:['eth1']},entries),1,'the position wins');
+ assert.equal(h.c.captureRefusedIndex({interfaces:['eth2','eth3']},entries),1,'no position: the interfaces find the entry');
+ assert.equal(h.c.captureRefusedIndex({position:'Capture 9 of 2',interfaces:['eth1']},entries),0,'a position out of range falls back to the interfaces');
+ assert.equal(h.c.captureRefusedIndex({interfaces:['eth9']},entries),-1,'nothing matches: no entry is blamed');
+});
+test('C07 fix: a set answer with one valid and one unsupported link shows no link at all and says why',async()=>{
+ const h=linkHarness(['lo','eth1'],['lo','eth1'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}]]);
+ h.c.openCapture('','',LINK_ENDS('eth1','eth1'));await settle();
+ h.c.json=async()=>({sessions:[{id:A64,url:'/static/capture-session.html#'+A64,label:'r1 eth1'},{id:B64,url:'javascript:x',label:'r2 eth1'}],refused:[],message:'ok'});
+ h.$('capture-ends-list').checked=[{dataset:{captureEnd:'0'}},{dataset:{captureEnd:'1'}}];
+ await h.$('capture-form').onsubmit({preventDefault(){}});
+ assert.equal(h.$('capture-status').textContent,'Unsupported capture link — reopen Capture traffic and try again.');
+ assert.doesNotMatch(h.$('capture-launches').innerHTML,/<a /,'the valid half is not offered either');assert.equal(h.$('capture-prepare').disabled,false);
+});
+test('C07 fix: choosing a device under Advanced while in link mode leaves link mode for that device; no choice stays and redraws the ends',async()=>{
+ const h=linkHarness(['lo','eth1','eth2'],['lo','eth1'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}]]);
+ h.c.openCapture('','',LINK_ENDS('eth1','eth1'));await settle();
+ assert.equal(h.$('capture-dialog').attrs['data-mode'],'link');assert.equal(h.$('capture-target').value,'','link mode chooses no device for the student');
+ h.$('capture-target').onchange();   // no selection: stays in link mode
+ assert.equal(h.$('capture-dialog').attrs['data-mode'],'link');assert.equal(h.$('capture-ends').hidden,false);assert.match(h.$('capture-ends-list').innerHTML,/data-capture-end="0"/);assert.match(h.$('capture-context').textContent,/^Link: /);
+ h.$('capture-target').value=B64;h.$('capture-target').onchange();
+ assert.equal(h.$('capture-dialog').attrs['data-mode'],'device');assert.equal(h.$('capture-ends').hidden,true);
+ assert.equal(h.$('capture-context').textContent,'Device: clab-demo-r2');
+ assert.equal(vm.runInContext('captureEnds.length',h.c),0,'the link ends are dropped');assert.equal(vm.runInContext('captureHint',h.c),'');
+ assert.match(h.$('capture-interfaces').innerHTML+h.$('capture-interfaces-all').innerHTML,/value="eth1"/,'boxes for the chosen device');
+ assert.equal(h.$('capture-target').value,B64,'the chosen device stays chosen');
+});
+test('C07 fix: a link opened with a single listed device still leaves the device picker empty',async()=>{
+ const h=linkHarness(['lo','eth1'],[],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}]],{twoNodes:false});
+ h.c.openCapture('','',LINK_ENDS('eth1','eth1'));await settle();
+ assert.equal(h.$('capture-dialog').attrs['data-mode'],'link');assert.equal(h.$('capture-target').value,'','a single target is not chosen automatically in link mode');
 });

@@ -7,6 +7,7 @@ from http.client import BadStatusLine
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 from urllib.error import URLError
@@ -15,7 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from app.main import create_app
-from app.capture import (CaptureError, EdgesharkProvider, MAX_RESPONSE, NoRedirect,
+from app.capture import (CaptureError, EdgesharkProvider, MAX_RESPONSE, MAY_HAVE_STARTED, NOT_ATTEMPTED, NoRedirect, PRUNE_GRACE_SECONDS,
                          configured_provider, normalize_targets, read_discovery, service_url)
 from app.capture_sessions import BrowserSessions
 
@@ -277,7 +278,7 @@ class ScriptedService:
     """Stands in for capture_service.py at the adapter boundary (C07): owner-scoped rows, the global cap of
     four, idempotent ids derived as the service derives them, and scripted failures per POST /sessions."""
     def __init__(self):
-        self.token='a'*64;self.rows={};self.calls=[];self.fail={};self.end_fail={};self.extra={};self.listing_extra=[]
+        self.token='a'*64;self.rows={};self.calls=[];self.fail={};self.end_fail={};self.extra={};self.listing_extra=[];self.list_fail=None;self.lists=0
         self.health={'ready':True,'max_sessions':4}
 
     def session_id(self,who,request_id):
@@ -295,6 +296,8 @@ class ScriptedService:
             if isinstance(self.health,Exception):raise self.health
             return self.health
         if (method,path)==('GET','sessions'):
+            self.lists+=1
+            if self.list_fail is not None and self.lists>self.list_fail:raise HTTPException(502,LOST)  # list_fail=N: every listing after the Nth fails
             return {'sessions':[{**self.public(s,r),**self.extra} for s,r in self.rows.items() if r['owner']==who]
                     +copy.deepcopy(self.listing_extra)}
         if (method,path)==('POST','sessions'):
@@ -470,9 +473,41 @@ class CaptureSetTests(unittest.TestCase):
         r=self.launch((self.r1,['eth0']),(self.r1,['eth2']),(self.r1,['lo']),rid='1'*64)
         self.assertEqual([s['label'] for s in r.json()['sessions']],['r1 eth0'])
         self.assertEqual([(x['position'],x['label'],x['interfaces'],x['detail']) for x in r.json()['refused']],
-                         [('Capture 2 of 3','r1 eth2',['eth2'],changed),('Capture 3 of 3','r1 lo',['lo'],changed)])
+                         [('Capture 2 of 3','r1 eth2',['eth2'],changed),('Capture 3 of 3','r1 lo',['lo'],NOT_ATTEMPTED)])
         self.assertEqual(len(self.service.posts()),2)
         self.assertEqual(r.json()['message'],'Wireshark started for r1 eth0; not for r1 eth2, r1 lo: '+changed)
+
+    def test_a_429_mid_set_gives_untried_entries_the_not_attempted_sentence(self):
+        self.service.fail={2:HTTPException(429,SLOTS)}
+        r=self.launch((self.r1,['eth0']),(self.r1,['eth2']),(self.r1,['lo']))
+        self.assertEqual(r.status_code,200,r.text);body=r.json()
+        self.assertEqual([(x['position'],x['detail']) for x in body['refused']],
+                         [('Capture 2 of 3',SLOTS),('Capture 3 of 3',NOT_ATTEMPTED)])
+        self.assertEqual(len(self.service.posts()),2)
+
+    def test_a_failed_relisting_after_a_lost_reply_reports_a_partial_result(self):
+        self.service.fail={2:'lost'};self.service.list_fail=1  # the pre-check lists, the recovery listing fails
+        r=self.launch((self.r1,['eth2']),(self.host,['ens18']),(self.r1,['lo']))
+        self.assertEqual(r.status_code,200,r.text);body=r.json()
+        self.assertEqual([s['label'] for s in body['sessions']],['r1 eth2'])
+        self.assertEqual([(x['label'],x['detail']) for x in body['refused']],
+                         [('init ens18',MAY_HAVE_STARTED+LOST),('r1 lo',NOT_ATTEMPTED)])
+        self.assertEqual(len(self.service.posts()),2)
+
+    def test_a_failed_pre_check_listing_is_a_plain_502_and_sends_nothing(self):
+        self.service.list_fail=0
+        r=self.launch((self.r1,['eth2']),(self.host,['ens18']))
+        self.assertEqual((r.status_code,r.json()),(502,{'detail':LOST}))
+        self.assertEqual(self.service.posts(),[])
+
+    def test_a_record_younger_than_the_grace_survives_a_listing_that_lacks_it(self):
+        a=self.launch((self.r1,['eth2']),rid='1'*64).json()['sessions'][0]['id']
+        del self.service.rows[a]
+        self.client.get('/api/capture/sessions')
+        self.assertIn(a,self.captures.known)  # just made: a launch may still be answering
+        later=self.captures.known[a]['started']+PRUNE_GRACE_SECONDS+1
+        with patch('app.capture.time.time',return_value=later):self.client.get('/api/capture/sessions')
+        self.assertNotIn(a,self.captures.known)
 
     def test_the_managers_own_session_check_stops_a_set(self):
         self.service.fail={2:'token'}
@@ -595,9 +630,11 @@ class CaptureSetTests(unittest.TestCase):
         b=self.launch((self.r1,['eth2']),rid='2'*64).json()['sessions'][0]['id']
         self.assertEqual(set(self.captures.known),{a,b})
         del self.service.rows[b]
-        self.client.get('/api/capture/sessions')  # browser OTHER lists: only its own records are pruned
+        later=time.time()+PRUNE_GRACE_SECONDS+1  # records younger than the grace are kept
+        with patch('app.capture.time.time',return_value=later):self.client.get('/api/capture/sessions')  # browser OTHER lists: only its own records are pruned
         self.assertEqual(set(self.captures.known),{a})
-        self.client.cookies.set('clab_capture_owner',WHO);self.client.get('/api/capture/sessions')
+        self.client.cookies.set('clab_capture_owner',WHO)
+        with patch('app.capture.time.time',return_value=later):self.client.get('/api/capture/sessions')
         self.assertEqual(set(self.captures.known),{a})
         for n in range(80):
             self.captures.remember(WHO,f'{n+1000:064x}',self.captures.label('x',['eth1']))

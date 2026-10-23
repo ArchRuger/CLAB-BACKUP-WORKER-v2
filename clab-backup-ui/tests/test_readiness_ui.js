@@ -430,6 +430,26 @@ test('C07 fix: the state poll calls showTab(tools) again and must not ask for th
  assert.equal(refreshed,1,'five polls while Tools stays shown ask nothing more');
  vm.runInContext("showTab('devices');showTab('tools')",h.context);assert.equal(refreshed,2,'a real tab change asks once');
 });
+test('C07 fix: showTab(tools) before capture.js has run, then again after, asks for the sessions once capture.js exists',()=>{
+ const h=appHarness();let refreshed=0;
+ vm.runInContext("state={labs:[{id:'l',name:'L',nodes:[],jobs:[]}],jobs:[],platforms:{},loaded:true};activeId='l';",h.context);
+ h.context.syncRoute=()=>{};
+ vm.runInContext("showTab('tools')",h.context);   // the first /api/state render of a reload at #view=tools
+ h.context.refreshCaptureSessions=()=>{refreshed++;};   // capture.js has run by the DOMContentLoaded render
+ vm.runInContext("showTab('tools')",h.context);assert.equal(refreshed,1,'the re-render asks, it was not asked before');
+ for(let i=0;i<3;i++)vm.runInContext("showTab('tools')",h.context);
+ assert.equal(refreshed,1,'polls afterwards ask nothing');
+});
+test('C07 fix: going Home and opening a lab on Tools again asks for the sessions',()=>{
+ const h=appHarness();let refreshed=0;
+ vm.runInContext("state={labs:[{id:'l',name:'L',nodes:[],jobs:[]}],jobs:[],platforms:{},loaded:true};activeId='l';",h.context);
+ h.context.syncRoute=()=>{};h.context.refreshCaptureSessions=()=>{refreshed++;};
+ vm.runInContext("showTab('tools')",h.context);assert.equal(refreshed,1);
+ vm.runInContext("activeId='';render();",h.context);   // goHome(): render() returns at the no-lab branch, before showTab
+ assert.equal(vm.runInContext('shownTab',h.context),'','no lab on screen, no view shown');
+ vm.runInContext("activeId='l';showTab('tools')",h.context);
+ assert.equal(refreshed,2,'Tools newly shown after Home asks again');
+});
 test('showTab refreshes the capture sessions for the Tools view only, also through the arrow keys and when the function is absent',()=>{
  const h=appHarness();let refreshed=0;
  vm.runInContext("state={labs:[{id:'l',name:'L',nodes:[],jobs:[]}],jobs:[],platforms:{},loaded:true};activeId='l';",h.context);

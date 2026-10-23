@@ -569,6 +569,9 @@ test('Capture all connected: only with two or more data rows, carrying the captu
  const out=c.diagInterfacesMarkup(two,ctx);
  assert.equal((out.match(/data-diag-capture-all=/g)||[]).length,1,'one button, in the main table');
  assert.match(out,/<button type="button" class="button ghost small" data-diag-capture-all="\[&quot;eth1&quot;,&quot;eth2&quot;\]"[^>]*>Capture all connected<\/button>/);
+ assert.match(out,/<th scope="col">Name<\/th>/,'the column header stays plain: the button is not part of its accessible name');
+ assert.ok(out.indexOf('data-diag-capture-all=')<out.indexOf('<table'),'the button is a line above the table, inside the same scroll region');
+ assert.ok(out.indexOf('data-diag-capture-all=')>out.indexOf('data-diag-key="region:main"'));
  const off=c.diagInterfacesMarkup(two,{...ctx,captureAttrs:'disabled title="Packet capture is not set up on this VM. See Tools › Packet capture for details."'});
  assert.match(off,/data-diag-capture-all="[^"]*"[^>]*disabled title="Packet capture is not set up/,'captureActionAttrs() reaches the button');
  const hostile=c.diagInterfacesMarkup(answer({interfaces:[iface({name:'<img onerror=x>'}),iface({name:'eth2'})]}),ctx);
