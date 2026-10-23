@@ -373,3 +373,26 @@ One row per confirmed finding (risk R1–R8, UI U1–U17); the refuted ones need
 | The parent-directory `O_NOFOLLOW` of the hardened read is not exercised (optional) | Tested with a symlinked parent and a missing parent. Finding of the test: on Linux `O_DIRECTORY|O_NOFOLLOW` on a symlink fails with `ENOTDIR`, not `ELOOP`, so the helper's "Symlink paths are not supported" branch is unreachable for a symlinked parent; the open is still refused and nothing is read ("no longer exists"). The helper is left as reviewed; the sentence is an open point for the next helper change | `test_host_diagnostics.py`; handoff |
 | Browse entries from a helper without `kind`, and the caps, are untested (optional) | Tested: `directory` true and false without `kind`; 4001 log lines capped to 4000; 300 interfaces to 256 | `test_device_diagnostics.py` |
 | Dispatch outside the host lock is proven by source text only (optional) | Tested: `main()` with `images` and `logs` under the held flock and a stubbed runner answers normally while `preview` gets the lock sentence; the textual check is kept | `test_host_diagnostics.py` |
+
+## 11. Slice verification answers (`/clab-slice-verify` on the UI slice `ac73779`, six workers; 12 of 16 checks held; the live pass on the parity lab)
+
+| Finding | Answer | Where |
+|---|---|---|
+| Live: Interfaces and Logs answer 409 on cEOS and cJunosEvolved ("Docker on the VM did not answer about this container.") because `INSPECT_FORMAT`'s `{{with .State.Health}}` is refused by Docker 27.5.1 for a container without a HEALTHCHECK (high) | Accepted: the format reads the optional map key with `{{with index .State "Health"}}{{.Status}}{{end}}` (verified read-only on the live containers); pinned by a test with a fake docker answering an empty health field; landed with the C05 helper slice, which owned the file; the VM's helper is refreshed by the release | §2.1; `host_operations.py` `INSPECT_FORMAT` |
+| M1 the docs say the Diagnostics page's VM commands row names the containerlab release; no backend emits it | Accepted: `/api/diagnostics` gains `containerlab_version` from the cached capabilities answer (no new helper call from the diagnostics page); the docs promise only "when the manager has asked the VM for its capabilities" | §3, §4.3; `diagnostics.py` |
+| M2 Lab files › All lab folders lists other labs' files that the viewer refuses | Accepted: in files mode the dialog is bounded to the lab's folder (All lab folders hidden, Up one folder stops at the lab's folder) | §4.4; `operations.js` |
+| L1 Follow's resume after a hidden tab sent `tail=200` | Accepted: the resume while Follow is on sends `tail=2000` without `since` (a replace) | §4.1 |
+| L2 "Some lines may be missing." vanished on the next poll | Accepted: sticky until Refresh or a Tail change | §4.1 |
+| L3, L4, L10 Follow announced "Logs loaded." on a routine poll; the empty inspect filter left a bare table; the running caption counted exited rows | Fixed before the verification report (`b842b55`), re-checked in the fixture smoke of the fix round | §4.1, §4.2 |
+| L5 the export name used the container name | Fixed in `b842b55`: the device's short name | §4.1 |
+| L6 the Images dialog shows no image id | No change: the design's §4.5 table has no ID column; the acceptance check was worded wider than the design | §4.5 |
+| L7 a 503 on a one-shot fetch stopped with Retry; a 503 between errors does not reset the count | Accepted with change: one automatic retry after 5 s with "The VM is busy, retrying…", then Retry; "three consecutive errors" reads "three errors without a success between them" (a 503 neither counts nor resets) | §4.1 |
+| L8 a network failure showed the browser's "Failed to fetch" | Accepted: "The manager did not answer. Check the connection, then Retry." for a fetch failure; the manager's `detail` for HTTP errors | §4.1 |
+| L9 at 390 the RX/TX values wrapped mid-number | Accepted: numeric and Port cells `nowrap`; `.table-wrap` scrolls internally, the drawer never sideways | §4.1 |
+| L11 Export was enabled before anything loaded | Accepted: disabled until a line is shown | §4.1 |
+| L12 the files-mode help line gained the deploy browser's download sentence | Accepted: not appended in files mode | §4.4 |
+| L13 the disabled Capture button's reason is reachable only in the caption | No change: the caption carries the reason; a disabled control is not a focus stop by design | §4.1 |
+| L14 the impairment line printed bare numbers and zeros | Accepted: `loss n%`, `corruption n%`, `rate n kbit`, durations as given, zeros skipped; the live JSON shape is confirmed in C05 | §4.1 |
+| L15 the Logs toolbar wrapped between the Find label and its input | Accepted: one inline-flex group | `style.css` |
+| Inspect filter and sort persisted into later inspect runs | Accepted: the view state is reset at the start of every run | §4.2 |
+| Live, low: the drawer's Image row and Images "used by" show the topology's tag while `vrt` runs the local nested-virtualization derivative | No change here: C04's Container section shows the running image from discovery beside the topology's | C04-DESIGN §4.3 |
