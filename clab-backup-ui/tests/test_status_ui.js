@@ -715,7 +715,7 @@ test('C02: a stopped operation needs attention as a warning in the person\'s own
 
 test('C02: STATUS_STOPPABLE names the actions that die with the helper channel, and the confirmation names what may be left half done and the way back',()=>{
  const c=makeContext(),g=name=>vm.runInContext(name,c);
- assert.deepEqual([...g('STATUS_STOPPABLE')],['deploy','redeploy','destroy','apply','start','stop','restart','restart-node','save','clone','inspect-all']);
+ assert.deepEqual([...g('STATUS_STOPPABLE')],['deploy','redeploy','destroy','apply','start','stop','restart','restart-node','start-node','stop-node','save','clone','inspect-all']);
  for(const refused of ['create','delete','publish','revise','inspect'])assert.ok(!g('STATUS_STOPPABLE').includes(refused),refused+' finishes on its own and has no Stop');
  for(const action of g('STATUS_STOPPABLE'))assert.ok(g('STATUS_STOP_AFTERMATH')[action],action+' has aftermath words');
  assert.equal(c.statusStopQuestion('deploy','Start lab','demo'),'End the running command (Start lab) on demo? The manager asks the lab VM to end it now. The lab may be only partly started; afterwards: Redeploy lab.');
@@ -735,4 +735,21 @@ test('C04: consoleState reads the server decision: offered only with console, ok
  assert.deepEqual({...c.consoleState({console:true,console_hold:''})},{offered:true,ok:true,reason:'',key:''});
  assert.deepEqual({...c.consoleState({console:true,console_hold:{key:'young',text:'x started less than two minutes ago; its launcher takes the console first. Try again in a moment.'}})},{offered:true,ok:false,reason:'x started less than two minutes ago; its launcher takes the console first. Try again in a moment.',key:'young'});
  assert.equal(c.consoleState({console:false,console_hold:{key:'none',text:'t'}}).offered,false,'a hold without a console is no offer');
+});
+
+test('C05: Start device and Stop device are stoppable with their aftermath words, name their device wherever a job is at hand, and have device states',()=>{
+ const c=makeContext(),g=name=>vm.runInContext(name,c);
+ for(const action of ['start-node','stop-node']){assert.ok(g('STATUS_STOPPABLE').includes(action));assert.ok(g('STATUS_STOP_AFTERMATH')[action]);}
+ assert.match(c.statusStopQuestion('stop-node','Stop ceos','demo'),/only partly stopped; afterwards: Stop device again \(or Start device if it should run\)\.$/);
+ assert.match(c.statusStopQuestion('start-node','Start ceos','demo'),/only partly started; afterwards: Start device again\.$/);
+ assert.equal(c.operationLabel('stop-node'),'Stopping device');assert.equal(c.operationLabel('start-node'),'Starting device');
+ assert.equal(c.operationLabel('stop-node',{node_label:'ceos'}),'Stopping ceos');assert.equal(c.operationLabel('start-node',{node_label:'ceos'}),'Starting ceos');
+ assert.equal(c.operationLabel('stop',{node_label:'ceos'}),'Stopping devices','the lab-wide Stop devices never takes a device name');
+ assert.equal(c.operationLabel('destroy',{nodes:['ceos']}),'Destroying ceos');assert.equal(c.operationLabel('save',{nodes:['ceos','vsw']}),'Saving ceos, vsw');
+ assert.equal(c.operationLabel('destroy',{nodes:[]}),'Destroying lab');assert.equal(c.operationLabel('destroy'),'Destroying lab');
+ assert.equal(c.operationLabel('destroy',{nodes:['a','b','c','d','e']}),'Destroying a, b, c and 2 more');
+ const starting=c.deviceState({name:'clab-x-r1',short_name:'R1',ssh_ready:false,nos_login:{status:'starting'}});
+ assert.deepEqual([starting.key,starting.label,starting.cli,starting.pill],['working','Starting',false,'busy']);assert.match(starting.detail,/R1 is being started/);
+ const stopping=c.deviceState({name:'clab-x-r1',short_name:'R1',ssh_ready:false,nos_login:{status:'stopping'}});
+ assert.deepEqual([stopping.key,stopping.label,stopping.cli,stopping.pill],['working','Stopping',false,'busy']);
 });

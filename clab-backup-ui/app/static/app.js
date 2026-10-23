@@ -21,7 +21,7 @@ function restoreRunning(j){return typeof statusRestoreActive==='function'?status
 function restoreRechecking(j){return !APP_RESTORE_BUSY.includes(j?.status)&&restoreRunning(j);}
 function designRechecking(j){return typeof statusDesignRechecking==='function'?statusDesignRechecking(j):j?.status==='interrupted'&&Array.isArray(j.rechecking)&&j.rechecking.length>0;}
 const RECHECK_BANNER='Checking the devices after a manager restart…';
-const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-stop','banner-dismiss'],'home-banner':['home-banner-output']};
+const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-review','banner-stop','banner-dismiss'],'home-banner':['home-banner-output']};
 const current=()=>state.labs.find(l=>l.id===activeId);
 // What holds the manager right now, as one sentence, or '' when nothing does. It mirrors the server's guard for a save
 // (GitProgress.idle: lab_operations.operation_busy for every lab, plus backup and login jobs, plus a design read-back of
@@ -278,9 +278,10 @@ function renderLabBanner(){
   }
   spec={tone:ls.pill==='warn'?'warn':'danger',icon:'alert',text:ls.detail,detail:job.message||'',identity:'job.'+job.id,actions};
  }
- else if(ls.key==='attention')spec={tone:'danger',icon:'alert',text:ls.detail,actions:lab.deployment?.status==='Partially running'?start():{'banner-credentials':{label:'Check credentials',run:()=>showTab('credentials')}}};
+ else if(ls.key==='attention'){spec={tone:'danger',icon:'alert',text:ls.detail,actions:lab.deployment?.status==='Partially running'?start():{'banner-credentials':{label:'Check credentials',run:()=>showTab('credentials')}}};if(typeof opAttentionSpec==='function')spec=opAttentionSpec(lab,spec);}
  else if(credentials)spec={tone:'warn',icon:'alert',text:`${credentials} ${credentials===1?'device needs':'devices need'} login credentials before you can open ${credentials===1?'its':'their'} CLI.`,actions:{'banner-credentials':{label:'Add credentials',run:()=>openProfile()}}};
  else if(ls.key==='starting')spec={tone:'info',icon:'clock',running:true,text:'Lab is starting — '+ls.detail};
+ else if(typeof opPendingBannerSpec==='function'&&opPendingBannerSpec(lab))spec=opPendingBannerSpec(lab);
  else if(ls.key==='stopped')spec={tone:'info',icon:'info',text:'This lab is not running.',actions:start()};
  else if(ls.key==='unknown')spec={tone:'warn',icon:'alert',text:ls.detail||'The lab VM cannot be reached. Status may be out of date.',actions:{'banner-vm':{label:'VM connection…',run:()=>{if(typeof openVmDialog==='function')openVmDialog();}}}};
  else if(ls.key==='unlinked')spec={tone:'info',icon:'info',text:ls.detail,actions:{'banner-link':{label:'Match to a running lab…',run:()=>{const b=$('link-deployment');if(b&&typeof b.onclick==='function')b.onclick();}}}};
@@ -296,18 +297,23 @@ function renderNodes(){const lab=current();if(!lab||!devicesTechnical)return;con
 // The serial console button (docs/parity-campaign/C04-DESIGN.md section 4.2): only for a kind that has one, disabled with the
 // server's own reason (consoleState in status.js) while the device is starting, restarting or not running.
 function consoleButton(n){const c=typeof consoleState==='function'?consoleState(n):{offered:false};if(!c.offered)return '';return `<button class="console-action" data-console="${esc(n.name)}" ${c.ok?'':`disabled title="${esc(c.reason)}"`}>Console <span aria-hidden="true">↗</span></button>`;}
-function nodeActions(n,details=false){const hint=sshHint(n),restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button>${consoleButton(n)}<button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button><button class="danger-action" data-restart="${esc(n.name)}" ${restart.ok?'':`disabled title="${esc(restart.reason)}"`}>Restart device…</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}`;}
+// Stop device and Start device beside Restart device: one eligibility function (operations.js), a disabled button carries its reason.
+function nodeActionCheck(action,n){return typeof opNodeActionState==='function'?opNodeActionState(action,current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};}
+function nodeStateButton(action,label,n,danger){const check=nodeActionCheck(action,n);return `<button${danger?' class="danger-action"':''} data-node-action="${esc(action)}" data-node="${esc(n.name)}" ${check.ok?'':`disabled title="${esc(check.reason)}"`}>${esc(label)}</button>`;}
+function nodeActions(n,details=false){const hint=sshHint(n),restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button>${consoleButton(n)}<button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button><button class="danger-action" data-restart="${esc(n.name)}" ${restart.ok?'':`disabled title="${esc(restart.reason)}"`}>Restart device…</button>${nodeStateButton('stop-node','Stop device…',n,true)}${nodeStateButton('start-node','Start device…',n,false)}${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}`;}
 // The device panel's line under its actions: why a disabled action is unavailable, in words a keyboard or touch
 // user can reach (a disabled button's title is hover-only), plus the capture caption when there is one.
 function nodeActionNotes(n){
  const notes=[];const capture=typeof captureStatusLine==='function'?captureStatusLine():'';if(capture)notes.push(capture);
  const con=typeof consoleState==='function'?consoleState(n):{offered:false};if(con.offered&&!con.ok)notes.push('Console is not available: '+con.reason);
  const restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:true};if(!restart.ok)notes.push('Restart device… is not available: '+restart.reason+'.');
+ if(typeof opNodeActionState==='function')for(const [action,label] of [['stop-node','Stop device…'],['start-node','Start device…']]){const check=nodeActionCheck(action,n);if(!check.ok&&!check.own)notes.push(label+' is not available: '+check.reason+'.');}
+ const saveCheck=typeof opSaveNodeState==='function'?opSaveNodeState(current(),n,state.discovery,busy()):{ok:true};if(!saveCheck.ok&&!saveCheck.own)notes.push('Save startup configuration… is not available: '+saveCheck.reason+'.');
  const backup=typeof nodeBackupReason==='function'?nodeBackupReason(n):'';if(backup)notes.push('Back up configuration is not available: '+backup+'.');
  return notes.join(' ');
 }
 // The drawer's Advanced section: check the saved login now, or change the connection settings.
-function nodeDrawerActions(n){return `<button data-check="${esc(n.name)}" ${!(n.login_configured??n.ssh_ready)?'disabled title="Add credentials first"':''}>Test login</button><button data-edit="${esc(n.name)}">Edit connection…</button>`;}
+function nodeDrawerActions(n){const save=typeof opSaveNodeState==='function'?opSaveNodeState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};return `<button data-check="${esc(n.name)}" ${!(n.login_configured??n.ssh_ready)?'disabled title="Add credentials first"':''}>Test login</button><button data-edit="${esc(n.name)}">Edit connection…</button><button data-save-node="${esc(n.name)}" ${save.ok?'':`disabled title="${esc(save.reason)}"`}>Save startup configuration…</button>`;}
 // A readable id per device name; the hash keeps names that differ only in punctuation apart.
 function deviceSlug(name){let hash=0;for(const c of String(name))hash=(hash*31+c.charCodeAt(0))>>>0;return String(name).replace(/[^A-Za-z0-9_-]+/g,'-')+'-'+hash.toString(36);}
 // One row per device for the Devices tab and the topology rail: name, platform, state pill and the
@@ -404,6 +410,8 @@ async function handleNodeAction(e){const b=e.target.closest('button');if(!b||b.d
  // The device panel stays open under the review (its button gets focus back when the review closes); from the
  // map menu, which closes itself, the drawn device is the control to return to.
  if(b.dataset.restart){const labId=activeId,name=b.dataset.restart;const opener=typeof b.closest==='function'&&b.closest('#node-context-menu')?(typeof contextNode!=='undefined'&&contextNode)||null:b;if(typeof opRestartDevice==='function'&&typeof opTask==='function')opTask(null,()=>opRestartDevice(labId,name,opener));}
+ // Start device, Stop device and Save startup configuration (operations.js): reviewed operations on one device, like Restart device.
+ if(b.dataset.nodeAction||b.dataset.saveNode){const labId=activeId,name=b.dataset.node||b.dataset.saveNode,opener=typeof b.closest==='function'&&b.closest('#node-context-menu')?(typeof contextNode!=='undefined'&&contextNode)||null:b;if(typeof opTask==='function')opTask(null,()=>b.dataset.saveNode?(typeof opSaveNode==='function'?opSaveNode(labId,name,opener):null):(typeof opNodeAction==='function'?opNodeAction(b.dataset.nodeAction,labId,name,opener):null));}
  if(b.dataset.check){const labId=activeId;b.disabled=true;try{const result=await json('/labs/'+labId+'/ssh-check','POST',{name:b.dataset.check});notify(result.message);if(activeId===labId)await refreshHealth();}catch(error){notify(error.message);}finally{b.disabled=false;}}
 }
 for(const id of ['nodes','details-dialog','device-list','topology-devices'])$(id).addEventListener('click',handleNodeAction);

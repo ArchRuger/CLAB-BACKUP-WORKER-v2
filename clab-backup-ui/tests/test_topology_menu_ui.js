@@ -248,3 +248,51 @@ test('C04: the menu gains Console after Open CLI only for a kind that has one; h
  assert.equal(held.kind,'console');assert.match(held.attrs,/disabled title="vsw is still starting: its launcher uses the console/);assert.match(held.body,/<small>vsw is still starting: its launcher/,'the reason is visible text under the item');
  assert.match(h.nodeMenu.innerHTML,/role="menuitem" data-console="vsw"/);
 });
+
+// C05: Stop device and Start device in the menu, and the impairment badge on the map (class on the wire group, caption, titles).
+test('C05: the context menu offers Stop device… and Start device… after Restart device…, each with the shared eligibility and its reason',()=>{
+ const h=harness({lab:lab()});const asked=[];
+ h.context.opNodeActionState=(action,l,n,discovery,isBusy)=>{asked.push([action,n.name,isBusy]);return action==='stop-node'?{ok:true,reason:''}:{ok:false,reason:n.short_name+' is already running',own:true};};
+ h.context.openNodeMenu(element('r1'),0,0);
+ const list=items(h.nodeMenu.innerHTML);
+ assert.deepEqual(list.map(i=>i.kind),['terminal','capture','backup','restart','node','node','details']);
+ assert.equal(list[4].body,'Stop device…');assert.match(list[4].attrs,/class="danger"/);assert.doesNotMatch(list[4].attrs,/disabled/);
+ assert.match(h.nodeMenu.innerHTML,/data-node-action="stop-node" data-node="r1"/);
+ assert.equal(list[5].body.replace(/<small>.*$/,''),'Start device…');assert.match(list[5].attrs,/disabled title="R1 is already running"/);assert.match(list[5].body,/<small>R1 is already running<\/small>/);
+ assert.deepEqual(asked,[['stop-node','r1',false],['start-node','r1',false]]);
+});
+function wireGroup(ends,base){
+ const g=stub('wire');const title={textContent:base};g.attrs['data-capture-endpoints']=JSON.stringify(ends);g.attrs['aria-label']='Capture '+ends.map(e=>e.label+':'+e.interface).join(' to ');
+ g.querySelector=sel=>sel==='title'?title:null;g.title=title;return g;
+}
+test('C05: the map badge is a class on the wire group, names the impaired end in the title and aria-label, counts wires, and survives a re-render',()=>{
+ const h=harness({lab:lab()});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/topology-render.js'),'utf8'),h.context);
+ const wires=[wireGroup([{node:'r1',label:'R1',interface:'eth1'},{node:'r2',label:'R2',interface:'eth1'}],'R1:eth1 — R2:eth1'),wireGroup([{node:'r2',label:'R2',interface:'eth2'},{node:'r3',label:'R3',interface:'eth1'}],'R2:eth2 — R3:eth1')];
+ h.$('topology-map').querySelectorAll=sel=>sel==='.topology-wire'?wires:[];
+ const answer={devices:{r1:{impairments:[{interface:'eth1',port:'Ethernet1',delay:'20ms',jitter:'',loss:1.5,rate:0,corruption:0}]},r2:{impairments:[{interface:'eth1',port:'Ethernet1',delay:'5ms',jitter:'',loss:0,rate:0,corruption:0}]}},interfaces:2,complete:true};
+ assert.equal(h.context.renderMapImpairments(answer),1,'one wire, impaired at both ends');
+ assert.equal(wires[0].classList.contains('impaired'),true);assert.equal(wires[1].classList.contains('impaired'),false);
+ assert.equal(wires[0].title.textContent,'R1:eth1 — R2:eth1 · impaired at R1 Ethernet1 (traffic leaving R1): delay 20ms, loss 1.5%; R2 Ethernet1 (traffic leaving R2): delay 5ms');
+ assert.match(wires[0].attrs['aria-label'],/^Capture R1:eth1 to R2:eth1 · impaired at R1 Ethernet1/);
+ assert.equal(wires[1].title.textContent,'R2:eth2 — R3:eth1','an unimpaired wire keeps its title');
+ assert.equal(h.$('map-impaired').textContent,'1 link impaired');assert.equal(h.$('map-impaired').hidden,false);assert.equal(h.$('map-impaired').title,'2 interfaces with an impairment');assert.equal(h.$('map-impaired-clear').hidden,false);
+ // re-applied from the cache after a map render
+ h.context.opImpairmentCache={a:answer};wires[0].classList.remove('impaired');
+ assert.equal(h.context.renderMapImpairments(),1);assert.equal(wires[0].classList.contains('impaired'),true);
+ // cleared: class, title, aria-label and caption go back
+ h.context.renderMapImpairments({devices:{},interfaces:0,complete:true});
+ assert.equal(wires[0].classList.contains('impaired'),false);assert.equal(wires[0].title.textContent,'R1:eth1 — R2:eth1');assert.equal(wires[0].attrs['aria-label'],'Capture R1:eth1 to R2:eth1');
+ assert.equal(h.$('map-impaired').hidden,true);assert.equal(h.$('map-impaired-clear').hidden,true);
+ h.context.renderMapImpairments({devices:{r1:{impairments:[{interface:'eth1',port:'Ethernet1',delay:'20ms',jitter:'',loss:0,rate:0,corruption:0}]}},interfaces:1,complete:false});
+ assert.equal(h.$('map-impaired').textContent,'1 link impaired · some devices not read');
+});
+test('C05: when C06 provides mapWireText the badge hands it the clause in data-impaired-text instead of writing the title itself',()=>{
+ const h=harness({lab:lab()});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/topology-render.js'),'utf8'),h.context);
+ const wire=wireGroup([{node:'r1',label:'R1',interface:'eth1'},{node:'r2',label:'R2',interface:'eth1'}],'R1:eth1 — R2:eth1');
+ h.$('topology-map').querySelectorAll=()=>[wire];const seen=[];h.context.mapWireText=g=>seen.push(g.getAttribute('data-impaired-text'));
+ h.context.renderMapImpairments({devices:{r1:{impairments:[{interface:'eth1',port:'Ethernet1',delay:'20ms',jitter:'',loss:0,rate:0,corruption:0}]}},interfaces:1,complete:true});
+ assert.deepEqual(seen,['impaired at R1 Ethernet1 (traffic leaving R1): delay 20ms']);assert.equal(wire.title.textContent,'R1:eth1 — R2:eth1','the title is left to mapWireText');
+ h.context.renderMapImpairments({devices:{},interfaces:0,complete:true});assert.equal(seen.at(-1),null);assert.equal(wire.getAttribute('data-impaired-text'),null);
+});

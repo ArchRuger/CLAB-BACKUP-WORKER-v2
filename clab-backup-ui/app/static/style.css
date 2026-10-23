@@ -1840,6 +1840,9 @@ dialog.drawer, dialog.node-details {
 path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke; }
 .topology-wire[role="button"] { cursor: pointer; }
 .topology-wire[role="button"]:hover path:not(.capture-hit), .topology-wire[role="button"]:focus-visible path:not(.capture-hit) { stroke: var(--accent); stroke-width: 4; }
+/* an impaired link (C05 4.3): dashed in the warning colour; the capture hit area keeps its 16 px transparent stroke, so right-click and click still open Capture */
+.topology-wire.impaired path:not(.capture-hit) { stroke: var(--warn); stroke-dasharray: 7 4; }
+.map-tools .map-impaired { color: var(--warn-strong); font-weight: 600; }
 
 /* expanded map (class toggled on #topology-view) */
 .map-expanded {
@@ -2650,3 +2653,26 @@ th[aria-sort=descending] > .op-sort::after { content: " ▼"; font-size: 10px; }
   .diag-toolbar { gap: 6px; }
   .op-code.diag-log { height: 220px; }
 }
+
+/* Run with options, the apply plan and the review's device lines (C05 4.4, 4.5) */
+.op-options { margin: 12px 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; background: var(--surface-2); }
+.op-options summary { cursor: pointer; font-weight: 600; }
+.op-options-set { border: 0; margin: 8px 0 0; padding: 0; min-width: 0; }
+.op-options-set:disabled { opacity: .6; }
+.op-options-set legend { font-weight: 600; font-size: 13px; padding: 0; }
+.op-opt-row { margin: 10px 0 0; }
+.op-opt-row input[type=number] { max-width: 8rem; }
+.op-plan h4 { margin: 12px 0 4px; }
+.op-plan ul { margin: 0; padding-left: 20px; }
+.op-plan-reason { color: var(--muted); }
+.op-plan-empty { padding: 8px 12px; border-left: 3px solid var(--ok); background: var(--ok-soft); }
+.op-kept { font-size: 13px; color: var(--muted); }
+
+/* The drawer's Impairments table (device-impairments.js): inputs wide enough for "20ms", the actions wrapping under the row in a narrow drawer */
+.impairments-table input { width: 6ch; min-width: 0; }
+.impairments-table td { vertical-align: top; }
+.impairments-table td:first-child { min-width: 7ch; }
+.impairments-table td .actions, .impairments-table td > div { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 520px) { .impairments-table table { min-width: 0; } .impairments-table th, .impairments-table td { padding-inline: 4px; } }
+.imp-question { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-left: 3px solid var(--danger); border-radius: var(--radius); background: var(--surface-2); }
+.imp-question .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
