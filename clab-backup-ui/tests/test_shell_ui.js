@@ -62,11 +62,12 @@ function harness({hash='',session={},local={},throwStorage=false,labs=[{id:'a',n
  const switcherSummary=el('summary',{text:'Switch lab'});const switcher=el('details',{id:'lab-switcher',class:'lab-switcher'},[switcherSummary,el('nav',{id:'labs'})]);
  const dialog=el('dialog',{id:'details-dialog'});dialog.close=function(){this.open=false;this.dispatch('close');};
  const nodeMenu=el('div',{id:'node-context-menu',hidden:true});
+ const linkMenu=el('div',{id:'link-context-menu',hidden:true}),linkItem=el('button',{id:'link-item',text:'Capture both ends…'});linkMenu.append(linkItem);
  const banner=el('div',{id:'lab-banner',hidden:true});
  const skeleton=el('div',{id:'home-skeleton',hidden:true});
  const navHome=el('a',{id:'nav-home',href:'/'});const crumbHome=el('button',{id:'crumb-home'});
  const outside=el('main',{id:'outside'});
- doc.body.append(navHome,crumbHome,switcher,manager,saveControl,labActions,dialog,saveDrawer,nodeMenu,banner,skeleton,outside);
+ doc.body.append(navHome,crumbHome,switcher,manager,saveControl,labActions,dialog,saveDrawer,nodeMenu,linkMenu,banner,skeleton,outside);
  const storage=map=>{const m=new Map(Object.entries(map));return throwStorage?{getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');},removeItem(){throw new Error('blocked');}}:{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),map:m};};
  const history=[],location={hash,pathname:'/',search:''};
  const setUrl=url=>{location.hash=url.includes('#')?url.slice(url.indexOf('#')):'';};
@@ -76,7 +77,7 @@ function harness({hash='',session={},local={},throwStorage=false,labs=[{id:'a',n
   selectLab(id,view='topology'){calls.selectLab.push([id,view]);context.activeId=id;context.tab=view;},showTab(view){calls.showTab.push(view);context.tab=view;},openDetails(name){calls.openDetails.push(name);context.detailName=name;dialog.open=true;},render(){calls.render++;},renderLabBanner(){calls.renderLabBanner++;},notify(m){calls.notify.push(m);}});
  context.window=context;context.timers=[];context.windowListeners={};context.addEventListener=(name,fn)=>{context.windowListeners[name]=fn;};
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/shell.js'),'utf8'),context);
- return {context,doc,el,history,location,calls,managerButton,managerList,labButton,labList,saveChip,savePanel,saveTitle,saveInside,saveButton,loadButton,loadPanel,saveDrawer,panelEvents,switcher,switcherSummary,dialog,nodeMenu,outside,skeleton};
+ return {context,doc,el,history,location,calls,managerButton,managerList,labButton,labList,saveChip,savePanel,saveTitle,saveInside,saveButton,loadButton,loadPanel,saveDrawer,panelEvents,switcher,switcherSummary,dialog,nodeMenu,linkMenu,linkItem,outside,skeleton};
 }
 
 test('route precedence: the hash wins, sessionStorage is consumed once, unknown ids fall back to Home',()=>{
@@ -749,4 +750,65 @@ test('C05: closing the device drawer also resets the Impairments section, and a 
  h.dialog.close();
  assert.deepEqual(order,['diagnostics','impairments'],'both resets run once, diagnostics first');
  const bare=harness();bare.context.resetDeviceDiagnostics=()=>{};bare.dialog.open=true;assert.doesNotThrow(()=>bare.dialog.close());
+});
+
+
+// ---- C07: the capture memory and the wire menu's three explicit exceptions ----
+test('captureMemory: null on a missing key, invalid JSON, a wrong shape and a throwing storage; the record is cleaned',()=>{
+ const key='clab.capture.lab.node:clab-x';
+ const h=harness({local:{[key]:JSON.stringify({interfaces:['eth1',5,'','eth2'],separate:true,ends:[1,0]}),'clab.capture.lab.bad':'{nope','clab.capture.lab.shape':JSON.stringify({interfaces:'eth1'})}});
+ assert.equal(JSON.stringify(h.context.captureMemory('lab','node:clab-x')),JSON.stringify({interfaces:['eth1','eth2'],separate:true,ends:[true,false]}));
+ assert.equal(h.context.captureMemory('lab','missing'),null);assert.equal(h.context.captureMemory('lab','bad'),null);assert.equal(h.context.captureMemory('lab','shape'),null);
+ assert.equal(h.context.captureMemory('',"x"),null);
+ const blocked=harness({throwStorage:true});assert.equal(blocked.context.captureMemory('lab','node:a'),null);
+});
+test('rememberCapture refuses a record over 2000 characters, reports a throwing storage, and the Open as default is validated',()=>{
+ const h=harness();
+ assert.equal(h.context.rememberCapture('lab','node:a',{interfaces:['eth1'],separate:false}),true);
+ assert.equal(h.context.localStorage.getItem('clab.capture.lab.node:a'),JSON.stringify({interfaces:['eth1'],separate:false}));
+ assert.equal(h.context.rememberCapture('lab','node:big',{interfaces:['x'.repeat(2001)]}),false);assert.equal(h.context.localStorage.getItem('clab.capture.lab.node:big'),null);
+ assert.equal(h.context.captureOpenAs(),'');assert.equal(h.context.rememberOpenAs('each'),true);assert.equal(h.context.captureOpenAs(),'each');
+ assert.equal(h.context.rememberOpenAs('junk'),false);assert.equal(h.context.captureOpenAs(),'each');
+ h.context.localStorage.setItem('clab.capture.openas','garbage');assert.equal(h.context.captureOpenAs(),'');
+ const blocked=harness({throwStorage:true});
+ assert.equal(blocked.context.rememberCapture('lab','node:a',{interfaces:['eth1']}),false);assert.equal(blocked.context.rememberOpenAs('one'),false);assert.equal(blocked.context.captureOpenAs(),'');
+});
+function linkMenuSpies(h){
+ const closed=[],menus=[];
+ h.context.closeLinkMenu=()=>{closed.push(1);h.linkMenu.hidden=true;};
+ const real=h.context.closeMenus;h.context.closeMenus=except=>{menus.push(except);return real.call(h.context,except);};
+ return {closed,menus};
+}
+test('wire menu exception 1: a pointerdown inside it keeps it open and passes it as except; one outside closes it after closeMenus',()=>{
+ const h=harness(),spy=linkMenuSpies(h);
+ h.linkMenu.hidden=false;
+ h.linkItem.dispatch('pointerdown');
+ assert.equal(h.linkMenu.hidden,false,'the item\'s click still has a menu to land on');assert.equal(spy.closed.length,0);
+ assert.equal(spy.menus.length,1);assert.equal(spy.menus[0],h.linkMenu,'closeMenus got the link menu as except');
+ h.outside.dispatch('pointerdown');
+ assert.equal(spy.closed.length,1);assert.equal(h.linkMenu.hidden,true);
+ // pressing a header menu (the node-menu right-click is such a pointerdown) closes it too
+ h.linkMenu.hidden=false;h.managerButton.dispatch('pointerdown');assert.equal(spy.closed.length,2);
+});
+test('wire menu exception 2: Escape returns early while it is open (the menu\'s own keydown owns it), and a closed menu changes nothing',()=>{
+ const h=harness(),spy=linkMenuSpies(h);
+ h.managerButton.dispatch('click');h.linkMenu.hidden=false;
+ const escape=h.outside.dispatch('keydown',{key:'Escape'});
+ assert.equal(escape.stopped,false,'the event is not stopped here');assert.equal(h.managerList.hidden,false,'closeMenus did not run');assert.equal(spy.closed.length,0,'shell does not close it');
+ h.linkMenu.hidden=true;const after=h.outside.dispatch('keydown',{key:'Escape'});assert.equal(after.stopped,true);assert.equal(h.managerList.hidden,true);
+});
+test('wire menu exception 3: resize, blur and a capture-phase scroll call only closeLinkMenu; an open save panel stays open; closeMenus never touches the link menu',()=>{
+ const h=harness(),spy=linkMenuSpies(h);
+ h.saveChip.dispatch('click');h.linkMenu.hidden=false;
+ assert.equal(h.savePanel.hidden,false);
+ const scroll=h.doc.listeners.scroll||[];assert.equal(scroll.length,1);assert.equal(scroll[0].capture,true,'scroll is listened to in the capture phase');
+ let before=spy.menus.length;
+ h.context.windowListeners.resize();assert.equal(spy.closed.length,1);assert.equal(h.linkMenu.hidden,true);
+ h.linkMenu.hidden=false;h.context.windowListeners.blur();assert.equal(spy.closed.length,2);
+ h.linkMenu.hidden=false;scroll[0].fn({});assert.equal(spy.closed.length,3);
+ assert.equal(spy.menus.length,before,'none of the three called closeMenus');
+ assert.equal(h.savePanel.hidden,false,'the save panel stays open');assert.equal(h.savePanel.getAttribute('aria-hidden'),null);assert.equal(h.saveChip.getAttribute('aria-expanded'),'true');
+ h.linkMenu.hidden=false;h.context.closeMenus();assert.equal(h.linkMenu.hidden,false,'closeMenus() itself never touches the link menu');
+ // without capture.js the three are harmless
+ const bare=harness();assert.doesNotThrow(()=>{bare.context.windowListeners.resize();bare.context.windowListeners.blur();bare.doc.listeners.scroll[0].fn({});bare.outside.dispatch('pointerdown');});
 });

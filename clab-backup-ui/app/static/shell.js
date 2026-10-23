@@ -185,12 +185,41 @@ function shellEscape(e){
  if(e.key!=='Escape')return;
  const target=e.target&&typeof e.target.closest==='function'?e.target:null;
  const nodeMenu=shellEl('node-context-menu');if(nodeMenu&&!nodeMenu.hidden)return;
+ // The wire menu (capture.js) owns its Escape too: its own keydown closes it and returns focus to the wire.
+ const linkMenu=shellEl('link-context-menu');if(linkMenu&&!linkMenu.hidden)return;
  if(target&&target.closest('.menu-list, [data-panel]'))return;
  const details=target?target.closest('details#lab-switcher, details.menu'):null;
  if(details&&details.open){details.open=false;const summary=typeof details.querySelector==='function'?details.querySelector('summary'):null;if(summary&&typeof summary.focus==='function')summary.focus();e.stopPropagation();return;}
  if(closeMenus())e.stopPropagation();
 }
-function shellPointerDown(e){const target=e.target&&typeof e.target.closest==='function'?e.target:null;const menu=target?target.closest('.menu, details#lab-switcher'):null;closeMenus(menu||undefined);}
+// The wire menu (capture.js) is handled like the node menu, never through closeMenus(): a pointerdown inside it passes it as
+// `except` so it survives until the item's click; a pointerdown anywhere else closes it.
+function shellPointerDown(e){
+ const target=e.target&&typeof e.target.closest==='function'?e.target:null;
+ const menu=target?target.closest('.menu, details#lab-switcher, #link-context-menu'):null;
+ closeMenus(menu||undefined);
+ if(!(menu&&menu.id==='link-context-menu')&&typeof closeLinkMenu==='function')closeLinkMenu();
+}
+// localStorage: the capture dialog's remembered selection per lab and device or link, and the last Open as choice.
+// Written by capture.js only after a full success, read only when the dialog opened without a hint, a chosen end or a preset.
+function captureMemory(labId,scope){
+ if(!labId||!scope)return null;
+ const raw=shellGet('localStorage','clab.capture.'+labId+'.'+scope);if(!raw)return null;
+ try{
+  const data=JSON.parse(raw);
+  if(!data||typeof data!=='object'||!Array.isArray(data.interfaces))return null;
+  const interfaces=data.interfaces.filter(n=>typeof n==='string'&&n).slice(0,128);
+  const ends=Array.isArray(data.ends)&&data.ends.length===2?data.ends.map(Boolean):null;
+  return {interfaces,separate:data.separate===true,ends};
+ }catch{return null;}
+}
+function rememberCapture(labId,scope,record){
+ if(!labId||!scope||!record)return false;
+ const text=JSON.stringify(record);if(text.length>2000)return false;
+ return shellSet('localStorage','clab.capture.'+labId+'.'+scope,text);
+}
+function captureOpenAs(){const value=shellGet('localStorage','clab.capture.openas');return value==='each'||value==='one'?value:'';}
+function rememberOpenAs(value){return value==='each'||value==='one'?shellSet('localStorage','clab.capture.openas',value):false;}
 // localStorage: when each lab was opened (the card's "Opened …" line in home.js), and dismissed job warnings.
 function rememberOpened(id){if(!id)return false;return shellSet('localStorage','clab.opened.'+id,new Date().toISOString());}
 // sessionStorage: the Home list tab the student chose (home.js), for this browser session.
@@ -268,6 +297,12 @@ function pageVisible(){return typeof document==='undefined'||document.visibility
 document.addEventListener('visibilitychange',()=>{if(typeof diagVisibilityChanged==='function')diagVisibilityChanged();});
 document.addEventListener('keydown',shellEscape,true);
 document.addEventListener('pointerdown',shellPointerDown,true);
+// A wire menu must not float away from its wire, and an opening soft keyboard or a tab switch must not strand it. These
+// call only closeLinkMenu(), never closeMenus(): the save panel and the Load panel stay open through all three.
+const shellCloseLinkMenu=()=>{if(typeof closeLinkMenu==='function')closeLinkMenu();};
+window.addEventListener('resize',shellCloseLinkMenu);
+window.addEventListener('blur',shellCloseLinkMenu);
+document.addEventListener('scroll',shellCloseLinkMenu,true);
 window.addEventListener('hashchange',()=>{if(!shellApplying)applyRoute();});
 setTimeout(()=>{const skeleton=shellEl('home-skeleton');if(skeleton&&!(typeof state!=='undefined'&&state&&state.loaded))skeleton.hidden=false;},200);
 // Deferred scripts run in order, and a fast first /api/state answer can render before the later scripts
