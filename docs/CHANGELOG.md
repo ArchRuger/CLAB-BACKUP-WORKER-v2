@@ -4,6 +4,32 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.31.4
+
+**Parity campaign, chunk C05: link impairments and the mutating lifecycle through the helper.** The helper half shipped
+in 1.31.3; this release adds the manager and the UI ([LAB-OPERATIONS](LAB-OPERATIONS.md)).
+
+- **Link impairments.** The device drawer gains an **Impairments** section: one row per data interface with delay,
+  jitter, loss, rate and corruption, **Apply** and **Reset** per row after a one-line question, and **Clear
+  impairments** for the device; the map shows a badge on an impaired link with the end named in the wire's title, a
+  caption "N links impaired" and **Clear all**. Every change names the lab, the device, the interface and the
+  container id the drawer was shown; the helper refuses the management interface and host-network devices, takes the
+  host lock without waiting and checks the request's digest. Typed values and focus survive the drawer's polling.
+- **Stop device and Start device** beside Restart device, with their own reviews (the affected device, its neighbours'
+  links, a destroyed neighbour named as such), device-named job titles, and Try again that knows a filtered job.
+- **Apply topology changes… shows containerlab's dry-run plan** (devices to create, start, restart, recreate or
+  remove, links to connect or disconnect, with containerlab's reasons), says "Nothing to apply" with Apply anyway, and
+  is now in Lab actions ▾ for a running or partly running lab. A **pending-changes line** appears once per open and
+  after every operation or sync when the topology file differs from the running lab; a dismissed plan stays dismissed
+  until the plan changes; a partly running lab whose plan would create, recreate or reconnect offers Review changes….
+- **Run with options** in the deploy, redeploy, destroy and save reviews: a device filter (deploy only while the lab
+  is not deployed; never with Clean up), Max workers, Skip post-deploy, Keep management network and the Graceful stop
+  note; the review is previewed again on every change with its fold disabled while the VM answers. **Save this
+  device's configuration** in the drawer runs containerlab's save for one device.
+- New routes: `GET /api/operations/impairments`, `POST /api/operations/impairments/set`, `/reset`, `/clear`,
+  `GET /api/operations/apply-plan`; `start-node`, `stop-node`, the `nodes` option and the run flags on the operation
+  preview; jobs carry the devices a filtered job touched; a filtered destroy or save never records a deployment.
+
 ## Changes in 1.31.3
 
 **Parity campaign: the C03 drawer sections, C04 (serial console and container facts) and the helper half of C05.**

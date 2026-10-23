@@ -831,6 +831,7 @@ class Discovery:
                 # Legacy inventory endpoints stay manual until explicitly switched.
                 for node in lab['nodes']: node.setdefault('endpoint_mode','manual')
                 reconcile(self.store.state); self.store.save()
+                app.state.operations.forget_plan(lab_id)   # the cached pending-changes plan compared the old deployment
                 return public_lab(lab)
 
         @app.post('/api/lab-definitions')

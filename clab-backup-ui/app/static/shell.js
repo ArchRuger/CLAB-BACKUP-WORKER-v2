@@ -36,6 +36,7 @@ function applyRoute(){
  if(!shellSessionConsumed){shellSessionConsumed=true;shellRemove('sessionStorage','activeLab');}
  const known=!!route.lab&&(state.labs||[]).some(l=>l.id===route.lab);
  shellApplying=true;
+ if(typeof closeLinkMenu==='function')closeLinkMenu();   // a route change ends the wire menu: it belongs to one lab's map
  try{
   if(!known){if(typeof activeId==='string'&&activeId)goHome();else writeRoute({});return true;}
   const view=route.view||'topology';

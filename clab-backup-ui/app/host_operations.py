@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.31.3'
+VERSION = '1.31.4'
 LIMIT = 1024 * 1024
 # `containerlab inspect --all` runs a Docker inspection per container: several labs or a busy daemon take
 # well over the short bound of the other commands. The same bounds as discovery's copy of this command
@@ -275,7 +275,8 @@ def link_rows(rows):
 
 def impairment_rows(rows):
     """`containerlab tools netem show` entries of one container, reduced to the keys `netem set` names
-    (`packet_loss`, containerlab's JSON key for `--loss`, is read as `loss`); unknown keys are dropped."""
+    (`packet_loss`, containerlab's JSON key for `--loss`, is read as `loss`); unknown keys are dropped; an
+    interface printed as `eth1 (ge-0/0/0)` is split into `interface` and `alias`."""
     found = []
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict): continue
@@ -284,6 +285,12 @@ def impairment_rows(rows):
             value = row.get(key, row.get('packet_loss') if key == 'loss' else None)
             if isinstance(value, str): item[key] = value[:64]
             elif type(value) in (int, float): item[key] = value
+        # containerlab prints a VM-in-container interface as 'eth1 (ge-0/0/0)': the Linux name is what `netem set`
+        # and `reset` take, the NOS name is kept as `alias` (verified live on vJunos-switch, 2026-10-23).
+        name = item.get('interface')
+        if isinstance(name, str) and ' (' in name and name.endswith(')'):
+            item['interface'], alias = name.split(' (', 1)[0], name.split(' (', 1)[1][:-1]
+            if alias: item['alias'] = alias[:64]
         if isinstance(item.get('interface'), str) and item['interface']: found.append(item)
         if len(found) >= INTERFACE_LIMIT: break
     return found

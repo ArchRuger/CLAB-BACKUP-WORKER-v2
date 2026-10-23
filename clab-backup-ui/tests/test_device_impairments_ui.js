@@ -164,13 +164,15 @@ test('the three busy sentences disable every control with the sentence; Retry cl
   const h=harness();h.standard();await h.open();
   h.on('/operations/impairments/reset',()=>{throw Object.assign(new Error(sentence),{status:409});});
   h.click('imp-reset-0','reset',0);h.click('imp-confirm','confirm',0);await tick();await tick();
-  assert.equal(h.$('imp-status').textContent,sentence);
+  assert.equal(h.$('imp-busy').textContent,sentence);assert.equal(h.$('imp-busy').hidden,false);
+  assert.equal(h.$('imp-status').textContent,'','the sentence is shown once: not again in the status');assert.equal(h.$('imp-error').textContent,'');
   assert.equal(h.$('imp-reset-0').disabled,true);assert.equal(h.$('imp-reset-0').title,sentence);
   assert.equal(h.$('imp-clear').disabled,true);
   assert.equal(h.$('imp-retry').hidden,false);
   h.render();assert.equal(h.$('imp-reset-0').disabled,true,'a poll keeps it blocked');
   h.$('imp-retry').dataset={};h.section.fire('click',{target:{id:'imp-retry',closest:()=>null}});
   assert.equal(h.$('imp-reset-0').disabled,false);assert.equal(h.$('imp-retry').hidden,true);
+  assert.equal(h.doc.activeElement.id,'imp-reset-0','focus lands on a visible control, not the hidden Retry');
  }
 });
 test('a local busy lab disables the controls and re-enables them when it clears',async()=>{
@@ -243,16 +245,64 @@ test('an error keeps the typed values and shows the manager sentence in the stat
  assert.equal(h.get('imp').typed.eth2.delay,'20');
  assert.equal(h.$('imp-apply-1').disabled,false);
 });
-test('a successful change tells the Interfaces section to follow; a new device or close resets the section',async()=>{
+test('a successful change tells the map to re-read; a new device or close resets the section',async()=>{
  const h=harness();h.standard();await h.open();
- const seen=[];h.context.refreshDeviceDiagnostics=k=>seen.push(k);
+ const seen=[];h.context.opLoadImpairments=k=>seen.push(k);
  h.on('/operations/impairments/set',()=>({container:'c',impairments:[h.row(),h.row({interface:'eth2',port:'Ethernet2',delay:'9ms',jitter:'',loss:0})]}));
  h.type(1,'delay','9');h.click('imp-apply-1','apply',1);h.click('imp-confirm','confirm',0);await tick();await tick();
- assert.deepEqual(seen,['netem']);
+ assert.deepEqual(seen,['L1']);
  h.context.resetDeviceImpairments();
  assert.equal(h.section.open,false);assert.equal(h.$('imp-body').innerHTML,'');assert.equal(h.get('imp').rows.length,0);
 });
 test('the script holds no inline style, no document or window listener and escapes its interpolations',()=>{
  assert.doesNotMatch(source,/style=|\.style\b|window\.addEventListener|document\.addEventListener/);
  assert.match(source,/esc\(/);
+});
+
+test('B2: the map refresh runs once per successful Apply, Reset and Clear and never on a refusal',async()=>{
+ const h=harness();h.standard();await h.open();
+ const maps=[];h.context.opLoadImpairments=id=>maps.push(id);
+ h.on('/operations/impairments/set',()=>({container:'c',impairments:[h.row(),h.row({interface:'eth2',port:'Ethernet2',delay:'9ms',jitter:'',loss:0})]}));
+ h.type(1,'delay','9');h.click('imp-apply-1','apply',1);h.click('imp-confirm','confirm',0);await tick();await tick();
+ assert.deepEqual(maps,['L1'],'Apply');
+ h.on('/operations/impairments/reset',()=>({changed:true,impairments:[h.row()]}));
+ h.click('imp-reset-1','reset',1);h.click('imp-confirm','confirm',0);await tick();await tick();
+ assert.deepEqual(maps,['L1','L1'],'Reset');
+ h.on('/operations/impairments/clear',()=>({cleared:1,total:1,failed:[],remaining:[],devices:{r1:{impairments:[]}}}));
+ h.click('imp-clear','clear',-1);h.click('imp-confirm','confirm',0);await tick();await tick();
+ assert.deepEqual(maps,['L1','L1','L1'],'Clear');
+});
+test('B2: a refused change does not refresh the map',async()=>{
+ const h=harness();h.standard();await h.open();
+ const maps=[];h.context.opLoadImpairments=id=>maps.push(id);
+ h.on('/operations/impairments/set',()=>{throw new Error('The container changed; refresh.');});
+ h.type(1,'delay','9');h.click('imp-apply-1','apply',1);h.click('imp-confirm','confirm',0);await tick();await tick();
+ assert.deepEqual(maps,[]);
+ assert.match(h.$('imp-error').textContent,/The container changed/);
+});
+test('a reload started by the poll keeps values typed while it was fetching and an open question; Refresh still replaces them',async()=>{
+ const h=harness();h.standard();await h.open();
+ let release;const gate=new Promise(res=>{release=res;});
+ h.on('/operations/impairments?',async()=>{await gate;return {devices:{r1:{present:true,id:HEX,impairments:[h.row()]}},complete:true};});
+ h.context.state.operations=[{lab_id:'L1',finished:'2026-10-23T10:00:00Z'}];
+ h.render();await tick();
+ h.type(1,'delay','40');h.click('imp-apply-1','apply',1);
+ assert.ok(h.get('imp').question,'a question is open while the reload is in flight');
+ release();await tick();await tick();await tick();
+ assert.equal(h.get('imp').typed.eth2.delay,'40','typed text survives');
+ assert.ok(h.get('imp').question,'the question survives');
+ assert.equal(h.$('imp-stale').hidden,false,'the Refresh line is shown');
+ h.section.fire('click',{target:{id:'imp-refresh',closest:()=>null}});await tick();await tick();await tick();
+ assert.equal(h.get('imp').typed.eth2.delay,'');assert.equal(h.get('imp').question,null);
+});
+
+test('Escape inside an open question closes the question only; without a question it is left to the drawer',async()=>{
+ const h=harness();h.standard();await h.open();
+ h.type(1,'delay','40');h.click('imp-apply-1','apply',1);
+ const ev={key:'Escape',stopped:0,prevented:0,preventDefault(){this.prevented++;},stopPropagation(){this.stopped++;}};
+ h.section.fire('keydown',ev);
+ assert.equal(h.get('imp').question,null);assert.equal(ev.stopped,1);assert.equal(ev.prevented,1);
+ assert.equal(h.$('imp-question-zone').innerHTML,'');
+ const again={key:'Escape',stopped:0,prevented:0,preventDefault(){this.prevented++;},stopPropagation(){this.stopped++;}};
+ h.section.fire('keydown',again);assert.equal(again.stopped,0,'no question: the drawer handles Escape');
 });
