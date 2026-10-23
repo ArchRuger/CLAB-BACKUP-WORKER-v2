@@ -199,3 +199,14 @@ lists that re-render on the poll, new `window`/`location`/`history`/`localStorag
    folder…** is never disabled. No page script calls the old folder routes (`PUT …/git`, `…/git/connect`,
    `…/git/destination`, `…/repositories/{id}/folders`, `…/repositories/{id}/tree`), pinned by the same test.
 8. **Worker line (replaces A.10 for saves and loads).** `Saving…` and `Loading…`.
+
+## L. Amendment of the parity campaign, chunk C06 (with the release that ships C06)
+
+C06 (with the release that ships C06): the Topology tab's More ▾ gains **Download picture…**, **Export to draw.io…**
+and **Arrange devices…**; C.41's "no new export code path" is superseded for the map picture (built in the browser
+only) and for the draw.io dialog (the existing route with two query values, layout and theme). The helper-run
+horizontal/vertical graph of the old UI stays removed (`layout=horizontal|vertical` remain refused; the
+inventory's "must not reappear" line stands); the manager's own `rows`/`columns` arrangement, computed by
+`layout.arrange()` without the helper, is new and is not that feature. The Tools "Map" card sentence becomes
+"Edit map also downloads the map file. Download picture… and Export to draw.io… are in the Topology tab's More ▾
+menu." (`index.html`; pinned in `tests/test_page_load_ui.js`). Everything else in this addendum still binds.

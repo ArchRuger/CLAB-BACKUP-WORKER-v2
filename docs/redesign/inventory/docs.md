@@ -65,7 +65,7 @@ Open **Lab actions** or right-click a saved lab (Shift+F10). Items:
 - **Telemetry settings…**.
 - **Delete undeployed VM YAML**.
 - **Deploy New Lab → Lab Topologies**, **New topology**, **Save to manager / Deploy lab**, **Clone repository / popular labs**.
-Removed (must not reappear; rejected by helper): existing VM YAML editing, copy topology path, Select/link VM project, Open VM folder, separate Edit layout, horizontal/vertical diagram exports, SSHX/GoTTY, SR Linux fcli.
+Removed (must not reappear; rejected by helper): existing VM YAML editing, copy topology path, Select/link VM project, Open VM folder, separate Edit layout, horizontal/vertical diagram exports (the helper-run graph; the manager's own rows/columns draw.io arrangement since C06 is a different feature), SSHX/GoTTY, SR Linux fcli.
 
 ### 2.4 Import a lab already running on the VM (TOUR, wiki Part 12, VM-CONNECTION)
 1. Discovery sees the lab within 30 s; landing page lists it; or click **Refresh discovery**.
