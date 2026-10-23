@@ -83,6 +83,7 @@ These routes need no `Origin` header and are not part of the application.
 | `load_preset` | `all-ok`, `one-failed`, `one-rolled-back`, `one-uncertain`, `one-unreachable`, `one-blocked`, `one-editing`, `one-bad-login`, `slow` |
 | `load_device` | device the `one-*` presets act on (default `xrv9k`) |
 | `load_script` | `{device: outcome}` for any mix; outcomes `failed rolled_back uncertain unreachable blocked blocked-editing bad-login slow ok` |
+| `capture` | only with `docs/redesign/tools/fixture_manager.py --capture` (the scripted browser-Wireshark stack, no Docker; a cap of 4 sessions, 15 minutes idle, 2 hours): `{"fail_next_start": n, "after": k, "mode": "refuse"}`. The first `k` fresh session starts succeed, then the next `n` fail (`refuse` is the service's 429, `unavailable` 503, `lost_reply` creates the desktop and then fails the reply with 502), and the counters count down. It drives the mid-set `refused` state of a set start (**Start the remaining <n>**); a retry with the same request id meets the session that did start. Without `--capture` the switch has no effect |
 | `load_seconds` | for `slow`: device k of the lab settles after k times this (default 5: about 20 s for four) |
 
 `status_problem` values (the sentence is the helper's own; the stage says which modes raise it, as in `host_git.py`):
