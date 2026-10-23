@@ -6,9 +6,16 @@ guides in this folder; validation evidence for recent releases is in
 
 ## Changes in 1.31.1
 
-**The agent routing lives in the repository.** No application code changed; the helpers moved by their lockstep
-version alone. What a clone now carries under `.claude/`, and how a person sets up a development VM from it, is in
-the new guide [AGENT-ROUTING.md](AGENT-ROUTING.md).
+**The agent routing lives in the repository**, and one application fix for a dependency change. The helpers moved by
+their lockstep version alone. What a clone now carries under `.claude/`, and how a person sets up a development VM
+from it, is in the new guide [AGENT-ROUTING.md](AGENT-ROUTING.md).
+
+- **Credential profiles keep their API contract under FastAPI 0.147 and later.** Since 2026-10-19 FastAPI reads an
+  omitted boolean form field as `false`, so `POST /api/labs/{id}/profiles` without `make_default` stopped making the
+  new profile the platform's default (the page always sends the checkbox, so the browser flow was unaffected; the
+  test suite and API callers that leave the field out were). The route now reads the field as text: omitted means
+  default, `true`/`1`/`on`/`yes` and `false` keep their meaning. CI installs the newest allowed versions, which is
+  how the change surfaced.
 
 - **Agents.** The fifteen definitions in `.claude/agents/` were rewritten against the current Claude Code frontmatter
   reference: every one preloads the new `clab-worker-contract` skill instead of repeating the same contract, carries a

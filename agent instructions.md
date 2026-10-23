@@ -15,7 +15,11 @@
    says. The two-worker setup kit that generated the first routing is history and must not be run against a checkout.
 5. **After editing agent files start a new session** before trusting a route, and read the route from `/tasks` or the
    per-agent transcript; a running session was seen to keep the old definitions.
-6. **Open points.** `CLAUDE.md` is still above the documented size target (the product invariants stay there on
+6. **Form booleans under FastAPI 0.147 and later.** An omitted boolean form field is `false` now; the profile route
+   reads `make_default` as text so that omitted still means default. Any new form route with a boolean that should
+   default to true must do the same, and CI installs the newest allowed dependency versions, so a dependency change
+   shows up there first.
+7. **Open points.** `CLAUDE.md` is still above the documented size target (the product invariants stay there on
    purpose; moving them into path-scoped rules is an instruction migration for `risk-reviewer`). The workflows were not
    run end to end on real work. `web-design-guidelines` fetches guideline text from its upstream's `main`; the rules
    call it a checklist, a pinned local copy would be better. A worker could still spawn the built-in general-purpose
