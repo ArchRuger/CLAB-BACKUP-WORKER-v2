@@ -254,7 +254,9 @@ test('C02: the device drawer facts carry Copy buttons for the name, endpoint, ad
  const targets=[...html.matchAll(/data-copy="([^"]*)" data-copy-target="([^"]*)"/g)].map(m=>[m[1],m[2]]);
  assert.deepEqual(targets,[['clab-l-r1','details-fact-name'],['172.20.20.2:22','details-fact-endpoint'],['172.20.20.2','details-fact-address'],['ceos','details-fact-kind'],['ceos:4.32','details-fact-image']]);
  for(const id of ['details-fact-name','details-fact-endpoint','details-fact-address','details-fact-kind','details-fact-image'])assert.match(html,new RegExp(`id="${id}"`),id+' exists for the button to select');
- assert.match(html,/aria-label="Copy the address only"/);assert.match(html,/<dt>Container kind<\/dt>/);assert.match(html,/<dt>Image<\/dt>/);
+ assert.match(html,/aria-label="Copy address only"/);
+ // two Copy buttons in the Address row must differ to the eye: the second reads Copy address, its label contains the visible words, and the flip restores it
+ const row=html.match(/<dt>Address<\/dt><dd>.*?<\/dd>/)[0];assert.deepEqual([...row.matchAll(/data-label="([^"]*)"[^>]*>([^<]*)<\/button>/g)].map(m=>[m[1],m[2]]),[['Copy','Copy'],['Copy address','Copy address']]);assert.match(html,/<dt>Container kind<\/dt>/);assert.match(html,/<dt>Image<\/dt>/);
  assert.match(html,/<dt>Name in lab files<\/dt>/);assert.match(html,/<dt>Network OS<\/dt>/);assert.match(html,/<dt>Login credentials<\/dt>/,'the other facts stay');
  const v6=show({name:'r6',address:'3fff::5',port:22,platform:'arista_ceos',enabled:true});
  assert.match(v6,/data-copy="\[3fff::5\]:22" data-copy-target="details-fact-endpoint"/);assert.match(v6,/data-copy="3fff::5" data-copy-target="details-fact-address"/);

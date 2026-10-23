@@ -9,7 +9,7 @@ function node(tag,attrs={}){
   get id(){return this.attrs.id||'';},get classList(){const self=this;return {contains:c=>self.className.split(/\s+/).includes(c)};},
   get nextElementSibling(){const p=this.parentElement;if(!p)return null;return p.children[p.children.indexOf(this)+1]||null;},
   appendChild(c){c.parentElement=this;this.children.push(c);return c;},
-  remove(){if(this.parentElement)this.parentElement.children=this.parentElement.children.filter(x=>x!==this);this.parentElement=null;},
+  remove(){if(this.parentElement)this.parentElement.children=this.parentElement.children.filter(x=>x!==this);this.parentElement=null;this.isConnected=false;if(env&&env.activeElement===this)env.activeElement=env.body;},
   get parentNode(){return this.parentElement;},removeChild(c){c.remove();},
   closest(sel){let x=this;while(x){if(sel==='dialog[open]'?x.tag==='dialog'&&x.open:sel==='button[data-copy]'?x.tag==='button'&&x.dataset.copy!==undefined:false)return x;x=x.parentElement;}return null;},
   querySelector(sel){const cls=sel.slice(1),find=x=>{for(const c of x.children){if(c.className.split(/\s+/).includes(cls))return c;const d=find(c);if(d)return d;}return null;};return find(this);},
@@ -20,7 +20,7 @@ function node(tag,attrs={}){
 let env;
 function harness({clipboard,execResult=true,notify,withTools=false}={}){
  const body=node('body'),listeners={};
- const document={body,activeElement:null,getElementById:id=>{const find=x=>{if(x.id===id)return x;for(const c of x.children){const d=find(c);if(d)return d;}return null;};return find(body);},
+ const document={body,activeElement:body,getElementById:id=>{const find=x=>{if(x.id===id)return x;for(const c of x.children){const d=find(c);if(d)return d;}return null;};return find(body);},
   createElement:tag=>node(tag),addEventListener(type,fn){listeners[type]=fn;},createRange:()=>({selectNodeContents(n){this.node=n;}}),
   execCommand:cmd=>{document.execs.push({cmd,active:document.activeElement});return execResult;},execs:[]};
  env=document;
@@ -48,6 +48,19 @@ test('without navigator.clipboard the textarea is appended to the open dialog, e
  assert.equal(hostSeen,'dialog');assert.equal(h.document.execs.length,1);assert.equal(h.document.execs[0].active.tag,'textarea');assert.equal(dialog.children.length,1,'only the button is left');
  hostSeen=null;const plain=button(h.body);h.c.__b=plain;await vm.runInContext('copyText("v",__b)',h.c);assert.equal(hostSeen,'body');
  hostSeen=null;await vm.runInContext('copyText("v",null)',h.c);assert.equal(hostSeen,'body');
+});
+test('after the textarea fallback focus is back on the element that had it, in the body and in a dialog; a detached element is not focused',async()=>{
+ const h=harness({}),b=button(h.body);b.focus();assert.equal(h.document.activeElement,b);
+ h.c.__b=b;assert.equal(await vm.runInContext('copyText("v",__b)',h.c),true);assert.equal(h.document.activeElement,b,'the source button, not BODY');
+ const dialog=node('dialog');dialog.open=true;h.body.appendChild(dialog);const d=button(dialog);d.focus();
+ h.c.__b=d;await vm.runInContext('copyText("v",__b)',h.c);assert.equal(h.document.activeElement,d);
+ // the failure path restores first, then selects the target for Ctrl+C
+ const bad=harness({execResult:false}),fact=node('dd',{id:'fact'});bad.body.appendChild(fact);const c=button(bad.body);c.focus();
+ bad.c.__b=c;assert.equal(await vm.runInContext('copyText("v",__b)',bad.c),false);assert.equal(bad.document.activeElement,c);
+ // an element removed meanwhile (isConnected false) is not focused, and focus is requested without scrolling
+ const gone=harness({}),g=button(gone.body);g.focus();let calls=[];g.focus=function(o){calls.push(o);};
+ gone.c.__b=g;await vm.runInContext('copyText("v",__b)',gone.c);assert.equal(JSON.stringify(calls),'[{"preventScroll":true}]');
+ const h2=harness({}),e=button(h2.body);e.focus();e.isConnected=false;calls=[];e.focus=o=>calls.push(o);h2.c.__b=e;await vm.runInContext('copyText("v",__b)',h2.c);assert.deepEqual(calls,[]);
 });
 test('a closed dialog is not a host: a textarea in an inert page would copy nothing',async()=>{
  const h=harness({}),dialog=node('dialog');h.body.appendChild(dialog);const b=button(dialog);let host=null;
@@ -82,6 +95,13 @@ test('a click on button[data-copy] copies, flips text and aria-label to Copied a
  assert.equal(b.textContent,'Copy');assert.equal(b.getAttribute('aria-label'),'Copy the address');
  // a click elsewhere or on a disabled button does nothing
  written.length=0;h.listeners.click({target:node('div')});b.disabled=true;h.click(b);await settle();assert.deepEqual(written,[]);
+});
+test('copyButton takes an optional visible text; data-label and the Copied flip use it',async()=>{
+ const h=harness({clipboard:{writeText:async()=>{}},withTools:true});
+ const html=vm.runInContext('copyButton("1.2.3.4","address only","t","Copy address")',h.c);
+ assert.match(html,/data-label="Copy address" aria-label="Copy address only">Copy address<\/button>/);
+ const b=button(h.body,{text:'Copy address',dataset:{label:'Copy address'}});
+ h.click(b);await settle();assert.equal(b.textContent,'Copied');h.timers.filter(Boolean)[0]();assert.equal(b.textContent,'Copy address');
 });
 test('a failed copy never flips the button to Copied',async()=>{
  const h=harness({clipboard:{writeText:async()=>{throw new Error('x');}},execResult:false,withTools:true}),b=button(h.body);

@@ -18,6 +18,8 @@ async function copyText(text,source){
  const value=String(text??'');
  try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(value);return true;}}catch{}
  let sink=null;
+ // The textarea takes focus to copy; the page gets it back afterwards, so a keyboard user stays where they were.
+ const before=typeof document!=='undefined'&&document?document.activeElement:null;
  try{
   // A modal dialog makes the rest of the page inert: a textarea outside it never takes focus, and execCommand would still say true.
   const host=(source&&source.closest&&source.closest('dialog[open]'))||document.body;
@@ -27,7 +29,10 @@ async function copyText(text,source){
   const done=selected&&document.execCommand('copy')===true;
   if(done)return true;
  }catch{}
- finally{try{if(sink&&sink.parentNode)sink.parentNode.removeChild(sink);else if(sink&&typeof sink.remove==='function')sink.remove();}catch{}}
+ finally{
+  try{if(sink&&sink.parentNode)sink.parentNode.removeChild(sink);else if(sink&&typeof sink.remove==='function')sink.remove();}catch{}
+  try{if(sink&&before&&before.isConnected!==false&&typeof before.focus==='function')before.focus({preventScroll:true});}catch{}
+ }
  copySelectTarget(source);
  return false;
 }
@@ -39,7 +44,7 @@ function copyFeedback(button,ok){
  const beside=button.nextElementSibling&&button.nextElementSibling.classList&&button.nextElementSibling.classList.contains('copy-status')?button.nextElementSibling:null;
  let shown=false;
  if(dialog&&beside){beside.textContent=sentence;shown=true;if(!ok){const error=dialog.querySelector('.form-error');if(error)error.textContent=sentence;}}
- if(!shown&&typeof document!=='undefined'){const tools=document.getElementById&&document.getElementById('tools-status');if(tools){tools.textContent=sentence;shown=true;}}
+ if(!shown&&typeof document!=='undefined'){const tools=document.getElementById&&document.getElementById('tools-status');if(tools){tools.textContent=sentence;tools.title=sentence;shown=true;}}
  if(!shown&&!dialog&&typeof notify==='function'){notify(sentence);shown=true;}
  if(!shown&&beside){beside.textContent=sentence;}
  if(!ok)return;
@@ -49,9 +54,11 @@ function copyFeedback(button,ok){
  button.textContent='Copied';button.setAttribute('aria-label','Copied');
  flip.timer=setTimeout(()=>{copyFlips.delete(button);button.textContent=flip.text;if(flip.label===null||flip.label===undefined)button.removeAttribute('aria-label');else button.setAttribute('aria-label',flip.label);if(beside&&beside.textContent==='Copied')beside.textContent='';},2000);
 }
-function copyButton(value,what,targetId){
+// visible is the button's own text (default Copy); two buttons in one row need different words.
+function copyButton(value,what,targetId,visible){
  const text=String(value??'');if(!text)return '';
- return `<button type="button" class="button ghost small copy-button" data-copy="${copyEscape(text)}" data-copy-target="${copyEscape(targetId||'')}" data-label="Copy" aria-label="Copy ${copyEscape(what)}">Copy</button><span class="copy-status" role="status"></span>`;
+ const shown=copyEscape(visible||'Copy');
+ return `<button type="button" class="button ghost small copy-button" data-copy="${copyEscape(text)}" data-copy-target="${copyEscape(targetId||'')}" data-label="${shown}" aria-label="Copy ${copyEscape(what)}">${shown}</button><span class="copy-status" role="status"></span>`;
 }
 if(typeof document!=='undefined'&&document&&typeof document.addEventListener==='function'){
  document.addEventListener('click',event=>{

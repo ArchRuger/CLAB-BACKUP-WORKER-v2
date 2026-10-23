@@ -267,6 +267,7 @@ def build(data_dir, port, classic=False):
     # review dialogs, the banner-first confirm flow, the output window and the topology browser can be
     # exercised in a browser. Nothing here touches a VM; a run only prints a few lines and succeeds.
     from app import lab_operations as lo
+    from app.lab_operations import LOCK_SENTENCE
     EXAMPLE_YAML = 'name: srl-ceos\ntopology:\n  nodes:\n    srl:\n      kind: nokia_srlinux\n      image: ghcr.io/nokia/srlinux\n    ceos:\n      kind: arista_ceos\n      image: ceos:4.35.0F\n  links:\n    - endpoints: ["srl:e1-1", "ceos:eth1"]\n'
     vm_files = {}
     with store.lock:
@@ -463,7 +464,11 @@ def build(data_dir, port, classic=False):
                 'source_hash': source_hash, 'affected': affected, 'argv': argv, 'steps': [], **extra}
         return {**base, 'digest': hashlib.sha256(json.dumps(base, sort_keys=True).encode()).hexdigest(), 'warnings': warnings}
 
-    def ops_run(req, output):
+    # When a scripted run was last stopped: the helper's lock is held for a moment after that, as on a real VM while the command ends.
+    stopped_at = {'t': None}
+    LOCK_WINDOW = 3.0
+
+    def ops_run(req, output, stopping=None):
         plan = ops_preview({k: v for k, v in req.items() if k not in ('mode', 'digest')})
         if req.get('digest') != plan['digest']:
             raise ValueError('The topology or deployment changed. Preview the operation again.')
@@ -490,9 +495,18 @@ def build(data_dir, port, classic=False):
             groups = {name: ops_lab_rows(name)} if action == 'inspect' else {l['name']: ops_lab_rows(l['name']) for l in store.state['labs']}
             output(json.dumps({k: v for k, v in groups.items() if v}, indent=2) + '\n')
             return {'exit_code': 0}
+        def stop_if_asked():
+            if stopping is not None and stopping.is_set():
+                stopped_at['t'] = time.monotonic()
+                raise lo.OperationStopped('Operation stopped. Inspect the lab before retrying.')
         for line in ('INFO[0000] Containerlab (fixture) started', f'INFO[0001] {action} {name}', 'INFO[0003] done'):
+            stop_if_asked()
             output(line + '\n')
-            time.sleep(1.2)
+            end = time.monotonic() + 1.2
+            while time.monotonic() < end:   # between the lines, so a stop is seen within a moment
+                stop_if_asked()
+                time.sleep(0.05)
+        stop_if_asked()
         # What discovery would see next on a real VM: a deployed lab runs, a destroyed one is gone. Without
         # this a lab deployed here never counts as deployed, and "refused while deployed" cannot be shown.
         with store.lock:
@@ -540,9 +554,12 @@ def build(data_dir, port, classic=False):
                 {'reference': r, 'local': False, 'registry': 'found' if r.startswith('ghcr.io/') else 'unreachable' if r.startswith('unreachable.example/') else 'not-found',
                  'detail': '' if r.startswith('ghcr.io/') else 'denied: requested access to the resource is denied'} for r in refs]}
         if mode == 'preview':
+            # The manager's follow-up probe after a stop: the helper answers with its lock sentence while the command still ends.
+            if stopped_at['t'] is not None and time.monotonic() - stopped_at['t'] < LOCK_WINDOW:
+                raise ValueError(LOCK_SENTENCE)
             return ops_preview(request)
         if mode == 'run':
-            return ops_run(request, output or (lambda chunk: None))
+            return ops_run(request, output or (lambda chunk: None), stopping)
         raise ValueError('Unsupported helper mode: ' + str(mode))
     lo.remote = fake_remote
 

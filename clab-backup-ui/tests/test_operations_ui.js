@@ -569,6 +569,10 @@ test('C02: a stopped job reads Stopped by you in the history, a warning banner w
  assert.equal(c.opRetryRequest({id:'zz',action:'deploy',status:'cancelled'},'lab'),null,'no remembered request: the dialog, as for a failed deploy');
  assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:'x',action:'destroy',status:'cancelled'},'lab'))),{lab_id:'lab',action:'destroy',options:{cleanup:true}},'every other stopped action repeats itself');
  assert.equal(c.opRetryRequest({id:'j',action:'deploy',status:'failed'},'lab').action,'deploy','a failed deploy is repeated as before');
+ // start, apply and restart end in the same aftermath as a stopped deploy (Redeploy lab): the same redeploy review, the same options
+ c.jobRequest=id=>({start:{action:'start',lab_id:'old',options:{}},apply:{action:'apply',lab_id:'old',options:{a:1}},restart:{action:'restart',lab_id:'old',options:{}}}[id]||null);
+ for(const action of ['start','apply','restart'])assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:action,action,status:'cancelled'},'lab'))),{action:'redeploy',lab_id:'lab',options:action==='apply'?{a:1}:{}},action+' becomes a redeploy review');
+ assert.equal(c.opRetryRequest({id:'start',action:'start',status:'failed'},'lab').action,'start','a failed start is repeated as before');
 });
 
 test('C02: the Stop block is offered only for stoppable actions while queued or running, and walks ask, confirmation, Stopping… with focus kept',async()=>{
@@ -579,6 +583,7 @@ test('C02: the Stop block is offered only for stoppable actions while queued or 
  h.get('op-stop-ask').handlers.click();
  assert.match(h.box().innerHTML,/End the running command \(Start lab\) on demo\? The manager asks the lab VM to end it now\. The lab may be only partly started; afterwards: Redeploy lab\./);
  assert.match(h.box().innerHTML,/id="op-stop-keep">Keep running</);assert.match(h.box().innerHTML,/class="button danger small" id="op-stop-confirm">Stop</);
+ assert.match(h.box().innerHTML,/<div role="group" aria-labelledby="op-stop-question"><p id="op-stop-question">.*<\/p><div class="actions"><button[^>]*id="op-stop-keep">.*id="op-stop-confirm">Stop<\/button><\/div><\/div>/,'the question labels the group of its two buttons');
  assert.equal(h.log.focus.at(-1),'op-stop-keep','focus starts on the safe choice');
  h.get('op-stop-keep').handlers.click();
  assert.match(h.box().innerHTML,/op-stop-ask/);assert.equal(h.log.focus.at(-1),'op-stop-ask','Keep running returns focus to the ask button');
@@ -607,6 +612,15 @@ test('C02: Stop is not drawn for actions that finish on their own or for finishe
  assert.equal(h.get('op-job-banner').className,'op-banner warn');assert.match(h.get('op-job-banner').innerHTML,/ended early: you stopped it/);
 });
 
+test('C02: a poll that turns the confirmation into Stopping… moves focus from the vanished button to the status, and only then',async()=>{
+ const jobs={current:stopJob({})},h=stopHarness(jobs);let poll;h.c.setTimeout=fn=>{poll=fn;return 1;};
+ await h.c.opShowJob('a');h.get('op-stop-ask').handlers.click();assert.equal(h.log.focus.at(-1),'op-stop-keep');
+ jobs.current=stopJob({cancel_requested:'2026-10-20T10:00:05Z'});await poll();
+ assert.match(h.box().innerHTML,/op-stop-status/);assert.equal(h.log.focus.at(-1),'op-stop-status','focus does not fall to BODY');
+ // nothing held focus (the person is reading the output): the change steals none
+ const idleJobs={current:stopJob({})},h3=stopHarness(idleJobs);let p3;h3.c.setTimeout=fn=>{p3=fn;return 1;};
+ await h3.c.opShowJob('a');idleJobs.current=stopJob({cancel_requested:'x'});await p3();assert.equal(h3.log.focus.length,0,'no focus was held, none is taken');
+});
 test('C02: opening with {stop:true} unfolds the confirmation on Keep running; a refused stop shows the error and brings the ask button back',async()=>{
  const jobs={current:stopJob({action:'destroy'})},h=stopHarness(jobs);
  await h.c.opShowJob('a',{stop:true});

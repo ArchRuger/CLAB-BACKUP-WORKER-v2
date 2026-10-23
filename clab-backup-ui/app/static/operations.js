@@ -45,10 +45,12 @@ function opDestroyOptions(caps=opCaps){return caps?.actions?.destroy?.cleanup===
 // default options, the lifecycle actions with none. deploy and redeploy may have been the clear-the-folder variant, and
 // create, revise, publish and clone need text that is gone, so for those this returns null and the banner offers the dialog.
 const opPlainRetry=['start','stop','restart','apply','inspect','inspect-all','save','delete'];
+const opRedeployActions=['deploy','start','apply','restart'];
 function opRetryRequest(job,labId){
  const stored=typeof jobRequest==='function'?jobRequest(job?.id):null;
  // A stopped deploy may have left some devices started: the repair is Redeploy lab, with the options the student confirmed.
- if(job?.status==='cancelled'&&job.action==='deploy')return stored&&stored.action==='deploy'?{...stored,action:'redeploy',lab_id:labId}:null;
+ // Start, apply and restart end in the same aftermath (Redeploy lab), so they take the same way back.
+ if(job?.status==='cancelled'&&opRedeployActions.includes(job.action))return stored&&stored.action===job.action?{...stored,action:'redeploy',lab_id:labId}:null;
  if(stored&&stored.action===job.action)return {...stored,lab_id:labId,...(job.node&&!stored.node?{node:job.node}:{})};
  if(job?.action==='destroy')return {lab_id:labId,action:'destroy',options:opDestroyOptions()};
  if(job?.action==='restart-node'&&job.node)return {lab_id:labId,action:'restart-node',node:job.node,options:{}};
@@ -310,7 +312,7 @@ function opStopMarkup(mode,job){
  if(mode==='ask')return '<button type="button" class="button secondary small" id="op-stop-ask">Stop this operation…</button>';
  if(mode==='asking'){
   const label=opLabels[job.action]||job.action,question=typeof statusStopQuestion==='function'?statusStopQuestion(job.action,label,job.name||'the lab'):`End the running command (${label}) on ${job.name||'the lab'}?`;
-  return `<p id="op-stop-question">${esc(question)}</p><div class="actions"><button type="button" class="button secondary small" id="op-stop-keep">Keep running</button><button type="button" class="button danger small" id="op-stop-confirm">Stop</button></div>`;
+  return `<div role="group" aria-labelledby="op-stop-question"><p id="op-stop-question">${esc(question)}</p><div class="actions"><button type="button" class="button secondary small" id="op-stop-keep">Keep running</button><button type="button" class="button danger small" id="op-stop-confirm">Stop</button></div></div>`;
  }
  if(mode==='stopping')return '<p id="op-stop-status" role="status" tabindex="-1">Stopping… the manager has asked the lab VM to end the command.</p>';
  return '';
@@ -346,6 +348,8 @@ async function opShowJob(id,{auto=false,stop=false}={}){
   if(mode!==shownMode){
    const held=typeof document!=='undefined'&&document.activeElement&&typeof box.contains==='function'&&box.contains(document.activeElement);
    shownMode=mode;box.innerHTML=opStopMarkup(mode,latest);box.hidden=mode==='none';
+   // A poll that turns the confirmation into Stopping… (the stop was requested elsewhere) removes the button that held focus.
+   if(held&&mode==='stopping')focusNext='status';
    if(mode==='none'&&held){const banner=$('op-job-banner');if(banner&&typeof banner.focus==='function')banner.focus();}
    $('op-stop-ask')?.addEventListener('click',()=>{asked=true;focusNext='keep';renderStop();});
    $('op-stop-keep')?.addEventListener('click',()=>{asked=false;focusNext='ask';renderStop();});

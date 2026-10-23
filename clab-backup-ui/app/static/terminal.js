@@ -3,7 +3,7 @@ const params=new URLSearchParams(location.hash.slice(1)),lab=params.get('lab'),n
 const get=id=>document.getElementById(id);
 document.title=(name||'Device')+' · '+labLabel+' · Containerlab Node Manager';get('title').textContent=(name||'Unknown device')+' · '+labLabel;
 if(get('back')){get('back').href='/#'+new URLSearchParams({lab:lab||'',device:name||''});get('back').textContent='← '+labLabel;get('back').hidden=!lab;}
-if(get('notice-text'))get('notice-text').textContent=`Logged in with the credentials saved for ${name||'this device'}. The session closes after 15 minutes without activity. Alt+T moves to the terminal tools; Alt+Up, Alt+Down and Alt+0 change the text size.`;
+if(get('notice-text'))get('notice-text').textContent=`Logged in with the credentials saved for ${name||'this device'}. The session closes after 15 minutes without activity. Alt+T moves to the terminal tools; Alt+Up, Alt+Down and Alt+0 change the text size; on a Linux node type Esc then the key for the shell's own Alt shortcuts.`;
 const FONT_SIZES=[11,12,13,14,15,16,17,18],FONT_DEFAULT=14,FONT_KEY='clab.terminal.fontSize',SCROLLBACK=3000;
 // Browser storage may be blocked or absent: the size is then simply not remembered.
 function prefGet(key){try{return localStorage.getItem(key);}catch{return null;}}
@@ -36,7 +36,7 @@ async function connect(){
   get('endpoint').textContent=data.endpoint||'';
   if(request!==generation)return;
   const ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api/terminal');socket=ws;ws.binaryType='arraybuffer';
-  ws.onopen=()=>{ws.send(JSON.stringify({ticket:data.ticket}));terminal.reset();terminal.focus();if(opened)toolsStatus('Reconnected; the previous screen was cleared');opened=true;};
+  ws.onopen=()=>{ws.send(JSON.stringify({ticket:data.ticket}));terminal.reset();clearedText='';terminal.focus();if(opened)toolsStatus('Reconnected; the previous screen was cleared');opened=true;};
   ws.onmessage=event=>{if(request!==generation)return;if(event.data instanceof ArrayBuffer)terminal.write(new Uint8Array(event.data));else{const message=JSON.parse(event.data);setStatus(message.message);if(message.message==='Connected')resize();}};
   // On close the reason (if any) is kept after "Disconnected" instead of being appended to whatever was shown.
   ws.onclose=()=>{if(request!==generation)return;socket=null;setConnectEnabled(true);const shown=get('status').textContent;const reason=/^(Connected|Connecting|Disconnected)/.test(shown)?'':shown;get('status').textContent=reason?'Disconnected — '+reason:'Disconnected';get('status').removeAttribute('title');};
@@ -46,7 +46,8 @@ async function connect(){
 // ---- terminal tools (docs/parity-campaign/C02-DESIGN.md section 1): text size, copy, clear, save as text; nothing is sent to the manager ----
 const TOOL_IDS=['font-down','font-up','font-reset','copy-selection','copy-screen','clear','export-screen','export-session'];
 let roving=0;
-function toolsStatus(text){const el=get('tools-status');if(el)el.textContent=text;}
+// One line that never changes the toolbar's height (terminal.css); the full sentence is also the title for when it is cut short.
+function toolsStatus(text){const el=get('tools-status');if(el){el.textContent=text;el.title=text;}}
 function toolButton(id){return get(id);}
 function setRoving(index){roving=index;TOOL_IDS.forEach((id,i)=>{const b=toolButton(id);if(b)b.setAttribute('tabindex',i===index?'0':'-1');});}
 function moveRoving(step){
@@ -61,10 +62,12 @@ function jumpRoving(start,step){
 function syncFontButtons(){
  const down=toolButton('font-down'),up=toolButton('font-up');if(!down||!up)return;
  const min=FONT_SIZES[0],max=FONT_SIZES[FONT_SIZES.length-1];
+ // Read the focus before disabling: Chromium blurs a button the moment it is disabled, Firefox keeps focus on it.
+ const focused=document.activeElement;
  down.disabled=fontSize<=min;up.disabled=fontSize>=max;
  // A disabled button cannot keep focus or the roving stop: hand both to the other size button.
- if(down.disabled&&(document.activeElement===down||roving===0)){setRoving(1);if(document.activeElement===down)up.focus();}
- if(up.disabled&&(document.activeElement===up||roving===1)){setRoving(0);if(document.activeElement===up)down.focus();}
+ if(down.disabled&&(focused===down||roving===0)){setRoving(1);if(focused===down)up.focus();}
+ if(up.disabled&&(focused===up||roving===1)){setRoving(0);if(focused===up)down.focus();}
 }
 function setFont(n,announce=true){
  fontSize=clampFont(n);terminal.options.fontSize=fontSize;resize();prefSet(FONT_KEY,fontSize);syncFontButtons();
@@ -84,11 +87,13 @@ function rowsText(buffer,from,to){
  return trimmed.join('\n');
 }
 function screenText(){const b=terminal.buffer.active;return rowsText(b,b.viewportY,b.viewportY+terminal.rows-1);}
-function sessionText(){const b=terminal.buffer.normal;return rowsText(b,0,b.length-1);}
-function exportName(labText,deviceText,date){
+// Clear drops the scrollback inside xterm; the session export keeps what was on the screen before it (the snapshot is taken by sessionText() just before clear()).
+let clearedText='';
+function sessionText(){const b=terminal.buffer.normal,now=rowsText(b,0,b.length-1);return clearedText?(now?clearedText+'\n'+now:clearedText):now;}
+function exportName(labText,deviceText,date,kind){
  const clean=(value,fallback)=>String(value??'').replace(/[^A-Za-z0-9_.-]+/g,'-').replace(/^[-.]+|-+$/g,'')||fallback;
  const stamp=date.toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'Z');
- return `${clean(labText,'lab')}-${clean(deviceText,'device')}-${stamp}.txt`;
+ return `${clean(labText,'lab')}-${clean(deviceText,'device')}-${stamp}${kind?'-'+clean(kind,''):''}.txt`;
 }
 function download(text,filename){
  const url=URL.createObjectURL(new Blob([text],{type:'text/plain'})),a=document.createElement('a');
@@ -96,14 +101,14 @@ function download(text,filename){
 }
 function exportText(kind){
  const text=(kind==='session'?sessionText():screenText())+'\n';
- download(text,exportName(labLabel,name,new Date()));
+ download(text,exportName(labLabel,name,new Date(),kind==='session'?'session':'screen'));
  const limited=kind==='session'&&terminal.buffer.normal.length>=SCROLLBACK;
  toolsStatus('Saved on this computer only. The manager keeps no copy of this session.'+(limited?' The file holds the last 3,000 lines.':''));
 }
 async function copyTool(text,button){const ok=await copyText(text,button);toolsStatus(ok?'Copied':'Could not copy. Select the text and press Ctrl+Insert.');return ok;}
 async function copySelection(button){const text=terminal.getSelection();if(!text){toolsStatus('Nothing is selected');return false;}return copyTool(text,button||get('copy-selection'));}
 async function copyScreen(button){return copyTool(screenText(),button||get('copy-screen'));}
-function clearScreen(){terminal.clear();toolsStatus('Screen cleared. The device was not told.');}
+function clearScreen(){const earlier=sessionText();terminal.clear();clearedText=earlier;toolsStatus('Screen cleared. The device was not told; Save session still includes the earlier lines.');}
 // A button hands focus back to the terminal only after a pointer activation, so Enter on a button never reaches the device.
 function afterTool(event){if(event&&event.detail>0)terminal.focus();}
 const TOOL_ACTIONS={'font-down':()=>setFont(fontSize-1),'font-up':()=>setFont(fontSize+1),'font-reset':()=>setFont(FONT_DEFAULT),'copy-selection':()=>copySelection(),'copy-screen':()=>copyScreen(),'clear':clearScreen,'export-screen':()=>exportText('screen'),'export-session':()=>exportText('session')};
