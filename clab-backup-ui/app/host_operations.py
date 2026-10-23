@@ -61,6 +61,9 @@ INSPECT_FORMAT = '\t'.join(('{{.Id}}', '{{.State.Pid}}', '{{.State.Status}}', '{
 CGROUP_LINE = r'(?:^|/)(?:docker-)?%s(?:\.scope)?(?:$|/)'
 PROC_LIMIT = 64 * 1024
 INTERFACE_LIMIT = 256
+# The `all` option of `interfaces` (C06 link state): at most this many containers of one lab are answered.
+LINK_CONTAINER_LIMIT = 512
+TRUSTED_ROOTS_SENTENCE = 'This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.'
 # The text files the lab browser lists beside the topologies (`files` option) and the viewer reads:
 # what containerlab and its users write into a lab folder. Keys, certificates, `.env`, binaries and
 # hooks are never listed or read.
@@ -255,6 +258,17 @@ def interface_rows(rows):
         if not isinstance(row, dict) or not isinstance(row.get('name'), str) or not row['name']: continue
         found.append({'name': row['name'][:64], 'alias': bounded_text(row.get('alias')), 'state': bounded_text(row.get('state')), 'mac': bounded_text(row.get('mac')),
                       'type': bounded_text(row.get('type')), 'mtu': bounded_int(row.get('mtu')), 'ifindex': bounded_int(row.get('ifindex'))})
+        if len(found) >= INTERFACE_LIMIT: break
+    return found
+
+
+def link_rows(rows):
+    """`containerlab inspect interfaces` entries of one container reduced to what a link colour needs: the name,
+    alias, state and type, each cut at 64 characters. No MAC, MTU or ifindex (the device drawer has its own call)."""
+    found = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict) or not isinstance(row.get('name'), str) or not row['name']: continue
+        found.append({'name': row['name'][:64], 'alias': bounded_text(row.get('alias')), 'state': bounded_text(row.get('state')), 'type': bounded_text(row.get('type'))})
         if len(found) >= INTERFACE_LIMIT: break
     return found
 
@@ -532,8 +546,12 @@ class HostOperations:
 
     def interfaces(self, name, options):
         """One container's interfaces from the lab-wide `containerlab inspect interfaces`, with one counter
-        sample from its own /proc/<pid>/net/dev when the task can be bound to it."""
+        sample from its own /proc/<pid>/net/dev when the task can be bound to it. With exactly `{'all': True}`
+        instead, every running container of the lab with four fields per interface (lab_links)."""
         lab = identity(name)
+        if isinstance(options, dict) and 'all' in options:
+            if set(options) != {'all'} or options['all'] is not True: raise ValueError('Unsupported interface options.')
+            return self.lab_links(lab)
         if not isinstance(options, dict) or set(options) - {'node', 'container'}: raise ValueError('Unsupported interface options.')
         facts = self.container_of(options, lab)
         result = {'facts': facts, 'interfaces': []}
@@ -549,6 +567,36 @@ class HostOperations:
         if counters is None or counters == 'host': result['counters_reason'] = counters or 'pid'
         else: result['counters'] = counters; result['sampled_at'] = time.time()
         return result
+
+    def lab_links(self, lab):
+        """The `all` option of `interfaces` (C06 link state): every running container of `lab` with the name, alias,
+        state and type of each interface. Read-only and outside the host lock like the per-device form.
+
+        The lab is bound first, once per call: one fixed `containerlab inspect --name <lab> -f json`, whose every
+        row must name a topology inside the trusted roots (container_of's binding of a lab name to a trusted
+        topology path, for the whole lab), else nothing is listed. No row (no lab of that name runs) is
+        `present: False`, not an error. Then the same lab-wide listing the per-device form reads, kept to the
+        containers the binding listed and reduced by link_rows. No Docker command, no counters, no facts; binding
+        a container to a manager device is the manager's job."""
+        code, out = self.run([self.clab, 'inspect', '--name', lab, '-f', 'json'], timeout=INSPECT_TIMEOUT, limit=INSPECT_LIMIT)
+        try: listing = json.loads(out) if code == 0 else None
+        except ValueError: listing = None
+        if isinstance(listing, dict): rows = [row for group in listing.values() for row in (group if isinstance(group, list) else [group])]
+        else: rows = listing if isinstance(listing, list) else []
+        if not rows: return {'nodes': [], 'present': False}
+        if not all(isinstance(row, dict) and self.trusted(row.get('absLabPath') or row.get('labPath')) for row in rows):
+            raise ValueError(TRUSTED_ROOTS_SENTENCE)
+        bound = {row['name'] for row in rows if isinstance(row.get('name'), str)}
+        code, out = self.run([self.clab, 'inspect', 'interfaces', '--name', lab, '-f', 'json'], timeout=INSPECT_TIMEOUT, limit=INSPECT_LIMIT)
+        if code: raise ValueError('Containerlab on the VM did not list the interfaces of this lab.')
+        try: listing = json.loads(out)
+        except ValueError: return {'nodes': [], 'present': False}   # "no containers found" is text with exit 0
+        nodes = []
+        for entry in listing if isinstance(listing, list) else []:
+            if not isinstance(entry, dict) or not isinstance(entry.get('name'), str) or len(entry['name']) > 253 or entry['name'] not in bound: continue
+            nodes.append({'name': entry['name'], 'interfaces': link_rows(entry.get('interfaces'))})
+            if len(nodes) >= LINK_CONTAINER_LIMIT: break
+        return {'nodes': nodes, 'present': True}
 
     def counters(self, facts, names):
         """The named interfaces' counters from /proc/<pid>/net/dev, read through one directory descriptor of
@@ -778,8 +826,11 @@ class HostOperations:
         actions['impairments'] = {'available': bool(self.help('tools', 'netem', 'set'))}
         actions['clone'] = {'available': bool(self.config.get('network')) and os.access(self.config.get('git', '/usr/bin/git'), os.X_OK)}
         actions['publish'] = {'available': True}; actions['revise'] = {'available': True}
+        # `link_state`: `interfaces` with {'all': true} (C06) needs containerlab's own `inspect interfaces` (0.64 or later).
+        # A containerlab without it prints the help of `inspect` itself for this argv, so its usage line must name it.
         result = {'protocol': PROTOCOL, 'version': VERSION, 'actions': actions, 'roots': [str(p) for p in self.roots],
-                  'network': bool(self.config.get('network')), 'images': self.docker_available(), 'diagnostics': True, 'lifecycle_options': True}
+                  'network': bool(self.config.get('network')), 'images': self.docker_available(), 'diagnostics': True, 'lifecycle_options': True,
+                  'link_state': 'inspect interfaces' in self.help('inspect', 'interfaces')}
         # The installed containerlab's release, for the footer and the debug page; kept only when it reads as one.
         code, out = self.run([self.clab, 'version', '--short'])
         version = out.strip().splitlines()[0].strip() if code == 0 and out.strip() else ''
