@@ -58,3 +58,6 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   `vJunos-router_vrt_2026-10-23_02-30UTC.cfg` and its node carries no `restore_format` (restore off by design). The
   node record still shows the originally imported image tag; a Sync from VM would pick up the local tag. `cjunos`,
   recreated at 02:04 with the others, had not opened SSH by 02:30 (first boot took nine minutes); being looked at.
+- 2026-10-23 02:44 UTC: `cjunos` finished booting (Model ptx10001-36mr, 02:40); test login 1/1 (job `0d4b97c6…`) and
+  backup 1/1 (job `273ded5b…`), so the C01 live pass covers all five nodes through the manager. C02 is in build (four
+  slices), the C03 helper slice is in build; the C03 manager and UI slices wait for C02's files to settle.
