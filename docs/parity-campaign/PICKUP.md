@@ -51,3 +51,10 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   lab, recreating `vrt` and its link neighbours `vsw` and `cjunos` (02:04 UTC). The manager's catalog keeps the
   published tag: on a bare-metal host the published image is expected to boot; the owner should know that the
   nested case needs the CPU-model fix (upstream vrnetlab issue material).
+- 2026-10-23 02:30 UTC, **C01 live pass (partial, four of five nodes)**: with `vrt` on the nested-virtualization image,
+  vJunos-router boots (`show version`: Model vmx, Junos 26.2R1.7) and the manager's jobs through the real pipeline
+  succeeded on `vrt`, `vsw`, `xrv9k`, `ceos`: test logins 4/4 (job `a2c78ce6…`), backup 4/4 "Configuration saved" (job
+  `e20f18a2…`, archive `parity_2026-10-23_02-30.zip`); the router's download name is
+  `vJunos-router_vrt_2026-10-23_02-30UTC.cfg` and its node carries no `restore_format` (restore off by design). The
+  node record still shows the originally imported image tag; a Sync from VM would pick up the local tag. `cjunos`,
+  recreated at 02:04 with the others, had not opened SSH by 02:30 (first boot took nine minutes); being looked at.
