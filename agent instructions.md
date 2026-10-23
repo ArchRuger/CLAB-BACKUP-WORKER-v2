@@ -1,3 +1,26 @@
+# Agent routing embedded in the repository — 1.31.1
+
+`.claude/` is the source of truth for how a session is staffed; `docs/AGENT-ROUTING.md` is the guide. Preserve:
+
+1. **The four views of the roster agree** (agent files, `clab-ui-routing.md`, the skills table in
+   `fable-opus-routing.md`, `CLAUDE.md` "Delegating work") and `test_claude_config.py` keeps them so; a new agent or
+   skill is added in all four and to the test's expectations where it enumerates (the read-only set, the Haiku set).
+2. **Read-only roles stay read-only through `tools`**: never add `memory`, `Bash`, `Edit`, `Write` or `Agent` to
+   `risk-reviewer`, `clab-ui-reviewer` or `clab-ui-scout`. A skill an agent preloads never carries `paths`.
+3. **The guard hook** (`.claude/hooks/guard-bash.py`, `hooks.PreToolUse` in `.claude/settings.json`,
+   `onFailure: block`) and the script are committed together; its decision table is pinned in the test. It is a
+   guardrail, not a boundary; the owner runs a refused command in a shell of their own and is the only one who
+   changes the settings.
+4. **Vendored skills are never edited in place**; refresh with Git and the lockfile as `.claude/THIRD-PARTY-SKILLS.md`
+   says. The two-worker setup kit that generated the first routing is history and must not be run against a checkout.
+5. **After editing agent files start a new session** before trusting a route, and read the route from `/tasks` or the
+   per-agent transcript; a running session was seen to keep the old definitions.
+6. **Open points.** `CLAUDE.md` is still above the documented size target (the product invariants stay there on
+   purpose; moving them into path-scoped rules is an instruction migration for `risk-reviewer`). The workflows were not
+   run end to end on real work. `web-design-guidelines` fetches guideline text from its upstream's `main`; the rules
+   call it a checklist, a pinned local copy would be better. A worker could still spawn the built-in general-purpose
+   agent, which has the MCP tools the project agents are denied; the worker contract forbids it, nothing enforces it.
+
 # Git save and load redesign — 1.31.0
 
 Saving and loading moved from the Progress tab into the lab header; a save is the whole lab; any folder of a

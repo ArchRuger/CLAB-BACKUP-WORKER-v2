@@ -1,3 +1,47 @@
+# Agent routing embedded in the repository — 1.31.1
+
+No application code changed in this release; the helpers' `VERSION` moved by the lockstep rule alone. Evidence, by
+kind (this checkout, development VM, Claude Code 2.1.309):
+
+**Static and unit**
+
+- `PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests`: 2574 tests, OK, 2 skipped (the
+  opt-in SSH fixtures), run before the last three guard cases were added; `test_claude_config.py` alone afterwards
+  with the system `python3`: 32 tests, OK.
+- `node --test tests/*.js`: 768 tests pass (749 before, 19 new in `test_claude_workflows.js`).
+- `claude plugin validate .claude/agents --strict` and `.claude/skills --strict`: passed (a parse check only, as the
+  review showed; the field checks are the test's).
+- `python3 deploy/verify-release.py`, `python3 docs/maintenance-audit/tools/check_links.py` (vendored skills skipped),
+  `git diff --check` (vendored skills exempted in `.gitattributes`).
+
+**Documentation facts.** Every field and behaviour the rules and the guide state was taken from the Claude Code
+documentation pages downloaded on 2026-10-23 (sub-agents, skills, memory, hooks, settings, permissions, workflows,
+model-config), read by nine readers and checked by five auditors and a completeness critic in a dynamic workflow;
+their findings are applied (details in the handoff section).
+
+**Runtime probes (small paid calls on this account).** A fresh headless session (`claude -p --debug`) spawned
+`clab-ui-builder` and `clab-ui-scout` from the final definitions: the debug log shows `clab-worker-contract` and
+`clab-manager-ui` preloaded into the builder, `clab-worker-contract` and `clab-repo-contracts` into the scout, and
+the requests dispatched to `claude-sonnet-5-5` and `claude-haiku-5-5`. An earlier workflow probe showed
+`agentType` plus a structured-output schema working for the two read-only agents. `claude-haiku-5-5` answered a
+one-word probe. The registered hook refused a `docker push` from this session's own Bash tool.
+
+**Independent review.** `risk-reviewer` (read-only, Opus) on the hook, settings, ignore rules, vendoring, agent tools
+and the instruction migration; `clab-opus-specialist` on every frontmatter field and harness claim against the
+downloaded pages and on the workflow scripts, with its own headless probes. Must-fix findings, all applied: the guard
+did not split on newlines or continuations and did not cover the data directory's parent, globs or relative paths;
+skills with `paths` are not preloadable (removed, with a test); a running session kept serving old agent definitions
+(the guide now says to start a new session and confirm in `/tasks`). Should-fix findings applied: more forbidden
+spellings and fewer false refusals in the guard, the refusal text no longer suggests editing the settings, the
+reviewers in `clab-review-changes` receive a patch file, the refutation rules and an `unverified` bucket, the journal
+claim corrected to the per-agent transcript, the size-guideline wording, the no-tests case of `clab-slice-verify`,
+the privileged-paths rule now covers the helper clients and `operation_busy`, the two-VM trigger is owner-written per
+campaign and this checkout's stale worker marker was removed, the PR review toolkit's place is stated, the
+third-party refresh recipe needs no kit.
+
+**Not run.** No deployment, no live device, no VM reinstall. The three workflows were parsed and their agents
+probed, not run end to end on a real design or diff. `/clab-routing-smoke` was not run by a person in this session.
+
 # Git save and load redesign — 1.31.0
 
 What was run for this release, by kind of evidence. Details, reports and screenshots are under

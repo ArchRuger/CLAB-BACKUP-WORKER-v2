@@ -1,17 +1,44 @@
 {
-  "enabledPlugins": {
-    "pyright-lsp@claude-plugins-official": true,
-    "typescript-lsp@claude-plugins-official": true
-  },
   "model": "claude-fable-5-1",
   "env": {
     "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5-5",
-    "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "0",
+    "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "0",
     "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-1",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5-5",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001"
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-5-5"
   },
-  "effortLevel": "high"
+  "enabledPlugins": {
+    "pyright-lsp@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true
+  },
+  "permissions": {
+    "deny": [
+      "Read(//srv/containerlab-node-manager/data/state.key)",
+      "Read(//srv/containerlab-node-manager/data/state.enc)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-bash.py",
+            "args": [],
+            "timeout": 10,
+            "onFailure": "block",
+            "statusMessage": "Checking the command against the repository rules"
+          }
+        ]
+      }
+    ]
+  },
+  "worktree": {
+    "baseRef": "head"
+  },
+  "workflowSizeGuideline": "unrestricted"
 }

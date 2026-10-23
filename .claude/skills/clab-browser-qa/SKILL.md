@@ -21,6 +21,8 @@ Because the application polls and uses WebSockets, wait for explicit UI conditio
 and locator assertions, not a blanket network-idle condition or arbitrary sleeps.
 Only mock at a named boundary; label fixture evidence as fixture evidence. Browser
 success does not establish live NOS configuration or rollback correctness.
+These rules win over the `webapp-testing` skill where they disagree: no `networkidle`
+waits, and the application starts through `fixture_manager.py`, not `with_server.py`.
 
 File a reproducible finding with severity, expected/actual, owned paths, regression
 test and evidence. Re-run the original failing path after the fix and adjacent

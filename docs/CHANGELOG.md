@@ -4,6 +4,57 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.31.1
+
+**The agent routing lives in the repository.** No application code changed; the helpers moved by their lockstep
+version alone. What a clone now carries under `.claude/`, and how a person sets up a development VM from it, is in
+the new guide [AGENT-ROUTING.md](AGENT-ROUTING.md).
+
+- **Agents.** The fifteen definitions in `.claude/agents/` were rewritten against the current Claude Code frontmatter
+  reference: every one preloads the new `clab-worker-contract` skill instead of repeating the same contract, carries a
+  `color`, and the writing roles get no MCP tools (`disallowedTools: mcp__*`). The two Haiku roles run on Haiku 5.5
+  (`claude-haiku-5-5`, the current `haiku` alias) with a turn cap and cannot delegate; `docs-auditor` cannot delegate
+  either. The read-only reviewers keep their `tools` allowlists and gain no `memory` (it would re-enable writes);
+  `clab-ui-reviewer` no longer preloads the browser-QA procedure it cannot run; the scout loses its web and Skill
+  tools. `clab-ui-qa` and `clab-devops-engineer` keep a machine-local agent memory of VM and fixture facts. Every
+  description now says when to use the agent and what not to use it for.
+- **Rules.** `fable-opus-routing.md` states how the harness resolves a subagent's model (spawn parameter, definition,
+  `CLAUDE_CODE_SUBAGENT_MODEL`, session), that forcing needs `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`, the concurrency
+  caps, the fork rule, where a route is verified (`/tasks`, the per-agent transcript), the vendored skills and how
+  their generic advice is read here. `clab-ui-routing.md` maps the staffing order onto the three workflows and lists
+  the seven new path-scoped `routing-*.md` rules (privileged paths, device transactions, manager UI, editor, tests and
+  CI, release records, the configuration itself), which load only when a file they name is read or edited and name
+  the builder, the reviewer and the tests. The two-VM rule shrinks to its activation signal
+  (`.claude/worker.local.json`, written and removed by the owner per campaign); the protocol moved into the
+  `clab-parallel-handoff` skill with the `TASK-HANDOFF.md` template. `CLAUDE.md` "Delegating work" is a pointer plus
+  the corrected sentence about overrides, and the routing table gains a row for this area.
+- **Skills.** New `clab-worker-contract` (the shared contract, not user-invocable) and `clab-routing-smoke` (the
+  routing check a person runs before a campaign). The ten third-party skills (Anthropic, Superpowers, Vercel) are
+  vendored under `.claude/skills/` with their licences and the hash lock `external-skills.lock.json`;
+  `.claude/THIRD-PARTY-SKILLS.md` records source, commit and licence and how to refresh one with Git alone. Two of
+  them (`systematic-debugging`, `requesting-code-review`) were refreshed to their current upstream commits; the diffs
+  were two shell-quoting fixes. No project skill carries `paths`: a skill with `paths` is silently not preloadable.
+- **Workflows.** `.claude/workflows/` holds `clab-design-review`, `clab-review-changes` and `clab-slice-verify`: the
+  design review, the diff review and the independent slice verification as dynamic workflows over the named agents,
+  with explicit models per stage, two refuters per finding, an `unverified` bucket when no refuter answered, and a
+  patch file written for the read-only reviewers.
+- **Settings and the guard.** `.claude/settings.json` registers the Bash guard `.claude/hooks/guard-bash.py` (it
+  refuses force pushes in every spelling, remote deletions, tag pushes and tag creation in the checkout, destructive
+  resets, forced cleans, stash drops and whole-tree discards of the checkout, `docker push` in its forms, blanket
+  prunes, `docker compose down -v`, GitHub releases, `gh pr merge --admin`, and deletion or moving of
+  `/srv/containerlab-node-manager` or of `state.key` and `state.enc` outside a scratch location; it splits compound
+  and multi-line commands, ignores heredoc bodies and redirections, looks through `sudo -u`, `env`, `timeout`,
+  `nice`, `xargs`, the shells' `-c` and `eval`, and follows `cd`), denies reading the live `state.key` and
+  `state.enc`, caps subagent nesting at two levels, enables the PR review toolkit for every clone, starts worktrees
+  from the lead's `HEAD`, and sets the workflow size guideline to unrestricted. The project `effortLevel` and the
+  `..._FORCE=0` line are gone: effort comes from each definition, and the lead's from the owner's settings.
+  `.gitignore` keeps the machine-local files out; `.gitattributes` exempts the vendored skills from the whitespace
+  check; the link checker skips them.
+- **Tests and CI.** `test_claude_config.py` (stdlib, first CI group) parses every agent, skill and rule, checks the
+  fields against the documented sets, the roster against the files, the settings, the hook's decisions (about a
+  hundred commands) and the vendored skills' hashes; `test_claude_workflows.js` parses the workflows and checks their
+  agents exist. Both are in the CI lists.
+
 ## Changes in 1.31.0
 
 The Git save and load redesign. Saving and loading move out of the Progress tab into the lab header, a save is the

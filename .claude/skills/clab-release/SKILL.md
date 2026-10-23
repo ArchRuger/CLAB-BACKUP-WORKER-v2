@@ -1,6 +1,7 @@
 ---
 name: clab-release
 description: "Integrate and checkpoint a tested CLAB release; the lead only."
+when_to_use: "Use when cutting a release: deciding the number, running deploy/set-release.py, writing the CHANGELOG, VALIDATION and handoff sections, appending CI test lists, committing and pushing the task branch."
 ---
 
 # clab-release

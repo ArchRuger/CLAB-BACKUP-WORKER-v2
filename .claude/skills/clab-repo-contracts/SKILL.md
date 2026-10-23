@@ -5,9 +5,10 @@ description: "Read CLAB architecture and preserve repository invariants before i
 
 # clab-repo-contracts
 
-Read `CLAUDE.md`, `docs/REPOSITORY-MAINTENANCE.md`, the relevant portion of
-`docs/ARCHITECTURE.md`, and the newest applicable handoff section. Do not load the
-entire historical `agent instructions.md` into every task. Verify current HEAD,
+`CLAUDE.md` and `docs/REPOSITORY-MAINTENANCE.md` are already in your context. Read the
+routing-table row for your area, the relevant portion of `docs/ARCHITECTURE.md`, and the
+newest applicable handoff section. Do not load the entire historical
+`agent instructions.md` into every task. Verify current HEAD,
 branch, VERSION and worktree status instead of trusting historical pickup files.
 
 Preserve existing functions and behavioral assertions. The manager is FastAPI,

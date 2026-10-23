@@ -8,7 +8,7 @@ deploy a topology, watch the devices boot, open SSH to every node, capture packe
 Wireshark from the browser, back up device configurations and save lab progress to
 Git. Nothing is installed on your workstation; you only need a browser.
 
-Current release: **1.31.0** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
+Current release: **1.31.1** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
 
 ## What it does
 
@@ -71,7 +71,7 @@ command in this project works from any directory; the guides keep the source in
    defaults; say `y` to the plan, enter your sudo password, and create a password for
    `clab-discovery` when asked (write it down). Choose `2` at *Next step* to set up
    Git later. The image build and the capture stack take a few minutes; the installer
-   ends with `Manager 1.31.0: running; HTTP and version checks passed.`
+   ends with `Manager 1.31.1: running; HTTP and version checks passed.`
 
 3. Open `http://VM_IP:8081`. The VM connection dialog opens on its own: enter the
    `clab-discovery` password and click **Save and test connection**.
@@ -151,6 +151,7 @@ and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | [Network telemetry](docs/TELEMETRY.md) | Read the retirement notice for the removed telemetry feature and Grafana dashboards |
 | [Health check](docs/HEALTH-CHECK.md) and [Diagnostics](docs/DEBUG-PANEL.md) | Read `check-install.sh` results and diagnose the VM connection from the browser |
 | [Architecture](docs/ARCHITECTURE.md) | See how the pieces connect and which module does what |
+| [Agent routing](docs/AGENT-ROUTING.md) | Set up a development VM for Claude Code sessions: the agents, skills, workflows and the guard hook that ship in `.claude/` |
 | [Changelog](docs/CHANGELOG.md) | Read what changed in each release |
 
 The [documentation index](docs/README.md) lists everything, including the manual
@@ -160,6 +161,7 @@ setup and migration guide, the Wiki.js master guide, the release rules and the a
 
 ```text
 ├── README.md                this page
+├── .claude/                 Claude Code agents, skills, rules, workflows and the guard hook (docs/AGENT-ROUTING.md)
 ├── LICENSE                  MIT
 ├── docs/                    guides, architecture, changelog, tour (docs/README.md is the index)
 │   ├── images/              screenshots used by the README and the tour
