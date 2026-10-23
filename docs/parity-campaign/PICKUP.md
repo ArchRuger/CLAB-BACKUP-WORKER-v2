@@ -13,14 +13,11 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
 - **Branch**: `claude/parity-campaign`, stacked on `claude/agent-routing-embed` (pull request 71, release 1.31.1,
   the agent routing in `.claude/`). Merge 71 first; this branch's pull request will be opened against `main` and
   carries 71's commits until then.
-- **Research**: running (a dynamic workflow: eight inventories, the gap matrix, a critic). Its result becomes
-  `RESEARCH.md` (inventories) and `PARITY.md` (the matrix with dispositions: present, partial, absent, not pursued
-  with the invariant that rules it out) in this folder.
+- **Research**: done (`RESEARCH.md`, `PARITY.md`); the plan with the chunk order is `README.md`.
 - **VM**: 72 GB RAM, 24 CPUs, 98 GB free disk, KVM present; the five images are pulled; two labs from the Git
   redesign stream exist with their containers exited (`git-redesign`, `git-redesign-b`); the manager and the capture
   stack run (release image 1.31.0 at the time of writing).
-- **Chunks**: not yet decided; the matrix proposes them, the lead orders them (most valuable and least risky first,
-  live-lab chunks explicit).
+- **Chunk in progress**: C00 (vJunos-router boot triage) and C02 (ergonomics) next; see the log.
 
 ## How to continue after an interruption
 
@@ -41,3 +38,7 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   downloads, saves, the lab-builder catalog and the labels; restore and network design stay off for it until the
   live proof on `vrt` (then: `restore_junos.SUPPORTED_KINDS`, the `restore*` keys in `inventory.PLATFORMS`, and the
   two tests that pin the absence). `docs/parity-campaign/` is history-exempt in `verify-release.py`.
+- 2026-10-23 02:05 UTC: research landed (99-row matrix, critic). The manager on the VM is 1.31.1 from this branch
+  (`sudo bash deploy/start-manager.sh`), the `parity` lab is imported (lab id `d7e3a4686c084f9f88e344b5064aa162`), five
+  nodes Ready with inventory logins. vJunos-router: the container is up but its VM relaunches every five seconds
+  (291 launches); triage is C00.
