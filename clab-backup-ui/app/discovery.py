@@ -145,7 +145,7 @@ def parse_inspect(raw):
                 try: entry['status'] = literal(status, 'Container status', 80)
                 except ValueError: pass
             # Container facts for the device drawer: each optional and never fatal, like the status line.
-            cid = row.get('id')
+            cid = row.get('container_id') or row.get('id')   # containerlab 0.79.0 names it container_id (12 hex); older output used id
             if isinstance(cid, str) and re.fullmatch('[0-9a-f]{12,64}', cid): entry['id'] = cid
             for key, field in (('ipv4', 'ipv4_address'), ('ipv6', 'ipv6_address')):
                 value = row.get(field)

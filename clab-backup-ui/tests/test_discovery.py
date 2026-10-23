@@ -78,7 +78,7 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_public_row_adds_container_console_and_the_four_discovered_fields(self):
         self.host();lab=self.register()
-        data=json.loads(response());data['training'][0].update(id='a1b2c3d4e5f6',ipv6_address='N/A',image='img:1',status='Up 20 minutes (healthy)')
+        data=json.loads(response());data['training'][0].update(container_id='a1b2c3d4e5f6',ipv6_address='N/A',image='img:1',status='Up 20 minutes (healthy)')
         data['training'][1]['status']='Up 20 minutes (healthy)'
         self.poll(json.dumps(data).encode())
         raw=self.client.get('/api/state').text
@@ -373,17 +373,22 @@ class DiscoveryParserTests(unittest.TestCase):
     def test_inspect_container_facts_are_optional_validated_and_reconciled(self):
         from app.discovery import reconcile
         data=json.loads(response());row=data['training'][0]
-        row.update(id='a1b2c3d4e5f6',ipv4_address='172.20.20.112/24',ipv6_address='N/A',image='vrnetlab/juniper_vjunos-switch:25.2R1.9')
+        row.update(container_id='a1b2c3d4e5f6',ipv4_address='172.20.20.112/24',ipv6_address='N/A',image='vrnetlab/juniper_vjunos-switch:25.2R1.9')
         parsed=parse_inspect(json.dumps(data).encode())['training']
         self.assertEqual((parsed[0]['id'],parsed[0]['ipv4'],parsed[0]['ipv6'],parsed[0]['image']),('a1b2c3d4e5f6','172.20.20.112','','vrnetlab/juniper_vjunos-switch:25.2R1.9'))
         self.assertEqual(parsed[0]['address'],'172.20.20.112','address keeps its first-usable meaning')
         self.assertEqual((parsed[1].get('id'),parsed[1]['ipv4'],parsed[1]['ipv6'],parsed[1].get('image')),(None,'172.20.20.3',''  ,None),'a row without the fields still parses')
         row.update(ipv6_address='fd00::5/64');self.assertEqual(parse_inspect(json.dumps(data).encode())['training'][0]['ipv6'],'fd00::5')
         for bad in ('xyz','A1B2C3D4E5F6','a1b2c3',7,None):
-            row['id']=bad;self.assertNotIn('id',parse_inspect(json.dumps(data).encode())['training'][0],repr(bad))
-        row.update(id='a1b2c3d4e5f6',image='x'*400,ipv4_address='172.20.20.9/24',ipv6_address='not-an-ip')
+            row.pop('container_id',None)
+            for field in ('container_id','id'):
+                row.pop('id',None);row.pop('container_id',None);row[field]=bad;self.assertNotIn('id',parse_inspect(json.dumps(data).encode())['training'][0],(field,repr(bad)))
+        row.update(container_id='a1b2c3d4e5f6',image='x'*400,ipv4_address='172.20.20.9/24',ipv6_address='not-an-ip')
         odd=parse_inspect(json.dumps(data).encode())['training'][0]
         self.assertNotIn('image',odd);self.assertEqual((odd['ipv4'],odd['ipv6'],odd['id']),('172.20.20.9','','a1b2c3d4e5f6'),'odd values are dropped, never fatal')
+        row.pop('container_id');row['id']='a1b2c3d4e5f6'
+        self.assertEqual(parse_inspect(json.dumps(data).encode())['training'][0]['id'],'a1b2c3d4e5f6','a row with only id still binds (compatibility)')
+        row.pop('id');row['container_id']='a1b2c3d4e5f6'
         row.update(ipv4_address='172.20.20.112/24',image='img:1')
         nodes=[dict(name='clab-training-r1',definition_node='r1',endpoint_mode='auto'),dict(name='clab-training-r2',definition_node='r2',endpoint_mode='auto')]
         state={'labs':[dict(id='l',deployment_name='training',container_prefix='clab',nodes=nodes)],'discovery':{'labs':parse_inspect(json.dumps(data).encode())}}
