@@ -638,7 +638,13 @@ class ImageModeTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.root = Path(self.tmp.name)
         self.docker = self.root / 'docker'; self.docker.write_text('#!/bin/sh\n'); self.docker.chmod(0o755)
         self.calls = []; self.probes = []
-        self.listing = 'n24l/ceos:4.35.0F\nghcr.io/srl-labs/network-multitool:latest\n<none>:<none>\nbad image name:x\nn24l/cisco_xrv9k:24.3.1\n'
+        # Docker's four tab-separated fields (reference, id, size, created); the helper keeps the reference list it
+        # always returned and adds the other three as `details`.
+        self.listing = ('n24l/ceos:4.35.0F\tsha256:aaa\t2.16GB\t2025-11-01 10:00:00 +0000 UTC\n'
+                        'ghcr.io/srl-labs/network-multitool:latest\tsha256:bbb\t120MB\t2026-01-05 09:00:00 +0000 UTC\n'
+                        '<none>:<none>\tsha256:ccc\t1MB\t2026-01-05 09:00:00 +0000 UTC\n'
+                        'bad image name:x\tsha256:ddd\t1MB\t2026-01-05 09:00:00 +0000 UTC\n'
+                        'n24l/cisco_xrv9k:24.3.1\tsha256:eee\t2.19GB\t2026-09-01 08:00:00 +0000 UTC\n')
         self.answers = {}
         def run(argv, **bounds):
             self.calls.append(argv)
@@ -656,8 +662,13 @@ class ImageModeTests(unittest.TestCase):
 
     def test_images_lists_the_vm_s_references_with_one_fixed_command(self):
         found = self.host.images()
-        self.assertEqual(found, {'available': True, 'images': ['ghcr.io/srl-labs/network-multitool:latest', 'n24l/ceos:4.35.0F', 'n24l/cisco_xrv9k:24.3.1']})
-        self.assertEqual(self.calls, [[str(self.docker), 'image', 'ls', '--format', '{{.Repository}}:{{.Tag}}']])
+        self.assertEqual(found['available'], True)
+        self.assertEqual(found['images'], ['ghcr.io/srl-labs/network-multitool:latest', 'n24l/ceos:4.35.0F', 'n24l/cisco_xrv9k:24.3.1'],
+                         'the reference list the lab builder reads is unchanged by the details')
+        self.assertEqual([d['reference'] for d in found['details']], found['images'])
+        self.assertEqual(found['details'][1], {'reference': 'n24l/ceos:4.35.0F', 'id': 'sha256:aaa', 'size': '2.16GB', 'created': '2025-11-01 10:00:00 +0000 UTC'})
+        self.assertEqual(set(found), {'available', 'images', 'details'})
+        self.assertEqual(self.calls, [[str(self.docker), 'image', 'ls', '--format', '{{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedAt}}']])
         self.assertTrue(self.host.capabilities()['images'])
         self.docker.chmod(0o644)
         self.assertEqual(self.host.images(), {'available': False, 'images': []}, 'no Docker client: an honest empty answer, no error')

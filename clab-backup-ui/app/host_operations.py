@@ -3,6 +3,7 @@
 Stdlib only. Deployment is privileged and restricted to explicitly trusted roots.
 Topology hooks and mounts retain Containerlab semantics; this is not a sandbox.
 """
+import errno
 import hashlib
 import json
 import os
@@ -40,6 +41,27 @@ IMAGE_REFERENCE = re.compile(
     r'^(?:(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?))*(?::[0-9]{1,5})?/)?'
     r'[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*'
     r'(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?$')
+# Read-only diagnostics of one deployed device: its container log, its interfaces with one counter
+# sample, and its impairments. They run outside the host lock (they change nothing, and their value is
+# highest while a deploy holds it). The variable argv elements are the validated lab name, the
+# container name node_selector() bound, a tail count, a `since` stamp of this exact shape, and the
+# 64-hex Id that `docker inspect --type container` returned after its labels named this lab and node.
+LOGS_TAIL_LIMIT = 2000
+LOGS_TIMEOUT = 15
+LOGS_LIMIT = 512 * 1024
+LOGS_SINCE = re.compile(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,9})?Z', re.ASCII)
+CONTAINER_ID = re.compile(r'[0-9a-f]{64}')
+INSPECT_FORMAT = '\t'.join(('{{.Id}}', '{{.State.Pid}}', '{{.State.Status}}', '{{.State.StartedAt}}', '{{with .State.Health}}{{.Status}}{{end}}',
+                            '{{index .Config.Labels "containerlab"}}', '{{index .Config.Labels "clab-node-name"}}', '{{index .Config.Labels "clab-node-kind"}}',
+                            '{{index .Config.Labels "clab-topo-file"}}', '{{json .NetworkSettings.Ports}}'))
+CGROUP_LINE = r'(?:^|/)(?:docker-)?%s(?:\.scope)?(?:$|/)'
+PROC_LIMIT = 64 * 1024
+INTERFACE_LIMIT = 256
+# The text files the lab browser lists beside the topologies (`files` option) and the viewer reads:
+# what containerlab and its users write into a lab folder. Keys, certificates, `.env`, binaries and
+# hooks are never listed or read.
+READABLE = ('.yaml', '.yml', '.json', '.drawio', '.txt', '.cfg', '.conf', '.set', '.md')
+READABLE_NAMES = ('startup-config', 'juniper.conf')
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
 # The lab builder publishes a new lab folder (publish) and saves again over a lab that is not
 # deployed (revise). Both texts travel in one request line, so each stays well inside it.
@@ -124,6 +146,104 @@ def capture(argv, cwd='/', timeout=15, limit=LIMIT):
         process.wait(); process.stdout.close()
 
 
+def capture_merged(argv, cwd='/', timeout=15, limit=LIMIT):
+    """`capture` for the one command whose stderr is part of the answer (`docker logs`: a container's
+    two streams). Unlike `capture` it keeps the newest bytes: the stream is read to its end (or the
+    timeout) and only the last limit + 1 bytes are returned, raw, so the caller can tell that it was
+    longer and cut at a line before decoding. Memory stays within twice the limit."""
+    process = subprocess.Popen(argv, cwd=cwd, env=ENV, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+    timer = threading.Timer(timeout, process.kill); timer.start()
+    try:
+        output = bytearray()
+        while True:
+            chunk = process.stdout.read1(65536)
+            if not chunk: break
+            output += chunk
+            if len(output) > 2 * limit + 2: del output[:len(output) - limit - 1]
+        return process.wait(timeout=2), bytes(output[-(limit + 1):])
+    finally:
+        timer.cancel()
+        if process.poll() is None: process.kill()
+        process.wait(); process.stdout.close()
+
+
+def read_fd(fd, limit):
+    """At most limit bytes from an open descriptor (one more than the caller allows, so it can tell)."""
+    data = b''
+    while len(data) <= limit:
+        chunk = os.read(fd, limit + 1 - len(data))
+        if not chunk: break
+        data += chunk
+    return data
+
+
+def bounded_text(value, limit=64):
+    return value[:limit] if isinstance(value, str) else ''
+
+
+def bounded_int(value):
+    return value if type(value) is int else 0
+
+
+def readable_name(name):
+    return name in READABLE_NAMES or Path(name).suffix.lower() in READABLE
+
+
+def port_bindings(text):
+    """Docker's `NetworkSettings.Ports` reduced to [{container: '22/tcp', host: '2201'}], digits only."""
+    try: value = json.loads(text)
+    except ValueError: return []
+    if not isinstance(value, dict): return []
+    found = []
+    for key in sorted((k for k in value if isinstance(k, str) and re.fullmatch(r'[0-9]{1,5}/(tcp|udp|sctp)', k)), key=lambda k: (int(k.split('/')[0]), k)):
+        rows = value[key] if isinstance(value[key], list) else []
+        hosts = sorted({r['HostPort'] for r in rows if isinstance(r, dict) and isinstance(r.get('HostPort'), str) and re.fullmatch(r'[0-9]{1,5}', r['HostPort'])}, key=int)
+        found.extend({'container': key, 'host': host} for host in hosts)
+    return found[:64]
+
+
+def interface_rows(rows):
+    """`containerlab inspect interfaces` entries of one container, reduced to bounded plain values."""
+    found = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict) or not isinstance(row.get('name'), str) or not row['name']: continue
+        found.append({'name': row['name'][:64], 'alias': bounded_text(row.get('alias')), 'state': bounded_text(row.get('state')), 'mac': bounded_text(row.get('mac')),
+                      'type': bounded_text(row.get('type')), 'mtu': bounded_int(row.get('mtu')), 'ifindex': bounded_int(row.get('ifindex'))})
+        if len(found) >= INTERFACE_LIMIT: break
+    return found
+
+
+def impairment_rows(rows):
+    """`containerlab tools netem show` entries of one container, reduced to the keys `netem set` names
+    (`packet_loss`, containerlab's JSON key for `--loss`, is read as `loss`); unknown keys are dropped."""
+    found = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict): continue
+        item = {}
+        for key in ('interface', 'delay', 'jitter', 'loss', 'rate', 'corruption'):
+            value = row.get(key, row.get('packet_loss') if key == 'loss' else None)
+            if isinstance(value, str): item[key] = value[:64]
+            elif type(value) in (int, float): item[key] = value
+        if isinstance(item.get('interface'), str) and item['interface']: found.append(item)
+        if len(found) >= INTERFACE_LIMIT: break
+    return found
+
+
+def net_dev(text, names):
+    """/proc/<pid>/net/dev parsed for the named interfaces only: the eight counters the device drawer shows."""
+    wanted = set(names); found = {}
+    for line in text.splitlines():
+        name, colon, rest = line.partition(':')
+        name = name.strip()
+        if not colon or name not in wanted: continue
+        fields = rest.split()
+        if len(fields) < 12 or not all(re.fullmatch(r'[0-9]+', f) for f in fields[:12]): continue
+        value = [int(f) for f in fields[:12]]
+        found[name] = {'rx_bytes': value[0], 'rx_packets': value[1], 'rx_errors': value[2], 'rx_dropped': value[3],
+                       'tx_bytes': value[8], 'tx_packets': value[9], 'tx_errors': value[10], 'tx_dropped': value[11]}
+    return found
+
+
 def stream(argv, cwd, emit, timeout=1200):
     process = subprocess.Popen(argv, cwd=cwd, env=ENV, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                start_new_session=True)
@@ -163,8 +283,9 @@ def stream(argv, cwd, emit, timeout=1200):
 
 
 class HostOperations:
-    def __init__(self, config, run=capture, probe=probe):
-        self.config = config; self.run = run; self.probe = probe
+    def __init__(self, config, run=capture, probe=probe, run_merged=capture_merged):
+        self.config = config; self.run = run; self.probe = probe; self.run_merged = run_merged
+        self.proc = '/proc'  # a test points the counter sample at a temporary tree
         # Older operations.json files still carry a 'docker' path (the retired Grafana mode used it); it is ignored.
         self.clab = config['clab']
         self.roots = [Path(p) for p in config['roots']]
@@ -183,21 +304,53 @@ class HostOperations:
     def read(self, value):
         path = self.path(value)
         if not path.is_file() or path.stat().st_size > LIMIT: raise ValueError('Select a regular file smaller than 1 MiB.')
-        if path.suffix.lower() not in ('.yaml', '.yml', '.json', '.drawio', '.txt', '.cfg', '.conf', '.set'):
-            raise ValueError('This file type cannot be viewed in the manager.')
-        raw = path.read_bytes()
+        if not readable_name(path.name): raise ValueError('This file type cannot be viewed in the manager.')
+        # The bytes come from a descriptor opened through the parent directory with O_NOFOLLOW (a symlink
+        # planted at this name or at its parent after the checks above is refused, never followed; a
+        # directory higher up is covered by path() only) and O_NONBLOCK (a FIFO cannot make the helper
+        # wait for a writer); fstat on that descriptor, not a fresh path stat, must show a regular file
+        # within the limit. The same shape as owned_bytes_any().
+        try:
+            folder_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except OSError as exc:
+            raise ValueError('Symlink paths are not supported.' if exc.errno == errno.ELOOP else 'The selected VM path no longer exists.') from None
+        try:
+            try: fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder_fd)
+            except OSError as exc:
+                raise ValueError('Symlink paths are not supported.' if exc.errno == errno.ELOOP else 'The selected VM path no longer exists.') from None
+            try:
+                info = os.fstat(fd)
+                if not stat.S_ISREG(info.st_mode) or info.st_size > LIMIT: raise ValueError('Select a regular file smaller than 1 MiB.')
+                raw = read_fd(fd, LIMIT)
+            finally: os.close(fd)
+        finally: os.close(folder_fd)
         if len(raw) > LIMIT: raise ValueError('File exceeded the read limit.')
         return {'path': str(path), 'text': raw.decode('utf-8-sig'), 'sha256': hashlib.sha256(raw).hexdigest()}
 
-    def browse(self, value=''):
+    def browse(self, value='', options=None):
+        """The folders and topologies under a trusted root; with the one option `files`, also the readable
+        text files (READABLE suffixes and containerlab's two configuration names) with their sizes."""
+        options = options or {}
+        if not isinstance(options, dict) or set(options) - {'files'} or type(options.get('files', False)) is not bool: raise ValueError('Unsupported browse options.')
+        files = options.get('files', False)
         if not value: return {'path': '', 'entries': [{'name': str(p), 'path': str(p), 'directory': True} for p in self.roots]}
         path = self.path(value)
         if not path.is_dir(): raise ValueError('Choose a project directory.')
         entries = []
         for p in sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
             if p.name.startswith('.') or p.is_symlink(): continue
-            if not p.is_dir() and not (p.is_file() and p.name.lower().endswith(('.clab.yaml', '.clab.yml'))): continue
-            entries.append({'name': p.name, 'path': str(p), 'directory': p.is_dir()})
+            if p.is_dir(): kind = 'directory'
+            elif not p.is_file(): continue
+            elif p.name.lower().endswith(('.clab.yaml', '.clab.yml')): kind = 'topology'
+            elif files and readable_name(p.name): kind = 'file'
+            else: continue
+            entry = {'name': p.name, 'path': str(p), 'directory': kind == 'directory'}
+            if files:
+                entry['kind'] = kind
+                if kind != 'directory':
+                    try: entry['size'] = p.lstat().st_size
+                    except OSError: continue
+            entries.append(entry)
             if len(entries) >= 500: break
         return {'path': str(path), 'parent': str(path.parent) if path not in self.roots else '', 'entries': entries}
 
@@ -209,12 +362,134 @@ class HostOperations:
         return os.access(DOCKER, os.X_OK)
 
     def images(self):
-        """The image references this VM already has (`repository:tag`, dangling images left out)."""
+        """The image references this VM already has (`repository:tag`, dangling images left out), as
+        `images` (the list the lab builder reads, unchanged) and `details` (Docker's own id, size and
+        creation strings per reference; the manager normalises them)."""
         if not self.docker_available(): return {'available': False, 'images': []}
-        code, out = self.run([DOCKER, 'image', 'ls', '--format', '{{.Repository}}:{{.Tag}}'])
+        code, out = self.run([DOCKER, 'image', 'ls', '--format', '{{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedAt}}'])
         if code: raise ValueError('Docker on the VM did not list its images.')
-        found = sorted({line.strip() for line in out.splitlines() if line.strip() and '<none>' not in line and IMAGE_REFERENCE.match(line.strip())})
-        return {'available': True, 'images': found[:1000]}
+        details = {}
+        for line in out.splitlines():
+            fields = [f.strip() for f in line.split('\t')] + ['', '', '']
+            ref = fields[0]
+            if not ref or '<none>' in ref or not IMAGE_REFERENCE.match(ref) or ref in details: continue
+            details[ref] = {'reference': ref, 'id': fields[1][:64], 'size': fields[2][:32], 'created': fields[3][:64]}
+        found = sorted(details)[:1000]
+        return {'available': True, 'images': found, 'details': [details[r] for r in found]}
+
+    def container_of(self, options, lab):
+        """The container of `lab`'s node `options['node']` as Docker binds it: `{'present': False}` when
+        there is none, else its facts. `docker inspect --type container` never resolves an image, a volume
+        or a network of that name (it may still resolve a container Id prefix, which the labels then
+        refuse); the answer counts only with a 64-hex Id, the labels `containerlab` == lab and
+        `clab-node-name` == node, and a `clab-topo-file` inside the trusted roots (the same binding of a
+        lab name to a trusted topology path that every lifecycle action has), and that Id (never the
+        name) is what the other modes hand to Docker."""
+        node, container = node_selector(options, lab)
+        if not self.docker_available(): raise ValueError('No Docker client on the VM.')
+        code, out, err = self.probe([DOCKER, 'inspect', '--type', 'container', '--format', INSPECT_FORMAT, container], IMAGE_PROBE_TIMEOUT)
+        if code:
+            if 'no such container' in (err or '').lower(): return {'present': False}
+            raise ValueError('Docker on the VM did not answer about this container.')
+        fields = out.rstrip('\r\n').split('\t')
+        if len(fields) != 10 or not CONTAINER_ID.fullmatch(fields[0]): raise ValueError('Docker on the VM returned an unusable container identity.')
+        if fields[5] != lab or fields[6] != node: raise ValueError('This container does not belong to lab ' + lab + '.')
+        if not self.trusted(fields[8]): raise ValueError('This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.')
+        pid = int(fields[1]) if re.fullmatch(r'[0-9]{1,10}', fields[1]) else 0
+        return {'present': True, 'id': fields[0], 'pid': pid, 'status': fields[2][:32], 'health': fields[4][:32], 'started': fields[3][:64],
+                'kind': fields[7][:64], 'ports': port_bindings(fields[9])}
+
+    def trusted(self, value):
+        """Whether a topology path a label names lies under a trusted root: the lexical half of path()
+        (absolute, no traversal, a root among its parents), without touching the file system."""
+        if not isinstance(value, str) or not value or len(value) > 4096 or any(ord(c) < 32 for c in value): return False
+        path = Path(value)
+        return path.is_absolute() and '..' not in path.parts and any(root in path.parents for root in self.roots)
+
+    def logs(self, name, options):
+        """The last `tail` lines of one container's log, stamped, optionally from `since`: raw text (the
+        manager redacts), the last 512 KiB cut at a line when longer. Docker's own message never becomes log text."""
+        lab = identity(name)
+        if not isinstance(options, dict) or set(options) - {'node', 'container', 'tail', 'since'}: raise ValueError('Unsupported log options.')
+        tail = options.get('tail')
+        if type(tail) is not int or not 1 <= tail <= LOGS_TAIL_LIMIT: raise ValueError('Ask for 1 to %d log lines.' % LOGS_TAIL_LIMIT)
+        since = options.get('since')
+        if since is not None and (not isinstance(since, str) or not LOGS_SINCE.fullmatch(since)): raise ValueError('The log start must be a UTC timestamp.')
+        facts = self.container_of(options, lab)
+        if not facts['present']: return {'facts': facts, 'text': '', 'truncated': False}
+        argv = [DOCKER, 'logs', '--tail', str(tail), '--timestamps', *(['--since', since] if since else []), facts['id']]
+        code, raw = self.run_merged(argv, timeout=LOGS_TIMEOUT, limit=LOGS_LIMIT)
+        if code: raise ValueError("Docker on the VM did not return this container's log.")
+        truncated = len(raw) > LOGS_LIMIT
+        if truncated:
+            raw = raw[-LOGS_LIMIT:]; cut = raw.find(b'\n')
+            if 0 <= cut < len(raw) - 1: raw = raw[cut + 1:]
+        return {'facts': facts, 'text': raw.decode('utf8', errors='replace'), 'truncated': truncated}
+
+    def interfaces(self, name, options):
+        """One container's interfaces from the lab-wide `containerlab inspect interfaces`, with one counter
+        sample from its own /proc/<pid>/net/dev when the task can be bound to it."""
+        lab = identity(name)
+        if not isinstance(options, dict) or set(options) - {'node', 'container'}: raise ValueError('Unsupported interface options.')
+        facts = self.container_of(options, lab)
+        result = {'facts': facts, 'interfaces': []}
+        if not facts['present']: return result
+        code, out = self.run([self.clab, 'inspect', 'interfaces', '--name', lab, '-f', 'json'], timeout=INSPECT_TIMEOUT, limit=INSPECT_LIMIT)
+        if code: raise ValueError('Containerlab on the VM did not list the interfaces of this lab.')
+        try: listing = json.loads(out)
+        except ValueError: listing = None  # "no containers found" is text with exit 0
+        for entry in listing if isinstance(listing, list) else []:
+            if isinstance(entry, dict) and entry.get('name') == options['container']:
+                result['interfaces'] = interface_rows(entry.get('interfaces')); break
+        counters = self.counters(facts, [row['name'] for row in result['interfaces']])
+        if counters is None or counters == 'host': result['counters_reason'] = counters or 'pid'
+        else: result['counters'] = counters; result['sampled_at'] = time.time()
+        return result
+
+    def counters(self, facts, names):
+        """The named interfaces' counters from /proc/<pid>/net/dev, read through one directory descriptor of
+        /proc/<pid> that is bound to that task (a reused pid answers ESRCH through it, never another
+        process's files) and only after its cgroup named this container. None when it cannot be had,
+        'host' when the task shares the VM's network namespace; no exec, no shell, nothing enters the container."""
+        pid = facts.get('pid')
+        if type(pid) is not int or pid <= 0: return None
+        try: dir_fd = os.open('%s/%d' % (self.proc, pid), os.O_RDONLY | os.O_DIRECTORY)
+        except OSError: return None
+        try:
+            # The Id must be a whole path segment of the task's cgroup (`/docker/<id>` or `/docker-<id>.scope`), not a substring.
+            if not re.search(CGROUP_LINE % facts['id'], self.proc_text(dir_fd, 'cgroup'), re.MULTILINE): return None
+            if self.in_host_network(dir_fd): return 'host'
+            return net_dev(self.proc_text(dir_fd, 'net/dev'), names)
+        except OSError: return None
+        finally: os.close(dir_fd)
+
+    def in_host_network(self, dir_fd):
+        """Whether the task's network namespace is the VM's own (a `network-mode: host` node): its
+        net/dev would be the VM's interfaces, which the manager never receives."""
+        try: own = os.stat('%s/1/ns/net' % self.proc); task = os.stat('ns/net', dir_fd=dir_fd)
+        except OSError: return False
+        return (own.st_dev, own.st_ino) == (task.st_dev, task.st_ino)
+
+    def proc_text(self, dir_fd, name):
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode): raise OSError(errno.EINVAL, 'not a regular file')
+            return read_fd(fd, PROC_LIMIT)[:PROC_LIMIT].decode('utf8', errors='replace')
+        finally: os.close(fd)
+
+    def netem_show(self, name, options):
+        """One container's impairments as `containerlab tools netem show` reports them (read-only; the
+        command takes a container name, shown beside the bound facts)."""
+        lab = identity(name)
+        if not isinstance(options, dict) or set(options) - {'node', 'container'}: raise ValueError('Unsupported impairment options.')
+        facts = self.container_of(options, lab)
+        if not facts['present']: return {'facts': facts, 'impairments': []}
+        code, out = self.run([self.clab, 'tools', 'netem', 'show', '-n', options['container'], '-f', 'json'], timeout=15)
+        try: value = json.loads(out) if not code else None
+        except ValueError: value = None
+        if value is None: raise ValueError('Containerlab on the VM did not show the impairments of this device.')
+        rows = value.get(options['container']) if isinstance(value, dict) else None
+        return {'facts': facts, 'impairments': impairment_rows(rows)}
 
     def image_check(self, options):
         """For each reference (at most IMAGE_CHECK_LIMIT, each validated): is it on the VM (`docker image
@@ -252,8 +527,13 @@ class HostOperations:
             actions['redeploy'] = {**actions['destroy'], 'fallback': True}
         actions['clone'] = {'available': bool(self.config.get('network')) and os.access(self.config.get('git', '/usr/bin/git'), os.X_OK)}
         actions['publish'] = {'available': True}; actions['revise'] = {'available': True}
-        return {'protocol': PROTOCOL, 'version': VERSION, 'actions': actions, 'roots': [str(p) for p in self.roots],
-                'network': bool(self.config.get('network')), 'images': self.docker_available()}
+        result = {'protocol': PROTOCOL, 'version': VERSION, 'actions': actions, 'roots': [str(p) for p in self.roots],
+                  'network': bool(self.config.get('network')), 'images': self.docker_available(), 'diagnostics': True}
+        # The installed containerlab's release, for the footer and the debug page; kept only when it reads as one.
+        code, out = self.run([self.clab, 'version', '--short'])
+        version = out.strip().splitlines()[0].strip() if code == 0 and out.strip() else ''
+        if re.match(r'\d+\.\d+\.\d+', version): result['containerlab'] = version[:32]
+        return result
 
     def popular(self):
         if not self.config.get('network'): raise ValueError('Enable --allow-downloads on the VM to browse the online popular-lab catalog.')
@@ -697,10 +977,13 @@ def main():
         mode = req.get('mode')
         if mode == 'capabilities': result = host.capabilities()
         elif mode == 'read': result = host.read(req.get('path'))
-        elif mode == 'browse': result = host.browse(req.get('path', ''))
+        elif mode == 'browse': result = host.browse(req.get('path', ''), req.get('options') or {})
         elif mode == 'popular': result = host.popular()
         elif mode == 'images': result = host.images()
         elif mode == 'image-check': result = host.image_check(req.get('options') or {})
+        elif mode == 'logs': result = host.logs(req.get('name'), req.get('options') or {})
+        elif mode == 'interfaces': result = host.interfaces(req.get('name'), req.get('options') or {})
+        elif mode == 'netem-show': result = host.netem_show(req.get('name'), req.get('options') or {})
         elif mode in ('preview', 'run'):
             import fcntl
             with open('/run/clab-manager-operations.lock', 'a') as lock:
