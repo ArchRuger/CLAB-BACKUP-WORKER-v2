@@ -37,6 +37,10 @@ class PureTests(unittest.TestCase):
         self.assertEqual(bare, {'interface': 'eth1', 'port': 'eth1', 'delay': '', 'jitter': '', 'loss': 0, 'rate': 0, 'corruption': 0})
         self.assertEqual(public_impairment({'interface': 'eth1', 'loss': True, 'rate': 'x'}, 'linux')['loss'], 0)
 
+    def test_a_helper_alias_names_the_port_so_a_vjunos_row_reads_back(self):
+        rows = public_rows([{'interface': 'eth1', 'alias': 'ge-0/0/0', 'delay': '20ms'}, {'interface': 'eth2', 'delay': '1ms'}], 'juniper_vjunosswitch')
+        self.assertEqual([(r['interface'], r['port']) for r in rows], [('eth1', 'ge-0/0/0'), ('eth2', 'ge-0/0/1')])
+
     def test_rows_on_management_and_internal_interfaces_are_dropped(self):
         rows = [{'interface': n, 'delay': '1ms'} for n in ('eth0', 'cpu', 'fabric', 'eth1', 'eth2')]
         self.assertEqual([r['interface'] for r in public_rows(rows, 'arista_ceos')], ['eth1', 'eth2'])

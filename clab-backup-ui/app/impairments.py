@@ -61,7 +61,7 @@ def public_impairment(row, kind):
     """One impairment row as the browser may see it: containerlab's formats normalised so a row nobody touched always passes the
     page's own validator (durations in whole milliseconds, percentages to two decimals, the rate an int), plus the NOS's port name."""
     name = row['interface'][:64]
-    return {'interface': name, 'port': displayed_interface(kind, name) if interface_role(kind, name) == 'data' else name,
+    return {'interface': name, 'port': (row.get('alias') if isinstance(row.get('alias'), str) and row.get('alias') else displayed_interface(kind, name)) if interface_role(kind, name) == 'data' else name,
             'delay': duration_text(row.get('delay')), 'jitter': duration_text(row.get('jitter')),
             'loss': number(row.get('loss'), 2), 'rate': number(row.get('rate')), 'corruption': number(row.get('corruption'), 2)}
 
