@@ -42,3 +42,12 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   (`sudo bash deploy/start-manager.sh`), the `parity` lab is imported (lab id `d7e3a4686c084f9f88e344b5064aa162`), five
   nodes Ready with inventory logins. vJunos-router: the container is up but its VM relaunches every five seconds
   (291 launches); triage is C00.
+- 2026-10-23 02:05 UTC, **C00 result**: `n24l/juniper_vjunos-router:26.2R1.7` does not boot on this VM. The container's
+  launcher starts the outer qemu with `-cpu host`; the Junos "VM-VMX" architecture then starts an inner qemu 2.7.0,
+  which aborts with `kvm_put_msrs: Assertion 'ret == cpu->kvm_msr_buf->nmsrs' failed` (two levels of nesting under a
+  VM host; the vJunos-switch launcher uses a fixed IvyBridge model with `vmx=on` and boots here). A test-only local
+  image `local/juniper_vjunos-router:26.2R1.7-nested` (Dockerfile: one `sed` on `/launch.py` applying the switch's
+  CPU model; never pushed) replaces the node's image in `parity.clab.yaml`; `containerlab deploy` reconciled the
+  lab, recreating `vrt` and its link neighbours `vsw` and `cjunos` (02:04 UTC). The manager's catalog keeps the
+  published tag: on a bare-metal host the published image is expected to boot; the owner should know that the
+  nested case needs the CPU-model fix (upstream vrnetlab issue material).
