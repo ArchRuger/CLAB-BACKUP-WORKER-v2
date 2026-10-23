@@ -51,9 +51,13 @@ LOGS_TIMEOUT = 15
 LOGS_LIMIT = 512 * 1024
 LOGS_SINCE = re.compile(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,9})?Z', re.ASCII)
 CONTAINER_ID = re.compile(r'[0-9a-f]{64}')
-INSPECT_FORMAT = '\t'.join(('{{.Id}}', '{{.State.Pid}}', '{{.State.Status}}', '{{.State.StartedAt}}', '{{with .State.Health}}{{.Status}}{{end}}',
+# Health is an optional key: a container without a HEALTHCHECK has no `State.Health` at all, and Docker
+# 27 evaluates a template with `index .Config.Labels` against the raw JSON map, where `.State.Health`
+# then fails the whole inspect ("map has no entry for key Health"). `index .State "Health"` is nil there
+# and `with` skips it; every optional map key in this format is read with `index` for that reason.
+INSPECT_FORMAT = '\t'.join(('{{.Id}}', '{{.State.Pid}}', '{{.State.Status}}', '{{.State.StartedAt}}', '{{with index .State "Health"}}{{.Status}}{{end}}',
                             '{{index .Config.Labels "containerlab"}}', '{{index .Config.Labels "clab-node-name"}}', '{{index .Config.Labels "clab-node-kind"}}',
-                            '{{index .Config.Labels "clab-topo-file"}}', '{{json .NetworkSettings.Ports}}'))
+                            '{{index .Config.Labels "clab-topo-file"}}', '{{json .NetworkSettings.Ports}}', '{{.HostConfig.NetworkMode}}'))
 CGROUP_LINE = r'(?:^|/)(?:docker-)?%s(?:\.scope)?(?:$|/)'
 PROC_LIMIT = 64 * 1024
 INTERFACE_LIMIT = 256
@@ -63,6 +67,41 @@ INTERFACE_LIMIT = 256
 READABLE = ('.yaml', '.yml', '.json', '.drawio', '.txt', '.cfg', '.conf', '.set', '.md')
 READABLE_NAMES = ('startup-config', 'juniper.conf')
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
+# One device at a time: containerlab's node-scoped restart, start and stop (the action without `-node` is the command).
+NODE_ACTIONS = ('restart-node', 'start-node', 'stop-node')
+# Run options beyond cleanup and graceful, each allowed only for the actions named here (C05 design section 2.8) and
+# appended only when the installed command's help lists its flag. A partial deploy is only for a lab that is not deployed.
+OPTION_ACTIONS = {'nodes': ('deploy', 'destroy', 'save'), 'max_workers': ('deploy', 'redeploy', 'destroy'),
+                  'skip_post_deploy': ('deploy', 'redeploy'), 'keep_mgmt_net': ('redeploy', 'destroy')}
+NODE_NAME = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}')
+NODE_FILTER_LIMIT = 64
+MAX_WORKERS_LIMIT = 64
+# The dry run (`deploy --dry-run --format json`): read-only, pulls nothing, creates nothing (facts F8, F12); it is the
+# plan inside the apply review and the pending-changes check `apply-plan`.
+APPLY_PLAN_TIMEOUT = 60
+PLAN_LIST_LIMIT = 256
+PLAN_KEYS = (('added-nodes', 'added'), ('deleted-nodes', 'removed'), ('recreated-nodes', 'recreated'), ('started-nodes', 'started'),
+             ('restarted-nodes', 'restarted'), ('added-links', 'links_added'), ('deleted-endpoints', 'endpoints_removed'))
+# Link impairments (`tools netem set` / `reset`): one interface of one running container of this lab, bound by
+# container_of() and the container id the drawer showed; never the management interface, never a host-network task.
+NETEM_TIMEOUT = 15
+SHOW_ALL_DEADLINE = 60
+IMPAIRMENT_INTERFACE = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,14}', re.ASCII)   # Linux IFNAMSIZ; never a leading dash (an option-like argv element)
+IMPAIRMENT_TIME = re.compile(r'(0|[1-9][0-9]{0,5})(ms|s)', re.ASCII)
+DELAY_LIMIT_MS = 60000
+RATE_LIMIT_KBIT = 10_000_000
+MANAGEMENT_INTERFACES = ('eth0', 'lo')
+IMPAIRMENT_SET_KEYS = ('node', 'container', 'interface', 'delay', 'jitter', 'loss', 'rate', 'corruption')
+IMPAIRMENT_RESET_KEYS = ('node', 'container', 'interface')
+TIME_SENTENCE = 'Delay and jitter are a number with ms or s, up to 60s.'
+PERCENT_SENTENCE = 'Loss and corruption are a percentage from 0 to 100.'
+RATE_SENTENCE = 'Rate is a whole number of kbit/s.'
+CHANGED_SENTENCE = "The device's container changed since you opened this section; reopen it and apply again."
+HOST_NETWORK_SENTENCE = "This device shares the VM's own network; its interfaces are the VM's and cannot be impaired."
+# The one host lock. main() takes it, non-blocking, for exactly preview, run, netem-set and netem-reset; held elsewhere
+# answers LOCK_SENTENCE and runs nothing. lab_operations.LOCK_SENTENCE is pinned equal to it.
+LOCK_PATH = '/run/clab-manager-operations.lock'
+LOCK_SENTENCE = 'Another host lab operation is running.'
 # The lab builder publishes a new lab folder (publish) and saves again over a lab that is not
 # deployed (revise). Both texts travel in one request line, so each stays well inside it.
 BUILDER_LIMIT = 512 * 1024
@@ -81,6 +120,14 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
+def container_matches(container, lab, node):
+    """Whether `container` is what containerlab names node `node` of lab `lab`: <prefix>-<lab>-<node> for any
+    prefix, <lab>-<node> for the `__lab-name` prefix, or the bare node name for an empty prefix. The one rule
+    node_selector() and the `nodes` membership check apply; a bare suffix match would let `switch` bind
+    `…-vjunos-switch`."""
+    return container == node or container == lab + '-' + node or container.endswith('-' + lab + '-' + node)
+
+
 def node_selector(options, lab):
     """The one topology node of a single-device action, and the container it must be on the VM.
 
@@ -96,8 +143,7 @@ def node_selector(options, lab):
         raise ValueError('Choose one device by its literal topology node name.')
     if not isinstance(container, str) or not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,252}', container):
         raise ValueError('The device has no valid container name.')
-    if container != node and container != lab + '-' + node and not container.endswith('-' + lab + '-' + node):
-        raise ValueError('The container name does not belong to this topology node.')
+    if not container_matches(container, lab, node): raise ValueError('The container name does not belong to this topology node.')
     return node, container
 
 
@@ -227,6 +273,64 @@ def impairment_rows(rows):
         if isinstance(item.get('interface'), str) and item['interface']: found.append(item)
         if len(found) >= INTERFACE_LIMIT: break
     return found
+
+
+def duration_ms(value):
+    """A netem delay or jitter as the request spells it (`<n>ms` or `<n>s`, no leading zero), in milliseconds."""
+    match = IMPAIRMENT_TIME.fullmatch(value) if isinstance(value, str) else None
+    if not match: raise ValueError(TIME_SENTENCE)
+    ms = int(match.group(1)) * (1000 if match.group(2) == 's' else 1)
+    if ms > DELAY_LIMIT_MS: raise ValueError(TIME_SENTENCE)
+    return ms
+
+
+def percentage(value):
+    """A loss or corruption percentage: an int or float (never a bool) in 0..100, `-0.0` normalised to 0."""
+    if type(value) not in (int, float) or not 0 <= value <= 100: raise ValueError(PERCENT_SENTENCE)
+    return 0 if value == 0 else value
+
+
+def impairment_values(options):
+    """The five values of a `netem-set` row, validated (C05 design section 2.2, the table shared with the manager and
+    the UI), rendered as the argv text containerlab receives: durations as sent, percentages with `%g` (at most six
+    significant digits, `0` for zero), the rate as a whole number. Jitter needs a delay; an all-zero row is a Reset."""
+    delay = duration_ms(options['delay']); jitter = duration_ms(options['jitter'])
+    loss = percentage(options['loss']); corruption = percentage(options['corruption']); rate = options['rate']
+    if type(rate) is not int or not 0 <= rate <= RATE_LIMIT_KBIT: raise ValueError(RATE_SENTENCE)
+    if jitter and not delay: raise ValueError('Set a delay before adding jitter.')
+    if not (delay or jitter or loss or corruption or rate): raise ValueError('Set at least one impairment, or use Reset to remove them.')
+    return {'delay': options['delay'], 'jitter': options['jitter'], 'loss': '%g' % loss, 'rate': str(rate), 'corruption': '%g' % corruption}
+
+
+def apply_plan(value):
+    """The dry run's JSON (fact F8) reduced to bounded, sorted lists and reasons, so the same plan always hashes the
+    same whatever order containerlab printed it in; `null` lists are empty, unknown keys are dropped."""
+    value = value if isinstance(value, dict) else {}
+    plan = {'deploys_lab': value.get('deployed-lab') is True}
+    for key, out in PLAN_KEYS:
+        rows = value.get(key)
+        plan[out] = sorted(r[:120] for r in rows if isinstance(r, str) and r)[:PLAN_LIST_LIMIT] if isinstance(rows, list) else []
+    reasons = value.get('node-change-reasons')
+    reasons = reasons if isinstance(reasons, dict) else {}
+    plan['reasons'] = {k[:120]: v[:200] for k, v in sorted((k, v) for k, v in reasons.items() if isinstance(k, str) and k and isinstance(v, str))[:PLAN_LIST_LIMIT]}
+    return plan
+
+
+def plan_changes(plan):
+    return bool(plan) and (plan['deploys_lab'] or any(plan[out] for _, out in PLAN_KEYS))
+
+
+def error_line(text, limit=300):
+    """The sentence of a failed containerlab command from its stderr (fact F13): the first non-empty line after a
+    line reading `ERROR` (its box stripped), else the first line containing `Failed` or `ERRO`, else the last
+    non-empty line that is not the INFO banner; the generic `Consult…` line only when nothing better exists."""
+    lines = [line.strip() for line in (text or '').splitlines() if line.strip()]
+    for index, line in enumerate(lines[:-1]):
+        if re.sub(r'[^A-Za-z]', '', line) == 'ERROR': return lines[index + 1][:limit]
+    for line in lines:
+        if 'Failed' in line or 'ERRO' in line: return line[:limit]
+    rest = [line for line in lines[1:] if not line.startswith('Consult with release notes')] or lines[1:] or lines
+    return rest[-1][:limit] if rest else ''
 
 
 def net_dev(text, names):
@@ -392,12 +496,12 @@ class HostOperations:
             if 'no such container' in (err or '').lower(): return {'present': False}
             raise ValueError('Docker on the VM did not answer about this container.')
         fields = out.rstrip('\r\n').split('\t')
-        if len(fields) != 10 or not CONTAINER_ID.fullmatch(fields[0]): raise ValueError('Docker on the VM returned an unusable container identity.')
+        if len(fields) != 11 or not CONTAINER_ID.fullmatch(fields[0]): raise ValueError('Docker on the VM returned an unusable container identity.')
         if fields[5] != lab or fields[6] != node: raise ValueError('This container does not belong to lab ' + lab + '.')
         if not self.trusted(fields[8]): raise ValueError('This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.')
         pid = int(fields[1]) if re.fullmatch(r'[0-9]{1,10}', fields[1]) else 0
         return {'present': True, 'id': fields[0], 'pid': pid, 'status': fields[2][:32], 'health': fields[4][:32], 'started': fields[3][:64],
-                'kind': fields[7][:64], 'ports': port_bindings(fields[9])}
+                'kind': fields[7][:64], 'ports': port_bindings(fields[9]), 'network_mode': fields[10][:64]}
 
     def trusted(self, value):
         """Whether a topology path a label names lies under a trusted root: the lexical half of path()
@@ -451,24 +555,42 @@ class HostOperations:
         /proc/<pid> that is bound to that task (a reused pid answers ESRCH through it, never another
         process's files) and only after its cgroup named this container. None when it cannot be had,
         'host' when the task shares the VM's network namespace; no exec, no shell, nothing enters the container."""
-        pid = facts.get('pid')
-        if type(pid) is not int or pid <= 0: return None
-        try: dir_fd = os.open('%s/%d' % (self.proc, pid), os.O_RDONLY | os.O_DIRECTORY)
-        except OSError: return None
+        dir_fd = self.bound_task(facts)
+        if dir_fd is None: return None
         try:
-            # The Id must be a whole path segment of the task's cgroup (`/docker/<id>` or `/docker-<id>.scope`), not a substring.
-            if not re.search(CGROUP_LINE % facts['id'], self.proc_text(dir_fd, 'cgroup'), re.MULTILINE): return None
             if self.in_host_network(dir_fd): return 'host'
             return net_dev(self.proc_text(dir_fd, 'net/dev'), names)
         except OSError: return None
         finally: os.close(dir_fd)
 
+    def bound_task(self, facts):
+        """An open directory descriptor of /proc/<pid> whose cgroup names this container's Id (a whole path
+        segment, `/docker/<id>` or `/docker-<id>.scope`, never a substring), or None when the task cannot be bound."""
+        pid = facts.get('pid')
+        if type(pid) is not int or pid <= 0: return None
+        try: dir_fd = os.open('%s/%d' % (self.proc, pid), os.O_RDONLY | os.O_DIRECTORY)
+        except OSError: return None
+        try:
+            if re.search(CGROUP_LINE % facts['id'], self.proc_text(dir_fd, 'cgroup'), re.MULTILINE): return dir_fd
+        except OSError: pass
+        os.close(dir_fd); return None
+
     def in_host_network(self, dir_fd):
         """Whether the task's network namespace is the VM's own (a `network-mode: host` node): its
-        net/dev would be the VM's interfaces, which the manager never receives."""
+        net/dev would be the VM's interfaces, which the manager never receives. None when it cannot be told."""
         try: own = os.stat('%s/1/ns/net' % self.proc); task = os.stat('ns/net', dir_fd=dir_fd)
-        except OSError: return False
+        except OSError: return None
         return (own.st_dev, own.st_ino) == (task.st_dev, task.st_ino)
+
+    def network_separate(self, facts):
+        """Tri-state: True when the bound task's network namespace is proven separate from the VM's, False when it
+        is the VM's own, None when it cannot be bound or told (no task, a cgroup mismatch, an OSError)."""
+        dir_fd = self.bound_task(facts)
+        if dir_fd is None: return None
+        try:
+            shared = self.in_host_network(dir_fd)
+            return None if shared is None else not shared
+        finally: os.close(dir_fd)
 
     def proc_text(self, dir_fd, name):
         fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
@@ -484,12 +606,129 @@ class HostOperations:
         if not isinstance(options, dict) or set(options) - {'node', 'container'}: raise ValueError('Unsupported impairment options.')
         facts = self.container_of(options, lab)
         if not facts['present']: return {'facts': facts, 'impairments': []}
-        code, out = self.run([self.clab, 'tools', 'netem', 'show', '-n', options['container'], '-f', 'json'], timeout=15)
+        return {'facts': facts, 'impairments': self.netem_rows(options['container'])}
+
+    def netem_rows(self, container):
+        """`containerlab tools netem show -n <container> -f json`, reduced by impairment_rows()."""
+        code, out = self.run([self.clab, 'tools', 'netem', 'show', '-n', container, '-f', 'json'], timeout=NETEM_TIMEOUT)
         try: value = json.loads(out) if not code else None
         except ValueError: value = None
         if value is None: raise ValueError('Containerlab on the VM did not show the impairments of this device.')
-        rows = value.get(options['container']) if isinstance(value, dict) else None
-        return {'facts': facts, 'impairments': impairment_rows(rows)}
+        return impairment_rows(value.get(container) if isinstance(value, dict) else None)
+
+    def impairment_request(self, req, keys):
+        """The shape and the binding of a mutating netem request `{mode, name, options, expected_id, digest}`: the
+        option keys exactly `keys`, `expected_id` a 64-hex container id, and `digest` the helper's own digest over
+        `{mode, name, options, expected_id}` (recomputed here, so nothing the student was shown can differ from what
+        runs). Returns (options, expected_id)."""
+        options = req.get('options')
+        if not isinstance(options, dict) or set(options) != set(keys): raise ValueError('Unsupported impairment options.')
+        expected_id = req.get('expected_id')
+        if not isinstance(expected_id, str) or not CONTAINER_ID.fullmatch(expected_id): raise ValueError(CHANGED_SENTENCE)
+        if set(req) - {'mode', 'name', 'options', 'expected_id', 'digest'}: raise ValueError('Review the impairment again.')
+        bound = {'mode': req.get('mode'), 'name': req.get('name'), 'options': options, 'expected_id': expected_id}
+        if req.get('digest') != digest(bound): raise ValueError('Review the impairment again.')
+        return options, expected_id
+
+    def impairment_target(self, name, options, expected_id):
+        """The one interface of the one running container an impairment may touch (C05 design section 2.1). The
+        interface name is checked first (a literal name, never eth0 or lo: the manager reaches the device through
+        eth0); then container_of() binds the container (labels, trusted topology, 64-hex Id), which must be running,
+        be the container the drawer showed (`expected_id`), run in its own Docker network (not `host`, not another
+        container's), and have a task whose network namespace is proven separate from the VM's (tri-state: shared
+        and unknown both refuse). Returns (lab, facts, interface)."""
+        lab = identity(name)
+        interface = options.get('interface')
+        if not isinstance(interface, str) or not IMPAIRMENT_INTERFACE.fullmatch(interface): raise ValueError('Choose an interface by its literal name.')
+        if interface == 'eth0': raise ValueError('The management interface eth0 cannot be impaired: the manager reaches the device through it.')
+        if interface in MANAGEMENT_INTERFACES: raise ValueError(interface + ' cannot be impaired.')
+        facts = self.container_of(options, lab)
+        if not facts['present'] or facts['status'] != 'running':
+            raise ValueError('Device ' + options['container'] + ' is not running; impairments exist only on a running device.')
+        if facts['id'] != expected_id: raise ValueError(CHANGED_SENTENCE)
+        mode = facts['network_mode']
+        if not mode: raise ValueError("The manager could not read this device's network mode; try again in a moment.")
+        if mode == 'host': raise ValueError(HOST_NETWORK_SENTENCE)
+        if mode.startswith('container:'): raise ValueError("This device shares another container's network; its interfaces are not its own and cannot be impaired.")
+        separate = self.network_separate(facts)
+        if separate is False: raise ValueError(HOST_NETWORK_SENTENCE)
+        if separate is None: raise ValueError("The manager could not bind this device's network namespace; try again in a moment.")
+        return lab, facts, interface
+
+    def netem_set(self, req):
+        """`netem-set`: replace the impairments of one interface with the row's five values (containerlab replaces the
+        whole qdisc, fact F4, so all five flags always travel). Argv: the fixed command, then the bound container name,
+        the validated interface and the five validated values; none of them at argv[0..4]. Runs under the host lock."""
+        options, expected_id = self.impairment_request(req, IMPAIRMENT_SET_KEYS)
+        lab, facts, interface = self.impairment_target(req.get('name'), options, expected_id)
+        values = impairment_values(options)
+        container = options['container']
+        argv = [self.clab, 'tools', 'netem', 'set', '-n', container, '-i', interface, '--delay', values['delay'], '--jitter', values['jitter'],
+                '--loss', values['loss'], '--rate', values['rate'], '--corruption', values['corruption']]
+        code, out, err = self.probe(argv, NETEM_TIMEOUT)
+        if code:
+            if 'Link not found' in (err or ''): raise ValueError(interface + ' is not an interface of this device right now.')
+            raise ValueError('Containerlab on the VM refused the impairment: ' + error_line(err, 200))
+        return {'facts': facts, 'impairments': self.netem_rows(container)}
+
+    def netem_reset(self, req):
+        """`netem-reset`: remove the impairments of one interface. Nothing runs when the interface has no row
+        (containerlab fails on a clean interface, fact F7). Runs under the host lock."""
+        options, expected_id = self.impairment_request(req, IMPAIRMENT_RESET_KEYS)
+        lab, facts, interface = self.impairment_target(req.get('name'), options, expected_id)
+        container = options['container']
+        rows = self.netem_rows(container)
+        if not any(row['interface'] == interface for row in rows): return {'facts': facts, 'changed': False, 'impairments': rows}
+        code, out, err = self.probe([self.clab, 'tools', 'netem', 'reset', '-n', container, '-i', interface], NETEM_TIMEOUT)
+        if code: raise ValueError('Containerlab on the VM could not reset the impairment on ' + interface + '.')
+        return {'facts': facts, 'changed': True, 'impairments': self.netem_rows(container)}
+
+    def netem_show_all(self, name, options):
+        """`netem-show-all` (read-only, outside the lock): the impairments of 1..64 devices of one lab in one call,
+        each pair bound like the single read; a stopped or absent device answers `[]`. Pairs not reached within
+        SHOW_ALL_DEADLINE come back as `unread` and the answer says `complete: False`."""
+        lab = identity(name)
+        if not isinstance(options, dict) or set(options) != {'nodes'}: raise ValueError('Unsupported impairment options.')
+        pairs = options['nodes']
+        if not isinstance(pairs, list) or not 1 <= len(pairs) <= NODE_FILTER_LIMIT: raise ValueError('Name 1 to %d devices.' % NODE_FILTER_LIMIT)
+        selected = []
+        for pair in pairs:
+            if not isinstance(pair, dict) or set(pair) != {'node', 'container'}: raise ValueError('Unsupported impairment options.')
+            selected.append(node_selector(pair, lab))
+        started = time.monotonic(); devices = []; complete = True
+        for node, container in selected:
+            if time.monotonic() - started >= SHOW_ALL_DEADLINE:
+                devices.append({'node': node, 'container': container, 'unread': True}); complete = False; continue
+            facts = self.container_of({'node': node, 'container': container}, lab)
+            rows = self.netem_rows(container) if facts['present'] and facts['status'] == 'running' else []
+            devices.append({'node': node, 'container': container, 'present': facts['present'], 'impairments': rows})
+        return {'devices': devices, 'complete': complete}
+
+    def dry_run_argv(self, path, name, help_text):
+        """The one builder of every dry-run argv: `deploy --dry-run --format json -t <path> [--name <lab>]`. `apply`
+        is deploy's alias (fact F8), so the dry run is spelled `deploy`, the command whose help was probed."""
+        return [self.clab, 'deploy', '--dry-run', '--format', 'json', '-t', str(path)] + (['--name', name] if '--name' in help_text else [])
+
+    def dry_run(self, path, name):
+        """The plan a deploy of `path` would carry out against the live lab: (plan, failed, error) where failed is
+        '' (plan is the reduced JSON), 'unsupported' (no --dry-run on this containerlab) or 'error' (error is the
+        sentence from stderr). Read-only: writes nothing, pulls nothing (facts F8, F12)."""
+        help_text = self.help('deploy')
+        if '--dry-run' not in help_text: return None, 'unsupported', ''
+        code, out, err = self.probe(self.dry_run_argv(path, name, help_text), APPLY_PLAN_TIMEOUT)
+        if code == 0:
+            try: value = json.loads(out)
+            except ValueError: value = None
+            if isinstance(value, dict): return apply_plan(value), '', ''
+        return None, 'error', error_line(err)
+
+    def pending_plan(self, name, value):
+        """`apply-plan` (read-only, outside the lock): the pending-changes check of one lab from its topology path."""
+        lab = identity(name)
+        path = self.path(value)
+        if path.suffix.lower() not in ('.yaml', '.yml'): raise ValueError('Select the original lab YAML.')
+        plan, failed, error = self.dry_run(path, lab)
+        return {'plan': plan, 'failed': failed, 'error': error}
 
     def image_check(self, options):
         """For each reference (at most IMAGE_CHECK_LIMIT, each validated): is it on the VM (`docker image
@@ -519,16 +758,20 @@ class HostOperations:
         actions = {}
         for action in LIFECYCLE:
             help_text = self.help(action)
-            actions[action] = {'available': bool(help_text), 'cleanup': '--cleanup' in help_text,
-                               'graceful': '--graceful' in help_text}
-            # Restart device (one node): containerlab's own node selector on its restart command.
-            if action == 'restart': actions['restart-node'] = {'available': bool(help_text) and '--node' in help_text}
+            actions[action] = {'available': bool(help_text), 'cleanup': '--cleanup' in help_text, 'graceful': '--graceful' in help_text,
+                               'node_filter': '--node-filter' in help_text, 'max_workers': '--max-workers' in help_text,
+                               'skip_post_deploy': '--skip-post-deploy' in help_text, 'keep_mgmt_net': '--keep-mgmt-net' in help_text,
+                               'dry_run': '--dry-run' in help_text}
+            # One device (restart-node, start-node, stop-node): containerlab's own node selector on that command.
+            if action in ('restart', 'start', 'stop'): actions[action + '-node'] = {'available': bool(help_text) and '--node' in help_text}
         if not actions['redeploy']['available'] and actions['deploy']['available'] and actions['destroy']['available']:
-            actions['redeploy'] = {**actions['destroy'], 'fallback': True}
+            # The destroy step takes cleanup, graceful, keep_mgmt_net and max_workers; the deploy step skip_post_deploy; no filter, no plan.
+            actions['redeploy'] = {**actions['destroy'], 'node_filter': False, 'skip_post_deploy': actions['deploy']['skip_post_deploy'], 'dry_run': False, 'fallback': True}
+        actions['impairments'] = {'available': bool(self.help('tools', 'netem', 'set'))}
         actions['clone'] = {'available': bool(self.config.get('network')) and os.access(self.config.get('git', '/usr/bin/git'), os.X_OK)}
         actions['publish'] = {'available': True}; actions['revise'] = {'available': True}
         result = {'protocol': PROTOCOL, 'version': VERSION, 'actions': actions, 'roots': [str(p) for p in self.roots],
-                  'network': bool(self.config.get('network')), 'images': self.docker_available(), 'diagnostics': True}
+                  'network': bool(self.config.get('network')), 'images': self.docker_available(), 'diagnostics': True, 'lifecycle_options': True}
         # The installed containerlab's release, for the footer and the debug page; kept only when it reads as one.
         code, out = self.run([self.clab, 'version', '--short'])
         version = out.strip().splitlines()[0].strip() if code == 0 and out.strip() else ''
@@ -599,14 +842,23 @@ class HostOperations:
 
     def plan(self, req):
         action = req.get('action')
-        if action not in (*LIFECYCLE, 'restart-node', 'inspect-all', 'create', 'delete', 'clone', 'publish', 'revise'): raise ValueError('Unsupported lab operation.')
+        if action not in (*LIFECYCLE, *NODE_ACTIONS, 'inspect-all', 'create', 'delete', 'clone', 'publish', 'revise'): raise ValueError('Unsupported lab operation.')
         options = req.get('options') or {}
-        # restart-node takes its two selector keys and nothing else; no other action accepts a selector.
-        allowed = {'node', 'container'} if action == 'restart-node' else {'cleanup', 'graceful', 'url', 'project', 'text', 'annotations', 'root', 'base'}
+        # A node action takes its two selector keys and nothing else; no other action accepts a selector. The run
+        # options beyond the old union (nodes, max_workers, skip_post_deploy, keep_mgmt_net) are allowed per action
+        # by OPTION_ACTIONS; a key outside that is refused before anything runs.
+        if action in NODE_ACTIONS: allowed = {'node', 'container'}
+        else: allowed = {'cleanup', 'graceful', 'url', 'project', 'text', 'annotations', 'root', 'base'} | {k for k, actions in OPTION_ACTIONS.items() if action in actions}
         if not isinstance(options, dict) or set(options) - allowed:
             raise ValueError('Unsupported operation options.')
-        for key in ('cleanup', 'graceful'):
+        for key in ('cleanup', 'graceful', 'skip_post_deploy', 'keep_mgmt_net'):
             if key in options and type(options[key]) is not bool: raise ValueError('Invalid boolean option.')
+        if 'max_workers' in options and (type(options['max_workers']) is not int or not 1 <= options['max_workers'] <= MAX_WORKERS_LIMIT):
+            raise ValueError('Max workers must be a whole number from 1 to %d.' % MAX_WORKERS_LIMIT)
+        nodes = options.get('nodes')
+        if 'nodes' in options and (not isinstance(nodes, list) or not 1 <= len(nodes) <= NODE_FILTER_LIMIT or len(set(map(str, nodes))) != len(nodes)
+                                   or not all(isinstance(n, str) and NODE_NAME.fullmatch(n) for n in nodes)):
+            raise ValueError('Choose devices by their literal topology node names.')
         name = identity(req.get('name', 'manager'))
         path = None; source_hash = ''; affected = []; argv = []; steps = []; warnings = []; extra = {}
         if action == 'clone':
@@ -652,31 +904,35 @@ class HostOperations:
                 original = row.get('absLabPath') or row.get('labPath')
                 if original and Path(original).is_absolute() and Path(original) != path:
                     raise ValueError('The deployed lab name belongs to a different topology path.')
-            if action == 'restart-node':
-                # Restart device: containerlab's node-scoped restart (the operation the VS Code
-                # extension runs as `containerlab restart -r docker --node <node> -t <topology>`), a
-                # lifecycle-aware stop+start that parks the node's dataplane interfaces and restores
-                # them; a stopped node takes the start/restore path. Exactly one node, named literally,
-                # bound to the one deployed container it must be (its id and state are in the digest, so
-                # a redeploy, a start or a stop between review and run is caught at run time).
+            if action in NODE_ACTIONS:
+                # Restart, start or stop one device: containerlab's node-scoped command (the operation the
+                # VS Code extension runs as `containerlab restart -r docker --node <node> -t <topology>`;
+                # start and stop park and restore the node's dataplane interfaces the same way, fact F1).
+                # Exactly one node, named literally, bound to the one deployed container it must be (its
+                # id and state are in the digest, so a redeploy, a start or a stop between review and run
+                # is caught at run time). Stop of a stopped device and start of a running one are refused
+                # here: containerlab would exit 0 silently (fact F2) and a no-op must never read as a success.
+                command = action[:-5]
                 node, container = node_selector(options, name)
-                help_text = self.help('restart')
-                if not help_text: raise ValueError('This Containerlab version does not support restart.')
+                help_text = self.help(command)
+                if not help_text: raise ValueError('This Containerlab version does not support ' + command + '.')
                 if '--node' not in help_text:
-                    raise ValueError('The installed Containerlab cannot restart one device: its restart command has no --node option. Upgrade containerlab on the VM.')
+                    raise ValueError('The installed Containerlab cannot ' + command + ' one device: its ' + command + ' command has no --node option. Upgrade containerlab on the VM.')
                 targets = [r for r in rows if r.get('name') == container]
                 if len(targets) != 1:
                     raise ValueError('Device ' + container + ' is not deployed in lab ' + name + '. Refresh the lab list and review again.')
                 target = targets[0]
                 affected = [{'name': target.get('name'), 'id': target.get('container_id'), 'state': target.get('state')}]
-                argv = [self.clab, 'restart', '-t', str(path)]
+                state = str(target.get('state') or '')
+                if action == 'stop-node' and state != 'running': raise ValueError('Device ' + container + ' is ' + (state or 'not running') + '; there is nothing to stop.')
+                if action == 'start-node' and state == 'running': raise ValueError('Device ' + container + ' is already running.')
+                argv = [self.clab, command, '-t', str(path)]
                 if '--name' in help_text: argv.extend(['--name', name])
                 elif req.get('source_name', name) != name: raise ValueError('This version cannot target the overridden lab name.')
                 argv.extend(['--node', node])
                 if argv.count('--node') != 1 or argv[-1] != node or ',' in node:
-                    raise ValueError('The restart command must name exactly one device.')
-                state = str(target.get('state') or '')
-                if state != 'running':
+                    raise ValueError('The ' + command + ' command must name exactly one device.')
+                if action == 'restart-node' and state != 'running':
                     warnings.append('This device is ' + (state or 'not running') + ', so containerlab takes its start/restore path: it starts the container and restores its links instead of stopping it first. '
                                     'Links are restored only if containerlab parked them (a stop from the manager, the VS Code extension or containerlab stop); a device stopped with docker stop has already lost its links, and redeploying the lab is the way to get them back.')
                 extra = {'node': node, 'container': container}
@@ -721,16 +977,51 @@ class HostOperations:
                 for command in steps or [argv]:
                     if '--name' in self.help(command[1]): command.extend(['--name', name])
                     elif req.get('source_name', name) != name: raise ValueError('This version cannot target the overridden lab name.')
-                if action == 'inspect': argv += ['--format', 'json']
-                for flag in ('cleanup', 'graceful'):
+                # Chosen devices (`nodes`, section 2.8): on destroy and save every name must be exactly one deployed
+                # container of this lab (the rule node_selector applies); on deploy only while nothing is deployed
+                # (containerlab would delete the devices left out, fact F9); never with cleanup (it would delete the
+                # whole lab folder the kept devices use, fact F10). The review names the devices kept.
+                if nodes is not None:
+                    if action == 'deploy' and rows:
+                        raise ValueError('This lab is already deployed, so a deploy limited to chosen devices is not possible (containerlab would remove the devices left out). Use Apply topology changes to add the missing devices.')
+                    if options.get('cleanup'):
+                        raise ValueError('Clean up cannot be combined with chosen devices: containerlab would delete the whole lab folder, which the devices left running still use.')
+                    if action in ('destroy', 'save'):
+                        chosen = []
+                        for node in nodes:
+                            matched = [r for r in rows if container_matches(str(r.get('name') or ''), name, node)]
+                            if len(matched) != 1: raise ValueError('Device ' + node + ' is not deployed in lab ' + name + '. Refresh the lab list and review again.')
+                            chosen.append(matched[0])
+                        affected = [{'name': r.get('name'), 'id': r.get('container_id'), 'state': r.get('state')} for r in chosen]
+                        extra['kept'] = [r.get('name') for r in rows if not any(r is c for c in chosen)]
+                    if '--node-filter' not in help_text: raise ValueError('Installed command lacks --node-filter.')
+                    argv.extend(['--node-filter', ','.join(nodes)])
+                # Flags in one fixed order after the filter: --max-workers N, --skip-post-deploy, --cleanup, --graceful,
+                # --keep-mgmt-net; each only when the installed command (or, in the redeploy fallback, the step that
+                # takes it) lists it. The review shows the argv verbatim.
+                if 'max_workers' in options:
+                    for command in steps or [argv]:
+                        if '--max-workers' not in self.help(command[1]): raise ValueError('Installed ' + command[1] + ' command lacks this option.' if steps else 'Installed command lacks --max-workers.')
+                        command.extend(['--max-workers', str(options['max_workers'])])
+                for flag in ('skip_post_deploy', 'cleanup', 'graceful', 'keep_mgmt_net'):
                     if options.get(flag):
                         if flag == 'cleanup' and action not in ('deploy', 'redeploy', 'destroy'): raise ValueError('Cleanup is only available for lifecycle recreation/removal.')
+                        dashed = '--' + flag.replace('_', '-')
                         if steps:
-                            if '--' + flag not in self.help('destroy'): raise ValueError('Installed destroy command lacks this option.')
-                            steps[0].append('--' + flag)
+                            step = steps[1] if flag == 'skip_post_deploy' else steps[0]
+                            if dashed not in self.help(step[1]): raise ValueError('Installed ' + step[1] + ' command lacks this option.')
+                            step.append(dashed)
                         else:
-                            if '--' + flag not in help_text: raise ValueError('Installed command lacks --' + flag + '.')
-                            argv.append('--' + flag)
+                            if dashed not in help_text: raise ValueError('Installed command lacks ' + dashed + '.')
+                            argv.append(dashed)
+                if action == 'inspect': argv += ['--format', 'json']
+                if action == 'apply':
+                    # The plan inside the apply review (section 2.6): the dry run reads the live lab, so its result
+                    # is part of the digest; a device that stops, a link that disappears or a file edit between the
+                    # review and the run changes the plan and the run is refused with the existing sentence.
+                    plan, failed, error = self.dry_run(path, name)
+                    extra['plan'] = plan; extra['plan_failed'] = failed
+                    if failed == 'error': warnings.append('containerlab could not plan this change: ' + error)
                 if action in ('redeploy', 'apply'):
                     # The deploy review's own body text now names the same trust plainly (hooks, mounts,
                     # image pulls) as ordinary description text, not a warning box; repeating it here as
@@ -967,6 +1258,13 @@ def main():
         if hasattr(signal, name): signal.signal(getattr(signal, name), interrupted)
     def emit(value):
         print(json.dumps(value, separators=(',', ':')), flush=True)
+    def locked(work):
+        """The one host lock, non-blocking: held by another process answers LOCK_SENTENCE and nothing runs."""
+        import fcntl
+        with open(LOCK_PATH, 'a') as lock:
+            try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError: raise ValueError('Another host lab operation is running.') from None   # == LOCK_SENTENCE (the C02 test pins the literal)
+            return work()
     try:
         config = json.loads(Path('/etc/clab-manager/operations.json').read_text())
         raw = sys.stdin.buffer.readline(2 * LIMIT + 1)
@@ -984,13 +1282,12 @@ def main():
         elif mode == 'logs': result = host.logs(req.get('name'), req.get('options') or {})
         elif mode == 'interfaces': result = host.interfaces(req.get('name'), req.get('options') or {})
         elif mode == 'netem-show': result = host.netem_show(req.get('name'), req.get('options') or {})
-        elif mode in ('preview', 'run'):
-            import fcntl
-            with open('/run/clab-manager-operations.lock', 'a') as lock:
-                try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError: raise ValueError('Another host lab operation is running.')
-                result = host.plan(req) if mode == 'preview' else host.execute(req, emit)
-                if mode == 'preview': result.pop('options', None)
+        elif mode == 'netem-show-all': result = host.netem_show_all(req.get('name'), req.get('options') or {})
+        elif mode == 'apply-plan': result = host.pending_plan(req.get('name'), req.get('path'))
+        elif mode == 'netem-set': result = locked(lambda: host.netem_set(req))
+        elif mode == 'netem-reset': result = locked(lambda: host.netem_reset(req))
+        elif mode == 'preview': result = locked(lambda: host.plan(req)); result.pop('options', None)
+        elif mode == 'run': result = locked(lambda: host.execute(req, emit))
         else: raise ValueError('Unknown request mode.')
         emit({'result': result}); return 0
     except (BrokenPipeError, KeyboardInterrupt): return 1

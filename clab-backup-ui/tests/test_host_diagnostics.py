@@ -37,8 +37,9 @@ NET_DEV = ('Inter-|   Receive                                                |  
            '  eth1:     512       4    0    1    0     0          0         0      1024       8    0    2    0     0       0          0\n')
 
 
-def inspect_line(id=ID, pid=4242, status='running', started='2026-10-23T01:02:03.456789Z', health='healthy', lab=LAB, node=NODE, kind='ceos', topo='/srv/labs/parity/parity.clab.yml', ports=PORTS):
-    return '\t'.join((id, str(pid), status, started, health, lab, node, kind, topo, ports)) + '\n'
+def inspect_line(id=ID, pid=4242, status='running', started='2026-10-23T01:02:03.456789Z', health='healthy', lab=LAB, node=NODE, kind='ceos', topo='/srv/labs/parity/parity.clab.yml', ports=PORTS, network_mode='clab'):
+    """The eleven tab-separated fields of INSPECT_FORMAT (C05 added `HostConfig.NetworkMode`; the read-only modes ignore it)."""
+    return '\t'.join((id, str(pid), status, started, health, lab, node, kind, topo, ports, network_mode)) + '\n'
 
 
 class DiagnosticsHarness(unittest.TestCase):
@@ -113,11 +114,25 @@ class ContainerBindingTests(DiagnosticsHarness):
         facts = self.host.container_of(self.options, LAB)
         self.assertEqual(self.probes, [([str(self.docker), 'inspect', '--type', 'container', '--format', host_operations.INSPECT_FORMAT, CONTAINER], host_operations.IMAGE_PROBE_TIMEOUT)])
         self.assertEqual(facts, {'present': True, 'id': ID, 'pid': 4242, 'status': 'running', 'health': 'healthy', 'started': '2026-10-23T01:02:03.456789Z', 'kind': 'ceos',
-                                 'ports': [{'container': '22/tcp', 'host': '2201'}, {'container': '57400/tcp', 'host': '57401'}]})
-        self.assertEqual(host_operations.INSPECT_FORMAT.count('\t'), 9)
-        for piece in ('{{.Id}}', '{{.State.Pid}}', '{{index .Config.Labels "containerlab"}}', '{{index .Config.Labels "clab-node-name"}}', '{{index .Config.Labels "clab-topo-file"}}', '{{json .NetworkSettings.Ports}}'):
+                                 'ports': [{'container': '22/tcp', 'host': '2201'}, {'container': '57400/tcp', 'host': '57401'}], 'network_mode': 'clab'})
+        self.assertEqual(host_operations.INSPECT_FORMAT.count('\t'), 10, 'eleven fields: C05 added the network mode last')
+        for piece in ('{{.Id}}', '{{.State.Pid}}', '{{index .Config.Labels "containerlab"}}', '{{index .Config.Labels "clab-node-name"}}', '{{index .Config.Labels "clab-topo-file"}}', '{{json .NetworkSettings.Ports}}', '{{.HostConfig.NetworkMode}}'):
             self.assertIn(piece, host_operations.INSPECT_FORMAT)
         self.assertEqual(self.calls, [], 'the binding runs no containerlab command')
+
+    def test_health_is_read_with_index_so_a_container_without_a_healthcheck_binds(self):
+        # Docker 27.5.1 evaluates this template against the raw JSON map (the `index .Config.Labels` pieces make it),
+        # where a container without a HEALTHCHECK has no `State.Health` key: `{{with .State.Health}}` failed the whole
+        # inspect for clab-parity-ceos and clab-parity-cjunos ("map has no entry for key Health"), so `interfaces` and
+        # `logs` answered "did not answer about this container". `index` yields nil there and `with` skips it.
+        self.assertIn('{{with index .State "Health"}}{{.Status}}{{end}}', host_operations.INSPECT_FORMAT)
+        self.assertNotIn('.State.Health', host_operations.INSPECT_FORMAT)
+        self.assertEqual(host_operations.INSPECT_FORMAT.split('\t')[4], '{{with index .State "Health"}}{{.Status}}{{end}}', 'the fifth field, as inspect_line() lays it out')
+        self.containers[CONTAINER] = self.line(health='')
+        facts = self.host.container_of(self.options, LAB)
+        self.assertEqual((facts['present'], facts['health'], facts['status'], facts['id']), (True, '', 'running', ID))
+        self.assertEqual(self.host.interfaces(LAB, self.options)['facts']['health'], '')
+        self.assertEqual(self.host.logs(LAB, {**self.options, 'tail': 5})['facts']['health'], '')
 
     def test_an_absent_container_is_not_an_error(self):
         # Also the name of an image, a volume or a network: `--type container` makes Docker answer "No such container".
@@ -142,7 +157,10 @@ class ContainerBindingTests(DiagnosticsHarness):
         for bad in ('x' * 64, ID[:63], ID.upper(), '', ID + 'a', '-' + ID[1:]):
             self.containers[CONTAINER] = self.line(id=bad)
             with self.assertRaisesRegex(ValueError, 'unusable container identity', msg=bad): self.host.container_of(self.options, LAB)
-        self.containers[CONTAINER] = '\t'.join((ID, '1', 'running', 'x', '', LAB, NODE, 'ceos', self.topo)) + '\n'
+        for short in ((ID, '1', 'running', 'x', '', LAB, NODE, 'ceos', self.topo), (ID, '1', 'running', 'x', '', LAB, NODE, 'ceos', self.topo, PORTS)):
+            self.containers[CONTAINER] = '\t'.join(short) + '\n'   # nine fields; the pre-C05 ten-field line
+            with self.assertRaisesRegex(ValueError, 'unusable container identity'): self.host.container_of(self.options, LAB)
+        self.containers[CONTAINER] = self.line() + 'extra\tline\n'
         with self.assertRaisesRegex(ValueError, 'unusable container identity'): self.host.container_of(self.options, LAB)
         self.assertEqual(self.merged, [])
 
@@ -296,7 +314,7 @@ class InterfacesModeTests(DiagnosticsHarness):
         self.containers[CONTAINER] = self.line(pid=0, status='exited', health=''); self.interfaces_output = '[]'
         result = self.host.interfaces(LAB, self.options)
         self.assertEqual(result, {'facts': {'present': True, 'id': ID, 'pid': 0, 'status': 'exited', 'health': '', 'started': '2026-10-23T01:02:03.456789Z', 'kind': 'ceos',
-                                            'ports': [{'container': '22/tcp', 'host': '2201'}, {'container': '57400/tcp', 'host': '57401'}]}, 'interfaces': [], 'counters_reason': 'pid'})
+                                            'ports': [{'container': '22/tcp', 'host': '2201'}, {'container': '57400/tcp', 'host': '57401'}], 'network_mode': 'clab'}, 'interfaces': [], 'counters_reason': 'pid'})
 
     def test_text_output_is_an_empty_list_and_a_failed_command_is_a_sentence(self):
         self.interfaces_output = 'no containers found\n'
@@ -503,8 +521,10 @@ class CapabilitiesModeTests(DiagnosticsHarness):
 
 
 class DispatchTests(unittest.TestCase):
-    """main() dispatches the five modes outside the host lock, adds nothing wider, and the gateway is untouched."""
-    def test_main_dispatches_the_diagnostics_modes_before_the_lock(self):
+    """main() dispatches the diagnostics modes outside the host lock, adds nothing wider, and the gateway is untouched."""
+    def test_main_dispatches_the_diagnostics_modes_outside_the_lock(self):
+        # Since C05 main() has one `elif` per mode and one shared locked() helper around the flock (test_host_lifecycle.py
+        # pins which four modes go through it); the diagnostics lines are dispatched directly, never through locked().
         source = Path(host_operations.__file__).read_text()
         lines = ["elif mode == 'images': result = host.images()",
                  "elif mode == 'image-check': result = host.image_check(req.get('options') or {})",
@@ -512,13 +532,14 @@ class DispatchTests(unittest.TestCase):
                  "elif mode == 'logs': result = host.logs(req.get('name'), req.get('options') or {})",
                  "elif mode == 'interfaces': result = host.interfaces(req.get('name'), req.get('options') or {})",
                  "elif mode == 'netem-show': result = host.netem_show(req.get('name'), req.get('options') or {})"]
-        lock = source.index("elif mode in ('preview', 'run'):")
-        self.assertLess(lock, source.index('fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)'))
         for line in lines:
             self.assertEqual(source.count(line), 1, line)
-            self.assertLess(source.index(line), lock, line + ' is dispatched outside the host lock')
+            self.assertNotIn('locked(', line)
         self.assertEqual(source.count('fcntl.flock('), 1, 'one host lock')
-        self.assertEqual(len(re.findall(r"^\s+elif mode == '([a-z-]+)'", source, re.MULTILINE)), 8, 'read, browse, popular, images, image-check, logs, interfaces, netem-show')
+        self.assertIn('fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)', source)
+        modes = re.findall(r"^\s+elif mode == '([a-z-]+)'", source, re.MULTILINE)
+        self.assertEqual(modes, ['read', 'browse', 'popular', 'images', 'image-check', 'logs', 'interfaces', 'netem-show', 'netem-show-all', 'apply-plan', 'netem-set', 'netem-reset', 'preview', 'run'])
+        self.assertEqual(len(modes), len(set(modes)), 'one elif per mode')
 
     def run_main(self, request, **methods):
         """main() with the host lock held by someone else and a stub runner; returns (exit code, answer)."""
@@ -555,8 +576,14 @@ class DispatchTests(unittest.TestCase):
     def test_nothing_execs_follows_writes_or_contacts_a_device(self):
         source = Path(host_operations.__file__).read_text()
         for forbidden in ("DOCKER, 'exec'", "DOCKER, 'pull'", "DOCKER, 'rmi'", "DOCKER, 'run'],", "DOCKER, 'push'", "DOCKER, 'load'", "DOCKER, 'build'", "DOCKER, 'start'",
-                          "DOCKER, 'stop'", "DOCKER, 'kill'", "DOCKER, 'cp'", "'logs', '-f'", "'--follow'", "'nsenter'", "'netem', 'set'", "'netem', 'reset'", "'exec'", "'ssh'", "paramiko"):
+                          "DOCKER, 'stop'", "DOCKER, 'kill'", "DOCKER, 'cp'", "'logs', '-f'", "'--follow'", "'nsenter'", "'exec'", "'ssh'", "paramiko"):
             self.assertNotIn(forbidden, source, forbidden)
+        # C05's two mutating netem commands exist exactly once each, in their own modes under the host lock; the
+        # read-only modes of this chunk still build neither.
+        self.assertEqual(source.count("'tools', 'netem', 'set', '-n'"), 1); self.assertEqual(source.count("'tools', 'netem', 'reset', '-n'"), 1)
+        for method in ('def logs(', 'def interfaces(', 'def netem_show(', 'def netem_rows(', 'def counters('):
+            body = source[source.index(method):source.index('\n    def ', source.index(method) + 1)]
+            self.assertNotIn("'set'", body, method); self.assertNotIn("'reset'", body, method)
         self.assertNotIn("'--since', options", source, 'only the validated stamp reaches argv')
         self.assertIn("facts['id']]", source, 'docker logs reads the inspected Id')
         self.assertIn("'--type', 'container'", source)
