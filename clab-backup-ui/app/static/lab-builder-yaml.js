@@ -212,19 +212,31 @@ function builderYamlCount(text){
  if(text===builderYaml.countText)return;builderYaml.countText=text;
  const count=builderYamlEl('builder-yaml-count');if(count)count.textContent=text;
 }
+// Where keyboard focus sits in the list before it is redrawn: the item (by its line and code), or the list itself.
+function builderYamlFocusIn(ol){
+ const a=typeof document!=='undefined'&&document?document.activeElement:null;if(!a)return null;
+ if(a===ol)return {list:true,line:'',code:''};
+ const line=typeof a.getAttribute==='function'?a.getAttribute('data-line'):null;
+ if(line===null||(typeof ol.contains==='function'&&!ol.contains(a)))return null;
+ return {list:false,line,code:a.getAttribute('data-code')||''};
+}
 function builderYamlRenderList(list){
  const ol=builderYamlEl('builder-yaml-list');if(!ol)return;
+ // A redraw destroys the focused button: keep focus on the same item (line and code), or on the list when that item is gone.
+ const had=builderYamlFocusIn(ol);let again=null;
  ol.replaceChildren();
  for(const f of list){
   const li=builderYamlMake('li','is-'+f.severity);
   if(f.line>0){
-   const b=builderYamlMake('button','builder-yaml-problem');b.setAttribute('type','button');b.setAttribute('data-line',String(f.line));
+   const b=builderYamlMake('button','builder-yaml-problem');b.setAttribute('type','button');b.setAttribute('data-line',String(f.line));b.setAttribute('data-code',String(f.code||''));
+   if(had&&!had.list&&!again&&String(f.line)===had.line&&String(f.code||'')===had.code)again=b;
    b.append(builderYamlMake('span','builder-yaml-sev',f.severity==='error'?'Error':'Warning'),' Line '+f.line+': '+f.message);li.append(b);
   }else li.append(f.message);
   ol.append(li);
  }
  // A list that scrolls is reachable by keyboard.
- if(ol.scrollHeight>ol.clientHeight)ol.setAttribute('tabindex','0');else ol.removeAttribute('tabindex');
+ if(ol.scrollHeight>ol.clientHeight)ol.setAttribute('tabindex','0');else if(had&&!again)ol.setAttribute('tabindex','-1');else ol.removeAttribute('tabindex');
+ if(had&&typeof (again||ol).focus==='function')(again||ol).focus({preventScroll:true});
 }
 function builderYamlCaption(text){const p=builderYamlEl('builder-yaml-schema');if(p&&p.textContent!==text)p.textContent=text;}
 // Runs the check over the panel's text and draws the list, the gutter marks, the count and aria-invalid; never the status line.

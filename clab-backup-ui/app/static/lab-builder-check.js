@@ -147,6 +147,10 @@ function builderCheckMatch(src,text,guarded){
 // The port rule's guard: no port number or address octet has six digits (the zone after % aside), and with no
 // longer digit run the schema's repeated port group cannot backtrack far.
 function builderCheckPortGuard(text){return !/[0-9]{6,}/.test(text.replace(/%[^:]*/,''));}
+// The SR OS free-form `type` pattern backtracks without bound on a crafted string, so it is tested only behind a cheap guard of its own:
+// at most 64 characters, all from the characters a type line is written with. A longer or stranger value is not tested (no finding).
+const BUILDER_CHECK_TYPE_LIMIT=64;
+function builderCheckTypeGuard(text){return text.length<=BUILDER_CHECK_TYPE_LIMIT&&/^[\w\s=\/:.\-]*$/.test(text);}
 // Every pattern of a schema compiled once: the tests require zero failures for each vendored file.
 function builderCheckSelfTest(schema){
  const result={patterns:0,failed:0,failures:[],risky:[]},seen=new Set();
@@ -170,7 +174,8 @@ function builderCheckStart(schema,context){
   out:[],aliases:new Set(),probed:BUILDER_PROBED_LEVELS[version]||[],extras:BUILDER_SCHEMA_EXTRA_KEYS[version]||{}};
 }
 function builderCheckSub(r){return Object.assign({},r,{out:[]});}
-function builderCheckAdd(r,severity,line,code,path,message){r.out.push({severity,line:Number(line)>0?Number(line):1,message,code,path:path.map(String)});}
+// A finding has no `refuser` unless the manager's own import refuses it where containerlab does not: then refuser is 'manager'.
+function builderCheckAdd(r,severity,line,code,path,message,refuser){const f={severity,line:Number(line)>0?Number(line):1,message,code,path:path.map(String)};if(refuser)f.refuser=refuser;r.out.push(f);}
 function builderCheckExact(r){return r.exact?'error':'warning';}
 function builderCheckClab(r){return r.version?'containerlab '+r.version:'containerlab';}
 // A local `#/definitions/…` reference, merged under the keys beside it; any other reference is dropped, never fetched.
@@ -271,6 +276,9 @@ function builderCheckHardName(r,loc,sch,path,line){
  const result=builderCheckMatch(sch.pattern,text,false);
  if(result==='long'){builderCheckAdd(r,'warning',line,'too-long',path,'`'+key+'` is too long to check (more than 1,024 characters).');return;}
  if(result!==false&&BUILDER_CHECK_MANAGER_NAME.test(text))return;
+ // containerlab expands ${VAR} itself (its own examples write prefix: ${CLAB_PREFIX:=""}) and validates the result; the manager's import reads the
+ // text as written, so an expression is the manager's refusal, not containerlab's.
+ if(text.includes('${')){builderCheckAdd(r,'error',line,'pattern-hard',path,"the manager’s import refuses this "+(key==='name'?'lab name':'prefix')+" ("+shown+"): the manager reads it as written, so it must start with a letter or digit (containerlab itself would expand the variable).",'manager');return;}
  const what=key==='name'?'the lab name '+shown:'the prefix '+shown;
  const message=/^[A-Za-z0-9]/.test(text)?what+' can only use letters, digits, dot, dash and underscore'+(key==='prefix'?' (or be empty, or __lab-name).':'.'):what+' must start with a letter or digit.';
  builderCheckAdd(r,'error',line,'pattern-hard',path,message);
@@ -343,7 +351,7 @@ function builderCheckScalar(r,loc,sch,path,line,o){
   if(path.length===1&&(key==='name'||key==='prefix')){builderCheckHardName(r,loc,sch,path,line);return;}
   // R6a: a port mapping containerlab refuses (P: `Invalid containerPort: abc`).
   const port=key==='ports'&&builderCheckIsIndex(path[path.length-1]);
-  const result=port&&!builderCheckPortGuard(text)?false:builderCheckMatch(sch.pattern,text,port);
+  const result=port&&!builderCheckPortGuard(text)?false:builderCheckMatch(sch.pattern,text,port||(key==='type'&&builderCheckTypeGuard(text)));
   if(result==='long'){builderCheckAdd(r,'warning',line,'too-long',path,label+' is too long to check (more than 1,024 characters).');return;}
   if(result===false){
    if(port)builderCheckAdd(r,'error',line,'pattern-hard',path,shown+' is not a port mapping (host:container, e.g. 8080:80).');
@@ -540,6 +548,12 @@ function builderCheckWaits(devices){
  }
  return waits;
 }
+// The names of a wait loop, at most eight; the rest is counted.
+const BUILDER_CHECK_CYCLE_NAMES=8;
+function builderCheckCycle(loop){
+ const names=loop.map(builderCheckShow);
+ return names.length<=BUILDER_CHECK_CYCLE_NAMES?names.join(' → '):names.slice(0,BUILDER_CHECK_CYCLE_NAMES).join(' → ')+' → … ('+(names.length-BUILDER_CHECK_CYCLE_NAMES)+' more)';
+}
 function builderCheckGraph(r,devices){
  const names=devices.map(d=>d.name),byName=new Map(devices.map(d=>[d.name,d])),waits=builderCheckWaits(devices);
  for(const w of waits){
@@ -580,7 +594,7 @@ function builderCheckGraph(r,devices){
   // The way back from the waited-for device to the waiting one closes the loop: waiter → target → … → waiter.
   const tail=[];let v=first.waiter;while(v!==first.target&&back.has(v)&&tail.length<=group.size){tail.unshift(v);v=back.get(v);}
   const loop=[first.waiter,first.target,...tail.slice(0,-1),first.waiter];
-  builderCheckAdd(r,'error',first.line,'wait-loop',['topology','nodes',first.waiter,'stages'],'Devices wait for each other in a loop ('+loop.map(builderCheckShow).join(' → ')+'). containerlab will not deploy the lab.');
+  builderCheckAdd(r,'error',first.line,'wait-loop',['topology','nodes',first.waiter,'stages'],'Devices wait for each other in a loop ('+builderCheckCycle(loop)+'). containerlab will not deploy the lab.');
  }
 }
 
@@ -673,8 +687,35 @@ function builderCheckLinkKeys(r,link,def,path,where,owned){
 // most BUILDER_CHECK_LIMIT items plus one closing "… and N more". With schema === null only the rules that need no
 // schema run (R0, R2a, R3, R7a/c/d, R8a–d, R9a/b), so the list works before the schema arrives and when its fetch
 // failed. `message` carries no "Line N:" prefix: the panel writes the line beside it.
+// YAML merge keys (`<<: *anchor`, which containerlab applies): the located tree may still carry `<<` as a key. The anchor's keys are applied in its
+// place, the map's own keys winning (and, for a list of anchors, the earlier one). A tree without `<<` comes back unchanged.
+function builderCheckMerged(n,depth){
+ if(!n||typeof n!=='object'||depth>BUILDER_CHECK_DEPTH||!Array.isArray(n.items))return n;
+ if(n.kind==='seq'){
+  let changed=false;const items=n.items.map(v=>{const m=builderCheckMerged(v,depth+1);if(m!==v)changed=true;return m;});
+  return changed?Object.assign({},n,{items}):n;
+ }
+ if(n.kind!=='map')return n;
+ let changed=false;const own=[],sources=[];
+ for(const item of n.items){
+  if(!item)continue;
+  if(item.key==='<<'){
+   changed=true;
+   const v=item.value;
+   for(const m of builderCheckIsMap(v)?[v]:builderCheckIsSeq(v)?v.items:[])if(builderCheckIsMap(m))sources.push(builderCheckMerged(m,depth+1));
+   continue;
+  }
+  const value=builderCheckMerged(item.value,depth+1);
+  if(value!==item.value){changed=true;own.push(Object.assign({},item,{value}));}else own.push(item);
+ }
+ if(!changed)return n;
+ const seen=new Set(own.map(i=>String(i.key))),items=own.slice();
+ for(const m of sources)for(const item of m.items){if(!item||seen.has(String(item.key)))continue;seen.add(String(item.key));items.push(item);}
+ return Object.assign({},n,{items});
+}
 function builderCheck(tree,schema,context){
  if(!tree||typeof tree!=='object')return [];
+ tree=builderCheckMerged(tree,0);
  const r=builderCheckStart(schema,context);
  builderCheckRoot(r,tree);
  return builderCheckFinish(r);

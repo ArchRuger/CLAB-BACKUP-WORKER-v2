@@ -80,13 +80,13 @@ body.lab-builder{display:flex;flex-direction:column}
 .builder-yaml-example-actions{padding-bottom:var(--space-2)}
 .builder-yaml-line.is-error{color:var(--danger-strong);font-weight:700;background:var(--danger-soft)}
 .builder-yaml-line.is-warning{color:var(--warn-strong);font-weight:700;background:var(--warn-soft)}
-.builder-yaml-problems{flex:none;display:flex;flex-direction:column;max-height:42%;min-height:0;padding:0 var(--space-3) var(--space-2)}
+.builder-yaml-problems{flex:none;display:flex;flex-direction:column;min-height:0;padding:0 var(--space-3) var(--space-2)}
 .builder-yaml-problems-title{margin:var(--space-2) 0 0;font-size:13px;color:var(--ink)}
 .builder-yaml-problems-note,.builder-yaml-schema,.builder-yaml-keyhelp{margin:0;padding:var(--space-1) 0 0;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
 .builder-yaml-schema-failed{margin:var(--space-1) 0 0;font-size:12.5px;color:var(--danger-strong);overflow-wrap:anywhere}
 .builder-yaml-schema-failed[hidden]{display:none}
 .builder-yaml-schema-failed .button{padding:1px 10px;min-height:0}
-.builder-yaml-list{flex:1 1 auto;min-height:0;max-height:30vh;margin:var(--space-1) 0 0;padding:0;list-style:none;overflow:auto}
+.builder-yaml-list{flex:1 1 auto;min-height:84px;max-height:30vh;margin:var(--space-1) 0 0;padding:0;list-style:none;overflow:auto}
 .builder-yaml-list li{margin:0;overflow-wrap:anywhere;font-size:13px}
 .builder-yaml-problem{display:block;width:100%;padding:3px 6px;text-align:left;font:inherit;color:var(--ink);background:transparent;border:0;border-radius:4px;cursor:pointer;overflow-wrap:anywhere}
 .builder-yaml-problem:hover{background:var(--surface-2)}

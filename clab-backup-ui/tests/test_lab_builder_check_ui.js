@@ -188,15 +188,16 @@ test('R4: the enums §3 names are errors when exact, the other enums warnings; t
  assert.equal(only(lab({'link-apply-mode':'now'})).severity,'warning');
  for(const ok of ['Always','IfNotPresent','never'])assert.deepEqual(check(lab({'image-pull-policy':ok})),[],ok);
 });
-test('R4: the kind-specific type enums are warnings with a suggestion; the SR OS type pattern is never tested (it backtracks without bound)',()=>{
+test('R4: the kind-specific type enums are warnings with a suggestion; the SR OS type pattern is tested only behind its guard (it backtracks without bound)',()=>{
  assert.deepEqual(brief(only(lab({kind:'nokia_srlinux',type:'ixrd9'}))),[7,'warning','enum','`ixrd9` is not a type containerlab 0.79.0 knows for the kind `nokia_srlinux`. Did you mean `ixrd1`?']);
  assert.deepEqual(check(lab({kind:'nokia_srlinux',type:'ixr-d3l'})),[]);
  assert.equal(only(lab({kind:'cisco_iol',type:'l3'})).message,'`l3` is not a type containerlab 0.79.0 knows for the kind `cisco_iol`. Did you mean `l2`?');
  assert.equal(only(lab({kind:'nokia_srsim',type:'sr-99'})).code,'enum');
  // The kind may come from the defaults: the condition uses the device's resolved kind.
  assert.equal(check({name:'x',topology:{defaults:{kind:'nokia_srlinux',image:'i'},nodes:{a:{type:'ixrd9'}}}}).filter(f=>f.code==='enum').length,1);
- // SR OS: an enum value, a valid custom type line, and one that is neither all pass (the pattern branch is not tested).
- for(const type of ['sr-1','cp: cpu=2 ram=4 ___ lc: cpu=2 ram=4','not a type'])assert.deepEqual(check(lab({kind:'nokia_sros',type})),[],type);
+ // SR OS: an enum value and a valid custom type line pass; a value that is neither gets the enum warning (the pattern branch is tested behind its guard).
+ for(const type of ['sr-1','cp: cpu=2 ram=4 ___ lc: cpu=2 ram=4'])assert.deepEqual(check(lab({kind:'nokia_sros',type})),[],type);
+ for(const type of ['not a type','card=x foo'])assert.deepEqual(brief(only(lab({kind:'nokia_sros',type}))),[7,'warning','enum','`'+type+'` is not a type containerlab 0.79.0 knows for the kind `nokia_sros`.'],type);
  // Not a nokia kind: type is any text.
  assert.deepEqual(check(lab({type:'whatever'})),[]);
 });
@@ -515,4 +516,46 @@ test('odd trees never throw: random located values in every place (a fixed seed,
   }
   C.builderKeyHelp(located(doc),SCHEMA,1+rnd(40));
  }
+});
+
+// ---- the panel fixes after the independent verification (docs/parity-campaign/C08-DESIGN.md §3, §4, §9) ----------
+test('the SR OS type guard: a long or strange value is not tested and returns at once; a wrong short one warns',()=>{
+ const start=Date.now();
+ for(const type of ['x'.repeat(300),'cpu=1 '.repeat(10)+'!','cpu=1  ___ '.repeat(90)+'x','é'.repeat(20)])assert.deepEqual(check(lab({kind:'nokia_sros',type})),[],type.slice(0,20));
+ assert.equal(check(lab({kind:'nokia_sros',type:'cpu=1 '.repeat(10)+'x'})).length,1,'a 61-character value inside the guard is tested');
+ assert.equal(check(lab({kind:'nokia_sros',type:'a'.repeat(65)})).length,0,'65 characters: over the cap, untested');
+ assert.ok(Date.now()-start<500,'took '+(Date.now()-start)+' ms');
+});
+test('a wait loop names at most eight devices and counts the rest',()=>{
+ const n=12,nodes={};
+ for(let i=0;i<n;i++)nodes['n'+i]={kind:'linux',image:'i',stages:{create:{'wait-for':[{node:'n'+((i+1)%n),stage:'create'}]}}};
+ const f=check({name:'x',topology:{nodes}}).filter(x=>x.code==='wait-loop');
+ assert.equal(f.length,1);
+ assert.match(f[0].message,/^Devices wait for each other in a loop \((n\d+ → ){8}… \(5 more\)\)\. containerlab will not deploy the lab\.$/);
+ const small=check({name:'x',topology:{nodes:{a:{kind:'linux',image:'i',stages:{create:{'wait-for':[{node:'b',stage:'create'}]}}},b:{kind:'linux',image:'i',stages:{create:{'wait-for':[{node:'a',stage:'create'}]}}}}}}).filter(x=>x.code==='wait-loop');
+ assert.match(small[0].message,/\(a → b → a\)/);
+});
+test('an environment-variable prefix is an error the manager refuses, not containerlab; an ordinary bad prefix stays containerlab’s',()=>{
+ const f=check({name:'x',prefix:'${CLAB_PREFIX:=""}',topology:{nodes:{}}});
+ assert.equal(f.length,1);assert.equal(f[0].severity,'error');assert.equal(f[0].code,'pattern-hard');assert.equal(f[0].refuser,'manager');
+ assert.match(f[0].message,/^the manager’s import refuses this prefix \(`\$\{CLAB_PREFIX:=""\}`\)/);
+ const plainBad=check({name:'x',prefix:'a b',topology:{nodes:{}}});
+ assert.equal(plainBad[0].refuser,undefined,'no refuser field means containerlab');
+});
+test('YAML merge keys: the anchor’s keys apply, the map’s own keys win, and `<<` is never an unknown key',()=>{
+ const entry=(key,keyLine,value)=>({key,keyLine,value});
+ const sc=(v,line)=>({kind:'scalar',line,value:v,tag:'str'});
+ const anchor={kind:'map',line:4,items:[entry('kind',4,sc('linux',4)),entry('image',5,sc('alpine:3',5))]};
+ const own={kind:'map',line:8,items:[entry('<<',8,anchor),entry('image',9,sc('own:1',9))]};
+ const merged=C.builderCheckMerged(own,0);
+ assert.deepEqual(plain(merged.items.map(i=>[i.key,i.value.value])),[['image','own:1'],['kind','linux']]);
+ const tree={kind:'map',line:1,items:[entry('name',1,sc('x',1)),entry('topology',2,{kind:'map',line:3,items:[entry('nodes',3,{kind:'map',line:4,items:[entry('a',4,anchor),entry('b',8,own)]})]})]};
+ const list=plain(C.builderCheck(tree,SCHEMA,EXACT));
+ assert.deepEqual(list.filter(f=>f.code==='unknown-key'||f.code==='kind-missing'),[],JSON.stringify(list));
+ // A list of anchors: the earlier one wins; a value that is neither a map nor a list of maps adds nothing and is not reported as a key.
+ const a1={kind:'map',line:1,items:[entry('image',1,sc('one',1))]},a2={kind:'map',line:2,items:[entry('image',2,sc('two',2)),entry('kind',2,sc('linux',2))]};
+ const two=C.builderCheckMerged({kind:'map',line:3,items:[entry('<<',3,{kind:'seq',line:3,items:[a1,a2]})]},0);
+ assert.deepEqual(plain(two.items.map(i=>[i.key,i.value.value])),[['image','one'],['kind','linux']]);
+ assert.deepEqual(plain(C.builderCheckMerged({kind:'map',line:1,items:[entry('<<',1,sc('x',1))]},0).items),[]);
+ const untouched={kind:'map',line:1,items:[entry('a',1,sc('1',1))]};assert.equal(C.builderCheckMerged(untouched,0),untouched,'no `<<`: the same tree');
 });

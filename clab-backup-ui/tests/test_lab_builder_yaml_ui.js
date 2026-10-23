@@ -386,3 +386,29 @@ test('the stylesheet gives the text box 160 px, one block per state and no inlin
  assert.match(css,/\.builder-yaml-line\.is-error/);assert.match(css,/\.builder-yaml-list\{[^}]*overflow:auto/);
  assert.match(css,/\.lab-builder #root svg\{max-width:none\}/);
 });
+
+test('redrawing the Problems list keeps keyboard focus on the same item (by line and code), or on the list when that item is gone',async()=>{
+ const c=loadCheck(),e=openWith(c,BAD);await settle();
+ const ol=c.els['builder-yaml-list'],first=items(c)[0].children[0];
+ assert.equal(first.attrs['data-code'],'unknown-key');
+ c.document.activeElement=first;
+ c.builderYamlCheckList();
+ const again=items(c)[0].children[0];
+ assert.notEqual(again,first,'the list was rebuilt');assert.equal(again.focused,1,'focus moved to the same item in the new list');assert.equal(ol.focused,0);
+ // Focus elsewhere is left alone.
+ c.document.activeElement=c.els['builder-yaml-editor'];c.builderYamlCheckList();
+ assert.equal(items(c)[0].children[0].focused,0);assert.equal(ol.focused,0);
+ // The focused item is gone after a fix: focus lands on the list container, which can take it.
+ c.document.activeElement=items(c)[0].children[0];
+ type(c,GOOD);c.runTimers();await settle();
+ assert.equal(items(c).length,0);assert.equal(ol.focused,1);assert.equal(ol.attrs.tabindex,'-1');
+ // Focus on the list itself stays on it.
+ c.document.activeElement=ol;c.builderYamlCheckList();assert.equal(ol.focused,2);
+});
+test('the Problems list keeps at least three items visible; the panel scrolls for the rest',()=>{
+ const css=read('lab-builder.css');
+ const list=/\.builder-yaml-list\{([^}]*)\}/.exec(css)[1];
+ const min=/min-height:(\d+)px/.exec(list);assert.ok(min&&Number(min[1])>=78,'a minimum of three items (about 26px each)');
+ assert.doesNotMatch(/\.builder-yaml-problems\{([^}]*)\}/.exec(css)[1],/max-height/,'the section no longer squeezes the list');
+ assert.match(css,/\.builder-yaml-panel\{overflow-y:auto\}/);
+});

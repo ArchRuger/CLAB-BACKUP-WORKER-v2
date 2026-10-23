@@ -591,3 +591,29 @@ test('the page’s capabilities reach the panel: the VM’s containerlab picks t
  p.c.opCapabilities=async()=>({containerlab:'0.79.0',actions:{}});
  return p.run('builderConnect()').then(()=>assert.deepEqual(seen,['0.79.0']));
 });
+
+test('an error the manager’s import refuses is worded as that, and the generic sentence counts only containerlab’s errors',async()=>{
+ const base={name:'lab1',prefix:'${CLAB_PREFIX:=""}',topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33'}}}};
+ const p=notePage(base);p.run('builderCheckStatus()');await p.fired();
+ assert.equal(p.el('builder-check').hidden,false);
+ const text=p.el('builder-check-text').textContent;
+ assert.match(text,/^1 error the manager’s import refuses: line 2, the manager’s import refuses this prefix /);assert.doesNotMatch(text,/containerlab will refuse/);
+ const mixed=notePage({...base,topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',imge:'x'}}}});mixed.run('builderCheckStatus()');await mixed.fired();
+ const both=mixed.el('builder-check-text').textContent;
+ assert.match(both,/^1 error containerlab will refuse when deploying: line \d+, `imge` is not a device setting/);assert.match(both,/The manager’s import also refuses 1 more\.$/);
+});
+test('Dismiss is remembered across a reload in the tab (sessionStorage, per draft, text and count) until the text changes',async()=>{
+ const session=(()=>{const m=new Map();return {getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>{m.set(k,String(v));},removeItem:k=>{m.delete(k);}};})();
+ const first=notePage();first.c.window.sessionStorage=session;
+ first.run('builderCheckStatus()');await first.fired();assert.equal(first.el('builder-check').hidden,false);
+ first.el('builder-check-dismiss').onclick();assert.equal(first.el('builder-check').hidden,true);
+ // A reload: a new page (nothing in memory) in the same tab.
+ const second=notePage();second.c.window.sessionStorage=session;
+ second.run('builderCheckStatus()');await second.fired();assert.equal(second.el('builder-check').hidden,true,'the same problems stay dismissed after a reload');
+ second.handle.doc={name:'lab1',topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',imge:'x',imgx:'y'}}}};second.run('builderCheckStatus()');await second.fired();
+ assert.equal(second.el('builder-check').hidden,false,'other problems are news again');
+ // A browser that refuses sessionStorage: Dismiss still works for the page’s life.
+ const refused=notePage();Object.defineProperty(refused.c.window,'sessionStorage',{get(){throw new Error('denied');}});
+ refused.run('builderCheckStatus()');await refused.fired();refused.el('builder-check-dismiss').onclick();
+ assert.equal(refused.el('builder-check').hidden,true);refused.run('builderCheckStatus()');await refused.fired();assert.equal(refused.el('builder-check').hidden,true);
+});
