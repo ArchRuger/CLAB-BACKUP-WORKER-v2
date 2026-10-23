@@ -1,3 +1,152 @@
+# Parity campaign: C03 drawer sections, C04 console and facts, the C05 helper — 1.31.3
+
+Evidence by kind (this checkout on the owner's development VM; the `parity` lab; containerlab 0.79.0; Docker 27.5.1).
+
+**Static and unit**
+
+- `node --test tests/*.js`: 889 tests pass (817 at 1.31.2; new `test_device_diagnostics_ui.js` and cases in
+  `test_operations_ui.js`, `test_page_load_ui.js`, `test_shell_ui.js`, `test_debug_ui.js`, `test_terminal_ui.js`,
+  `test_readiness_ui.js`, `test_topology_menu_ui.js`, `test_status_ui.js`).
+- `PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests`: 2761 tests, OK, 2 skipped
+  (2689 at 1.31.2; new `test_node_console.py`, `test_host_lifecycle.py`, cases in `test_nodes.py`, `test_discovery.py`,
+  `test_manager_reset.py`, `test_diagnostics.py`, `test_host_diagnostics.py`, `test_gateway_whitelist.py`).
+- `node --check` on every changed script, `python3 -m py_compile` on the changed modules, `python3 deploy/verify-release.py`,
+  `python3 docs/maintenance-audit/tools/check_links.py`, `git diff --check`.
+
+**Fixture and browser**
+
+- `/clab-slice-verify` on the C03 UI slice (six workers that did not write it, from its worktree): the seven slice test
+  files 177/177, `node --test tests/*.js` 859/859; the attack held 12 of 16 acceptance checks and found two medium
+  breaks (the Diagnostics page's containerlab version that no backend emitted; Lab files offering other labs' files the
+  viewer refused) and eleven low ones; the fixture pass at 1440, 760 and 390 in Chromium and Firefox (poll plan with
+  injected 503s and errors, hidden-tab resume, Follow cursor, Export, the inspect table, Lab files, Images). Every
+  medium and low finding was fixed and re-checked in a fixture smoke at 1280 and 390 (answers in C03-DESIGN §11).
+- C04 UI: the builder's fixture smoke with a seeded vJunos-router container whose health could be flipped, 52 of 52
+  checks at 1440 and 760 (the Container section and its unlinked form, Console enabled only while healthy with the
+  server's reason otherwise, Copy focus surviving the poll, the terminal page's console mode and its refusals).
+- C03 UI fixes from the live pass re-checked in Chromium (running-only caption, empty-filter row, ID cell).
+
+**Live (the `parity` lab through the manager)**
+
+- C03 UI, read-only, Chromium and Firefox at 1440 and 760: on `vrt`, `vsw` and `xrv9k` the Interfaces table (roles, Junos
+  port aliases, rates from the second sample, no sideways scroll), Logs (tail 200 and 2000, Find, Follow with the cursor
+  every 5 s, Export equal to the shown redacted text, vrnetlab's launcher lines), request discipline (`lab_id` and `node`
+  only, nothing before a section opens, nothing after the drawer closes), the inspect table with Owner `archtop`, Lab
+  files down to `ceos/flash/startup-config` in the viewer, Images with the five parity images used by `parity`, the
+  containerlab version in the menu. On `ceos` and `cjunos` both sections answered 409: the helper's inspect format was
+  refused by Docker for a container without a HEALTHCHECK; fixed in the helper (`index .State "Health"`), re-checked after the VM rebuild and helper refresh: `GET /api/operations/interfaces` answered 16 interfaces for `ceos` and 15 for
+  `cjunos` with the three roles, `logs` answered on both, `vrt` unchanged with health `healthy`; the capabilities answer
+  reports the new lifecycle options and the `start-node` and `impairments` actions available.
+- C04 console on `vrt`: Chromium at 1440 and 760 and Firefox for the drawer: the Container section (name, kind, the running image beside
+  the topology's, IPv4, the Console row, State `running · healthy`, seven Copy buttons with the shown values), Console
+  enabled; the console connected 1.2 s after the click, a bare Enter brought `login:` within 0.3 s, `admin` logged in,
+  `show version` answered Model vmx and Junos 26.2R1.7 (the pager needs Enter per page: a serial console has no window
+  size), `exit` returned to `login:`; keystroke echo median about 20 ms; a second tab was refused in 1.7 s with the
+  "already open from this manager (since …)" sentence and one TCP connection to port 5000 existed throughout; after
+  Disconnect the second tab reconnected; an outside holder (`nc` on port 5000) gave the held sentence after 3.1 s and
+  the manager's socket closed; eight sessions logged eight `console.open` and `console.close` pairs with lab and node
+  only, the manager's logs held neither the typed input nor the address; `ceos` and `cjunos` show no Console button.
+  Break found and fixed: discovery read the container id under `id` while containerlab writes `container_id`, so the
+  ID row read "Not reported" live.
+- C01 and C02 evidence stands as recorded at 1.31.2.
+
+**Independent review**
+
+- `/clab-design-review` of C04 (22 confirmed: two must-fix on the console being taken while vrnetlab's launcher still
+  needs it, answered with the server-side gate; C04-DESIGN §9) and of C05 (30 confirmed, three must-fix; C05-DESIGN §9).
+- `/clab-review-changes` on `d303f38..` (the C03 UI with its fixes, C04, the C05 helper): 17 confirmed (1 must-fix, 7 should-fix, 9 optional; 1 refuted; 42 agents). The must-fix (discovery's
+  container id under the wrong key) had been fixed from the live pass before the review ended; every should-fix and
+  optional finding was applied (keyboard focus kept across polls and when Retry hides, Lab files bounded on the
+  server as well as in the browser, the console kind table and the session loop's limits pinned, a test that every
+  test file is in the CI lists, the lab-wide impairment read tolerating one device's failed show and carrying the
+  container id, the digest's docstring, the guides and CLAUDE.md naming the console and the diagnostics). Answers in
+  C03-DESIGN §12, C04-DESIGN §10, C05-DESIGN §10.
+
+**Not run.** The C05 manager and UI (next release); no restore onto vJunos-router (C10); no image published.
+
+# Parity campaign, chunks C01 and C02, the C03 helper and API — 1.31.2
+
+Evidence by kind (this checkout on the owner's development VM; the `parity` lab of five nodes: vJunos-switch
+23.2R1.14, vJunos-router 26.2R1.7 on the nested-virtualization derivative, cJunosEvolved 26.2R1.7-EVO, XRv9k 24.3.1,
+cEOS 4.35.0F; containerlab 0.79.0). The campaign folder holds the designs, the review answers and the pickup log.
+
+**Static and unit**
+
+- `node --test tests/*.js`: 817 tests pass (768 at 1.31.1; new `test_clipboard_ui.js`, and new cases in
+  `test_terminal_ui.js`, `test_operations_ui.js`, `test_status_ui.js`, `test_readiness_ui.js`, `test_page_load_ui.js`,
+  `test_lab_builder_ui.js`, `test_restore_ui.js`).
+- `PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests`: 2689 tests, OK, 2 skipped
+  (the opt-in SSH fixtures); 2574 at 1.31.1. New: `OperationStopTests` (25) in `test_lab_operations.py`, including the
+  buffered final line, an unsent stop, the lock sentence proven against the helper's source and against the real
+  helper under `flock`, the cross-origin 403 and the wording parity between `status.js` and `lab_operations.py`;
+  `test_host_diagnostics.py` (43); `test_device_diagnostics.py` (29); `VJunosRouterKindTests` in `test_junos_kinds.py`
+  and the kind's cases in `test_restore.py` and `test_topology.py`; the images pins rewritten for the four-field
+  helper answer with the reference-list claim kept.
+- `node --check` on every changed script, `python3 -m py_compile` on the changed modules,
+  `python3 deploy/verify-release.py`, `python3 docs/maintenance-audit/tools/check_links.py`, `git diff --check`.
+
+**Fixture and browser**
+
+- `/clab-slice-verify` on the C02 build (`d00ccf1`; five workers that did not write it): the seven slice test files
+  194/194 and `node --test tests/*.js` 806/806 (exit 0); the attack worker held all nine acceptance checks (cancel
+  route 413/404/403/409/202, eight concurrent stops with one timestamp, busy until the probe, one Node context per
+  page, no inline styles, every interpolation escaped) and found five breaks, one medium (a result line already
+  buffered when the stop landed read `cancelled`); the fixture pass at 1440 and 760 in Chromium, plus Firefox by the
+  attack worker, over plain `http://` (Stop from View output and from the banner, "Start lab ended early: you stopped
+  it", Try again opening the redeploy review, Copy and paste-back of the exact values, the toolbar chords and the
+  wrapped-line export). The stock fixture's fake remote ignored a stop, so those runs used a scratch wrapper; the
+  fixture is stop-aware since `dd3a3b5`.
+- All five breaks and every code-review finding were fixed (`fcde544`, `dd3a3b5`; answers in C02-DESIGN §8), then a
+  `clab-ui-qa` re-check at 1440 and 760 in Chromium and Firefox passed its eight checks: clipboard values, focus back
+  on the button after the text-area copy inside a dialog, the Stop group's focus order and labelling, Try again on a
+  stopped deploy, a toolbar whose height does not change with its status line, and the screen and session export
+  names and contents (on the live cEOS terminal).
+- The full suites were run again on the final tree (the counts above).
+
+**Live (the `parity` lab through the manager)**
+
+- C01, all five nodes through the real pipeline: test logins 5/5 and backups 5/5 "Configuration saved" (jobs
+  `a2c78ce6…`, `e20f18a2…`, then `0d4b97c6…`, `273ded5b…` once cJunosEvolved had booted, nine minutes), archive
+  `parity_2026-10-23_02-30.zip`; the router's download name `vJunos-router_vrt_2026-10-23_02-30UTC.cfg`; its node
+  record carries no `restore_format` (restore off by design).
+- C02, the live stop pass on a disposable two-cEOS lab (`docs/parity-campaign/evidence/c02-live-stop.md`, two runs):
+  the containerlab process group was gone within 1.0 s and 1.6 s of the stop, the host lock free within 1.0 s and
+  1.2 s, the job `cancelled` within 1.5 s and 1.7 s; Redeploy repaired the half-started lab; the 409 answers for a
+  finished job and for an unstoppable action as designed. SIGKILL escalation was not reached (SIGTERM sufficed).
+- C03 helper and API, read-only, after the manager and helpers were rebuilt from the tree (`sudo bash
+  deploy/start-manager.sh`): on `clab-parity-vrt`, `GET /api/operations/interfaces` listed six interfaces with the
+  management, data and internal roles, the Junos port names as aliases and counters for all six (`counters_reason`
+  empty, a second sample two seconds later); `GET /api/operations/logs?tail=50` returned 50 stamped lines (the last
+  two are vrnetlab's "connection to '127.0.0.1' on port '5000' closed successfully" and "Startup complete") and the
+  `since` cursor one line; `GET /api/operations/netem` an empty list; `GET /api/operations/images` 14 images with
+  details, `used_by` naming the three labs that run them and nothing missing; `POST /api/operations/browse` in files
+  mode listed the project folder, the lab folder and the node folders with sizes; `POST /api/operations/view` returned
+  the topology file with one comment line omitted because it contains the word "secret" (the keyword rule; the
+  file holds no credential) and refused `/etc/passwd` (400 "That file is not in
+  this lab's folder."); an unknown device 404, `tail=abc` 400, an unknown lab 404; six concurrent log calls answered
+  three 200 and three 503; no event in `/api/state` names a diagnostics route or carries log text.
+
+**Independent review**
+
+- `/clab-design-review` of C02 (27 confirmed findings, answered in C02-DESIGN §7) and of C03 (25 confirmed: risk R1–R8,
+  UI U1–U17, answered in C03-DESIGN §9); `risk-reviewer` again on the built helper slice, its findings applied by the
+  specialist before the checkpoint.
+- `/clab-review-changes` on the C02 build (`408a2fd..d00ccf1`): 22 confirmed, 2 refuted, no must-fix; every finding
+  fixed. A second `/clab-review-changes` on the fixes and the C03 helper and manager checkpoints (`d00ccf1..`):
+  21 confirmed (9 should-fix, 12 optional, none must-fix, none refuted; 47 agents). Every should-fix was fixed
+  before this release: a private-key block cut by the log window, the `since` cursor, the helper's size cap or the
+  viewer's cut is now masked from the window start through its END line and the viewer redacts before it cuts; the
+  unredacted `/api/operations/read` keeps its old file types, so a startup configuration opens only through the
+  redacted viewer; a lab stored without `container_prefix` binds the right container; the audited-view test makes
+  the POST it names; the terminal's status line keeps its warning visible without changing the toolbar's height;
+  Save session after Clear keeps the 3,000-line note and does not repeat the prompt line. Of the optional findings,
+  all were applied except Try again for a stopped Start, Apply or Restart without a stored request (the mapping lives
+  in `operations.js`, owned by the C03 UI slice in flight; the next release). Answers in C02-DESIGN §8 and
+  C03-DESIGN §10.
+
+**Not run.** The C03 drawer sections (the UI half) are not in this release. No image was published; the
+nested-virtualization router image is a local, test-only build. No restore onto vJunos-router (C10).
+
 # Agent routing embedded in the repository — 1.31.1
 
 One application change in this release (the `make_default` form field of the profile route, for FastAPI 0.147 and

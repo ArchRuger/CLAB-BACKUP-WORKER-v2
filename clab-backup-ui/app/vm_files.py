@@ -11,7 +11,7 @@ import threading
 
 import paramiko
 
-from .inventory import JUNOS_SWITCHES, literal, parse_inventory, read_data
+from .inventory import JUNOS_ROUTERS, JUNOS_SWITCHES, literal, parse_inventory, read_data
 from .topology import parse_drawing
 
 PROTOCOL = 'clab-manager-files-v1'
@@ -121,7 +121,7 @@ def prepare_lab(bundle, deployed_name, previous=None):
                 node.update(synced_login)
             # Explicit sync may recognize a previously unsupported kind, but
             # must not enable it or replace a user's existing driver selection.
-            if not saved.get('platform') and inferred_platform in JUNOS_SWITCHES:
+            if not saved.get('platform') and inferred_platform in (*JUNOS_SWITCHES, *JUNOS_ROUTERS):
                 node['platform'] = inferred_platform
             node['endpoint_mode'] = saved.get('endpoint_mode', 'manual')
     if files.get('annotations') or not lab.get('drawing'):

@@ -95,6 +95,10 @@ class GatewayWhitelistTests(unittest.TestCase):
         for word in ('eval', 'bash', 'sh -c', '"$@"', '$*'):
             self.assertNotIn(word, text)
         self.assertEqual(text.count('SSH_ORIGINAL_COMMAND'), 1)
+        # The helper modes added since (C03 diagnostics, C05 lifecycle and impairments) travel as request lines on the
+        # existing names: the gateway names none of them and gains no arm for them.
+        for mode in ('logs', 'interfaces', 'netem', 'apply-plan', 'start-node', 'stop-node', 'impairment', 'lifecycle', 'diagnostics'):
+            self.assertNotIn(mode, text)
         self.assertEqual(sorted(set(re.findall(r'/usr/local/sbin/[\w-]+', text))),
                          sorted({'/usr/local/sbin/clab-manager-git', '/usr/local/sbin/clab-manager-operate', '/usr/local/sbin/clab-manager-inspect'}))
 

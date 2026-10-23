@@ -52,6 +52,7 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Edit map | Move devices and notes, add text, boxes, circles, lines and groups, style, undo and redo, save and export the map as JSON or draw.io; never changes devices, links or the topology file (see *The map and its editor*). |
 | Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the file is deployed, also when it is deployed under another lab name (found by its topology path). |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
+| Lab files (Lab actions ▾, and the Advanced tab) | The same dialog opened for one lab, titled *Lab files · <lab>*. On a VM whose helper reports `diagnostics` it is in *files mode*: every listing it makes (the first, a folder you expand, **Up one folder**, **All lab folders**) also shows the text and configuration files the manager can read (`.yaml`, `.yml`, `.json`, `.drawio`, `.txt`, `.cfg`, `.conf`, `.set`, `.md`, and the containerlab files named `startup-config` and `juniper.conf`) with their sizes, topology files first, so a device's startup configuration under `clab-<lab>/<device>/` is reachable. A topology file opens as before; any other file opens a read-only *File on the VM* viewer that hides lines with passwords, secrets or SNMP communities, says so, and shows at most the last 512 KiB of a longer file (**Copy** when the browser can copy). Keys, certificates, `.env` files and binaries are never listed. Without the flag (an older helper) the dialog is the topology browser above. |
 | Upload a file from this computer… (Home › Deploy, and the link in the topology browser) | For a topology file that is on your computer: the browser reads it, the manager checks that it is a topology it can read, you see the text and where it will be written, **Create file on the VM…** runs as a reviewed operation, and **Deploy or add this lab…** continues as for any file on the VM. Only that one file is uploaded (up to 1 MiB); files it refers to must be on the VM. A copied lab's saved map (`<topology>.annotations.json`, up to 1 MiB) can be added at the same time so devices keep their positions; it travels through the same review and is written beside the topology under its own name regardless of what the file on your computer was called, with a notice when that name differs and, if a map file is already there, a "Replaces the existing map file" notice in the review. |
 | Build a lab visually… / Open in Lab Builder… | Opens the [lab builder](LAB-BUILDER.md): draw devices and links, then save the lab folder to the VM through a review. *Open in Lab Builder…* opens an existing topology file; saving again is only possible while the lab is not deployed and keeps a copy of the previous version. Opened from the topology file dialog, the builder's **← My labs** link and the browser Back button return to that same dialog (read fresh from the VM); opening it directly from the Build card returns to My labs as usual. |
 | Write a new topology… | Creates a new topology file on the VM after a structure preview and confirmation; never replaces an existing file. |
@@ -96,6 +97,52 @@ notices that are not tied to one operation, such as configuration lines the reti
 telemetry feature left on a device, with a **Review and remove…** action (see
 [TELEMETRY.md](TELEMETRY.md)).
 
+## Diagnostics: logs, interfaces, inspect and images
+
+Everything here is read-only. None of it starts, stops, writes, pulls or runs anything inside a device; the manager
+asks the VM's operations helper (new modes `logs`, `interfaces`, `netem-show`, an extended `browse`, `images`) and
+shows the answer. The sections need a helper that reports `diagnostics: true` in `/api/operations/capabilities`;
+after upgrading the manager, refresh the helper (`sudo bash deploy/start-manager.sh --enable-operations`) or the
+device drawer shows neither section. The browser sends only the lab id and the device name; the manager derives the
+container from the lab's deployment name and refuses a container that is not labelled for that lab and device.
+
+- **Device drawer › Interfaces** (closed until opened). Name, Port (the device's own name, for example `ge-0/0/0`),
+  State, RX and TX, with MAC, MTU and type as a second line. Data interfaces come first and carry **Capture**, which
+  opens the capture dialog on that container interface; the management interface (`eth0`) is labelled; internal
+  ones (cEOS `cpu`/`fabric`, cJunosEvolved `eth1`–`eth3`) sit under *Other interfaces*. RX and TX show bytes and,
+  from the second sample of the same container run, a rate. Impairments set on an interface show as a line under it.
+  A stopped container says so (*Interfaces exist only while it runs; Logs shows its last output.*); a device with no
+  container yet says *No container for this device yet (deploy the lab, or wait for the deploy to create it).*
+- **Device drawer › Logs.** The container's output: **Tail** (200, 1000, 2000), **Refresh**, **Follow**, **Find**
+  and **Export**. Lines show `HH:MM:SS` with the full stamp on hover. Lines with passwords, passphrases, private
+  keys, community strings or secrets are replaced before they reach the browser, terminal escape codes are removed,
+  and nothing is stored, logged or written to an event; **Export** saves what is shown as
+  `<lab>-<device>-logs-<UTC stamp>.txt` from the browser. **Follow** adds new lines every few seconds and scrolls
+  only while you are at the bottom.
+- **How the sections poll.** One request at a time, the next only after the answer; every 5 s, backing off to 30 s
+  while the manager is busy (it serves three diagnostics calls at once) with the last data kept under *Updating
+  paused, retrying…*; three errors in a row stop it with **Retry**; after 30 minutes it pauses with **Resume**; a
+  hidden browser tab stops asking and fetches once on return. Closing the drawer or moving to another device
+  collapses both sections and clears their state.
+- **Device drawer › Container.** What the manager already knows about the device's container, from the latest VM
+  discovery (opening the drawer asks the VM for nothing): Container (name), ID (first 12 characters), Container kind,
+  Image (with *topology names …* when the running image differs), Addresses (IPv4 and IPv6), Console, and State (the
+  VM's last report, for example *running · Up 2 hours (healthy)*, or *Not on the VM*), most with a **Copy** button. While
+  Interfaces or Logs is open and refreshing, the section also shows the process id, health, start time and published
+  ports those calls return. For a lab that is not linked to a running lab it is one sentence (*Container facts come from
+  the VM. This lab is not linked to a running lab…*) with the kind and image the topology names. The Console row reads
+  *Serial, port 5000* for vJunos-switch, vJunos-router and XRv9k, *None for this kind* for the other kinds, and *Not
+  known* when the manager has no topology kind for the device.
+- **Running labs on the VM…** (Manager ▾) keeps its six columns (Topology, Lab, Device, Type / image, State /
+  health, IPv4 / IPv6) and adds **ID** (the first 12 characters of the container id) and **Owner**. Each header
+  sorts; **Filter devices** hides rows whose text lacks what you typed (a case-insensitive substring, any column);
+  the caption reads *n of m running devices* while a filter is set.
+- **Images on this VM…** (Manager ▾) lists the Docker images with size and age and the labs whose topologies name
+  each one; **Used by my labs** and **Missing** (a reference a lab names that the VM does not have) filter the
+  list. Nothing is pulled or removed. Without the updated helper only the references appear.
+- **containerlab version.** The Manager menu's footer and the Diagnostics page's *VM commands* row name the
+  containerlab release when the manager has asked the VM for its capabilities.
+
 ## Device readiness after deployment
 
 A running container is not a network OS that accepts a login: cEOS, vJunos and XRv9k
@@ -106,7 +153,9 @@ kind) until the network OS answers. The lab header shows *Starting* and *n of m 
 ready*; each device carries a state pill (*Starting*, *Ready*, *Needs credentials*,
 *Needs attention*, *Unavailable*) with a sentence that says what to do, on the Devices
 tab, in the device panel and on the map. **Open CLI** and **Open all CLIs** enable as
-devices answer, and a login check runs once by itself when every device has answered,
+devices answer (vJunos-switch, vJunos-router and XRv9k devices also offer **Console ↗**, a serial console that opens
+once the container reports healthy and is the way in when SSH does not answer or the management configuration is
+broken; see [NODE-FEATURES.md](../clab-backup-ui/NODE-FEATURES.md#serial-console)), and a login check runs once by itself when every device has answered,
 so its `show version` result is under Tools › Configuration backups › *Login checks*
 without a click. A device that stops or restarts must answer again. A failed automatic
 check sends its devices back to *Starting* and is retried up to three times per boot. A
@@ -160,7 +209,8 @@ The map's **More ▾** menu (also in the expanded map) offers **Open all CLIs �
 **Back up all configurations**. Back up all covers every device that can be backed up
 now, including devices not selected for scheduled backups. When every device is ready it
 starts at once; when some cannot be backed up, or a job is already running, it first lists
-the devices it will skip and why, and you confirm with **Back up N devices**. Right-click a device on the map for Open CLI, Capture traffic, Back
+the devices it will skip and why, and you confirm with **Back up N devices**. Right-click a device on the map for Open CLI, Console ↗ (the three kinds above; disabled with the reason while
+the console cannot open), Capture traffic, Back
 up configuration, Restart device… and Device details.
 
 ## Review and persistence
@@ -169,7 +219,7 @@ Every submitted host command requires a preview and confirmation. Review tokens
 expire after five minutes and bind the VM connection, original file digest and
 relevant deployment state. A change requires another preview. Output and outcome
 persist in **Operation history…** (Manager ▾ or Lab actions ▾ › Advanced options); interrupted jobs require
-inspection before retrying. Lifecycle commands can interrupt CLI sessions. Manager
+inspection before retrying. A running command can be stopped with `POST /api/operations/{id}/cancel` when it is one of the eleven stoppable actions (every lifecycle command: deploy, redeploy, destroy, apply, start, stop, restart, plus Restart device, Save device configurations, Download lab and Running labs on the VM); the five that finish on their own (create, delete, publish, revise, inspect) answer 409: the manager closes its SSH channel, the helper ends containerlab's process group, the job stays busy until the helper's host lock is free (about 20 seconds, since the last check may run past the deadline), and it then reads `cancelled` with the repair for that action (for example Redeploy lab after a stopped deploy); a stopped deploy never records a deployment time. Lifecycle commands can interrupt CLI sessions. Manager
 backups/import changes are blocked during an active lab operation.
 
 Before it plans a command on an existing topology file (the lifecycle commands, *Restart

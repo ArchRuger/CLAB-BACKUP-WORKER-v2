@@ -131,8 +131,11 @@ never reach `/api/state`.
    readers wait for stream EOF rather than exit status (keep new readers identical in shape). Helper
    `VERSION` must equal the manager's; the launcher refuses a mixed tree, and
    `deploy/setup-*.sh --refresh` reinstalls a helper.
-2. *The nodes directly*: Ansible `network_cli` (`runner.py`) and Paramiko shells (`node_services.py`,
-   `node_readiness.py`, `restore_shell.py`, `telemetry_retirement.py`). Every Ansible run gets its own `HOME` and host-key checking off
+2. *The nodes directly*: Ansible `network_cli` (`runner.py`), Paramiko shells (`node_services.py`,
+   `node_readiness.py`, `restore_shell.py`, `telemetry_retirement.py`) and, for the vrnetlab kinds in
+   `inventory.CONSOLE_PORTS`, the serial console (a TCP connection from `node_services.py` to the container's port
+   5000 through the telnet codec in `node_console.py`, behind the same ticket and Origin rules as SSH, gated by
+   `console_gate`, no credentials sent). Every Ansible run gets its own `HOME` and host-key checking off
    (`runner.job_environment`); lab containers regenerate host keys on each deploy.
 3. *The side stack*: browser Wireshark (`capture.py` discovery → `capture_sessions.py` same-origin
    relay → `capture_service.py`, the separate container that alone holds the Docker socket). The
@@ -155,7 +158,8 @@ queued/running work `interrupted`. There is no multi-instance coordination.
    `window`/`location`/`history`/`localStorage`/document listeners here so the other files still load
    in Node), `app.js` (state, `render`, `PANELS`), then the feature files (`topology-render`,
    `topology`, `home`, `management`, `operations`, `diagram-editor`, `diff-view`, `git-progress`,
-   `save-header`, `git-places`, `save-drawers`, `load`, `restore`, `network-design`, `capture`). Classic scripts
+   `save-header`, `git-places`, `save-drawers`, `load`, `restore`, `network-design`, `capture`,
+   `clipboard`, `device-diagnostics`). Classic scripts
    share one global scope: a top-level name declared in two files breaks the page
    (`tests/test_page_load_ui.js` loads them all in one context). Standalone pages (`terminal`, `workspace`, `debug`,
    `vm-connection`, `capture-setup`, `capture-session`, `lab-builder`, `map-editor`) have their own
@@ -192,7 +196,7 @@ a fake `$`, `esc` and `state`. Copy `tests/test_operations_ui.js` for a module o
   run; say plainly what is static, unit, fixture/browser, CI or live evidence.
 - `host_*.py` under `clab-backup-ui/app` are installed on the VM as sudoers helpers: treat changes as
   security-sensitive, keep the gateway's command list and each helper's option whitelist exact, and
-  never add a helper for device work (device access stays on the direct node-SSH path).
+  never add a helper for device work (device access stays on the direct node path: SSH or the serial console).
 - Do not add dependencies the notes rule out (PyEZ/ncclient/lxml for Junos; a Docker socket or host
   metrics in the manager; frontend frameworks or CDN assets in the manager UI).
 - Commit with Git (dotfiles included, LF enforced by `.gitattributes`); never replace files through

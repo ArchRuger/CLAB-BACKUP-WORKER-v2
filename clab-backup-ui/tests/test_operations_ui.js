@@ -45,7 +45,7 @@ test('inspection table handles grouped JSON surrounded by CLI log lines',()=>{
  const raw='INFO inspecting\n'+JSON.stringify({training:[{name:'clab-training-r1',absLabPath:'/etc/lab.clab.yaml',kind:'cisco_xrv9k',image:'router:1',state:'running',health_status:'healthy',ipv4_address:'172.20.20.2/24',ipv6_address:'2001:db8::2/64'}]},null,2)+'\nFinished\n';
  const rows=context.opInspectionRows(raw);assert.equal(rows.length,1);
  assert.equal(rows[0].lab,'training');assert.equal(rows[0].state,'running · healthy');assert.equal(rows[0].topology,'/etc/lab.clab.yaml');
- const table=context.opInspectionTable(rows);assert.match(table,/router:1/);assert.match(table,/2001:db8::2\/64/);assert.match(table,/<th>State \/ health<\/th>/);
+ const table=context.opInspectionTable(rows);assert.match(table,/router:1/);assert.match(table,/2001:db8::2\/64/);assert.match(table,/<th scope="col" aria-sort="none"><button type="button" class="op-sort" data-op-sort="state">State \/ health<\/button><\/th>/);
 });
 test('flat inspection rows use lab identity and escape untrusted output',()=>{
  const rows=context.opInspectionRows(JSON.stringify([{lab_name:'demo',name:'<script>bad</script>',labels:{'clab-topo-file':'/tmp/a.yaml'},state:'exited'}]));
@@ -457,7 +457,7 @@ test('the Restart device review names the one device and the lab, what drops, an
 });
 
 test('opRestartDevice re-checks eligibility, then reviews exactly one device of one lab with no options',async()=>{
- const calls=[];const c=vm.createContext({$:()=>null,esc:context.esc,state:{discovery:{connected:true},labs:[{id:'a',name:'square',deployment_name:'square',vm_project_path:'/srv/p/square.clab.yml',deployment:{status:'Running'},nodes:[{name:'clab-square-ceos',short_name:'ceos',discovered:true,runtime_state:'running'},{name:'clab-square-xrv9k',short_name:'xrv9k',discovered:false,runtime_state:'absent'}]}],jobs:[],operations:[],git_jobs:[]},busy:()=>false,notify:m=>calls.push(['notify',m]),showActionError:m=>calls.push(['error',m]),api:async()=>({json:async()=>({actions:{'restart-node':{available:true}}})}),json:async(path,method,data)=>{calls.push(['json',path,method,data]);return {};}});
+ const calls=[];const c=vm.createContext({$:()=>null,esc:context.esc,state:{discovery:{connected:true},labs:[{id:'a',name:'square',deployment_name:'square',vm_project_path:'/srv/p/square.clab.yml',deployment:{status:'Running'},nodes:[{name:'clab-square-ceos',short_name:'ceos',discovered:true,runtime_state:'running'},{name:'clab-square-xrv9k',short_name:'xrv9k',discovered:false,runtime_state:'absent'}]}],jobs:[],operations:[],git_jobs:[]},busy:()=>false,notify:m=>calls.push(['notify',m]),renderLabBanner(){},showActionError:m=>calls.push(['error',m]),api:async()=>({json:async()=>({actions:{'restart-node':{available:true}}})}),json:async(path,method,data)=>{calls.push(['json',path,method,data]);return {};}});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
  c.opReview=async request=>{calls.push(['review',request]);};
  await c.opRestartDevice('a','clab-square-ceos');
@@ -526,4 +526,590 @@ test('no manager script writes or clears the remembered lab in sessionStorage wi
   const source=fs.readFileSync(path.join(__dirname,'../app/static',file),'utf8');
   assert.doesNotMatch(source,/(?<!try\{)sessionStorage\.(setItem|removeItem)\('activeLab'/,file+': blocked site data throws SecurityError; shell.js shellSet/shellRemove or a try/catch must wrap the call');
  }
+});
+
+// C02: Stop a running lifecycle operation and Copy output. A tiny DOM: every id in written markup becomes an element, so the
+// Stop block can rebuild itself and the test can click, focus and read it.
+function stopHarness(jobs,{clipboard=true}={}){
+ const elements=new Map(),log={focus:[],copies:[],feedback:[],posts:[],bodies:[]};
+ let active=null;
+ const make=id=>{
+  const el={id,hidden:false,disabled:false,className:'',textContent:'',scrollTop:0,scrollHeight:0,clientHeight:0,children:new Set(),handlers:{},_html:'',
+   get innerHTML(){return this._html;},
+   set innerHTML(html){this._html=html;this.children.clear();for(const m of String(html).matchAll(/ id="([\w-]+)"/g)){const child=make(m[1]);this.children.add(child);}},
+   addEventListener(name,fn){this.handlers[name]=fn;},focus(){active=this;log.focus.push(id);},
+   contains(other){return other===this||this.children.has(other);}};
+  elements.set(id,el);return el;
+ };
+ const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs:[]},activeId:'lab1',console,
+  document:{getElementById:()=>null,get activeElement(){return active;}},setTimeout:()=>1,clearTimeout(){},
+  api:async()=>({json:async()=>jobs.current}),refresh:async()=>{},
+  json:async(url,method,body)=>{log.posts.push([url,method,body]);if(jobs.postError)throw new Error(jobs.postError);return {status:'running'};}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),c);
+ if(clipboard)vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/clipboard.js'),'utf8'),c);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ if(clipboard){c.copyText=async(text,source)=>{log.copies.push([text,source.id]);return jobs.copyOk!==false;};c.copyFeedback=(button,ok)=>log.feedback.push([button.id,ok]);}
+ const dialog={id:'operation-output',open:true,classList:{toggle(){}},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]};
+ c.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))make(m[1]);log.html=html;return dialog;};
+ const stopBox=()=>elements.get('op-job-stop');
+ return {c,elements,log,dialog,box:stopBox,get:id=>elements.get(id)};
+}
+const stopJob=extra=>({id:'a',action:'deploy',name:'demo',lab_id:'lab1',status:'running',output:'',...extra});
+
+test('C02: a stopped job reads Stopped by you in the history, a warning banner without a hint, and Try again turns a stopped deploy into a redeploy review',()=>{
+ const c=vm.createContext({$:()=>null,esc:s=>String(s)});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ assert.equal(c.opStatusWord('cancelled'),'Stopped by you');
+ const pull='level=error msg="Failed to pull image image=docker.io/library/x:1"';
+ const banner=c.opJobBanner({action:'deploy',name:'demo',status:'cancelled',exit_code:null,message:'You stopped Start lab.',output:pull});
+ assert.equal(banner.tone,'warn');assert.equal(banner.title,'■ Start lab ended early: you stopped it');assert.equal(banner.hint,undefined,'a stop is not a failure to explain');assert.equal(banner.exit,'');
+ assert.equal(c.opJobBanner({action:'destroy',name:'demo',status:'failed',exit_code:1}).tone,'bad','failures keep their tone');
+ c.jobRequest=id=>id==='j'?{action:'deploy',lab_id:'old',options:{cleanup:true}}:null;
+ assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:'j',action:'deploy',status:'cancelled'},'lab'))),{action:'redeploy',lab_id:'lab',options:{cleanup:true}},'same options, the redeploy review');
+ assert.equal(c.opRetryRequest({id:'zz',action:'deploy',status:'cancelled'},'lab'),null,'no remembered request: the dialog, as for a failed deploy');
+ assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:'x',action:'destroy',status:'cancelled'},'lab'))),{lab_id:'lab',action:'destroy',options:{cleanup:true}},'every other stopped action repeats itself');
+ assert.equal(c.opRetryRequest({id:'j',action:'deploy',status:'failed'},'lab').action,'deploy','a failed deploy is repeated as before');
+ // start, apply and restart end in the same aftermath as a stopped deploy (Redeploy lab): the same redeploy review, the same options
+ c.jobRequest=id=>({start:{action:'start',lab_id:'old',options:{}},apply:{action:'apply',lab_id:'old',options:{a:1}},restart:{action:'restart',lab_id:'old',options:{}}}[id]||null);
+ for(const action of ['start','apply','restart'])assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:action,action,status:'cancelled'},'lab'))),{action:'redeploy',lab_id:'lab',options:action==='apply'?{a:1}:{}},action+' becomes a redeploy review');
+ assert.equal(c.opRetryRequest({id:'start',action:'start',status:'failed'},'lab').action,'start','a failed start is repeated as before');
+ // a stopped start, apply or restart from an earlier session (no remembered request) still gets the one-click redeploy review; deploy stays null (its options may have been the cleanup variant)
+ c.jobRequest=()=>null;
+ for(const action of ['start','apply','restart'])assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:'old-'+action,action,status:'cancelled'},'lab'))),{lab_id:'lab',action:'redeploy',options:{}},action+' without a stored request becomes a redeploy review');
+ assert.equal(c.opRetryRequest({id:'old-deploy',action:'deploy',status:'cancelled'},'lab'),null,'deploy without a stored request is never guessed');
+});
+
+test('C02: the Stop block is offered only for stoppable actions while queued or running, and walks ask, confirmation, Stopping… with focus kept',async()=>{
+ const jobs={current:stopJob({})},h=stopHarness(jobs);
+ await h.c.opShowJob('a');
+ assert.equal(h.box().hidden,false);assert.match(h.box().innerHTML,/id="op-stop-ask">Stop this operation…</);assert.doesNotMatch(h.box().innerHTML,/op-stop-confirm/);
+ assert.deepEqual(h.log.focus,[],'opening the window moves no focus');
+ h.get('op-stop-ask').handlers.click();
+ assert.match(h.box().innerHTML,/End the running command \(Start lab\) on demo\? The manager asks the lab VM to end it now\. The lab may be only partly started; afterwards: Redeploy lab\./);
+ assert.match(h.box().innerHTML,/id="op-stop-keep">Keep running</);assert.match(h.box().innerHTML,/class="button danger small" id="op-stop-confirm">Stop</);
+ assert.match(h.box().innerHTML,/<div role="group" aria-labelledby="op-stop-question"><p id="op-stop-question">.*<\/p><div class="actions"><button[^>]*id="op-stop-keep">.*id="op-stop-confirm">Stop<\/button><\/div><\/div>/,'the question labels the group of its two buttons');
+ assert.equal(h.log.focus.at(-1),'op-stop-keep','focus starts on the safe choice');
+ h.get('op-stop-keep').handlers.click();
+ assert.match(h.box().innerHTML,/op-stop-ask/);assert.equal(h.log.focus.at(-1),'op-stop-ask','Keep running returns focus to the ask button');
+ h.get('op-stop-ask').handlers.click();
+ await h.get('op-stop-confirm').handlers.click();
+ assert.deepEqual(JSON.parse(JSON.stringify(h.log.posts)),[['/operations/a/cancel','POST',{}]]);
+ assert.match(h.box().innerHTML,/<p id="op-stop-status" role="status" tabindex="-1">Stopping… the manager has asked the lab VM to end the command\.<\/p>/);
+ assert.equal(h.log.focus.at(-1),'op-stop-status');
+ // The record carries the request: a later poll with cancel_requested keeps the same block, and a reopened window shows it unasked.
+ const before=h.log.focus.length;jobs.current=stopJob({cancel_requested:'2026-10-20T10:00:05Z'});
+ await h.c.opShowJob('a');assert.match(h.box().innerHTML,/op-stop-status/);assert.equal(h.log.focus.length,before,'a reopened window does not steal focus');
+});
+
+test('C02: Stop is not drawn for actions that finish on their own or for finished jobs, and the block hands focus to the banner when it goes away under the person',async()=>{
+ for(const action of ['create','delete','publish','revise','inspect']){
+  const h=stopHarness({current:stopJob({action})});await h.c.opShowJob('a');
+  assert.equal(h.box().hidden,true,action);assert.equal(h.box().innerHTML,'');
+ }
+ for(const status of ['succeeded','failed','cancelled','interrupted']){const h=stopHarness({current:stopJob({status})});await h.c.opShowJob('a');assert.equal(h.box().hidden,true,status);}
+ const queued=stopHarness({current:stopJob({status:'queued'})});await queued.c.opShowJob('a');assert.match(queued.box().innerHTML,/op-stop-ask/,'queued can be stopped');
+ // The block holds focus (the confirmation), then the job ends: focus moves to the job banner, not to the page.
+ const jobs={current:stopJob({})},h=stopHarness(jobs);let poll;h.c.setTimeout=fn=>{poll=fn;return 1;};
+ await h.c.opShowJob('a');h.get('op-stop-ask').handlers.click();assert.equal(h.log.focus.at(-1),'op-stop-keep');
+ jobs.current=stopJob({status:'cancelled',message:'You stopped Start lab.'});await poll();
+ assert.equal(h.box().hidden,true);assert.equal(h.log.focus.at(-1),'op-job-banner');assert.match(h.log.html,/id="op-job-banner" class="op-banner" tabindex="-1"/);
+ assert.equal(h.get('op-job-banner').className,'op-banner warn');assert.match(h.get('op-job-banner').innerHTML,/ended early: you stopped it/);
+});
+
+test('C02: a poll that turns the confirmation into Stopping… moves focus from the vanished button to the status, and only then',async()=>{
+ const jobs={current:stopJob({})},h=stopHarness(jobs);let poll;h.c.setTimeout=fn=>{poll=fn;return 1;};
+ await h.c.opShowJob('a');h.get('op-stop-ask').handlers.click();assert.equal(h.log.focus.at(-1),'op-stop-keep');
+ jobs.current=stopJob({cancel_requested:'2026-10-20T10:00:05Z'});await poll();
+ assert.match(h.box().innerHTML,/op-stop-status/);assert.equal(h.log.focus.at(-1),'op-stop-status','focus does not fall to BODY');
+ // nothing held focus (the person is reading the output): the change steals none
+ const idleJobs={current:stopJob({})},h3=stopHarness(idleJobs);let p3;h3.c.setTimeout=fn=>{p3=fn;return 1;};
+ await h3.c.opShowJob('a');idleJobs.current=stopJob({cancel_requested:'x'});await p3();assert.equal(h3.log.focus.length,0,'no focus was held, none is taken');
+});
+test('C02: opening with {stop:true} unfolds the confirmation on Keep running; a refused stop shows the error and brings the ask button back',async()=>{
+ const jobs={current:stopJob({action:'destroy'})},h=stopHarness(jobs);
+ await h.c.opShowJob('a',{stop:true});
+ assert.match(h.box().innerHTML,/End the running command \(Destroy lab\) on demo\?.*only partly removed; afterwards: run Destroy lab again\./);assert.equal(h.log.focus.at(-1),'op-stop-keep');
+ jobs.postError='This operation has already finished.';
+ const errors=[];h.dialog.querySelector=sel=>sel==='.form-error'?{set textContent(v){errors.push(v);},get textContent(){return '';},scrollIntoView(){}}:{textContent:''};
+ await h.get('op-stop-confirm').handlers.click();
+ assert.ok(errors.includes('This operation has already finished.'),'the refusal lands in the dialog\'s error line');
+ assert.match(h.box().innerHTML,/op-stop-ask/);assert.equal(h.log.focus.at(-1),'op-stop-ask');
+});
+
+test('C02: Copy output is disabled while the output is empty, copies the job output through its own click and flips through copyFeedback',async()=>{
+ const jobs={current:stopJob({action:'inspect',output:''})},h=stopHarness(jobs);
+ await h.c.opShowJob('a');
+ assert.match(h.log.html,/<div class="op-output-tools"><button type="button" id="op-copy-output" class="button ghost small" data-label="Copy output" aria-label="Copy the command output" data-copy-target="op-job-output" disabled>Copy output<\/button><span class="copy-status" role="status"><\/span><\/div><pre class="op-output" id="op-job-output"/);
+ assert.doesNotMatch(h.log.html,/data-copy=/,'no data-copy: the document-level delegation never copies this a second time');
+ const button=h.get('op-copy-output');assert.equal(button.disabled,true,'Waiting for the VM… is never copied');
+ await button.onclick();assert.deepEqual(h.log.copies,[]);
+ jobs.current=stopJob({action:'inspect',output:'line 1\nline 2'});
+ let poll;h.c.setTimeout=fn=>{poll=fn;return 1;};jobs.current.status='running';await h.c.opShowJob('a');
+ const again=h.get('op-copy-output');assert.equal(again.disabled,false);
+ await again.onclick();assert.deepEqual(h.log.copies,[['line 1\nline 2','op-copy-output']]);assert.deepEqual(h.log.feedback,[['op-copy-output',true]]);
+ jobs.copyOk=false;await again.onclick();assert.deepEqual(h.log.feedback.at(-1),['op-copy-output',false],'a failed copy is reported, never shown as Copied');
+ const bare=stopHarness({current:stopJob({output:'x'})},{clipboard:false});await bare.c.opShowJob('a');
+ assert.doesNotMatch(bare.log.html,/op-copy-output/,'a page without clipboard.js has no dead button');
+});
+
+// ---- C03 (docs/parity-campaign/C03-DESIGN.md 4.2 to 4.5) ----------------------------------------------------------------------
+const inspectRaw=JSON.stringify([
+ {lab_name:'beta',name:'clab-beta-r2',kind:'ceos',image:'ceos:4.35',state:'running',health_status:'healthy',ipv4_address:'172.20.20.3/24',container_id:'0123456789abcdef0123',owner:'student',labels:{'clab-topo-file':'/p/beta.clab.yaml'}},
+ {lab_name:'alpha',name:'clab-alpha-r10',kind:'linux',image:'alpine',state:'running',ipv4_address:'172.20.20.9/24',container_id:'ffffffffffffffff',owner:'root',labels:{'clab-topo-file':'/p/alpha.clab.yaml'}},
+ {lab_name:'alpha',name:'clab-alpha-r9',kind:'linux',image:'alpine',state:'exited',ipv4_address:'172.20.20.8/24',container_id:'',labels:{}}]);
+test('the inspect table keeps its six columns in order with the Lab column, then appends ID and Owner',()=>{
+ const rows=context.opInspectionRows(inspectRaw);
+ assert.equal(rows[0].id,'0123456789ab','the first 12 characters of the container id');assert.equal(rows[0].owner,'student');assert.equal(rows[2].id,'');assert.equal(rows[2].owner,'');
+ const table=context.opInspectionTable(rows);
+ const heads=[...table.matchAll(/data-op-sort="(\w+)">([^<]+)<\/button>/g)].map(m=>m[2]);
+ assert.deepEqual(heads,['Topology','Lab','Device','Type / image','State / health','IPv4 / IPv6','ID','Owner']);
+ assert.match(table,/<td class="mono">0123456789ab<\/td><td>student<\/td>/);
+ assert.match(table,/<td class="mono">—<\/td><td>—<\/td>/,'an empty id or owner reads as a dash');
+ assert.equal((table.match(/aria-sort="none"/g)||[]).length,8,'every header carries aria-sort and holds a button');
+ assert.match(table,/<label for="op-inspect-filter">Filter devices<\/label><input type="search" id="op-inspect-filter"/,'the filter box has a visible label');
+ assert.match(table,/<caption>2 running devices<\/caption>/,'the exited row is listed but not counted');
+});
+test('inspect sort is stable, numeric-aware and reversible; aria-sort follows the state',()=>{
+ const rows=context.opInspectionRows(inspectRaw),names=list=>Array.from(list,r=>r.node);
+ assert.deepEqual(names(context.opInspectionSort(rows,'node','asc')),['clab-alpha-r9','clab-alpha-r10','clab-beta-r2'],'r9 before r10');
+ assert.deepEqual(names(context.opInspectionSort(rows,'node','desc')),['clab-beta-r2','clab-alpha-r10','clab-alpha-r9']);
+ assert.deepEqual(names(context.opInspectionSort(rows,'lab','asc')),['clab-alpha-r10','clab-alpha-r9','clab-beta-r2'],'equal keys keep their order');
+ assert.deepEqual(names(context.opInspectionSort(rows,'','asc')),names(rows),'no key keeps the order given');assert.deepEqual(names(context.opInspectionSort(rows,'node','')),names(rows));
+ assert.deepEqual(names(rows),['clab-beta-r2','clab-alpha-r10','clab-alpha-r9'],'sorting copies, never reorders the input');
+ const table=context.opInspectionTable(rows,{key:'lab',dir:'desc',filter:''});
+ assert.match(table,/aria-sort="descending"><button type="button" class="op-sort" data-op-sort="lab">/);assert.equal((table.match(/aria-sort="none"/g)||[]).length,7);
+ assert.match(context.opInspectionTable(rows,{key:'lab',dir:'asc'}),/aria-sort="ascending"><button[^>]*data-op-sort="lab"/);
+});
+test('inspect filter is a case-insensitive substring over every column, the Lab included; the caption says n of m',()=>{
+ const rows=context.opInspectionRows(inspectRaw),names=list=>Array.from(list,r=>r.node);
+ assert.deepEqual(names(context.opInspectionFilter(rows,'ALPHA')),['clab-alpha-r10','clab-alpha-r9'],'the Lab column is searched');
+ assert.deepEqual(names(context.opInspectionFilter(rows,'0123456789AB')),['clab-beta-r2'],'the new ID column is searched');
+ assert.deepEqual(names(context.opInspectionFilter(rows,'student')),['clab-beta-r2']);
+ assert.deepEqual(names(context.opInspectionFilter(rows,'172.20.20.8')),['clab-alpha-r9']);
+ assert.equal(context.opInspectionFilter(rows,'  ').length,3);assert.equal(context.opInspectionFilter(rows,'a*').length,0,'no wildcard grammar');
+ const table=context.opInspectionTable(rows,{filter:'alpha'});
+ assert.match(table,/<caption>1 of 2 running devices<\/caption>/);assert.match(table,/value="alpha"/);assert.doesNotMatch(table,/clab-beta-r2/);
+ assert.match(context.opInspectionTable(rows,{filter:'"><b>'}),/value="&quot;&gt;&lt;b&gt;"/,'the filter text is escaped');
+ assert.match(context.opInspectionTable([rows[0]]),/<caption>1 running device<\/caption>/);
+ const none=context.opInspectionTable(rows,{filter:'zzz'});
+ assert.match(none,/<caption>0 of 2 running devices<\/caption>/);assert.match(none,/<tbody><tr><td colspan="8" class="op-inspection-empty">No device matches\.<\/td><\/tr><\/tbody>/,'one row spanning the columns');
+});
+test('the inspect table redraws only its own parts when the filter or a header changes',()=>{
+ const rows=context.opInspectionRows(inspectRaw),view={key:'',dir:'',filter:''},focused=[];
+ const listeners={},table={innerHTML:'',addEventListener(type,fn){listeners['table:'+type]=fn;},querySelector:sel=>sel.includes('data-op-sort')?{focus(){focused.push(sel);}}:null};
+ const filter={value:'',addEventListener(type,fn){listeners['filter:'+type]=fn;}};
+ const root={querySelector:sel=>sel==='table'?table:filter};
+ context.opInspectionBind(root,rows,view);
+ filter.value='beta';listeners['filter:input']();assert.equal(view.filter,'beta');assert.match(table.innerHTML,/<caption>1 of 2 running devices<\/caption>/);assert.deepEqual(focused,[],'typing never moves focus');
+ const click=key=>listeners['table:click']({target:{closest:()=>({dataset:{opSort:key}})}});
+ click('node');assert.deepEqual([view.key,view.dir],['node','asc']);click('node');assert.equal(view.dir,'desc');click('node');assert.deepEqual([view.key,view.dir],['','']);
+ click('lab');assert.deepEqual([view.key,view.dir],['lab','asc']);assert.match(focused.at(-1),/data-op-sort="lab"/,'focus returns to the header button that was used');
+});
+
+test('sizes read like Docker (kB, MB) and the files-mode labels carry them',()=>{
+ assert.equal(context.opSize(0),'0 B');assert.equal(context.opSize(2100),'2.1 kB');assert.equal(context.opSize(3400000),'3.4 MB');assert.equal(context.opSize('x'),'');
+ assert.equal(context.opFileLabel({name:'startup-config',size:2100}),'◇ startup-config · 2.1 kB');assert.equal(context.opFileLabel({name:'a.yaml'}),'◇ a.yaml');
+ const entries=[{name:'notes.md',kind:'file',directory:false},{name:'clab-lab',kind:'directory',directory:true},{name:'lab.clab.yaml',kind:'topology',directory:false},{name:'lab.clab.yaml.annotations.json',kind:'file'}];
+ assert.deepEqual(Array.from(context.opFileEntries(entries),e=>e.name),['lab.clab.yaml','clab-lab','notes.md','lab.clab.yaml.annotations.json'],'topology files first, then folders, then the other files in the order given');
+});
+
+function browseHarness({diagnostics=true}={}){
+ const calls=[];
+ const element=tag=>({tag,children:[],className:'',textContent:'',open:false,isConnected:true,disabled:false,append(...c){this.children.push(...c);},replaceChildren(){this.children=[];}});
+ const nodes={};
+ const get=id=>{if(!nodes[id])nodes[id]=Object.assign(element('x'),{id});return nodes[id];};
+ const listing={'/srv/p/lab':[{name:'clab-lab',path:'/srv/p/lab/clab-lab',directory:true,kind:'directory'},{name:'lab.clab.yaml',path:'/srv/p/lab/lab.clab.yaml',kind:'topology',size:900},{name:'map.annotations.json',path:'/srv/p/lab/map.annotations.json',kind:'file',size:120}],
+  '/srv/p/lab/clab-lab':[{name:'r1',path:'/srv/p/lab/clab-lab/r1',directory:true,kind:'directory'}],'/srv/p/lab/clab-lab/r1':[{name:'startup-config',path:'/srv/p/lab/clab-lab/r1/startup-config',kind:'file',size:2100}],'/srv/p':[{name:'lab',path:'/srv/p/lab',directory:true,kind:'directory'}],'':[{name:'projects',path:'/srv/p',directory:true,kind:'directory'}]};
+ const c=vm.createContext({$:id=>/^(op-|help$|err$)/.test(id)?get(id):null,esc:v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])),state:{labs:[{id:'L1',name:'lab one',vm_project_path:'/srv/p/lab/lab.clab.yaml'}]},document:{createElement:element},
+  json:async(url,method,body)=>{calls.push([url,JSON.parse(JSON.stringify(body))]);return {path:body.path,parent:body.path&&body.path!=='/srv/p'?'/srv/p':'',entries:listing[body.path]||[]};}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ const dialog={querySelector:sel=>sel==='.form-help'?get('help'):get('err'),querySelectorAll:()=>[],open:true,close(){}};
+ const dialogs=[];
+ c.opDialog=(id,title,body)=>{dialogs.push({id,title,body});return dialog;};
+ c.opCapabilities=async()=>{const caps={diagnostics,network:false,actions:{}};vm.runInContext('opCaps='+JSON.stringify(caps),c);return caps;};
+ c.opViewed=[];c.opView=async(p,l)=>{c.opViewed.push([p,l]);};c.opEdit=async(p,l)=>{c.opViewed.push(['edit',p,l]);};
+ return {c,calls,dialogs,get};
+}
+test('Lab files mode: every listing sends files:true with the lab, keeps the title and help, and reaches nested folders',async()=>{
+ const h=browseHarness();
+ await h.c.opBrowse('','L1');
+ assert.deepEqual(h.calls[0],['/operations/browse',{path:'/srv/p/lab',files:true,lab_id:'L1'}],'the first listing starts in the lab folder');
+ assert.equal(h.dialogs[0].title,'Lab files · lab one');assert.match(h.dialogs[0].body,/Files the manager can show \(text and configuration files\)\. Other files on the VM are not listed\./);
+ const tree=h.get('op-file-tree');
+ assert.equal(tree.children.length,3);
+ const [topology,folder,other]=tree.children;
+ assert.equal(topology.textContent,'◇ lab.clab.yaml · 900 B','topology files first');assert.equal(folder.tag,'details');assert.equal(other.textContent,'◇ map.annotations.json · 120 B');
+ folder.open=true;await folder.ontoggle();
+ assert.deepEqual(h.calls.at(-1),['/operations/browse',{path:'/srv/p/lab/clab-lab',files:true,lab_id:'L1'}],'folder expansion keeps files mode');
+ const nested=folder.children[1].children[0];nested.open=true;await nested.ontoggle();
+ const file=nested.children[1].children[0];
+ assert.equal(file.textContent,'◇ startup-config · 2.1 kB','a node folder\'s startup configuration is reachable');
+ await file.onclick();assert.deepEqual(Array.from(h.c.opViewed.at(-1)),['/srv/p/lab/clab-lab/r1/startup-config','L1'],'a non-topology file opens the read-only viewer');
+ await topology.onclick();assert.deepEqual(Array.from(h.c.opViewed.at(-1)),['edit','/srv/p/lab/lab.clab.yaml','L1'],'a topology file opens as before');
+ const up=h.get('op-up');
+ assert.equal(up.disabled,true,'Up one folder stops at the lab folder');assert.equal(up.title,"This is the lab's folder");
+ assert.doesNotMatch(h.dialogs[0].body,/id="op-roots"|All lab folders/,'files mode never lists all lab folders');
+ // A listing below the lab folder (the dialog reopened there) can still go up, and keeps files mode.
+ up.disabled=false;up.title='';await h.c.opBrowse('/srv/p/lab/clab-lab','L1');
+ assert.equal(up.disabled,false,'below the lab folder Up is enabled');
+ await up.onclick();assert.deepEqual(h.calls.at(-1),['/operations/browse',{path:'/srv/p',files:true,lab_id:'L1'}],'Up one folder keeps files mode');
+ assert.equal(h.dialogs.at(-1).title,'Lab files · lab one');
+});
+test('the topology browser keeps All lab folders and an enabled Up; files mode never appends the downloads sentence',async()=>{
+ const old=browseHarness({diagnostics:false});await old.c.opBrowse('','L1');
+ assert.match(old.dialogs[0].body,/id="op-roots">All lab folders/);assert.notEqual(old.get('op-up').disabled,true);
+ await old.get('op-roots').onclick();assert.deepEqual(old.calls.at(-1),['/operations/browse',{path:''}]);
+ await new Promise(r=>setImmediate(r));
+ assert.match(old.get('help').textContent,/Downloading labs from the internet is turned off/,'the deploy browser says it');
+ const files=browseHarness();await files.c.opBrowse('','L1');await new Promise(r=>setImmediate(r));
+ assert.doesNotMatch(files.get('help').textContent,/Downloading labs/,'files mode does not append it (network is off in this harness)');
+});
+test('without the diagnostics flag, or without a lab, Lab files is today\'s topology browser',async()=>{
+ const old=browseHarness({diagnostics:false});await old.c.opBrowse('','L1');
+ assert.deepEqual(old.calls[0],['/operations/browse',{path:'/srv/p/lab'}],'no files option for an older helper');
+ assert.match(old.dialogs[0].body,/Only topology files are listed, up to 500 per folder\./);
+ const none=browseHarness();await none.c.opBrowse('/srv/p');
+ assert.deepEqual(none.calls[0],['/operations/browse',{path:'/srv/p'}],'no lab, no files mode');assert.equal(none.dialogs[0].title,'Deploy a new lab');
+});
+
+test('Images on this VM: rows from details, used_by and missing; chips and filter',()=>{
+ const data={available:true,images:['alpine:latest','n24l/ceos:4.35.0F'],details:[{reference:'alpine:latest',id:'a',size:'7.8MB',created:'2026-10-23 02:03:42 +0000 UTC'},{reference:'n24l/ceos:4.35.0F',id:'b',size:'2.1GB',created:'2026-09-01T10:00:00Z'}],used_by:{'alpine:latest':['lab one','lab two'],'vrnetlab/xrv:1':['lab one']},missing:['vrnetlab/xrv:1']};
+ const rows=context.opImageRows(data);
+ assert.equal(rows.length,3);assert.deepEqual(Array.from(rows[0].labs),['lab one','lab two']);assert.equal(rows[2].missing,true);assert.equal(rows[2].size,'');assert.deepEqual(Array.from(rows[2].labs),['lab one']);
+ assert.deepEqual(Array.from(context.opImageFilter(rows,'','used'),r=>r.reference),['alpine:latest','vrnetlab/xrv:1']);
+ assert.deepEqual(Array.from(context.opImageFilter(rows,'','missing'),r=>r.reference),['vrnetlab/xrv:1']);
+ assert.deepEqual(Array.from(context.opImageFilter(rows,'LAB TWO','all'),r=>r.reference),['alpine:latest'],'the filter also searches the lab names');
+ assert.deepEqual(Array.from(context.opImageFilter(rows,'ceos','used'),r=>r.reference),[]);
+ const old=context.opImageRows({available:true,images:['alpine:latest'],used_by:{}});
+ assert.equal(old.length,1);assert.equal(old[0].size,'','a helper without details still lists the references');
+ assert.equal(context.opImageRows(null).length,0);
+ assert.equal(context.opCreatedDate('2026-10-23 02:03:42 +0000 UTC').toISOString(),'2026-10-23T02:03:42.000Z');assert.equal(context.opCreatedDate('nope'),null);assert.equal(context.opCreatedDate(''),null);
+ const body=context.opImageTableBody(rows);
+ assert.match(body,/<span class="pill danger">Missing<\/span>/);assert.match(body,/lab one, lab two/);assert.match(body,/title="2026-10-23 02:03:42 UTC"/);
+ assert.match(context.opImageTableBody([{reference:'<i>x</i>',size:'',created:'',labs:['<b>'],missing:false}]),/&lt;i&gt;x&lt;\/i&gt;.*&lt;b&gt;/);
+ assert.match(context.opImageTableBody([]),/No images match\./);
+});
+
+test('an inspect run starts with a clean sort and filter on the reused dialog',async()=>{
+ const elements=new Map();
+ for(const id of ['op-job-banner','op-job-output','op-job-result'])elements.set(id,{hidden:false,className:'',textContent:'',innerHTML:'',scrollTop:0,scrollHeight:0,clientHeight:0,addEventListener(){}});
+ const dialog={open:true,classList:{toggle(){}},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]};
+ const job={id:'j',action:'inspect',name:'',status:'succeeded',output:'',result:{}};
+ const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs:[]},console,document:{getElementById:()=>null},setTimeout:()=>1,clearTimeout(){},api:async()=>({json:async()=>job}),refresh:async()=>{}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opDialog=()=>dialog;
+ await c.opShowJob('j');
+ Object.assign(dialog._inspectView,{key:'lab',dir:'desc',filter:'beta'});
+ await c.opShowJob('j');
+ assert.deepEqual({...dialog._inspectView},{key:'',dir:'',filter:''},'the next inspect run does not inherit the earlier view');
+});
+
+function managerMenuHarness(caps){
+ const els=new Map();
+ const get=id=>{if(!els.has(id)){const listeners={};els.set(id,{id,hidden:true,textContent:'',innerHTML:'',value:'',dataset:{},listeners,isConnected:true,classList:{toggle(){},add(){},remove(){}},
+  addEventListener(type,fn){(listeners[type]=listeners[type]||[]).push(fn);},insertAdjacentHTML(){},querySelector:()=>null,querySelectorAll:()=>[],setAttribute(){},getAttribute:()=>null,removeAttribute(){}});}return els.get(id);};
+ const c=vm.createContext({$:get,esc:v=>String(v??''),state:{labs:[],discovery:{connected:false}},document:{createElement:()=>({}),addEventListener(){},getElementById:()=>null},console,setTimeout:()=>1,clearTimeout(){},addEventListener(){},
+  api:async()=>({json:async()=>({})}),json:async()=>({}),refresh:async()=>{}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opCapabilities=async()=>caps();
+ const open=async()=>{for(const fn of get('manager-menu-list').listeners.menuopen||[])fn();await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));};
+ return {c,get,open};
+}
+test('Manager menu: opening it shows the VM\'s containerlab only for a well-formed version',async()=>{
+ const good=managerMenuHarness(()=>({containerlab:'0.79.0'}));await good.open();
+ assert.equal(good.get('clab-version').textContent,' · containerlab 0.79.0');assert.equal(good.get('clab-version').hidden,false);
+ for(const [label,answer] of [['a malformed version',{containerlab:'bad'}],['a number',{containerlab:7}],['a non-object answer',7],['no answer',null]]){
+  const h=managerMenuHarness(()=>answer);h.get('clab-version').textContent='stale';h.get('clab-version').hidden=false;await h.open();
+  assert.equal(h.get('clab-version').textContent,'',label+' shows nothing');assert.equal(h.get('clab-version').hidden,true,label+' hides the span');
+ }
+ const failing=managerMenuHarness(()=>{throw new Error('no VM');});failing.get('clab-version').textContent='stale';await failing.open();
+ assert.equal(failing.get('clab-version').textContent,'stale','a failed capabilities call leaves the footer as it was and throws nothing');
+});
+test('Images on this VM with no Docker client says so and wires nothing; the file viewer says when only the tail is shown',async()=>{
+ const dialogs=[];
+ const element=()=>({value:'',textContent:'',innerHTML:'',addEventListener(){},querySelectorAll:()=>[]});
+ const els=new Map(),get=id=>{if(!els.has(id))els.set(id,element());return els.get(id);};
+ const data={available:false};
+ const c=vm.createContext({$:get,esc:v=>String(v??''),state:{labs:[]},document:{createElement:element},api:async()=>({json:async()=>data}),json:async()=>({name:'startup-config',text:'hostname r1',truncated:true})});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opDialog=(id,title,body)=>{dialogs.push({id,title,body});return {querySelector:()=>null,querySelectorAll:()=>[]};};
+ c.opBindCopyOutput=()=>{};
+ await c.opImages();
+ assert.equal(dialogs[0].title,'Images on this VM');assert.match(dialogs[0].body,/no Docker client the manager can ask/);assert.doesNotMatch(dialogs[0].body,/op-images-filter/,'no filter or table is drawn');
+ await c.opView('/srv/p/lab/clab-lab/r1/startup-config','L1');
+ assert.match(dialogs[1].body,/Showing the last 512 KiB of this file\./);assert.equal(get('op-view-text').value,'hostname r1');
+});
+
+// ---- C05: Start device, Stop device, the apply plan, Run with options, pending changes, node-filtered jobs -----------------------------
+const c05={lab:{id:'a',name:'square',deployment_name:'square',vm_project_path:'/srv/p/square.clab.yml',deployment:{status:'Running'},nodes:[{name:'clab-square-ceos',short_name:'ceos',definition_node:'ceos',discovered:true,runtime_state:'running'},{name:'clab-square-vsw',short_name:'vsw',definition_node:'vsw',discovered:true,runtime_state:'exited'}]}};
+const plainJson=o=>JSON.parse(JSON.stringify(o));
+function c05Context({preview=async()=>({}),caps=null,labs=[c05.lab],operations=[]}={}){
+ const calls=[],shown=[];
+ const stubs=new Map(),el=id=>{if(id==='import-top')return null;if(!stubs.has(id))stubs.set(id,{id,onclick:null,focus(){},close(){},textContent:'',hidden:false,innerHTML:''});return stubs.get(id);};
+ const c=vm.createContext({$:el,esc:context.esc,state:{discovery:{connected:true},labs,operations},busy:()=>false,activeId:'a',current:()=>labs[0],notify:m=>calls.push(['notify',m]),renderLabBanner(){},showActionError:m=>calls.push(['error',m]),
+  json:async(url,method,body)=>{calls.push(['json',url,body]);return url==='/operations/preview'?preview(body):{id:'j1'};},refresh:async()=>{},
+  api:async url=>{calls.push(['api',url]);if(url==='/operations/capabilities')return {json:async()=>caps};if(c.apiImpl)return {json:async()=>c.apiImpl(url)};throw new Error('no api');}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),c);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opDialog=(id,title,body)=>{const dialog={id,title,body,open:true,close(){this.open=false;},querySelector:()=>null,querySelectorAll:()=>[]};shown.push(dialog);return dialog;};
+ c.opReviewImages=()=>{};c.opTask=async(d,fn)=>fn();
+ return {c,calls,shown,el};
+}
+const c05Caps={actions:{'start-node':{available:true},'stop-node':{available:true},impairments:{available:true},deploy:{available:true,node_filter:true,max_workers:true,skip_post_deploy:true},redeploy:{available:true,max_workers:true,skip_post_deploy:true,keep_mgmt_net:true,graceful:true},destroy:{available:true,cleanup:true,graceful:true,node_filter:true,max_workers:true,keep_mgmt_net:true},save:{available:true,node_filter:true},apply:{available:true}}};
+const c05Value=(extra)=>({token:'tok',action:'apply',name:'square',path:'/srv/p/square.clab.yml',warnings:[],affected:[{name:'clab-square-ceos',state:'running'}],argv:['containerlab','deploy','-t','x'],...extra});
+
+test('C05: Start device and Stop device are eligible by the device\'s own state, with reasons; unknown capabilities count as available and a loaded answer decides',()=>{
+ const {c}=c05Context();const [ceos,vsw]=c05.lab.nodes,d={connected:true};
+ assert.deepEqual(plainJson(c.opNodeActionState('stop-node',c05.lab,ceos,d)),{ok:true,reason:''});
+ assert.deepEqual(plainJson(c.opNodeActionState('stop-node',c05.lab,vsw,d)),{ok:false,reason:'vsw is not running',own:true});
+ assert.deepEqual(plainJson(c.opNodeActionState('start-node',c05.lab,vsw,d)),{ok:true,reason:''});
+ assert.deepEqual(plainJson(c.opNodeActionState('start-node',c05.lab,ceos,d)),{ok:false,reason:'ceos is already running',own:true});
+ assert.equal(c.opNodeActionState('stop-node',c05.lab,{...ceos,discovered:false,runtime_state:'absent'},d).reason,'ceos is not deployed on the VM');
+ assert.equal(c.opNodeActionState('stop-node',c05.lab,ceos,{connected:false}).reason,'Connect the VM first');
+ assert.equal(c.opNodeActionState('stop-node',c05.lab,ceos,d,true).reason,'Wait for the current operation to finish');
+ vm.runInContext("opCaps={actions:{'restart-node':{available:true}}}",c);
+ assert.equal(c.opNodeActionState('stop-node',c05.lab,ceos,d).reason,'Not available on this VM — its containerlab or helper cannot stop one device (see Diagnostics)');
+ assert.equal(c.opNodeActionState('start-node',c05.lab,vsw,d).reason,'Not available on this VM — its containerlab or helper cannot start one device (see Diagnostics)');
+ assert.equal(c.opNodeActionState('restart-node',c05.lab,ceos,d).ok,true);
+ vm.runInContext("opCaps={actions:{'stop-node':{available:true}}}",c);assert.equal(c.opNodeActionState('stop-node',c05.lab,ceos,d).ok,true);
+ vm.runInContext('opCaps=null',c);assert.equal(c.opNodeActionState('stop-node',c05.lab,ceos,d).ok,true,'capabilities not loaded: available');
+ assert.deepEqual(plainJson(c.opRestartState(c05.lab,ceos,d)),plainJson(c.opNodeActionState('restart-node',c05.lab,ceos,d)),'opRestartState is the one-line wrapper');
+});
+test('C05: opNodeAction loads the capabilities, re-checks, then reviews exactly one device; a refusal is the banner sentence naming the action',async()=>{
+ const {c,calls}=c05Context({caps:c05Caps});const reviews=[];c.opReview=async(r)=>{reviews.push(plainJson(r));};
+ await c.opNodeAction('stop-node','a','clab-square-ceos');
+ assert.deepEqual(reviews,[{lab_id:'a',action:'stop-node',node:'clab-square-ceos',options:{}}]);assert.ok(calls.some(x=>x[0]==='api'&&x[1]==='/operations/capabilities'));
+ await c.opNodeAction('stop-node','a','clab-square-vsw');
+ assert.equal(reviews.length,1);assert.deepEqual(calls.filter(x=>x[0]==='error').at(-1),['error','Stop device… is not available: vsw is not running']);
+ await c.opNodeAction('start-node','a','clab-square-ceos');assert.equal(calls.filter(x=>x[0]==='error').at(-1)[1],'Start device… is not available: ceos is already running');
+ await c.opNodeAction('start-node','a','clab-square-vsw');assert.equal(reviews.at(-1).action,'start-node');
+});
+test('C05: Save this device\'s configuration needs a running device and the node filter, and reviews a one-device save',async()=>{
+ const {c,calls}=c05Context({caps:c05Caps});const [ceos,vsw]=c05.lab.nodes,d={connected:true};
+ assert.equal(c.opSaveNodeState(c05.lab,ceos,d).ok,true);assert.equal(c.opSaveNodeState(c05.lab,vsw,d).reason,'vsw is not running');
+ vm.runInContext("opCaps={actions:{save:{available:true,node_filter:false}}}",c);assert.match(c.opSaveNodeState(c05.lab,ceos,d).reason,/cannot save one device/);
+ vm.runInContext('opCaps=null',c);assert.equal(c.opSaveNodeState(c05.lab,ceos,d).ok,true);
+ const reviews=[];c.opReview=async r=>{reviews.push(plainJson(r));};await c.opSaveNode('a','clab-square-ceos');
+ assert.deepEqual(reviews,[{lab_id:'a',action:'save',options:{nodes:['ceos']}}]);
+});
+test('C05: a job names its device or chosen devices: Stop ceos, ✔ ceos stopped, ✖ Stop ceos failed, Destroy ceos; Restart device keeps its word',()=>{
+ const {c}=c05Context();
+ assert.equal(c.opJobLabel({action:'stop-node',node_label:'ceos'}),'Stop ceos');assert.equal(c.opJobLabel({action:'start-node',node_label:'ceos'}),'Start ceos');
+ assert.equal(c.opJobLabel({action:'stop-node'}),'Stop device','no device on the record: the table word');
+ assert.equal(c.opJobLabel({action:'destroy',nodes:['ceos']}),'Destroy ceos');assert.equal(c.opJobLabel({action:'save',nodes:['ceos','vsw']}),'Save ceos, vsw');
+ assert.equal(c.opJobLabel({action:'destroy'}),'Destroy lab');assert.equal(c.opJobLabel({action:'restart-node',node_label:'ceos'}),'Restart device');
+ const job=extra=>({action:'stop-node',name:'square',node_label:'ceos',status:'succeeded',exit_code:0,message:'ok',...extra});
+ assert.equal(c.opJobBanner(job()).title,'✔ ceos stopped');assert.equal(c.opJobBanner(job({action:'start-node'})).title,'✔ ceos started');
+ assert.equal(c.opJobBanner(job({status:'failed'})).title,'✖ Stop ceos failed');assert.equal(c.opJobBanner(job({status:'failed'})).tone,'bad');
+ assert.equal(c.opJobBanner(job({status:'running'})).title,'Stopping ceos…');
+ assert.equal(c.opJobBanner(job({status:'cancelled'})).title,'■ Stop ceos ended early: you stopped it');
+ assert.equal(c.opJobBanner({action:'destroy',nodes:['ceos'],name:'square',status:'succeeded'}).title,'✔ ceos destroyed');
+ assert.equal(c.opJobBanner({action:'destroy',name:'square',status:'succeeded'}).title,'✔ Destroy lab succeeded');
+});
+test('C05: Try again for the three node actions carries the device, never opPlainRetry; a filtered destroy or save rebuilds from the job\'s nodes without Clean up',()=>{
+ const {c}=c05Context();const retry=(job)=>plainJson(c.opRetryRequest(job,'a'));
+ for(const action of ['restart-node','start-node','stop-node'])assert.deepEqual(retry({id:'x',action,node:'clab-square-ceos',status:'failed'}),{lab_id:'a',action,node:'clab-square-ceos',options:{}});
+ assert.equal(c.opRetryRequest({id:'x',action:'stop-node',status:'failed'},'a'),null,'a node action without its device has no safe guess');
+ assert.deepEqual(retry({id:'x',action:'destroy',nodes:['ceos'],status:'failed'}),{lab_id:'a',action:'destroy',options:{nodes:['ceos']}});
+ assert.deepEqual(retry({id:'x',action:'save',nodes:['ceos','vsw'],status:'failed'}),{lab_id:'a',action:'save',options:{nodes:['ceos','vsw']}});
+ assert.equal(c.opRetryRequest({id:'x',action:'deploy',nodes:['ceos'],status:'failed'},'a'),null,'a job with devices and no safe guess opens the dialog');
+ assert.deepEqual(retry({id:'x',action:'destroy',status:'failed'}),{lab_id:'a',action:'destroy',options:{cleanup:true}},'the plain destroy is unchanged');
+ assert.ok(!vm.runInContext("opPlainRetry.some(a=>a.endsWith('-node'))",c));
+ c.jobRequest=id=>id==='s'?{lab_id:'a',action:'deploy',options:{nodes:['ceos'],max_workers:2}}:null;
+ assert.deepEqual(retry({id:'s',action:'deploy',status:'cancelled'}),{lab_id:'a',action:'redeploy',options:{max_workers:2}},'a cancelled filtered deploy becomes a plain redeploy: redeploy takes no filter');
+});
+test('C05: the Stop device and Start device reviews say what happens, drop the lab-wide lines and name the one affected device',async()=>{
+ const stop=c05Context({caps:c05Caps,preview:async()=>c05Value({action:'stop-node',node_label:'ceos',affected:[{name:'clab-square-ceos',state:'running'}]})});
+ await stop.c.opReview({lab_id:'a',action:'stop-node',node:'clab-square-ceos',options:{}});
+ const body=stop.shown.at(-1).body,title=stop.shown.at(-1).title;
+ assert.equal(title,'Stop ceos?');
+ assert.match(body,/Only ceos in square stops: containerlab stops its container and parks its links \(containerlab stop --node\)/);
+ assert.match(body,/1 device affected: ceos \(clab-square-ceos, running\)\. The other devices of square are not stopped\./);
+ assert.match(body,/id="op-confirm">Stop device</);assert.match(body,/button danger/);
+ assert.doesNotMatch(body,/Configuration changes you have not saved are lost\.|Open CLI sessions to this lab will disconnect|running device affected|devices affected/);
+ const start=c05Context({caps:c05Caps,preview:async()=>c05Value({action:'start-node',node_label:'vsw',affected:[{name:'clab-square-vsw',state:'exited'}]})});
+ await start.c.opReview({lab_id:'a',action:'start-node',node:'clab-square-vsw',options:{}});
+ assert.equal(start.shown.at(-1).title,'Start vsw?');assert.match(start.shown.at(-1).body,/1 device affected: vsw \(clab-square-vsw, exited\)\. The other devices of square are not started\./);
+ assert.match(start.shown.at(-1).body,/id="op-confirm">Start device</);assert.doesNotMatch(start.shown.at(-1).body,/button danger/);
+ assert.deepEqual(start.calls.filter(x=>x[0]==='notify'),[]);
+ start.shown.at(-1);await start.el('op-confirm').onclick();
+ assert.deepEqual(start.calls.filter(x=>x[0]==='notify').map(x=>x[1]),['Starting vsw…'],'the toast names the device');
+ assert.equal(vm.runInContext("opDisruptive.includes('stop-node')&&!opDisruptive.includes('start-node')&&opLifecycle.includes('start-node')",start.c),true);
+});
+test('C05: the apply plan lists create, start, restart, recreate, remove and links in that order with reasons, and an empty plan says Nothing to apply',()=>{
+ const {c}=c05Context();
+ const plan={deploys_lab:false,added:['r3'],removed:['r9'],recreated:['r2'],started:['r4'],restarted:['r1'],links_added:['r1:eth1 -- r3:eth1'],endpoints_removed:['r9:eth1'],reasons:{r2:'config drift: Env',r1:'added link'}};
+ const html=c.opPlanMarkup(plan,'');
+ const order=[...html.matchAll(/<h4>([^<]+)</g)].map(m=>m[1]);
+ assert.deepEqual(order,['Create (1)','Start (1)','Restart (1)','Recreate (1)','Remove (1)','Links to connect (1)','Link ends to disconnect (1)']);
+ assert.match(html,/<li>r2 <small class="op-plan-reason">· config drift: Env<\/small><\/li>/);assert.match(html,/<li>r1 <small class="op-plan-reason">· added link<\/small><\/li>/);
+ assert.match(html,/These devices are recreated: configuration you have not saved on them is lost\./);assert.match(html,/These devices are removed from the VM: their unsaved configuration is lost\./);
+ assert.equal(c.opPlanMarkup({added:['r3']},'').includes('Start ('),false,'sections only when non-empty');
+ assert.match(c.opPlanMarkup({deploys_lab:true,added:['a']},''),/The lab is not running: Apply deploys the whole topology\./);
+ assert.equal(c.opPlanMarkup({added:[],reasons:{}},''),'<p class="op-plan-empty">Nothing to apply: the running lab already matches its topology file.</p>');
+ assert.match(c.opPlanMarkup(null,'unsupported'),/The installed containerlab cannot show what Apply will change; the command runs without a plan\./);
+ assert.equal(c.opPlanMarkup(null,'error'),'');
+ assert.equal(c.opPlanSummary(plan),'r3 to create · r2 to recreate · r4 to start · r1 to restart · r9 to remove · 1 link to connect · 1 link end to disconnect');
+ assert.equal(c.opPlanSummary({added:['a','b','c']}),'3 devices to create');assert.equal(c.opPlanSummary({added:[]}),'');
+ assert.equal(c.opPlanIdentity({added:['a','b'],reasons:{x:'1',y:'2'}}),c.opPlanIdentity({reasons:{y:'2',x:'1'},added:['b','a'],checked_at:5}),'the same plan in another order is the same identity');
+ assert.notEqual(c.opPlanIdentity({added:['a','b']}),c.opPlanIdentity({added:['a','b','c']}));
+});
+test('C05: the apply review shows the plan, keeps the generic loss and disconnect lines only while something changes, and offers Apply anyway for nothing to apply or a failed check',async()=>{
+ const run=async value=>{const h=c05Context({caps:c05Caps,preview:async()=>c05Value(value)});await h.c.opReview({lab_id:'a',action:'apply',options:{}});return h.shown.at(-1).body;};
+ const changes=await run({plan:{added:['r3'],reasons:{}},plan_failed:''});
+ assert.match(changes,/<h4>Create \(1\)</);assert.match(changes,/Configuration changes you have not saved are lost\./);assert.match(changes,/Open CLI sessions to this lab will disconnect/);assert.match(changes,/id="op-confirm">Apply changes</);assert.match(changes,/button danger/);assert.doesNotMatch(changes,/running device affected/);
+ const nothing=await run({plan:{added:[],reasons:{}},plan_failed:''});
+ assert.match(nothing,/Nothing to apply: the running lab already matches its topology file\./);assert.doesNotMatch(nothing,/Configuration changes you have not saved are lost|Open CLI sessions/);
+ assert.match(nothing,/button secondary" id="op-confirm">Apply anyway</);
+ const failed=await run({plan:null,plan_failed:'error',warnings:['The topology file could not be read.']});
+ assert.match(failed,/The topology file could not be read\./);assert.match(failed,/button danger" id="op-confirm">Apply anyway</);
+ const unsupported=await run({plan:null,plan_failed:'unsupported'});
+ assert.match(unsupported,/the command runs without a plan/);assert.match(unsupported,/id="op-confirm">Apply changes</);assert.match(unsupported,/Configuration changes you have not saved are lost\./);assert.match(unsupported,/1 running device affected/);
+});
+test('C05: Run with options shows only the controls the installed command has, per action, and Choose devices on deploy only while the lab is not deployed',()=>{
+ const {c}=c05Context();const lab=c05.lab,idle={...lab,deployment:{status:'Not deployed'}};
+ const ids=html=>[...html.matchAll(/id="(op-opt-[a-z-]+\d*)"/g)].map(m=>m[1]);
+ assert.deepEqual(ids(c.opOptionsForm('destroy',c05Caps,lab,{})),['op-opt-node-0','op-opt-node-1','op-opt-workers','op-opt-keepnet','op-opt-graceful']);
+ assert.deepEqual(ids(c.opOptionsForm('redeploy',c05Caps,lab,{})),['op-opt-workers','op-opt-skip','op-opt-keepnet','op-opt-graceful'],'redeploy takes no device filter');
+ assert.deepEqual(ids(c.opOptionsForm('deploy',c05Caps,lab,{})),['op-opt-workers','op-opt-skip'],'a deployed lab cannot take a partial deploy');
+ assert.deepEqual(ids(c.opOptionsForm('deploy',c05Caps,idle,{})),['op-opt-node-0','op-opt-node-1','op-opt-workers','op-opt-skip']);
+ assert.deepEqual(ids(c.opOptionsForm('save',c05Caps,lab,{})),['op-opt-node-0','op-opt-node-1']);
+ assert.equal(c.opOptionsForm('destroy',{actions:{destroy:{available:true}}},lab,{}),'','no flag, no fold');assert.equal(c.opOptionsForm('destroy',null,lab,{}),'');assert.equal(c.opOptionsForm('apply',c05Caps,lab,{}),'');
+ const html=c.opOptionsForm('destroy',c05Caps,lab,{nodes:['ceos'],max_workers:2,graceful:true},true);
+ assert.match(html,/<details class="op-options" id="op-run-options" open>/);assert.match(html,/data-opt-node="ceos" checked/);assert.doesNotMatch(html,/data-opt-node="vsw" checked/);assert.match(html,/id="op-opt-workers"[^>]*value="2"/);assert.match(html,/id="op-opt-graceful" checked/);
+ assert.match(html,/The devices you leave out keep running; the lab folder is kept\./);assert.match(html,/removed after two minutes, and with several devices the waits add up/);
+ assert.doesNotMatch(html,/style=/);
+});
+test('C05: option merging: chosen devices drop Clean up, no devices bring the plain defaults back, Max workers is a whole number from 1 to 64',()=>{
+ const {c}=c05Context();vm.runInContext("opCaps={actions:{destroy:{cleanup:true}}}",c);const m=(a,p,f)=>plainJson(c.opMergeOptions(a,p,{nodes:[],maxWorkers:'',skip:false,keep:false,graceful:false,...f}));
+ assert.deepEqual(m('destroy',{cleanup:true},{nodes:['ceos']}),{nodes:['ceos']});
+ assert.deepEqual(m('destroy',{},{}),{cleanup:true},'unticking every device returns the plain Destroy lab request');
+ assert.deepEqual(m('save',{},{nodes:['ceos','vsw'],maxWorkers:'3',skip:true,keep:true,graceful:true}),{nodes:['ceos','vsw'],max_workers:3,skip_post_deploy:true,keep_mgmt_net:true,graceful:true});
+ assert.deepEqual(m('redeploy',{cleanup:true},{}),{cleanup:true});
+ for(const bad of ['0','65','1.5','-1','abc','1e2'])assert.equal(c.opMaxWorkersProblem(bad),'Max workers must be a whole number from 1 to 64.',bad);
+ for(const good of ['','1','64',' 8 '])assert.equal(c.opMaxWorkersProblem(good),'',good);
+ assert.deepEqual(plainJson(c.opPlainOptions({cleanup:true,nodes:['a'],max_workers:2,graceful:true})),{cleanup:true});
+ assert.equal(c.opGracefulNotice({graceful:true,max_workers:1},11),'With these options the command may take longer than the manager waits for it (about 22 minutes); choose more workers or leave Graceful stop off.');
+ assert.equal(c.opGracefulNotice({graceful:true,max_workers:5},10),'');assert.equal(c.opGracefulNotice({graceful:false,max_workers:1},10),'');assert.equal(c.opGracefulNotice({graceful:true},10),'');
+});
+test('C05: a node-filtered destroy review names the devices, says what keeps running, offers no Clean up and shows the exact command; the fold re-previews the exact request',async()=>{
+ const requests=[];
+ const h=c05Context({caps:c05Caps,preview:async r=>{requests.push(plainJson(r));return c05Value({action:'destroy',kept:['vsw'],argv:['containerlab','destroy','-t','x','--node-filter','ceos'],affected:[{name:'clab-square-ceos',state:'running'}]});}});
+ await h.c.opReview({lab_id:'a',action:'destroy',options:{nodes:['ceos'],max_workers:2}});
+ const body=h.shown.at(-1).body;
+ assert.equal(h.shown.at(-1).title,'Destroy ceos in square?');assert.match(body,/The chosen devices are removed from the VM; the other devices and the lab folder stay\./);
+ assert.match(body,/<p class="op-kept">Left running: vsw<\/p>/);assert.match(body,/--node-filter/);assert.doesNotMatch(body,/lab folder is deleted|Clean up/);
+ assert.match(body,/data-opt-node="ceos" checked/);assert.ok(h.calls.some(x=>x[0]==='api'&&x[1]==='/operations/capabilities'),'capabilities are read before the review');
+ // a toast after confirming names the devices
+ await h.el('op-confirm').onclick();assert.deepEqual(h.calls.filter(x=>x[0]==='notify').map(x=>x[1]),['Destroying ceos…']);
+});
+test('C05: a re-preview carries a sequence number: an answer older than the newest request is dropped and never shown',async()=>{
+ const resolvers=[];
+ const h=c05Context({caps:c05Caps,preview:r=>new Promise(res=>resolvers.push(()=>res(c05Value({action:'destroy',token:'t'+resolvers.length,affected:[]}))))});
+ vm.runInContext('opCaps='+JSON.stringify(c05Caps),h.c);
+ const first=h.c.opReview({lab_id:'a',action:'destroy',options:{cleanup:true}},undefined,{keepOptionsOpen:true});
+ const second=h.c.opReview({lab_id:'a',action:'destroy',options:{nodes:['ceos']}},undefined,{keepOptionsOpen:true});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(resolvers.length,2);resolvers[1]();await second;resolvers[0]();const dropped=await first;
+ assert.equal(dropped,null,'the older answer is dropped');assert.equal(h.shown.length,1,'only the newest answer is shown');assert.match(h.shown[0].body,/data-opt-node="ceos" checked/);
+});
+test('C05: opOptionsChanged disables the fold with Checking…, previews the merged request, keeps the fold open and sends focus back; a refused preview disables Confirm and shows the sentence',async()=>{
+ const els={err:{textContent:''},set:{disabled:false},status:{textContent:''},confirm:{disabled:false,title:''},workers:null};
+ const map={'.form-error':'err','#op-options-set':'set','#op-options-status':'status','#op-confirm':'confirm'};
+ const dialog={querySelector:sel=>sel==='#op-opt-workers'?els.workers:els[map[sel]]||null,querySelectorAll:sel=>sel==='[data-opt-node]'?[{checked:true,dataset:{optNode:'ceos'}},{checked:false,dataset:{optNode:'vsw'}}]:[]};
+ const h=c05Context({caps:c05Caps});const previews=[];h.c.opReview=async(request,opener,extra)=>{previews.push([plainJson(request),plainJson(extra),els.set.disabled,els.status.textContent]);};
+ await h.c.opOptionsChanged(dialog,{lab_id:'a',action:'destroy',options:{cleanup:true}},null,{cleanup:true},{id:'op-opt-node-0'});
+ assert.deepEqual(previews,[[{lab_id:'a',action:'destroy',options:{nodes:['ceos']}},{keepOptionsOpen:true,focusId:'op-opt-node-0',plain:{cleanup:true}},true,'Checking…']]);
+ h.c.opReview=async()=>{throw new Error("Choose devices from this lab's topology file: x is not in it.");};
+ await h.c.opOptionsChanged(dialog,{lab_id:'a',action:'destroy',options:{}},null,{},{id:'op-opt-node-0'});
+ assert.equal(els.set.disabled,false);assert.equal(els.status.textContent,'');assert.match(els.err.textContent,/is not in it/);assert.equal(els.confirm.disabled,true);
+ els.err.textContent='';els.workers={value:'99'};let called=0;h.c.opReview=async()=>{called++;};
+ await h.c.opOptionsChanged(dialog,{lab_id:'a',action:'destroy',options:{}},null,{},{id:'op-opt-workers'});
+ assert.equal(called,0,'an invalid Max workers is not previewed');assert.equal(els.err.textContent,'Max workers must be a whole number from 1 to 64.');
+});
+test('C05: opPlanDue fires on exactly four triggers: open, a finished job, a sync and nothing else; never a timer',()=>{
+ const {c}=c05Context();const lab=c05.lab,memo0={lab:'',active:false,jobs:[],sig:''};
+ assert.deepEqual(plainJson(vm.runInContext('opPlanTriggers',c)),['open','job','sync','review']);
+ let r=c.opPlanDue(memo0,lab,[]);assert.equal(r.reason,'open');
+ let again=c.opPlanDue(r.memo,lab,[]);assert.equal(again.reason,'','no trigger without a change: a render every 4 s asks nothing');
+ const jobs=[{id:'j1',lab_id:'a',status:'running'}];assert.equal(c.opPlanDue(again.memo,lab,jobs).reason,'','a running job is not a trigger');
+ jobs[0].status='succeeded';r=c.opPlanDue(again.memo,lab,jobs);assert.equal(r.reason,'job');assert.equal(c.opPlanDue(r.memo,lab,jobs).reason,'','a terminal job triggers once');
+ assert.equal(c.opPlanDue(r.memo,lab,[...jobs,{id:'j2',lab_id:'other',status:'succeeded'}]).reason,'','another lab\'s job is not ours');
+ const synced={...lab,vm_source:{status:'Up to date',synced_digest:'d2',digest:'d2'}};
+ const before=c.opPlanDue(memo0,{...lab,vm_source:{status:'Updates available',synced_digest:'d1',digest:'d2'}},[]);
+ assert.equal(c.opPlanDue(before.memo,synced,[]).reason,'sync');
+ assert.equal(c.opPlanDue(r.memo,{...lab,deployment:{status:'Not deployed'}},jobs).reason,'','a lab that is not running asks nothing');
+ assert.equal(c.opPlanDue({...r.memo,lab:'zzz'},lab,jobs).reason,'open','opening another lab asks again');
+ assert.equal(c.opPlanDue(memo0,null,[]).reason,'');
+ assert.ok(!/setInterval|setTimeout/.test(vm.runInContext('[opWatchLab,opPlanDue,opLoadPlan,opLoadImpairments].map(String).join()',c)));
+});
+test('C05: opWatchLab asks the apply plan and the impairments once when a running lab opens, and Review changes… asks again with refresh=1',async()=>{
+ const h=c05Context({caps:c05Caps});const asked=[];
+ h.c.apiImpl=url=>{asked.push(url);return url.startsWith('/operations/apply-plan')?{changed:true,plan:{added:['r3'],reasons:{}},failed:'',checked_at:1}:{devices:{},interfaces:0,complete:true};};
+ h.c.opWatchLab(c05.lab);await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+ assert.deepEqual(asked.sort(),['/operations/apply-plan?lab_id=a','/operations/impairments?lab_id=a']);
+ h.c.opWatchLab(c05.lab);await new Promise(r=>setImmediate(r));assert.equal(asked.length,2,'the next render asks nothing');
+ h.c.opReview=async()=>{asked.push('review');};await h.c.opReviewChanges('a');
+ assert.deepEqual(asked.slice(2),['/operations/apply-plan?lab_id=a&refresh=1','review']);
+ assert.equal(h.c.opPendingChanges(c05.lab).plan.added[0],'r3');
+});
+test('C05: the pending notice: a Running lab with differences offers Review changes… once per plan; a dismissed notice stays dismissed for the same plan and returns for a different one',()=>{
+ const h=c05Context();const c=h.c,lab=c05.lab;
+ assert.equal(c.opPendingBannerSpec(lab),null,'nothing checked: no notice');
+ const set=(answer)=>vm.runInContext('opPlanCache='+JSON.stringify({a:{answer,error:'',at:1}}),c);
+ set({changed:false,plan:{added:[]},failed:'',checked_at:1});assert.equal(c.opPendingBannerSpec(lab),null);
+ set({changed:true,plan:{added:['r3'],recreated:['r2'],links_added:['x'],reasons:{r2:'config drift'}},failed:'',checked_at:1});
+ const spec=c.opPendingBannerSpec(lab);
+ assert.equal(spec.text,'The topology file differs from the running lab.');assert.equal(spec.detail,'r3 to create · r2 to recreate · 1 link to connect');assert.deepEqual(Object.keys(spec.actions),['banner-review']);assert.equal(spec.actions['banner-review'].label,'Review changes…');
+ const first=spec.identity;set({changed:true,plan:{added:['r3'],recreated:['r2'],links_added:['x'],reasons:{r2:'config drift'}},failed:'',checked_at:99});
+ assert.equal(c.opPendingBannerSpec(lab).identity,first,'the same plan re-checked keeps its identity (check time excluded)');
+ set({changed:true,plan:{added:['r3','r4'],recreated:['r2'],links_added:['x'],reasons:{r2:'config drift'}},failed:'',checked_at:99});
+ assert.notEqual(c.opPendingBannerSpec(lab).identity,first,'one more device is a different notice');
+ assert.equal(c.opPendingBannerSpec({...lab,deployment:{status:'Partially running'}}),null,'a Partially running lab uses the attention branch');
+ set({changed:false,plan:null,failed:'error',error:'x'});assert.equal(c.opPendingBannerSpec(lab),null,'a failed check never claims differences');
+});
+test('C05: a Partially running lab with a device to create or recreate offers Review changes… instead of Start; a started-only plan keeps Start',()=>{
+ const {c}=c05Context();const lab={...c05.lab,deployment:{status:'Partially running'}};
+ const base={tone:'danger',icon:'alert',text:'Some devices are not running.',actions:{'banner-start':{label:'Start stopped devices'}}};
+ const set=plan=>vm.runInContext('opPlanCache='+JSON.stringify({a:{answer:{changed:true,plan,failed:''},error:'',at:1}}),c);
+ assert.equal(plainJson(c.opAttentionSpec(lab,base)).actions['banner-start'].label,'Start stopped devices','no plan: Start');
+ set({added:['ceos'],reasons:{}});let spec=plainJson(c.opAttentionSpec(lab,base));
+ assert.deepEqual(Object.keys(spec.actions),['banner-review']);assert.equal(spec.detail,'ceos to create');assert.match(spec.identity,/^pending\./);assert.equal(spec.text,base.text);
+ set({recreated:['ceos'],reasons:{}});assert.deepEqual(Object.keys(c.opAttentionSpec(lab,base).actions),['banner-review']);
+ set({endpoints_removed:['a:eth1'],reasons:{}});assert.deepEqual(Object.keys(c.opAttentionSpec(lab,base).actions),['banner-review']);
+ set({started:['vsw'],reasons:{}});assert.deepEqual(Object.keys(c.opAttentionSpec(lab,base).actions),['banner-start'],'a stopped device is started, not recreated');
+ assert.equal(c.opAttentionSpec({...lab,deployment:{status:'Running'}},base),base);
+});
+test('C05: the Deployment details line reads Not checked, Matches, Differs with Review changes…, or could not be checked',()=>{
+ const {c}=c05Context();
+ assert.equal(c.opPendingMarkup(undefined),'Not checked');
+ assert.match(c.opPendingMarkup({answer:{changed:false,plan:{},failed:'',checked_at:1700000000}}),/^Matches the running lab/);
+ assert.match(c.opPendingMarkup({answer:{changed:true,plan:{added:['r3']},failed:''}}),/^Differs from the running lab: r3 to create — <button type="button" class="button ghost small" data-pending-review>Review changes…<\/button>$/);
+ assert.equal(c.opPendingMarkup({answer:{changed:false,failed:'error',error:'Failed to read <x>'}}),'Could not be checked: Failed to read &lt;x&gt;');
+ assert.match(c.opPendingMarkup({answer:{failed:'unsupported'}}),/^Not checked: the installed containerlab cannot compare/);
+ assert.equal(c.opPendingMarkup({answer:null,error:'The VM is busy'}),'Could not be checked: The VM is busy');
+});
+test('C05: Lab actions ▾ has Apply topology changes… enabled on Running and Partially running through the shared rule',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ assert.match(html,/data-op-action="apply" data-op-options="\{\}" disabled><span>Apply topology changes…<\/span>/);
+ const order=[...html.matchAll(/id="lab-actions-menu"[\s\S]*?<\/div>/g)][0][0];assert.ok(order.indexOf('Restart all devices')<order.indexOf('Apply topology changes')&&order.indexOf('Apply topology changes')<order.indexOf('menu-sep'));
+ for(const status of ['Running','Partially running','Stopped','Not deployed']){
+  const button={dataset:{opAction:'apply',opOptions:'{}'},disabled:true,title:'',querySelector:()=>null};
+  const lab={...c05.lab,deployment:{status}};const h=c05Context({labs:[lab]});h.c.current=()=>lab;h.c.$=id=>id==='lab-actions-menu'?{querySelectorAll:()=>[button]}:null;
+  h.c.renderLabOperations();assert.equal(button.disabled,!['Running','Partially running'].includes(status),status);
+ }
+});
+test('C05: Clear impairments asks once, shows Clearing… while it runs, and reports a partial result with the way on',async()=>{
+ const h=c05Context({caps:c05Caps});const els=h.el;
+ vm.runInContext("opImpairmentCache={a:{devices:{'clab-square-ceos':{impairments:[{interface:'eth1'},{interface:'eth2'}]},'clab-square-vsw':{impairments:[{interface:'eth1'}]},x:{impairments:[]}},interfaces:3,complete:true}}",h.c);
+ assert.deepEqual(plainJson(h.c.opImpairmentCount(vm.runInContext('opImpairmentCache.a',h.c))),{interfaces:3,devices:2});
+ let release;h.c.json=async(url,method,body)=>{h.calls.push(['json',url,body]);await new Promise(r=>{release=r;});return {cleared:2,total:3,failed:[{node:'clab-square-vsw',interface:'eth1',reason:'Link not found.'}],remaining:[{node:'clab-square-vsw',interface:'eth1'}]};};
+ h.c.opLoadImpairments=async()=>null;
+ await h.c.opClearImpairments('a');
+ assert.equal(h.shown.at(-1).title,'Remove every impairment in square (3 interfaces on 2 devices)?');
+ const confirm=els('op-clear-confirm'),status=els('op-clear-status');const pending=confirm.onclick();
+ await Promise.resolve();assert.equal(confirm.textContent,'Clearing…');assert.equal(confirm.disabled,true);
+ release();await pending;
+ assert.equal(status.textContent,'2 of 3 interfaces cleared; vsw eth1: Link not found. Try again.');
+ assert.equal(confirm.disabled,false);assert.equal(confirm.textContent,'Clear all');assert.deepEqual(plainJson(h.calls.filter(x=>x[0]==='json'&&x[1].endsWith('/clear')).map(x=>x[2])),[{lab_id:'a'}]);
 });

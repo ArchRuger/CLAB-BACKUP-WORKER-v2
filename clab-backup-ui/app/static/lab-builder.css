@@ -76,7 +76,7 @@ body.lab-builder{display:flex;flex-direction:column}
 /* Editor controls that cannot work in a builder and have no switch in this editor version. Hidden by
    their test ids; tests/test_lab_builder_ui.js fails when the bundled editor stops carrying them. */
 [data-testid="navbar-deploy"],[data-testid="navbar-deploy-menu"],[data-testid="navbar-apply-dirty-badge"],
-[data-testid="navbar-layout-geo"],[data-testid="navbar-split-view"],
+[data-testid="navbar-about"],[data-testid="navbar-layout-geo"],[data-testid="navbar-split-view"],
 [data-testid="svg-export-grafana-bundle"],[data-testid="svg-export-grafana-advanced-btn"]{display:none !important}
 /* The editor's colours follow the manager's palette; its type and shapes stay its own. */
 .lab-builder{--clab-ui-accent:#1d6f8e}

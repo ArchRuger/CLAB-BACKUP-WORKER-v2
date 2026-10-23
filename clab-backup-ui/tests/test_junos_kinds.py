@@ -26,6 +26,7 @@ from app.vm_files import prepare_lab
 KINDS = {
     'juniper_vqfx': ('juniper_vqfx', 'vr-vqfx', 'vqfx'),
     'juniper_vjunosswitch': ('juniper_vjunosswitch', 'vr-vjunosswitch', 'vjunosswitch'),
+    'juniper_vjunosrouter': ('juniper_vjunosrouter', 'vr-vjunosrouter', 'vjunosrouter'),
 }
 GENERIC_JUNOS = ('junos', 'junipernetworks.junos.junos')
 
@@ -53,6 +54,40 @@ def node(platform, name='sw1'):
     return {'name': name, 'short_name': name, 'platform': platform,
             'address': '192.0.2.11', 'port': 22, 'enabled': True,
             'profile_id': '', 'username': 'fixture-admin', 'password': 'fixture-device-secret'}
+
+
+class VJunosRouterKindTests(unittest.TestCase):
+    def test_router_is_a_junos_platform_with_its_own_label_default_login_and_download_name(self):
+        from app.downloads import FORMATS as DOWNLOADS
+        from app.git_progress import FORMATS as SAVE_FORMATS
+        from app.inventory import DEFAULT_CREDENTIALS, JUNOS_PLATFORMS, JUNOS_SWITCHES
+        self.assertIn('juniper_vjunosrouter', JUNOS_PLATFORMS)
+        self.assertNotIn('juniper_vjunosrouter', JUNOS_SWITCHES)
+        self.assertEqual(PLATFORMS['juniper_vjunosrouter']['label'], 'Junos (vJunos-router)')
+        self.assertEqual(PLATFORMS['juniper_vjunosrouter']['os'], PLATFORMS['juniper_vjunosswitch']['os'])
+        self.assertEqual(PLATFORMS['juniper_vjunosrouter']['command'], PLATFORMS['juniper_vjunosswitch']['command'])
+        self.assertEqual(DEFAULT_CREDENTIALS['juniper_vjunosrouter'], ('admin', 'admin@123'))
+        self.assertEqual(DOWNLOADS['juniper_vjunosrouter'], ('vJunos-router', 'cfg'))
+        self.assertEqual(SAVE_FORMATS['juniper_vjunosrouter'], 'junos-display-set')
+
+    def test_router_has_no_restore_artifact_and_no_restore_driver_until_proven_live(self):
+        from app import restore_drivers, restore_junos
+        from app.restore import NO_DRIVER, saved_device_reason
+        from app.runner import restore_filename
+        self.assertFalse(any(k.startswith('restore') for k in PLATFORMS['juniper_vjunosrouter']))
+        self.assertEqual(restore_filename({'name': 'r1', 'platform': 'juniper_vjunosrouter'}), '')
+        self.assertIsNone(restore_drivers.for_platform('juniper_vjunosrouter'))
+        self.assertFalse(restore_junos.supports_restore('juniper_vjunosrouter'))
+        lab = {'nodes': [{'name': 'r1', 'platform': 'juniper_vjunosrouter'}]}
+        self.assertEqual(saved_device_reason(lab, 'r1', 'juniper_vjunosrouter'), NO_DRIVER)
+
+    def test_router_is_not_offered_to_network_design(self):
+        from app import design_junos, design_ownership, design_provision
+        from app import design_capabilities as dc
+        self.assertNotIn('juniper_vjunosrouter', design_junos.SUPPORTED_KINDS)
+        self.assertNotIn('juniper_vjunosrouter', design_ownership.SET_KINDS)
+        self.assertNotIn('juniper_vjunosrouter', design_provision.PREPARERS)
+        self.assertEqual(dc.resolve('bgp', 'juniper_vjunosrouter')['level'], 'unsupported')
 
 
 class JunosKindImportTests(unittest.TestCase):
@@ -192,7 +227,7 @@ class JunosKindImportTests(unittest.TestCase):
             item.update(username='', password='')
         lab = {'name': 'Junos', 'nodes': items, 'profiles': [], 'defaults': {}}
         sessions = ET.fromstring(session_xml(lab)).findall('SessionData')
-        self.assertEqual([item.attrib['Username'] for item in sessions], ['admin', 'admin'])
+        self.assertEqual([item.attrib['Username'] for item in sessions], ['admin'] * len(KINDS))
         self.assertTrue(all(item.attrib['ExtraArgs'] == '' for item in sessions))
 
 
@@ -205,7 +240,7 @@ class JunosKindAppTests(unittest.TestCase):
         self.lab = {'id': 'junos-lab', 'name': 'Junos lab', 'profiles': [], 'defaults': {},
                     'interval': 0, 'nodes': [node(platform, name) for platform, name in
                         (('juniper_vqfx', 'qfx1'), ('juniper_vjunosswitch', 'switch1'),
-                         ('juniper_cjunosevolved', 'evo1'))]}
+                         ('juniper_cjunosevolved', 'evo1'), ('juniper_vjunosrouter', 'router1'))]}
         self.store.state['labs'].append(self.lab)
         self.store.save()
 
@@ -248,14 +283,14 @@ class JunosKindAppTests(unittest.TestCase):
         self.assertEqual(credential_source(self.lab, self.lab['nodes'][2]), 'default')
         self.assertEqual(effective_credentials(self.lab, self.lab['nodes'][2])['username'], 'admin')
         self.assertNotIn('admin@123', public.text)
-        self.assertEqual(len(set(self.lab['defaults'].values())), 2)
+        self.assertEqual(len(set(self.lab['defaults'].values())), len(KINDS))
         self.assertNotEqual(PLATFORMS['juniper_vqfx']['label'], PLATFORMS['juniper_vjunosswitch']['label'])
         with patch('app.git_progress.remote_git') as remote:
             response = self.client.get('/api/labs/junos-lab/git')
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()['unsupported_nodes'], [])
         self.assertEqual({n['platform'] for n in response.json()['supported_nodes']},
-                         {'juniper_vqfx', 'juniper_vjunosswitch', 'juniper_cjunosevolved'})
+                         {'juniper_vqfx', 'juniper_vjunosswitch', 'juniper_cjunosevolved', 'juniper_vjunosrouter'})
         remote.assert_not_called()
 
     def capture(self):

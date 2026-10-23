@@ -220,5 +220,19 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertEqual(after, before, 'a half-moved tree is the failure: no file may be written when one marker is missing')
 
 
+class CiListTests(unittest.TestCase):
+    """Every test file reaches the explicit lists of .github/workflows/release-check.yml (CI never runs `discover`)."""
+    def test_every_test_file_is_named_in_the_workflow(self):
+        tests = ROOT / 'clab-backup-ui' / 'tests'
+        workflow = (ROOT / '.github' / 'workflows' / 'release-check.yml').read_text(encoding='utf-8')
+        optional = {'test_eos_ssh.py'}   # opt-in real-driver fixture (RUN_SSH_FIXTURES=1, vendor collections): CLAUDE.md Commands
+        python = sorted(p.name for p in tests.glob('test_*.py') if not p.name.startswith('test_capture') and p.name not in optional)
+        missing = [n for n in python if f'-p {n}' not in workflow]
+        node_lines = ' '.join(line for line in workflow.splitlines() if 'node --test' in line)
+        missing += [n for n in sorted(p.name for p in tests.glob('test_*.js')) if f'tests/{n}' not in node_lines]
+        self.assertIn('test_capture*.py', workflow, 'the capture glob')
+        self.assertEqual(missing, [], 'test files missing from the CI lists')
+
+
 if __name__ == '__main__':
     unittest.main()

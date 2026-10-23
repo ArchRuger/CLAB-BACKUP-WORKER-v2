@@ -7,6 +7,7 @@ import socket
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
@@ -16,14 +17,54 @@ from fastapi import HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from .discovery import PinnedHostKey, vm_password, parse_definition, stamp, expected_container
-from .host_operations import IMAGE_CHECK_LIMIT, image_reference
+from .discovery import PinnedHostKey, vm_password, parse_definition, stamp, expected_container, lab_status, discovery_fresh
+from .host_operations import IMAGE_CHECK_LIMIT, LOCK_SENTENCE, NODE_ACTIONS, OPTION_ACTIONS, image_reference
 from .inventory import read_data
 from .topology import parse_drawing
 from .drawio_export import drawio
 from .layout import MAX_DOCUMENT, annotations, decorations, keep_document, map_document, revision
 
 BUSY = ('queued', 'running')
+# The actions that run through the helper's stream() and so die with the SSH channel: the only ones a person can stop.
+# create, delete, publish and revise write first and answer once at the end; inspect is one short read.
+# status.js STATUS_STOPPABLE is the same list (a test pins the two equal).
+STOPPABLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'restart-node', 'start-node', 'stop-node', 'save', 'clone', 'inspect-all')
+# action -> (how far the lab may have got, what repairs it); status.js STATUS_STOP_AFTERMATH holds the same words.
+STOP_AFTERMATH = {
+    'deploy': ('started', 'Redeploy lab'), 'redeploy': ('started', 'Redeploy lab'), 'apply': ('started', 'Redeploy lab'),
+    'start': ('started', 'Redeploy lab'), 'restart': ('started', 'Redeploy lab'),
+    'destroy': ('removed', 'run Destroy lab again'), 'stop': ('stopped', 'run Stop devices again'),
+    'restart-node': ('started', 'Restart device again (Redeploy lab also works but clears unsaved configuration on every device)'),
+    'start-node': ('started', 'Start device again'), 'stop-node': ('stopped', 'Stop device again (or Start device if it should run)'),
+    'save': ('', 'run Save device configurations again'), 'clone': ('', 'run Download lab again'), 'inspect-all': ('', 'run it again'),
+}
+STOP_LABELS = {'deploy': 'Start lab', 'redeploy': 'Redeploy lab', 'destroy': 'Destroy lab', 'apply': 'Apply topology changes', 'start': 'Start devices',
+               'stop': 'Stop devices', 'restart': 'Restart all devices', 'restart-node': 'Restart device', 'start-node': 'Start device', 'stop-node': 'Stop device', 'save': 'Save device configurations',
+               'clone': 'Download lab', 'inspect-all': 'Running labs on the VM'}
+STOP_ASKED = 'Stopping… the manager has asked the lab VM to end the command'
+STOP_UNPROVEN = 'The lab VM is still ending the command; wait a moment before the next operation.'
+# What host_operations.main() answers for any error it did not word itself (a missing config, a bad request, a crash):
+# it can come from before the host lock was taken, so it proves nothing about the command having ended.
+GENERIC_HELPER_ERROR = 'Host operation failed. Check setup, paths and installed tools.'
+FOLLOW_UP_LIMIT = 20
+
+
+class OperationStopped(ValueError):
+    """A person (or the shutdown) ended the operation while the helper had not yet answered: the outcome is not known.
+    `sent` is False when the stop came before the request was handed to the VM (nothing can have run)."""
+    sent = True
+
+
+def stop_message(action):
+    verb, repair = STOP_AFTERMATH.get(action, ('', 'run it again'))
+    label = STOP_LABELS.get(action, action)
+    return 'You stopped ' + label + '. ' + ('The lab may be only partly ' + verb + ': ' + repair + '.' if verb else 'Afterwards: ' + repair + '.')
+
+
+class StopCondition:
+    """What remote() polls: the manager's shutdown or this one job's stop request."""
+    def __init__(self, stopping, event): self.stopping = stopping; self.event = event
+    def is_set(self): return self.stopping.is_set() or bool(self.event and self.event.is_set())
 GIT_BUSY = ('queued', 'capturing', 'exporting', 'pushing')
 # A live restore holds the lab the same way a Git save does. progress_id excludes the
 # restore job's own id so its pre/post backups are not blocked by itself.
@@ -93,6 +134,11 @@ def operation_connection_error(status, stderr):
             'Run sudo bash deploy/check-install.sh on the VM and review the operations checks.')
 
 
+def unsent_stop():
+    failure = OperationStopped('Operation stopped. Inspect the lab before retrying.'); failure.sent = False
+    return failure
+
+
 def remote(host, request, output=None, stopping=None, timeout=None):
     if not host or not host.get('enabled'): raise ValueError('Configure and enable the VM connection first.')
     if not host.get('fingerprint'): raise ValueError('Refresh discovery to establish the VM fingerprint first.')
@@ -103,16 +149,21 @@ def remote(host, request, output=None, stopping=None, timeout=None):
     opts['password'] = password
     try:
         client.connect(**opts)
+        if stopping and stopping.is_set(): raise unsent_stop()
         client.get_transport().set_keepalive(15)
         channel = client.get_transport().open_session(timeout=8); channel.settimeout(15)
+        if stopping and stopping.is_set(): raise unsent_stop()
         channel.exec_command('clab-manager-operations')
         channel.sendall((json.dumps(request) + '\n').encode()); channel.shutdown_write()
         channel.settimeout(.2)
         until = time.monotonic() + (timeout if timeout is not None else 1250 if request.get('mode') == 'run' else 180)
         pending = b''; result = None; total = 0; stderr = b''; eof = False
         while True:
-            if time.monotonic() > until or (stopping and stopping.is_set()):
-                raise ValueError('Operation connection interrupted. Inspect the lab before retrying.')
+            if time.monotonic() > until: raise ValueError('Operation connection interrupted. Inspect the lab before retrying.')
+            # Only while the helper has said nothing final: once its result line is in, the loop runs to EOF and
+            # exit status, and a command that completed is never relabelled as stopped.
+            # What has already arrived is read first: a result or error line waiting in the channel is the answer, not a stop.
+            if result is None and stopping and stopping.is_set() and not channel.recv_ready(): raise OperationStopped('Operation stopped. Inspect the lab before retrying.')
             if channel.recv_stderr_ready():
                 chunk = channel.recv_stderr(65536)
                 stderr = (stderr + chunk)[:8192]
@@ -129,7 +180,9 @@ def remote(host, request, output=None, stopping=None, timeout=None):
                     try: item = json.loads(line)
                     except ValueError: raise ValueError('Operations helper is unavailable or outdated. Run start-manager.sh --enable-operations on the VM.')
                     if not isinstance(item, dict): raise ValueError('Invalid operations helper response.')
-                    if 'error' in item: raise ValueError(str(item['error'])[:1000])
+                    if 'error' in item:
+                        failure = ValueError(str(item['error'])[:1000]); failure.from_helper = True
+                        raise failure
                     if output and 'output' in item: output(str(item['output']))
                     if 'result' in item: result = item['result']
             # Exit status is metadata, not EOF. Some servers deliver it before
@@ -147,7 +200,7 @@ DEPLOY_ACTIONS = ('deploy', 'redeploy')
 # The operations that change which containers a lab has, or their state: a Restart device review made
 # before one of them ran is stale, whatever the helper's digest still says (a lab-wide restart keeps every
 # container id and state, so only the manager can tell that the device was already restarted since).
-LIFECYCLE_JOBS = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'restart-node')
+LIFECYCLE_JOBS = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'restart-node', 'start-node', 'stop-node')
 
 
 # Images whose container cannot be started a second time, proven live on the development VM: the restart
@@ -165,6 +218,21 @@ RESTART_KNOWN_LIMITS = {
 }
 
 
+# The same images when the device is stopped rather than restarted (Stop device's review).
+STOP_KNOWN_LIMITS = {
+    'juniper_vjunosswitch': 'Known limit of the vJunos-switch image: its container cannot be started a second time, so after this stop only '
+                            'Redeploy lab brings the device back (Start device and Restart device leave it stopped).',
+    'cisco_xrv9k': 'Known limit of the XRv9k image: the next start boots the device from a fresh disk, so it comes back with its factory '
+                   'configuration and everything configured since the deploy is gone. Back up the configuration first.',
+}
+# The node actions and what a device shows while one of them is queued or running: (nos_login status, message).
+NODE_ACTION_STATUS = {
+    'restart-node': ('restarting', 'Restarting on the VM (containerlab restart --node); its login is checked again afterwards.'),
+    'start-node': ('starting', 'Starting on the VM (containerlab start --node); its login is checked again afterwards.'),
+    'stop-node': ('stopping', 'Stopping on the VM (containerlab stop --node).'),
+}
+
+
 def restart_links(lab, short):
     """What containerlab will have to restore for a node's restart, as the lab's drawing (parsed from the
     topology file) knows it: the number of dataplane links the node has, and the neighbours whose container is
@@ -175,7 +243,7 @@ def restart_links(lab, short):
     for n in lab.get('nodes') or []:
         for key in (n.get('definition_node'), n.get('short_name')):
             if key and key not in by_short: by_short[key] = n
-    expected = 0; down = []
+    expected = 0; down = []; absent = []
     for pair in (lab.get('drawing') or {}).get('links') or []:
         if not isinstance(pair, list) or len(pair) != 2: continue
         ends = [str((ep or {}).get('node') or '') if isinstance(ep, dict) else '' for ep in pair]
@@ -186,14 +254,39 @@ def restart_links(lab, short):
         state = (peer or {}).get('runtime_state') or ''
         if peer is not None and state and state not in ('running', 'unknown'):
             label = peer.get('short_name') or peer.get('definition_node') or peer['name']
-            if label not in down: down.append(label)
-    return expected, down
+            # `absent`: the container is gone (destroyed, a filtered destroy included), not merely stopped.
+            target = absent if state == 'absent' else down
+            if label not in target: target.append(label)
+    return expected, down, absent
+
+
+def neighbour_note(action, shown, expected, down, absent):
+    """The review notes about the neighbours of a device a node action touches (pure). Restart and Start: a neighbour that is
+    stopped (its link may be parked or gone) and one that was destroyed (its link is gone until Apply recreates it) are two
+    different sentences. Stop: the links are parked, not removed. Returns a list of sentences."""
+    if action == 'stop-node':
+        return ['Its links are parked, not removed: Start device or Restart device brings them back; a neighbour that restarts meanwhile keeps waiting for this link.']
+    verb = 'start' if action == 'start-node' else 'restart'
+    notes = []
+    if down:
+        who = ', '.join(down)
+        notes.append('%s is not running. If it was stopped by the manager, the VS Code extension or containerlab stop, its link to %s is parked and comes back with this %s. '
+                     'If it exited on its own or was stopped with docker stop, that link is gone: containerlab restores %s%s, and the device then waits for all its interfaces before it boots (cEOS gives up waiting after five minutes, a VM-based image waits for good) and stays at Starting until %s runs again. '
+                     'Start %s first (%s on it takes the start/restore path), then this device, or redeploy the lab.'
+                     % (who, shown, verb, 'only %d of %d links' % (expected - len(down), expected) if expected > len(down) else 'no link',
+                        ' and the job says so', who, who, 'Start device' if action == 'start-node' else 'Restart device…'))
+    if absent:
+        who = ', '.join(absent)
+        notes.append('%s %s removed from the VM (destroyed, not stopped): its link to %s is gone until Apply topology changes recreates %s; %s may wait for that interface before it boots. '
+                     'Apply topology changes first (Lab actions ▾), then %s this device.'
+                     % (who, 'was' if len(absent) == 1 else 'were', shown, who if len(absent) == 1 else 'them', shown, verb))
+    return notes
 
 
 def restarting_nodes(state, lab_id):
-    """The manager node names of this lab with a Restart device job queued or running right now."""
-    return {j.get('node') for j in state.get('operations', [])
-            if j.get('lab_id') == lab_id and j.get('action') == 'restart-node' and j.get('status') in BUSY and j.get('node')}
+    """{manager node name: action} of this lab's devices with a Restart, Start or Stop device job queued or running right now."""
+    return {j['node']: j['action'] for j in state.get('operations', [])
+            if j.get('lab_id') == lab_id and j.get('action') in NODE_ACTIONS and j.get('status') in BUSY and j.get('node')}
 
 
 def last_deployed(state, lab):
@@ -341,7 +434,14 @@ class LabOperations:
         # readiness: the ReadinessMonitor, so a Restart device job can drop the device's proven login
         # (its readiness epoch) when the restart is accepted and again when it has run.
         self.store = store; self.discovery = discovery; self.readiness = readiness; self.previews = {}; self.stopping = threading.Event()
+        self.cancels = {}   # operation id -> threading.Event, set by the stop route and by close()
         self.pool = ThreadPoolExecutor(max_workers=1); self.cap_cache = None; self.active = set()
+        # Impairment calls in flight (impairments.py registers them through impairing()): guard() refuses a preview or confirm
+        # while one holds the host lock, so a job is never created only to meet the helper's lock sentence.
+        self.in_flight_impairments = set()
+        # The pending-changes plan per lab (impairments.py serves it): lab id -> (expires, answer). A generation per lab keeps an
+        # answer that was being computed while the lab changed from being stored after forget_plan().
+        self.plan_cache = {}; self.plan_gen = {}; self.plan_lock = threading.Lock()
         # Image questions are read-only and repeat (every builder edit, every review): the VM's image list is kept for
         # a minute and each reference's answer for a while, so the helper is asked once per question, not per page.
         self.images_cache = None; self.image_cache = {}; self.image_lock = threading.Lock()
@@ -355,7 +455,11 @@ class LabOperations:
             store.save()
 
     def close(self):
-        self.stopping.set(); self.pool.shutdown(wait=False, cancel_futures=True)
+        # The manager-wide flag first: execute() reads it before it classifies a stop, so a shutdown racing a stop is `interrupted`.
+        self.stopping.set()
+        with self.store.lock:
+            for event in list(self.cancels.values()): event.set()
+        self.pool.shutdown(wait=False, cancel_futures=True)
 
     def host(self):
         with self.store.lock: return copy.deepcopy(self.store.state.get('host', {}))
@@ -363,10 +467,27 @@ class LabOperations:
     def guard(self, lab_id=''):
         # operation_busy without a lab holds every lab for the others' work; a design apply's read-back after a restart
         # holds only its own lab, so a named lab asks for it too (a Restart device under it would decide its outcome).
-        if self.active or operation_busy(self.store.state) or (lab_id and design_rechecking(self.store.state, lab_id)):
+        if self.active or self.in_flight_impairments or operation_busy(self.store.state) or (lab_id and design_rechecking(self.store.state, lab_id)):
             raise HTTPException(409, 'Wait for the current lab operation to finish.')
         if any(j['status'] in BUSY and (not lab_id or j['lab_id'] == lab_id) for j in self.store.state['jobs']):
             raise HTTPException(409, 'Wait for the lab backup or login job to finish.')
+
+    @contextmanager
+    def impairing(self, lab_id):
+        """An impairment call in flight: refused (guard's two sentences) while any job, restore, Git save or design apply holds
+        the lab, and visible to guard() for as long as the call runs."""
+        token = object()
+        with self.store.lock:
+            self.guard(lab_id)
+            self.in_flight_impairments.add(token)
+        try: yield
+        finally:
+            with self.store.lock: self.in_flight_impairments.discard(token)
+
+    def forget_plan(self, lab_id):
+        """Drop the lab's cached pending-changes plan (and make any answer still being computed unstorable)."""
+        with self.plan_lock:
+            self.plan_cache.pop(lab_id, None); self.plan_gen[lab_id] = self.plan_gen.get(lab_id, 0) + 1
 
     def invoke(self, req):
         try: return remote(self.host(), req)
@@ -394,11 +515,15 @@ class LabOperations:
             self.cap_cache = (key, time.monotonic() + 60, result)
             return result
 
-        @app.post('/api/operations/browse')
-        def browse(data: Request): return self.invoke({'mode': 'browse', 'path': data.path})
+        # /api/operations/browse and /api/operations/images are owned by device_diagnostics.py (installed first):
+        # browse gained a files mode and images its details there; the helper modes behind them are unchanged.
 
         @app.post('/api/operations/read')
-        def read(data: Request): return self.invoke({'mode': 'read', 'path': data.path})
+        def read(data: Request):
+            # The helper also reads configuration names and .md for the redacted viewer (device_diagnostics /view);
+            # this raw route keeps the file types it always served.
+            if not data.path.lower().endswith(('.yaml', '.yml', '.json', '.drawio', '.txt', '.cfg', '.conf', '.set')): raise HTTPException(409, 'This file type cannot be viewed in the manager.')
+            return self.invoke({'mode': 'read', 'path': data.path})
 
         @app.get('/api/operations/popular')
         def popular(): return self.invoke({'mode': 'popular'})
@@ -413,18 +538,6 @@ class LabOperations:
                 for entry in topology_images(text):
                     counts = found.setdefault(entry['kind'], {}); counts[entry['reference']] = counts.get(entry['reference'], 0) + len(entry['nodes'])
             return {'images': {kind: sorted(counts, key=lambda i: (-counts[i], i))[:12] for kind, counts in sorted(found.items())}}
-
-        @app.get('/api/operations/images')
-        def vm_images():
-            """The images the VM already has (the helper's read-only `images` mode), kept for a minute."""
-            host = self.host(); key = host.get('revision')
-            with self.image_flight:
-                with self.image_lock:
-                    if self.images_cache and self.images_cache[0] == key and self.images_cache[1] > time.monotonic(): return self.images_cache[2]
-                result = self.invoke({'mode': 'images'})
-                value = {'available': bool(result.get('available')), 'images': [i for i in result.get('images', []) if isinstance(i, str)][:1000]}
-                with self.image_lock: self.images_cache = (key, time.monotonic() + 60, value)
-            return value
 
         class ImageCheck(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -491,9 +604,9 @@ class LabOperations:
 
         @app.post('/api/operations/preview')
         def preview(data: Request):
-            if data.action not in ("deploy", "redeploy", "destroy", "apply", "start", "stop", "restart", "restart-node", "save", "inspect", "inspect-all", "create", "delete", "clone", "publish", "revise"):
+            if data.action not in ("deploy", "redeploy", "destroy", "apply", "start", "stop", "restart", "restart-node", "start-node", "stop-node", "save", "inspect", "inspect-all", "create", "delete", "clone", "publish", "revise"):
                 raise HTTPException(400, "This lab operation has been removed or is unsupported.")
-            if data.node and data.action != 'restart-node': raise HTTPException(400, 'Only Restart device names a single device.')
+            if data.node and data.action not in NODE_ACTIONS: raise HTTPException(400, 'Only Restart device, Start device and Stop device name a single device.')
             if 'node' in data.options or 'container' in data.options: raise HTTPException(400, 'The device selector is resolved by the manager, not sent by the page.')
             with self.store.lock:
                 self.guard(data.lab_id)
@@ -504,7 +617,9 @@ class LabOperations:
                 # or after it (even one confirmed while the helper round trips below were in flight) makes a
                 # Restart device review stale at confirm time.
                 review_stamp = stamp()
-            if data.action == 'restart-node' and data.path: raise HTTPException(400, "Restart device uses the lab's own topology file.")
+            if data.action in NODE_ACTIONS and data.path: raise HTTPException(400, STOP_LABELS[data.action] + " uses the lab's own topology file.")
+            run_options = [k for k in OPTION_ACTIONS if k in data.options]
+            if run_options and data.action not in ('deploy', 'redeploy', 'destroy', 'save'): raise HTTPException(400, 'This action takes no run options.')
             path = data.path or (lab.get('vm_project_path') or lab.get('vm_source', {}).get('files', {}).get('definition', {}).get('path', '') if lab else '')
             name = (lab.get('deployment_name') or lab['name']) if lab else data.name or 'manager'
             options = copy.deepcopy(data.options)
@@ -516,21 +631,45 @@ class LabOperations:
                 try: source_name = parse_definition(source['text'].encode())['name']
                 except (ValueError, TypeError, AttributeError, RecursionError): raise HTTPException(400, 'The VM file must contain a valid literal Containerlab topology.')
                 if not lab: name = source_name
+            chosen_nodes = None
+            if run_options:
+                # Run options (docs/parity-campaign/C05-DESIGN.md 3.2). The helper validates them again; the manager says first, and names
+                # devices from the topology file it parsed, so a review never shows a command that cannot run.
+                if 'max_workers' in options:
+                    value = options['max_workers']
+                    if type(value) is not int or not 1 <= value <= 64: raise HTTPException(400, 'Max workers must be a whole number from 1 to 64.')
+                for flag in ('skip_post_deploy', 'keep_mgmt_net'):
+                    if flag in options and type(options[flag]) is not bool: raise HTTPException(400, 'Invalid boolean option.')
+                if 'nodes' in options:
+                    names = options['nodes']
+                    if not isinstance(names, list) or not 1 <= len(names) <= 64 or not all(isinstance(n, str) for n in names) or len(set(names)) != len(names):
+                        raise HTTPException(400, 'Choose devices by their literal topology node names.')
+                    try: known = {n['definition_node'] for n in parse_definition(source['text'].encode())['nodes']}
+                    except (ValueError, TypeError, AttributeError, KeyError, RecursionError): raise HTTPException(400, 'The VM file must contain a valid literal Containerlab topology.')
+                    unknown = [n for n in names if n not in known]
+                    if unknown: raise HTTPException(400, "Choose devices from this lab's topology file: " + ', '.join(unknown) + (' is' if len(unknown) == 1 else ' are') + ' not in it.')
+                    if options.get('cleanup'): raise HTTPException(400, 'Clean up cannot be combined with chosen devices: containerlab would delete the whole lab folder, which the devices left running still use.')
+                    if data.action == 'deploy' and lab:
+                        with self.store.lock: deployment = lab_status(self.store.state, lab)['status']
+                        if deployment != 'Not deployed':
+                            raise HTTPException(409, 'This lab is already deployed, so a deploy limited to chosen devices is not possible (containerlab would remove the devices left out). Use Apply topology changes to add the missing devices.')
+                    chosen_nodes = list(names)
             if data.action == 'create':
                 try:
                     parsed = parse_definition(str(options.get('text', '')).encode())
                     if not lab or data.action == 'create': name = parsed['name']
                 except (ValueError, TypeError, AttributeError, RecursionError): raise HTTPException(400, 'Use valid literal Containerlab YAML for the new project.')
-            diff = ''; notes = []; node_name = ''; node_label = ''; links_expected = 0; neighbours_down = []
-            if data.action == 'restart-node':
-                # Restart device (one node, containerlab restart --node): the page names the device by
+            diff = ''; notes = []; node_name = ''; node_label = ''; links_expected = 0; neighbours_down = []; neighbours_absent = []
+            if data.action in NODE_ACTIONS:
+                # Restart, Start and Stop device (one node, containerlab <command> --node): the page names the device by
                 # the manager's own node record; the server resolves that to the literal topology node
                 # name and the container containerlab gave it, and checks both against the topology file
                 # on the VM as it is now. Anything that does not resolve exactly is refused here, before
                 # the helper sees a request; there is no fallback to a wider scope.
-                if not lab: raise HTTPException(400, 'Restart device needs a lab from My labs.')
-                if options: raise HTTPException(400, 'Restart device takes no options.')
-                if not data.node: raise HTTPException(400, 'Choose the device to restart.')
+                label = STOP_LABELS[data.action]; verb = data.action[:-5]
+                if not lab: raise HTTPException(400, label + ' needs a lab from My labs.')
+                if options: raise HTTPException(400, label + ' takes no options.')
+                if not data.node: raise HTTPException(400, 'Choose the device to ' + verb + '.')
                 target = next((n for n in lab['nodes'] if n['name'] == data.node), None)
                 if not target: raise HTTPException(404, 'This device is not in the lab.')
                 shown = target.get('short_name') or target.get('definition_node') or target['name']
@@ -541,21 +680,24 @@ class LabOperations:
                 defined = next((n for n in parsed['nodes'] if n['definition_node'] == short), None) if short else None
                 if not container or not defined or defined['name'] != container or target['name'] != container:
                     raise HTTPException(409, 'The manager cannot match ' + shown + ' to a device of the topology file on the VM. '
-                                        'Sync the topology from the VM (Advanced › Deployment details), then review the restart again.')
+                                        'Sync the topology from the VM (Advanced › Deployment details), then review the ' + verb + ' again.')
+                # What discovery last saw of the device: Stop device and Start device are refused here, before the helper is asked,
+                # when the answer is already known (the helper checks the live container again).
+                with self.store.lock: fresh = discovery_fresh(self.store.state)   # a stale or absent discovery proves nothing about the device
+                state = (target.get('runtime_state') or '') if fresh else ''
+                if data.action in ('start-node', 'stop-node') and target.get('discovered') is False and state == 'absent':
+                    raise HTTPException(409, shown + ' is not deployed on the VM, so there is nothing to ' + verb + '.' +
+                                        (' Apply topology changes (Lab actions ▾) recreates it.' if data.action == 'start-node' else ''))
+                if data.action == 'stop-node' and state and state not in ('running', 'unknown'):
+                    raise HTTPException(409, 'Device ' + container + ' is ' + state + '; there is nothing to stop.')
+                if data.action == 'start-node' and state == 'running':
+                    raise HTTPException(409, 'Device ' + container + ' is already running.')
                 options = {'node': short, 'container': container}
                 node_name = target['name']; node_label = shown
-                limit = RESTART_KNOWN_LIMITS.get(target.get('kind') or target.get('platform') or '')
+                limit = (STOP_KNOWN_LIMITS if data.action == 'stop-node' else RESTART_KNOWN_LIMITS).get(target.get('kind') or target.get('platform') or '')
                 if limit: notes.append(limit)
-                links_expected, neighbours_down = restart_links(lab, short)
-                if neighbours_down:
-                    # Proven live: a neighbour stopped by containerlab keeps its link ends parked, so the link comes back;
-                    # one that exited on its own or was stopped with docker stop took the link with it.
-                    who = ', '.join(neighbours_down)
-                    notes.append('%s is not running. If it was stopped by the manager, the VS Code extension or containerlab stop, its link to %s is parked and comes back with this restart. '
-                                 'If it exited on its own or was stopped with docker stop, that link is gone: containerlab restores %s%s, and the device then waits for all its interfaces before it boots (cEOS gives up waiting after five minutes, a VM-based image waits for good) and stays at Starting until %s runs again. '
-                                 'Start %s first (Restart device… on it takes the start/restore path), then this device, or redeploy the lab.'
-                                 % (who, shown, 'only %d of %d links' % (links_expected - len(neighbours_down), links_expected) if links_expected > len(neighbours_down) else 'no link',
-                                    ' and the job says so', who, who))
+                links_expected, neighbours_down, neighbours_absent = restart_links(lab, short)
+                notes.extend(neighbour_note(data.action, shown, links_expected, neighbours_down, neighbours_absent))
             if data.action in ('publish', 'revise'):
                 # The lab builder's save. The manager checks what it will later have to read back: a
                 # topology parse_definition accepts, under the name the folder and the file will carry.
@@ -602,11 +744,12 @@ class LabOperations:
                 token = uuid.uuid4().hex
                 if node_name and any(j.get('lab_id') == data.lab_id and j.get('action') in LIFECYCLE_JOBS and j.get('created', '') >= review_stamp
                                      for j in self.store.state['operations']):
-                    raise HTTPException(409, 'Another lab operation ran while this review was being prepared. Review the restart again.')
+                    raise HTTPException(409, 'Another lab operation ran while this review was being prepared. Review the ' + data.action[:-5] + ' again.')
                 self.previews[token] = {'request': req, 'digest': result['digest'], 'revision': host_revision,
                                         'lab_id': data.lab_id, 'expires': time.monotonic() + 300,
                                         'node': node_name, 'node_label': node_label, 'stamp': review_stamp,
-                                        'links_expected': links_expected, 'neighbours_down': neighbours_down}
+                                        'links_expected': links_expected, 'neighbours_down': neighbours_down, 'neighbours_absent': neighbours_absent,
+                                        'nodes': chosen_nodes}
             if node_name:
                 if len(result.get('affected', [])) != 1 or result['affected'][0].get('name') != options['container']:
                     raise HTTPException(409, 'The helper did not bind the restart to exactly this device. Review again.')
@@ -634,24 +777,29 @@ class LabOperations:
                     # never be confirmed, so its tab must hear the reason at once, not "wait" and then,
                     # on its retry, "review again" (QA-020).
                     lab = self.store.lab(preview['lab_id']); target = next((n for n in lab['nodes'] if n['name'] == preview['node']), None)
+                    again = 'Review the ' + preview['request']['action'][:-5] + ' again.'
                     if not target or expected_container(lab, target) != preview['request']['options'].get('container'):
-                        raise HTTPException(409, 'The device changed after this review. Review the restart again.')
+                        raise HTTPException(409, 'The device changed after this review. ' + again)
                     if any(j.get('lab_id') == preview['lab_id'] and j.get('action') in LIFECYCLE_JOBS and j.get('created', '') >= preview['stamp']
                            for j in self.store.state['operations']):
-                        raise HTTPException(409, 'Another lab operation ran after this review. Review the restart again.')
+                        raise HTTPException(409, 'Another lab operation ran after this review. ' + again)
                 self.guard(preview['lab_id'])
                 req = {**preview['request'], 'mode': 'run', 'digest': preview['digest']}
                 job = {'id': uuid.uuid4().hex, 'lab_id': preview['lab_id'], 'name': req['name'], 'action': req['action'],
                        'path': req['path'], 'created': stamp(), 'status': 'queued', 'output': '', 'message': 'Queued', 'exit_code': None}
-                if preview.get('node'): job.update(node=preview['node'], node_label=preview.get('node_label') or preview['node'], links_expected=preview.get('links_expected') or 0, neighbours_down=list(preview.get('neighbours_down') or []))
+                if preview.get('node'): job.update(node=preview['node'], node_label=preview.get('node_label') or preview['node'], links_expected=preview.get('links_expected') or 0, neighbours_down=list(preview.get('neighbours_down') or []),
+                                                 neighbours_absent=list(preview.get('neighbours_absent') or []))
+                if preview.get('nodes'): job['nodes'] = list(preview['nodes'])   # the devices a filtered job names: topology node names the review showed
                 previous_jobs = self.store.state['operations']
                 self.store.state['operations'] = (previous_jobs + [job])[-200:]
                 try: self.store.save()
                 except OSError:
                     self.store.state['operations'] = previous_jobs; raise HTTPException(500, 'Could not save the operation; nothing was submitted.')
                 self.previews.pop(data.token)
+                self.cancels[job['id']] = threading.Event()   # before submit: execute() and the stop route both find it
                 try: self.pool.submit(self.execute, job['id'], self.host(), req)
                 except RuntimeError:
+                    self.cancels.pop(job['id'], None)
                     job.update(status='interrupted', message='Manager is shutting down. Preview again after restart.'); self.store.save()
                     raise HTTPException(409, job['message'])
                 return copy.deepcopy(job)
@@ -666,6 +814,21 @@ class LabOperations:
                 found = next((j for j in self.store.state['operations'] if j['id'] == job_id), None)
                 if not found: raise HTTPException(404, 'Operation not found.')
                 return copy.deepcopy(found)
+
+        @app.post('/api/operations/{job_id}/cancel', status_code=202)
+        def cancel(job_id: str):
+            with self.store.lock:
+                found = next((j for j in self.store.state['operations'] if j['id'] == job_id), None)
+                if not found: raise HTTPException(404, 'Operation not found.')
+                if found.get('action') not in STOPPABLE: raise HTTPException(409, 'This step finishes on its own in a moment and cannot be stopped.')
+                if found['status'] not in BUSY: raise HTTPException(409, 'This operation has already finished.')
+                if not found.get('cancel_requested'):
+                    found['cancel_requested'] = stamp()
+                    try: self.store.save()
+                    except OSError: pass   # the memory record and the event carry the request; the job's own saves write it
+                event = self.cancels.get(job_id)
+                if event: event.set()
+                return {'id': job_id, 'status': found['status'], 'cancel_requested': found['cancel_requested'], 'message': STOP_ASKED}
 
         class LabSettings(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -686,6 +849,7 @@ class LabOperations:
                 name = parse_definition(lab['definition_yaml'].encode())['name'] if lab.get('definition_yaml') else lab['name']
                 revision = self.store.state.get('host', {}).get('revision')
             if data.path:
+                self.forget_plan(lab_id)
                 value = self.invoke({'mode': 'read', 'path': data.path})
                 try:
                     parsed = parse_definition(value['text'].encode())
@@ -823,7 +987,7 @@ class LabOperations:
             lab = self.store.lab(job['lab_id']) if job and job.get('action') in DEPLOY_ACTIONS and job.get('lab_id') else None
             if lab: lab['last_deployed'] = finished
 
-    def settled_after_restart(self, key):
+    def settled_after_restart(self, key, action='restart-node'):
         """After a successful node restart: '' when the container is running, else the reason the job failed.
 
         Some images cannot start a second time (vJunos-switch renames its init.conf on the first start): the
@@ -840,12 +1004,54 @@ class LabOperations:
             kind = node.get('kind') or node.get('platform') or ''
         if state in ('', 'running'): return ''
         why = RESTART_KNOWN_LIMITS.get(kind, 'The image could not start again from its current state.')
-        return ('containerlab restarted the device, but its container is ' + state + (' (' + status + ')' if status else '') +
+        return ('containerlab ' + ('started' if action == 'start-node' else 'restarted') + ' the device, but its container is ' + state + (' (' + status + ')' if status else '') +
                 ' right after starting. ' + why + ' Redeploy the lab to recreate the device; configuration changes that were not saved to its startup configuration are lost either way.')
 
+    def finish_stopped(self, ident, host, req, ran, clean):
+        """A person stopped the job: keep it busy until the VM proves it ended the command, then record `cancelled`.
+
+        The stop closed the SSH channel; the helper's next heartbeat fails and it ends containerlab's process group.
+        Until its host lock is free the lab may still be written to, so the job stays `running` (and every guard keeps
+        refusing) while a read-only preview, which needs that same lock, is asked once a second for up to 20 s."""
+        def update(**fields):
+            with self.store.lock:
+                job = next(j for j in self.store.state['operations'] if j['id'] == ident)
+                job.update(fields); self.store.save()
+        with self.store.lock:
+            job = next(j for j in self.store.state['operations'] if j['id'] == ident)
+            action = job.get('action', ''); asked = job.get('cancel_requested') or stamp()
+        if not ran:
+            self.forget_plan(job.get('lab_id'))
+            update(status='cancelled', cancel_requested=asked, finished=stamp(), exit_code=None, output=clean,
+                   message='You stopped ' + STOP_LABELS.get(action, action) + ' before it started. Nothing was changed on the VM.')
+            return
+        try: update(status='running', cancel_requested=asked, output=clean, message=STOP_ASKED)
+        except OSError: pass   # the memory record holds it
+        probe = {k: v for k, v in req.items() if k != 'digest'}; probe['mode'] = 'preview'
+        deadline = time.monotonic() + FOLLOW_UP_LIMIT; proven = False
+        while True:
+            if self.stopping.is_set():
+                self.forget_plan(job.get('lab_id'))
+                update(status='interrupted', finished=stamp(), output=clean, message='Operation connection interrupted. Inspect the lab before retrying.')
+                return
+            try:
+                remote(host, probe, None, self.stopping, timeout=8)
+                proven = True
+            except OperationStopped: continue   # the shutdown flag: the next pass ends the job as interrupted
+            except ValueError as exc:
+                # The helper's own answer other than the lock sentence or its generic failure (which can predate the lock) means it took the lock: the command is gone.
+                # A connection failure (ours or the gateway's) proves nothing.
+                proven = bool(getattr(exc, 'from_helper', False)) and str(exc) not in (LOCK_SENTENCE, GENERIC_HELPER_ERROR)
+            except Exception: proven = False
+            if proven or time.monotonic() >= deadline: break
+            time.sleep(1)
+        self.forget_plan(job.get('lab_id'))
+        update(status='cancelled', finished=stamp(), exit_code=None, output=clean, message=stop_message(action) if proven else STOP_UNPROVEN)
+
     def execute(self, ident, host, req):
-        with self.store.lock: self.active.add(ident)
-        window = OutputWindow(); last_save = 0
+        with self.store.lock: self.active.add(ident); event = self.cancels.get(ident)
+        stop = StopCondition(self.stopping, event)
+        window = OutputWindow(); last_save = 0; ran = False   # ran: the request was handed to the VM
         def update(**fields):
             with self.store.lock:
                 job = next(j for j in self.store.state['operations'] if j['id'] == ident)
@@ -868,7 +1074,10 @@ class LabOperations:
                 last_save = time.monotonic()
         with self.store.lock:
             job = next((j for j in self.store.state['operations'] if j['id'] == ident), {})
-            restart_key = (job.get('lab_id'), job.get('node')) if job.get('action') == 'restart-node' and job.get('node') else None
+            restart_key = (job.get('lab_id'), job.get('node')) if job.get('action') in ('restart-node', 'start-node') and job.get('node') else None
+            # Stop device: the device will not answer, so its proven login is forgotten once (no settle check follows).
+            stop_key = (job.get('lab_id'), job.get('node')) if job.get('action') == 'stop-node' and job.get('node') else None
+            lab_of_job = job.get('lab_id') or ''; action_of_job = job.get('action') or ''; forgot_stop = []
             # A lab-wide lifecycle job (deploy, redeploy, start, restart) boots every device of the lab: each one's proven
             # login is history too, and each gets the same login grace window as a single restarted device (QA-019).
             lab_keys = []
@@ -882,12 +1091,16 @@ class LabOperations:
             # a probe in flight nor one that ran while the container came back counts.
             if not self.readiness: return
             if restart_key: self.readiness.forget(restart_key)
+            if stop_key and not forgot_stop: self.readiness.forget(stop_key); forgot_stop.append(True)
             for key in lab_keys: self.readiness.forget(key)
         try:
+            # A shutdown, or a stop asked while the job was queued, ends it before the VM is touched.
+            if stop.is_set(): raise OperationStopped('Operation stopped. Inspect the lab before retrying.')
             invalidate_readiness()
             try: update(status='running', started=stamp(), message='Executing on the VM')
             except OSError: raise ValueError("The manager could not save the operation record, so nothing was run on the VM. Check the manager's disk and try again.") from None
-            result = remote(host, req, output, self.stopping)
+            ran = True
+            result = remote(host, req, output, stop)
             invalidate_readiness()   # before the job turns terminal: no window in which an old proof reads as Ready
             add('', True); text = window.text()
             with self.store.lock: clean = scrub(text, self.store.state)
@@ -903,20 +1116,25 @@ class LabOperations:
                 else:
                     message += ' · ' + (str(restored) + (' link' if restored == 1 else ' links') + ' restored' if restored else 'no links restored (none were parked by containerlab; redeploy the lab if this device should have links)')
                 # A successful command is not a running device: the container is looked at once more.
-                exited = self.settled_after_restart(restart_key)
+                exited = self.settled_after_restart(restart_key, action_of_job)
                 if exited: succeeded = False; message = exited
             finished = stamp()
             if succeeded: self.record_deployment(ident, finished)
         except Exception as exc:
-            message = str(exc) if type(exc) is ValueError else 'SSH connection or operation failed. Inspect the VM before retrying.'
+            stopped = isinstance(exc, OperationStopped)
+            if stopped and self.stopping.is_set(): message = 'Operation connection interrupted. Inspect the lab before retrying.'
+            else: message = str(exc) if type(exc) is ValueError else 'SSH connection or operation failed. Inspect the VM before retrying.'
             add('', True); text = window.text()
             with self.store.lock: clean = scrub(text, self.store.state); message = scrub(message, self.store.state)
+            self.forget_plan(lab_of_job)   # before any terminal write: a browser that sees the job end can never be handed the pre-operation plan
             try:
-                update(status='interrupted' if self.stopping.is_set() else 'failed', finished=stamp(), output=clean, message=message)
+                if stopped and not self.stopping.is_set(): self.finish_stopped(ident, host, req, ran and getattr(exc, 'sent', True), clean)
+                else: update(status='interrupted' if self.stopping.is_set() else 'failed', finished=stamp(), output=clean, message=message)
             except OSError:
                 pass  # update retained the terminal state in memory; restart reconciles disk.
         else:
             # Outside the try of the remote call: the operation ran, so a storage error here is not an SSH failure.
+            self.forget_plan(lab_of_job)   # before the terminal write (see the except branch)
             try:
                 update(status='succeeded' if succeeded else 'failed', exit_code=result.get('exit_code'),
                        finished=finished, output=clean, result=result, message=message)
@@ -934,4 +1152,4 @@ class LabOperations:
             except OSError:
                 pass  # The discovery loop retries storage failures independently.
             finally:
-                with self.store.lock: self.active.discard(ident)
+                with self.store.lock: self.active.discard(ident); self.cancels.pop(ident, None)

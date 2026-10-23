@@ -1,5 +1,6 @@
 import copy
 import json
+import time
 import unittest
 from unittest.mock import patch
 
@@ -72,6 +73,39 @@ class DiagnosticsTests(unittest.TestCase):
                 data = self.client.post('/api/debug/probe', json={}).json()
                 self.assertEqual([c['status'] for c in data['checks']], ['fail', 'warning'])
                 self.assertEqual(data['checks'][0]['code'], 'untrusted-folder')
+
+    def test_probe_reports_containerlab_version_live_first_then_cached_fallback(self):
+        self.host()
+        ops = self.app.state.operations
+        answer = {'protocol': 'clab-manager-operations-v1', 'version': __version__}
+        key = ops.host().get('revision')
+        later = time.monotonic() + 60
+        def probe(live, cache):
+            ops.cap_cache = cache
+            def remote(host, req, **kwargs):
+                if req['mode'] == 'browse': return {'entries': []}
+                if isinstance(live, Exception): raise live
+                return live
+            with patch('app.diagnostics.remote', side_effect=remote) as mock:
+                checks = self.client.post('/api/debug/probe', json={}).json()['checks']
+            self.assertEqual([c.args[1]['mode'] for c in mock.call_args_list], ['browse', 'capabilities'])
+            return checks[1]
+        cached = (key, later, dict(answer, containerlab='0.78.0'))
+        # The live answer wins, with or without a cache.
+        self.assertEqual(probe(dict(answer, containerlab='0.79.0'), None)['containerlab_version'], '0.79.0')
+        self.assertEqual(probe(dict(answer, containerlab='0.79.0'), cached)['containerlab_version'], '0.79.0')
+        # Live answer without a usable key: the cache fills in, otherwise nothing.
+        self.assertEqual(probe(dict(answer), cached)['containerlab_version'], '0.78.0')
+        self.assertEqual(probe(dict(answer, containerlab=79), cached)['containerlab_version'], '0.78.0')
+        self.assertNotIn('containerlab_version', probe(dict(answer), None))
+        self.assertNotIn('containerlab_version', probe(dict(answer, containerlab='bad value!'), None))
+        # A failed probe call falls back to a valid cache.
+        failed = probe(ValueError('boom'), cached)
+        self.assertEqual((failed['status'], failed['containerlab_version']), ('fail', '0.78.0'))
+        self.assertNotIn('containerlab_version', probe(ValueError('boom'), None))
+        # The cached fallback keeps its expiry and revision checks.
+        self.assertNotIn('containerlab_version', probe(dict(answer), (key, time.monotonic() - 1, cached[2])))
+        self.assertNotIn('containerlab_version', probe(dict(answer), ('other', later, cached[2])))
 
     def test_cross_origin_and_parallel_probes_are_rejected(self):
         for path in ('/api/debug', '/api/debug/probe'):

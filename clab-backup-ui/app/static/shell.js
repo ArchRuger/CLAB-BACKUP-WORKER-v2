@@ -261,7 +261,11 @@ function dismissActionError(){shellActionError=null;}
 document.querySelectorAll('.menu-button').forEach(initMenu);
 document.querySelectorAll('.panel-button').forEach(initPanel);
 for(const id of ['nav-home','crumb-home']){const el=shellEl(id);if(el)el.addEventListener('click',e=>{e.preventDefault();goHome({push:true});});}
-{const dialog=shellEl('details-dialog');if(dialog)dialog.addEventListener('close',()=>{if(!shellApplying)writeRoute({...currentRoute(),device:''});});}
+{const dialog=shellEl('details-dialog');if(dialog)dialog.addEventListener('close',()=>{if(typeof resetDeviceDiagnostics==='function')resetDeviceDiagnostics();if(typeof resetDeviceImpairments==='function')resetDeviceImpairments();if(!shellApplying)writeRoute({...currentRoute(),device:''});});}
+// Whether this tab is on screen: the device drawer's polls (device-diagnostics.js) stop while it is hidden and
+// one fresh fetch runs when it returns.
+function pageVisible(){return typeof document==='undefined'||document.visibilityState!=='hidden';}
+document.addEventListener('visibilitychange',()=>{if(typeof diagVisibilityChanged==='function')diagVisibilityChanged();});
 document.addEventListener('keydown',shellEscape,true);
 document.addEventListener('pointerdown',shellPointerDown,true);
 window.addEventListener('hashchange',()=>{if(!shellApplying)applyRoute();});

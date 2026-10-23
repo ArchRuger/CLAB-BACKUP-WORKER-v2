@@ -193,6 +193,10 @@ class ContainerInterfaceTests(unittest.TestCase):
         self.assertEqual(container_interface('nokia_srlinux','ethernet-1/5'),'e1-5')
         self.assertEqual(container_interface('nokia_srlinux','Ethernet-1/5'),'e1-5')  # case variant
         self.assertEqual(displayed_interface('nokia_srlinux','e1-5'),'e1-5')
+    def test_vjunosrouter_is_listed_with_its_own_assertions(self):
+        self.assertEqual(container_interface('juniper_vjunosrouter','ge-0/0/1'),'eth2')
+        self.assertEqual(displayed_interface('juniper_vjunosrouter','eth2'),'ge-0/0/1')
+        self.assertEqual(container_interface('juniper_vjunosrouter','ge-0/0/1:0'),'')
     def test_breakouts_and_subinterfaces_are_unrecognised(self):
         for kind,name in [('juniper_vjunosswitch','ge-0/0/1:0'),('juniper_cjunosevolved','et-0/0/0.100'),
                           ('cisco_xrv9k','Gi0/0/0/1.100'),('arista_ceos','Ethernet1/1'),

@@ -1,3 +1,64 @@
+# Parity campaign: C03 drawer sections, C04 console and facts, the C05 helper — 1.31.3
+
+Preserve (the designs under `docs/parity-campaign/` carry the reasons and the review answers):
+
+1. **The diagnostics poll plan** (`diagPollNext` in `device-diagnostics.js`, C03-DESIGN §4.1, §11): one request in
+   flight per section, a 503 is a back-off never an error, three errors without a success stop with Retry, nothing
+   while the tab is hidden or the drawer is closed, the resume replaces the content with `tail=2000`; the browser sends
+   `lab_id` and the manager's node name only; Export and Copy never reach the manager; the Logs status announces the
+   first load, an error and a stopped follow, never a routine poll.
+2. **The console is gated on the server** (`console_gate` in `node_services.py`, C04-DESIGN §1.6, §2.2): kind from the
+   topology never the editable platform, a linked running container, not restarting, health not starting or unhealthy,
+   not younger than the floor, an address; the UI's `consoleState` only mirrors `console_hold`; one console per device
+   keyed `(lab_id, name)`, the slot reserved in the locked block; the idle clock counts browser input only; the probe
+   (no byte within 3 s) is the second defence against vrnetlab's launcher; the manager never sends credentials; only
+   `console.open` and `console.close` with lab and node are logged. `CONSOLE_PORTS` lists only kinds documented by
+   their image's project and proven live (`juniper_vqfx` waits).
+3. **Discovery's four container fields** are copied into the node as `discovered_*` and cleared when the container is
+   absent; `container_name` stays private; the public row's `container`, `console` and `console_hold` are computed under
+   the store lock.
+4. **The helper's lifecycle modes** (C05-DESIGN §2, §9): `netem-set` and `netem-reset` take the host flock
+   non-blocking through the one `locked()` helper that preview and run use, carry `digest({mode, name, options,
+   expected_id})` and refuse a container whose id changed; `eth0`, `lo`, host-network and `container:*` nodes are
+   refused; `start-node` and `stop-node` are preview/run like `restart-node`; the node filter never reaches `cleanup`
+   and never records a deployment for a filtered destroy or save; `INSPECT_FORMAT` reads optional map keys with
+   `index`. The manager side (`impairments.py`) and the UI are the next release.
+5. **Open points.** On Linux `O_DIRECTORY|O_NOFOLLOW` on a symlinked parent fails with `ENOTDIR`, so the helper's
+   "Symlink paths are not supported" sentence is unreachable for that case (the open is still refused). The impairment
+   line's live JSON shape is confirmed with C05's manager slice. The C05 manager slice is built on the side branch `claude/c05-manager` (its two Python tests expect the UI
+   slices' vocabulary mirror, in build); C06 to C09 designs are answered and their builds follow; the student guide
+   is not served until the owner revises it (C09-DESIGN §8). A `1×1` terminal resize on the console ends the session
+   like the SSH branch (in-range sizes are accepted and ignored).
+
+# Parity campaign, chunks C01 and C02, the C03 helper and API — 1.31.2
+
+The campaign's plan, research and the per-chunk designs with their review answers are under
+`docs/parity-campaign/`; `PICKUP.md` there is the dated checkpoint. Preserve:
+
+1. **The stop model** (`lab_operations.py`, C02-DESIGN §3, §8). `OperationStopped` is raised only while no result line
+   has been read and nothing is buffered on the channel; a result that arrived before the stop keeps its outcome. The
+   stoppable set is one list in two places and a test pins `STOPPABLE == STATUS_STOPPABLE`; `cancelled` is in
+   `STATUS_OPERATION_FAILED` and `dismissedSet` in `app.js` derives from the status sets. After a stop the job stays
+   `running` with `cancel_requested` until a read-only `preview` proves the lock free (20 s at most); the lock sentence
+   is proven against the helper's source. The helper's heartbeat, not the manager, ends the process group.
+2. **`clipboard.js` loads before `operations.js`** on every page that loads it (`test_page_load_ui.js`); the fallback
+   text area is appended inside the open dialog and the focus is handed back to the source button; nothing from the
+   terminal page (copies, exports) reaches the manager; the toolbar's status line never changes the toolbar's height.
+3. **The helper's diagnostics modes run outside the host lock** with `container_of()` binding every container by its
+   `containerlab` and `clab-node-name` labels and the topology path under a trusted root; `read` opens through a
+   directory fd with `O_NOFOLLOW`; counters come from `/proc/<pid>/net/dev` through one directory fd with the
+   host-namespace check; the browser never names a container (`lab_id` and the manager's node name only).
+   `device_diagnostics.py` is installed before `LabOperations` and owns `browse`, `images`, `view`, `logs`,
+   `interfaces` and `netem`; the `images` reference list is unchanged. Log text is redacted per line on the manager and
+   never stored, logged or put in a job.
+4. **vJunos-router** has no `restore*` keys in PLATFORMS and no design driver until C10 proves the transaction live;
+   the catalog keeps the published image tag; the nested-virtualization derivative is test-only and never pushed.
+5. **Open points.** The C03 UI slice (`device-diagnostics.js`, the drawer's Interfaces and Logs, the inspect table's ID
+   and Owner, Lab files, Images on this VM) is built and verified separately. The `scrub` constants are duplicated in
+   `device_diagnostics.py` (a shared module would be better). The lab header overlaps its banner at 760 px while an
+   operation runs (pre-existing). The next chunks in order: C04 (console, container facts), C05 (impairments and the
+   mutating lifecycle modes), C06 to C09, C10 (the router restore proof); C11 waits for `@containerlab/clab-ui` 0.4.0.
+
 # Agent routing embedded in the repository — 1.31.1
 
 `.claude/` is the source of truth for how a session is staffed; `docs/AGENT-ROUTING.md` is the guide. Preserve:

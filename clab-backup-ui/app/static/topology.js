@@ -48,6 +48,43 @@ function renderMapState(){
  return updated;
 }
 function applyMapStates(){return renderMapState();}
+// Impairments on the map (C05 4.3): a class on the wire group (style.css strokes only paths that are not the capture hit area), the
+// end and its values in the wire's title and aria-label, and a caption that counts wires. Re-applied after every map render from the
+// cached answer, so a re-render never drops the badge until the next fetch.
+function mapWireEnds(group){
+ try{const value=JSON.parse(group.getAttribute('data-capture-endpoints')||'[]');return Array.isArray(value)?value:[];}catch{return [];}
+}
+function mapWireImpairedText(group,text){
+ // C06's mapWireText(group) composes the title and aria-label from a base plus clauses; without it the clause is appended here.
+ if(text)group.setAttribute('data-impaired-text',text);else group.removeAttribute('data-impaired-text');
+ if(typeof mapWireText==='function'){mapWireText(group);return;}
+ const title=typeof group.querySelector==='function'?group.querySelector('title'):null;
+ if(group.getAttribute('data-base-label')===null)group.setAttribute('data-base-label',group.getAttribute('aria-label')||'');
+ if(title&&group.getAttribute('data-base-title')===null)group.setAttribute('data-base-title',title.textContent);
+ const baseLabel=group.getAttribute('data-base-label'),baseTitle=group.getAttribute('data-base-title');
+ if(title&&baseTitle!==null)title.textContent=text?baseTitle+' · '+text:baseTitle;
+ group.setAttribute('aria-label',text?baseLabel+' · '+text:baseLabel);
+}
+function renderMapImpairments(answer){
+ if(!map||typeof map.querySelectorAll!=='function'||typeof impairedWires!=='function')return 0;
+ if(answer===undefined)answer=typeof opImpairmentCache!=='undefined'&&typeof activeId==='string'?opImpairmentCache[activeId]:null;
+ const groups=[...map.querySelectorAll('.topology-wire')];
+ const hits=impairedWires(groups.map(g=>({ends:mapWireEnds(g)})),answer&&answer.devices);
+ const byIndex=new Map(hits.map(h=>[h.index,h]));
+ groups.forEach((group,index)=>{
+  const hit=byIndex.get(index);
+  group.classList.toggle('impaired',!!hit);
+  const text=hit?hit.text:'';
+  if((group.getAttribute('data-impaired-text')||'')!==text||(!text&&group.getAttribute('data-base-title')!==null))mapWireImpairedText(group,text);
+ });
+ const interfaces=answer&&Number.isInteger(answer.interfaces)?answer.interfaces:hits.reduce((sum,h)=>sum+h.ends.length,0);
+ const caption=$('map-impaired'),clear=$('map-impaired-clear');
+ const counted=hits.length?mapPlural(hits.length,'link')+' impaired':interfaces?mapPlural(interfaces,'interface')+' impaired':'';
+ const text=counted?counted+(answer&&answer.complete===false?' · some devices not read':''):(answer&&answer.complete===false?'Impairments: some devices not read':'');
+ if(caption){caption.textContent=text;caption.hidden=!text;caption.title=counted?mapPlural(interfaces,'interface')+' with an impairment':'';}
+ if(clear){clear.hidden=!interfaces;}
+ return hits.length;
+}
 // "Test logins": a lab-wide SSH login refresh beside the Devices heading — the rail's sticky h2 and
 // the Devices tab heading both carry it (node_services.py POST …/ssh-check-all). It only starts real
 // login tests and never marks a device ready by itself: deviceState()'s 'checking' pill and the
@@ -83,6 +120,12 @@ function nodeBackupReason(n){
  if(n.readiness==='Ready')return '';
  return n.readiness==='Needs credentials'?'Add credentials first':n.readiness==='Choose NOS'?'Choose the network OS first':n.readiness==='Lab unavailable'?'The lab is not running':'Not available right now';
 }
+// Stop device and Start device beside Restart device: the same eligibility function the Devices table and the device panel ask.
+function nodeMenuAction(action,label,n,danger){
+ if(typeof opNodeActionState!=='function')return '';
+ const check=opNodeActionState(action,current(),n,state.discovery,busy());
+ return `<button type="button" role="menuitem" data-node-action="${esc(action)}" data-node="${esc(n.name)}"${danger?' class="danger"':''} ${check.ok?'':`disabled title="${esc(check.reason)}"`}>${esc(label)}${check.ok?'':nodeMenuReason(check.reason)}</button>`;
+}
 // The right-click menu: the device's state in the header (its address stays in the device panel), the
 // actions in the order students use them, and a visible reason under every disabled item.
 function openNodeMenu(element,x,y){
@@ -91,11 +134,14 @@ function openNodeMenu(element,x,y){
  const ds=mapDeviceState(n),captureAttrs=typeof captureActionAttrs==='function'?captureActionAttrs():'',captureOff=/\bdisabled\b/.test(captureAttrs),backupReason=nodeBackupReason(n);
  // Restart device (one node, operations.js): the same eligibility the Devices view uses, with its reason.
  const restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};
+ const consoleItem=typeof consoleState==='function'?consoleState(n):{offered:false};
  nodeMenu.innerHTML=`<div class="context-node-name">${esc(n.short_name||n.name)}<span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span></div>`
  +`<button type="button" role="menuitem" data-terminal="${esc(n.name)}" ${n.ssh_ready?'':`disabled title="${esc(ds.detail)}"`}>Open CLI <span class="external" aria-hidden="true">↗</span>${n.ssh_ready?'':nodeMenuReason(ds.detail)}</button>`
+ +(consoleItem.offered?`<button type="button" role="menuitem" data-console="${esc(n.name)}" ${consoleItem.ok?'':`disabled title="${esc(consoleItem.reason)}"`}>Console <span class="external" aria-hidden="true">↗</span>${consoleItem.ok?'':nodeMenuReason(consoleItem.reason)}</button>`:'')
  +`<button type="button" role="menuitem" data-capture="${esc(n.name)}" ${captureAttrs}>Capture traffic…${captureOff?nodeMenuReason('Packet capture isn’t set up on this VM yet — see Tools › Packet capture.'):''}</button>`
  +`<button type="button" role="menuitem" data-backup="${esc(n.name)}" ${backupReason?`disabled title="${esc(backupReason)}"`:''}>Back up configuration${nodeMenuReason(backupReason)}</button>`
  +`<button type="button" role="menuitem" data-restart="${esc(n.name)}" class="danger" ${restart.ok?'':`disabled title="${esc(restart.reason)}"`}>Restart device…${restart.ok?'':nodeMenuReason(restart.reason)}</button>`
+ +nodeMenuAction('stop-node','Stop device…',n,true)+nodeMenuAction('start-node','Start device…',n,false)
  +`<button type="button" role="menuitem" data-details="${esc(n.name)}">Device details</button>`;
  nodeMenu.hidden=false;nodeMenu.style.left=Math.max(8,Math.min(x,window.innerWidth-nodeMenu.offsetWidth-8))+'px';nodeMenu.style.top=Math.max(8,Math.min(y,window.innerHeight-nodeMenu.offsetHeight-8))+'px';nodeMenu.querySelector('button:not(:disabled)')?.focus();
 }
@@ -154,7 +200,7 @@ async function refreshMap(force=false){
  map.innerHTML=topologyMarkup(drawing);
  map.classList.toggle('labels-on-select',drawing.settings?.labelMode==='on-select');
  mapBounds=measureTopology(map);mapBox=[...mapBounds];setMapBox();
- renderMapState();
+ renderMapState();renderMapImpairments();
  }catch(e){if(request===mapRequest){if($('map-loading'))$('map-loading').hidden=true;$('map-status').textContent='The map could not be loaded. '+e.message;}}
 }
 $('import-map').onclick=()=>{$('map-form').reset();$('map-form').querySelector('.form-error').textContent='';$('map-dialog').showModal();};
