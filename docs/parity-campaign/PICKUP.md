@@ -17,7 +17,7 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
 - **VM**: 72 GB RAM, 24 CPUs, 98 GB free disk, KVM present; the five images are pulled; two labs from the Git
   redesign stream exist with their containers exited (`git-redesign`, `git-redesign-b`); the manager and the capture
   stack run (release image 1.31.0 at the time of writing).
-- **Chunk in progress**: C00 (vJunos-router boot triage) and C02 (ergonomics) next; see the log.
+- **Chunk in progress**: C02 built (checkpoint `d00ccf1`, not released) and under verification; C03 helper slice in build; see the log.
 
 ## How to continue after an interruption
 
@@ -61,3 +61,9 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
 - 2026-10-23 02:44 UTC: `cjunos` finished booting (Model ptx10001-36mr, 02:40); test login 1/1 (job `0d4b97c6…`) and
   backup 1/1 (job `273ded5b…`), so the C01 live pass covers all five nodes through the manager. C02 is in build (four
   slices), the C03 helper slice is in build; the C03 manager and UI slices wait for C02's files to settle.
+- 2026-10-23 03:00 UTC: C02 built in four slices and committed as a checkpoint (`d00ccf1`); the manager on the VM was
+  rebuilt from the tree (3 s loop) so the cancel route exists live. Running: `/clab-slice-verify` (tests, attack, fixture
+  at 1440 and 760 plus read-only live checks of the terminal and Copy on the parity lab), `/clab-review-changes` (base
+  `408a2fd`), and a `clab-devops-engineer` live stop pass on a disposable two-cEOS lab `stoptest` (evidence to
+  `evidence/c02-live-stop.md`). The C03 helper slice (`host_operations.py`, new `test_host_diagnostics.py`) is
+  uncommitted in the tree and breaks one images test until its contract is settled.
