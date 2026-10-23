@@ -2193,6 +2193,11 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 .capture-more, .capture-advanced { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 10px 14px; }
 .capture-more summary, .capture-advanced summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent-strong); }
 .capture-more .capture-interfaces, .capture-advanced .capture-controls { margin-top: 10px; }
+.capture-openas label { display: block; margin: 6px 0; font-size: 13px; font-weight: 400; }
+.capture-openas input { width: auto; margin-right: 8px; }
+.capture-presets { display: flex; gap: 8px; margin-bottom: 8px; }
+.capture-end .form-help { margin: 0 0 6px; }
+.capture-dialog[data-mode="link"] .capture-device-only { display: none; }
 
 /* viewer page (body.capture-viewer) */
 body.capture-viewer { height: 100vh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; margin: 0; }

@@ -403,3 +403,19 @@ test('C04: focus survives the poll: a status change rewrites only the live rows,
  h.context.renderDetails();assert.equal(writes.live,writes.live,'an unchanged render writes nothing');
  vm.runInContext(`state.labs[0].nodes[0].discovered_ipv4='172.20.20.99';`,h.context);h.context.renderDetails();assert.ok(writes.info>infoWrites,'a changed static value does rebuild the static rows');
 });
+
+test('showTab refreshes the capture sessions for the Tools view only, also through the arrow keys and when the function is absent',()=>{
+ const h=appHarness();let refreshed=0;
+ vm.runInContext("state={labs:[{id:'l',name:'L',nodes:[],jobs:[]}],jobs:[],platforms:{},loaded:true};activeId='l';",h.context);
+ h.context.syncRoute=()=>{};
+ assert.doesNotThrow(()=>vm.runInContext("showTab('tools')",h.context),'the page loads and shows Tools without capture.js');
+ h.context.refreshCaptureSessions=()=>{refreshed++;};
+ vm.runInContext("showTab('devices')",h.context);assert.equal(refreshed,0,'other views do not ask');
+ vm.runInContext("showTab('tools')",h.context);assert.equal(refreshed,1);
+ // ArrowRight from the Devices tab lands on Tools: the keyboard path asks too
+ for(const name of ['topology','devices','tools','advanced']){const el=h.document.getElementById('tab-'+name);el.dataset.tab=name;el.focus=function(){h.document.activeElement=this;};}
+ h.document.activeElement=h.document.getElementById('tab-devices');
+ vm.runInContext("showTab('devices')",h.context);refreshed=0;
+ h.context.tabKeydown({key:'ArrowRight',preventDefault(){}});
+ assert.equal(refreshed,1,'ArrowRight from Devices shows Tools and refreshes once');
+});

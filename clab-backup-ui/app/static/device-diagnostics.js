@@ -134,7 +134,7 @@ function diagInterfaceRow(item,ctx){
  return `<tr><td>${name}${meta?`<small class="mono">${esc(meta)}</small>`:''}${impair?`<small class="diag-impair">${esc(impair)}</small>`:''}${capture}</td><td>${esc(item.port)||'—'}</td><td><span class="diag-state diag-state-${diagStateClass(item.state)}">${esc(item.state)||'—'}</span></td>${diagCounterCell(c,rate,'rx')}${diagCounterCell(c,rate,'tx')}</tr>`;
 }
 function diagInterfaceTable(rows,ctx,label,key){
- return `<div class="table-wrap diag-wrap" tabindex="0" role="region" aria-label="${esc(label)}" data-diag-key="${esc(key)}"><table class="diag-table"><caption class="sr-only">${esc(label)}</caption><thead><tr><th scope="col">Name</th><th scope="col">Port</th><th scope="col">State</th><th scope="col">RX</th><th scope="col">TX</th></tr></thead><tbody>${rows.map(r=>diagInterfaceRow(r,ctx)).join('')}</tbody></table></div>`;
+ return `<div class="table-wrap diag-wrap" tabindex="0" role="region" aria-label="${esc(label)}" data-diag-key="${esc(key)}"><table class="diag-table"><caption class="sr-only">${esc(label)}</caption><thead><tr><th scope="col">Name${key==='region:main'&&rows.filter(r=>r.role==='data').length>=2?` <button type="button" class="button ghost small" data-diag-capture-all="${esc(JSON.stringify(rows.filter(r=>r.role==='data').map(r=>r.name)))}" data-diag-key="capture-all" ${ctx.captureAttrs||''}>Capture all connected</button>`:''}</th><th scope="col">Port</th><th scope="col">State</th><th scope="col">RX</th><th scope="col">TX</th></tr></thead><tbody>${rows.map(r=>diagInterfaceRow(r,ctx)).join('')}</tbody></table></div>`;
 }
 // ctx: {device, rates, impair, captureAttrs, captureReason, otherOpen}
 function diagInterfacesMarkup(answer,ctx){
@@ -421,7 +421,10 @@ function renderDeviceDiagnostics(n){
  on('diag-if-body','toggle',event=>{const target=event.target;if(target&&target.hasAttribute&&target.hasAttribute('data-diag-other'))diagIf.otherOpen=!!target.open;},true);
  on('diag-if-body','click',event=>{
   const button=event.target&&event.target.closest?event.target.closest('[data-diag-capture]'):null;
-  if(!button||button.disabled||typeof openCapture!=='function')return;
-  openCapture(detailName,button.dataset.diagCapture);
+  if(button){if(!button.disabled&&typeof openCapture==='function')openCapture(detailName,button.dataset.diagCapture);return;}
+  const all=event.target&&event.target.closest?event.target.closest('[data-diag-capture-all]'):null;
+  if(!all||all.disabled||typeof openCapture!=='function')return;
+  let names=[];try{names=JSON.parse(all.dataset.diagCaptureAll);}catch{}
+  if(Array.isArray(names)&&names.length)openCapture(detailName,'',null,{preset:names});
  });
 }
