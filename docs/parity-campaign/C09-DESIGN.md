@@ -708,3 +708,17 @@ on each are binding and are the dispositions below.
 | 13 | U, should-fix: R101 is dropped without the record the design claims | Accepted (lead's decision): an explicit R101 entry in §8 (not pursued in this campaign, with the reason; the kinds link is a pointer, not R101's counterpart) and the README/PARITY note for the lead to apply | §8 R101 paragraph, §7 last bullet |
 | 14 | U, optional: the macOS sentence is wrong for the terminal chords | Accepted as proposed: `On macOS, Alt is Option; on the Edit map page Cmd works for undo and redo. Ctrl+Insert has no Mac equivalent: use Copy selection.` | §3 intro sentence |
 | 15 | U, optional: the Preferences status sentence carries over to the next opening | Accepted as proposed: the open handler empties `#prefs-status` before `showModal()`; pinned in `test_preferences_ui.js` and the fixture check | §5.3 open handler, §6, fixture (4) |
+
+## 10. Verification answers (`/clab-slice-verify` on `claude/c09-int` at e398842, six workers; the fixture passes at 1440, 760 and 390 in Chromium and Firefox)
+
+| Finding | Answer | Where |
+|---|---|---|
+| Medium: Escape cleared the Home filter in both browsers (a `type=search` input clears itself) | Accepted: the input's own keydown prevents the default on Escape; Clear stays the only way to empty it | §4.4; `home.js` |
+| Medium: the Reset confirmation was 668 px tall at 760 and 390 and pushed the buttons down | Accepted: one short paragraph with the counts and a collapsed "What exactly" (110 px at 1440 and 760, 130 px at 390; the buttons in view at 390×844) | §5.2; `preferences.js` |
+| Low: the student-guide `render()` line from §2.1 was missing, so the item could never show once the guide is served | Accepted: added with tests for hidden, shown and hidden again | `app.js`, `test_readiness_ui.js` |
+| Low: four stale `SHORTCUT_EXCLUSIONS` cites, and the reverse pin never checked that an exclusion or a row cites a real keydown site | Accepted: the stale entries dropped, the cites refreshed, the pin now requires a keydown site at every cited line (the folder-chooser rows cite their `case` lines) | §3, §6; `preferences.js`, `test_shell_ui.js` |
+| Low: a whitespace-only term showed the count and Clear | Accepted: trimmed once in `renderHome` | §4.1 |
+| Low: a double-click on Clear at 390 dropped focus to the body | Accepted: the field keeps one line with Clear and takes its place when it hides; a mousedown guard keeps focus in the row | §4.1; `style.css` |
+| Low: an out-of-range stored terminal size was misreported | Accepted: the same clamp as the terminal page (a pinned claim rewritten: '' and '9' read 11) | §5.1; `shell.js` |
+| Low: "1 of 1 labs"; a long term overflowing at 390; stale cards after Reset; the dialogs' columns cramped at 390 and misaligned across sections | Accepted: pluralised, `overflow-wrap: anywhere`, `render()` after a reset, one shared label column and one column at 420 px and narrower | §4.3, §5.2; `style.css` |
+| `verify_after.py` fails one pre-existing device-menu order check (Console, Stop and Start device were added by C04 and C05) | Not a C09 defect: the tool's expectation is refreshed by the lead with the next release that touches it | `docs/redesign/tools/verify_after.py` |
