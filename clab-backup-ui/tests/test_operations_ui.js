@@ -726,7 +726,7 @@ function browseHarness({diagnostics=true}={}){
  const dialog={querySelector:sel=>sel==='.form-help'?get('help'):get('err'),querySelectorAll:()=>[],open:true,close(){}};
  const dialogs=[];
  c.opDialog=(id,title,body)=>{dialogs.push({id,title,body});return dialog;};
- c.opCapabilities=async()=>{vm.runInContext('opCaps='+JSON.stringify({diagnostics,network:false,actions:{}}),c);return c.opCaps;};
+ c.opCapabilities=async()=>{const caps={diagnostics,network:false,actions:{}};vm.runInContext('opCaps='+JSON.stringify(caps),c);return caps;};
  c.opViewed=[];c.opView=async(p,l)=>{c.opViewed.push([p,l]);};c.opEdit=async(p,l)=>{c.opViewed.push(['edit',p,l]);};
  return {c,calls,dialogs,get};
 }
@@ -746,10 +746,23 @@ test('Lab files mode: every listing sends files:true with the lab, keeps the tit
  assert.equal(file.textContent,'◇ startup-config · 2.1 kB','a node folder\'s startup configuration is reachable');
  await file.onclick();assert.deepEqual(Array.from(h.c.opViewed.at(-1)),['/srv/p/lab/clab-lab/r1/startup-config','L1'],'a non-topology file opens the read-only viewer');
  await topology.onclick();assert.deepEqual(Array.from(h.c.opViewed.at(-1)),['edit','/srv/p/lab/lab.clab.yaml','L1'],'a topology file opens as before');
- await h.get('op-up').onclick();assert.deepEqual(h.calls.at(-1),['/operations/browse',{path:'/srv/p',files:true,lab_id:'L1'}],'Up one folder keeps files mode');
+ const up=h.get('op-up');
+ assert.equal(up.disabled,true,'Up one folder stops at the lab folder');assert.equal(up.title,"This is the lab's folder");
+ assert.doesNotMatch(h.dialogs[0].body,/id="op-roots"|All lab folders/,'files mode never lists all lab folders');
+ // A listing below the lab folder (the dialog reopened there) can still go up, and keeps files mode.
+ up.disabled=false;up.title='';await h.c.opBrowse('/srv/p/lab/clab-lab','L1');
+ assert.equal(up.disabled,false,'below the lab folder Up is enabled');
+ await up.onclick();assert.deepEqual(h.calls.at(-1),['/operations/browse',{path:'/srv/p',files:true,lab_id:'L1'}],'Up one folder keeps files mode');
  assert.equal(h.dialogs.at(-1).title,'Lab files · lab one');
- await h.get('op-roots').onclick();assert.deepEqual(h.calls.at(-1),['/operations/browse',{path:'',files:true,lab_id:'L1'}],'All lab folders keeps files mode and shows the roots');
- assert.equal(h.dialogs.at(-1).title,'Lab files · lab one');
+});
+test('the topology browser keeps All lab folders and an enabled Up; files mode never appends the downloads sentence',async()=>{
+ const old=browseHarness({diagnostics:false});await old.c.opBrowse('','L1');
+ assert.match(old.dialogs[0].body,/id="op-roots">All lab folders/);assert.notEqual(old.get('op-up').disabled,true);
+ await old.get('op-roots').onclick();assert.deepEqual(old.calls.at(-1),['/operations/browse',{path:''}]);
+ await new Promise(r=>setImmediate(r));
+ assert.match(old.get('help').textContent,/Downloading labs from the internet is turned off/,'the deploy browser says it');
+ const files=browseHarness();await files.c.opBrowse('','L1');await new Promise(r=>setImmediate(r));
+ assert.doesNotMatch(files.get('help').textContent,/Downloading labs/,'files mode does not append it (network is off in this harness)');
 });
 test('without the diagnostics flag, or without a lab, Lab files is today\'s topology browser',async()=>{
  const old=browseHarness({diagnostics:false});await old.c.opBrowse('','L1');
@@ -775,4 +788,18 @@ test('Images on this VM: rows from details, used_by and missing; chips and filte
  assert.match(body,/<span class="pill danger">Missing<\/span>/);assert.match(body,/lab one, lab two/);assert.match(body,/title="2026-10-23 02:03:42 UTC"/);
  assert.match(context.opImageTableBody([{reference:'<i>x</i>',size:'',created:'',labs:['<b>'],missing:false}]),/&lt;i&gt;x&lt;\/i&gt;.*&lt;b&gt;/);
  assert.match(context.opImageTableBody([]),/No images match\./);
+});
+
+test('an inspect run starts with a clean sort and filter on the reused dialog',async()=>{
+ const elements=new Map();
+ for(const id of ['op-job-banner','op-job-output','op-job-result'])elements.set(id,{hidden:false,className:'',textContent:'',innerHTML:'',scrollTop:0,scrollHeight:0,clientHeight:0,addEventListener(){}});
+ const dialog={open:true,classList:{toggle(){}},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]};
+ const job={id:'j',action:'inspect',name:'',status:'succeeded',output:'',result:{}};
+ const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs:[]},console,document:{getElementById:()=>null},setTimeout:()=>1,clearTimeout(){},api:async()=>({json:async()=>job}),refresh:async()=>{}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opDialog=()=>dialog;
+ await c.opShowJob('j');
+ Object.assign(dialog._inspectView,{key:'lab',dir:'desc',filter:'beta'});
+ await c.opShowJob('j');
+ assert.deepEqual({...dialog._inspectView},{key:'',dir:'',filter:''},'the next inspect run does not inherit the earlier view');
 });

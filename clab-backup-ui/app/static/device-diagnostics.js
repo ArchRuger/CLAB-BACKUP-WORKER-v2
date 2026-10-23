@@ -9,11 +9,14 @@ const DIAG_INTERVAL=5000, DIAG_SLOWEST=30000, DIAG_ERRORS=3, DIAG_PAUSE=30*60*10
 const DIAG_NO_CONTAINER='No container for this device yet (deploy the lab, or wait for the deploy to create it).';
 const DIAG_LOG_EMPTY='The container has written nothing yet.';
 const DIAG_PAUSED='Updating paused, retrying…';
+const DIAG_BUSY='The VM is busy, retrying…';
+const DIAG_OFFLINE='The manager did not answer. Check the connection, then Retry.';
 const DIAG_MANAGEMENT='the manager reaches the device through it';
 // ---- Pure helpers (tested in tests/test_device_diagnostics_ui.js) -------------------------------------------------
 function diagPlan(now){return {interval:DIAG_INTERVAL,errors:0,startedAt:now};}
 // The one poll plan for both sections: the next request is scheduled only after the previous answer; a 503 doubles the
-// wait up to 30 s and a success halves it back; three errors in a row stop it (Retry); 30 minutes pause it (Resume).
+// wait up to 30 s and a success halves it back; three errors stop it (Retry); 30 minutes pause it (Resume). "Three errors"
+// means three without a success between them: a 503 is a back-off and neither counts as an error nor resets the count.
 function diagPollNext(plan,answer,now){
  const next={interval:plan.interval,errors:plan.errors,startedAt:plan.startedAt};let stop='';
  if(answer&&answer.ok){next.errors=0;next.interval=Math.max(DIAG_INTERVAL,next.interval/2);}
@@ -87,7 +90,7 @@ function diagApplyLogs(log,incoming,replace){
  log.lines=all;
  const cursor=diagCursor(lines);
  if(cursor&&(!log.cursor||diagStampKey(cursor)>=diagStampKey(log.cursor)))log.cursor=cursor;
- log.missing=lines.length>=DIAG_LOG_MAX;
+ if(lines.length>=DIAG_LOG_MAX)log.missing=true;
  return {fresh,dropped,replaced:false};
 }
 // Follow scrolls only when the reader was within 30 px of the bottom before the append.
@@ -104,9 +107,16 @@ function diagEmptySentence(answer){
  if(status==='running')return 'No interfaces reported.';
  return `The container is stopped (${status||'unknown'}). Interfaces exist only while it runs; Logs shows its last output.`;
 }
+// containerlab prints delay and jitter as durations ("10ms"); loss and corruption are percentages, rate is kbit/s.
+// A field that is 0, '0', '0s', '0ms' or empty is not an impairment and is left out.
 function diagImpairment(row){
- const parts=[];
- for(const key of ['delay','jitter','loss','rate','corruption'])if(row&&row[key]!==undefined&&row[key]!==null&&row[key]!=='')parts.push(key+' '+row[key]);
+ const parts=[],set=value=>{if(value===undefined||value===null)return false;const text=String(value).trim();return !(text===''||/^0+(\.0+)?(ns|us|µs|ms|s|%)?$/.test(text));};
+ const suffix={loss:'%',corruption:'%',rate:' kbit'};
+ for(const key of ['delay','jitter','loss','corruption','rate']){
+  if(!row||!set(row[key]))continue;
+  const text=String(row[key]).trim();
+  parts.push(key+' '+text+(suffix[key]&&/^[\d.]+$/.test(text)?suffix[key]:''));
+ }
  return parts.join(' · ');
 }
 function diagStateClass(state){return state==='up'?'up':state==='down'?'down':'other';}
@@ -141,7 +151,7 @@ function diagInterfacesMarkup(answer,ctx){
 }
 function diagLineMarkup(line){return `<span class="diag-line"${line.at?` title="${esc(line.at)}"`:''}>${esc(diagLineText(line))}\n</span>`;}
 // ---- State ------------------------------------------------------------------------------------------------------
-function diagSectionNew(){return {open:false,timer:0,flight:false,queued:null,plan:diagPlan(0),stopped:'',hidden:false,kind:'',message:'',shown:false,token:0};}
+function diagSectionNew(){return {open:false,timer:0,flight:false,queued:null,plan:diagPlan(0),stopped:'',hidden:false,kind:'',message:'',shown:false,token:0,retried:false};}
 function diagIfNew(){return {sample:null,answer:null,rates:{},impair:{},impairStamp:null,otherOpen:false};}
 function diagLogNew(){return {lines:[],cursor:'',tail:200,follow:false,find:'',older:false,missing:false,truncated:false,present:true,loaded:false};}
 let diagKey='', diagFacts=null, diagFactsSeen='', diagEpoch=0, diagCapsAsked=0, diagSec={interfaces:diagSectionNew(),logs:diagSectionNew()}, diagIf=diagIfNew(), diagLog=diagLogNew();
@@ -233,6 +243,7 @@ function diagPaintLogCount(){
  const filtered=!!log.find.trim();
  count.textContent=log.loaded&&log.present?diagCount(diagFilter(log.lines,log.find).length,log.lines.length,filtered):'';
  const note=$('diag-log-note');if(note){const text=diagLogNotes();note.textContent=text;note.hidden=!text;}
+ const exp=$('diag-log-export');if(exp)exp.disabled=!diagShownLines().length;
 }
 function diagPaintLogs(){
  const view=$('diag-log-view');if(!view)return;
@@ -256,12 +267,14 @@ function diagApplyLogsAnswer(data,replace){
 }
 async function diagFetchLogs(replace){
  const log=diagLog,append=!replace&&log.follow;
- const params={lab_id:activeId,node:detailName,tail:String(append?DIAG_LOG_MAX:log.tail)};
+ // Under Follow every request asks for 2000 lines; only an append carries the cursor (a resume replaces).
+ const params={lab_id:activeId,node:detailName,tail:String(log.follow?DIAG_LOG_MAX:log.tail)};
  if(append&&diagStampKey(log.cursor))params.since=log.cursor;
  return (await api('/operations/logs?'+new URLSearchParams(params))).json();
 }
 function diagShownLines(){return diagFilter(diagLog.lines,diagLog.find);}
 function diagExport(){
+ if(!diagShownLines().length)return '';
  const text=diagShownLines().map(diagLineFull).join('\n')+'\n';
  const lab=typeof current==='function'?current():null;
  const link=document.createElement('a'),url=URL.createObjectURL(new Blob([text],{type:'text/plain'}));
@@ -281,24 +294,27 @@ async function diagRun(name,replace){
  const epoch=diagEpoch,token=sec.token;
  let result;
  try{result={ok:true,data:await(name==='interfaces'?diagFetchInterfaces():diagFetchLogs(replace))};}
- catch(e){result={ok:false,status:e&&e.status?e.status:0,message:e&&e.message?e.message:'The manager did not answer. Try again.'};}
+ catch(e){result={ok:false,status:e&&e.status?e.status:0,message:e&&e.status&&e.message?e.message:e&&e.name==='TypeError'||!e||!e.message?DIAG_OFFLINE:e.message};}
  sec.flight=false;
  if(epoch!==diagEpoch)return;
  if(token===sec.token){
   if(result.ok){
    if(name==='interfaces')diagApplyInterfaces(result.data,!!replace);else diagApplyLogsAnswer(result.data,!!replace);
-   sec.shown=true;sec.message='';
+   sec.shown=true;sec.message='';sec.retried=false;
    if(sec.kind!=='ok'&&!(name==='logs'&&sec.kind==='follow'&&diagLog.follow))diagSay(name,'ok',diagIds[name].loaded);
   }else sec.message=result.message;
   const polling=diagWants(name),next=diagPollNext(sec.plan,result.ok?{ok:true}:{ok:false,status:result.status},Date.now());
   sec.plan=next.plan;
   // A fetch the person asked for (open, Refresh) that fails has nothing to retry on its own: it stops at once with Retry.
-  const stop=next.stop||(!result.ok&&!polling?'retry':'');
-  if(stop){
+  // A one-shot fetch (open Logs, Refresh) that meets a busy VM waits 5 s and asks once more; a second 503 stops with Retry.
+  const again=!result.ok&&!polling&&result.status===503&&!sec.retried&&!next.stop;
+  const stop=next.stop||(!result.ok&&!polling&&!again?'retry':'');
+  if(again){sec.retried=true;diagSay(name,'err',DIAG_BUSY);sec.timer=setTimeout(()=>diagRun(name,replace),DIAG_INTERVAL);}
+  else if(stop){
    diagRetryButton(name,stop);
    diagSay(name,'stop',stop==='resume'?diagIds[name].pause:result.ok?'':sec.message);
   }else{
-   if(!result.ok)diagSay(name,'err',sec.shown?DIAG_PAUSED:sec.message);
+   if(!result.ok)diagSay(name,'err',sec.shown?DIAG_PAUSED:result.status===503?DIAG_BUSY:sec.message);
    if(polling){if(diagPageVisible())sec.timer=setTimeout(()=>diagRun(name,false),next.delay);else sec.hidden=true;}
   }
  }
@@ -308,7 +324,7 @@ async function diagRun(name,replace){
 }
 function diagStartSection(name){
  const sec=diagSec[name];
- sec.plan=diagPlan(Date.now());sec.hidden=false;diagRetryButton(name,'');
+ sec.plan=diagPlan(Date.now());sec.hidden=false;sec.retried=false;diagRetryButton(name,'');
  diagSay(name,'wait','Loading…');
  return diagRun(name,true);
 }
@@ -321,7 +337,7 @@ function diagOnToggle(name){
 }
 function diagRetry(name){
  const sec=diagSec[name];
- sec.plan=diagPlan(Date.now());sec.hidden=false;diagRetryButton(name,'');
+ sec.plan=diagPlan(Date.now());sec.hidden=false;sec.retried=false;diagRetryButton(name,'');
  diagSay(name,'wait','Loading…');
  diagRun(name,name==='logs'&&!diagLog.follow);
  diagSyncFacts();
@@ -337,7 +353,7 @@ function diagToggleFollow(){
 }
 function diagRefreshLogs(){
  const sec=diagSec.logs;
- sec.plan=diagPlan(Date.now());sec.hidden=false;diagRetryButton('logs','');
+ sec.plan=diagPlan(Date.now());sec.hidden=false;sec.retried=false;diagRetryButton('logs','');
  diagRun('logs',true);
  diagSyncFacts();
 }
@@ -359,6 +375,7 @@ function resetDeviceDiagnostics(){
  for(const name of ['interfaces','logs']){const box=$(diagIds[name].box),status=$(diagIds[name].status),retry=$(diagIds[name].retry);if(box)box.open=false;if(status)status.textContent='';if(retry)retry.hidden=true;}
  for(const id of ['diag-if-body','diag-log-view']){const el=$(id);if(el){el.innerHTML='';el._diagHtml=undefined;}}
  const follow=$('diag-log-follow');if(follow)follow.setAttribute('aria-pressed','false');
+ const exp=$('diag-log-export');if(exp)exp.disabled=true;
  const find=$('diag-log-find');if(find)find.value='';
  const tail=$('diag-log-tail');if(tail)tail.value='200';
  for(const id of ['diag-log-count','diag-log-note']){const el=$(id);if(el){el.textContent='';if(id==='diag-log-note')el.hidden=true;}}
@@ -382,6 +399,14 @@ function renderDeviceDiagnostics(n){
  if(key!==diagKey){resetDeviceDiagnostics();diagKey=key;}
 }
 // ---- Wiring (element listeners only; document and window listeners are shell.js's) --------------------------------
+{
+ // Find's label and field never split across a wrapped toolbar line: one inline-flex group (the page markup stays as it is).
+ const find=$('diag-log-find'),label=find&&find.previousElementSibling;
+ if(find&&label&&find.parentNode&&typeof document!=='undefined'&&typeof document.createElement==='function'&&!(find.parentNode.className||'').includes('diag-find')){
+  const group=document.createElement('span');group.className='diag-find';
+  find.parentNode.insertBefore(group,label);group.append(label,find);
+ }
+}
 {
  const on=(id,type,fn,capture)=>{const el=$(id);if(el&&typeof el.addEventListener==='function')el.addEventListener(type,fn,capture);};
  on('diag-interfaces','toggle',()=>diagOnToggle('interfaces'));

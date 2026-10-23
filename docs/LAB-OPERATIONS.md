@@ -141,7 +141,7 @@ container from the lab's deployment name and refuses a container that is not lab
   each one; **Used by my labs** and **Missing** (a reference a lab names that the VM does not have) filter the
   list. Nothing is pulled or removed. Without the updated helper only the references appear.
 - **containerlab version.** The Manager menu's footer and the Diagnostics page's *VM commands* row name the
-  containerlab release installed on the VM.
+  containerlab release when the manager has asked the VM for its capabilities.
 
 ## Device readiness after deployment
 

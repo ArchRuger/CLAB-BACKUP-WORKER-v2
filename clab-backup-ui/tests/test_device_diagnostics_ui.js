@@ -462,3 +462,77 @@ test('this script declares only diag and DIAG names and keeps document and windo
  assert.match(shell,/function pageVisible\(\)\{return typeof document==='undefined'\|\|document\.visibilityState!=='hidden';\}/);
  assert.match(shell,/addEventListener\('visibilitychange'/);assert.match(shell,/resetDeviceDiagnostics/);
 });
+
+test('the impairment line prints durations as given, percentages and kbit, and skips zero fields',()=>{
+ const f=harness().context.diagImpairment;
+ assert.equal(f({delay:'10ms',jitter:'2ms',loss:5,corruption:'0.5',rate:1000}),'delay 10ms · jitter 2ms · loss 5% · corruption 0.5% · rate 1000 kbit');
+ assert.equal(f({delay:'0s',jitter:'0ms',loss:0,corruption:'0',rate:'',}),'','zero and empty fields are not impairments');
+ assert.equal(f({delay:'1s',loss:'0%',rate:null}),'delay 1s');
+ assert.equal(f({loss:'2%'}),'loss 2%','a value that already carries its unit is not given a second one');
+ assert.equal(f(null),'');
+});
+
+test('Follow resume after a hidden tab replaces with tail=2000 and no since; the missing note is sticky until a replace',async()=>{
+ const h=harness();let n=0;
+ const many=count=>Array.from({length:count},(_,i)=>logLine(`2026-10-23T03:00:00.${String(i).padStart(9,'0')}Z`,'l'+i));
+ h.on('/operations/logs',()=>{n++;return n===2?logAnswer(many(2000)):logAnswer([logLine(stamp(n),'x'+n)]);});
+ h.context.renderDeviceDiagnostics({name:'r1'});h.open('logs');await tick();await tick();
+ h.get('diag-log-follow').fire('click');await tick();await tick();
+ assert.match(h.get('diag-log-note').textContent,/Some lines may be missing\./,'exactly 2000 lines back');
+ await h.run();
+ assert.match(h.get('diag-log-note').textContent,/Some lines may be missing\./,'a later, shorter poll does not clear it');
+ h.context.diagVisibilityChanged();await tick();await tick();
+ const resume=h.requests.at(-1);
+ assert.match(resume,/tail=2000/,'the resume under Follow asks for 2000 lines');assert.doesNotMatch(resume,/since=/,'and sends no cursor: it replaces');
+ assert.doesNotMatch(h.get('diag-log-note').textContent,/missing/,'a replace clears the note');
+});
+
+test('a 503 on a one-shot Logs fetch retries once after 5 s with "The VM is busy, retrying…", then stops with Retry',async()=>{
+ const h=harness();let mode='busy';
+ h.on('/operations/logs',()=>{if(mode==='busy')throw Object.assign(new Error('The manager is already asking the VM for diagnostics; try again in a moment.'),{status:503});return logAnswer([logLine(stamp(1),'ok')]);});
+ h.context.renderDeviceDiagnostics({name:'r1'});h.open('logs');await tick();await tick();
+ assert.equal(h.get('diag-log-status').textContent,'The VM is busy, retrying…');assert.equal(h.get('diag-log-retry').hidden,true);
+ assert.equal(h.live().length,1);assert.equal(h.live()[0].ms,5000);
+ await h.run();
+ assert.equal(h.get('diag-log-retry').hidden,false,'the second 503 stops with Retry');assert.equal(h.live().length,0);
+ mode='ok';h.get('diag-log-retry').fire('click');await tick();await tick();
+ assert.equal(h.get('diag-log-retry').hidden,true);assert.match(h.get('diag-log-view').innerHTML,/ok/);
+ mode='busy';h.get('diag-log-refresh').fire('click');await tick();await tick();
+ assert.equal(h.get('diag-log-status').textContent,'The VM is busy, retrying…','the automatic retry is available again for the next one-shot fetch');
+ mode='ok';await h.run();assert.equal(h.get('diag-log-retry').hidden,true);assert.match(h.get('diag-log-view').innerHTML,/ok/);
+});
+
+test('an unreachable manager says so; an HTTP error keeps the manager\'s sentence',async()=>{
+ const h=harness();let mode='net';const sentence='Cannot reach the VM operations helper. Check setup and SSH settings.';
+ h.on('/operations/logs',()=>{if(mode==='net')throw new TypeError('Failed to fetch');throw Object.assign(new Error(sentence),{status:409});});
+ h.context.renderDeviceDiagnostics({name:'r1'});h.open('logs');await tick();await tick();
+ assert.equal(h.get('diag-log-status').textContent,'The manager did not answer. Check the connection, then Retry.');assert.equal(h.get('diag-log-retry').hidden,false);
+ mode='http';h.get('diag-log-retry').fire('click');await tick();await tick();
+ assert.equal(h.get('diag-log-status').textContent,sentence);
+});
+
+test('Export stays disabled until a line is shown, and saves nothing when none is',async()=>{
+ const h=harness();let lines=[];
+ h.on('/operations/logs',()=>logAnswer(lines));
+ h.context.renderDeviceDiagnostics({name:'r1'});
+ assert.equal(h.get('diag-log-export').disabled,true,'a reset drawer starts with Export disabled');
+ h.open('logs');await tick();await tick();
+ assert.equal(h.get('diag-log-export').disabled,true,'an empty log has nothing to export');assert.equal(h.context.diagExport(),'');assert.deepEqual(h.downloads,[]);
+ lines=[logLine(stamp(1),'alpha')];h.get('diag-log-refresh').fire('click');await tick();await tick();
+ assert.equal(h.get('diag-log-export').disabled,false);
+ h.get('diag-log-find').value='zzz';h.get('diag-log-find').fire('input');
+ assert.equal(h.get('diag-log-export').disabled,true,'a Find that shows nothing disables it again');
+});
+
+test('the Find label and field are wrapped in one group that never splits; the numeric cells never wrap',()=>{
+ const placed=[];
+ const find={id:'find',previousElementSibling:{id:'label'},parentNode:{className:'diag-toolbar',insertBefore:(g,l)=>placed.push(['before',g.className,l.id])}};
+ const group={className:'',append:(...c)=>placed.push(['append',...c.map(x=>x.id)])};
+ const c=vm.createContext({$:id=>id==='diag-log-find'?find:null,esc,document:{createElement:()=>group}});
+ vm.runInContext(source,c);
+ assert.deepEqual(placed,[['before','diag-find','label'],['append','label','find']]);
+ assert.match(css,/\.diag-find \{ display: inline-flex;/);
+ const narrow=css.slice(css.indexOf('@media (max-width: 480px)'));
+ assert.doesNotMatch(narrow.slice(0,narrow.indexOf('}\n}')),/diag-table td:nth-child\(n\+2\)/,'the narrow rule no longer lets RX, TX and Port wrap');
+ assert.match(css,/\.diag-table td:nth-child\(n\+2\) \{ white-space: nowrap; overflow-wrap: normal; \}/);
+});

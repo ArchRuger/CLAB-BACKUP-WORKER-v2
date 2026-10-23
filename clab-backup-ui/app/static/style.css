@@ -2626,6 +2626,7 @@ tr.diff-ctx .diff-marker { color: var(--muted); }
 .diag-other > summary { cursor: pointer; }
 .diag-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .diag-toolbar label { display: inline; margin: 0; font-size: 13px; color: var(--muted); }
+.diag-find { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 180px; min-width: 0; }
 .diag-toolbar select, .diag-toolbar input[type=search] { min-height: 30px; font-size: 13px; width: auto; margin: 0; }
 .diag-toolbar input[type=search] { flex: 1 1 120px; min-width: 100px; width: auto; }
 .op-code.diag-log { min-height: 0; height: 260px; max-height: 50vh; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; resize: vertical; margin: 0; }
@@ -2643,7 +2644,6 @@ th[aria-sort=descending] > .op-sort::after { content: " ▼"; font-size: 10px; }
 .op-inspection td.op-inspection-empty { color: var(--muted); text-align: center; }
 @media (max-width: 480px) {
   .diag-table th, .diag-table td { padding: 6px; }
-  .diag-table td:nth-child(n+2) { white-space: normal; overflow-wrap: anywhere; }
   .diag-table td:first-child { min-width: 0; }
 }
 @media (max-width: 760px) {

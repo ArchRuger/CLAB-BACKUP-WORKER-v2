@@ -387,6 +387,8 @@ async function opShowJob(id,{auto=false,stop=false}={}){
  if(auto&&opClosedOutputs.has(id))return;
  clearTimeout(opOutputTimer);
  const dialog=opDialog('operation-output','Lab operation','<div id="op-job-banner" class="op-banner" tabindex="-1" hidden></div><div id="op-job-stop" class="op-stop" hidden></div>'+(typeof copyText==='function'?'<div class="op-output-tools"><button type="button" id="op-copy-output" class="button ghost small" data-label="Copy output" aria-label="Copy the command output" data-copy-target="op-job-output" disabled>Copy output</button><span class="copy-status" role="status"></span></div>':'')+'<pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
+ // The sort and filter of a previous inspect run live on the reused dialog: every run starts with a clean view.
+ dialog._inspectView={key:'',dir:'',filter:''};
  // Stop: the block is rebuilt only when its mode changes; focus moves only after the person's own action, or when the block they were in goes away.
  let latest=null,asked=stop,requested=false,shownMode='',focusNext=stop?'keep':'',lastOutput='';
  const copyOutputButton=opBindCopyOutput(()=>lastOutput);
@@ -572,10 +574,12 @@ async function opBrowse(path='',labId='',options={}){
  const lab=labId?(state.labs||[]).find(l=>l.id===labId):null,labPath=opPath(lab);
  if(lab&&!opCaps){try{await opCapabilities();}catch{/* the dialog stays the topology browser */}}
  const files=!!lab&&opCaps?.diagnostics===true;
+ // Files mode is bounded to this lab's own folder: no list of all lab folders, and Up stops there (other labs' files would be refused by the viewer).
+ const labFolder=files&&labPath.includes('/')?labPath.slice(0,labPath.lastIndexOf('/')):'';
  if(lab&&!path&&!options.root&&labPath)path=labPath.includes('/')?labPath.slice(0,labPath.lastIndexOf('/')):'';
  const listing=folder=>json('/operations/browse','POST',files?{path:folder,files:true,lab_id:labId}:{path:folder});
  const result=await listing(path);
- const dialog=opDialog('op-browser',lab?'Lab files · '+lab.name:'Deploy a new lab',`<p class="op-path">${esc(result.path||'Lab folders on the VM')}</p><div class="actions"><button class="button secondary" id="op-roots">All lab folders</button><button class="button secondary" id="op-up">Up one folder</button><button class="button secondary" id="op-build">Build a lab visually…</button><button class="button secondary" id="op-create">Write a new topology…</button><button class="button secondary" id="op-clone">Download a lab from GitHub…</button><button class="button secondary" id="op-popular">Browse popular labs…</button></div><div class="op-file-tree" id="op-file-tree" aria-label="${files?'Lab files':'Lab topology files'}"></div><p class="form-help">${files?'Files the manager can show (text and configuration files). Other files on the VM are not listed.':'Open a folder and pick a topology file (.clab.yaml) to view or deploy it. Only topology files are listed, up to 500 per folder.'}</p>${lab?'':'<p class="form-help">These are files on the lab VM. Is the topology file on your computer instead? <button type="button" class="link-button" id="op-browse-upload">Upload it from this computer…</button></p>'}`);
+ const dialog=opDialog('op-browser',lab?'Lab files · '+lab.name:'Deploy a new lab',`<p class="op-path">${esc(result.path||'Lab folders on the VM')}</p><div class="actions">${files?'':'<button class="button secondary" id="op-roots">All lab folders</button>'}<button class="button secondary" id="op-up">Up one folder</button><button class="button secondary" id="op-build">Build a lab visually…</button><button class="button secondary" id="op-create">Write a new topology…</button><button class="button secondary" id="op-clone">Download a lab from GitHub…</button><button class="button secondary" id="op-popular">Browse popular labs…</button></div><div class="op-file-tree" id="op-file-tree" aria-label="${files?'Lab files':'Lab topology files'}"></div><p class="form-help">${files?'Files the manager can show (text and configuration files). Other files on the VM are not listed.':'Open a folder and pick a topology file (.clab.yaml) to view or deploy it. Only topology files are listed, up to 500 per folder.'}</p>${lab?'':'<p class="form-help">These are files on the lab VM. Is the topology file on your computer instead? <button type="button" class="link-button" id="op-browse-upload">Upload it from this computer…</button></p>'}`);
  {const upload=$('op-browse-upload');if(upload)upload.onclick=()=>{dialog.close();opUpload();};}
  const addEntries=(container,entries)=>{
   entries=files?opFileEntries(entries):opTopologyEntries(entries);
@@ -592,7 +596,9 @@ async function opBrowse(path='',labId='',options={}){
   }
  };
  addEntries($('op-file-tree'),result.entries);
- $('op-roots').onclick=()=>opTask(dialog,()=>files?opBrowse('',labId,{root:true}):opBrowse());$('op-up').onclick=()=>opTask(dialog,()=>opBrowse(result.parent||'',files?labId:'',{root:!result.parent}));
+ {const roots=$('op-roots');if(roots)roots.onclick=()=>opTask(dialog,()=>opBrowse());}
+ {const up=$('op-up');if(files&&labFolder&&result.path===labFolder){up.disabled=true;up.title="This is the lab's folder";}}
+ $('op-up').onclick=()=>opTask(dialog,()=>opBrowse(result.parent||'',files?labId:'',{root:!result.parent}));
  $('op-build').onclick=()=>opBuilderOpen({root:opBuilderRoot(result.path,opCaps?.roots)});
  $('op-create').onclick=()=>opEdit('','',(result.path||'/srv/containerlab-node-manager/projects')+'/new-lab.clab.yaml');$('op-clone').onclick=()=>opClone();$('op-popular').onclick=()=>opTask(dialog,()=>opPopular());
  // Listing files does not depend on Containerlab's command help probes. Render
@@ -602,7 +608,7 @@ async function opBrowse(path='',labId='',options={}){
  opCapabilities().then(caps=>{
   if(!clone.isConnected)return;
   clone.disabled=!caps.network||caps.actions?.clone?.available===false;popular.disabled=!caps.network;
-  if(!caps.network)help.textContent+=' Downloading labs from the internet is turned off on this VM. An administrator can enable it (--allow-downloads) in VM setup.';
+  if(!caps.network&&!files)help.textContent+=' Downloading labs from the internet is turned off on this VM. An administrator can enable it (--allow-downloads) in VM setup.';
  }).catch(()=>{
   if(!clone.isConnected)return;
   help.textContent+=' Files are available, but the VM command check failed — open Diagnostics for details. Online downloads stay off.';
