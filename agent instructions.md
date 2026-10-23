@@ -1,3 +1,19 @@
+# Parity campaign, chunk C07: capture parity — 1.31.5
+
+Preserve (C07-DESIGN §1, §2, §9):
+
+1. **The service is unchanged.** "One Wireshark for all" is one session whose validated interface list the service
+   already accepts; "one per interface" is a manager-side fan-out; the HMAC identity still excludes the interface
+   list; nothing about captures is persisted (`Captures.known` is memory, capped, pruned per browser).
+2. **Per-entry session ids are derived by the manager** (`BrowserSessions.session_id(who, request_id)` with the
+   request id content-derived from `request_id`, `target_id` and `interfaces`, pinned equal to the real service's),
+   so a lost reply is recovered by one re-list and a narrowed retry keeps the set form and never duplicates a desktop.
+3. **The wire menu is handled like the node menu**, through the three explicit exceptions in `shell.js`
+   (`shellPointerDown`, `shellEscape`, the resize and blur listeners), never through `closeMenus()`.
+4. **Memory is written only** when the dialog was opened without a hint, `options.end` or a preset, and only after a
+   full success; the per-release check scripts under the history folders still name the old ids and are frozen.
+5. **Open points.** (a) an owner cookie minted on a request that then raises is lost (pre-existing, the dialog lists sessions first so it does not bite in practice); (b) the scripted capture fixture's id derivation is a third copy with no automated equality check against `BrowserSessions.session_id`; (c) two sessions on the same end share a row label (§11); (d) the relay logs a `WebSocketDisconnect` traceback when a viewer closes first.
+
 # Parity campaign, chunk C05: impairments and the mutating lifecycle — 1.31.4
 
 Preserve (C05-DESIGN §1, §2, §3, §9, §10 carry the reasons):

@@ -1,3 +1,41 @@
+# Parity campaign, chunk C07: capture parity — 1.31.5
+
+Evidence by kind (this checkout on the owner's development VM; the `parity` lab; the real session service).
+
+**Static and unit**
+
+- `node --test tests/*.js`: 982 tests pass; `PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests`: 2848 tests, OK, 2 skipped (new `CaptureSetTests` in `test_capture.py`, the derivation pin in `test_capture_sessions.py`, cases in `test_capture_ui.js`, `test_shell_ui.js`, `test_readiness_ui.js`, `test_capture_session_ui.js`, `test_device_diagnostics_ui.js`, `test_page_load_ui.js`).
+- The S1 builder's mutation run: 14 of 14 applied mutations caught by the tests.
+- `node --check`, `py_compile`, `verify-release.py`, `check_links.py`, `git diff --check`.
+
+**Fixture and browser**
+
+- The builders' smokes: the dialog's modes, the wire menu by mouse and keyboard, memory, the partial set and End all, 71 checks at 1440 and 760 three times over; the fixture's scripted capture stack driven by curl (single, set, idempotent retry, narrowed retry, mid-set refusal, lost reply, slot limits).
+- `/clab-slice-verify` on the integrated chunk: six workers (the exact test commands, an Opus attack of the eleven acceptance checks, QA at 1440, 760 and 390 in Chromium and Firefox on the scripted capture stack): 10 of 11 checks held; the four blocking findings (a 4 s poll of the capture service from the Tools tab, the wire menu not dismissable from the keyboard with capture disabled, End all confirming a stale count, the narrow-width layout) and the lower ones were fixed and re-run before the live pass; the record and the answers are C07-DESIGN §10.
+
+**Live**
+
+- The extended smoke's two-desktops check against the real session service on this VM (two sessions on one namespace with two request ids, ids equal to the HMAC derivation, an idempotent repeat, both ended; run through a driver because the full smoke refuses to run beside the live stack).
+- The parity lab through the rebuilt manager (`claude/c07-int`, the real session service, Chromium at 1440 and 760):
+  a left click on the vsw–vrt wire opened link mode with both ends ticked and Start 2 captures sent one set request
+  (`captures` with two entries and a `request_id`) answered with two sessions and two Open Wireshark links; a viewer
+  tab loaded the Wireshark desktop with the title `clab-parity-vsw · eth1 — Wireshark`; the wire's right-click menu
+  offered both ends and each end, one end started a single-form session; Capture traffic on `ceos` with All connected
+  and Open as one started one session on `eth1` and `eth2` (four sessions, four containers); a fifth capture was
+  refused by the page before any request with the single-variant sentence and a both-ends set with the link variant;
+  End all my sessions confirmed four, answered `{ended: 4, failed: []}`, emptied the list and removed the containers
+  (the open viewer read "Capture session ended" within 20 s); memory restored both ends after a full success, one
+  end after a one-end start, and the menu's both-ends item ignored it; with three sessions a two-end set was refused
+  with the link-variant sentence and nothing started; zero console errors and zero failed requests; the final state
+  held no session and no capture container. Cosmetic: two sessions on the same end share a row label; the relay logs
+  a `WebSocketDisconnect` traceback when a viewer closes first (harmless); an optional viewer asset probe answers 404.
+
+**Independent review**
+
+- `/clab-design-review` of C07 (28 confirmed, five must-fix, answered in C07-DESIGN §9); `/clab-review-changes` on the integrated chunk: 29 agents, 10 confirmed (4 should-fix, 6 optional), 2 refuted; the should-fix and four of the optional findings are fixed in this release (the Tools card asks for the session list again after Home and after a first render that ran before `capture.js`; untried set entries never carry a refused entry's reason; a just-made session record survives a concurrent prune; Capture all connected leaves the column header; the re-list failure after a lost reply and the Advanced target in link mode are tested; small `capture.js` branches pinned), the two remaining optional findings are recorded as open points; the answers are C07-DESIGN §12. After the fixes: `node --test tests/*.js` 982 pass; the full Python suite as above.
+
+**Not run.** No real-device packet content was inspected beyond the viewer loading (the smoke covers loopback packets in CI); no multi-browser live pass (Chromium only on the VM; Firefox on the fixture); no pass on a VM without the capture stack beyond the fixture's disabled mode.
+
 # Parity campaign, chunk C05: impairments and the mutating lifecycle — 1.31.4
 
 Evidence by kind (this checkout on the owner's development VM; the `parity` lab; containerlab 0.79.0).

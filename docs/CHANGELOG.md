@@ -4,6 +4,29 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.31.5
+
+**Parity campaign, chunk C07: capture parity** ([CAPTURE](CAPTURE.md)).
+
+- **One Wireshark for all connected interfaces of a device, or one per interface.** The capture dialog gains **All
+  connected** and **None**, and **Open as** (one Wireshark for the ticked interfaces, or one per interface). A set of
+  up to four captures is one request: every entry is validated before anything starts, a partial start is reported
+  with the refused entries named by position and **Start the remaining n** retries only those, and a repeated start
+  of the same set returns the same viewers.
+- **Both ends of a link.** A link's left click opens the dialog with both ends ticked (one Wireshark per end); its
+  right-click menu (also Shift+F10) offers both ends or one; an end the manager cannot map offers **Choose the
+  interface on <device>…**; both ends on the same device become one Wireshark.
+- **Remembered selection** per lab and device or link, in this browser only, restored for live interfaces and
+  written only after a full success; a hint from the map or the Interfaces table wins over memory.
+- **Your capture sessions**: the Tools card lists this browser's sessions with the time left as an upper bound and
+  **End all my sessions** (one confirmation); the viewer tab's title names the device and interfaces; the Interfaces
+  section of the device drawer offers **Capture all connected**.
+- The session service, the compose files and the Docker socket holder are unchanged; the manager derives the
+  service's session ids itself, keeps its own session list in memory only and never stores anything about captures.
+  New routes `GET /api/capture/sessions` and `POST /api/capture/sessions/end-all`; `POST /api/capture/launch`
+  accepts `{captures: […], request_id}` beside today's body. The loopback smoke gains the two-desktops check and the
+  fixture a scripted capture stack.
+
 ## Changes in 1.31.4
 
 **Parity campaign, chunk C05: link impairments and the mutating lifecycle through the helper.** The helper half shipped
