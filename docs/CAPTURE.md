@@ -2,14 +2,47 @@
 
 Select **Capture traffic…** (the **Packet capture** card on the lab's **Tools** tab, a
 device's right-click menu or device panel, or **Lab actions ▾ › Packet capture…**), or
-click either endpoint of a topology link. The dialog lists the interfaces the topology
-wires to that device first (a single one is already ticked; a link opens on its first
-endpoint). *Other interfaces on this device* holds the rest of that namespace, and
+click a topology link. The dialog lists the interfaces the topology
+wires to that device first (a single one is already ticked). A link opens in link mode with
+**both ends** ticked, one Wireshark per end because each end is its own container; right-click a link
+(or focus it and press the ContextMenu key or Shift+F10) for a menu of **Capture both ends…** and
+one entry per end. On a device, **All connected** ticks every wired port and **None** clears them, and
+**Open as** (shown once two or more interfaces are ticked) chooses **One Wireshark for the ticked
+interfaces** or **One Wireshark per interface**. The device's Interfaces section has **Capture all
+connected**, which opens the dialog with every data interface ticked. The dialog remembers your last
+selection for each device and link in this browser. *Other interfaces on this device* holds the rest of that namespace, and
 *Advanced: capture somewhere else* holds the scope, search and capture-target selector
 for bridges, host NICs, other namespaces or a device that discovery did not match; it
 unfolds by itself (as *Choose a device*) only when no target could be resolved. Click
-**Start capture**, then **Open Wireshark ↗**. Wireshark runs on
+**Start capture** (the button names the plan: **Start 2 captures** when two sessions will start), then
+**Open Wireshark ↗**; a plan with several sessions gives one **Open Wireshark: <device and port> ↗** link
+per session, each opening its own tab. Wireshark runs on
 the Containerlab VM; the workstation only needs a browser that can reach the manager.
+
+## One interface, all connected interfaces, both ends of a link
+
+- **One interface:** tick it (a click on a port, or the table's per-row **Capture**, ticks only that one
+  and wins over anything remembered) and press **Start capture**.
+- **All connected interfaces of a device:** **All connected** ticks the wired ports the VM lists. It never
+  ticks `eth0`, a `tapN` or an internal device such as cEOS `fabric`; those stay opt-in under *Other
+  interfaces on this device*. If the device has two or more connected ports, **Open as** decides
+  whether they share **One Wireshark for the ticked interfaces** (one session, one PCAPNG stream; the
+  default) or get **One Wireshark per interface** (one session each). The plan sentence above
+  **Start capture** says which will happen before anything starts.
+- **Both ends of a link:** click the link (or press Enter or Space on it). Each end has a checkbox, both
+  ticked, with the container interface the port maps to. Two ends on two devices are two sessions, so
+  **Open as** is hidden; the plan reads *Both ends of the link: … one Wireshark each (2 sessions)*. Untick
+  an end, or choose **Capture <device>: <port>…** in the link's menu, to capture only one. A self-loop (both ends on one
+  device) is one namespace, so **Open as** appears there. An end the VM cannot list yet (device still
+  starting, not running, or a port name with no known mapping) is disabled with the reason, and
+  **Choose the interface on <device>…** switches the dialog to that device's own interface list.
+- **What the manager remembers:** per lab and device or link, the last ticked interfaces (or ends) and the
+  **Open as** choice, plus the last **Open as** choice as a browser default. It is kept in this browser
+  only (browser storage), applies only to interfaces the VM still lists, is read and written only when
+  the dialog was opened without a specific port in mind (a clicked port, a menu entry naming one end or
+  **Capture all connected** wins), and is written only after every session of a plan started. The dialog
+  says *Your last selection here was restored.* when it applied. Nothing about it reaches the manager's
+  data.
 
 ## The capture stack
 
@@ -72,8 +105,24 @@ configured to capture from arbitrary remote Edgeshark hosts.
 - **Reconnect viewer** returns to the existing session. Closing a tab leaves it
   available under **Your capture sessions** until idle expiry.
 - **End session** deletes its container and temporary files, with confirmation.
-- Maximum **4 concurrent sessions**, **15 minutes idle** without viewer polling,
-  and **2 hours total lifetime**. Cleanup normally sweeps every 15 seconds; a
+- **Your capture sessions** (in the dialog) lists what was started from this browser, each row named by
+  device, port and lab (for example *vsw ge-0/0/0 (eth1) · parity*) with *at most … left (15 min once its
+  viewer is closed)*: the time is an upper bound, because the list is read when the dialog or the Tools
+  tab opens and after a start or an end, never on a timer. Each viewer tab is titled with its device and
+  interfaces, so several are told apart in the tab strip. The Tools tab's **Packet capture** card shows
+  *n Wireshark session(s) running from this browser.*
+- **End all my sessions** (the Tools card and the dialog, shown only while a session exists) ends every
+  session started from this browser after one confirmation that counts them and warns that capture files
+  are deleted. The manager lists the sessions of this browser at the service and ends each; a session that
+  could not be ended is named (*Could not end …; try End session on its row.*) and the rest are still
+  ended. Other browsers' sessions are untouched.
+- Maximum **4 concurrent sessions** on the VM, counted across every browser, **15 minutes idle** without viewer
+  polling (the idle rule starts to matter once the viewer is closed), and **2 hours total lifetime**. One
+  Wireshark per interface, or per link end, uses one slot each. Before it starts a plan the dialog counts
+  your own running sessions and refuses a plan that would pass the limit, with the way out (*End a
+  session under Your capture sessions, untick interfaces, or open one Wireshark for all of them*; for a
+  link, *untick one end*). Another browser's sessions are not visible to that count, so a slot can still be
+  taken meanwhile. Cleanup normally sweeps every 15 seconds; a
   container Docker refuses to remove is retried on the next sweep without
   holding up the others. An open viewer of a stopped desktop does not count as
   activity, so that session's slot frees after the idle time.
@@ -87,8 +136,17 @@ configured to capture from arbitrary remote Edgeshark hosts.
   `/tmp` and 64 MiB `/config`. Use Wireshark capture limits/ring buffers for busy
   interfaces; temporary storage can fill before the lifetime limit.
 
+When a plan with several sessions starts only in part (for example the limit is reached by another
+browser after the first start), the dialog shows the manager's sentence naming what started and what did
+not, keeps the **Open Wireshark** links of the sessions that started, unticks and disables their boxes, and
+the button reads **Start the remaining <n>**. Pressing it asks again for only the remaining ones; a session
+that had in fact started, if the reply was lost, is met again instead of duplicated. If a reply is lost
+the row says *This capture may have started; see Your capture sessions.*
+
 Captures are separate from backups, Git history and persistent manager data.
-They do not survive session deletion, service restart or host restart. Browser
+The manager stores nothing about them: no capture file, no session record and no choice of the person is
+kept in its Store, and its in-memory list of session labels is gone when it restarts (a session it did
+not start itself is then named from its container). They do not survive session deletion, service restart or host restart. Browser
 cookies isolate sessions between profiles; tabs in the same profile share them.
 Clearing cookies loses access until automatic cleanup.
 
@@ -98,11 +156,11 @@ Live node management/data ports, host NICs, bridges, veth, VLAN, VXLAN, loopback
 and other namespace interfaces are selectable when exposed by Edgeshark. The scope
 **Everything on the VM** (under *Advanced*) includes interfaces outside the drawing. Shared host namespaces
 are deduplicated with aliases; node/lab views retain exact container-name matching.
-Multiple interfaces in one namespace share a PCAPNG stream. Separate namespaces
-use separate sessions. Either link endpoint captures that side's traffic.
+Multiple interfaces in one namespace share a PCAPNG stream, or open one Wireshark each when you choose
+*One Wireshark per interface*. Separate namespaces use separate sessions, so both ends of a link are two
+sessions. Either link end captures that side's traffic.
 
-NOS aliases can differ from Linux interface names. Right-clicking a link (or its endpoint
-buttons) resolves this automatically: containerlab wires each supported kind's own port
+NOS aliases can differ from Linux interface names. A link (its menu, or a click on it) resolves this automatically: containerlab wires each supported kind's own port
 names onto sequential `ethN` container veths in a fixed, documented order (never a "+1"
 guess), so `ge-0/0/0` preselects `eth1` on a vJunos-switch, `et-0/0/0` preselects `eth4` on
 cJunosEvolved (its own `eth1`-`eth3` are reserved), and `Gi0/0/0/0` preselects `eth1` on an
@@ -122,7 +180,14 @@ traffic.
 
 ## Architecture and maintenance
 
-`app/capture.py` handles Edgeshark discovery and identity/interface validation.
+`app/capture.py` handles Edgeshark discovery and identity/interface validation. `POST /api/capture/launch`
+takes either one `target_id` with its `interfaces`, or `captures`, one to four such entries (the set
+form, used for one Wireshark per interface and for both ends of a link): the manager validates every entry
+against one fresh discovery before it starts any, counts your own running sessions, then starts the entries
+in order with request ids derived from each entry's content, so a retry meets the same session. The
+manager keeps an in-memory label (lab, device, port names) for the sessions it started, never stores it,
+and answers `GET /api/capture/sessions` and `POST /api/capture/sessions/end-all` from the service's
+listing for the browser's own cookie only.
 `app/capture_sessions.py` is the authenticated service adapter and bounded
 HTTP/WebSocket relay. `app/capture_service.py` runs separately and creates only
 fixed-image, labelled Wireshark containers. `static/capture-session.js` embeds the
@@ -244,6 +309,11 @@ survives token rotation. Do not remove unrelated containers or manager data.
   [cjunosevolved](https://containerlab.dev/manual/kinds/cjunosevolved/),
   [vr-vqfx](https://containerlab.dev/manual/kinds/vr-vqfx/), [vr-xrv9k](https://containerlab.dev/manual/kinds/vr-xrv9k/),
   [ceos](https://containerlab.dev/manual/kinds/ceos/), [srl](https://containerlab.dev/manual/kinds/srl/)
+
+`deploy/capture/smoke.py` also starts a second desktop on the same namespace under another request id
+and checks that the two sessions have their own id, container and VNC password, that repeating the first
+request returns the first session, and that ending both leaves nothing. For a browser pass without Docker,
+`docs/redesign/tools/fixture_manager.py --capture` scripts the discovery and the session service.
 
 The unit tests (`test_capture*.py`, `test_capture_ui.js`) run with the rest of the
 suites; see the README's development section. On an isolated Linux Docker host,

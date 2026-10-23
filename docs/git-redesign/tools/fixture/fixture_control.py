@@ -32,6 +32,7 @@ SWITCHES = {
     'load_preset': 'all-ok | one-failed | one-rolled-back | one-uncertain | one-unreachable | one-blocked | one-editing | one-bad-login | slow',
     'load_device': 'device (short or full name) the one-* presets act on, default xrv9k',
     'load_script': '{device: failed | rolled_back | uncertain | unreachable | blocked | blocked-editing | bad-login | slow | ok}, overrides the preset',
+    'capture': '(fixture_manager.py --capture) {fail_next_start: n, after: k, mode: refuse | unavailable | lost_reply}: the first k fresh session starts succeed, then the next n fail (refuse: 429, unavailable: 503, lost_reply: the desktop is created and the reply is lost, 502); counters count down',
     'load_seconds': 'seconds per device rank for `slow` (device k settles after k*load_seconds), default 5',
 }
 

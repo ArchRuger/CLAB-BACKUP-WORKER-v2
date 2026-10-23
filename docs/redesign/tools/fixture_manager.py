@@ -127,7 +127,7 @@ INVENTORY_YAML = b"""all:
 """
 
 
-def build(data_dir, port, classic=False):
+def build(data_dir, port, classic=False, capture=False):
     app = create_app(str(data_dir))
     store, monitor, discovery, runner, services = (app.state.store, app.state.readiness, app.state.discovery,
                                                    app.state.runner, app.state.node_services)
@@ -812,11 +812,176 @@ def build(data_dir, port, classic=False):
                 'devices': {n: dict(label=d.label, platform=d.platform, outcome=devices.outcome(d), lines=len(d.config.splitlines()), armed=bool(d.armed))
                             for n, d in sorted(devices.nodes.items())}}
     fixture_control.install(app, control, actions, describe)
+    if capture:     # C07
+        install_capture(app, control, port)
 
     print(f'fixture manager ready on http://127.0.0.1:{port}/  data={data_dir}', flush=True)
     for lab in store.state['labs']:
         print(f"  {lab['name']}: {lab['id']}", flush=True)
     return app
+
+
+# ======================================================================================================================
+# C07: the scripted capture stack (--capture). Self-contained block: nothing above or below depends on it except the three
+# hook lines marked "C07" (build() signature, its call before the ready message, main()'s flag).
+#
+# With the flag the fixture does what tests/test_capture.py does in-process: the real Captures, routes and relay run, the
+# Edgeshark discovery reads the fixture labs' running containers, and the browser-session service is a ScriptedSessions that
+# answers the service's routes (health, sessions, one session, end) with the real service's id derivation
+# HMAC-SHA256(token, owner + request_id), so an idempotent retry, a narrowed set and the lost-reply recovery behave as live.
+# Docker is never touched. Switch (fixture_control.py): capture = {"fail_next_start": n, "after": k, "mode": "refuse"}.
+# ======================================================================================================================
+CAPTURE_FIXTURE_TOKEN = '5c07' * 16        # a fixture-only value shaped like the real 64-hex service token; not a secret
+CAPTURE_MAX_SESSIONS = 4                    # capture_service.MAX_SESSIONS
+CAPTURE_LIFETIME = 2 * 60 * 60              # capture_service.LIFETIME_SECONDS
+CAPTURE_IDLE = 15 * 60                      # capture_service.IDLE_SECONDS
+CAPTURE_FIXTURE_PROBE = ('lo', 'eth0', 'eth1', 'eth2')
+
+
+def scripted_targets(store):
+    """The Ghostwire /mobyshark v1 payload for the fixture: every running container of every lab (eth0 to eth2 and lo; tap1
+    for a Junos kind; fabric and cpu for cEOS) and the host namespace. Identities are stable per name, so a target survives a
+    page reload exactly as a live one survives until its container restarts."""
+    with store.lock:
+        labs = copy.deepcopy(store.state['labs'])
+        running = copy.deepcopy(store.state.get('discovery', {}).get('labs', {}))
+    names = {}
+    for lab in labs:
+        for row in running.get(lab['name'], []):
+            if row.get('state') == 'running':
+                node = next((n for n in lab['nodes'] if n['name'] == row['name']), {})
+                names[row['name']] = str(node.get('platform') or row.get('kind') or '')
+    containers = []
+    for index, (name, platform) in enumerate(sorted(names.items())):
+        interfaces = list(CAPTURE_FIXTURE_PROBE)
+        if platform.startswith('juniper'):
+            interfaces.append('tap1')
+        if platform == 'arista_ceos' or platform == 'ceos':
+            interfaces += ['fabric', 'cpu']
+        containers.append({'name': name, 'type': 'docker', 'prefix': '', 'netns': 4026532100 + index, 'pid': 2000 + index,
+                           'starttime': 50000 + index, 'network-interfaces': interfaces})
+    containers.append({'name': 'init', 'type': 'proc', 'prefix': '', 'netns': 4026531992, 'pid': 1, 'starttime': 1,
+                       'network-interfaces': ['lo', 'ens18', 'docker0', 'br-clab']})
+    return {'metadata': {'creator-id': 'fixture'}, 'containers': containers}
+
+
+def scripted_sessions_class():
+    import hmac as hmac_module
+    import secrets
+    import string
+    from fastapi import HTTPException
+    from app.capture import IDENTITY_FIELDS
+    from app.capture_sessions import BrowserSessions
+
+    class ScriptedSessions(BrowserSessions):
+        """Answers BrowserSessions.request like capture_service.py does, with the adapter's own mapped sentences."""
+        MESSAGES = {404: 'Capture session ended or is not owned by this browser.',
+                    409: 'Capture target changed. Refresh interfaces and retry.',
+                    429: 'All browser capture slots are in use. End a session or wait for expiry.',
+                    503: 'Browser capture service is not ready. Run Capture setup and check its logs.',
+                    502: 'Cannot reach the browser capture service. Check Capture setup and retry.'}
+
+        def __init__(self, url, control, discover):
+            super().__init__(url, CAPTURE_FIXTURE_TOKEN)
+            self.control, self.discover, self.rows, self.lock = control, discover, {}, threading.RLock()
+
+        def fail(self, code):
+            raise HTTPException(code, self.MESSAGES[code])
+
+        def scripted_failure(self):
+            """capture = {fail_next_start: n, after: k, mode: refuse | unavailable | lost_reply}: the first k fresh starts
+            succeed, then the next n fail (refuse 429, unavailable 503, lost_reply 502 after the desktop was created)."""
+            with self.control.lock:
+                config = self.control.values.get('capture')
+                if not isinstance(config, dict):
+                    return ''
+                if int(config.get('after') or 0) > 0:
+                    config['after'] = int(config['after']) - 1
+                    return ''
+                if int(config.get('fail_next_start') or 0) > 0:
+                    config['fail_next_start'] = int(config['fail_next_start']) - 1
+                    return str(config.get('mode') or 'refuse')
+            return ''
+
+        def reap(self):
+            now = time.monotonic()
+            for sid in [k for k, r in self.rows.items() if now - r['seen'] >= CAPTURE_IDLE or now - r['created'] >= CAPTURE_LIFETIME]:
+                del self.rows[sid]
+
+        def public(self, sid, row):
+            return {'id': sid, 'name': row['name'], 'interfaces': row['interfaces'],
+                    'remaining_seconds': max(0, int(CAPTURE_LIFETIME - (time.monotonic() - row['created']))),
+                    'idle_seconds': CAPTURE_IDLE}
+
+        def get(self, sid, who):
+            self.reap()
+            row = self.rows.get(sid)
+            if row is None or not hmac_module.compare_digest(row['owner'], who):
+                self.fail(404)
+            return row
+
+        def create(self, sid, who, data):
+            wanted = data.get('target') or {}
+            current = next((t for t in self.discover() if all(t.get(k) == wanted.get(k) for k in IDENTITY_FIELDS)), None)
+            names = data.get('interfaces') or []
+            if current is None or len(set(names)) != len(names) or any(n not in current['network-interfaces'] for n in names):
+                self.fail(409)
+            now = time.monotonic()
+            self.rows[sid] = {'owner': who, 'name': current['name'], 'interfaces': list(names), 'created': now, 'seen': now,
+                              'password': ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))}
+            return self.public(sid, self.rows[sid])
+
+        def request(self, method, path, who='', data=None):
+            parts = path.strip('/').split('/')
+            with self.lock:
+                if parts == ['health'] and method == 'GET':
+                    return {'ready': True, 'max_sessions': CAPTURE_MAX_SESSIONS}
+                if parts == ['sessions'] and method == 'GET':
+                    self.reap()
+                    return {'sessions': [self.public(s, r) for s, r in self.rows.items() if hmac_module.compare_digest(r['owner'], who)]}
+                if parts == ['sessions'] and method == 'POST':
+                    self.reap()
+                    sid = self.session_id(who, data['request_id'])
+                    if sid in self.rows:                       # the same owner and request id: the same session, nothing created
+                        return self.public(sid, self.get(sid, who))
+                    failure = self.scripted_failure()
+                    if failure == 'unavailable':
+                        self.fail(503)
+                    if failure == 'refuse' or len(self.rows) >= CAPTURE_MAX_SESSIONS:
+                        self.fail(429)
+                    created = self.create(sid, who, data)
+                    if failure == 'lost_reply':               # the desktop exists, the reply never arrived
+                        self.fail(502)
+                    return created
+                if len(parts) == 2 and parts[0] == 'sessions' and method == 'GET':
+                    row = self.get(parts[1], who)
+                    return {**self.public(parts[1], row), 'running': True, 'viewer_password': row['password']}
+                if len(parts) == 3 and parts[0] == 'sessions' and parts[2] == 'end' and method == 'POST':
+                    self.get(parts[1], who)
+                    del self.rows[parts[1]]
+                    return {'ended': True}
+            self.fail(404)
+    return ScriptedSessions
+
+
+def install_capture(app, control, port):
+    """Replace the capture stack with the scripted one (after create_app read CAPTURE_* from the environment)."""
+    from app import capture as capture_module
+    from fastapi.responses import JSONResponse
+    store, captures = app.state.store, app.state.captures
+    capture_module.read_discovery = lambda url: scripted_targets(store)
+    captures.provider = capture_module.EdgesharkProvider('http://127.0.0.1:5001')
+    # The adapter's other routes (viewer assets, download, websockify) reach `url`; the fixture answers 404 there, so the viewer
+    # page shows "Starting Wireshark..." and then offers Reconnect, which is the honest state of a desktop that does not exist.
+    captures.sessions = scripted_sessions_class()(f'http://127.0.0.1:{port}/fixture/capture/', control, captures.provider.discover)
+
+    @app.get('/fixture/capture/{path:path}')
+    def no_desktop(path: str):
+        return JSONResponse({'detail': 'No desktop in the fixture.'}, status_code=404)
+
+    print('  capture: scripted (Edgeshark discovery from the fixture labs, session service with cap '
+          f'{CAPTURE_MAX_SESSIONS}); switch: capture={{"fail_next_start": n, "after": k, "mode": "refuse|unavailable|lost_reply"}}', flush=True)
+# ===================================================== end of the C07 block ===================================================
 
 
 def main(argv=None):
@@ -825,12 +990,15 @@ def main(argv=None):
     parser.add_argument('--data', default=os.environ.get('FIXTURE_DATA', ''))
     parser.add_argument('--keep', action='store_true', help='reuse the data directory instead of starting fresh')
     parser.add_argument('--classic', action='store_true', help='seed only the labs and the Course-Labs repository the first fixture had')
+    parser.add_argument('--capture', action='store_true', help='C07: a scripted browser-Wireshark stack (discovery from the fixture labs, a session service with a cap of 4)')
     args = parser.parse_args(argv)
+    if args.capture:     # C07: create_app reads these; the scripted stack replaces the service object right after
+        os.environ.update(CAPTURE_PROVIDER='edgeshark', CAPTURE_EDGESHARK_URL='http://127.0.0.1:5001', CAPTURE_SESSION_TOKEN=CAPTURE_FIXTURE_TOKEN)
     data_dir = Path(args.data) if args.data else Path(os.environ.get('TMPDIR', '/tmp')) / 'clab-fixture-manager'
     if not args.keep and data_dir.exists():
         shutil.rmtree(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
-    app = build(data_dir, args.port, classic=args.classic)
+    app = build(data_dir, args.port, classic=args.classic, capture=args.capture)
     import uvicorn
     uvicorn.run(app, host='127.0.0.1', port=args.port, log_level='warning')
 

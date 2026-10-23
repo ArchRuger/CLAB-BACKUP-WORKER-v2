@@ -803,3 +803,26 @@ are binding and are marked.
 | 25 | optional: live-pass step 3 contradicts the pre-check rule | Accepted (lead's decision, with [10]) | §7 live pass (3) |
 | 26 | optional: a one-time start from a per-end menu item rewrites the wire's left-click default | Accepted (lead's decision): link memory is written only when the dialog was opened without a hint, an `options.end` or a preset, the same condition that applies to reading it | §1.7, §3.1 memory, §5.3, §7 S2 (6) |
 | 27 | optional: smaller wording and affordance points (six) | Accepted as proposed (lead's decision): counts pluralised everywhere; the C03 button reads **Capture all connected**; `#capture-openas` sits after the interface fieldsets and the plan sentence names it; `#capture-more` opens when a preset or memory ticks a box inside it; End all is `.button.danger` with the idle label captured and restored; decision 8's Enter sentence corrected | §1.8, §3.1, §3.3, §3.4, §5.3 |
+
+## 10. Verification answers (`/clab-slice-verify` on `claude/c07-int` at d4eb1f4, six workers; 10 of 11 checks held)
+
+| Finding | Answer | Where |
+|---|---|---|
+| Medium: the Tools tab's 4-second poll rebuilt the session list and dropped keyboard focus | Accepted: the sessions refresh only when Tools is newly shown or on an explicit action; the list is painted only when its markup changed (0 mutations and 0 requests over 12 s in the smoke) | §3.3; `app.js`, `capture.js` |
+| Medium: with capture not set up every wire-menu item is disabled, so focus never entered the menu and Escape could not close it; Enter on the wire opened the dialog behind the menu; the menu floated over another view after a route change | Accepted: the menu is focusable (`tabindex=-1`) and takes focus when no item is enabled, so Escape and Tab close it; Enter closes the menu first; the hash router closes it | §3.2; `capture.js`, `shell.js` |
+| Medium: at 390 the link-ends grid overflowed when one end was disabled and the Open Wireshark link clipped | Accepted: one column at 420 px and narrower, wrapping rows and launch row (measured 306 px, nothing outside the dialog) | `style.css` |
+| Medium: End all my sessions from the Tools card confirmed a stale count and ended more than it named | Accepted: the list is re-read before asking and the current count named; a failed listing ends nothing | §3.3 |
+| Low: a started link end rendered as a garbled column; Start stayed enabled after a full success; 'Capture both ends…' honoured memory; focus landed on BODY after closing the dialog or End all; duplicated veth; singular message after a narrowed retry; the launch row offset | Accepted, each as the fix round reports; a menu item ignores memory (§3.6), focus returns to the opener found by its ends | §3.1, §3.6; `capture.js` |
+| Low: after a lost reply recovered on entry i the untried entries were refused with the transport sentence | Accepted: the set continues after a recovery; untried entries after a second 502 read "Not attempted: an earlier capture of this set failed." | §2.2; `capture.py` |
+| Low: an idempotent repeat logged `capture.launch` again and reset the record's `started` | Accepted: `begin()` runs only for a session id not yet in `known` | §2.3; `capture.py` |
+| Cosmetic: the dialog and plan say `label: port` while the session rows show the NOS name from `displayed_interface` | Open: one naming rule needs the NOS name on the link ends or a plan wording change with many pinned sentences; recorded for the release's handoff | §3.1 |
+| Held with a note: the pre-check excludes only the current (possibly narrowed) set's ids, which counts a request's already started sessions; the single form also returns `sessions` and `refused` (additive); the public row carries no `started` | Accepted as more accurate than §2.2 step 4 and consistent with §2.2 step 6 and §2.3 | §2.2, §2.3 |
+
+## 11. Live-pass answers (the parity lab, the real session service, 2026-10-23)
+
+| Finding | Answer | Where |
+|---|---|---|
+| Every step held: both ends from a wire click (one set request, two viewers), one end from the menu, All connected as one Wireshark on `ceos`, the page's pre-check at four and at three sessions, End all my sessions emptying the list and the containers, memory written only after a full success and ignored by a menu item | Recorded in VALIDATION; no change | §3, §4 |
+| Cosmetic: two sessions on the same end share a row label | Open with §10's naming rule: the row gains the session's start time or the NOS name once one rule covers the dialog and the card | §3.3 |
+| Log only: the relay logs a `WebSocketDisconnect` traceback when the viewer closed first; an optional viewer asset (`core/rfb.js`) answers 404 | Accepted as noise: `desktop` may catch the disconnect on close in a later tidy; the asset probe is the viewer's own and harmless | `capture_sessions.py` |
+| The Tools card shows the caption and End all; the labelled rows live in the dialog's session list | As designed (§3.3) | §3.3 |

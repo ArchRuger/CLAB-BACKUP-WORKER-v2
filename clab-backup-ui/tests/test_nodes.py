@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 from app.main import create_app
-from app.node_readiness import login_state
+from app.node_readiness import login_state, summarize
 from app.inventory import IMAGE_DEFAULT_CREDENTIALS
 
 
@@ -501,7 +501,7 @@ class NodeTests(unittest.TestCase):
 import socket
 import socketserver
 from app import inventory as app_inventory, node_services as console_module
-from app.node_services import (CONSOLE_HELD, CONSOLE_KIND_UNKNOWN, CONSOLE_LIMIT, CONSOLE_LIMIT_SENTENCE, CONSOLE_NO_ADDRESS,
+from app.node_services import (CONSOLE_HELD, CONSOLE_JOB_SENTENCES, CONSOLE_KIND_UNKNOWN, CONSOLE_LIMIT, CONSOLE_LIMIT_SENTENCE, CONSOLE_NO_ADDRESS,
                                CONSOLE_NONE, CONSOLE_NOT_RUNNING, CONSOLE_OPEN_HERE, CONSOLE_RESTARTING, CONSOLE_STARTING,
                                CONSOLE_UNHEALTHY, CONSOLE_UNLINKED, CONSOLE_UNREACHABLE, CONSOLE_YOUNG, console_gate)
 from app.node_console import BINARY, DO, ECHO, IAC, SGA, WILL
@@ -671,6 +671,28 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(self.ticket(protocol='telnet').status_code, 422)
         self.assertEqual(self.ticket(name='missing').status_code, 404)
         self.assertFalse(self.services.clients)
+
+    def test_a_start_or_stop_device_job_closes_the_console_with_a_sentence_that_names_that_job(self):
+        self.serve()
+        node = next(n for n in self.lab['nodes'] if n['name'] == 'r1')
+        for action, template in (('restart-node', CONSOLE_RESTARTING), ('start-node', CONSOLE_JOB_SENTENCES['start-node']), ('stop-node', CONSOLE_JOB_SENTENCES['stop-node'])):
+            for status in ('queued', 'running'):
+                job = {'id': 'op', 'lab_id': 'lab', 'action': action, 'node': 'r1', 'status': status}
+                with patch.dict(self.store.state, operations=[job]):
+                    expected = (409, 'restarting', template.format(device='r1'))
+                    self.assertEqual(self.gate(node), expected, (action, status))
+                    result = self.ticket('r1')
+                    self.assertEqual((result.status_code, result.json()['detail']), (409, expected[2]), (action, status))
+        self.assertIn('Stop device', CONSOLE_JOB_SENTENCES['stop-node']); self.assertNotIn('restarting', CONSOLE_JOB_SENTENCES['stop-node'])
+        self.assertIn('Start device', CONSOLE_JOB_SENTENCES['start-node']); self.assertNotIn('restarting', CONSOLE_JOB_SENTENCES['start-node'])
+        # A finished job, another device's job and another lab's job never close it.
+        for job in ({'status': 'succeeded'}, {'node': 'r2'}, {'lab_id': 'other'}):
+            with patch.dict(self.store.state, operations=[{'id': 'op', 'lab_id': 'lab', 'action': 'stop-node', 'node': 'r1', 'status': 'running', **job}]):
+                self.assertNotEqual((self.gate(node) or (0, ''))[1], 'restarting', job)
+
+    def test_a_starting_or_stopping_device_still_counts_in_the_readiness_total(self):
+        for status in ('starting', 'stopping', 'restarting', 'checking'):
+            self.assertEqual(summarize([{'status': 'ready'}, {'status': status}]), {'status': 'booting', 'total': 2, 'ready': 1, 'booting': 1, 'failed': 0}, status)
 
     def test_console_roundtrip_strips_iac_answers_options_and_ignores_resize(self):
         self.serve(script=[b'login: ', b'\xff\xff\xff\xfb\x01x'])   # one literal 0xFF, a stray WILL ECHO, x
@@ -902,7 +924,7 @@ class ConsoleTests(unittest.TestCase):
 
     def test_console_close_shuts_open_sessions_and_the_sentences_carry_no_address(self):
         for sentence in (CONSOLE_KIND_UNKNOWN, CONSOLE_NONE, CONSOLE_UNLINKED, CONSOLE_NOT_RUNNING, CONSOLE_NO_ADDRESS, CONSOLE_RESTARTING,
-                         CONSOLE_STARTING, CONSOLE_UNHEALTHY, CONSOLE_YOUNG, CONSOLE_OPEN_HERE, CONSOLE_HELD, CONSOLE_UNREACHABLE, CONSOLE_LIMIT_SENTENCE):
+                         CONSOLE_STARTING, CONSOLE_UNHEALTHY, CONSOLE_YOUNG, CONSOLE_OPEN_HERE, CONSOLE_HELD, CONSOLE_UNREACHABLE, CONSOLE_LIMIT_SENTENCE, *CONSOLE_JOB_SENTENCES.values()):
             self.assertNotIn('{address}', sentence)
         self.assertIn('{port}', CONSOLE_UNREACHABLE)
         self.serve()

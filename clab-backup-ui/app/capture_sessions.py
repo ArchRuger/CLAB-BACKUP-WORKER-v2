@@ -6,6 +6,7 @@ not a replacement for user authentication at a shared/public reverse proxy.
 """
 import asyncio
 import hashlib
+import hmac
 import json
 import re
 import secrets
@@ -86,6 +87,18 @@ VIEWER_ASSETS = {
 }
 
 
+# The only fields of a service row a browser sees (C07): a field the service adds later stays private.
+PUBLIC_SESSION = ('id', 'name', 'interfaces', 'remaining_seconds', 'idle_seconds')
+END_ALL_FAILED = 'Could not end {label}; try End session on its row.'
+
+
+def public_session(row, record):
+    """record: the one shape Captures.label() makes ({lab, lab_id, device, ports, label, started})."""
+    out = {k: row[k] for k in PUBLIC_SESSION if k in row}
+    out.update({'lab': record['lab'], 'device': record['device'], 'ports': list(record['ports']), 'label': record['label']})
+    return out
+
+
 def viewer_asset(path, body):
     """Whether body is the pinned image's own copy of this noVNC module."""
     return path in VIEWER_ASSETS and hashlib.sha256(body).hexdigest() == VIEWER_ASSETS[path]
@@ -144,6 +157,12 @@ class BrowserSessions:
     def headers(self, who=''):
         return {'Authorization': 'Bearer ' + self.token, 'X-Capture-Owner': who}
 
+    def session_id(self, who, request_id):
+        """The id the service gives this owner's request (capture_service.Sessions.start derives it the
+        same way, pinned by test_capture_sessions): how the manager recognises its own set's sessions in
+        a listing after a lost reply or on a retry, without trusting anything the browser sent."""
+        return hmac.new(self.token.encode(), (who + request_id).encode(), hashlib.sha256).hexdigest()
+
     def request(self, method, path, who='', data=None):
         try:
             with httpx.Client(trust_env=False, timeout=45) as client:
@@ -178,9 +197,39 @@ def install(app, captures):
     def health():
         return service().request('GET', 'health')
 
+    def listing(who):
+        """The owner's service rows with a valid id; the browser only ever sees them through public_session."""
+        rows = service().request('GET', 'sessions', who).get('sessions')
+        return [r for r in rows if isinstance(r, dict) and isinstance(r.get('id'), str) and TOKEN.fullmatch(r['id'])] \
+            if isinstance(rows, list) else []
+
     @app.get('/api/capture/sessions')
     def sessions(request: Request, response: Response):
-        return service().request('GET', 'sessions', owner(request, response))
+        who = owner(request, response)
+        rows = listing(who)
+        captures.prune(who, {r['id'] for r in rows})
+        return {'sessions': [public_session(r, captures.record_for(r)) for r in rows]}
+
+    @app.post('/api/capture/sessions/end-all')
+    def end_all(request: Request):
+        adapter = service()
+        who = owner(request)
+        ended, failed = [], []
+        for row in listing(who):
+            try:
+                adapter.request('POST', session_path(row['id']) + '/end', who, {})
+            except HTTPException as error:
+                if error.status_code != 404:  # 404: it expired between the listing and the end
+                    label = captures.record_for(row)['label']
+                    failed.append({'id': row['id'], 'label': label, 'detail': END_ALL_FAILED.format(label=label)})
+                    continue
+            ended.append(row['id'])
+        captures.forget(ended)
+        if ended or failed:
+            message = f'Ended {len(ended)} browser Wireshark session(s) and removed their temporary files'
+            message += f'; {len(failed)} could not be ended.' if failed else '.'
+            captures.store.event('capture.end_all', message, level='warning' if failed else 'info')
+        return {'ended': len(ended), 'failed': failed}
 
     @app.get('/api/capture/sessions/{sid}')
     def session(sid: str, request: Request):

@@ -1013,3 +1013,43 @@ now moot (lists are sorted before hashing, §2.6) and the second is carried into
 | The apply review digest includes the dry-run outcome, so a transient dry-run failure refuses an unchanged apply (optional) | Accepted as designed: the review's warning names it ("containerlab could not plan this change: …"); the student previews again | §2.6 |
 | The INSPECT_FORMAT live break was pinned by string only (optional) | Accepted: the test scans every action of the format and allows only the always-present keys and the `index`/`json` forms | `test_host_diagnostics.py` |
 | The manager slice (S2) found `netem-show-all` without the container id | Accepted: each present device now carries the bound `id` (64 hex) so the manager's calls can send it back as `expected_id`; `test_host_lifecycle.py` pins it | §2.4 |
+
+## 11. Code review answers for the manager and UI slices (`/clab-review-changes` on `ce74255..3b36667`; 23 confirmed, 0 refuted)
+
+| Finding | Answer | Where |
+|---|---|---|
+| Confirm stayed live while Run with options previewed a changed selection again, so the previous, broader request could run (must-fix; the verification's high break) | Accepted: `#op-confirm` is disabled with "Checking the new options…" before the fieldset, and enabled only by the new preview replacing the dialog; a click during the window sends nothing; tested | §4.5; `operations.js` |
+| A reload started by the 4-second poll wiped values typed during the fetch and dropped an open question (should-fix, three reviewers) | Accepted: after the await, an edited row or an open question keeps its state (adopt with keep, the question kept); tested | §4.1; `device-impairments.js` |
+| Clear held the in-flight token for the whole loop (should-fix) | Accepted: `impairing(lab_id)` wraps each helper call; a refusal between resets lands in `failed`/`remaining` | §3.4; `impairments.py` |
+| An Apply, Reset or Clear in the drawer never refreshed the map badge (should-fix; the verification's and the live pass's B2) | Accepted: the lab-wide refresh runs after every successful change; the dead hook removed; tested | §4.1, §4.3 |
+| Clear's read used the 45 s mutating timeout, shorter than the helper's 60 s deadline (should-fix) | Accepted: the read uses the longer read timeout; set and reset keep theirs; the order pinned | §3.4 |
+| The sync trigger was answered from the server's cached plan (should-fix) | Accepted: the 'sync' reason passes `refresh` | §4.4 |
+| The console gate treated Start and Stop device jobs as restarting with the restart sentence and no test (should-fix; two optionals) | Accepted: the sentence is keyed on the action; `starting` and `stopping` join the readiness totals' booting bucket; tested | `node_services.py` |
+| The plan-cache drop was tested only on the success path (should-fix) | Accepted: the settings route, a failing `remote()` and a cancel after the run are covered | `test_lab_operations.py` |
+| The `app.js` wiring of Stop, Start and Save startup configuration had no test (should-fix) | Accepted: `test_readiness_ui.js` cases | `app.js` |
+| The per-lab lock dictionary grew for any posted lab id (optional) | Accepted: the lab is looked up under the store lock first | `impairments.py` |
+| Run options were validated as a group, not per action; "already deployed" for an unknown status (optional; the verification's B7) | Accepted: per-action validation against `OPTION_ACTIONS`; the wording follows the status | §3.2 |
+| Linking the lab to another deployment kept the cached plan (optional) | Accepted: `forget_plan` in `bind()` | `discovery.py` |
+| The restart and start link counts ignored destroyed neighbours (optional) | Accepted: counted separately and named in the job message | §3.1 |
+| The settings path change forgot the plan before the new path was stored (optional) | Accepted: forgotten after the store | §3.3 |
+| After a successful Clear all, focus went to the hidden button (optional) | Accepted: focus moves to a visible control | §4.3 |
+| Stop device was disabled with the wrong reason for `runtime_state` 'unknown' (optional) | Accepted: the browser matches the server (running and unknown allowed) | §4.2 |
+| The busy sentences were duplicated in Python and JS without a pin (optional) | Accepted: a Python test extracts them from the script | tests |
+| No page-load seam test for `device-impairments.js` (optional) | Accepted | `test_page_load_ui.js` |
+
+## 12. Verification and live-pass answers (`/clab-slice-verify` on `3b36667`; the live pass on the parity lab)
+
+| Finding | Answer | Where |
+|---|---|---|
+| High: Confirm live during a re-preview (verification B1) | Fixed with the must-fix above | §4.5 |
+| Live, high: impairments on vJunos devices read back empty; Reset and Clear stayed disabled; the map showed no badge | containerlab prints the interface as `eth1 (ge-0/0/0)`; the helper's row parser now splits the Linux name and an `alias` (shown as the port) so Reset finds the row and the manager's role check sees `eth1`; tested on both sides; re-checked live on `ceos` (`2d8afde`) | §2.4, §3.4; `host_operations.py` `impairment_rows`, `impairments.py` |
+| Medium: the map badge and caption not re-read after a drawer change (B2, live too) | Fixed (the review row above) | §4.1 |
+| Medium: the Impairments table clipped at 390 and 1280; the actions outside the visible region (B3) | Accepted: inputs 6ch, the actions wrapping under the row, the hint never widening the table; measured in the fixture | `style.css` |
+| Medium: the map toolbar, the caption and Clear impairments clipped at 760 and below | Accepted: visible and reachable at 760 and 390 | `style.css` |
+| Low: Clear's read timeout below the helper's deadline (B4) | Fixed (the review row above) | §3.4 |
+| Low: a filtered destroy's confirm button read "Destroy lab"; "Left running" and "Not saved" listed container names (B5, live too) | Accepted: the button names the device; the lists use short names | §4.5 |
+| Low: the map's partial-clear sentence named the Linux interface (B6) | Accepted: the port label | §4.3 |
+| Low: run-option wording in edge states (B7) | Fixed (the review row above) | §3.2 |
+| Low: Escape in an open question closed the drawer; the busy sentence appeared three times; Retry dropped focus | Accepted: Escape closes the question only; one sentence; Retry keeps focus | §4.1 |
+| Low: no completion toast for Stop device and Start device | Accepted: "✔ <device> stopped" / "started" | §4.2 |
+| Live: Apply after a filtered destroy recreated the neighbours whose kind cannot add links live | Accepted as containerlab's behaviour: the review lists them; the Run with options help says so; recorded as an open point | §4.5, the handoff |

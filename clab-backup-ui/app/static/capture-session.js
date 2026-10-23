@@ -8,6 +8,8 @@ async function status(){
  const data=await response.json();
  if(!response.ok)throw Error(data.detail||'Session unavailable.');
  $('capture-name').textContent=data.name+' · '+data.interfaces.join(', ');
+ // Up to four viewers can be open at once: the tab strip tells them apart.
+ document.title=data.name+' · '+data.interfaces.join(', ')+' — Wireshark';
  // Wireshark restarts inside a running desktop. A stopped desktop has usually lost its tmpfs /pcaps, but the
  // download is the check: the service reports the loss only when the archive really holds no file.
  if(!data.running)throw Error('The Wireshark desktop stopped. Click Download saved captures to check for files saved under /pcaps (a stopped desktop usually loses them), then end this session and start a new capture.');

@@ -17,7 +17,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request as URLRequest, build_opener
 
 from fastapi import HTTPException, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 MAX_RESPONSE = 4 * 1024 * 1024
 MAX_TARGETS = 10000
@@ -184,11 +184,47 @@ def configured_provider(environ) -> Provider | None:
     return EdgesharkProvider(internal)
 
 
-class LaunchRequest(BaseModel):
+class CaptureEntry(BaseModel):
     model_config = ConfigDict(extra='forbid')
     target_id: str = Field(min_length=64, max_length=64, pattern=r'^[0-9a-f]{64}$')
     interfaces: list[str] = Field(min_length=1, max_length=128)
+
+
+class LaunchRequest(BaseModel):
+    """Two body forms: today's single capture, byte for byte, or a set of 1 to 4 captures (one session each)."""
+    model_config = ConfigDict(extra='forbid')
+    target_id: str | None = Field(default=None, min_length=64, max_length=64, pattern=r'^[0-9a-f]{64}$')
+    interfaces: list[str] | None = Field(default=None, min_length=1, max_length=128)
+    captures: list[CaptureEntry] | None = Field(default=None, min_length=1, max_length=4)
     request_id: str = Field(default_factory=lambda: secrets.token_hex(32), pattern=r'^[0-9a-f]{64}$')
+
+    @model_validator(mode='after')
+    def one_form(self):
+        single = self.target_id is not None or self.interfaces is not None
+        if single == (self.captures is not None) or (single and (self.target_id is None or self.interfaces is None)):
+            raise ValueError('Send either target_id with interfaces, or captures.')
+        return self
+
+    def entries(self):
+        return self.captures or [CaptureEntry(target_id=self.target_id, interfaces=self.interfaces)]
+
+
+# The most records and request plans kept in memory (C07). Nothing about sessions is persisted.
+KNOWN_LIMIT = 64
+CAPACITY_SECONDS = 60
+CHANGED = 'Capture target changed or disappeared. Refresh interfaces and select it again.'
+NOT_LISTED = 'Select interfaces from the refreshed live list.'
+LISTED_TWICE = 'The same interface is listed twice. Refresh interfaces and select again.'
+NOT_ATTEMPTED = 'Not attempted: an earlier capture of this set failed.'
+MAY_HAVE_STARTED = 'This capture may have started; see Your capture sessions. '
+STARTED_ONE = 'Wireshark session started on the VM. Open the browser viewer to inspect packets.'
+CAPTURE_SET_TOO_LARGE = ('{k} separate Wireshark sessions are more than the limit of {limit} at a time. '
+                         'Untick interfaces, or open one Wireshark for all of them.')
+CAPTURE_SLOTS_OWN_DEVICE = ('You already have {n} Wireshark {sessions} running from this browser; {k} more would pass '
+                            'the limit of {limit} at a time. End a session under Your capture sessions, untick '
+                            'interfaces, or open one Wireshark for all of them.')
+CAPTURE_SLOTS_OWN_LINK = ('You already have {n} Wireshark {sessions} running from this browser; both ends would pass '
+                          'the limit of {limit} at a time. End a session under Your capture sessions, or untick one end.')
 
 
 def expected_container(lab, node):
@@ -208,6 +244,15 @@ class Captures:
         self.slots = threading.BoundedSemaphore(4)
         self.error = ''
         self.sessions = None
+        # In memory only (C07), all under known_lock because the routes run on the threadpool:
+        # known: session id -> the one record shape label() makes; known_owner: session id -> the
+        # owner cookie that started it (so one browser's listing prunes only its own records);
+        # requests: request id -> {derived request id: session id or None} of a set's last attempt.
+        self.known_lock = threading.Lock()
+        self.known = {}
+        self.known_owner = {}
+        self.requests = {}
+        self.capacity_cache = None
         try:
             config = os.environ if environ is None else environ
             self.provider = configured_provider(config)
@@ -240,6 +285,111 @@ class Captures:
             raise HTTPException(502, str(error)) from None
         finally:
             self.slots.release()
+
+    def label(self, name, interfaces):
+        """The one record shape of a session (C07 §2.2 step 3), at launch and as the listing's fallback.
+
+        The lab and node come from container-name equality under the store lock (never the lab the
+        page sent); a container no lab names keeps its own name and the veth names."""
+        from .topology import displayed_interface
+        interfaces = [i for i in interfaces if isinstance(i, str)] if isinstance(interfaces, list) else []
+        lab_name = lab_id = ''
+        device, ports = name, list(interfaces)
+        def named(lab, node):
+            try:
+                return expected_container(lab, node) == name
+            except (KeyError, TypeError, AttributeError):
+                return False  # One odd stored node never blocks a launch or the listing.
+        with self.store.lock:
+            for lab in self.store.state.get('labs', []):
+                node = next((n for n in lab.get('nodes', []) if named(lab, n)), None) if name else None
+                if node is not None:
+                    lab_name, lab_id = str(lab.get('name', '')), str(lab.get('id', ''))
+                    device = str(node.get('short_name') or node['name'])
+                    ports = [displayed_interface(node.get('kind', ''), i) for i in interfaces]
+                    break
+        return {'lab': lab_name, 'lab_id': lab_id, 'device': device, 'ports': ports,
+                'label': (device + ' ' + ', '.join(ports)).strip(), 'started': 0.0}
+
+    def remember(self, who, sid, record):
+        with self.known_lock:
+            self.known.pop(sid, None)
+            self.known[sid] = record
+            self.known_owner[sid] = who
+            while len(self.known) > KNOWN_LIMIT:
+                oldest = next(iter(self.known))
+                del self.known[oldest]
+                self.known_owner.pop(oldest, None)
+
+    def plan(self, request_id, rids):
+        """Record a set's derived request ids before its first service call; earlier answers are kept."""
+        with self.known_lock:
+            plan = self.requests.pop(request_id, {})
+            for rid in rids:
+                plan.setdefault(rid, None)
+            self.requests[request_id] = plan
+            while len(self.requests) > KNOWN_LIMIT:
+                del self.requests[next(iter(self.requests))]
+
+    def planned(self, request_id, rid, sid):
+        with self.known_lock:
+            if request_id in self.requests:
+                self.requests[request_id][rid] = sid
+
+    def own_ids(self, who, request_id, rids):
+        """The service session ids these derived request ids have, or would have, for this browser."""
+        with self.known_lock:
+            plan = dict(self.requests.get(request_id, {}))
+        ids = {plan[rid] for rid in rids if plan.get(rid)}
+        derive = getattr(self.sessions, 'session_id', None)
+        if derive:
+            ids.update(derive(who, rid) for rid in rids)
+        return ids
+
+    def relisted(self, who, request_id, rid):
+        """After a 502 mid-set: the session id of this entry when the owner's listing now shows it, else ''."""
+        from .capture_sessions import TOKEN
+        try:
+            listed = self.sessions.request('GET', 'sessions', who).get('sessions')
+        except HTTPException:
+            return ''
+        ids = self.own_ids(who, request_id, [rid])
+        return next((r['id'] for r in listed if isinstance(r, dict) and isinstance(r.get('id'), str)
+                     and TOKEN.fullmatch(r['id']) and r['id'] in ids), '') if isinstance(listed, list) else ''
+
+    def record_for(self, row):
+        with self.known_lock:
+            record = self.known.get(row['id'])
+        return record if record is not None else self.label(row.get('name') if isinstance(row.get('name'), str) else '',
+                                                            row.get('interfaces'))
+
+    def prune(self, who, listed):
+        """Drop this browser's records the service no longer lists; other browsers' records stay."""
+        with self.known_lock:
+            for sid in [s for s, owner in self.known_owner.items() if owner == who and s not in listed]:
+                self.known.pop(sid, None)
+                self.known_owner.pop(sid, None)
+
+    def forget(self, sids):
+        with self.known_lock:
+            for sid in sids:
+                self.known.pop(sid, None)
+                self.known_owner.pop(sid, None)
+
+    def capacity(self):
+        """The service's published max_sessions, at most once a minute; 4 when it does not say."""
+        now = time.monotonic()
+        with self.known_lock:
+            if self.capacity_cache and now - self.capacity_cache[0] < CAPACITY_SECONDS:
+                return self.capacity_cache[1]
+        try:
+            value = self.sessions.request('GET', 'health').get('max_sessions')
+        except HTTPException:
+            value = None
+        limit = value if type(value) is int and 1 <= value <= 64 else 4
+        with self.known_lock:
+            self.capacity_cache = (now, limit)
+        return limit
 
     def install(self, app):
         from .capture_sessions import install, owner
@@ -284,19 +434,99 @@ class Captures:
         def launch(data: LaunchRequest, request: Request, response: Response):
             if not self.sessions:
                 raise HTTPException(503, self.error or 'Browser capture is disabled. Follow Capture setup.')
-            rows = self.discover()  # Always revalidate; never launch from a cached PID.
-            target = next((t for t in rows if hmac.compare_digest(self.identity(t), data.target_id)), None)
-            if target is None:
-                raise HTTPException(409, 'Capture target changed or disappeared. Refresh interfaces and select it again.')
-            if len(set(data.interfaces)) != len(data.interfaces) or any(n not in target['network-interfaces'] for n in data.interfaces):
-                raise HTTPException(409, 'Select interfaces from the refreshed live list.')
-            session = self.sessions.request('POST', 'sessions', owner(request, response),
-                                            {'target': {k: target[k] for k in (*IDENTITY_FIELDS, 'network-interfaces')},
-                                             'interfaces': data.interfaces, 'request_id': data.request_id})
             from .capture_sessions import TOKEN
-            if not isinstance(session.get('id'), str) or not TOKEN.fullmatch(session['id']):
-                raise HTTPException(502, 'Browser capture service returned an invalid session.')
-            self.store.event('capture.launch', 'Started browser Wireshark session for ' + target['name'] +
-                             ' (' + ', '.join(data.interfaces) + ').')
-            return {'id': session['id'], 'url': '/static/capture-session.html#' + session['id'],
-                    'message': 'Wireshark session started on the VM. Open the browser viewer to inspect packets.'}
+            rows = self.discover()  # Always revalidate, once per request; never launch from a cached PID.
+            entries = data.entries()
+            sets, many, total = data.captures is not None, len(entries) > 1, len(entries)
+
+            def position(i):
+                return f'Capture {i + 1} of {total}'
+            # 1. Validate the whole set before any container exists.
+            resolved, seen = [], set()
+            for i, entry in enumerate(entries):
+                prefix = position(i) + ': ' if many else ''
+                target = next((t for t in rows if hmac.compare_digest(self.identity(t), entry.target_id)), None)
+                if target is None:
+                    raise HTTPException(409, prefix + CHANGED)
+                if len(set(entry.interfaces)) != len(entry.interfaces) or any(n not in target['network-interfaces'] for n in entry.interfaces):
+                    raise HTTPException(409, prefix + NOT_LISTED)
+                # One namespace, one interface: two rows of a shared namespace are the same interface too.
+                pairs = {(target['netns'], n) for n in entry.interfaces}
+                if seen & pairs:
+                    raise HTTPException(409, LISTED_TWICE)
+                seen |= pairs
+                resolved.append((entry, target, self.label(target['name'], entry.interfaces)))
+            who = owner(request, response)
+            # A set's sessions get request ids derived from the entry's content, never its position, so a
+            # retried or narrowed set meets the same session at the service (which dedups on owner + id).
+            rids = ([hashlib.sha256(f'{data.request_id}:{e.target_id}:{"/".join(e.interfaces)}'.encode()).hexdigest()
+                     for e in entries] if sets else [data.request_id])
+            # 2. A convenience for the common case, never a reservation: the service's 429 is the cap.
+            if many:
+                listed = self.sessions.request('GET', 'sessions', who).get('sessions')
+                mine = self.own_ids(who, data.request_id, rids)
+                own = len([r for r in listed if isinstance(r, dict) and r.get('id') not in mine]) if isinstance(listed, list) else 0
+                limit = self.capacity()
+                if total > limit:
+                    raise HTTPException(409, CAPTURE_SET_TOO_LARGE.format(k=total, limit=limit))
+                if own + total > limit:
+                    template = CAPTURE_SLOTS_OWN_LINK if len({t['netns'] for _, t, _ in resolved}) > 1 else CAPTURE_SLOTS_OWN_DEVICE
+                    raise HTTPException(409, template.format(n=own, sessions='session' if own == 1 else 'sessions', k=total, limit=limit))
+            if sets:
+                self.plan(data.request_id, rids)
+            # 3. Start in order; any refusal stops the set.
+            started, refused = [], []
+
+            def begin(sid, rid, entry, target, record):
+                with self.known_lock:
+                    old = self.known.get(sid)
+                if old is None:  # Only a session the service newly made; a re-answered one keeps its record and writes no event.
+                    record = {**record, 'started': time.time()}
+                    self.remember(who, sid, record)
+                    self.store.event('capture.launch', 'Started browser Wireshark session for ' + target['name'] +
+                                     ' (' + ', '.join(entry.interfaces) + ').')
+                else:
+                    record = old
+                if sets:
+                    self.planned(data.request_id, rid, sid)
+                started.append({'id': sid, 'url': '/static/capture-session.html#' + sid, 'name': target['name'],
+                                'interfaces': list(entry.interfaces), 'label': record['label']})
+
+            for i, ((entry, target, record), rid) in enumerate(zip(resolved, rids)):
+                try:
+                    session = self.sessions.request('POST', 'sessions', who,
+                                                    {'target': {k: target[k] for k in (*IDENTITY_FIELDS, 'network-interfaces')},
+                                                     'interfaces': entry.interfaces, 'request_id': rid})
+                    if not isinstance(session.get('id'), str) or not TOKEN.fullmatch(session['id']):
+                        raise HTTPException(502, 'Browser capture service returned an invalid session.')
+                except HTTPException as error:
+                    if not sets:
+                        raise  # The single form keeps today's path exactly.
+                    detail = head = str(error.detail)
+                    if error.status_code == 502:
+                        # The container may exist although its reply was lost: look once, by this entry's id only.
+                        sid = self.relisted(who, data.request_id, rid)
+                        if sid:
+                            begin(sid, rid, entry, target, record)
+                            continue  # Recovered: the set goes on with the entries not yet tried.
+                        head = MAY_HAVE_STARTED + detail
+                        detail = NOT_ATTEMPTED  # The untried entries were never sent, whatever the transport said.
+                    for j in range(i, total):
+                        refused.append({'position': position(j), 'label': resolved[j][2]['label'],
+                                        'interfaces': list(entries[j].interfaces), 'detail': head if j == i else detail})
+                    if not started:
+                        raise  # Nothing started: a plain error, as a single launch.
+                    break
+                begin(session['id'], rid, entry, target, record)
+            result = {}
+            if started:
+                result.update(id=started[0]['id'], url=started[0]['url'])
+            if refused:
+                message = ('Wireshark started for ' + ', '.join(s['label'] for s in started) + '; not for ' +
+                           ', '.join(r['label'] for r in refused) + ': ' + refused[0]['detail'])
+            elif len(started) == 1:
+                message = STARTED_ONE
+            else:
+                message = f'Wireshark started on the VM for {len(started)} captures. Open each viewer below.'
+            result.update(message=message, sessions=started, refused=refused)
+            return result
