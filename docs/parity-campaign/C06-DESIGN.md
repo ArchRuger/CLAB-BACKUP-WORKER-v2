@@ -944,3 +944,37 @@ refuted, which need no row), in the review's order, with the lead's binding deci
 | 25 | optional: Arrange gives no warning about groups and allows no-op layouts | Accepted as proposed (lead's decision): the dialog counts the groups that will no longer surround their devices; Rows and Columns are disabled with a visible reason when the drawing has no links; `#map-arrange-hint` only for two or more devices | §3.8, §3.9, §4 |
 | 26 | optional: download anchors hide draw.io export errors | Accepted as proposed (lead's decision): the draw.io dialog fetches through `api()`, saves a blob named by `attachmentName`, and shows the server's sentence in its status line on failure | §3.7, §3.9, §4 |
 | 27 | optional: the More ▾ menu grows against the clipping note; disabled items show no visible reason | Accepted as proposed (lead's decision): the fixture pass checks the last item at 1440, 1280, 760 and 390 with C05's chip and Clear button shown and the stage at its minimum height, S2 updates the CSS note, a failing viewport renders the menu `position: fixed` from the button's rectangle; the three new items carry `<small class="menu-reason">No map yet</small>` | §3.1, §4 fixture pass, §6 S2 files |
+
+## 10. Verification answers (`/clab-slice-verify` on `claude/c06-int` at c733849, six workers; every acceptance check held, eight breaks)
+
+| Finding | Answer | Where |
+|---|---|---|
+| High: `test_lab_operations.py` red after the merge (C05's review follow-up tests landed inside `ArrangeTests` and lost their class's helpers) | Fixed by the lead: the C05 block moved back into `NodeActionAndOptionTests`, `ArrangeTests` follows it (141 tests OK) | `tests/test_lab_operations.py` |
+| Medium: the script-load race fix did not hold (the forced `refreshMap(true)` was superseded by the next plain refresh, which returned at the unchanged-key early return) | Fixed: `map-tools.js` clears `mapKey` before the forced refresh, so whichever request finishes last redraws with the hooks in place | `map-tools.js` (last line); §3.0 |
+| Medium: at 390 px the More menu's last item sat under the `#map-links` chip (stage 274 px, minimum 360 px) | Fixed in `style.css` per its own note; the last item is hit at top, middle and bottom at 390×700 | §3.1 |
+| Medium: one transient 409 (VM unreachable, a non-zero listing exit) turned link state off for good with no Retry | Fixed: a 409 takes the 503 path (colours kept, "paused, retrying…", three errors then Retry); only a 200 `available: false` means "colours are off here" | `map-tools.js` `mapLinkRun`; §3.9 |
+| Medium: after an unavailable answer on one lab, other labs were never polled (`mapToolsReset` kept `poll.mode`) | Fixed: the reset clears `mode` | `map-tools.js` |
+| Low: a double click on Undo arrange sent two requests and showed the stale sentence after a successful undo | Fixed: an in-flight guard, the button disabled while the request is out | `map-tools.js` `mapArrangeUndoRun` |
+| Low: the helper's link-state output can exceed its input and the manager's 3 MiB line limit (`ensure_ascii` expands astral characters twelvefold) | Open point: real rows are ASCII and larger than the reduced ones; the design's "smaller than the input" wording is corrected to "bounded"; a byte-measured cut is the fix if it ever bites (it fails closed as a 409) | §2.1 |
+| Low: the matcher matched an endpoint with an empty interface to the first row with an empty alias or port | Fixed: an empty interface never matches by alias or port; the wire stays unknown | `map-tools.js` `mapLinkEnd`; §2.3 |
+
+## 11. Risk review answers (one `risk-reviewer` pass over the backend diff; no must-fix, three should-fix)
+
+| Finding | Answer | Where |
+|---|---|---|
+| A containerlab older than 0.64 is misreported when the capabilities cache is cold (the second listing is a dict, every device `listed: false`, every wire drawn down) | Fixed: `lab_links` raises a dedicated sentence when the second listing is not a list, mapped to `available: false, reason: 'containerlab'` | `host_operations.py`, `device_diagnostics.py`; §2.1, §2.2 |
+| Undo could discard a later Edit map save that left the drawing unchanged (the revision alone was compared) | Fixed: the Undo entry keeps a digest of the map state after the arrange save; a mismatch is the stale 412 | `lab_operations.py`; §2.6 |
+| A lab deployed outside the trusted roots got a 409 on every poll ("stopped. Retry" that never succeeds) | Fixed: mapped to `available: false, reason: 'roots'` with the helper's sentence | `device_diagnostics.py`; §3.9 |
+| Notes: the two-call window between the binding listing and the interfaces listing; the re-serialised document (`allow_nan`, lone surrogates); Undo entries of removed labs never dropped; the capabilities cache not compared with the host revision; "not running" wording when Docker itself is down | Recorded as open points; none widens a privilege | §2 |
+
+## 12. Live pass (the parity lab through the manager rebuilt from the merged tree, 2026-10-23)
+
+| Step | Result |
+|---|---|
+| `GET /api/operations/link-state` for the parity lab | `available: true`, 5 of 5 listed; `vsw eth1 (ge-0/0/0)`, `vrt eth1 (ge-0/0/0)`, `xrv9k eth2 (Gi0/0/0/1)`, `ceos eth1` all `up` |
+| cEOS `interface Ethernet1` / `shutdown` over SSH | within 12 s `ceos eth1` read `dormant` (the wire is drawn down); `xrv9k eth2` stayed `up` (the XRv9k veth does not follow its neighbour); `no shutdown` → `up` again within 12 s |
+| **A1 check** on vJunos-switch: `set interfaces ge-0/0/0 disable`, commit | `vsw eth1` and `vrt eth1` both stayed `up` after 12 s; the `vm` wording (`connected` instead of `up`) ships for the vrnetlab kinds as written; reverted with `delete … disable`, commit |
+| `POST /arrange {mode: rows}` on the placed drawing | 200, new revision, 5 of 5 devices moved, `placed` true, `/map-document` rewritten |
+| `POST /arrange {undo: true}` | 200, positions and revision back exactly; a second Undo with the old revision → 412 `stale` with the sentence |
+| `GET /drawio?layout=rows&theme=print` and `layout=map&theme=manager` | 200, XML documents; `layout=bogus` → 400 "Choose a supported layout." |
+| Not run live | the browser chip, Find, hover and Download picture on the live lab (covered by the fixture QA at three widths and `check_c06.py`); the link-state helper on a VM with an old containerlab |

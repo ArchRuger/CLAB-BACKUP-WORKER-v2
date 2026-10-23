@@ -383,15 +383,45 @@ test('mapToolsReset and the markup: no inline style, esc() on every interpolatio
  assert.equal(h.$('map-find').value,'');
 });
 
-test('S1b contract: a 409 helper sentence turns the colours off with that sentence and stops the poll; a 404 counts as an error',async()=>{
+test('S1b contract (rewritten): a 409 is a transient like a 503 (colours kept, back-off, three errors stop with Retry), never "colours off"',async()=>{
  const h=harness();let mode='ok';
- h.on('/operations/link-state',async()=>{if(mode==='409')throw Object.assign(new Error('Link state needs the updated VM helper (ask your instructor or administrator).'),{status:409});return {json:async()=>answer()};});
+ h.on('/operations/link-state',async()=>{if(mode==='409')throw Object.assign(new Error('The VM could not be reached.'),{status:409});return {json:async()=>answer()};});
  const wires=h.render();await h.fire();assert.ok(wires[0].classList.contains('link-up'));
  mode='409';await h.fire();
- assert.equal(classes(wires[0]),'topology-wire');assert.match(h.$('map-links').innerHTML,/Link state off: Link state needs the updated VM helper/);assert.equal(h.live().length,0);
+ assert.ok(wires[0].classList.contains('link-up'),'colours kept');assert.match(h.$('map-links').innerHTML,/Link state paused, retrying…/);assert.doesNotMatch(h.$('map-links').innerHTML,/Link state off/);
+ assert.equal(h.live().length,1,'a retry is armed');
+ await h.fire();await h.fire();
+ assert.equal(h.live().length,0,'three errors stop');assert.match(h.$('map-links').innerHTML,/data-map-link-retry="retry">Retry/);assert.notEqual(h.get('mapLinkPoll').mode,'unavailable');
 });
 
-test('script-load race: a map drawn before map-tools.js ran is drawn once more, forced, so the hooks run; a page with no map drawn yet is left to the first refresh',()=>{
- const late=harness({drawnBefore:true});assert.equal(late.get('refreshes'),1);assert.equal(late.get('refreshForce'),true);
+test('an unavailable answer on one lab does not stop the poll of the next lab; an empty interface never matches an alias or a port',async()=>{
+ const h=harness();
+ h.labs.push({id:'L2',name:'Lab 2',deployment_name:'lab-y',deployment:{status:'Running'},nodes:[]});
+ let unavailable=true;
+ h.on('/operations/link-state',async()=>({json:async()=>unavailable?{available:false,text:'Link state needs the updated VM helper.'}:answer()}));
+ h.render();await h.fire();assert.equal(h.get('mapLinkPoll').mode,'unavailable');
+ unavailable=false;h.context.activeId='L2';
+ h.render();
+ assert.equal(h.get('mapLinkPoll').mode,'','the reset clears the mode');assert.equal(h.live().length,1,'L2 is polled');
+ const d=drawing();
+ const noIf=h.context.mapLinkStates({nodes:d.nodes,links:[[{node:'1',interface:''},{node:'4',interface:''}]]},answer());
+ assert.equal(noIf.wires[0].state,'unknown','an endpoint with no interface is not coloured from an unrelated row');
+ assert.equal(noIf.wires[0].ends[0].end,'unknown');
+});
+
+test('Undo arrange: two immediate clicks send one request; the button is disabled while it is out',async()=>{
+ const h=harness();let release;
+ h.on('/operations/link-state',async()=>({json:async()=>answer()}));
+ h.on('/labs/L1/arrange',()=>new Promise(r=>{release=()=>r({saved:true,revision:'r3'});}));
+ h.render();const c=h.context;
+ h.context.__u={lab:'L1',revision:'r2'};h.get('mapArrangeUndo=__u');
+ const a=c.mapArrangeUndoRun(),b=c.mapArrangeUndoRun();
+ await tick();release();await Promise.all([a,b]);
+ assert.equal(h.context.posts.filter(x=>x.p==='/labs/L1/arrange').length,1);
+ assert.doesNotMatch(h.$('map-links').innerHTML,/The map changed/);
+});
+
+test('script-load race: a map drawn before map-tools.js ran has its key cleared and is drawn once more, forced, so whichever request ends last redraws; a page with no map drawn yet is left to the first refresh',()=>{
+ const late=harness({drawnBefore:true});assert.equal(late.get('refreshes'),1);assert.equal(late.get('refreshForce'),true);assert.equal(late.get('mapKey'),'','the key is cleared so a following plain refresh cannot hit the unchanged-key return');
  const early=harness();assert.equal(early.get('refreshes'),0);
 });

@@ -2464,7 +2464,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .topology-stage { height: clamp(360px, calc(100dvh - 240px), 600px); min-height: 360px; }
   /* The toolbar (with the impairment caption and Clear impairments) sits above the map in a column; as a static block after a 100%-high map it fell outside the clipped stage. */
   .topology-stage { display: flex; flex-direction: column; }
-  .topology-stage .map-tools { position: static; order: -1; flex: none; max-width: none; justify-content: flex-start; margin: 8px; }
+  .topology-stage .map-tools { position: relative; z-index: 3; order: -1; flex: none; max-width: none; justify-content: flex-start; margin: 8px; }
+  /* relative with a z-index (not static): the open More ▾ menu then stacks above the #map-links chip, which would otherwise be drawn over its last items */
   .topology-stage > svg, .topology-stage #topology-map { flex: 1 1 0; height: auto; min-height: 0; }
   .topology-stage #map-status, .topology-stage .map-status { left: 8px; bottom: 8px; max-width: calc(100% - 16px); }
   .topology-stage #map-links { left: 8px; bottom: 40px; max-width: calc(100% - 16px); }

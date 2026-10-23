@@ -13,7 +13,7 @@ const MAP_PICTURE_DEFAULTS={'fill':'rgb(0, 0, 0)','fill-opacity':'1','stroke':'n
 const MAP_PICTURE_MAX=8192;
 let mapToolsLab='', mapToolsDrawing=null, mapToolsCaption='', mapToolsChipHtml=null;
 let mapLinkCache={}, mapLinkPoll={timer:0,inFlight:false,plan:null,lastAt:0,epoch:0,fresh:true,stopped:'',off:'',status:'',message:'',mode:''};
-let mapArrangeUndo=null, mapHoverWire=null, mapPictureBusy=false;
+let mapArrangeBusy=false, mapArrangeUndo=null, mapHoverWire=null, mapPictureBusy=false;
 const mapToolsPlural=(n,word)=>typeof plural==='function'?plural(n,word):`${n} ${word}${Number(n)===1?'':'s'}`;
 const mapToolsEl=id=>typeof $==='function'?$(id):null;
 const mapToolsGroups=()=>map&&typeof map.querySelectorAll==='function'?[...map.querySelectorAll('.topology-wire')]:[];
@@ -31,7 +31,8 @@ function mapLinkEnd(point,node,answer){
  if(!device)return base;
  base.vm=device.vm===true;
  if(device.listed===false)return {...base,end:'not-running'};
- const row=(device.interfaces||[]).find(r=>r&&(r.name===point.interface||r.alias===point.interface||r.port===point.interface||(point.capture_interface&&r.name===point.capture_interface)));
+ if(!point.interface&&!point.capture_interface)return base;
+ const row=(device.interfaces||[]).find(r=>r&&((point.interface&&(r.name===point.interface||r.alias===point.interface||r.port===point.interface))||(point.capture_interface&&r.name===point.capture_interface)));
  if(!row)return {...base,end:'missing'};
  return {...base,name:String(row.name||''),end:row.state==='up'?'up':'down',state:String(row.state||'down')};
 }
@@ -131,7 +132,7 @@ function mapLinkConditions(){
 function mapLinkStopTimer(){clearTimeout(mapLinkPoll.timer);mapLinkPoll.timer=0;}
 function mapToolsReset(){
  const poll=mapLinkPoll;mapLinkStopTimer();poll.epoch++;
- Object.assign(poll,{inFlight:false,plan:null,lastAt:0,fresh:true,stopped:'',off:'',message:'',legend:null});
+ Object.assign(poll,{inFlight:false,plan:null,lastAt:0,fresh:true,stopped:'',off:'',message:'',legend:null,mode:''});
  mapLinkCache={};mapArrangeUndo=null;mapHoverClear();mapToolsDrawing=null;
  const find=mapToolsEl('map-find');if(find)find.value='';
  const count=mapToolsEl('map-find-count');if(count){count.textContent='';count.hidden=true;}
@@ -167,8 +168,7 @@ async function mapLinkRun(){
  catch(e){result={ok:false,status:e&&e.status?e.status:0,message:e&&e.message?e.message:''};}
  poll.inFlight=false;
  if(epoch!==poll.epoch||activeId!==labId)return;
- // 409 is the manager's own helper sentence (an old helper): colours off with that sentence, no more polling, like available:false.
- if(!result.ok&&result.status===409&&result.message){poll.mode='unavailable';poll.timer=0;delete mapLinkCache[labId];mapLinkClear();mapLinkSay(MAP_LINK_OFF+result.message,null);return;}
+ // A 409 (VM unreachable, a failed listing) is a transient like a 503: the last colours stay and the back-off decides. Colours are off only for a 200 with available:false.
  const next=typeof diagPollNext==='function'?diagPollNext(poll.plan||mapLinkPlan(),result.ok?{ok:true}:{ok:false,status:result.status},Date.now()):{plan:poll.plan,delay:MAP_LINK_INTERVAL,stop:''};
  poll.plan=next.plan;
  if(result.ok){
@@ -439,7 +439,8 @@ function mapArrangeButtons(busy){
 }
 async function mapArrangeRun(mode){
  const drawing=mapToolsDrawing,labId=activeId,status=mapToolsEl('map-arrange-status');
- if(!drawing||!MAP_ARRANGE_DONE[mode])return;
+ if(!drawing||!MAP_ARRANGE_DONE[mode]||mapArrangeBusy)return;
+ mapArrangeBusy=true;
  if(status)status.textContent='';mapArrangeButtons(true);
  try{
   const answer=await json('/labs/'+labId+'/arrange','POST',{mode,revision:drawing.revision});
@@ -451,10 +452,11 @@ async function mapArrangeRun(mode){
   if(e&&e.status===412){mapArrangeUndo=null;if(activeId===labId)refreshMap(true);}
   if(status)status.textContent=e&&e.message?e.message:'The devices could not be arranged.';
   mapArrangeButtons(false);
- }
+ }finally{mapArrangeBusy=false;}
 }
 async function mapArrangeUndoRun(){
- const undo=mapArrangeUndo,labId=activeId;if(!undo||undo.lab!==labId)return;
+ const undo=mapArrangeUndo,labId=activeId;if(!undo||undo.lab!==labId||mapArrangeBusy)return;
+ mapArrangeBusy=true;mapArrangeUndoButtons(true);
  try{
   await json('/labs/'+labId+'/arrange','POST',{undo:true,revision:undo.revision});
   mapArrangeUndo=null;mapToolsChip();if(activeId===labId)await refreshMap(true);
@@ -463,8 +465,9 @@ async function mapArrangeUndoRun(){
   if(e&&e.status===412){mapArrangeUndo=null;mapToolsChip();if(activeId===labId)await refreshMap(true);}
   mapToolsSay(e&&e.message?e.message:'The arrangement could not be undone.');
   mapToolsChip();
- }
+ }finally{mapArrangeBusy=false;mapArrangeUndoButtons(false);}
 }
+function mapArrangeUndoButtons(busy){const chip=mapToolsEl('map-links');if(chip&&typeof chip.querySelectorAll==='function')for(const b of chip.querySelectorAll('[data-map-arrange-undo]'))b.disabled=busy;}
 // ---- Wiring (element listeners only; window and document listeners live in shell.js) ----------------------------------------------
 function mapToolsWire(){
  const on=(id,type,fn)=>{const el=mapToolsEl(id);if(el&&typeof el.addEventListener==='function')el.addEventListener(type,fn);};
@@ -492,4 +495,4 @@ function mapToolsWire(){
 }
 mapToolsWire();
 // The page scripts run in order, but a /topology answer can land before this one has run: refreshMap then drew the map with no hook in place, and its unchanged-drawing early return would never call mapToolsRendered (no chip, no link-state poll, no Find). A drawn map (mapKey set) is drawn once more with the hooks present.
-if(typeof mapKey==='string'&&mapKey&&typeof refreshMap==='function')refreshMap(true);
+if(typeof mapKey==='string'&&mapKey&&typeof refreshMap==='function'){mapKey='';refreshMap(true);}
