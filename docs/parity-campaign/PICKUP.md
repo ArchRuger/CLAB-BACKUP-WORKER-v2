@@ -101,3 +101,15 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   1.31.3 with the C03 UI; then C04 S2 UI and S3 docs, `/clab-review-changes` with `risk-reviewer` and
   `clab-network-specialist` on the console diff, the live console pass on `vrt`; C05 S2 manager after C04 S1b frees
   `discovery.py` and `main.py`.
+- 2026-10-23 06:20 UTC: towards 1.31.3 (all on the branch, pushed): the C03 UI slice verified (`/clab-slice-verify`,
+  12 of 16 held; answers C03-DESIGN §11) and passed live on `vrt`, `vsw`, `xrv9k`; its two medium and eleven low
+  findings fixed (`766558c`, `314dff7`); the live break on `ceos` and `cjunos` (Docker refused the inspect format for a
+  container without a HEALTHCHECK) fixed in the helper with the C05 S1 slice (`524fba4`) and re-checked live after
+  `start-manager.sh`. C04 built in three slices (`fd8da7f` console service, `08e7336` discovery and public row, `21a1b41`
+  UI, `2e082c2` docs) and passed its live console pass on `vrt` (login, `show version`, one console per device, the
+  held-console refusal, events only); one break (the container id read under `id`, containerlab writes `container_id`)
+  is being fixed with the C05 S2 manager slice, in build. Designs C06 (`04391ea`) and C07 (`50a6549`) answered the
+  lead's questions and are under `/clab-design-review`; C08 and C09 designs in writing. Running: `/clab-review-changes`
+  on `d303f38..` (the whole 1.31.3 scope). Next: its fixes, the Python suite, release 1.31.3 (records drafted in the
+  session's scratchpad), `start-manager.sh`; then C05 S3/S4 UI from the manager slice's route report, the C06/C07
+  builds from their answered designs.
