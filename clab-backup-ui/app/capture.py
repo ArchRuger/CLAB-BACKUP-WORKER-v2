@@ -215,6 +215,7 @@ CAPACITY_SECONDS = 60
 CHANGED = 'Capture target changed or disappeared. Refresh interfaces and select it again.'
 NOT_LISTED = 'Select interfaces from the refreshed live list.'
 LISTED_TWICE = 'The same interface is listed twice. Refresh interfaces and select again.'
+NOT_ATTEMPTED = 'Not attempted: an earlier capture of this set failed.'
 MAY_HAVE_STARTED = 'This capture may have started; see Your capture sessions. '
 STARTED_ONE = 'Wireshark session started on the VM. Open the browser viewer to inspect packets.'
 CAPTURE_SET_TOO_LARGE = ('{k} separate Wireshark sessions are more than the limit of {limit} at a time. '
@@ -477,12 +478,17 @@ class Captures:
             started, refused = [], []
 
             def begin(sid, rid, entry, target, record):
-                record = {**record, 'started': time.time()}
-                self.remember(who, sid, record)
+                with self.known_lock:
+                    old = self.known.get(sid)
+                if old is None:  # Only a session the service newly made; a re-answered one keeps its record and writes no event.
+                    record = {**record, 'started': time.time()}
+                    self.remember(who, sid, record)
+                    self.store.event('capture.launch', 'Started browser Wireshark session for ' + target['name'] +
+                                     ' (' + ', '.join(entry.interfaces) + ').')
+                else:
+                    record = old
                 if sets:
                     self.planned(data.request_id, rid, sid)
-                self.store.event('capture.launch', 'Started browser Wireshark session for ' + target['name'] +
-                                 ' (' + ', '.join(entry.interfaces) + ').')
                 started.append({'id': sid, 'url': '/static/capture-session.html#' + sid, 'name': target['name'],
                                 'interfaces': list(entry.interfaces), 'label': record['label']})
 
@@ -497,16 +503,15 @@ class Captures:
                     if not sets:
                         raise  # The single form keeps today's path exactly.
                     detail = head = str(error.detail)
-                    rest = i
                     if error.status_code == 502:
                         # The container may exist although its reply was lost: look once, by this entry's id only.
                         sid = self.relisted(who, data.request_id, rid)
                         if sid:
                             begin(sid, rid, entry, target, record)
-                            rest = i + 1
-                        else:
-                            head = MAY_HAVE_STARTED + detail
-                    for j in range(rest, total):
+                            continue  # Recovered: the set goes on with the entries not yet tried.
+                        head = MAY_HAVE_STARTED + detail
+                        detail = NOT_ATTEMPTED  # The untried entries were never sent, whatever the transport said.
+                    for j in range(i, total):
                         refused.append({'position': position(j), 'label': resolved[j][2]['label'],
                                         'interfaces': list(entries[j].interfaces), 'detail': head if j == i else detail})
                     if not started:

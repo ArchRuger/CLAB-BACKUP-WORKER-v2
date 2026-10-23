@@ -498,13 +498,42 @@ class CaptureSetTests(unittest.TestCase):
         self.assertEqual(len(self.events('capture.launch')),2)
         self.assertEqual([c[:2] for c in self.service.calls].count(('GET','sessions')),2)  # the pre-check, then one re-list
         self.assertIn(body['sessions'][1]['id'],self.captures.known)
-        # Lost on the first entry: recovered as well, and the set stops there.
+        # Lost on the first entry: recovered as well, and the set goes on with the untried entries.
         self.service.rows.clear();self.service.calls.clear();self.service.fail={1:'lost'}
         r=self.launch((self.r1,['eth2']),(self.host,['ens18']),rid='1'*64)
         self.assertEqual(r.status_code,200,r.text)
-        self.assertEqual([s['label'] for s in r.json()['sessions']],['r1 eth2'])
-        self.assertEqual([(x['label'],x['detail']) for x in r.json()['refused']],[('init ens18',LOST)])
-        self.assertEqual(len(self.service.posts()),1)
+        self.assertEqual([s['label'] for s in r.json()['sessions']],['r1 eth2','init ens18']);self.assertEqual(r.json()['refused'],[])
+        self.assertEqual(len(self.service.posts()),2)
+
+    def test_after_a_recovered_reply_one_more_service_failure_stops_the_set_as_not_attempted(self):
+        self.service.fail={1:'lost',2:HTTPException(502,LOST)}
+        r=self.launch((self.r1,['eth0']),(self.r1,['eth2']),(self.r1,['lo']))
+        self.assertEqual(r.status_code,200,r.text);body=r.json()
+        self.assertEqual([s['label'] for s in body['sessions']],['r1 eth0'])
+        self.assertEqual([(x['label'],x['detail']) for x in body['refused']],
+                         [('r1 eth2','This capture may have started; see Your capture sessions. '+LOST),
+                          ('r1 lo','Not attempted: an earlier capture of this set failed.')])
+        self.assertEqual(len(self.service.posts()),2)
+        self.assertNotIn('Cannot reach',body['refused'][1]['detail'])
+
+    def test_a_repeated_set_logs_no_second_launch_and_keeps_started(self):
+        first=self.launch((self.r1,['eth2']),(self.host,['ens18']))
+        self.assertEqual(first.status_code,200,first.text)
+        ids=[s['id'] for s in first.json()['sessions']]
+        started={i:self.captures.known[i]['started'] for i in ids}
+        self.assertEqual(len(self.events('capture.launch')),2)
+        again=self.launch((self.r1,['eth2']),(self.host,['ens18']))
+        self.assertEqual(again.status_code,200,again.text)
+        self.assertEqual([s['id'] for s in again.json()['sessions']],ids)
+        self.assertEqual(len(self.events('capture.launch')),2)
+        self.assertEqual({i:self.captures.known[i]['started'] for i in ids},started)
+        # The single form repeated with its request id behaves the same.
+        data=CaptureAPITests.selection(self);single={**data,'request_id':'2'*64}
+        a=self.client.post('/api/capture/launch',json=single);sid=a.json()['id'];t=self.captures.known[sid]['started']
+        n=len(self.events('capture.launch'))
+        b=self.client.post('/api/capture/launch',json=single)
+        self.assertEqual((b.status_code,b.json()['id']),(200,sid))
+        self.assertEqual(len(self.events('capture.launch')),n);self.assertEqual(self.captures.known[sid]['started'],t)
 
     def test_a_502_without_a_listed_row_may_have_started_and_the_narrowed_retry_meets_it(self):
         self.service.fail={2:HTTPException(502,LOST)}
