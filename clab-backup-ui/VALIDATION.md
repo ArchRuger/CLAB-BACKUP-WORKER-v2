@@ -1,7 +1,8 @@
 # Agent routing embedded in the repository — 1.31.1
 
-No application code changed in this release; the helpers' `VERSION` moved by the lockstep rule alone. Evidence, by
-kind (this checkout, development VM, Claude Code 2.1.309):
+One application change in this release (the `make_default` form field of the profile route, for FastAPI 0.147 and
+later); the helpers' `VERSION` moved by the lockstep rule alone. Evidence, by kind (this checkout, development VM,
+Claude Code 2.1.309):
 
 **Static and unit**
 
@@ -9,6 +10,11 @@ kind (this checkout, development VM, Claude Code 2.1.309):
   opt-in SSH fixtures), run before the last three guard cases were added; `test_claude_config.py` alone afterwards
   with the system `python3`: 32 tests, OK.
 - `node --test tests/*.js`: 768 tests pass (749 before, 19 new in `test_claude_workflows.js`).
+- The FastAPI change: CI on the first push failed `test_junos_kinds.py` (the runner installs the newest allowed
+  dependencies: FastAPI 0.161.1, Starlette 1.9.0, Python 3.14). Reproduced in a scratch virtual environment built
+  from `requirements.txt` with those versions, fixed in `main.py`, then `test_junos_kinds.py` passed there and
+  `test_junos_kinds.py`, `test_app.py`, `test_nodes.py`, `test_logging.py` passed in the local environment
+  (FastAPI 0.142.2); the full suite was run again with the newest versions (see the CI run of the pull request).
 - `claude plugin validate .claude/agents --strict` and `.claude/skills --strict`: passed (a parse check only, as the
   review showed; the field checks are the test's).
 - `python3 deploy/verify-release.py`, `python3 docs/maintenance-audit/tools/check_links.py` (vendored skills skipped),

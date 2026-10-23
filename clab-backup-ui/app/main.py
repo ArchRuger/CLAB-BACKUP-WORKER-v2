@@ -361,8 +361,12 @@ def create_app(data_dir=None):
     @app.post('/api/labs/{lab_id}/profiles')
     async def profile(lab_id: str, label: str=Form(...), platform: str=Form(...),
                       username: str=Form(...), auth: str=Form('password'), password: str=Form(''),
-                      passphrase: str=Form(''), enable_password: str=Form(''), make_default: bool=Form(True),
+                      passphrase: str=Form(''), enable_password: str=Form(''), make_default: str|None=Form(None),
                       private_key: UploadFile|None=File(None)):
+        # An omitted make_default means "make it the default" (the documented API contract); the page always sends
+        # the checkbox state. Read as text because FastAPI 0.147 and later turn an omitted boolean form field into
+        # False, which would silently change the contract for API callers that leave the field out.
+        make_default=True if make_default is None else make_default.strip().lower() in ('1','true','on','yes')
         if platform not in (*PLATFORMS,'ssh') or auth not in ('password','key'):
             raise HTTPException(400,'Choose a supported NOS and authentication method')
         try:
