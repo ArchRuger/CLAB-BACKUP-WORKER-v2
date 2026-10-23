@@ -440,8 +440,8 @@ class LabOperations:
             self.cap_cache = (key, time.monotonic() + 60, result)
             return result
 
-        @app.post('/api/operations/browse')
-        def browse(data: Request): return self.invoke({'mode': 'browse', 'path': data.path})
+        # /api/operations/browse and /api/operations/images are owned by device_diagnostics.py (installed first):
+        # browse gained a files mode and images its details there; the helper modes behind them are unchanged.
 
         @app.post('/api/operations/read')
         def read(data: Request): return self.invoke({'mode': 'read', 'path': data.path})
@@ -459,18 +459,6 @@ class LabOperations:
                 for entry in topology_images(text):
                     counts = found.setdefault(entry['kind'], {}); counts[entry['reference']] = counts.get(entry['reference'], 0) + len(entry['nodes'])
             return {'images': {kind: sorted(counts, key=lambda i: (-counts[i], i))[:12] for kind, counts in sorted(found.items())}}
-
-        @app.get('/api/operations/images')
-        def vm_images():
-            """The images the VM already has (the helper's read-only `images` mode), kept for a minute."""
-            host = self.host(); key = host.get('revision')
-            with self.image_flight:
-                with self.image_lock:
-                    if self.images_cache and self.images_cache[0] == key and self.images_cache[1] > time.monotonic(): return self.images_cache[2]
-                result = self.invoke({'mode': 'images'})
-                value = {'available': bool(result.get('available')), 'images': [i for i in result.get('images', []) if isinstance(i, str)][:1000]}
-                with self.image_lock: self.images_cache = (key, time.monotonic() + 60, value)
-            return value
 
         class ImageCheck(BaseModel):
             model_config = ConfigDict(extra='forbid')

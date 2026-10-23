@@ -24,6 +24,7 @@ from . import topology
 from .discovery import Discovery, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path, stored_file, topology_names
 from .lab_operations import LabOperations, design_rechecking, last_deployed, operation_busy, restarting_nodes
+from .device_diagnostics import DeviceDiagnostics
 from .git_progress import GitProgress
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
@@ -48,6 +49,7 @@ def create_app(data_dir=None):
     # embeds beside its configurations (runner.topology_capture; the manager's own copy when the VM's is not known).
     runner.topology_source=lambda lab: discovery.sources.get(lab.get('deployment_name') or '')
     operations=LabOperations(store,discovery,readiness_monitor)
+    device_diagnostics=DeviceDiagnostics(store,operations,discovery)
     git_progress=GitProgress(store,runner)
     restore=RestoreService(store,runner,git_progress)
     telemetry_retirement=TelemetryRetirement(store,services)
@@ -80,6 +82,8 @@ def create_app(data_dir=None):
     app.state.store=store; app.state.runner=runner
     app.state.discovery=discovery
     app.state.operations=operations
+    app.state.device_diagnostics=device_diagnostics
+    device_diagnostics.install(app)   # before operations.install: its GET /api/operations/{job_id} would take /logs, and these routes supersede its images and browse
     operations.install(app)
     app.state.git_progress=git_progress
     git_progress.install(app)

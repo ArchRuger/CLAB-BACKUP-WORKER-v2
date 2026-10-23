@@ -306,10 +306,106 @@ def build(data_dir, port, classic=False):
         return {'path': path, 'parent': path.rsplit('/', 1)[0], 'entries': entries}
 
     def ops_read(path):
-        if path not in vm_files:
+        if path not in vm_files and path not in vm_extra:
             raise ValueError('The requested project directory no longer exists.')
-        text = vm_files[path]
+        text = vm_files[path] if path in vm_files else vm_extra[path]
         return {'path': path, 'text': text, 'sha256': hashlib.sha256(text.encode()).hexdigest()}
+
+    # C03 diagnostics (read-only helper modes `logs`, `interfaces`, `netem-show`, files-mode `browse`, `images` details),
+    # scripted after app/host_operations.py. vm_extra holds the node folders a deployed lab writes beside its topology
+    # (shown only by `browse` with the `files` option); a device exists while its lab runs.
+    vm_extra = {}
+    for _path, _text in list(vm_files.items()):
+        if _path.endswith(('.clab.yaml', '.clab.yml')) and _path.startswith('/etc/containerlab/'):
+            _lab = _path.split('/')[3]
+            vm_extra[f'/etc/containerlab/{_lab}/{_lab}.clab.yaml.annotations.json'] = '{"nodeAnnotations": []}\n'
+            with store.lock:
+                _row = next((l for l in store.state['labs'] if l['name'] == _lab), None)
+                _nodes = [n.get('short_name') or n.get('definition_node') or n['name'] for n in (_row or {}).get('nodes', [])]
+            for _node in _nodes:
+                vm_extra[f'/etc/containerlab/{_lab}/clab-{_lab}/{_node}/startup-config'] = (
+                    f'hostname {_node}\nusername admin secret 0 not-a-real-secret\nsnmp-server community public ro\n!\ninterface Ethernet1\n   no shutdown\n')
+    FIXTURE_DETAILS = [dict(reference=r, id='sha256:' + hashlib.sha256(r.encode()).hexdigest()[:12], size=sz, created=c) for r, sz, c in (
+        ('ceos:4.35.0F', '2.4GB', '2026-08-14 10:21:07 +0000 UTC'), ('ghcr.io/srl-labs/network-multitool:latest', '189MB', '2026-09-02 08:00:00 +0000 UTC'),
+        ('n24l/cisco_xrv9k:24.3.1', '5.9GB', '2026-05-20 16:40:12 +0000 UTC'), ('ghcr.io/nokia/srlinux:24.10.1', '2.2GB', '2026-07-01 12:05:44 +0000 UTC'))]
+    boot = time.time() - 300
+
+    def ops_files_browse(path):
+        try:
+            listing = ops_browse(path)
+        except ValueError:
+            if not any(f.startswith(path.rstrip('/') + '/') for f in vm_extra):
+                raise
+            listing = {'path': path.rstrip('/'), 'parent': path.rstrip('/').rsplit('/', 1)[0], 'entries': []}
+        entries = []
+        for e in listing['entries']:
+            kind = 'directory' if e['directory'] else 'topology'
+            entry = dict(e, kind=kind)
+            if not e['directory']:
+                entry['size'] = len(vm_files.get(e['path'], ''))
+            entries.append(entry)
+        folder = path.rstrip('/')
+        children = {}
+        for f in vm_extra:
+            if f.startswith(folder + '/'):
+                head = f[len(folder) + 1:].split('/')
+                children.setdefault(head[0], len(head) == 1)
+        for name, is_file in sorted(children.items(), key=lambda kv: (kv[1], kv[0])):
+            full = f'{folder}/{name}'
+            if any(e['name'] == name for e in entries):
+                continue
+            entries.append(dict(name=name, path=full, directory=not is_file, kind='file' if is_file else 'directory',
+                                **({'size': len(vm_extra[full])} if is_file else {})))
+        return dict(listing, entries=entries)
+
+    def ops_device(request):
+        """(facts, node row) for the requested container, or ({'present': False}, None) when the lab is not running."""
+        options = request.get('options') or {}
+        name = str(request.get('name', ''))
+        with store.lock:
+            lab = next((l for l in store.state['labs'] if l.get('deployment_name') == name), None)
+            nodes = [dict(n) for n in (lab or {}).get('nodes', [])]
+        node = next((n for n in nodes if n.get('definition_node') == options.get('node')), None)
+        if not lab or not node or options.get('container') != f"{lab.get('container_prefix', 'clab')}-{name}-{node['definition_node']}":
+            raise ValueError('This container does not belong to lab ' + name + '.')
+        if not ops_lab_rows(name):
+            return {'present': False}, node
+        digest = hashlib.sha256(options['container'].encode()).hexdigest()
+        return {'present': True, 'id': digest, 'pid': 4000 + len(options['container']), 'status': 'running', 'health': 'healthy',
+                'started': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(boot)), 'kind': node.get('platform') or 'linux',
+                'ports': [{'container': '22/tcp', 'host': '2201'}]}, node
+
+    def ops_logs(request):
+        facts, node = ops_device(request)
+        if not facts['present']:
+            return {'facts': facts, 'text': '', 'truncated': False}
+        options = request['options']
+        stamp = lambda i: time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime(boot + i)) + '.%09dZ' % (i * 1000003 % 10 ** 9)
+        body = ['Starting containerlab node ' + options['node'], '\x1b[32mINFO\x1b[0m  management interface eth0 is up',
+                'PASSWORD=fixture-not-a-secret', '\x1b[1;31mWARN\x1b[0m  slow disk\r', 'login: admin', 'System ready']
+        lines = [stamp(i) + ' ' + text for i, text in enumerate(body)]
+        # A follow keeps appending one line per second so a second poll has something new after its `since`.
+        lines += [stamp(len(body) + i) + ' heartbeat %d' % i for i in range(int(time.time() - boot) % 600 + 1)]
+        since = options.get('since')
+        if since:
+            lines = [l for l in lines if l.split(' ', 1)[0] > since]
+        lines = lines[-int(options.get('tail', 200)):]
+        return {'facts': facts, 'text': '\n'.join(lines) + ('\n' if lines else ''), 'truncated': False}
+
+    def ops_interfaces(request):
+        facts, node = ops_device(request)
+        if not facts['present']:
+            return {'facts': facts, 'interfaces': []}
+        rows = [dict(name=n, alias='', state='up', mac='aa:c1:ab:00:%02x:%02x' % (len(request['options']['container']) % 256, i), type='veth',
+                     mtu=1500, ifindex=20 + i) for i, n in enumerate(('eth0', 'eth1'))]
+        ticks = int(time.time() - boot)
+        counters = {r['name']: dict(rx_bytes=1000 * ticks + 7 * i, rx_packets=10 * ticks, rx_errors=0, rx_dropped=0,
+                                    tx_bytes=1200 * ticks + 5 * i, tx_packets=11 * ticks, tx_errors=0, tx_dropped=0) for i, r in enumerate(rows)}
+        return {'facts': facts, 'interfaces': rows, 'counters': counters, 'sampled_at': time.time()}
+
+    def ops_netem(request):
+        facts, node = ops_device(request)
+        return {'facts': facts, 'impairments': [dict(interface='eth1', delay='15ms', jitter='2ms', loss=5.0)] if facts['present'] else []}
 
     def ops_preview(req):
         action, options, name, path = req['action'], req.get('options') or {}, req.get('name', 'manager'), req.get('path', '')
@@ -416,9 +512,18 @@ def build(data_dir, port, classic=False):
             actions = {a: {'available': True, 'cleanup': a in ('deploy', 'redeploy', 'destroy')} for a in
                        ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect', 'inspect-all', 'create', 'delete', 'publish', 'revise')}
             actions['clone'] = {'available': False}
-            return {'protocol': 'clab-manager-operations-v1', 'version': __version__, 'actions': actions, 'roots': roots, 'network': False}
+            return {'protocol': 'clab-manager-operations-v1', 'version': __version__, 'actions': actions, 'roots': roots, 'network': False,
+                    'diagnostics': True, 'containerlab': '0.79.0'}
         if mode == 'browse':
+            if (request.get('options') or {}).get('files'):
+                return ops_files_browse(str(request.get('path', '')))
             return ops_browse(str(request.get('path', '')))
+        if mode == 'logs':
+            return ops_logs(request)
+        if mode == 'interfaces':
+            return ops_interfaces(request)
+        if mode == 'netem-show':
+            return ops_netem(request)
         if mode == 'read':
             return ops_read(str(request.get('path', '')))
         if mode == 'popular':
@@ -427,7 +532,7 @@ def build(data_dir, port, classic=False):
         # registry", anything else unknown to the list is "not found"), like the helper's two image modes.
         FIXTURE_IMAGES = ['ceos:4.35.0F', 'ghcr.io/srl-labs/network-multitool:latest', 'n24l/cisco_xrv9k:24.3.1', 'ghcr.io/nokia/srlinux:24.10.1']
         if mode == 'images':
-            return {'available': True, 'images': list(FIXTURE_IMAGES)}
+            return {'available': True, 'images': list(FIXTURE_IMAGES), 'details': [dict(d) for d in FIXTURE_DETAILS]}
         if mode == 'image-check':
             refs = (request.get('options') or {}).get('references') or []
             return {'available': True, 'images': [

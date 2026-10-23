@@ -67,3 +67,8 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   `408a2fd`), and a `clab-devops-engineer` live stop pass on a disposable two-cEOS lab `stoptest` (evidence to
   `evidence/c02-live-stop.md`). The C03 helper slice (`host_operations.py`, new `test_host_diagnostics.py`) is
   uncommitted in the tree and breaks one images test until its contract is settled.
+- 2026-10-23 03:25 UTC: C03 helper (`3c982c1`) and manager side (`device_diagnostics.py`, routes GET logs/interfaces/netem,
+  GET images with details/used_by/missing, POST browse with files mode, POST view; installed before `LabOperations` so it
+  owns `browse` and `images`, whose old handlers were removed) committed as checkpoints; `fixture_manager.py` answers the
+  new modes. The C03 UI slice (`device-diagnostics.js` and hooks) starts when the C02 verification finishes, because the
+  fixture serves the tree. C02 live stop pass done (`evidence/c02-live-stop.md`).

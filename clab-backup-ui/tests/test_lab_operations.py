@@ -894,7 +894,10 @@ class OperationAPITests(unittest.TestCase):
         self.host(); self.store.state['host']['fingerprint'] = 'SHA256:fixture'
         with patch('app.lab_operations.remote', side_effect=remote):
             images = self.client.get('/api/operations/images', headers=self.auth)
-            self.assertEqual(images.status_code, 200, images.text); self.assertEqual(images.json(), {'available': True, 'images': ['ceos:4.35.0F', 'n24l/cisco_xrv9k:24.3.1']})
+            self.assertEqual(images.status_code, 200, images.text)
+            answer = images.json()
+            self.assertEqual((answer['available'], answer['images']), (True, ['ceos:4.35.0F', 'n24l/cisco_xrv9k:24.3.1']), 'the reference list the lab builder reads: strings only, in order')
+            self.assertEqual(set(answer), {'available', 'images', 'details', 'used_by', 'missing'}, 'the images page fields ride along (device_diagnostics owns the route)')
             self.client.get('/api/operations/images', headers=self.auth)
             self.assertEqual(asked.count('images'), 1, 'the VM image list is cached')
             check = lambda refs: self.client.post('/api/operations/image-check', headers=self.auth, json={'references': refs})
