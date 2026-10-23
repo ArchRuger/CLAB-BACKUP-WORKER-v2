@@ -38,7 +38,7 @@ MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_WIRE = 24 * 1024 * 1024
 FORMATS = {'juniper_cjunosevolved': 'junos-display-set', 'juniper_vqfx': 'junos-display-set',
-           'juniper_vjunosswitch': 'junos-display-set', 'cisco_xrv9k': 'iosxr-running-config',
+           'juniper_vjunosswitch': 'junos-display-set', 'juniper_vjunosrouter': 'junos-display-set', 'cisco_xrv9k': 'iosxr-running-config',
            'arista_ceos': 'eos-running-config'}
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'created', 'finished', 'status', 'message', 'backup_job_id',
               'commit', 'pushed', 'target', 'checkpoint', 'changed_files', 'snapshot_path', 'note', 'review_before_push',

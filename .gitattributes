@@ -6,3 +6,16 @@ deploy/*.sh text eol=lf
 deploy/clab-manager-gateway text eol=lf
 deploy/*.conf text eol=lf
 clab-backup-ui/VERSION text eol=lf
+
+# Vendored third-party skills (see .claude/THIRD-PARTY-SKILLS.md): kept byte-for-byte as upstream ships them, so
+# their trailing whitespace is not ours to fix; `git diff --check` skips it here and nowhere else.
+/.claude/skills/webapp-testing/** whitespace=-trailing-space,-space-before-tab
+/.claude/skills/systematic-debugging/** whitespace=-trailing-space,-space-before-tab
+/.claude/skills/verification-before-completion/** whitespace=-trailing-space,-space-before-tab
+/.claude/skills/test-driven-development/** whitespace=-trailing-space,-space-before-tab
+/.claude/skills/writing-plans/** whitespace=-trailing-space,-space-before-tab
+/.claude/skills/requesting-code-review/** whitespace=-trailing-space,-space-before-tab
+/.claude/skills/receiving-code-review/** whitespace=-trailing-space,-space-before-tab
+/.claude/skills/frontend-design/** whitespace=-trailing-space,-space-before-tab
+/.claude/skills/web-design-guidelines/** whitespace=-trailing-space,-space-before-tab
+/.claude/skills/vercel-react-best-practices/** whitespace=-trailing-space,-space-before-tab

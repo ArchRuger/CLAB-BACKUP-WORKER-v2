@@ -22,3 +22,9 @@ state.enc
 
 # Build-time dependencies of clab-backup-ui/lab-builder (its output is committed under app/static/lab-builder)
 node_modules/
+
+# Claude Code: personal and machine-local configuration next to the shared .claude/ tree
+.claude/settings.local.json
+.claude/worker.local.json
+.claude/worktrees/
+.claude/agent-memory-local/

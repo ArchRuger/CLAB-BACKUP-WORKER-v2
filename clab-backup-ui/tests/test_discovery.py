@@ -76,6 +76,32 @@ class DiscoveryTests(unittest.TestCase):
         self.assertTrue(node_available(self.store.state,saved,saved['nodes'][0]))
         self.assertEqual(len(saved['drawing']['links']),1)
 
+    def test_public_row_adds_container_console_and_the_four_discovered_fields(self):
+        self.host();lab=self.register()
+        data=json.loads(response());data['training'][0].update(container_id='a1b2c3d4e5f6',ipv6_address='N/A',image='img:1',status='Up 20 minutes (healthy)')
+        data['training'][1]['status']='Up 20 minutes (healthy)'
+        self.poll(json.dumps(data).encode())
+        raw=self.client.get('/api/state').text
+        for secret in ('container_name','host-secret'):self.assertNotIn(secret,raw)
+        rows={n['short_name']:n for n in self.client.get('/api/state').json()['labs'][0]['nodes']}
+        r1,r2=rows['r1'],rows['r2']
+        for row in rows.values():
+            for secret in ('username','password','enable_password','container_name'):self.assertNotIn(secret,row)
+        self.assertEqual(r1['container'],'clab-training-r1');self.assertEqual(r2['container'],'clab-training-r2')
+        self.assertEqual((r1['discovered_id'],r1['discovered_ipv4'],r1['discovered_ipv6'],r1['discovered_image']),('a1b2c3d4e5f6','172.20.20.2','','img:1'))
+        self.assertEqual((r2['discovered_id'],r2['discovered_ipv4'],r2['discovered_image']),('','172.20.20.3',''))
+        self.assertIs(r1['console'],True);self.assertEqual(r1['console_hold'],'','a healthy linked node has no hold')
+        self.assertIs(r2['console'],False,'a kind without a console');self.assertEqual(r2['console_hold']['key'],'none')
+        self.assertEqual(set(r2['console_hold']),{'key','text'});self.assertTrue(r2['console_hold']['text'])
+        # a young or still-starting container is held with the gate's own key and sentence
+        data['training'][0]['status']='Up 20 minutes (health: starting)';self.poll(json.dumps(data).encode())
+        r1=self.client.get('/api/state').json()['labs'][0]['nodes'][0]
+        self.assertIs(r1['console'],True);self.assertEqual(r1['console_hold']['key'],'starting')
+        # an unlinked lab has no container and no console
+        self.store.state['labs'][0]['deployment_name']='';self.store.save()
+        for row in self.client.get('/api/state').json()['labs'][0]['nodes']:
+            self.assertEqual(row['container'],'');self.assertIs(row['console'],False)
+
     def test_offline_error_and_missing_lab_do_not_erase_workspace(self):
         lab=self.register();self.host();self.poll()
         saved=self.store.lab(lab['id']);saved['profiles']=[{'id':'p','label':'router','platform':'cisco_xrv9k','username':'clab','auth':'password','password':'device-secret'}]
@@ -343,6 +369,34 @@ class DiscoveryParserTests(unittest.TestCase):
         state={'labs':[dict(id='l',deployment_name='training',container_prefix='clab',nodes=nodes)],'discovery':{'labs':parse_inspect(json.dumps(data).encode())}}
         reconcile(state);self.assertEqual(nodes[0]['runtime_status'],'Up 12 minutes (healthy)');self.assertEqual(nodes[1]['runtime_status'],'');self.assertEqual(nodes[0]['runtime_state'],'running')
         state['discovery']['labs']={};reconcile(state);self.assertEqual((nodes[0]['runtime_status'],nodes[0]['runtime_state']),('','absent'))
+
+    def test_inspect_container_facts_are_optional_validated_and_reconciled(self):
+        from app.discovery import reconcile
+        data=json.loads(response());row=data['training'][0]
+        row.update(container_id='a1b2c3d4e5f6',ipv4_address='172.20.20.112/24',ipv6_address='N/A',image='vrnetlab/juniper_vjunos-switch:25.2R1.9')
+        parsed=parse_inspect(json.dumps(data).encode())['training']
+        self.assertEqual((parsed[0]['id'],parsed[0]['ipv4'],parsed[0]['ipv6'],parsed[0]['image']),('a1b2c3d4e5f6','172.20.20.112','','vrnetlab/juniper_vjunos-switch:25.2R1.9'))
+        self.assertEqual(parsed[0]['address'],'172.20.20.112','address keeps its first-usable meaning')
+        self.assertEqual((parsed[1].get('id'),parsed[1]['ipv4'],parsed[1]['ipv6'],parsed[1].get('image')),(None,'172.20.20.3',''  ,None),'a row without the fields still parses')
+        row.update(ipv6_address='fd00::5/64');self.assertEqual(parse_inspect(json.dumps(data).encode())['training'][0]['ipv6'],'fd00::5')
+        for bad in ('xyz','A1B2C3D4E5F6','a1b2c3',7,None):
+            row.pop('container_id',None)
+            for field in ('container_id','id'):
+                row.pop('id',None);row.pop('container_id',None);row[field]=bad;self.assertNotIn('id',parse_inspect(json.dumps(data).encode())['training'][0],(field,repr(bad)))
+        row.update(container_id='a1b2c3d4e5f6',image='x'*400,ipv4_address='172.20.20.9/24',ipv6_address='not-an-ip')
+        odd=parse_inspect(json.dumps(data).encode())['training'][0]
+        self.assertNotIn('image',odd);self.assertEqual((odd['ipv4'],odd['ipv6'],odd['id']),('172.20.20.9','','a1b2c3d4e5f6'),'odd values are dropped, never fatal')
+        row.pop('container_id');row['id']='a1b2c3d4e5f6'
+        self.assertEqual(parse_inspect(json.dumps(data).encode())['training'][0]['id'],'a1b2c3d4e5f6','a row with only id still binds (compatibility)')
+        row.pop('id');row['container_id']='a1b2c3d4e5f6'
+        row.update(ipv4_address='172.20.20.112/24',image='img:1')
+        nodes=[dict(name='clab-training-r1',definition_node='r1',endpoint_mode='auto'),dict(name='clab-training-r2',definition_node='r2',endpoint_mode='auto')]
+        state={'labs':[dict(id='l',deployment_name='training',container_prefix='clab',nodes=nodes)],'discovery':{'labs':parse_inspect(json.dumps(data).encode())}}
+        reconcile(state)
+        self.assertEqual([nodes[0][k] for k in ('discovered_id','discovered_ipv4','discovered_ipv6','discovered_image')],['a1b2c3d4e5f6','172.20.20.112','','img:1'])
+        self.assertEqual([nodes[1][k] for k in ('discovered_id','discovered_ipv4','discovered_ipv6','discovered_image')],['','172.20.20.3','',''])
+        state['discovery']['labs']={};reconcile(state)
+        self.assertEqual([nodes[0][k] for k in ('discovered_id','discovered_ipv4','discovered_ipv6','discovered_image')],['']*4)
 
     def test_bad_identity_and_duplicate_entries_fail_closed(self):
         data=json.loads(response());data['training'].append(data['training'][0])

@@ -33,7 +33,7 @@ const restoreAttentionTarget = new Set(['applied_unverified', 'verify_mismatch',
 const restoreUnchangedTarget = new Set(['failed', 'ineligible', 'rolled_back']);
 // A containerlab kind shown as a short device-type label next to the node name; unknown kinds show nothing.
 const restorePlatformLabels = {
- juniper_cjunosevolved: 'Junos Evolved', juniper_vjunosswitch: 'Junos', juniper_vqfx: 'Junos',
+ juniper_cjunosevolved: 'Junos Evolved', juniper_vjunosswitch: 'Junos', juniper_vjunosrouter: 'Junos', juniper_vqfx: 'Junos',
  arista_ceos: 'EOS', cisco_xrv9k: 'IOS XR'};
 function restorePlatformLabel(kind) { return restorePlatformLabels[kind] || ''; }
 // Preflight reasons, matched by prefix; anything unknown is shown verbatim. [prefix, sentence (the job window), sentence without a menu path,

@@ -1840,6 +1840,9 @@ dialog.drawer, dialog.node-details {
 path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke; }
 .topology-wire[role="button"] { cursor: pointer; }
 .topology-wire[role="button"]:hover path:not(.capture-hit), .topology-wire[role="button"]:focus-visible path:not(.capture-hit) { stroke: var(--accent); stroke-width: 4; }
+/* an impaired link (C05 4.3): dashed in the warning colour; the capture hit area keeps its 16 px transparent stroke, so right-click and click still open Capture */
+.topology-wire.impaired path:not(.capture-hit) { stroke: var(--warn); stroke-dasharray: 7 4; }
+.map-tools .map-impaired { color: var(--warn-strong); font-weight: 600; }
 
 /* expanded map (class toggled on #topology-view) */
 .map-expanded {
@@ -1996,6 +1999,15 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 .op-banner.good { background: var(--ok-soft); border-color: var(--ok); color: var(--ok-strong); }
 .op-banner.bad { background: var(--danger-soft); border-color: var(--danger); color: var(--danger-strong); }
 .op-banner.running { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-strong); }
+.op-banner.warn { background: var(--warn-soft); border-color: var(--warn); color: var(--warn-strong); }
+.op-banner:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.op-stop { margin: 0 0 14px; }
+.op-stop p { margin: 0 0 8px; overflow-wrap: anywhere; }
+.op-stop .actions { margin: 0; }
+.op-output-tools { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+.copy-button { margin-left: 8px; min-height: 26px; padding: 2px 8px; font-size: 12px; }
+.copy-status { margin-left: 6px; font-size: 12px; color: var(--muted); }
+.copy-sink { position: fixed; left: -9999px; top: 0; opacity: 0; }
 
 /* --------------------------------------------------------------------------
    21. Diagram editor (#op-layout-editor)
@@ -2589,3 +2601,78 @@ tr.diff-ctx .diff-marker { color: var(--muted); }
   .save-item > span:first-child { overflow-wrap: break-word; flex: 1 1 auto; }
   .save-item > .save-when { flex: none; }
 }
+
+/* --------------------------------------------------------------------------
+   C03 diagnostics: the device drawer's Interfaces and Logs, the inspect table's tools, Images on this VM
+   -------------------------------------------------------------------------- */
+#details-diagnostics { border-bottom: 1px solid var(--line); }
+.diag-section { padding: 12px 0; border-bottom: 0; }
+.diag-section + .diag-section { border-top: 1px solid var(--line); }
+.diag-section > summary { cursor: pointer; padding: 4px 0; }
+.diag-section > :not(summary) { margin-top: 8px; }
+.diag-status { min-height: 1.2em; margin: 8px 0 0; }
+.diag-empty { margin: 0; font-size: 13px; color: var(--muted); }
+.diag-wrap { max-width: 100%; }
+.table-wrap.diag-wrap table, .diag-table { min-width: 0; table-layout: auto; }
+.diag-table th, .diag-table td { padding: 8px 10px; vertical-align: top; }
+.diag-table th { white-space: normal; }
+.diag-table td { overflow-wrap: anywhere; }
+.diag-table td:nth-child(n+2) { white-space: nowrap; overflow-wrap: normal; }
+.diag-table td:first-child { min-width: 150px; }
+.table-wrap.diag-wrap thead th { position: static; }
+.diag-table td small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.diag-table td .button { margin-top: 6px; }
+.diag-table .diag-impair { color: var(--warn-strong); }
+.diag-state { font-weight: 600; }
+.diag-state-up { color: var(--ok-strong); }
+.diag-state-down { color: var(--danger-strong); }
+.diag-other > summary { cursor: pointer; }
+.diag-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.diag-toolbar label { display: inline; margin: 0; font-size: 13px; color: var(--muted); }
+.diag-find { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 180px; min-width: 0; }
+.diag-toolbar select, .diag-toolbar input[type=search] { min-height: 30px; font-size: 13px; width: auto; margin: 0; }
+.diag-toolbar input[type=search] { flex: 1 1 120px; min-width: 100px; width: auto; }
+.op-code.diag-log { min-height: 0; height: 260px; max-height: 50vh; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; resize: vertical; margin: 0; }
+.diag-line { display: inline; }
+.op-inspection-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; font-size: 13px; }
+.op-inspection-tools input[type=search] { min-height: 32px; flex: 1 1 200px; width: auto; }
+.op-sort { background: transparent; border: 0; padding: 0; font: inherit; font-weight: 600; color: inherit; cursor: pointer; text-align: left; }
+th[aria-sort=ascending] > .op-sort::after { content: " ▲"; font-size: 10px; }
+th[aria-sort=descending] > .op-sort::after { content: " ▼"; font-size: 10px; }
+.op-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.op-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.op-chip[aria-pressed=true] { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent); }
+#op-images .op-inspection td.mono { font-size: 12px; }
+.op-inspection td.mono { white-space: nowrap; overflow-wrap: normal; }
+.op-inspection td.op-inspection-empty { color: var(--muted); text-align: center; }
+@media (max-width: 480px) {
+  .diag-table th, .diag-table td { padding: 6px; }
+  .diag-table td:first-child { min-width: 0; }
+}
+@media (max-width: 760px) {
+  .diag-toolbar { gap: 6px; }
+  .op-code.diag-log { height: 220px; }
+}
+
+/* Run with options, the apply plan and the review's device lines (C05 4.4, 4.5) */
+.op-options { margin: 12px 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; background: var(--surface-2); }
+.op-options summary { cursor: pointer; font-weight: 600; }
+.op-options-set { border: 0; margin: 8px 0 0; padding: 0; min-width: 0; }
+.op-options-set:disabled { opacity: .6; }
+.op-options-set legend { font-weight: 600; font-size: 13px; padding: 0; }
+.op-opt-row { margin: 10px 0 0; }
+.op-opt-row input[type=number] { max-width: 8rem; }
+.op-plan h4 { margin: 12px 0 4px; }
+.op-plan ul { margin: 0; padding-left: 20px; }
+.op-plan-reason { color: var(--muted); }
+.op-plan-empty { padding: 8px 12px; border-left: 3px solid var(--ok); background: var(--ok-soft); }
+.op-kept { font-size: 13px; color: var(--muted); }
+
+/* The drawer's Impairments table (device-impairments.js): inputs wide enough for "20ms", the actions wrapping under the row in a narrow drawer */
+.impairments-table input { width: 6ch; min-width: 0; }
+.impairments-table td { vertical-align: top; }
+.impairments-table td:first-child { min-width: 7ch; }
+.impairments-table td .actions, .impairments-table td > div { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 520px) { .impairments-table table { min-width: 0; } .impairments-table th, .impairments-table td { padding-inline: 4px; } }
+.imp-question { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-left: 3px solid var(--danger); border-radius: var(--radius); background: var(--surface-2); }
+.imp-question .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

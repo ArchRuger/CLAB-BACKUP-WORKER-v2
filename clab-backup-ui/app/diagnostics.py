@@ -71,6 +71,22 @@ class Diagnostics:
         self.lock = threading.Lock()
         self.probe_lock = threading.Lock()
 
+    @staticmethod
+    def clean_containerlab_version(answer):
+        value = answer.get('containerlab') if isinstance(answer, dict) else ''
+        if not isinstance(value, str): return ''
+        value = value.strip()
+        return value if re.fullmatch(r'[0-9A-Za-z][0-9A-Za-z.+_-]{0,39}', value) else ''
+
+    def containerlab_version(self, host, live=None):
+        # The probe's own live capabilities answer wins. Only when that call failed or lacked a usable key does the
+        # operations helper's cached answer (60 s, same VM settings revision) fill in. No extra helper call is made.
+        found = self.clean_containerlab_version(live)
+        if found: return found
+        cached = getattr(self.operations, 'cap_cache', None)
+        if not cached or cached[0] != host.get('revision') or cached[1] <= time.monotonic(): return ''
+        return self.clean_containerlab_version(cached[2])
+
     def snapshot(self):
         public = self.discovery.public()
         packages = {}
@@ -130,7 +146,7 @@ class Diagnostics:
                 # requests never read topology contents or run lifecycle commands.
                 for mode in ('browse', 'capabilities'):
                     started = time.monotonic()
-                    item = {'check': mode}
+                    item = {'check': mode}; result = None
                     try:
                         req = {'mode': mode}
                         if mode == 'browse': req['path'] = data.path
@@ -147,6 +163,9 @@ class Diagnostics:
                                         message='Helper matches the manager.' if helper_version == __version__ else 'Install helpers and manager from the same source release.')
                     except Exception as exc:
                         item.update(status='fail', **failure_hint(exc))
+                    if mode == 'capabilities':
+                        clab_version = self.containerlab_version(host, result)
+                        if clab_version: item['containerlab_version'] = clab_version
                     item['duration_ms'] = round((time.monotonic() - started) * 1000)
                     checks.append(item)
                 if host.get('revision') != self.operations.host().get('revision'):

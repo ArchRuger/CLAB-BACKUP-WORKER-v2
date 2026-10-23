@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "skills": [
+    {
+      "name": "webapp-testing",
+      "url": "https://github.com/anthropics/skills.git",
+      "path": "skills/webapp-testing",
+      "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "sha256": "9aadfff50920f8fdbc1274877061828ac51f22f16c9281a99462c6285faeca7f",
+      "pack": "daily"
+    },
+    {
+      "name": "systematic-debugging",
+      "url": "https://github.com/obra/superpowers.git",
+      "path": "skills/systematic-debugging",
+      "commit": "2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
+      "sha256": "4354790a16c8e14e9d79d967bebb5cbbd4557d3bcd567cc9b4a977e7eae60aac",
+      "pack": "daily"
+    },
+    {
+      "name": "verification-before-completion",
+      "url": "https://github.com/obra/superpowers.git",
+      "path": "skills/verification-before-completion",
+      "commit": "2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
+      "sha256": "12ef51904fc237194da53bfa80fc1a8bde1699f6796ce6a7289dcbfbceab8445",
+      "pack": "daily"
+    },
+    {
+      "name": "test-driven-development",
+      "url": "https://github.com/obra/superpowers.git",
+      "path": "skills/test-driven-development",
+      "commit": "2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
+      "sha256": "ae7cafeaa67143329282dd9493e7d3a692759abcfcdc8e08f081ddc413610675",
+      "pack": "daily"
+    },
+    {
+      "name": "writing-plans",
+      "url": "https://github.com/obra/superpowers.git",
+      "path": "skills/writing-plans",
+      "commit": "2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
+      "sha256": "c94596eb4c581a27ebc4b2920b0df25c751093771c99d3493419972f0b8d65e1",
+      "pack": "daily"
+    },
+    {
+      "name": "requesting-code-review",
+      "url": "https://github.com/obra/superpowers.git",
+      "path": "skills/requesting-code-review",
+      "commit": "2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
+      "sha256": "e132ab36c74281ba05a83e105dcbc7c9aacd2c5c4cd5db8a92951a6922cc44ec",
+      "pack": "daily"
+    },
+    {
+      "name": "receiving-code-review",
+      "url": "https://github.com/obra/superpowers.git",
+      "path": "skills/receiving-code-review",
+      "commit": "2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
+      "sha256": "244b5fde3771fb4a68f543f6fef218871a1ae63096cea03760f9bcf03d1d3d7d",
+      "pack": "daily"
+    },
+    {
+      "name": "frontend-design",
+      "url": "https://github.com/anthropics/skills.git",
+      "path": "skills/frontend-design",
+      "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "sha256": "323a3b9b17e063498d5ee2e1fc955111c3b04dcf8b14c25cc182a467b3fc615f",
+      "pack": "ui"
+    },
+    {
+      "name": "web-design-guidelines",
+      "url": "https://github.com/vercel-labs/agent-skills.git",
+      "path": "skills/web-design-guidelines",
+      "commit": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "sha256": "5f7009169d8a61f1f523696dec6d8600a23e7cb06c29edfca75b953cbe68d235",
+      "pack": "ui"
+    },
+    {
+      "name": "vercel-react-best-practices",
+      "url": "https://github.com/vercel-labs/agent-skills.git",
+      "path": "skills/react-best-practices",
+      "commit": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "sha256": "b06782e6c057ec05447845869d33d2d95d7bbeb8742cc056bdf72dbed3b99504",
+      "pack": "ui"
+    }
+  ]
+}

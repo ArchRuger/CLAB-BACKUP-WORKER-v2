@@ -699,3 +699,57 @@ test('a save written over a newer save the online copy held says so at the end o
  assert.equal(c.saveChangeSentence(one,also,{target:'latest',replaces_online:true}),c.saveChangeSentence(one,also,{target:'latest'})+end,'after everything else the upload sends');
  for(const job of [undefined,{target:'latest'},{target:'latest',replaces_online:false},{target:'latest',replaces_online:'yes'}])assert.doesNotMatch(c.saveChangeSentence(one,null,job),/online copy/);
 });
+
+test('C02: a stopped operation needs attention as a warning in the person\'s own words, and Dismiss clears it',()=>{
+ const c=makeContext(),lab={...running,deployment:{status:'Not deployed'}};
+ const stopped={id:'op-s',lab_id:'lab',action:'deploy',status:'cancelled',created:'2026-09-16T11:00:00Z',finished:'2026-09-16T11:01:00Z'};
+ const s=c.labState(lab,{operations:[stopped]});
+ assert.equal(s.key,'attention');assert.equal(s.label,'Needs attention');assert.equal(s.pill,'warn','a stop the person asked for is not a red failure');
+ assert.equal(s.detail,'Starting lab was stopped by you before it finished.');assert.equal(s.job.id,'op-s');
+ assert.equal(c.labState(lab,{operations:[stopped],dismissed:new Set(['op-s'])}).label,'Stopped','a dismissed stop leaves the attention state');
+ assert.equal(c.labState(lab,{operations:[{...stopped,status:'failed'}]}).pill,'danger','a real failure keeps its red pill');
+ const g=name=>vm.runInContext(name,c);assert.ok(g('STATUS_OPERATION_FAILED').includes('cancelled'));assert.equal(c.badgeLabel('cancelled'),'Stopped by you');
+ const redone={id:'op-2',lab_id:'lab',action:'deploy',status:'succeeded',created:'2026-09-16T11:05:00Z',finished:'2026-09-16T11:06:00Z'};
+ assert.equal(c.labState(running,{operations:[stopped,redone]}).label,'Running','a later successful operation clears the stop');
+});
+
+test('C02: STATUS_STOPPABLE names the actions that die with the helper channel, and the confirmation names what may be left half done and the way back',()=>{
+ const c=makeContext(),g=name=>vm.runInContext(name,c);
+ assert.deepEqual([...g('STATUS_STOPPABLE')],['deploy','redeploy','destroy','apply','start','stop','restart','restart-node','start-node','stop-node','save','clone','inspect-all']);
+ for(const refused of ['create','delete','publish','revise','inspect'])assert.ok(!g('STATUS_STOPPABLE').includes(refused),refused+' finishes on its own and has no Stop');
+ for(const action of g('STATUS_STOPPABLE'))assert.ok(g('STATUS_STOP_AFTERMATH')[action],action+' has aftermath words');
+ assert.equal(c.statusStopQuestion('deploy','Start lab','demo'),'End the running command (Start lab) on demo? The manager asks the lab VM to end it now. The lab may be only partly started; afterwards: Redeploy lab.');
+ assert.match(c.statusStopQuestion('destroy','Destroy lab','demo'),/only partly removed; afterwards: run Destroy lab again\.$/);
+ assert.match(c.statusStopQuestion('stop','Stop devices','demo'),/only partly stopped; afterwards: run Stop devices again\.$/);
+ assert.match(c.statusStopQuestion('restart-node','Restart device','demo'),/afterwards: Restart device again \(Redeploy lab also works but clears unsaved configuration on every device\)\.$/);
+ for(const [action,again] of [['save','run Save device configurations again'],['clone','run Download lab again'],['inspect-all','run it again']]){
+  const q=c.statusStopQuestion(action,'x','demo');assert.doesNotMatch(q,/only partly/);assert.ok(q.endsWith('Afterwards: '+again+'.'),q);
+ }
+ assert.doesNotMatch([...Object.values(g('STATUS_STOP_AFTERMATH'))].map(a=>a.repair).join(' '),/rolled back/i);
+});
+
+test('C04: consoleState reads the server decision: offered only with console, ok only without a hold sentence, the reason is the server text',()=>{
+ const c=makeContext();
+ assert.deepEqual({...c.consoleState({name:'ceos',console:false,console_hold:''})},{offered:false,ok:false,reason:'',key:''});
+ assert.equal(c.consoleState(undefined).offered,false);assert.equal(c.consoleState({}).offered,false);
+ assert.deepEqual({...c.consoleState({console:true,console_hold:''})},{offered:true,ok:true,reason:'',key:''});
+ assert.deepEqual({...c.consoleState({console:true,console_hold:{key:'young',text:'x started less than two minutes ago; its launcher takes the console first. Try again in a moment.'}})},{offered:true,ok:false,reason:'x started less than two minutes ago; its launcher takes the console first. Try again in a moment.',key:'young'});
+ assert.equal(c.consoleState({console:false,console_hold:{key:'none',text:'t'}}).offered,false,'a hold without a console is no offer');
+});
+
+test('C05: Start device and Stop device are stoppable with their aftermath words, name their device wherever a job is at hand, and have device states',()=>{
+ const c=makeContext(),g=name=>vm.runInContext(name,c);
+ for(const action of ['start-node','stop-node']){assert.ok(g('STATUS_STOPPABLE').includes(action));assert.ok(g('STATUS_STOP_AFTERMATH')[action]);}
+ assert.match(c.statusStopQuestion('stop-node','Stop ceos','demo'),/only partly stopped; afterwards: Stop device again \(or Start device if it should run\)\.$/);
+ assert.match(c.statusStopQuestion('start-node','Start ceos','demo'),/only partly started; afterwards: Start device again\.$/);
+ assert.equal(c.operationLabel('stop-node'),'Stopping device');assert.equal(c.operationLabel('start-node'),'Starting device');
+ assert.equal(c.operationLabel('stop-node',{node_label:'ceos'}),'Stopping ceos');assert.equal(c.operationLabel('start-node',{node_label:'ceos'}),'Starting ceos');
+ assert.equal(c.operationLabel('stop',{node_label:'ceos'}),'Stopping devices','the lab-wide Stop devices never takes a device name');
+ assert.equal(c.operationLabel('destroy',{nodes:['ceos']}),'Destroying ceos');assert.equal(c.operationLabel('save',{nodes:['ceos','vsw']}),'Saving ceos, vsw');
+ assert.equal(c.operationLabel('destroy',{nodes:[]}),'Destroying lab');assert.equal(c.operationLabel('destroy'),'Destroying lab');
+ assert.equal(c.operationLabel('destroy',{nodes:['a','b','c','d','e']}),'Destroying a, b, c and 2 more');
+ const starting=c.deviceState({name:'clab-x-r1',short_name:'R1',ssh_ready:false,nos_login:{status:'starting'}});
+ assert.deepEqual([starting.key,starting.label,starting.cli,starting.pill],['working','Starting',false,'busy']);assert.match(starting.detail,/R1 is being started/);
+ const stopping=c.deviceState({name:'clab-x-r1',short_name:'R1',ssh_ready:false,nos_login:{status:'stopping'}});
+ assert.deepEqual([stopping.key,stopping.label,stopping.cli,stopping.pill],['working','Stopping',false,'busy']);
+});

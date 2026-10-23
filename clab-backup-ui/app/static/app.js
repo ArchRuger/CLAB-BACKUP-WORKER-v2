@@ -21,7 +21,7 @@ function restoreRunning(j){return typeof statusRestoreActive==='function'?status
 function restoreRechecking(j){return !APP_RESTORE_BUSY.includes(j?.status)&&restoreRunning(j);}
 function designRechecking(j){return typeof statusDesignRechecking==='function'?statusDesignRechecking(j):j?.status==='interrupted'&&Array.isArray(j.rechecking)&&j.rechecking.length>0;}
 const RECHECK_BANNER='Checking the devices after a manager restart…';
-const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-dismiss'],'home-banner':['home-banner-output']};
+const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-review','banner-stop','banner-dismiss'],'home-banner':['home-banner-output']};
 const current=()=>state.labs.find(l=>l.id===activeId);
 // What holds the manager right now, as one sentence, or '' when nothing does. It mirrors the server's guard for a save
 // (GitProgress.idle: lab_operations.operation_busy for every lab, plus backup and login jobs, plus a design read-back of
@@ -101,6 +101,8 @@ function openSaveRoute(){
 function syncRoute(push=false){if(!routeApplied||typeof writeRoute!=='function'||typeof currentRoute!=='function')return;writeRoute(currentRoute(),{push});}
 function selectLab(id,view='topology'){if(typeof closeLabDialogs==='function')closeLabDialogs();else if($('details-dialog').open)$('details-dialog').close();activeId=id;setTab(view);try{sessionStorage.setItem('activeLab',id);}catch{/* blocked site data: the route and the page state still carry the open lab */}$('search').value='';$('log-job').value='';if(typeof rememberOpened==='function')rememberOpened(id);if(typeof closeMenus==='function')closeMenus();if(typeof writeRoute==='function')writeRoute({lab:id,view:tab},{push:true});render();}
 function platformLabel(kind){return state.platforms[kind]?.label||(kind==='ssh'?'Generic SSH / Linux':'Unmapped');}
+// Stop is offered only while the job is queued or running, is a stoppable action and no stop was asked for yet.
+function stoppableOp(j){return !!j&&['queued','running'].includes(j.status)&&!j.cancel_requested&&typeof STATUS_STOPPABLE!=='undefined'&&STATUS_STOPPABLE.includes(j.action);}
 function badge(status){const type=['Ready','succeeded','reachable'].includes(status)?'good':['failed','unreachable','interrupted'].includes(status)?'bad':['queued','running'].includes(status)?'running':'warn';const label=typeof badgeLabel==='function'?badgeLabel(status):status;return `<span class="badge ${type}" title="${esc(status)}">${esc(label)}</span>`;}
 function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platform||'ssh'];return lab.profiles.find(p=>p.id===id)?.label||(node.inventory_credentials?'From inventory':node.credential_source==='default'?'Containerlab default login':'Not configured');}
 // Why an SSH action is disabled right now; the readiness monitor clears it on its own. Fallback for
@@ -119,7 +121,7 @@ function retiredBannerText(retired){
 }
 // Vocabulary helpers shared by the header, the lab switcher and home.js. labContext adds the dismissed
 // operation ids so a failed job the student already dismissed stops reading as "Needs attention".
-function dismissedSet(){const ids=new Set();if(typeof isDismissed!=='function')return ids;for(const j of [...(state.operations||[]),...(state.restore_jobs||[])])if(j.id&&['failed','interrupted','preflight_failed','needs_attention','partial'].includes(j.status)&&isDismissed(j.id))ids.add(j.id);return ids;}
+function dismissedSet(){const ids=new Set();if(typeof isDismissed!=='function')return ids;const dismissable=typeof STATUS_OPERATION_FAILED!=='undefined'?[...STATUS_OPERATION_FAILED,...STATUS_RESTORE_FAILED,...STATUS_RESTORE_ATTENTION]:['failed','interrupted','cancelled','preflight_failed','needs_attention','partial'];for(const j of [...(state.operations||[]),...(state.restore_jobs||[])])if(j.id&&dismissable.includes(j.status)&&isDismissed(j.id))ids.add(j.id);return ids;}
 function labContext(){return {...state,dismissed:dismissedSet()};}
 function labStateOf(lab){return typeof labState==='function'?labState(lab,labContext()):{key:'',label:lab.deployment?.status||'Not matched to a running lab',pill:'neutral',detail:''};}
 function readyLine(lab,ls){const total=(lab.nodes||[]).length,ready=(lab.nodes||[]).filter(n=>n.ssh_ready).length;if(ls.key==='stopped')return 'Not running';if(['unlinked','unknown'].includes(ls.key))return '';return `${ready} of ${total} devices ready`;}
@@ -142,7 +144,7 @@ function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.31.0';$('app-version').textContent='v'+version;
+ const version=state.version||'1.31.3';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;
@@ -260,7 +262,7 @@ function renderLabBanner(){
  const start=()=>({'banner-start':{label:startLabel(),run:startLab,disabled:!!$('lab-start')?.disabled,title:$('lab-start')?.title||''}});
  let spec={};
  if(err&&err.lab===lab.id)spec={tone:'danger',icon:'alert',text:err.sentence,detail:err.message,identity:'error.'+(err.seq||err.at),onClose:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();},actions:{'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();}}}};
- else if(runningOp)spec={tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(runningOp.action,runningOp):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};
+ else if(runningOp)spec={tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(runningOp.action,runningOp):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}},...(stoppableOp(runningOp)?{'banner-stop':{label:'Stop…',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id,{stop:true});}}}:{})}};
  else if(runningRestore)spec={tone:'info',icon:'clock',running:true,text:restoreRechecking(runningRestore)?RECHECK_BANNER:'Loading a saved state…',detail:runningRestore.message||'',actions:{'banner-restore':{label:'View progress',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(runningRestore.id);}}}};
  else if(recheckDesign)spec={tone:'info',icon:'clock',running:true,text:RECHECK_BANNER,detail:recheckDesign.message||'',actions:{'banner-output':{label:'View progress',run:()=>{if(typeof designApplyShowJob==='function')designApplyShowJob(recheckDesign.id);}}}};
  else if(ls.key==='attention'&&ls.job){
@@ -276,9 +278,10 @@ function renderLabBanner(){
   }
   spec={tone:ls.pill==='warn'?'warn':'danger',icon:'alert',text:ls.detail,detail:job.message||'',identity:'job.'+job.id,actions};
  }
- else if(ls.key==='attention')spec={tone:'danger',icon:'alert',text:ls.detail,actions:lab.deployment?.status==='Partially running'?start():{'banner-credentials':{label:'Check credentials',run:()=>showTab('credentials')}}};
+ else if(ls.key==='attention'){spec={tone:'danger',icon:'alert',text:ls.detail,actions:lab.deployment?.status==='Partially running'?start():{'banner-credentials':{label:'Check credentials',run:()=>showTab('credentials')}}};if(typeof opAttentionSpec==='function')spec=opAttentionSpec(lab,spec);}
  else if(credentials)spec={tone:'warn',icon:'alert',text:`${credentials} ${credentials===1?'device needs':'devices need'} login credentials before you can open ${credentials===1?'its':'their'} CLI.`,actions:{'banner-credentials':{label:'Add credentials',run:()=>openProfile()}}};
  else if(ls.key==='starting')spec={tone:'info',icon:'clock',running:true,text:'Lab is starting — '+ls.detail};
+ else if(typeof opPendingBannerSpec==='function'&&opPendingBannerSpec(lab))spec=opPendingBannerSpec(lab);
  else if(ls.key==='stopped')spec={tone:'info',icon:'info',text:'This lab is not running.',actions:start()};
  else if(ls.key==='unknown')spec={tone:'warn',icon:'alert',text:ls.detail||'The lab VM cannot be reached. Status may be out of date.',actions:{'banner-vm':{label:'VM connection…',run:()=>{if(typeof openVmDialog==='function')openVmDialog();}}}};
  else if(ls.key==='unlinked')spec={tone:'info',icon:'info',text:ls.detail,actions:{'banner-link':{label:'Match to a running lab…',run:()=>{const b=$('link-deployment');if(b&&typeof b.onclick==='function')b.onclick();}}}};
@@ -291,17 +294,26 @@ function renderNodes(){const lab=current();if(!lab||!devicesTechnical)return;con
 // The per-device actions of the Devices view (its technical table and the device panel): Open CLI,
 // Capture traffic…, Back up configuration, Restart device… (operations.js decides its eligibility, the
 // same way the map's right-click menu does) and, outside the panel, Details.
-function nodeActions(n,details=false){const hint=sshHint(n),restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button><button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button><button class="danger-action" data-restart="${esc(n.name)}" ${restart.ok?'':`disabled title="${esc(restart.reason)}"`}>Restart device…</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}`;}
+// The serial console button (docs/parity-campaign/C04-DESIGN.md section 4.2): only for a kind that has one, disabled with the
+// server's own reason (consoleState in status.js) while the device is starting, restarting or not running.
+function consoleButton(n){const c=typeof consoleState==='function'?consoleState(n):{offered:false};if(!c.offered)return '';return `<button class="console-action" data-console="${esc(n.name)}" ${c.ok?'':`disabled title="${esc(c.reason)}"`}>Console <span aria-hidden="true">↗</span></button>`;}
+// Stop device and Start device beside Restart device: one eligibility function (operations.js), a disabled button carries its reason.
+function nodeActionCheck(action,n){return typeof opNodeActionState==='function'?opNodeActionState(action,current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};}
+function nodeStateButton(action,label,n,danger){const check=nodeActionCheck(action,n);return `<button${danger?' class="danger-action"':''} data-node-action="${esc(action)}" data-node="${esc(n.name)}" ${check.ok?'':`disabled title="${esc(check.reason)}"`}>${esc(label)}</button>`;}
+function nodeActions(n,details=false){const hint=sshHint(n),restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button>${consoleButton(n)}<button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button><button class="danger-action" data-restart="${esc(n.name)}" ${restart.ok?'':`disabled title="${esc(restart.reason)}"`}>Restart device…</button>${nodeStateButton('stop-node','Stop device…',n,true)}${nodeStateButton('start-node','Start device…',n,false)}${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}`;}
 // The device panel's line under its actions: why a disabled action is unavailable, in words a keyboard or touch
 // user can reach (a disabled button's title is hover-only), plus the capture caption when there is one.
 function nodeActionNotes(n){
  const notes=[];const capture=typeof captureStatusLine==='function'?captureStatusLine():'';if(capture)notes.push(capture);
+ const con=typeof consoleState==='function'?consoleState(n):{offered:false};if(con.offered&&!con.ok)notes.push('Console is not available: '+con.reason);
  const restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:true};if(!restart.ok)notes.push('Restart device… is not available: '+restart.reason+'.');
+ if(typeof opNodeActionState==='function')for(const [action,label] of [['stop-node','Stop device…'],['start-node','Start device…']]){const check=nodeActionCheck(action,n);if(!check.ok&&!check.own)notes.push(label+' is not available: '+check.reason+'.');}
+ const saveCheck=typeof opSaveNodeState==='function'?opSaveNodeState(current(),n,state.discovery,busy()):{ok:true};if(!saveCheck.ok&&!saveCheck.own)notes.push('Save startup configuration… is not available: '+saveCheck.reason+'.');
  const backup=typeof nodeBackupReason==='function'?nodeBackupReason(n):'';if(backup)notes.push('Back up configuration is not available: '+backup+'.');
  return notes.join(' ');
 }
 // The drawer's Advanced section: check the saved login now, or change the connection settings.
-function nodeDrawerActions(n){return `<button data-check="${esc(n.name)}" ${!(n.login_configured??n.ssh_ready)?'disabled title="Add credentials first"':''}>Test login</button><button data-edit="${esc(n.name)}">Edit connection…</button>`;}
+function nodeDrawerActions(n){const save=typeof opSaveNodeState==='function'?opSaveNodeState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};return `<button data-check="${esc(n.name)}" ${!(n.login_configured??n.ssh_ready)?'disabled title="Add credentials first"':''}>Test login</button><button data-edit="${esc(n.name)}">Edit connection…</button><button data-save-node="${esc(n.name)}" ${save.ok?'':`disabled title="${esc(save.reason)}"`}>Save startup configuration…</button>`;}
 // A readable id per device name; the hash keeps names that differ only in punctuation apart.
 function deviceSlug(name){let hash=0;for(const c of String(name))hash=(hash*31+c.charCodeAt(0))>>>0;return String(name).replace(/[^A-Za-z0-9_-]+/g,'-')+'-'+hash.toString(36);}
 // One row per device for the Devices tab and the topology rail: name, platform, state pill and the
@@ -310,7 +322,7 @@ function deviceRow(n,rail){
  const ds=typeof deviceState==='function'?deviceState(n):{key:n.ssh_ready?'ready':'unknown',label:n.ssh_ready?'Ready':'Not ready',detail:n.ssh_ready?'':sshHint(n),cli:!!n.ssh_ready,pill:n.ssh_ready?'ok':'neutral'};
  const why=(rail?'why-rail-':'why-')+deviceSlug(n.name),reason=!ds.cli&&ds.detail?`<small class="row-reason" id="${esc(why)}">${esc(ds.detail)}</small>`:'';
  const open=$('details-dialog').open&&detailName===n.name;
- return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span></div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}</div></li>`;
+ return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span></div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':consoleButton(n)}${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}</div></li>`;
 }
 function renderDeviceList(){
  const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();
@@ -391,12 +403,15 @@ async function handleNodeAction(e){const b=e.target.closest('button');if(!b||b.d
  if(b.dataset.profile!==undefined){profileFromDrawer=detailName;$('details-dialog').close();openProfile();}
  if(b.dataset.details)openDetails(b.dataset.details);
  if(b.dataset.terminal){const url='/static/terminal.html#'+new URLSearchParams({lab:activeId,node:b.dataset.terminal,label:current().name});window.open(url,'_blank');}
+ if(b.dataset.console){const url='/static/terminal.html#'+new URLSearchParams({lab:activeId,node:b.dataset.console,label:current().name,protocol:'console'});window.open(url,'_blank');}
  if(b.dataset.backup){$('details-dialog').close();startJob('backup',[b.dataset.backup]);}
  // Restart device: the map menu, the Devices table and the device panel all end up here, and here in
  // one reviewed operation (operations.js) that names the device and the lab.
  // The device panel stays open under the review (its button gets focus back when the review closes); from the
  // map menu, which closes itself, the drawn device is the control to return to.
  if(b.dataset.restart){const labId=activeId,name=b.dataset.restart;const opener=typeof b.closest==='function'&&b.closest('#node-context-menu')?(typeof contextNode!=='undefined'&&contextNode)||null:b;if(typeof opRestartDevice==='function'&&typeof opTask==='function')opTask(null,()=>opRestartDevice(labId,name,opener));}
+ // Start device, Stop device and Save startup configuration (operations.js): reviewed operations on one device, like Restart device.
+ if(b.dataset.nodeAction||b.dataset.saveNode){const labId=activeId,name=b.dataset.node||b.dataset.saveNode,opener=typeof b.closest==='function'&&b.closest('#node-context-menu')?(typeof contextNode!=='undefined'&&contextNode)||null:b;if(typeof opTask==='function')opTask(null,()=>b.dataset.saveNode?(typeof opSaveNode==='function'?opSaveNode(labId,name,opener):null):(typeof opNodeAction==='function'?opNodeAction(b.dataset.nodeAction,labId,name,opener):null));}
  if(b.dataset.check){const labId=activeId;b.disabled=true;try{const result=await json('/labs/'+labId+'/ssh-check','POST',{name:b.dataset.check});notify(result.message);if(activeId===labId)await refreshHealth();}catch(error){notify(error.message);}finally{b.disabled=false;}}
 }
 for(const id of ['nodes','details-dialog','device-list','topology-devices'])$(id).addEventListener('click',handleNodeAction);
@@ -464,6 +479,54 @@ function recheckPending(n){return !!n&&detailsRecheck.name===n.name&&Date.now()-
 const DETAILS_LOGIN_TEST_HELP='Test login (under Advanced) checks the saved credentials now.';
 function detailsLoginHelp(lab,n){return (lab?.deployment_name&&n?.nos_login?.status!=='unmonitored'?'Running devices are checked automatically until they accept a login. ':'')+DETAILS_LOGIN_TEST_HELP;}
 function statusActions(n,ds){if(!ds)return '';if(recheckPending(n))return `<button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='attention')return `<button data-edit="${esc(n.name)}">Check credentials</button><button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='credentials')return ds.next==='Edit connection'?`<button data-edit="${esc(n.name)}">Edit connection…</button>`:`<button data-profile="">Add credentials</button>`;return '';}
+// The endpoint as it is typed into a client: [address]:port for IPv6, address:port otherwise.
+function detailsEndpoint(n){const a=String(n.address??'');return (a.includes(':')?'['+a+']':a)+':'+n.port;}
+// The same endpoint as markup: the address sits in its own span so Copy the address only can select it.
+function detailsEndpointMarkup(n){const a=String(n.address??''),v6=a.includes(':');return (v6?'[':'')+(a?`<span id="details-fact-address">${esc(a)}</span>`:'')+(v6?']':'')+':'+esc(n.port);}
+// Copy buttons come from clipboard.js; a page without it shows the facts as before.
+function copyIf(value,what,targetId,visible){return typeof copyButton==='function'?copyButton(value,what,targetId,visible):'';}
+// The device panel's Container section (docs/parity-campaign/C04-DESIGN.md section 4.3), built from discovery alone: it never
+// calls the VM. The static rows (with the Copy buttons) and the volatile rows (#details-container-live) are written by
+// separate setMarkup calls, so a focused Copy button and its "Copied" feedback survive the 4-second poll.
+const DETAILS_CONTAINER_UNLINKED='Container facts come from the VM. This lab is not linked to a running lab (Advanced › Link to a running lab…).';
+function detailsFactRow(label,html){return `<dt>${esc(label)}</dt><dd>${html}</dd>`;}
+function detailsKindImageRows(n){
+ const image=n.discovered_image||n.image||'',differs=n.discovered_image&&n.image&&n.discovered_image!==n.image;
+ return (n.kind?detailsFactRow('Container kind',`<span class="mono" id="details-fact-kind">${esc(n.kind)}</span>${copyIf(n.kind,'the container kind','details-fact-kind')}`):'')
+  +(image?detailsFactRow('Image',`<span class="mono" id="details-fact-image">${esc(image)}</span>${copyIf(image,'the image','details-fact-image')}${differs?`<small class="secondary-text">topology names ${esc(n.image)}</small>`:''}`):'');
+}
+function detailsConsoleWord(n){
+ if(typeof consoleState==='function'&&consoleState(n).offered)return 'Serial, port 5000 (Console ↗ above)';
+ return n.kind?'None for this kind':'Not known: the manager has no topology kind for this device';
+}
+function detailsAddressRows(n){
+ const lines=[['IPv4',n.discovered_ipv4,'details-fact-ipv4','the IPv4 address'],['IPv6',n.discovered_ipv6,'details-fact-ipv6','the IPv6 address']].filter(l=>l[1]);
+ return detailsFactRow('Addresses',lines.length?lines.map(([family,value,id,what])=>`<div><span class="secondary-text">${family}</span><span class="mono" id="${id}">${esc(value)}</span>${copyIf(value,what,id)}</div>`).join(''):'No address reported');
+}
+// Everything with a Copy button; rebuilt only when one of these values changes.
+function detailsContainerStatic(n){
+ // An older manager sends no container field at all: say nothing about linking, show the topology facts alone.
+ if(typeof n.container!=='string'){const rows=detailsKindImageRows(n);return rows?`<section class="drawer-section"><h3>Container</h3><dl class="health-grid">${rows}</dl></section>`:'';}
+ if(!n.container){const rows=detailsKindImageRows({kind:n.kind,image:n.image});return `<section class="drawer-section"><h3>Container</h3><p class="caption">${esc(DETAILS_CONTAINER_UNLINKED)}</p>${rows?`<dl class="health-grid">${rows}</dl>`:''}</section>`;}
+ const id=n.discovered_id||'';
+ return `<section class="drawer-section"><h3>Container</h3><dl class="health-grid">`
+  +detailsFactRow('Container',`<span class="mono" id="details-fact-container">${esc(n.container)}</span>${copyIf(n.container,'the container name','details-fact-container')}`)
+  +detailsFactRow('ID',id?`<span class="mono" id="details-fact-id">${esc(id)}</span>${copyIf(id,'the container id','details-fact-id')}`:'Not reported')
+  +detailsKindImageRows(n)+detailsAddressRows(n)+detailsFactRow('Console',esc(detailsConsoleWord(n)))
+  +`</dl><dl class="health-grid" id="details-container-live"></dl></section>`;
+}
+// The volatile rows: State from discovery, and the diagnostics facts only while a diagnostics section of this device is open and polling.
+function detailsContainerLive(n,facts){
+ if(typeof n.container!=='string'||!n.container)return '';
+ const state=n.runtime_state||'',status=n.runtime_status||'';
+ let html=state||status?detailsFactRow('State',esc(state==='absent'?'Not on the VM':[state,status].filter(Boolean).join(' · '))):'';
+ if(facts&&facts.present){
+  const ports=(facts.ports||[]).map(p=>`<div class="mono">${esc(p.host)} → ${esc(p.container)}</div>`).join('');
+  html+=detailsFactRow('Process',esc(facts.pid||'—'))+detailsFactRow('Health',esc(facts.health||'no health check'))+detailsFactRow('Started',esc(facts.started?utcDisplay(facts.started):'—'))+detailsFactRow('Published ports',ports||'none')
+   +detailsFactRow('Source','<small class="secondary-text">From the Interfaces or Logs section while it is open.</small>');
+ }
+ return html;
+}
 function renderDetails(){
  const lab=current(),n=lab?.nodes.find(n=>n.name===detailName);if(!n){if($('details-dialog').open)$('details-dialog').close();return;}
  const h=nodeHealth(n.name),ds=typeof deviceState==='function'?deviceState(n):null;
@@ -478,12 +541,15 @@ function renderDetails(){
  if($('details-status-text'))$('details-status-text').textContent=recheckPending(n)?`Checking ${n.short_name||n.name} again… (automatic within a minute — or Test login now)`:ds?ds.detail:(h?.ssh?.message||'');
  setMarkup($('details-status-actions'),statusActions(n,ds));
  setMarkup($('details-status-raw-body'),`<div class="connection-result">${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<p>${esc(h?.ssh?.message||'No login check yet.')}</p>${h?.ssh?.at?`<time>${esc(utcDisplay(h.ssh.at))}${h.ssh.source==='automatic'?' · automatic check':''}</time>`:''}</div><p class="form-help">${detailsLoginHelp(lab,n)}</p>`);
- setMarkup($('details-info'),`<section class="drawer-section"><h3>Connection</h3><dl class="health-grid"><dt>Name in lab files</dt><dd class="mono">${esc(n.name)}</dd><dt>Network OS</dt><dd>${esc(platformLabel(n.platform))}</dd><dt>Login credentials</dt><dd>${esc(profileName(lab,n))}</dd><dt>Address</dt><dd class="mono">${esc(n.address)}:${esc(n.port)}</dd></dl></section>`);
+ setMarkup($('details-info'),`<section class="drawer-section"><h3>Connection</h3><dl class="health-grid"><dt>Name in lab files</dt><dd><span class="mono" id="details-fact-name">${esc(n.name)}</span>${copyIf(n.name,'the name in the lab files','details-fact-name')}</dd><dt>Network OS</dt><dd>${esc(platformLabel(n.platform))}</dd><dt>Login credentials</dt><dd>${esc(profileName(lab,n))}</dd><dt>Address</dt><dd><span class="mono" id="details-fact-endpoint">${detailsEndpointMarkup(n)}</span>${copyIf(detailsEndpoint(n),'the address and port','details-fact-endpoint')}${n.address?copyIf(n.address,'address only','details-fact-address','Copy address'):''}</dd></dl></section>${detailsContainerStatic(n)}`);
+ setMarkup($('details-container-live'),detailsContainerLive(n,typeof diagnosticsFacts==='function'?diagnosticsFacts(activeId+'/'+detailName):null));
  setMarkup($('details-advanced-body'),`<dl class="health-grid"><dt>Included in backups</dt><dd><label class="checkbox-label"><input type="checkbox" data-enable="${esc(n.name)}" ${n.enabled?'checked':''} ${!n.platform?'disabled title="Choose a network OS first (Edit connection)"':''}> Include ${esc(n.short_name||n.name)} in backups</label></dd><dt>Can be backed up</dt><dd>${n.readiness==='Ready'?'Yes':'No'+(n.readiness?' — '+esc(readinessWord(n.readiness)):'')}</dd></dl>`);
  const backups=state.jobs.filter(j=>j.lab_id===activeId&&j.operation==='backup'&&!['queued','running'].includes(j.status));
  const entries=backups.flatMap(j=>j.nodes.map((node,index)=>({j,node,index}))).filter(x=>x.node.name===n.name&&x.node.status==='succeeded'&&x.node.download_name);
  const historyHtml=entries.length?entries.map(({j,node,index},i)=>`<div class="device-download"><div><strong>${i===0?'Latest successful backup':'Backup'}</strong><small>${esc(utcDisplay(node.captured_at||j.finished||j.created))}</small><code>${esc(node.download_name)}</code></div><button class="button secondary" data-download="${esc(j.id)}" data-node-index="${index}" data-filename="${esc(node.download_name)}">Download configuration</button></div>`).join(''):'<p>No configuration backups for this device yet. Back up configuration creates one.</p>';
  setListMarkup($('node-history'),historyHtml,()=>historyHtml);
+ if(typeof renderDeviceDiagnostics==='function')renderDeviceDiagnostics(n);
+ if(typeof renderDeviceImpairments==='function')renderDeviceImpairments(n);
  syncDownloadButtons();
 }
 $('node-history').addEventListener('click',handleDownload);

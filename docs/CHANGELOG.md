@@ -4,6 +4,147 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.31.3
+
+**Parity campaign: the C03 drawer sections, C04 (serial console and container facts) and the helper half of C05.**
+The campaign record is [`docs/parity-campaign/`](parity-campaign/README.md).
+
+- **Interfaces and Logs in the device drawer** ([LAB-OPERATIONS](LAB-OPERATIONS.md) "Diagnostics"). Two sections,
+  closed by default, ask the VM nothing until opened. Interfaces lists the container's interfaces with the NOS port
+  name, state, MAC, MTU, byte counters and, from the second sample, rates, with a Capture button per data interface and
+  the impairment line; Logs shows the container's last lines with a Tail choice, Find, Follow (appending with a cursor,
+  never a repeated stamped line), Refresh and a text Export built in the browser. One poll plan governs both: chained
+  requests, 5 s, a busy VM doubles the interval up to 30 s and never counts as an error, three errors without a success
+  stop with Retry, a 30-minute pause with Resume, nothing while the tab is hidden or the drawer is closed. Private keys,
+  passwords and key-style lines are redacted by the manager before anything reaches the browser.
+- **The inspect table** gains ID and Owner, sortable headers, a "Filter devices" box and a caption counting running
+  devices; **Lab files** opens the lab's folder in the topology browser's dialog, bounded to that folder, with a
+  read-only viewer for configuration and text files; **Images on this VM** (Manager menu) lists the VM's images with
+  size, age and the labs that use them; the Manager menu footer and the Diagnostics page name the containerlab release.
+- **A serial console for the vrnetlab kinds** ([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md) "Serial console"):
+  vJunos-switch, vJunos-router and XRv9k offer **Console ↗** beside Open CLI in the device drawer, the Devices view and
+  the map's menu. It is the console port of the virtual machine (TCP 5000 of the container, reached directly like SSH,
+  no helper), so it works when SSH does not answer or the management configuration is broken. The manager sends no
+  credentials: the device shows its own login. The console opens only once the container reports healthy (vrnetlab's
+  launcher uses it during the first boot), never while a restart runs or within two minutes of the container's start,
+  one session per device at a time (a second tab is told when the first opened), 15 minutes without typing or 4 hours
+  end it, and the terminal page's toolbar, exports and chords apply. Only `console.open` and `console.close` are logged.
+- **Container facts in the drawer**: a Container section with the container's name, id, kind, the running image beside
+  the topology's, both addresses and the console state, from discovery alone (containerlab's inspect now keeps the id,
+  both addresses and the image); an unlinked lab reads one sentence. **Start fresh** waits for open consoles as it does
+  for SSH sessions.
+- **The operations helper** gains the mutating modes C05 builds on (the manager and UI follow in the next release):
+  `netem-set` and `netem-reset` per interface under the host lock with a review digest bound to the request and the
+  container id the drawer showed, a lab-wide `netem-show-all`, `start-node` and `stop-node` (containerlab's own node
+  selector, refused by state), the apply dry-run plan inside the apply review and a read-only `apply-plan`, a validated
+  node filter for deploy, destroy and save, and the `max_workers`, `skip_post_deploy` and `keep_mgmt_net` flags probed
+  from containerlab's help; management and host-network interfaces are refused in the helper. The container binding
+  reads the optional health field in a form Docker accepts for containers without a HEALTHCHECK (the live pass found
+  cEOS and cJunosEvolved refused by the previous form).
+- Try again on a stopped Start, Apply or Restart without a stored request opens a redeploy review (a C02 follow-up).
+
+## Changes in 1.31.2
+
+**Parity campaign, chunks C01 and C02, and the helper and API half of C03.** The campaign (feature parity with
+`containerlab-app` and the VS Code extension, within the manager's architecture) is recorded in
+[`docs/parity-campaign/`](parity-campaign/README.md): the research and gap matrix, each chunk's design with the
+answers to its reviews, the pickup log and the live evidence.
+
+- **A terminal toolbar** ([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md)). The CLI page gains text size (Smaller,
+  Larger, Reset; Alt+Up, Alt+Down, Alt+0; remembered per browser), Copy selection and Copy screen (Ctrl+Insert copies
+  the selection), Clear, and two text exports built in the browser alone, of the screen or of the whole session (the
+  manager keeps no copy of a session; Clear keeps the earlier lines in the session export). Alt+T moves the keyboard
+  to the toolbar. Wrapped lines are joined back when copied or exported. The chords act on key down only, so a
+  device never sees them.
+- **Copy buttons.** The device drawer's facts (name in the lab files, address and port, address only, container kind,
+  image) and the command output of an operation carry Copy, through the new `clipboard.js`: the Clipboard API on a
+  secure origin; on the plain `http://` address most students use, a hidden text area inside the open dialog, and
+  the focus returns to the button; a failure selects the value so Ctrl+C still works.
+- **Stop a running lab operation** ([LAB-OPERATIONS](LAB-OPERATIONS.md)). View output of a running Start, Redeploy,
+  Destroy, Stop devices, Restart, Restart device, Save configurations, Download lab or Inspect all offers **Stop this
+  operation…**, and the lab banner offers **Stop…**. The manager closes its channel to the VM helper, whose heartbeat
+  ends the containerlab process group; the job stays busy ("Stopping…") until a read-only probe proves the host lock
+  free (at most 20 s), then ends **Stopped by you** with the repair for that action (Redeploy lab, run Destroy lab
+  again, …), and Try again on a stopped deploy opens a redeploy review. A command whose result had already arrived is
+  never relabelled; a real error keeps its own message; the file actions (create, delete, publish, revise) and the
+  short inspect cannot be stopped and say so. New route `POST /api/operations/{id}/cancel` (body `{}`), answering
+  404, 409 and 202.
+- **The lab builder's Stop.** `lab-builder.html` now loads the status vocabulary, so a deploy started from the builder
+  can be stopped from its output window; the upstream editor's About entry is hidden on both editor pages.
+- **vJunos-router** (`juniper_vjunosrouter`, image `n24l/juniper_vjunos-router:26.2R1.7`): a managed kind for logins
+  (`admin` / `admin@123`, the image's published default), readiness, backups (download name
+  `vJunos-router_<node>_…cfg`), saves (`junos-display-set`), the lab-builder catalog and the Sync from VM mapping.
+  Restore and network design stay off for it until a live proof (the saved-version list says why). On a
+  nested-virtualization VM the published image's launcher (`-cpu host`) makes the inner Junos VM abort; the
+  campaign's lab runs a local derivative with the vJunos-switch CPU model (`docs/parity-campaign/PICKUP.md`, C00).
+- **Read-only diagnostics in the operations helper and the API** (the first half of C03; the device drawer sections
+  that show them are the next release). The helper gains `logs`, `interfaces` (with one counter sample from
+  `/proc/<pid>/net/dev`), `netem-show`, image details, lab-folder files and the containerlab version, dispatched
+  outside the host lock with a fixed argv each, every container bound by its labels and its topology path under a
+  trusted root, and `read` opening files with `O_NOFOLLOW`. The new `device_diagnostics.py` owns
+  `GET /api/operations/logs|interfaces|netem`, `GET /api/operations/images` (now with `details`, `used_by` and
+  `missing`; the reference list is unchanged), `POST /api/operations/browse` (a `files` mode) and
+  `POST /api/operations/view`, redacting log lines on the manager and never storing them; three calls are admitted at
+  once (a fourth answers 503). The helper's `VERSION` moves with the release, so the usual refresh installs it.
+
+## Changes in 1.31.1
+
+**The agent routing lives in the repository**, and one application fix for a dependency change. The helpers moved by
+their lockstep version alone. What a clone now carries under `.claude/`, and how a person sets up a development VM
+from it, is in the new guide [AGENT-ROUTING.md](AGENT-ROUTING.md).
+
+- **Credential profiles keep their API contract under FastAPI 0.147 and later.** Since 2026-10-19 FastAPI reads an
+  omitted boolean form field as `false`, so `POST /api/labs/{id}/profiles` without `make_default` stopped making the
+  new profile the platform's default (the page always sends the checkbox, so the browser flow was unaffected; the
+  test suite and API callers that leave the field out were). The route now reads the field as text: omitted means
+  default, `true`/`1`/`on`/`yes` and `false` keep their meaning. CI installs the newest allowed versions, which is
+  how the change surfaced.
+
+- **Agents.** The fifteen definitions in `.claude/agents/` were rewritten against the current Claude Code frontmatter
+  reference: every one preloads the new `clab-worker-contract` skill instead of repeating the same contract, carries a
+  `color`, and the writing roles get no MCP tools (`disallowedTools: mcp__*`). The two Haiku roles run on Haiku 5.5
+  (`claude-haiku-5-5`, the current `haiku` alias) with a turn cap and cannot delegate; `docs-auditor` cannot delegate
+  either. The read-only reviewers keep their `tools` allowlists and gain no `memory` (it would re-enable writes);
+  `clab-ui-reviewer` no longer preloads the browser-QA procedure it cannot run; the scout loses its web and Skill
+  tools. `clab-ui-qa` and `clab-devops-engineer` keep a machine-local agent memory of VM and fixture facts. Every
+  description now says when to use the agent and what not to use it for.
+- **Rules.** `fable-opus-routing.md` states how the harness resolves a subagent's model (spawn parameter, definition,
+  `CLAUDE_CODE_SUBAGENT_MODEL`, session), that forcing needs `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`, the concurrency
+  caps, the fork rule, where a route is verified (`/tasks`, the per-agent transcript), the vendored skills and how
+  their generic advice is read here. `clab-ui-routing.md` maps the staffing order onto the three workflows and lists
+  the seven new path-scoped `routing-*.md` rules (privileged paths, device transactions, manager UI, editor, tests and
+  CI, release records, the configuration itself), which load only when a file they name is read or edited and name
+  the builder, the reviewer and the tests. The two-VM rule shrinks to its activation signal
+  (`.claude/worker.local.json`, written and removed by the owner per campaign); the protocol moved into the
+  `clab-parallel-handoff` skill with the `TASK-HANDOFF.md` template. `CLAUDE.md` "Delegating work" is a pointer plus
+  the corrected sentence about overrides, and the routing table gains a row for this area.
+- **Skills.** New `clab-worker-contract` (the shared contract, not user-invocable) and `clab-routing-smoke` (the
+  routing check a person runs before a campaign). The ten third-party skills (Anthropic, Superpowers, Vercel) are
+  vendored under `.claude/skills/` with their licences and the hash lock `external-skills.lock.json`;
+  `.claude/THIRD-PARTY-SKILLS.md` records source, commit and licence and how to refresh one with Git alone. Two of
+  them (`systematic-debugging`, `requesting-code-review`) were refreshed to their current upstream commits; the diffs
+  were two shell-quoting fixes. No project skill carries `paths`: a skill with `paths` is silently not preloadable.
+- **Workflows.** `.claude/workflows/` holds `clab-design-review`, `clab-review-changes` and `clab-slice-verify`: the
+  design review, the diff review and the independent slice verification as dynamic workflows over the named agents,
+  with explicit models per stage, two refuters per finding, an `unverified` bucket when no refuter answered, and a
+  patch file written for the read-only reviewers.
+- **Settings and the guard.** `.claude/settings.json` registers the Bash guard `.claude/hooks/guard-bash.py` (it
+  refuses force pushes in every spelling, remote deletions, tag pushes and tag creation in the checkout, destructive
+  resets, forced cleans, stash drops and whole-tree discards of the checkout, `docker push` in its forms, blanket
+  prunes, `docker compose down -v`, GitHub releases, `gh pr merge --admin`, and deletion or moving of
+  `/srv/containerlab-node-manager` or of `state.key` and `state.enc` outside a scratch location; it splits compound
+  and multi-line commands, ignores heredoc bodies and redirections, looks through `sudo -u`, `env`, `timeout`,
+  `nice`, `xargs`, the shells' `-c` and `eval`, and follows `cd`), denies reading the live `state.key` and
+  `state.enc`, caps subagent nesting at two levels, enables the PR review toolkit for every clone, starts worktrees
+  from the lead's `HEAD`, and sets the workflow size guideline to unrestricted. The project `effortLevel` and the
+  `..._FORCE=0` line are gone: effort comes from each definition, and the lead's from the owner's settings.
+  `.gitignore` keeps the machine-local files out; `.gitattributes` exempts the vendored skills from the whitespace
+  check; the link checker skips them.
+- **Tests and CI.** `test_claude_config.py` (stdlib, first CI group) parses every agent, skill and rule, checks the
+  fields against the documented sets, the roster against the files, the settings, the hook's decisions (about a
+  hundred commands) and the vendored skills' hashes; `test_claude_workflows.js` parses the workflows and checks their
+  agents exist. Both are in the CI lists.
+
 ## Changes in 1.31.0
 
 The Git save and load redesign. Saving and loading move out of the Progress tab into the lab header, a save is the

@@ -18,18 +18,19 @@ test('a new draft is a blank topology with the lab name, and the templates list 
  assert.deepEqual(JSON.parse(JSON.stringify(c.builderBlank('lab2'))),{yaml:'name: lab2\ntopology:\n  nodes: {}\n',annotations:''});
  // the starters are gone, but the device palette still needs a template for every driver the manager has,
  // each with a name and an image (the New lab dialog no longer chooses one; dragging the palette does)
- for(const kind of ['arista_ceos','juniper_cjunosevolved','juniper_vjunosswitch','cisco_xrv9k','linux']){
+ for(const kind of ['arista_ceos','juniper_cjunosevolved','juniper_vjunosswitch','juniper_vjunosrouter','cisco_xrv9k','linux']){
   const t=c.BUILDER_TEMPLATES.find(x=>x.kind===kind);assert.ok(t,kind);assert.ok(t.name&&t.image,kind);
  }
 });
 test('the four built-in network templates carry the requested n24l images and the cJunosEvolved env; every image splits into repository and tag',()=>{
  const c=load(),by=k=>c.BUILDER_TEMPLATES.find(t=>t.kind===k);
  assert.equal(by('juniper_cjunosevolved').image,'n24l/cjunosevolved:26.2R1.7-EVO');assert.equal(by('juniper_vjunosswitch').image,'n24l/vjunos-switch:23.2R1.14');
+ assert.equal(by('juniper_vjunosrouter').image,'n24l/juniper_vjunos-router:26.2R1.7');assert.equal(by('juniper_vjunosrouter').name,'Juniper vJunos-router');assert.equal(by('juniper_vjunosrouter').pinned,true);assert.equal(by('juniper_vjunosrouter').interfacePattern,'ge-0/0/{n:0}');
  assert.equal(by('cisco_xrv9k').image,'n24l/cisco_xrv9k:24.3.1');assert.equal(by('arista_ceos').image,'n24l/ceos:4.35.0F');
  for(const t of c.BUILDER_TEMPLATES.filter(x=>x.pinned)){assert.match(t.image,/^n24l\/[a-z0-9_-]+:[^:\/]+$/,t.kind+' is a valid lower-case reference with a tag');}
  // Juniper's entrypoint writes the container hostname only under CPTX_AUTO_CONFIG
  assert.deepEqual(JSON.parse(JSON.stringify(by('juniper_cjunosevolved').env)),{CPTX_AUTO_CONFIG:'1'});
- for(const k of ['arista_ceos','juniper_vjunosswitch','cisco_xrv9k','linux'])assert.equal(by(k).env,undefined,k+' has no env');
+ for(const k of ['arista_ceos','juniper_vjunosswitch','juniper_vjunosrouter','cisco_xrv9k','linux'])assert.equal(by(k).env,undefined,k+' has no env');
 });
 test('pinned built-in templates keep their default; the known-image and VM-image preference applies to the Linux host',()=>{
  const c=load(),list=c.builderTemplateList({arista_ceos:['site/ceos:9','ceos:old'],linux:['alpine:3'],nokia_srlinux:['ghcr.io/nokia/srlinux']},['n24l/ceos:4.34.2F']);
@@ -411,6 +412,7 @@ test('a student with no labs finds the builder from the first page, and the buil
 // silently coming back.
 test('every editor control the page hides still exists in the bundled editor',()=>{
  const css=read('lab-builder.css'),ids=[...css.matchAll(/\[data-testid="([a-z-]+)"\]/g)].map(m=>m[1]);assert.ok(ids.length>=7,ids.join());
+ assert.ok(ids.includes('navbar-about'),'the page hides the editor About entry (navbar-about)');
  const dir=path.join(__dirname,'../app/static/lab-builder/assets'),code=fs.readdirSync(dir).filter(f=>f.endsWith('.js')).map(f=>fs.readFileSync(path.join(dir,f),'utf8')).join('\n');
  // Context menu entries and palette tabs get their test id from a template (`context-menu-item-${id}`,
  // `panel-tab-${id}`): the bundle then holds the template and the id, not the joined string.

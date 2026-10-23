@@ -3,9 +3,10 @@
 // opLabels are the imperative student labels for every containerlab action (status.js keeps its own
 // in-progress table for the header and the banner); the review dialog, the output window and the
 // history rows all read from here so one operation has one name everywhere.
-const opLabels={deploy:'Start lab',redeploy:'Redeploy lab',destroy:'Destroy lab',apply:'Apply topology changes',start:'Start devices',stop:'Stop devices',restart:'Restart all devices','restart-node':'Restart device',save:'Save device configurations',inspect:'Show running devices','inspect-all':'Running labs on the VM',create:'Create topology file',delete:'Delete topology file',clone:'Download lab',publish:'Save lab to the VM',revise:'Save topology changes'};
-const opLifecycle=['deploy','start','stop','restart','restart-node','redeploy','destroy','apply'];
-const opDisruptive=['stop','restart','restart-node','redeploy','destroy','apply'];
+const opLabels={deploy:'Start lab',redeploy:'Redeploy lab',destroy:'Destroy lab',apply:'Apply topology changes',start:'Start devices',stop:'Stop devices',restart:'Restart all devices','restart-node':'Restart device','start-node':'Start device','stop-node':'Stop device',save:'Save device configurations',inspect:'Show running devices','inspect-all':'Running labs on the VM',create:'Create topology file',delete:'Delete topology file',clone:'Download lab',publish:'Save lab to the VM',revise:'Save topology changes'};
+const opNodeActions=['restart-node','start-node','stop-node'];
+const opLifecycle=['deploy','start','stop','restart','restart-node','start-node','stop-node','redeploy','destroy','apply'];
+const opDisruptive=['stop','restart','restart-node','stop-node','redeploy','destroy','apply'];
 let opCaps=null, opMenuLab='', opOutputTimer=null, opEditorContext=null;
 // Every operation dialog is named by its own heading (screen readers announce the title, not "dialog"),
 // and gives focus back to the control that opened it when it closes: `opener` names that control; without
@@ -28,7 +29,7 @@ async function opTask(dialog,fn){
 function opPath(lab){return lab?.vm_project_path||lab?.vm_source?.files?.definition?.path||'';}
 function opName(lab){return lab?.deployment_name||lab?.name||'';}
 function opWhen(value){if(!value)return '';return typeof relativeTime==='function'?relativeTime(value):new Date(value).toLocaleString();}
-function opStatusWord(status){return {succeeded:'Completed',failed:'Failed',interrupted:'Interrupted',running:'Running',queued:'Waiting'}[status]||String(status||'');}
+function opStatusWord(status){return {succeeded:'Completed',failed:'Failed',interrupted:'Interrupted',cancelled:'Stopped by you',running:'Running',queued:'Waiting'}[status]||String(status||'');}
 async function opCapabilities(){opCaps=await(await api('/operations/capabilities')).json();return opCaps;}
 function opCommand(action,label=opLabels[action],options={}){
  const cap=opCaps?.actions?.[action], unavailable=cap&&!cap.available;
@@ -45,11 +46,25 @@ function opDestroyOptions(caps=opCaps){return caps?.actions?.destroy?.cleanup===
 // default options, the lifecycle actions with none. deploy and redeploy may have been the clear-the-folder variant, and
 // create, revise, publish and clone need text that is gone, so for those this returns null and the banner offers the dialog.
 const opPlainRetry=['start','stop','restart','apply','inspect','inspect-all','save','delete'];
+const opRedeployActions=['deploy','start','apply','restart'];
 function opRetryRequest(job,labId){
  const stored=typeof jobRequest==='function'?jobRequest(job?.id):null;
+ const chosen=typeof statusJobNodes==='function'?statusJobNodes(job):[];
+ const withoutNodes=request=>{if(!request||!request.options||!('nodes' in request.options))return request;const {nodes,...rest}=request.options;return {...request,options:rest};};
+ // A stopped deploy may have left some devices started: the repair is Redeploy lab, with the options the student confirmed.
+ // Start, apply and restart end in the same aftermath (Redeploy lab), so they take the same way back.
+ if(job?.status==='cancelled'&&opRedeployActions.includes(job.action))return stored&&stored.action===job.action?withoutNodes({...stored,action:'redeploy',lab_id:labId}):(job.action==='deploy'?null:{lab_id:labId,action:'redeploy',options:{}});
  if(stored&&stored.action===job.action)return {...stored,lab_id:labId,...(job.node&&!stored.node?{node:job.node}:{})};
+ // A job limited to chosen devices (its public `nodes`) repeats for those devices alone, never as the whole-lab action: a destroy
+ // takes no cleanup then (the two cannot combine); any other action with devices has no safe guess, so the banner opens the dialog.
+ if(chosen.length){
+  if(job.action==='destroy')return {lab_id:labId,action:'destroy',options:{nodes:chosen}};
+  if(job.action==='save')return {lab_id:labId,action:'save',options:{nodes:chosen}};
+  return null;
+ }
  if(job?.action==='destroy')return {lab_id:labId,action:'destroy',options:opDestroyOptions()};
- if(job?.action==='restart-node'&&job.node)return {lab_id:labId,action:'restart-node',node:job.node,options:{}};
+ // The three single-device actions never travel without their device, so they are not in opPlainRetry.
+ if(opNodeActions.includes(job?.action)&&job.node)return {lab_id:labId,action:job.action,node:job.node,options:{}};
  if(opPlainRetry.includes(job?.action))return {lab_id:labId,action:job.action,options:{}};
  return null;
 }
@@ -142,6 +157,10 @@ const opReviewCopy={
  // Restart device (one node): containerlab's own node-scoped restart, the operation the VS Code extension
  // runs. The text names the device and the lab, what is interrupted, and what is not done for the student.
  'restart-node':{title:(n,v)=>`Restart ${v?.node_label||'this device'}?`,body:v=>`Only ${v.node_label||'this device'} in ${v.name} restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.`,confirm:'Restart device',danger:true},
+ // Start device and Stop device (one node): containerlab's node-scoped start and stop. The text names the device and the lab, what
+ // is interrupted and what is not done for the student; known limits and neighbour notes arrive from the manager as warnings.
+ 'stop-node':{title:(n,v)=>`Stop ${v?.node_label||'this device'}?`,body:v=>`Only ${v.node_label||'this device'} in ${v.name} stops: containerlab stops its container and parks its links (containerlab stop --node). Its CLI sessions drop and traffic through it stops; neighbours lose their adjacencies to it until it starts again. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.`,confirm:'Stop device',danger:true},
+ 'start-node':{title:(n,v)=>`Start ${v?.node_label||'this device'}?`,body:v=>`Only ${v.node_label||'this device'} in ${v.name} starts: containerlab starts its container and restores the links it parked (containerlab start --node). The device boots and reads Starting until it accepts a login again.`,confirm:'Start device'},
  redeploy:{title:n=>`Redeploy ${n}?`,body:'Devices are destroyed and started again from the topology; unsaved device changes are lost. Save first if you need them.',confirm:'Redeploy lab',danger:true,cleanup:" The lab's generated folder on the VM is cleared as well."},
  destroy:{title:n=>`Destroy ${n}?`,body:v=>`The running devices are removed from the VM${v.options?.cleanup?" and the lab's generated folder is deleted":''}. Configuration changes you have not saved are lost. Your saves, lab states and backups remain.`,confirm:'Destroy lab',danger:true},
  apply:{title:n=>`Apply topology changes to ${n}?`,body:'The running lab is updated to match the topology file. Devices removed from the file are destroyed; connectivity may be interrupted.',confirm:'Apply changes',danger:true},
@@ -200,17 +219,133 @@ async function opReviewImages(dialog,images){
   if(fix){fix.hidden=!missing.length;fix.textContent=missing.length?(missing.length===1?'The devices using it stay down after the deploy.':'The devices using them stay down after the deploy.')+' Choose an image the VM has, or load it on the VM first.':'';}
  }catch{if(dialog.open&&list.isConnected&&status){status.className='op-notice';status.textContent='Images could not be checked right now; the deploy reports any image it cannot pull.';}}
 }
-async function opReview(request,opener){
+// The apply plan (C05 4.4), as the manager passes it (`value.plan`, or the pending-changes check's `plan`): created, started,
+// restarted, recreated and removed devices, links to connect and link ends to disconnect, with the reason for a restart or a
+// recreation. Pure functions: the review and the banner read the same words.
+const OP_PLAN_SECTIONS=[['added','Create',''],['started','Start',''],['restarted','Restart',''],['recreated','Recreate','These devices are recreated: configuration you have not saved on them is lost.'],['removed','Remove','These devices are removed from the VM: their unsaved configuration is lost.'],['links_added','Links to connect',''],['endpoints_removed','Link ends to disconnect','']];
+function opPlanList(plan,key){return Array.isArray(plan&&plan[key])?plan[key].map(String):[];}
+function opPlanChanges(plan){return !!plan&&(plan.deploys_lab===true||OP_PLAN_SECTIONS.some(([key])=>opPlanList(plan,key).length>0));}
+function opPlanMarkup(plan,failed){
+ if(failed==='unsupported')return '<p class="op-notice">The installed containerlab cannot show what Apply will change; the command runs without a plan.</p>';
+ if(failed||!plan||typeof plan!=='object')return '';
+ const reasons=plan.reasons&&typeof plan.reasons==='object'?plan.reasons:{};
+ const lines=plan.deploys_lab===true?'<p>The lab is not running: Apply deploys the whole topology.</p>':'';
+ if(!opPlanChanges(plan))return '<p class="op-plan-empty">Nothing to apply: the running lab already matches its topology file.</p>';
+ return `<div class="op-plan" id="op-plan">${lines}${OP_PLAN_SECTIONS.map(([key,heading,note])=>{
+  const names=opPlanList(plan,key);if(!names.length)return '';
+  const withReason=key==='restarted'||key==='recreated';
+  return `<h4>${esc(heading)} (${names.length})</h4>${note?`<p class="form-help">${esc(note)}</p>`:''}<ul>${names.map(n=>`<li>${esc(n)}${withReason&&reasons[n]?` <small class="op-plan-reason">· ${esc(reasons[n])}</small>`:''}</li>`).join('')}</ul>`;
+ }).join('')}</div>`;
+}
+// "r3 to create · r2 to recreate · 1 link to connect": the banner's detail line and the Deployment details line.
+function opPlanSummary(plan){
+ const part=(names,verb)=>names.length?(names.length<=2?names.join(', ')+' to '+verb:names.length+' devices to '+verb):'';
+ const count=(names,one,many)=>names.length?names.length+' '+(names.length===1?one:many):'';
+ return [part(opPlanList(plan,'added'),'create'),part(opPlanList(plan,'recreated'),'recreate'),part(opPlanList(plan,'started'),'start'),part(opPlanList(plan,'restarted'),'restart'),part(opPlanList(plan,'removed'),'remove'),count(opPlanList(plan,'links_added'),'link to connect','links to connect'),count(opPlanList(plan,'endpoints_removed'),'link end to disconnect','link ends to disconnect'),plan&&plan.deploys_lab===true?'the lab is not running':''].filter(Boolean).join(' · ');
+}
+function opHash(text){let hash=0;const s=String(text);for(let i=0;i<s.length;i++)hash=(hash*31+s.charCodeAt(i))>>>0;return hash.toString(36);}
+// A dismissed pending-changes notice stays dismissed while the plan is the same and comes back when it differs: the identity is a
+// digest of the canonical plan (every list sorted, the reasons' keys sorted); the check time is not part of it.
+function opPlanIdentity(plan){
+ const reasons=plan&&plan.reasons&&typeof plan.reasons==='object'?plan.reasons:{};
+ const canon={deploys_lab:!!(plan&&plan.deploys_lab),...Object.fromEntries(OP_PLAN_SECTIONS.map(([key])=>[key,[...opPlanList(plan,key)].sort()])),reasons:Object.fromEntries(Object.keys(reasons).sort().map(k=>[k,String(reasons[k])]))};
+ return opHash(JSON.stringify(canon));
+}
+// Run with options (C05 4.5): the controls of one review. Only the controls the installed command has; none at all → ''.
+const OP_RUN_KEYS=['nodes','max_workers','skip_post_deploy','keep_mgmt_net','graceful'];
+const OP_RUN_LIMIT_SECONDS=1250;
+function opPlainOptions(options){const plain={...(options||{})};for(const key of OP_RUN_KEYS)delete plain[key];return plain;}
+function opMaxWorkersProblem(value){
+ const text=String(value??'').trim();if(!text)return '';
+ return /^[1-9]\d{0,2}$/.test(text)&&Number(text)<=64?'':'Max workers must be a whole number from 1 to 64.';
+}
+// The request a form describes: the plain options (no chosen devices) or the chosen devices without Clean up (the two cannot combine).
+function opMergeOptions(action,plain,form){
+ const options={...(plain||{})};
+ const nodes=Array.isArray(form.nodes)?form.nodes:[];
+ if(nodes.length){options.nodes=nodes;delete options.cleanup;}
+ else if(action==='destroy')Object.assign(options,opDestroyOptions());
+ if(!opMaxWorkersProblem(form.maxWorkers)&&String(form.maxWorkers??'').trim())options.max_workers=Number(String(form.maxWorkers).trim());
+ if(form.skip)options.skip_post_deploy=true;
+ if(form.keep)options.keep_mgmt_net=true;
+ if(form.graceful)options.graceful=true;
+ return options;
+}
+function opGracefulNotice(options,count){
+ const workers=options&&options.max_workers;
+ if(!options||!options.graceful||!Number.isInteger(workers)||!(count>workers))return '';
+ const seconds=120*Math.ceil(count/workers);
+ return seconds>OP_RUN_LIMIT_SECONDS?`With these options the command may take longer than the manager waits for it (about ${Math.ceil(seconds/60)} minutes); choose more workers or leave Graceful stop off.`:'';
+}
+function opOptionsForm(action,caps,lab,options={},open=false){
+ const cap=caps&&caps.actions&&caps.actions[action];if(!cap)return '';
+ const devices=(lab&&lab.nodes||[]).map(n=>({name:n.definition_node||n.short_name||n.name,label:n.short_name||n.definition_node||n.name}));
+ const chosen=Array.isArray(options.nodes)?options.nodes:[];
+ const parts=[];
+ if(['deploy','destroy','save'].includes(action)&&cap.node_filter===true&&devices.length&&(action!=='deploy'||lab?.deployment?.status==='Not deployed')){
+  const help={deploy:'Only possible before the lab is deployed; add the rest later with Apply topology changes.',destroy:'The devices you leave out keep running; the lab folder is kept.',save:'Only the chosen devices save their configuration.'}[action];
+  parts.push(`<fieldset class="op-opt-devices"><legend>Choose devices</legend>${devices.map((d,i)=>`<label class="checkbox-label" for="op-opt-node-${i}"><input type="checkbox" id="op-opt-node-${i}" data-opt-node="${esc(d.name)}" ${chosen.includes(d.name)?'checked':''}> ${esc(d.label)}</label>`).join('')}<p class="form-help">${esc(help)}</p></fieldset>`);
+ }
+ if(['deploy','redeploy','destroy'].includes(action)&&cap.max_workers===true)parts.push(`<div class="op-opt-row"><label for="op-opt-workers">Max workers</label><input type="number" id="op-opt-workers" min="1" max="64" step="1" inputmode="numeric" value="${Number.isInteger(options.max_workers)?options.max_workers:''}"><p class="form-help">How many devices containerlab creates at once. Leave empty for containerlab's default; 1 or 2 spares memory when devices are VMs.</p></div>`);
+ if(['deploy','redeploy'].includes(action)&&cap.skip_post_deploy===true)parts.push(`<label class="checkbox-label" for="op-opt-skip"><input type="checkbox" id="op-opt-skip" ${options.skip_post_deploy?'checked':''}> Skip post-deploy actions</label>`);
+ if(['redeploy','destroy'].includes(action)&&cap.keep_mgmt_net===true)parts.push(`<label class="checkbox-label" for="op-opt-keepnet"><input type="checkbox" id="op-opt-keepnet" ${options.keep_mgmt_net?'checked':''}> Keep the management network</label>`);
+ if(['redeploy','destroy'].includes(action)&&cap.graceful===true)parts.push(`<label class="checkbox-label" for="op-opt-graceful"><input type="checkbox" id="op-opt-graceful" ${options.graceful?'checked':''}> Graceful stop</label><p class="form-help">Asks each device to shut down before removing it. A device that ignores the request is removed after two minutes, and with several devices the waits add up.</p>`);
+ if(!parts.length)return '';
+ return `<details class="op-options" id="op-run-options" ${open?'open':''}><summary>Run with options</summary><fieldset class="op-options-set" id="op-options-set">${parts.join('')}</fieldset><p class="form-help" id="op-options-status" role="status" aria-live="polite"></p></details>`;
+}
+function opReadForm(root){
+ const all=selector=>[...root.querySelectorAll(selector)];
+ const one=selector=>root.querySelector(selector);
+ return {nodes:all('[data-opt-node]').filter(i=>i.checked).map(i=>i.dataset.optNode),maxWorkers:(one('#op-opt-workers')||{}).value||'',skip:!!(one('#op-opt-skip')||{}).checked,keep:!!(one('#op-opt-keepnet')||{}).checked,graceful:!!(one('#op-opt-graceful')||{}).checked};
+}
+// Every change of an option previews the exact request again (the review is the preview of that request, and the helper's digest binds it).
+// The fold is disabled with "Checking…" meanwhile; each preview carries a sequence number (opPreviewSeq) and an older answer is dropped.
+async function opOptionsChanged(dialog,request,opener,plain,target){
+ const error=dialog.querySelector('.form-error'),set=dialog.querySelector('#op-options-set'),status=dialog.querySelector('#op-options-status'),confirm=dialog.querySelector('#op-confirm');
+ const form=opReadForm(dialog),problem=opMaxWorkersProblem(form.maxWorkers);
+ if(problem){if(error)error.textContent=problem;if(confirm){confirm.disabled=true;confirm.title='Fix the options above first';}return;}
+ if(error)error.textContent='';
+ if(set)set.disabled=true;if(status)status.textContent='Checking…';
+ try{await opReview({...request,options:opMergeOptions(request.action,plain,form)},opener,{keepOptionsOpen:true,focusId:target&&target.id||'',plain});}
+ catch(e){
+  if(set)set.disabled=false;if(status)status.textContent='';
+  if(error)error.textContent=e.message;
+  if(confirm){confirm.disabled=true;confirm.title='The options above were not accepted';}
+ }
+}
+let opPreviewSeq=0;
+async function opReview(request,opener,extra={}){
+ const withOptions=['deploy','redeploy','destroy','save'].includes(request.action);
+ // The fold needs the installed command's flags: the capabilities are read before the review, also when it opens from Start lab.
+ if(withOptions&&!extra.keepOptionsOpen){try{await opCapabilities();}catch{/* the fold stays absent; the review still works */}}
+ const seq=++opPreviewSeq;
  const value=await json('/operations/preview','POST',request);
+ if(seq!==opPreviewSeq)return null;
  // The helper's plan carries no lab id; the request does.
  const labId=request.lab_id||value.lab_id||'';
  const label=opLabels[value.action]||value.action,copy=opReviewCopy[value.action]||{title:()=>label+'?',body:'',confirm:label};
  const lab=typeof current==='function'&&labId&&labId===activeId?current():null;
+ const labOf=(state.labs||[]).find(l=>l.id===labId)||lab||null;
  const cleanup=!!request.options?.cleanup;
- const title=typeof copy.title==='function'?copy.title(value.name||opName(lab)||'this lab',value):copy.title;
- const body=(typeof copy.body==='function'?copy.body(value):copy.body)+(cleanup&&copy.cleanup?copy.cleanup:'');
+ const chosen=Array.isArray(request.options?.nodes)?request.options.nodes.map(String):[];
+ const chosenText=typeof statusNodeNames==='function'?statusNodeNames(chosen):chosen.join(', ');
+ const shownName=value.name||opName(lab)||'this lab';
+ let title=typeof copy.title==='function'?copy.title(shownName,value):copy.title;
+ let body=(typeof copy.body==='function'?copy.body(value):copy.body)+(cleanup&&copy.cleanup?copy.cleanup:'');
+ if(chosen.length){
+  if(value.action==='destroy'){title=`Destroy ${chosenText} in ${shownName}?`;body='The chosen devices are removed from the VM; the other devices and the lab folder stay. Configuration changes you have not saved on them are lost. Your saves, lab states and backups remain.';}
+  if(value.action==='save'){
+   title=chosen.length===1?`Save ${chosenText}'s running configuration as its startup configuration on the VM?`:`Save the configuration of ${chosenText} on the VM?`;
+   body=(chosen.length===1?'containerlab save --node-filter writes it':'containerlab save --node-filter writes each of them')+'. This is separate from Save in the lab’s header and from the manager’s backups.';
+  }
+  if(value.action==='deploy'){title=`Start ${chosenText} in ${shownName}?`;body='Creates and starts only the chosen devices, as the topology file describes them. Add the rest later with Apply topology changes.';}
+ }
  const technicalWarnings=value.warnings.filter(w=>/cleanup/i.test(w)),warnings=value.warnings.filter(w=>!technicalWarnings.includes(w));
  const disruptive=opDisruptive.includes(value.action);
+ const isNode=opNodeActions.includes(value.action);
+ // The apply review's plan: known, unknown (the installed containerlab cannot show it) or failed (its dry run could not read the file).
+ const planKnown=value.action==='apply'&&!!value.plan&&typeof value.plan==='object'&&!value.plan_failed;
+ const planEmpty=planKnown&&!opPlanChanges(value.plan);
  // Start lab (deploy) is the everyday, non-destructive action: its review shows the command plainly
  // instead of behind a fold, and skips the generic "this is checked again" caption other reviews keep.
  const plain=value.action==='deploy';
@@ -223,22 +358,40 @@ async function opReview(request,opener){
  const commandBlock=`${value.affected.length?`<h4>Devices</h4><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul>`:''}${command?`<h4>Command run on the VM</h4><pre class="op-output">${esc(command)}</pre>`:''}${technicalWarnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}`;
  const images=Array.isArray(value.images)?value.images.filter(i=>i&&typeof i.reference==='string'):[];
  const imageBlock=images.length?`<p class="form-help" id="op-review-images-status" role="status" aria-live="polite">Checking images…</p><details open class="op-images" id="op-review-images-section" hidden><summary>Images needing attention</summary><p class="form-help" id="op-review-images-fix" hidden></p><ul id="op-review-images"></ul></details>`:'';
+ const kept=Array.isArray(value.kept)?value.kept.map(String):[];
+ const keptLine=kept.length&&(value.action==='destroy'||value.action==='save')?`<p class="op-kept">${value.action==='destroy'?'Left running':'Not saved'}: ${esc(kept.join(', '))}</p>`:'';
+ const affectedVerb={'restart-node':'restarted','start-node':'started','stop-node':'stopped'}[value.action];
+ const affectedLine=copy.readonly||copy.quiet||value.action==='deploy'?'':isNode?`<p>1 device affected: ${esc(value.node_label||'')} (${esc(value.affected[0]?.name||'')}, ${esc(value.affected[0]?.state||'')}). The other devices of ${esc(value.name)} are not ${affectedVerb}.</p>`:planKnown?'':`<p>${value.affected.length} running ${value.affected.length===1?'device':'devices'} affected</p>`;
+ const plainOptions=extra.plain||opPlainOptions(request.options);
+ const fold=withOptions?opOptionsForm(value.action,opCaps,labOf,request.options||{},!!extra.keepOptionsOpen):'';
+ const deviceCount=chosen.length||(labOf&&labOf.nodes?labOf.nodes.length:value.affected.length);
+ const graceful=opGracefulNotice(request.options,deviceCount);
+ const confirmLabel=planEmpty||value.plan_failed==='error'?'Apply anyway':copy.confirm||label;
+ const confirmClass=planEmpty?'secondary':copy.danger||value.plan_failed==='error'?'danger':'primary';
+ const generic=disruptive&&!planEmpty;
  const dialog=opDialog('operation-review',title,`${copy.hideName?'':`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All labs on the VM')}</p>`}
  ${warnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}
+ ${value.action==='apply'?opPlanMarkup(value.plan,value.plan_failed):''}
  <p>${esc(body)}</p>
+ ${fold}
+ ${graceful?`<p class="op-notice" id="op-graceful-notice">${esc(graceful)}</p>`:''}
  ${imageBlock}
  ${mapLine}
- ${disruptive&&!['destroy','restart-node'].includes(value.action)?'<p>Configuration changes you have not saved are lost.</p>':''}
+ ${generic&&!['destroy',...opNodeActions].includes(value.action)?'<p>Configuration changes you have not saved are lost.</p>':''}
  ${opSaveLine(lab,value)}
- ${disruptive&&!['restart','restart-node'].includes(value.action)?'<p class="op-notice">Open CLI sessions to this lab will disconnect.</p>':''}
- ${copy.readonly||copy.quiet||value.action==='deploy'?'':value.action==='restart-node'?`<p>1 device affected: ${esc(value.node_label||'')} (${esc(value.affected[0]?.name||'')}, ${esc(value.affected[0]?.state||'')}). The other devices of ${esc(value.name)} are not restarted.</p>`:`<p>${value.affected.length} running ${value.affected.length===1?'device':'devices'} affected</p>`}
+ ${generic&&!['restart',...opNodeActions].includes(value.action)?'<p class="op-notice">Open CLI sessions to this lab will disconnect.</p>':''}
+ ${affectedLine}
+ ${keptLine}
  ${plain||!commandBlock?commandBlock:`<details><summary>Technical details</summary>${commandBlock}</details>`}
  ${copy.quiet&&typeof request.options?.text==='string'?`<details ${value.diff?'':'open'}><summary>Topology that will be saved (YAML)</summary><pre class="op-output" id="op-review-yaml">${esc(request.options.text)}</pre></details>`:''}
  ${value.diff?`<details open><summary>Topology file changes</summary><pre class="op-output">${esc(value.diff)}</pre></details>`:''}
  ${plain?'':'<p class="form-help">Runs on the lab VM. If the lab changes before you confirm, this check is repeated.</p>'}
- <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button>${lab&&lab.git_binding&&disruptive&&typeof gitSaveProgress==='function'?'<button class="button secondary" id="op-save-first">Save first</button>':''}<button class="button ${copy.danger?'danger':'primary'}" id="op-confirm">${esc(copy.confirm||label)}</button></div>`,opener);
+ <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button>${lab&&lab.git_binding&&disruptive&&typeof gitSaveProgress==='function'?'<button class="button secondary" id="op-save-first">Save first</button>':''}<button class="button ${confirmClass}" id="op-confirm">${esc(confirmLabel)}</button></div>`,opener);
  $('op-cancel').onclick=()=>dialog.close();
  opReviewImages(dialog,images);
+ const foldElement=dialog.querySelector('#op-run-options');
+ if(foldElement&&typeof foldElement.addEventListener==='function')foldElement.addEventListener('change',event=>{opOptionsChanged(dialog,request,opener,plainOptions,event.target);});
+ if(extra.focusId){const back=dialog.querySelector('#'+extra.focusId);if(back&&typeof back.focus==='function')back.focus();}
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};
  $('op-confirm').onclick=()=>opTask(dialog,async()=>{
   const job=await json('/operations/confirm','POST',{token:value.token});dialog.close();
@@ -252,12 +405,16 @@ async function opReview(request,opener){
   try{await refresh();}catch{}
   // Starting a lab opens its live output right away — no second click for "View output" — but a
   // student who deliberately closes it is not interrupted again by the same launch.
-  if(plain){await opShowJob(job.id,{auto:true});return;}
+  if(plain&&!chosen.length){await opShowJob(job.id,{auto:true});return;}
   // Lifecycle actions on the open lab report through the header and the banner ([View output]);
-  // result-bearing actions open their output right away.
-  if(opLifecycle.includes(value.action)&&labId&&labId===activeId&&typeof renderLabBanner==='function'){notify(label+'…');return;}
+  // result-bearing actions open their output right away. A toast names the device, never the bare lab-wide verb.
+  if(opLifecycle.includes(value.action)&&labId&&labId===activeId&&typeof renderLabBanner==='function'){
+   const named=(value.action==='start-node'||value.action==='stop-node'||chosen.length)&&typeof operationLabel==='function'?operationLabel(value.action,{...job,node_label:job.node_label||value.node_label,nodes:job.nodes||chosen}):label;
+   notify(named+'…');return;
+  }
   await opShowJob(job.id);
  });
+ return dialog;
 }
 function opInspectionRows(output){
  let value;
@@ -275,11 +432,59 @@ function opInspectionRows(output){
  for(const [lab,nodes] of groups){if(!Array.isArray(nodes))continue;for(const n of nodes){
   if(!n||typeof n!=='object'||!n.name)continue;
   const label=n.labels||{};
-  rows.push({topology:n.absLabPath||n.labPath||label['clab-topo-file']||'',lab:n.lab_name||lab,node:n.name,kind:n.kind||'',image:n.image||'',state:[n.state||n.status||'unknown',n.health_status||n.health||''].filter(v=>typeof v==='string'&&v).join(' · '),ipv4:n.ipv4_address||'',ipv6:n.ipv6_address||''});
+  rows.push({topology:n.absLabPath||n.labPath||label['clab-topo-file']||'',lab:n.lab_name||lab,node:n.name,kind:n.kind||'',image:n.image||'',state:[n.state||n.status||'unknown',n.health_status||n.health||''].filter(v=>typeof v==='string'&&v).join(' · '),ipv4:n.ipv4_address||'',ipv6:n.ipv6_address||'',id:typeof n.container_id==='string'?n.container_id.slice(0,12):'',owner:typeof n.owner==='string'?n.owner:''});
   if(rows.length>=10000)return rows;
  }}return rows;
 }
-function opInspectionTable(rows){return `<div class="op-inspection"><table><caption>${rows.length} running ${rows.length===1?'device':'devices'}</caption><thead><tr>${['Topology','Lab','Device','Type / image','State / health','IPv4 / IPv6'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.topology)||'—'}</td><td>${esc(r.lab)}</td><td>${esc(r.node)}</td><td>${esc(r.kind)}<small>${esc(r.image)}</small></td><td>${esc(r.state)}</td><td>${esc(r.ipv4)}<small>${esc(r.ipv6)}</small></td></tr>`).join('')}</tbody></table></div>`;}
+// The six columns of the table keep their names and order (the Lab column included); ID and Owner are appended.
+const OP_INSPECT_COLUMNS=[['topology','Topology'],['lab','Lab'],['node','Device'],['kind','Type / image'],['state','State / health'],['ipv4','IPv4 / IPv6'],['id','ID'],['owner','Owner']];
+function opInspectionValue(row,key){return key==='kind'?row.kind+' '+row.image:key==='ipv4'?row.ipv4+' '+row.ipv6:String(row[key]??'');}
+// Pure: a sorted copy (dir 'asc' or 'desc'; anything else keeps the order given), numbers compared as numbers.
+function opInspectionSort(rows,key,dir){
+ const list=rows.slice();if(!key||(dir!=='asc'&&dir!=='desc'))return list;
+ const sign=dir==='desc'?-1:1;
+ return list.map((row,index)=>({row,index})).sort((a,b)=>sign*opInspectionValue(a.row,key).localeCompare(opInspectionValue(b.row,key),undefined,{numeric:true,sensitivity:'base'})||a.index-b.index).map(x=>x.row);
+}
+// Pure: a case-insensitive substring over every column, the Lab included. No wildcard grammar.
+function opInspectionFilter(rows,text){
+ const needle=String(text||'').trim().toLowerCase();if(!needle)return rows;
+ return rows.filter(row=>OP_INSPECT_COLUMNS.map(([key])=>opInspectionValue(row,key)).join(' ').toLowerCase().includes(needle));
+}
+function opInspectionIsRunning(row){return /^running\b/i.test(String(row&&row.state||''));}
+// Counts only the running rows: a stopped or exited container is listed but is not a running device.
+function opInspectionCaption(shown,all){
+ const n=shown.filter(opInspectionIsRunning).length,m=all.filter(opInspectionIsRunning).length;
+ return (n===m?String(m):n+' of '+m)+' running '+(m===1?'device':'devices');
+}
+function opInspectionHead(view){
+ return '<tr>'+OP_INSPECT_COLUMNS.map(([key,label])=>{const sorted=view.key===key&&view.dir;return `<th scope="col" aria-sort="${sorted==='asc'?'ascending':sorted==='desc'?'descending':'none'}"><button type="button" class="op-sort" data-op-sort="${key}">${label}</button></th>`;}).join('')+'</tr>';
+}
+function opInspectionBody(rows){
+ if(!rows.length)return `<tr><td colspan="${OP_INSPECT_COLUMNS.length}" class="op-inspection-empty">No device matches.</td></tr>`;
+ return rows.map(r=>`<tr><td>${esc(r.topology)||'—'}</td><td>${esc(r.lab)}</td><td>${esc(r.node)}</td><td>${esc(r.kind)}<small>${esc(r.image)}</small></td><td>${esc(r.state)}</td><td>${esc(r.ipv4)}<small>${esc(r.ipv6)}</small></td><td class="mono">${esc(r.id)||'—'}</td><td>${esc(r.owner)||'—'}</td></tr>`).join('');
+}
+// view: {key, dir, filter} kept by the dialog that shows the table, so a repeated render keeps the person's sort and filter.
+function opInspectionTable(rows,view={}){
+ const shown=opInspectionSort(opInspectionFilter(rows,view.filter),view.key,view.dir);
+ return `<div class="op-inspection-tools"><label for="op-inspect-filter">Filter devices</label><input type="search" id="op-inspect-filter" value="${esc(view.filter||'')}" autocomplete="off"></div><div class="op-inspection"><table><caption>${opInspectionCaption(shown,rows)}</caption><thead>${opInspectionHead(view)}</thead><tbody>${opInspectionBody(shown)}</tbody></table></div>`;
+}
+// Wire the filter box and the header buttons of a rendered table; only the table's own parts are redrawn, so typing keeps focus.
+function opInspectionBind(root,rows,view){
+ const filter=root&&root.querySelector?root.querySelector('#op-inspect-filter'):null,table=root&&root.querySelector?root.querySelector('table'):null;
+ if(!filter||!table)return;
+ const redraw=refocus=>{
+  const shown=opInspectionSort(opInspectionFilter(rows,view.filter),view.key,view.dir);
+  table.innerHTML=`<caption>${opInspectionCaption(shown,rows)}</caption><thead>${opInspectionHead(view)}</thead><tbody>${opInspectionBody(shown)}</tbody>`;
+  if(refocus){const back=table.querySelector('[data-op-sort="'+refocus+'"]');if(back&&typeof back.focus==='function')back.focus();}
+ };
+ filter.addEventListener('input',()=>{view.filter=filter.value;redraw('');});
+ table.addEventListener('click',event=>{
+  const button=event.target&&event.target.closest?event.target.closest('[data-op-sort]'):null;if(!button)return;
+  const key=button.dataset.opSort;
+  if(view.key!==key){view.key=key;view.dir='asc';}else if(view.dir==='asc')view.dir='desc';else{view.key='';view.dir='';}
+  redraw(key);
+ });
+}
 // The outcome is what a reader looks for first: a large green (or red) banner names
 // the action, the lab and the result before the raw command output; the exit code is a detail.
 // A failure a student can act on, in words. Image references are shown as the topology names them
@@ -290,11 +495,58 @@ function opJobHint(job){
  if(images.length)return 'The VM does not have '+(images.length>1?'these images':'this image')+' and could not download '+(images.length>1?'them':'it')+': '+images.join(', ')+'. Check the image name on the devices that use '+(images.length>1?'them':'it')+' (open the topology file and choose Open in Lab Builder…, then the device\'s Image field), or ask for the image to be installed on the VM.';
  return '';
 }
+// The imperative name of a job, wherever a job record is at hand: Start/Stop name their one device ("Stop ceos", never the bare
+// "Stop device" a letter away from "Stop devices"), and a job limited to chosen devices (its public `nodes`) names them
+// ("Destroy ceos"). Restart device keeps its table word. Pure.
+const OP_PAST={'start-node':'started','stop-node':'stopped',destroy:'destroyed',save:'saved',deploy:'started'};
+function opJobDevices(job){
+ const action=job?.action;
+ if((action==='start-node'||action==='stop-node')&&job.node_label)return String(job.node_label);
+ if(['destroy','save','deploy'].includes(action)&&typeof statusJobNodes==='function'){const names=statusJobNodes(job);if(names.length)return statusNodeNames(names);}
+ return '';
+}
+function opJobLabel(job){
+ const who=opJobDevices(job),action=job?.action;
+ if(!who)return opLabels[action]||action;
+ return {'start-node':'Start','stop-node':'Stop',destroy:'Destroy',save:'Save',deploy:'Start'}[action]+' '+who;
+}
 function opJobBanner(job){
- const label=opLabels[job.action]||job.action,done=job.status==='succeeded',failed=['failed','interrupted'].includes(job.status);
+ const who=opJobDevices(job),label=opJobLabel(job),done=job.status==='succeeded',failed=['failed','interrupted'].includes(job.status),stopped=job.status==='cancelled';
  const detail=[job.name,job.node_label,job.message].filter(Boolean).join(' · ');
+ if(who){
+  const exit2=job.exit_code===null||job.exit_code===undefined?'':'Exit code '+job.exit_code;
+  return {tone:done?'good':failed?'bad':stopped?'warn':'running',title:done?`✔ ${who} ${OP_PAST[job.action]}`:failed?`✖ ${label} ${job.status==='interrupted'?'interrupted':'failed'}`:stopped?`■ ${label} ended early: you stopped it`:`${typeof operationLabel==='function'?operationLabel(job.action,job):label}…`,detail,exit:exit2,...(opJobHint(job)?{hint:opJobHint(job)}:{})};
+ }
  const exit=job.exit_code===null||job.exit_code===undefined?'':'Exit code '+job.exit_code;
- return {tone:done?'good':failed?'bad':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:`${label} ${job.status}…`,detail,exit,...(opJobHint(job)?{hint:opJobHint(job)}:{})};
+ return {tone:done?'good':failed?'bad':stopped?'warn':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:stopped?`■ ${label} ended early: you stopped it`:`${label} ${job.status}…`,detail,exit,...(opJobHint(job)?{hint:opJobHint(job)}:{})};
+}
+// The Stop block of the output window. Pure: which of none | ask | asking | stopping applies. Only the actions that die with the
+// helper's channel (STATUS_STOPPABLE, status.js) are ever offered, and only while the job is queued or running.
+function opStopMode(job,asked,requested){
+ const list=typeof STATUS_STOPPABLE!=='undefined'?STATUS_STOPPABLE:[];
+ if(!job||!list.includes(job.action)||!['queued','running'].includes(job.status))return 'none';
+ if(job.cancel_requested||requested)return 'stopping';
+ return asked?'asking':'ask';
+}
+function opStopMarkup(mode,job){
+ if(mode==='ask')return '<button type="button" class="button secondary small" id="op-stop-ask">Stop this operation…</button>';
+ if(mode==='asking'){
+  const label=opJobLabel(job),question=typeof statusStopQuestion==='function'?statusStopQuestion(job.action,label,job.name||'the lab'):`End the running command (${label}) on ${job.name||'the lab'}?`;
+  return `<div role="group" aria-labelledby="op-stop-question"><p id="op-stop-question">${esc(question)}</p><div class="actions"><button type="button" class="button secondary small" id="op-stop-keep">Keep running</button><button type="button" class="button danger small" id="op-stop-confirm">Stop</button></div></div>`;
+ }
+ if(mode==='stopping')return '<p id="op-stop-status" role="status" tabindex="-1">Stopping… the manager has asked the lab VM to end the command.</p>';
+ return '';
+}
+// The Copy output button: a click of its own (this page may not load shell.js), the Copied flip and announcement from
+// clipboard.js (copyFeedback), and nothing to copy while the output is still "Waiting for the VM…".
+function opBindCopyOutput(getOutput,id='op-copy-output'){
+ const button=$(id);if(!button)return null;
+ button.onclick=async()=>{
+  const text=getOutput();if(!text||typeof copyText!=='function')return;
+  const ok=await copyText(text,button);
+  if(typeof copyFeedback==='function')copyFeedback(button,ok);
+ };
+ return button;
 }
 // Auto-opened right after a confirmed launch (Start lab today), with no second "View output" click; a
 // student who closes it on purpose does not have it pop back up on the next poll tick — its job id goes
@@ -303,10 +555,37 @@ function opJobBanner(job){
 // holds it back. Moving to another lab closes an auto-opened dialog instead of leaving it open over a lab
 // it is not about, and — being closed the same way — it does not come back there on its own either.
 const opClosedOutputs=new Set();
-async function opShowJob(id,{auto=false}={}){
+async function opShowJob(id,{auto=false,stop=false}={}){
  if(auto&&opClosedOutputs.has(id))return;
  clearTimeout(opOutputTimer);
- const dialog=opDialog('operation-output','Lab operation','<div id="op-job-banner" class="op-banner" hidden></div><pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
+ const dialog=opDialog('operation-output','Lab operation','<div id="op-job-banner" class="op-banner" tabindex="-1" hidden></div><div id="op-job-stop" class="op-stop" hidden></div>'+(typeof copyText==='function'?'<div class="op-output-tools"><button type="button" id="op-copy-output" class="button ghost small" data-label="Copy output" aria-label="Copy the command output" data-copy-target="op-job-output" disabled>Copy output</button><span class="copy-status" role="status"></span></div>':'')+'<pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
+ // The sort and filter of a previous inspect run live on the reused dialog: every run starts with a clean view.
+ dialog._inspectView={key:'',dir:'',filter:''};
+ // Stop: the block is rebuilt only when its mode changes; focus moves only after the person's own action, or when the block they were in goes away.
+ let latest=null,asked=stop,requested=false,shownMode='',focusNext=stop?'keep':'',lastOutput='';
+ const copyOutputButton=opBindCopyOutput(()=>lastOutput);
+ const renderStop=()=>{
+  const box=$('op-job-stop');if(!box||!latest)return;
+  const mode=opStopMode(latest,asked,requested);
+  if(mode!==shownMode){
+   const held=typeof document!=='undefined'&&document.activeElement&&typeof box.contains==='function'&&box.contains(document.activeElement);
+   shownMode=mode;box.innerHTML=opStopMarkup(mode,latest);box.hidden=mode==='none';
+   // A poll that turns the confirmation into Stopping… (the stop was requested elsewhere) removes the button that held focus.
+   if(held&&mode==='stopping')focusNext='status';
+   if(mode==='none'&&held){const banner=$('op-job-banner');if(banner&&typeof banner.focus==='function')banner.focus();}
+   $('op-stop-ask')?.addEventListener('click',()=>{asked=true;focusNext='keep';renderStop();});
+   $('op-stop-keep')?.addEventListener('click',()=>{asked=false;focusNext='ask';renderStop();});
+   $('op-stop-confirm')?.addEventListener('click',async()=>{
+    let sent=false;
+    await opTask(dialog,async()=>{await json('/operations/'+id+'/cancel','POST',{});sent=true;});
+    if(sent){requested=true;focusNext='status';}else{asked=false;focusNext='ask';}
+    renderStop();
+   });
+  }
+  const target={keep:'op-stop-keep',ask:'op-stop-ask',status:'op-stop-status'}[focusNext];
+  if(target&&$(target)&&typeof $(target).focus==='function')$(target).focus();
+  focusNext='';
+ };
  // A page that acts on the outcome (the lab builder's opJobDone) hears it even when this dialog was closed
  // while the job ran; a poll that fails is repeated, because one lost answer must not hide how the job ended.
  let fails=0;const follows=typeof opJobDone==='function';
@@ -316,16 +595,19 @@ async function opShowJob(id,{auto=false}={}){
    const job=await(await api('/operations/'+id)).json();fails=0;
    if(auto&&dialog.open&&job.lab_id&&typeof activeId==='string'&&activeId&&job.lab_id!==activeId)dialog.close();
    if(!dialog.open){if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(follows)opJobDone(job);}return;}
-   const heading=dialog.querySelector('h2');if(heading)heading.textContent=(opLabels[job.action]||job.action)+(job.name?' · '+job.name:'');
+   const heading=dialog.querySelector('h2');if(heading)heading.textContent=opJobLabel(job)+(job.name?' · '+job.name:'');
    const banner=opJobBanner(job),shown=$('op-job-banner');shown.hidden=false;shown.className='op-banner '+banner.tone;shown.innerHTML=`<strong>${esc(banner.title)}</strong><span>${esc(banner.detail)}</span>${banner.exit?`<small class="${job.exit_code?'op-exit-bad':''}">${esc(banner.exit)}</small>`:''}${banner.hint?`<p class="op-banner-hint">${esc(banner.hint)}</p>`:''}`;
-   const pre=$('op-job-output'),follow=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;pre.textContent=job.output||'Waiting for the VM…';if(follow)pre.scrollTop=pre.scrollHeight;
+   latest=job;renderStop();
+   const pre=$('op-job-output'),follow=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;pre.textContent=job.output||'Waiting for the VM…';lastOutput=job.output||'';if(copyOutputButton)copyOutputButton.disabled=!lastOutput;if(follow)pre.scrollTop=pre.scrollHeight;
    const rows=opInspectionRows(job.output||'');
    const inspectAction=['inspect','inspect-all'].includes(job.action);
    dialog.classList.toggle('inspection-dialog',inspectAction);
    const inspected=inspectAction&&job.status==='succeeded'&&rows.length;
    const emptyInspection=inspectAction&&job.status==='succeeded'&&/(^|\n)\s*(?:\[\s*\]|\{\s*\})\s*(?=\n|$)/.test(job.output||'');
    pre.hidden=!!inspected||emptyInspection;
-   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p>${opOnBuilder()?'<div id="op-published-block"></div>':'<button class="button primary" id="op-open-published">Deploy or add this lab…</button>'}`:'');
+   const inspectView=dialog._inspectView||(dialog._inspectView={key:'',dir:'',filter:''});
+   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows,inspectView):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p>${opOnBuilder()?'<div id="op-published-block"></div>':'<button class="button primary" id="op-open-published">Deploy or add this lab…</button>'}`:'');
+   if(inspected)opInspectionBind($('op-job-result'),rows,inspectView);
    if(opPublishedPath(job)&&opOnBuilder())opRenderPublished(dialog,opPublishedPath(job));
    $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(opPublishedPath(job))));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
@@ -377,7 +659,7 @@ function opRenderPublished(dialog,path,focus=false){
 async function opHistory(labId=''){
  const jobs=await(await api('/operations')).json();
  const lab=labId?(state.labs||[]).find(l=>l.id===labId):null;
- const dialog=opDialog('operation-history','Operation history'+(lab?' · '+lab.name:''),`<p>Past lab operations and their output are kept on this manager.</p><div class="op-history">${jobs.filter(j=>!labId||j.lab_id===labId).map(j=>`<button class="button secondary" data-job="${esc(j.id)}"><strong>${esc(j.name)}${j.node_label?' · '+esc(j.node_label):''} · ${esc(opLabels[j.action]||j.action)}</strong><small>${esc(opStatusWord(j.status))} · ${esc(opWhen(j.created))}</small></button>`).join('')||'<p>No lab operations yet. Starting, stopping or redeploying a lab shows up here.</p>'}</div>`);
+ const dialog=opDialog('operation-history','Operation history'+(lab?' · '+lab.name:''),`<p>Past lab operations and their output are kept on this manager.</p><div class="op-history">${jobs.filter(j=>!labId||j.lab_id===labId).map(j=>`<button class="button secondary" data-job="${esc(j.id)}"><strong>${esc(j.name)}${j.node_label&&!opJobDevices(j)?' · '+esc(j.node_label):''} · ${esc(opJobLabel(j))}</strong><small>${esc(opStatusWord(j.status))} · ${esc(opWhen(j.created))}</small></button>`).join('')||'<p>No lab operations yet. Starting, stopping or redeploying a lab shows up here.</p>'}</div>`);
  dialog.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>opShowJob(b.dataset.job));
 }
 // Deploy lab keeps the manager in step with the VM: the workspace (nodes, map and VM
@@ -443,27 +725,52 @@ function opReopenReturn(value){
 function openDeploy(){return opTask(null,()=>opBrowse());}
 function opNewTab(values){const url='/static/workspace.html#'+new URLSearchParams(values);if(!window.open(url,'_blank'))opDialog('op-open-tab','Open the CLI launcher',`<p>Your browser blocked the new tab. Use this button instead:</p><a class="button primary" href="${esc(url)}" target="_blank" rel="opener">Open CLI launcher <span aria-hidden="true">↗</span></a>`);}
 function opTopologyEntries(entries){return entries.filter(entry=>entry.directory||/\.clab\.ya?ml$/i.test(entry.name));}
-// path: the folder to open; labId: opened as "Lab files · <lab>" starting in the lab's own folder.
-async function opBrowse(path='',labId=''){
+// Sizes in the file tree and the images table: Docker-style decimal units, one decimal.
+function opSize(bytes){
+ const n=Number(bytes);if(!Number.isFinite(n)||n<0)return '';
+ if(n<1000)return Math.round(n)+' B';
+ const units=['kB','MB','GB','TB'];let size=n/1000,i=0;
+ while(size>=1000&&i<units.length-1){size/=1000;i++;}
+ return size.toFixed(1)+' '+units[i];
+}
+// Files mode (C03 4.4): the dialog opened for a lab on a VM whose helper reports `diagnostics`. It is a property of the dialog:
+// every listing it makes sends files:true with the lab, keeps the title and help line, and lists the files the manager can show,
+// so the node folders under clab-<lab>/ and their startup configurations are reachable. Topology files first.
+function opFileEntries(entries){
+ const rank=entry=>entry.kind==='topology'||(!entry.kind&&!entry.directory&&/\.clab\.ya?ml$/i.test(entry.name))?0:entry.directory?1:2;
+ return entries.map((entry,index)=>({entry,index})).sort((a,b)=>rank(a.entry)-rank(b.entry)||a.index-b.index).map(x=>x.entry);
+}
+function opFileLabel(entry){return '◇ '+entry.name+(typeof entry.size==='number'?' · '+opSize(entry.size):'');}
+// path: the folder to open; labId: opened as "Lab files · <lab>" starting in the lab's own folder (options.root: at the roots instead).
+async function opBrowse(path='',labId='',options={}){
  const lab=labId?(state.labs||[]).find(l=>l.id===labId):null,labPath=opPath(lab);
- if(lab&&!path&&labPath)path=labPath.includes('/')?labPath.slice(0,labPath.lastIndexOf('/')):'';
- const result=await json('/operations/browse','POST',{path});
- const dialog=opDialog('op-browser',lab?'Lab files · '+lab.name:'Deploy a new lab',`<p class="op-path">${esc(result.path||'Lab folders on the VM')}</p><div class="actions"><button class="button secondary" id="op-roots">All lab folders</button><button class="button secondary" id="op-up">Up one folder</button><button class="button secondary" id="op-build">Build a lab visually…</button><button class="button secondary" id="op-create">Write a new topology…</button><button class="button secondary" id="op-clone">Download a lab from GitHub…</button><button class="button secondary" id="op-popular">Browse popular labs…</button></div><div class="op-file-tree" id="op-file-tree" aria-label="Lab topology files"></div><p class="form-help">Open a folder and pick a topology file (.clab.yaml) to view or deploy it. Only topology files are listed, up to 500 per folder.</p>${lab?'':'<p class="form-help">These are files on the lab VM. Is the topology file on your computer instead? <button type="button" class="link-button" id="op-browse-upload">Upload it from this computer…</button></p>'}`);
+ if(lab&&!opCaps){try{await opCapabilities();}catch{/* the dialog stays the topology browser */}}
+ const files=!!lab&&opCaps?.diagnostics===true;
+ // Files mode is bounded to this lab's own folder: no list of all lab folders, and Up stops there (other labs' files would be refused by the viewer).
+ const labFolder=files&&labPath.includes('/')?labPath.slice(0,labPath.lastIndexOf('/')):'';
+ if(lab&&!path&&!options.root&&labPath)path=labPath.includes('/')?labPath.slice(0,labPath.lastIndexOf('/')):'';
+ const listing=folder=>json('/operations/browse','POST',files?{path:folder,files:true,lab_id:labId}:{path:folder});
+ const result=await listing(path);
+ const dialog=opDialog('op-browser',lab?'Lab files · '+lab.name:'Deploy a new lab',`<p class="op-path">${esc(result.path||'Lab folders on the VM')}</p><div class="actions">${files?'':'<button class="button secondary" id="op-roots">All lab folders</button>'}<button class="button secondary" id="op-up">Up one folder</button><button class="button secondary" id="op-build">Build a lab visually…</button><button class="button secondary" id="op-create">Write a new topology…</button><button class="button secondary" id="op-clone">Download a lab from GitHub…</button><button class="button secondary" id="op-popular">Browse popular labs…</button></div><div class="op-file-tree" id="op-file-tree" aria-label="${files?'Lab files':'Lab topology files'}"></div><p class="form-help">${files?'Files the manager can show (text and configuration files). Other files on the VM are not listed.':'Open a folder and pick a topology file (.clab.yaml) to view or deploy it. Only topology files are listed, up to 500 per folder.'}</p>${lab?'':'<p class="form-help">These are files on the lab VM. Is the topology file on your computer instead? <button type="button" class="link-button" id="op-browse-upload">Upload it from this computer…</button></p>'}`);
  {const upload=$('op-browse-upload');if(upload)upload.onclick=()=>{dialog.close();opUpload();};}
  const addEntries=(container,entries)=>{
-  entries=opTopologyEntries(entries);
-  if(!entries.length){container.textContent='No topology files in this folder.';return;}
+  entries=files?opFileEntries(entries):opTopologyEntries(entries);
+  if(!entries.length){container.textContent=files?'No files the manager can show in this folder.':'No topology files in this folder.';return;}
   for(const entry of entries){
    if(entry.directory){
     const folder=document.createElement('details'),summary=document.createElement('summary'),children=document.createElement('div');
     summary.textContent=entry.name;children.className='op-tree-children';folder.append(summary,children);container.append(folder);
     let loaded=false,loading=false;
-    folder.ontoggle=async()=>{if(!folder.open||loaded||loading)return;loading=true;children.textContent='Loading…';try{const listing=await json('/operations/browse','POST',{path:entry.path});children.replaceChildren();addEntries(children,listing.entries);loaded=true;}catch(e){children.textContent=e.message+' Close and reopen this folder to retry.';}finally{loading=false;}};
-   }else{const button=document.createElement('button');button.className='op-tree-file';button.textContent='◇ '+entry.name;button.onclick=()=>opTask(dialog,()=>opEdit(entry.path,lab?lab.id:''));container.append(button);}
+    folder.ontoggle=async()=>{if(!folder.open||loaded||loading)return;loading=true;children.textContent='Loading…';try{const answer=await listing(entry.path);children.replaceChildren();addEntries(children,answer.entries);loaded=true;}catch(e){children.textContent=e.message+' Close and reopen this folder to retry.';}finally{loading=false;}};
+   }else{const button=document.createElement('button');button.className='op-tree-file';button.textContent=files?opFileLabel(entry):'◇ '+entry.name;
+    const topology=!files||entry.kind==='topology'||(!entry.kind&&/\.clab\.ya?ml$/i.test(entry.name));
+    button.onclick=()=>opTask(dialog,()=>topology?opEdit(entry.path,lab?lab.id:''):opView(entry.path,labId));container.append(button);}
   }
  };
  addEntries($('op-file-tree'),result.entries);
- $('op-roots').onclick=()=>opTask(dialog,()=>opBrowse());$('op-up').onclick=()=>opTask(dialog,()=>opBrowse(result.parent||''));
+ {const roots=$('op-roots');if(roots)roots.onclick=()=>opTask(dialog,()=>opBrowse());}
+ {const up=$('op-up');if(files&&labFolder&&result.path===labFolder){up.disabled=true;up.title="This is the lab's folder";}}
+ $('op-up').onclick=()=>opTask(dialog,()=>opBrowse(result.parent||'',files?labId:'',{root:!result.parent}));
  $('op-build').onclick=()=>opBuilderOpen({root:opBuilderRoot(result.path,opCaps?.roots)});
  $('op-create').onclick=()=>opEdit('','',(result.path||'/srv/containerlab-node-manager/projects')+'/new-lab.clab.yaml');$('op-clone').onclick=()=>opClone();$('op-popular').onclick=()=>opTask(dialog,()=>opPopular());
  // Listing files does not depend on Containerlab's command help probes. Render
@@ -473,11 +780,19 @@ async function opBrowse(path='',labId=''){
  opCapabilities().then(caps=>{
   if(!clone.isConnected)return;
   clone.disabled=!caps.network||caps.actions?.clone?.available===false;popular.disabled=!caps.network;
-  if(!caps.network)help.textContent+=' Downloading labs from the internet is turned off on this VM. An administrator can enable it (--allow-downloads) in VM setup.';
+  if(!caps.network&&!files)help.textContent+=' Downloading labs from the internet is turned off on this VM. An administrator can enable it (--allow-downloads) in VM setup.';
  }).catch(()=>{
   if(!clone.isConnected)return;
   help.textContent+=' Files are available, but the VM command check failed — open Diagnostics for details. Online downloads stay off.';
  });
+}
+// A file of the lab's folder that is not a topology (a startup configuration, a map file): read-only, hidden lines said.
+// The manager redacts lines with passwords, secrets and SNMP communities and shows at most the last 512 KiB.
+async function opView(path,labId){
+ const value=await json('/operations/view','POST',{lab_id:labId,path});
+ const dialog=opDialog('op-editor','File on the VM',`<p class="op-path">${esc(value.name||path)}</p><p class="form-help">Lines with passwords, secrets or SNMP communities are hidden. This copy is for reading, not for loading onto a device.</p>${value.truncated?'<p class="op-notice">Showing the last 512 KiB of this file.</p>':''}${typeof copyText==='function'?'<div class="op-output-tools"><button type="button" id="op-copy-view" class="button ghost small" data-label="Copy" aria-label="Copy the file text" data-copy-target="op-view-text">Copy</button><span class="copy-status" role="status"></span></div>':''}<label for="op-view-text">File contents</label><textarea class="op-code" id="op-view-text" spellcheck="false" readonly></textarea>`);
+ $('op-view-text').value=value.text||'';
+ opBindCopyOutput(()=>value.text||'','op-copy-view');
 }
 // upload: {text, file} for a topology the student chose on their own computer (opUpload); it goes
 // through the same review as a topology typed here.
@@ -610,10 +925,13 @@ function opQuickActions(lab,discovery,isBusy=false){
  const blocked=!lab?'':!discovery?.connected?'Connect the VM first':isBusy?'Wait for the current operation to finish':!opPath(lab)?'This lab has no topology file on the VM (Advanced › Deployment details)':!known?'Lab status is unknown — refresh the lab list':'';
  return {startAction:status==='Not deployed'?'deploy':'start',canStart:available&&status!=='Running',canDestroy:available&&status!=='Not deployed',available,reason:blocked||(status==='Running'?'The lab is already running':''),destroyReason:blocked||(status==='Not deployed'?'Nothing to destroy — the lab is not running':'')};
 }
-// Restart device (one node): whether the action is available for this device, and the reason when it is
-// not — one answer for the map's right-click menu, the Devices table and the device panel. A stopped
-// device is eligible (containerlab's start/restore path); a device the VM does not list is not.
-function opRestartState(lab,n,discovery,isBusy=false){
+// The single-device actions (Restart device, Start device, Stop device): whether the action is available for this device, and the
+// reason when it is not — one answer for the map's right-click menu, the Devices table and the device panel. `own` says the reason is
+// the device's own state (a running device's disabled Start needs no note beside the buttons). The first eight checks are shared; a
+// stopped device is eligible for Restart (containerlab's start/restore path); a device the VM does not list is not. Capabilities not
+// loaded yet count as available (the click loads them and checks again), only a loaded answer that lacks the action disables it.
+const OP_NODE_VERBS={'restart-node':'restart','start-node':'start','stop-node':'stop'};
+function opNodeChecks(lab,n,discovery,isBusy=false){
  const dev=n?.short_name||n?.name||'This device',status=lab?.deployment?.status;
  if(!lab||!n)return {ok:false,reason:'This device is not in the lab'};
  if(!discovery?.connected)return {ok:false,reason:'Connect the VM first'};
@@ -623,7 +941,24 @@ function opRestartState(lab,n,discovery,isBusy=false){
  if(status==='Unknown'||!status)return {ok:false,reason:'Lab status is unknown — refresh the lab list'};
  if(status==='Not deployed')return {ok:false,reason:'The lab is not running'};
  if(!n.discovered||n.runtime_state==='absent')return {ok:false,reason:`${dev} is not deployed on the VM`};
- if(opCaps&&opCaps.actions&&opCaps.actions['restart-node']?.available!==true)return {ok:false,reason:'Not available on this VM — its containerlab or helper cannot restart one device (see Diagnostics)'};
+ return null;
+}
+function opNodeActionState(action,lab,n,discovery,isBusy=false){
+ const shared=opNodeChecks(lab,n,discovery,isBusy);if(shared)return shared;
+ const dev=n.short_name||n.name||'This device',verb=OP_NODE_VERBS[action]||'restart';
+ if(action==='stop-node'&&n.runtime_state!=='running')return {ok:false,reason:`${dev} is not running`,own:true};
+ if(action==='start-node'&&(!n.runtime_state||n.runtime_state==='running'))return {ok:false,reason:n.runtime_state==='running'?`${dev} is already running`:`${dev} is not deployed on the VM`,own:n.runtime_state==='running'};
+ if(opCaps&&opCaps.actions&&opCaps.actions[action]?.available!==true)return {ok:false,reason:`Not available on this VM — its containerlab or helper cannot ${verb} one device (see Diagnostics)`};
+ return {ok:true,reason:''};
+}
+function opRestartState(lab,n,discovery,isBusy=false){return opNodeActionState('restart-node',lab,n,discovery,isBusy);}
+// Save this device's configuration (the device panel): containerlab save --node-filter for the one running device.
+function opSaveNodeState(lab,n,discovery,isBusy=false){
+ const shared=opNodeChecks(lab,n,discovery,isBusy);if(shared)return shared;
+ const dev=n.short_name||n.name||'This device';
+ if(n.runtime_state!=='running')return {ok:false,reason:`${dev} is not running`,own:true};
+ const cap=opCaps&&opCaps.actions?opCaps.actions.save:null;
+ if(opCaps&&opCaps.actions&&(!cap||cap.available!==true||cap.node_filter!==true))return {ok:false,reason:'Not available on this VM — its containerlab cannot save one device (see Diagnostics)'};
  return {ok:true,reason:''};
 }
 async function opRestartDevice(labId,name,opener){
@@ -633,6 +968,24 @@ async function opRestartDevice(labId,name,opener){
  // The reason is the banner's headline (shell.js keeps this sentence as it is), not a folded detail.
  if(!check.ok){const text='Restart device… is not available: '+check.reason;if(typeof showActionError==='function')showActionError(text);else notify(text);return;}
  await opReview({lab_id:labId,action:'restart-node',node:name,options:{}},opener);
+}
+// Start device and Stop device: the same click path as Restart device — capabilities loaded first, eligibility checked again, then
+// the review of exactly one device of one lab with no options.
+async function opNodeAction(action,labId,name,opener){
+ if(action==='restart-node')return opRestartDevice(labId,name,opener);
+ if(!opNodeActions.includes(action))return;
+ try{await opCapabilities();}catch{opCaps=null;}
+ const lab=(state.labs||[]).find(l=>l.id===labId),n=lab?.nodes?.find(n=>n.name===name);
+ const check=opNodeActionState(action,lab,n,state.discovery,busy());
+ if(!check.ok){const text=opLabels[action]+'… is not available: '+check.reason;if(typeof showActionError==='function')showActionError(text);else notify(text);return;}
+ await opReview({lab_id:labId,action,node:name,options:{}},opener);
+}
+async function opSaveNode(labId,name,opener){
+ try{await opCapabilities();}catch{opCaps=null;}
+ const lab=(state.labs||[]).find(l=>l.id===labId),n=lab?.nodes?.find(n=>n.name===name);
+ const check=opSaveNodeState(lab,n,state.discovery,busy());
+ if(!check.ok){const text='Save startup configuration… is not available: '+check.reason;if(typeof showActionError==='function')showActionError(text);else notify(text);return;}
+ await opReview({lab_id:labId,action:'save',options:{nodes:[n.definition_node||n.short_name||n.name]}},opener);
 }
 async function opQuickRun(kind){
  const lab=current(),actions=opQuickActions(lab,state.discovery,busy());
@@ -648,11 +1001,173 @@ function opMenuState(button,disabled,reason,label,hint=''){
  const text=button.querySelector('span');if(text&&label!==undefined)text.textContent=label;
  const small=button.querySelector('.menu-reason');if(small){small.textContent=disabled?reason||'':'';small.hidden=!(disabled&&reason);}
 }
+// Images on this VM (C03 4.5): what Docker holds, how big and how old, and which of the student's labs name each image. Nothing is pulled or removed.
+// Docker's CreatedAt ("2026-10-23 02:03:42 +0000 UTC") is not an ISO stamp; the manager may pass either.
+function opCreatedDate(value){
+ const text=String(value||'').trim();if(!text)return null;
+ const m=/^(\d{4}-\d\d-\d\d)[ T](\d\d:\d\d:\d\d)/.exec(text);
+ const date=new Date(m?m[1]+'T'+m[2]+'Z':text);
+ return Number.isNaN(date.getTime())?null:date;
+}
+// Pure: the table rows. `missing` references are named by a lab but not on the VM; they carry no size or age.
+function opImageRows(data){
+ const used=data&&data.used_by&&typeof data.used_by==='object'?data.used_by:{},rows=[];
+ const details=Array.isArray(data&&data.details)?data.details:[];
+ const known=details.length?details:(Array.isArray(data&&data.images)?data.images:[]).map(reference=>({reference,size:'',created:''}));
+ for(const item of known)rows.push({reference:String(item.reference||''),size:String(item.size||''),created:String(item.created||''),labs:Array.isArray(used[item.reference])?used[item.reference]:[],missing:false});
+ for(const reference of Array.isArray(data&&data.missing)?data.missing:[])rows.push({reference:String(reference),size:'',created:'',labs:Array.isArray(used[reference])?used[reference]:[],missing:true});
+ return rows;
+}
+function opImageFilter(rows,text,chip){
+ const needle=String(text||'').trim().toLowerCase();
+ return rows.filter(r=>(chip==='used'?r.labs.length>0:chip==='missing'?r.missing:true)&&(!needle||(r.reference+' '+r.labs.join(' ')).toLowerCase().includes(needle)));
+}
+function opImageTableBody(rows){
+ if(!rows.length)return '<tr><td colspan="4">No images match.</td></tr>';
+ return rows.map(r=>{const date=opCreatedDate(r.created);return `<tr><td class="mono">${esc(r.reference)}${r.missing?' <span class="pill danger">Missing</span>':''}</td><td>${esc(r.size)||'—'}</td><td${date?` title="${esc(date.toISOString().replace('T',' ').slice(0,19)+' UTC')}"`:''}>${date?esc(opWhen(date.toISOString())):esc(r.created)||'—'}</td><td>${r.labs.length?esc(r.labs.join(', ')):'—'}</td></tr>`;}).join('');
+}
+async function opImages(){
+ const data=await(await api('/operations/images')).json();
+ const rows=opImageRows(data),hasDetails=Array.isArray(data.details)&&data.details.length>0,view={text:'',chip:'all'};
+ const chips=[['all','All'],['used','Used by my labs'],['missing','Missing']];
+ const dialog=opDialog('op-images','Images on this VM',data.available===false?'<p>This VM has no Docker client the manager can ask, so its images cannot be listed.</p>':`<p class="form-help">The Docker images on the lab VM. Nothing is pulled or removed here.</p>${hasDetails||!rows.length?'':'<p class="form-help">Size and age need the updated VM helper.</p>'}<div class="op-inspection-tools"><label for="op-images-filter">Filter images</label><input type="search" id="op-images-filter" autocomplete="off"></div><div class="op-chips" role="group" aria-label="Show">${chips.map(([key,label])=>`<button type="button" class="button secondary small op-chip" data-op-chip="${key}" aria-pressed="${key==='all'}">${label}</button>`).join('')}</div><div class="op-inspection"><table><caption id="op-images-caption"></caption><thead><tr><th scope="col">Reference</th><th scope="col">Size</th><th scope="col">Created</th><th scope="col">Used by</th></tr></thead><tbody id="op-images-body"></tbody></table></div>`);
+ if(data.available===false)return;
+ const redraw=()=>{
+  const shown=opImageFilter(rows,view.text,view.chip);
+  $('op-images-body').innerHTML=opImageTableBody(shown);
+  $('op-images-caption').textContent=shown.length===rows.length?rows.length+(rows.length===1?' image':' images'):shown.length+' of '+rows.length+' images';
+ };
+ redraw();
+ $('op-images-filter').addEventListener('input',event=>{view.text=event.target.value;redraw();});
+ for(const button of dialog.querySelectorAll('[data-op-chip]'))button.addEventListener('click',()=>{view.chip=button.dataset.opChip;for(const other of dialog.querySelectorAll('[data-op-chip]'))other.setAttribute('aria-pressed',String(other===button));redraw();});
+}
+// Pending changes and impairments (C05 4.3, 4.4). Both are read-only questions about the running lab, asked at exactly four moments
+// and never on a timer: when a lab that is Running or Partially running becomes the open one ('open'), after an operation of that
+// lab turned terminal ('job'), after a successful Sync topology from VM ('sync') and when Review changes… is chosen ('review').
+const opPlanTriggers=['open','job','sync','review'];
+const OP_TERMINAL=['succeeded','failed','interrupted','cancelled'];
+let opPlanCache={}, opImpairmentCache={}, opWatchMemo={lab:'',active:false,jobs:[],sig:''}, opPlanSeq={}, opImpairSeq={};
+// A sync rewrites the stored copy of the topology file; its digests change, which the page sees without a hook into the sync button.
+function opSourceSignature(lab){const v=lab&&lab.vm_source;return v?JSON.stringify([v.status||'',v.synced_digest||'',v.digest||'']):'';}
+// Pure: which trigger (if any) the current state calls for, and the memo to remember for the next look.
+function opPlanDue(memo,lab,jobs){
+ const active=!!lab&&['Running','Partially running'].includes(lab.deployment?.status);
+ const terminal=lab?(jobs||[]).filter(j=>j&&j.lab_id===lab.id&&OP_TERMINAL.includes(j.status)).map(j=>j.id):[];
+ const next={lab:lab?lab.id:'',active,jobs:terminal,sig:opSourceSignature(lab)};
+ let reason='';
+ if(active){
+  if(memo.lab!==next.lab||!memo.active)reason='open';
+  else if(terminal.some(id=>!memo.jobs.includes(id)))reason='job';
+  else if(memo.sig!==next.sig)reason='sync';
+ }
+ return {reason,memo:next};
+}
+async function opLoadPlan(labId,refresh=false){
+ const seq=opPlanSeq[labId]=(opPlanSeq[labId]||0)+1;
+ try{
+  const answer=await(await api('/operations/apply-plan?lab_id='+encodeURIComponent(labId)+(refresh?'&refresh=1':''))).json();
+  if(seq===opPlanSeq[labId])opPlanCache[labId]={answer,error:'',at:Date.now()};
+ }catch(e){if(seq===opPlanSeq[labId])opPlanCache[labId]={answer:null,error:e&&e.message||'The check failed.',at:Date.now()};}
+ if(labId===activeId){if(typeof renderLabBanner==='function')renderLabBanner();opRenderPending(typeof current==='function'?current():null);}
+ return opPlanCache[labId];
+}
+// The cached check when it found differences (a failed or unsupported check never claims any).
+function opPendingChanges(lab){
+ const entry=lab&&opPlanCache[lab.id],answer=entry&&entry.answer;
+ return answer&&answer.changed===true&&!answer.failed&&answer.plan&&opPlanChanges(answer.plan)?answer:null;
+}
+async function opLoadImpairments(labId){
+ if(opCaps&&opCaps.actions&&opCaps.actions.impairments?.available!==true){delete opImpairmentCache[labId];if(labId===activeId&&typeof renderMapImpairments==='function')renderMapImpairments(null);return null;}
+ const seq=opImpairSeq[labId]=(opImpairSeq[labId]||0)+1;
+ try{
+  const answer=await(await api('/operations/impairments?lab_id='+encodeURIComponent(labId))).json();
+  if(seq!==opImpairSeq[labId])return opImpairmentCache[labId]||null;
+  opImpairmentCache[labId]=answer;
+  if(labId===activeId&&typeof renderMapImpairments==='function')renderMapImpairments(answer);
+  return answer;
+ }catch{return opImpairmentCache[labId]||null;}
+}
+// Called by every render of the lab page (renderLabOperations): looks at the state and asks the VM only when a trigger fired.
+function opWatchLab(lab){
+ const {reason,memo}=opPlanDue(opWatchMemo,lab,state.operations);opWatchMemo=memo;
+ if(!lab)return;
+ if(!memo.active){
+  if(opImpairmentCache[lab.id]){delete opImpairmentCache[lab.id];if(typeof renderMapImpairments==='function')renderMapImpairments(null);}
+  return;
+ }
+ if(!reason)return;
+ const id=lab.id;
+ if(state.discovery?.connected&&opPath(lab)&&lab.deployment_name)opLoadPlan(id);
+ (opCaps?Promise.resolve():opCapabilities().catch(()=>{opCaps=null;})).then(()=>opLoadImpairments(id));
+}
+async function opReviewChanges(labId){
+ await opLoadPlan(labId,true);
+ await opReview({lab_id:labId,action:'apply',options:{}});
+}
+// The lab banner's pending-changes notice (a Running lab) and the attention banner of a Partially running lab. The identity is a digest
+// of the plan, so a dismissed notice stays dismissed while the plan is the same and comes back when it differs.
+function opPendingBannerSpec(lab){
+ if(!lab||lab.deployment?.status!=='Running')return null;
+ const pending=opPendingChanges(lab);if(!pending)return null;
+ return {tone:'info',icon:'info',text:'The topology file differs from the running lab.',detail:opPlanSummary(pending.plan),identity:'pending.'+opPlanIdentity(pending.plan),actions:{'banner-review':{label:'Review changes…',run:()=>opTask(null,()=>opReviewChanges(lab.id))}}};
+}
+// A Partially running lab offers Start, which cannot recreate a destroyed device: with devices to create or recreate (or link ends to
+// remove) the plan's review is the way back; a device merely stopped (a `started`-only plan) keeps Start.
+function opAttentionSpec(lab,spec){
+ if(!lab||lab.deployment?.status!=='Partially running')return spec;
+ const pending=opPendingChanges(lab);if(!pending)return spec;
+ const plan=pending.plan;
+ if(!(opPlanList(plan,'added').length||opPlanList(plan,'recreated').length||opPlanList(plan,'endpoints_removed').length))return spec;
+ return {...spec,detail:opPlanSummary(plan),identity:'pending.'+opPlanIdentity(plan),actions:{'banner-review':{label:'Review changes…',run:()=>opTask(null,()=>opReviewChanges(lab.id))}}};
+}
+// Advanced › Deployment details: the same check in one line.
+function opPendingMarkup(entry){
+ if(!entry)return 'Not checked';
+ const answer=entry.answer;
+ if(!answer)return `Could not be checked: ${esc(entry.error||'the check failed')}`;
+ if(answer.failed==='unsupported')return 'Not checked: the installed containerlab cannot compare the file with the running lab.';
+ if(answer.failed)return `Could not be checked: ${esc(answer.error||'the topology file could not be read')}`;
+ if(answer.changed===true&&answer.plan)return `Differs from the running lab: ${esc(opPlanSummary(answer.plan)||'see the review')} — <button type="button" class="button ghost small" data-pending-review>Review changes…</button>`;
+ const at=answer.checked_at?opWhen(new Date(answer.checked_at*1000).toISOString()):'';
+ return 'Matches the running lab'+(at?` (checked ${esc(at)})`:'');
+}
+function opRenderPending(lab){
+ const element=$('deployment-pending');if(!element)return;
+ const active=!!lab&&['Running','Partially running'].includes(lab.deployment?.status);
+ const html=active?opPendingMarkup(opPlanCache[lab.id]):'Not checked (the lab is not running)';
+ if(element._html!==html){element._html=html;element.innerHTML=html;}
+}
+// Clear impairments (the map caption): every impairment the manager lists for the lab, after one confirmation.
+function opPlural(n,word){return `${n} ${word}${Number(n)===1?'':'s'}`;}
+function opImpairmentCount(answer){
+ const devices=answer&&answer.devices&&typeof answer.devices==='object'?Object.values(answer.devices):[];
+ return {interfaces:devices.reduce((sum,d)=>sum+((d&&d.impairments)||[]).length,0),devices:devices.filter(d=>d&&(d.impairments||[]).length).length};
+}
+async function opClearImpairments(labId=activeId){
+ const lab=(state.labs||[]).find(l=>l.id===labId),count=opImpairmentCount(opImpairmentCache[labId]);
+ if(!lab||!count.interfaces)return;
+ const dialog=opDialog('op-clear-impairments',`Remove every impairment in ${lab.name} (${opPlural(count.interfaces,'interface')} on ${opPlural(count.devices,'device')})?`,'<p>Delay, jitter, loss, rate and corruption are removed from those interfaces. Nothing else on the devices changes.</p><p class="form-help" id="op-clear-status" role="status" aria-live="polite"></p><div class="dialog-actions"><button class="button secondary" id="op-clear-cancel">Cancel</button><button class="button danger" id="op-clear-confirm">Clear all</button></div>');
+ $('op-clear-cancel').onclick=()=>dialog.close();
+ $('op-clear-confirm').onclick=async()=>{
+  const confirm=$('op-clear-confirm'),status=$('op-clear-status'),error=dialog.querySelector('.form-error');
+  confirm.disabled=true;confirm.textContent='Clearing…';if(error)error.textContent='';
+  try{
+   const result=await json('/operations/impairments/clear','POST',{lab_id:labId});
+   await opLoadImpairments(labId);
+   const failed=Array.isArray(result.failed)?result.failed:[];
+   if(!failed.length&&!(result.remaining||[]).length){dialog.close();notify(`${opPlural(result.cleared||0,'interface')} cleared.`);return;}
+   const first=failed[0]||{},shown=(lab.nodes||[]).find(n=>n.name===first.node);
+   status.textContent=`${result.cleared||0} of ${result.total||count.interfaces} interfaces cleared${failed.length?`; ${shown?.short_name||first.node||'a device'} ${first.interface||''}: ${String(first.reason||'not cleared').replace(/\.+$/,'')}`:''}. Try again.`;
+   confirm.disabled=false;confirm.textContent='Clear all';
+  }catch(e){if(error)error.textContent=e.message;confirm.disabled=false;confirm.textContent='Clear all';}
+ };
+}
 function renderLabOperations(){
  const lab=current(),quick=opQuickActions(lab,state.discovery,busy()),status=lab?.deployment?.status,running=['Running','Partially running'].includes(status);
  if($('lab-start'))opMenuState($('lab-start'),!quick.canStart,quick.reason,quick.startAction==='deploy'?'Start lab':'Start stopped devices',quick.startAction==='deploy'?'Deploy this topology and start its devices':'Start stopped devices in this lab');
  if($('lab-destroy')){$('lab-destroy').disabled=!quick.canDestroy;$('lab-destroy').title=quick.canDestroy?'':quick.destroyReason;}
  if($('lab-actions'))$('lab-actions').hidden=!current();
+ opWatchLab(lab);opRenderPending(lab);
  const menu=$('lab-actions-menu');
  if(menu&&typeof menu.querySelectorAll==='function')for(const b of menu.querySelectorAll('[data-op-action]')){
   if(b.dataset.opVariant==='cleanup')b.hidden=opCaps?.actions?.redeploy?.cleanup!==true;
@@ -661,6 +1176,7 @@ function renderLabOperations(){
   opMenuState(b,!ok,unavailable?'Not available on this VM — see Diagnostics':quick.available?'The lab is not running':quick.reason);
  }
  if($('vm-projects')){const connected=!!state.discovery?.connected;opMenuState($('vm-projects'),!connected,'Connect the VM to browse its lab topologies');}
+ if($('manager-images')){const connected=!!state.discovery?.connected;opMenuState($('manager-images'),!connected,'Connect the VM to see its images');}
  // The banner (app.js) is the lowest-priority notice and a student can hide it for the session, so
  // this menu item is a second, always-reachable way to the same dialog: shown only while the lab has
  // something recorded, hidden (not merely disabled, so keyboard and pointer navigation both skip it).
@@ -677,6 +1193,10 @@ if($('import-top')){
  // Operation history for THIS lab from its menu and its Advanced tab; Manager ▾ keeps the history of every lab.
  for(const id of ['menu-operation-history','advanced-operation-history'])if($(id))$(id).onclick=()=>{if(typeof closeMenus==='function')closeMenus();opTask(null,()=>opHistory(activeId));};
  if($('menu-telemetry-retired'))$('menu-telemetry-retired').onclick=()=>{if(typeof closeMenus==='function')closeMenus();opTask(null,()=>openTelemetryRetired(activeId));};
+ if($('manager-images'))$('manager-images').onclick=()=>opTask(null,()=>opImages());
+ // The map caption's Clear impairments and the pending line's Review changes… (static markup in index.html, wired once).
+ if($('map-impaired-clear'))$('map-impaired-clear').onclick=()=>opTask(null,()=>opClearImpairments(activeId));
+ if($('deployment-pending'))$('deployment-pending').addEventListener('click',e=>{if(e.target.closest&&e.target.closest('[data-pending-review]'))opTask(null,()=>opReviewChanges(activeId));});
  $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>openDeploy();$('lab-start').onclick=()=>opTask(null,()=>opQuickRun('start'));$('lab-destroy').onclick=()=>opTask(null,()=>opQuickRun('destroy'));$('operations-history').onclick=()=>opTask(null,()=>opHistory());$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
  // Lab actions ▾ lifecycle items go through the same preview/confirm flow as the operations dialog.
  const menu=$('lab-actions-menu');
@@ -685,6 +1205,9 @@ if($('import-top')){
    opTask(null,async()=>{const lab=current();if(!lab)return;try{await opCapabilities();}catch{opCaps=null;}renderLabOperations();await opReview({lab_id:lab.id,action:b.dataset.opAction,options:JSON.parse(b.dataset.opOptions||'{}')});});});
   menu.addEventListener('menuopen',()=>{if(opCaps)return;opCapabilities().then(()=>renderLabOperations()).catch(()=>{});});
  }
+ // The Manager menu's footer names the VM's containerlab; the capabilities answer is cached for a minute on the server.
+ {const managerMenu=$('manager-menu-list');
+  if(managerMenu)managerMenu.addEventListener('menuopen',()=>{opCapabilities().then(caps=>{const span=$('clab-version'),version=typeof caps?.containerlab==='string'&&/^\d+\.\d+\.\d+/.test(caps.containerlab)?caps.containerlab:'';if(span){span.textContent=version?' · containerlab '+version:'';span.hidden=!version;}}).catch(()=>{});});}
  $('labs').addEventListener('contextmenu',e=>{const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}});
  $('labs').addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}}});
  // Coming back from the lab builder (its "← My labs" link, or the browser Back button): both are a

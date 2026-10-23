@@ -31,6 +31,12 @@ check backup after stay one backup job each, covering every node.
 | What else blocks a restore | somebody's uncommitted edits in the shared candidate | nothing (sessions are isolated) | another open configuration session or an exclusive lock |
 | Base-configuration prerequisite | none | none on 4.35.0F (the stock containerlab startup configuration is enough) | none |
 
+**vJunos-router (`juniper_vjunosrouter`)** is not in this matrix: its backups, downloads and saves are
+supported (display-set backup, `vJunos-router_*.cfg`, default login `admin` / `admin@123`), but it has no
+restore artifact and no restore driver, so a lab that holds one still offers Load for its other devices and
+lists the router as view and download only ("Live restore is not supported for this platform yet.") until the
+Junos driver is proven live on it. Network design does not list it either.
+
 Limits that are known and accepted:
 
 - Junos needs `system root-authentication` for `commit check` and `commit confirmed`. When the saved

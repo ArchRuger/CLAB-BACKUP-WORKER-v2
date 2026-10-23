@@ -142,8 +142,8 @@ it and keep none; the page names the problem and its line, and the file has to b
 
 ## Device templates and images
 
-The templates cover the kinds the manager has drivers for (Arista cEOS, Juniper cJunosEvolved and
-vJunos-switch, Cisco XRv9k) plus a Linux host. Each takes the image this site already uses for its
+The templates cover the kinds the manager has drivers for (Arista cEOS, Juniper cJunosEvolved,
+vJunos-switch and vJunos-router, Cisco XRv9k) plus a Linux host. Each takes the image this site already uses for its
 kind, read from the topologies in My labs; otherwise an image the VM already has for that kind (by
 its repository name, the highest tag); otherwise a placeholder you can change. Edit, add and star
 templates in the palette; they are kept in this browser. The image field is free text, and its list

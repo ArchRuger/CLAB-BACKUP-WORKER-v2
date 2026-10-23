@@ -18,6 +18,8 @@ imported.
   file describes the first releases and is history (its token login, SSH-key VM connection, in-lab
   worker deployment and old repository URL are all gone).
 - `docs/ARCHITECTURE.md` "Module map" has module-by-module responsibilities; do not rediscover them.
+- `docs/AGENT-ROUTING.md` explains the Claude Code configuration under `.claude/` (agents, skills,
+  rules, workflows, the guard hook) and how a development VM gets it from the repository.
 - `docs/maintenance-audit/` holds the documentation audit record (dispositions, the
   feature-to-documentation map, remaining debt) and its pickup file.
 - Pickup files of finished work streams stay useful for their open points and tooling:
@@ -129,8 +131,11 @@ never reach `/api/state`.
    readers wait for stream EOF rather than exit status (keep new readers identical in shape). Helper
    `VERSION` must equal the manager's; the launcher refuses a mixed tree, and
    `deploy/setup-*.sh --refresh` reinstalls a helper.
-2. *The nodes directly*: Ansible `network_cli` (`runner.py`) and Paramiko shells (`node_services.py`,
-   `node_readiness.py`, `restore_shell.py`, `telemetry_retirement.py`). Every Ansible run gets its own `HOME` and host-key checking off
+2. *The nodes directly*: Ansible `network_cli` (`runner.py`), Paramiko shells (`node_services.py`,
+   `node_readiness.py`, `restore_shell.py`, `telemetry_retirement.py`) and, for the vrnetlab kinds in
+   `inventory.CONSOLE_PORTS`, the serial console (a TCP connection from `node_services.py` to the container's port
+   5000 through the telnet codec in `node_console.py`, behind the same ticket and Origin rules as SSH, gated by
+   `console_gate`, no credentials sent). Every Ansible run gets its own `HOME` and host-key checking off
    (`runner.job_environment`); lab containers regenerate host keys on each deploy.
 3. *The side stack*: browser Wireshark (`capture.py` discovery → `capture_sessions.py` same-origin
    relay → `capture_service.py`, the separate container that alone holds the Docker socket). The
@@ -153,7 +158,8 @@ queued/running work `interrupted`. There is no multi-instance coordination.
    `window`/`location`/`history`/`localStorage`/document listeners here so the other files still load
    in Node), `app.js` (state, `render`, `PANELS`), then the feature files (`topology-render`,
    `topology`, `home`, `management`, `operations`, `diagram-editor`, `diff-view`, `git-progress`,
-   `save-header`, `git-places`, `save-drawers`, `load`, `restore`, `network-design`, `capture`). Classic scripts
+   `save-header`, `git-places`, `save-drawers`, `load`, `restore`, `network-design`, `capture`,
+   `clipboard`, `device-diagnostics`). Classic scripts
    share one global scope: a top-level name declared in two files breaks the page
    (`tests/test_page_load_ui.js` loads them all in one context). Standalone pages (`terminal`, `workspace`, `debug`,
    `vm-connection`, `capture-setup`, `capture-session`, `lab-builder`, `map-editor`) have their own
@@ -190,7 +196,7 @@ a fake `$`, `esc` and `state`. Copy `tests/test_operations_ui.js` for a module o
   run; say plainly what is static, unit, fixture/browser, CI or live evidence.
 - `host_*.py` under `clab-backup-ui/app` are installed on the VM as sudoers helpers: treat changes as
   security-sensitive, keep the gateway's command list and each helper's option whitelist exact, and
-  never add a helper for device work (device access stays on the direct node-SSH path).
+  never add a helper for device work (device access stays on the direct node path: SSH or the serial console).
 - Do not add dependencies the notes rule out (PyEZ/ncclient/lxml for Junos; a Docker socket or host
   metrics in the manager; frontend frameworks or CDN assets in the manager UI).
 - Commit with Git (dotfiles included, LF enforced by `.gitattributes`); never replace files through
@@ -198,24 +204,27 @@ a fake `$`, `esc` and `state`. Copy `tests/test_operations_ui.js` for a module o
 
 ## Delegating work
 
-A session is its own lead. `.claude/rules/fable-opus-routing.md` is the routing policy and
-`.claude/rules/clab-ui-routing.md` the roster of the project agents in `.claude/agents/`, each of which
-carries its model in the definition, so a task's route does not depend on the session's model. Fable 5.1
-leads and designs (`clab-fable-designer` for design slices, `clab-fable-specialist` for the hardest build
-work). Opus 5.5 reviews and specializes (`risk-reviewer` and `clab-ui-reviewer`, both read-only;
-`clab-opus-specialist`; `clab-network-specialist`). Sonnet 5.5 implements, tests, documents and runs QA
-(`clab-backend-engineer`, `clab-ui-builder`, `clab-test-engineer`, `clab-editor-specialist`,
-`clab-devops-engineer`, `clab-ui-qa`, `docs-auditor`). Haiku 4.5 scouts and applies decided edits
-(`clab-ui-scout`, `mechanical-editor`). The project skills in `.claude/skills/clab-*` are preloaded by the
-definitions that need them.
+A session is its own lead. The routing policy is `.claude/rules/fable-opus-routing.md`; the roster, the
+staffing order and the workflows are `.claude/rules/clab-ui-routing.md`; the path-scoped `routing-*.md`
+rules name the builder, the reviewer and the tests of an area when one of its files is touched. Every
+project agent in `.claude/agents/` carries its exact model and effort (Fable 5.1 leads and designs
+through `clab-fable-designer` and `clab-fable-specialist`; Opus 5.5 reviews read-only as `risk-reviewer`
+and `clab-ui-reviewer` and specializes as `clab-opus-specialist` and `clab-network-specialist`; Sonnet 5.5
+implements, tests, documents and runs QA as `clab-backend-engineer`, `clab-ui-builder`,
+`clab-test-engineer`, `clab-editor-specialist`, `clab-devops-engineer`, `clab-ui-qa` and `docs-auditor`;
+Haiku 5.5 scouts and applies decided edits as `clab-ui-scout` and `mechanical-editor`), so a task's route
+does not depend on the session's model. A user or managed setting can still override the routing
+(`CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`, `availableModels`): check what a worker actually ran on in `/tasks`
+before you report a route as used, and do not work around such a setting.
 
 Run scripts and searches before asking any model; give a worker the exact question, its files, the
 invariants that apply and the acceptance checks, not the whole history; run as many workers in parallel as
 there is independent work, with one owner per file at a time (own files or an own worktree); an implementer
-is never the only verifier of its work; the lead alone bumps the release, writes the shared records and the
-CI test lists, commits to the task branch and pushes. A user or managed setting can force every subagent
-onto one model (`CLAUDE_CODE_SUBAGENT_MODEL`, `availableModels`): check what a worker actually ran on
-before you report a route as used, and do not work around such a setting.
+is never the only verifier of its work (`/clab-design-review`, `/clab-slice-verify`, `/clab-review-changes`
+run those checks with the named agents); the lead alone bumps the release, writes the shared records and the
+CI test lists, commits to the task branch and pushes. The guard hook in `.claude/hooks/` refuses a force
+push, a tag, an image publish, a destructive reset of the checkout and a deletion of the live data in
+every permission mode. `docs/AGENT-ROUTING.md` describes the setup and how to change it.
 
 ## Invariants that must not regress
 
@@ -353,3 +362,4 @@ Sections are headings of `agent instructions.md`, named by their release.
 | Installer, health check, engineer access | 1.25.0 (2); 1.19.4; 1.19.3; 1.19.2; 1.16.0 | `docs/INSTALL.md`, `docs/HEALTH-CHECK.md`, `docs/FRESH-VM-GUIDE-V2.md` | `test_install_manager.py`, `test_check_*.py`, `test_git_onboard.py` |
 | Course structure, lab scaffold | 1.29.0 (live facts) | `docs/NAMING.md` | `test_scaffold_lab.py` |
 | Releases and documentation rules | 1.25.0 (3); 1.15.1 | `docs/REPOSITORY-MAINTENANCE.md` | `test_release_consistency.py`, `deploy/verify-release.py` |
+| Agent routing: `.claude/` agents, skills, rules, workflows, the guard hook | 1.31.1 | `docs/AGENT-ROUTING.md`, `.claude/THIRD-PARTY-SKILLS.md` | `test_claude_config.py`, `test_claude_workflows.js`, `claude plugin validate .claude/agents --strict` |

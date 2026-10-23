@@ -51,6 +51,7 @@ Three conventions hold across every guide:
 | [Changelog](CHANGELOG.md) | Release notes for every version since 1.10, newest first. |
 | [Maintenance audit](maintenance-audit/AUDIT.md) | The documentation audit record: what each document is for and what was decided about it, the map from each workflow to its code, guide and evidence, the remaining debt, and the [pickup file](maintenance-audit/PICKUP.md). |
 | [Repository maintenance](REPOSITORY-MAINTENANCE.md) | The release rules: the lockstep version set, the documentation conventions, the bump procedure, packaging limits and the CI workflow. |
+| [Agent routing](AGENT-ROUTING.md) | The Claude Code configuration that ships in `.claude/`: the agents and their models, the skills, the three review workflows, the guard hook, how a development VM is set up from the repository and how the configuration is changed and tested. |
 | [Wiki master guide](WIKI-MASTER-GUIDE.md) | The long-form build and operations guide formatted for Wiki.js. |
 | [Node features](../clab-backup-ui/NODE-FEATURES.md) | Node-level behaviour: SSH terminals, backups, the map and exports. |
 | [Validation evidence](../clab-backup-ui/VALIDATION.md) | What was actually tested for each release, on the dev VM and locally. |

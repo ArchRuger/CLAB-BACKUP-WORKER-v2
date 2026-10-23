@@ -144,6 +144,18 @@ def parse_inspect(raw):
             if isinstance(status, str) and status:
                 try: entry['status'] = literal(status, 'Container status', 80)
                 except ValueError: pass
+            # Container facts for the device drawer: each optional and never fatal, like the status line.
+            cid = row.get('container_id') or row.get('id')   # containerlab 0.79.0 names it container_id (12 hex); older output used id
+            if isinstance(cid, str) and re.fullmatch('[0-9a-f]{12,64}', cid): entry['id'] = cid
+            for key, field in (('ipv4', 'ipv4_address'), ('ipv6', 'ipv6_address')):
+                value = row.get(field)
+                value = value.strip() if isinstance(value, str) else ''
+                try: entry[key] = str(ipaddress.ip_interface(value).ip) if value and value not in ('N/A', '-') else ''
+                except ValueError: entry[key] = ''
+            image = row.get('image')
+            if isinstance(image, str) and image:
+                try: entry['image'] = literal(image, 'Container image', 300)
+                except ValueError: pass
             bucket = groups.setdefault(name, [])
             if any(n['name'] == container for n in bucket): raise ValueError('Duplicate container identity')
             bucket.append(entry)
@@ -249,7 +261,11 @@ def reconcile(state):
             found = rows.get(expected) if expected else rows.get(node['name'])
             node.update(discovered=bool(found), runtime_state=found['state'] if found else 'absent',
                         discovered_address=found['address'] if found else '',
-                        runtime_status=(found.get('status') or '') if found else '')
+                        runtime_status=(found.get('status') or '') if found else '',
+                        discovered_id=found.get('id', '') if found else '',
+                        discovered_ipv4=found.get('ipv4', '') if found else '',
+                        discovered_ipv6=found.get('ipv6', '') if found else '',
+                        discovered_image=found.get('image', '') if found else '')
             if found and found['address'] and node.get('endpoint_mode') == 'auto':
                 node.update(address=found['address'], port=22)
 
@@ -789,6 +805,7 @@ class Discovery:
                 lab.clear(); lab.update(candidate)
                 reconcile(self.store.state); self.store.save()
                 self.store.event('lab.sync', 'Synced VM files; saved node settings and backup history retained', lab_id=lab_id)
+                app.state.operations.forget_plan(lab_id)   # the cached pending-changes plan compared the old file
                 return public_lab(lab)
 
         class Binding(BaseModel):

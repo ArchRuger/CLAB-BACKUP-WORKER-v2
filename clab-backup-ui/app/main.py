@@ -15,15 +15,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.background import BackgroundTask
-from .inventory import PLATFORMS, parse_inventory, literal, address, port
+from .inventory import PLATFORMS, console_port, parse_inventory, literal, address, port
 from .store import Store
 from .runner import Runner, readiness, now, effective_credentials, credential_source
-from .node_services import NodeServices
+from .node_services import NodeServices, console_gate
 from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
-from .discovery import Discovery, lab_status, node_available, reconcile
+from .discovery import Discovery, expected_container, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path, stored_file, topology_names
-from .lab_operations import LabOperations, design_rechecking, last_deployed, operation_busy, restarting_nodes
+from .lab_operations import LabOperations, NODE_ACTION_STATUS, design_rechecking, last_deployed, operation_busy, restarting_nodes
+from .device_diagnostics import DeviceDiagnostics
+from .impairments import Impairments
 from .git_progress import GitProgress
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
@@ -48,6 +50,8 @@ def create_app(data_dir=None):
     # embeds beside its configurations (runner.topology_capture; the manager's own copy when the VM's is not known).
     runner.topology_source=lambda lab: discovery.sources.get(lab.get('deployment_name') or '')
     operations=LabOperations(store,discovery,readiness_monitor)
+    device_diagnostics=DeviceDiagnostics(store,operations,discovery)
+    impairments=Impairments(store,operations,device_diagnostics)
     git_progress=GitProgress(store,runner)
     restore=RestoreService(store,runner,git_progress)
     telemetry_retirement=TelemetryRetirement(store,services)
@@ -80,6 +84,10 @@ def create_app(data_dir=None):
     app.state.store=store; app.state.runner=runner
     app.state.discovery=discovery
     app.state.operations=operations
+    app.state.device_diagnostics=device_diagnostics
+    device_diagnostics.install(app)   # before operations.install: its GET /api/operations/{job_id} would take /logs, and these routes supersede its images and browse
+    app.state.impairments=impairments
+    impairments.install(app)   # after device_diagnostics and before operations.install: its GET /api/operations/{job_id} would take /impairments and /apply-plan
     operations.install(app)
     app.state.git_progress=git_progress
     git_progress.install(app)
@@ -161,6 +169,12 @@ def create_app(data_dir=None):
         for n in lab['nodes']:
             row={k:copy.deepcopy(v) for k,v in n.items() if k not in ('username','password','enable_password','container_name')}
             row['available']=node_available(store.state,lab,n)
+            # Container facts for the drawer: the name the formula gives (container_name itself stays private) and the
+            # console decision, from the same function the ticket route runs.
+            row['container']=expected_container(lab,n)
+            row['console']=bool(console_port(n.get('kind')) and row['container'])
+            with store.lock: hold=console_gate(store.state,lab,n)
+            row['console_hold']='' if hold is None else {'key':hold[1],'text':hold[2]}
             row['readiness']=readiness(lab,n) if row['available'] else 'Lab unavailable'
             row['inventory_credentials']=bool(n.get('username') and n.get('password'))
             row['credential_source']=credential_source(lab,n)
@@ -170,7 +184,7 @@ def create_app(data_dir=None):
             row['nos_login']=login_state(lab,n,row['available'],checks.get((lab['id'],n['name'])))
             # A device with a Restart device job queued or running is neither ready nor merely booting:
             # its login is proven again only after the restart has run (the job drops the old proof).
-            if n['name'] in restarting: row['nos_login']={'status':'restarting','message':'Restarting on the VM (containerlab restart --node); its login is checked again afterwards.'}
+            if n['name'] in restarting: row['nos_login']=dict(zip(('status','message'),NODE_ACTION_STATUS[restarting[n['name']]]))
             row['ssh_ready']=row['login_configured'] and row['nos_login']['status'] in ('ready','unmonitored')
             result['nodes'].append(row)
         result['deployment']=lab_status(store.state,lab)
@@ -210,8 +224,8 @@ def create_app(data_dir=None):
                 if design_rechecking(store.state): raise HTTPException(409, 'Wait for the current lab operation to finish.')
                 git_progress.guard_pending()
                 network_design.guard_idle()
-                if services.clients or services.checking:
-                    raise HTTPException(409, 'Close SSH sessions and wait for connection checks before resetting.')
+                if services.clients or services.checking or services.consoles:
+                    raise HTTPException(409, 'Close SSH sessions and serial consoles and wait for connection checks before resetting.')
                 try: store.reset()
                 except OSError: raise HTTPException(500, 'Storage reset could not finish. Check data directory permissions and free space, then retry Start fresh to complete it. A manager restart completes only a reset that was fully prepared; otherwise the labs, credentials and backups stay as they were and Start fresh must be chosen again.')
                 services.checks.clear(); services.tickets.clear(); readiness_monitor.reset()
@@ -361,8 +375,12 @@ def create_app(data_dir=None):
     @app.post('/api/labs/{lab_id}/profiles')
     async def profile(lab_id: str, label: str=Form(...), platform: str=Form(...),
                       username: str=Form(...), auth: str=Form('password'), password: str=Form(''),
-                      passphrase: str=Form(''), enable_password: str=Form(''), make_default: bool=Form(True),
+                      passphrase: str=Form(''), enable_password: str=Form(''), make_default: str|None=Form(None),
                       private_key: UploadFile|None=File(None)):
+        # An omitted make_default means "make it the default" (the documented API contract); the page always sends
+        # the checkbox state. Read as text because FastAPI 0.147 and later turn an omitted boolean form field into
+        # False, which would silently change the contract for API callers that leave the field out.
+        make_default=True if make_default is None else make_default.strip().lower() in ('1','true','on','yes')
         if platform not in (*PLATFORMS,'ssh') or auth not in ('password','key'):
             raise HTTPException(400,'Choose a supported NOS and authentication method')
         try:

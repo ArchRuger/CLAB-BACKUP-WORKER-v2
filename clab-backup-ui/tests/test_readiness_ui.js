@@ -219,3 +219,204 @@ test('V3: a save location problem is the chip\'s, never a closable banner; a dif
  const second=chip();assert.equal(second.key,'cant');assert.notEqual(second.sentence,first.sentence,'a different problem states itself');
  assert.equal(get('lab-banner').hidden,true);
 });
+
+// C02: Stop in the lab banner, the stopped job in the vocabulary sites of app.js, and the Copy buttons of the device drawer.
+test('C02: the banner offers Stop only while the job is queued or running, stoppable and not yet asked to stop; a stop reads as a warning badge and Dismiss clears it',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id);
+ const lab={id:'lab',name:'L',nodes:[],profiles:[],defaults:{},deployment:{status:'Running'},nos_readiness:{status:'idle'}};
+ const opened=[];h.context.opShowJob=(id,opts)=>opened.push([id,opts]);
+ const paint=ops=>vm.runInContext(`state=${JSON.stringify({labs:[lab],jobs:[],platforms:{},operations:ops})};activeId='lab';renderLabBanner();`,h.context);
+ const job=extra=>({id:'op-1',lab_id:'lab',action:'deploy',status:'running',created:'2026-10-20T10:00:00Z',message:'Executing on the VM',...extra});
+ paint([job({})]);
+ assert.equal(get('banner-stop').hidden,false);assert.equal(get('banner-stop').textContent,'Stop…');assert.equal(get('banner-output').hidden,false);
+ get('banner-stop').onclick();assert.equal(opened.length,1);assert.equal(opened[0][0],'op-1');assert.equal(opened[0][1].stop,true,'opens the output with the confirmation unfolded');
+ paint([job({status:'queued'})]);assert.equal(get('banner-stop').hidden,false);
+ paint([job({cancel_requested:'2026-10-20T10:00:05Z'})]);assert.equal(get('banner-stop').hidden,true,'already asked: no second Stop');assert.equal(get('banner-output').hidden,false);
+ for(const action of ['create','delete','publish','revise','inspect']){paint([job({action})]);assert.equal(get('banner-stop').hidden,true,action+' has no Stop');}
+ paint([job({status:'succeeded',finished:'2026-10-20T10:01:00Z'})]);assert.equal(get('banner-stop').hidden,true,'a finished job has none');
+ assert.ok(vm.runInContext('BANNER_BUTTONS["lab-banner"]',h.context).includes('banner-stop'));
+});
+test('C02: badge(cancelled) is a warning in the student\'s words, and a dismissed stopped job leaves the needs-attention set',()=>{
+ const h=appHarness();
+ const html=vm.runInContext("badge('cancelled')",h.context);
+ assert.match(html,/class="badge warn"/);assert.match(html,/>Stopped by you</);assert.match(html,/title="cancelled"/);
+ h.context.isDismissed=id=>id==='gone';
+ vm.runInContext(`state={labs:[],jobs:[],platforms:{},operations:[{id:'gone',status:'cancelled'},{id:'kept',status:'cancelled'},{id:'f',status:'failed'},{id:'ok',status:'succeeded'}],restore_jobs:[{id:'gone',status:'partial'}]}`,h.context);
+ assert.deepEqual([...vm.runInContext('dismissedSet()',h.context)],['gone'],'a stopped job the student dismissed is in the set');
+ h.context.isDismissed=()=>true;
+ assert.deepEqual([...vm.runInContext('dismissedSet()',h.context)].sort(),['f','gone','kept'],'every status of the three sets of status.js counts, a succeeded job never');
+});
+test('C02: the device drawer facts carry Copy buttons for the name, endpoint, address, kind and image; absent facts have none; IPv6 is bracketed; values are escaped',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/clipboard.js'),'utf8'),h.context);
+ const show=n=>{const lab={id:'lab',name:'L',nodes:[n],profiles:[],defaults:{},deployment:{status:'Running'}};vm.runInContext(`state.labs=[${JSON.stringify(lab)}];activeId='lab';detailName=${JSON.stringify(n.name)};`,h.context);get('details-dialog').open=true;h.context.renderDetails();return get('details-info').innerHTML;};
+ const html=show({name:'clab-l-r1',short_name:'r1',address:'172.20.20.2',port:22,platform:'arista_ceos',kind:'ceos',image:'ceos:4.32',enabled:true});
+ const targets=[...html.matchAll(/data-copy="([^"]*)" data-copy-target="([^"]*)"/g)].map(m=>[m[1],m[2]]);
+ assert.deepEqual(targets,[['clab-l-r1','details-fact-name'],['172.20.20.2:22','details-fact-endpoint'],['172.20.20.2','details-fact-address'],['ceos','details-fact-kind'],['ceos:4.32','details-fact-image']]);
+ for(const id of ['details-fact-name','details-fact-endpoint','details-fact-address','details-fact-kind','details-fact-image'])assert.match(html,new RegExp(`id="${id}"`),id+' exists for the button to select');
+ assert.match(html,/aria-label="Copy address only"/);
+ // two Copy buttons in the Address row must differ to the eye: the second reads Copy address, its label contains the visible words, and the flip restores it
+ const row=html.match(/<dt>Address<\/dt><dd>.*?<\/dd>/)[0];assert.deepEqual([...row.matchAll(/data-label="([^"]*)"[^>]*>([^<]*)<\/button>/g)].map(m=>[m[1],m[2]]),[['Copy','Copy'],['Copy address','Copy address']]);assert.match(html,/<dt>Container kind<\/dt>/);assert.match(html,/<dt>Image<\/dt>/);
+ assert.match(html,/<dt>Name in lab files<\/dt>/);assert.match(html,/<dt>Network OS<\/dt>/);assert.match(html,/<dt>Login credentials<\/dt>/,'the other facts stay');
+ const v6=show({name:'r6',address:'3fff::5',port:22,platform:'arista_ceos',enabled:true});
+ assert.match(v6,/data-copy="\[3fff::5\]:22" data-copy-target="details-fact-endpoint"/);assert.match(v6,/data-copy="3fff::5" data-copy-target="details-fact-address"/);
+ assert.doesNotMatch(v6,/Container kind|<dt>Image/,'kind and image rows are absent when the node names none');
+ const bare=show({name:'r7',address:'',port:22,platform:'arista_ceos',enabled:true});
+ assert.doesNotMatch(bare,/details-fact-address/);assert.doesNotMatch(bare,/data-copy-target="details-fact-kind"/);
+ const nasty=show({name:'a"b<i>',address:'10.0.0.1',port:22,platform:'arista_ceos',image:'x"y',kind:'k',enabled:true});
+ assert.doesNotMatch(nasty,/a"b<i>/);assert.match(nasty,/data-copy="a&quot;b&lt;i&gt;"/);assert.match(nasty,/data-copy="x&quot;y"/);
+ assert.equal(get('details-endpoint').textContent,'10.0.0.1:22','the header endpoint is untouched');
+ h.context.copyButton=undefined;
+ assert.doesNotMatch(show({name:'r1',address:'1.1.1.1',port:22,platform:'arista_ceos',enabled:true}),/data-copy/,'a page without clipboard.js shows the facts without buttons');
+});
+
+// ---- C04: the serial console button and the Container section of the device panel ----
+const VRT={name:'clab-parity-vrt',short_name:'vrt',address:'172.20.20.112',port:22,platform:'juniper_junos',kind:'juniper_vjunosrouter',image:'vrnetlab/vjunos-router:25.2',enabled:true,ssh_ready:false,login_configured:true,readiness:'Ready',nos_login:{status:'booting'},
+ container:'clab-parity-vrt',console:true,console_hold:'',discovered_id:'0123456789ab',discovered_ipv4:'172.20.20.112',discovered_ipv6:'3fff:172:20:20::112',discovered_image:'vrnetlab/vjunos-router:25.2',runtime_state:'running',runtime_status:'Up 2 hours (healthy)'};
+const HELD={key:'starting',text:'vrt is still starting: its launcher uses the console until the device reports healthy. Try again once it is healthy; if the device panel has a Logs section, it shows the boot.'};
+function drawer(h,n,{facts}={}){
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/clipboard.js'),'utf8'),h.context);
+ const lab={id:'lab',name:'parity',nodes:[n],profiles:[],defaults:{},deployment:{status:'Running'}};
+ vm.runInContext(`state.labs=[${JSON.stringify(lab)}];activeId='lab';detailName=${JSON.stringify(n.name)};`,h.context);
+ h.context.diagnosticsFacts=facts===undefined?undefined:()=>facts;
+ h.document.getElementById('details-dialog').open=true;h.context.renderDetails();
+ return {info:()=>h.document.getElementById('details-info').innerHTML,live:()=>h.document.getElementById('details-container-live').innerHTML,get:id=>h.document.getElementById(id)};
+}
+test('C04: consoleState mirrors the server decision and never derives a reason of its own',()=>{
+ const h=appHarness(),state=n=>vm.runInContext('consoleState('+JSON.stringify(n)+')',h.context);
+ assert.deepEqual({...state({name:'ceos',console:false,console_hold:''})},{offered:false,ok:false,reason:'',key:''});
+ assert.equal(state(null).offered,false);assert.equal(state({name:'old'}).offered,false,'an older manager sends no console field');
+ assert.deepEqual({...state({console:true,console_hold:HELD})},{offered:true,ok:false,reason:HELD.text,key:'starting'});
+ assert.deepEqual({...state({console:true,console_hold:''})},{offered:true,ok:true,reason:'',key:''});
+ assert.equal(state({console:true,console_hold:{key:'x',text:''}}).ok,true,'a hold without a sentence is no hold');
+});
+test('C04: Console sits after Open CLI in the panel and the table, only for a kind that has one, disabled with the server reason while Open CLI says Starting',()=>{
+ const h=appHarness(),act=(n,d)=>vm.runInContext('nodeActions('+JSON.stringify(n)+','+d+')',h.context);
+ const html=act(VRT,true);
+ assert.match(html,/data-terminal="clab-parity-vrt"[^>]*>Open CLI[\s\S]*<button class="console-action" data-console="clab-parity-vrt" >Console <span aria-hidden="true">↗<\/span><\/button><button data-capture/,'enabled when the server holds nothing, right after Open CLI');
+ assert.match(html,/data-terminal="clab-parity-vrt" disabled title="[^"]*still starting/,'Open CLI keeps its own state');
+ const held=act({...VRT,console_hold:HELD},true);
+ assert.match(held,/data-console="clab-parity-vrt" disabled title="vrt is still starting: its launcher uses the console/);
+ assert.equal(act({...VRT,console:false},true).includes('data-console'),false,'no button for cEOS or cJunosEvolved');
+ assert.equal(act({...VRT,console:undefined,container:undefined},true).includes('data-console'),false);
+ assert.match(act(VRT,false),/data-console=/,'the technical table has it too');
+ const row=n=>vm.runInContext('deviceRow('+JSON.stringify(n)+','+(n.__rail?'true':'false')+')',h.context);
+ h.document.getElementById('details-dialog').open=false;
+ assert.match(row(VRT),/data-console="clab-parity-vrt"/);assert.ok(row(VRT).indexOf('data-terminal')<row(VRT).indexOf('data-console')&&row(VRT).indexOf('data-console')<row(VRT).indexOf('class="details-action"'));
+ assert.equal(row({...VRT,__rail:true}).includes('data-console'),false,'the rail keeps Open CLI only');
+ assert.equal(row({...VRT,console:false}).includes('data-console'),false);
+ h.context.current=()=>({id:'lab',nodes:[]});
+ assert.match(h.context.nodeActionNotes({...VRT,console_hold:HELD}),/^Console is not available: vrt is still starting/,'the reason is visible text for keyboard and touch users');
+ assert.doesNotMatch(h.context.nodeActionNotes(VRT),/Console/);
+});
+test('C04: Console opens the terminal page in console mode in a new tab',async()=>{
+ const h=appHarness(),opened=[];h.context.window={open:(u,t)=>opened.push([u,t])};
+ vm.runInContext(`activeId='lab';state.labs=[{id:'lab',name:'par ity',nodes:[]}];`,h.context);
+ const button=name=>({closest:()=>button.self,disabled:false,dataset:{console:name}});
+ await h.context.handleNodeAction({target:{closest:()=>button('clab-parity-vrt')}});
+ assert.equal(opened.length,1);assert.equal(opened[0][1],'_blank');
+ const url=new URL('http://x'+opened[0][0].replace('#','?'));assert.equal(opened[0][0].split('#')[0],'/static/terminal.html');
+ assert.equal(url.searchParams.get('lab'),'lab');assert.equal(url.searchParams.get('node'),'clab-parity-vrt');assert.equal(url.searchParams.get('label'),'par ity');assert.equal(url.searchParams.get('protocol'),'console');
+ await h.context.handleNodeAction({target:{closest:()=>({disabled:true,dataset:{console:'x'}})}});assert.equal(opened.length,1,'a disabled button opens nothing');
+});
+test('C04: the C02 drawer facts, rewritten with every claim kept: Copy targets in document order, kind and image labels, optional rows, brackets, escaping',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/clipboard.js'),'utf8'),h.context);
+ const show=n=>{const lab={id:'lab',name:'L',nodes:[n],profiles:[],defaults:{},deployment:{status:'Running'}};vm.runInContext(`state.labs=[${JSON.stringify(lab)}];activeId='lab';detailName=${JSON.stringify(n.name)};`,h.context);get('details-dialog').open=true;h.context.renderDetails();return get('details-info').innerHTML;};
+ const html=show({name:'clab-l-r1',short_name:'r1',address:'172.20.20.2',port:22,platform:'arista_ceos',kind:'ceos',image:'ceos:4.32',enabled:true,container:'clab-l-r1',discovered_id:'abcdef012345',discovered_ipv4:'172.20.20.2',discovered_ipv6:'3fff::2',discovered_image:'ceos:4.32'});
+ const targets=[...html.matchAll(/data-copy="([^"]*)" data-copy-target="([^"]*)"/g)].map(m=>[m[1],m[2]]);
+ assert.deepEqual(targets,[['clab-l-r1','details-fact-name'],['172.20.20.2:22','details-fact-endpoint'],['172.20.20.2','details-fact-address'],['clab-l-r1','details-fact-container'],['abcdef012345','details-fact-id'],['ceos','details-fact-kind'],['ceos:4.32','details-fact-image'],['172.20.20.2','details-fact-ipv4'],['3fff::2','details-fact-ipv6']]);
+ for(const id of ['details-fact-name','details-fact-endpoint','details-fact-address','details-fact-container','details-fact-id','details-fact-kind','details-fact-image','details-fact-ipv4','details-fact-ipv6'])assert.match(html,new RegExp(`id="${id}"`),id+' exists for the button to select');
+ assert.match(html,/aria-label="Copy address only"/);
+ const row=html.match(/<dt>Address<\/dt><dd>.*?<\/dd>/)[0];assert.deepEqual([...row.matchAll(/data-label="([^"]*)"[^>]*>([^<]*)<\/button>/g)].map(m=>[m[1],m[2]]),[['Copy','Copy'],['Copy address','Copy address']]);
+ assert.match(html,/<dt>Container kind<\/dt><dd><span class="mono" id="details-fact-kind">ceos/);assert.match(html,/<dt>Image<\/dt><dd><span class="mono" id="details-fact-image">ceos:4.32/);
+ assert.ok(html.indexOf('<h3>Container</h3>')<html.indexOf('<dt>Container kind</dt>'),'kind and image moved into the Container section');
+ assert.ok(html.indexOf('<h3>Connection</h3>')<html.indexOf('<dt>Address</dt>')&&html.indexOf('<dt>Address</dt>')<html.indexOf('<h3>Container</h3>'));
+ assert.match(html,/<dt>Name in lab files<\/dt>/);assert.match(html,/<dt>Network OS<\/dt>/);assert.match(html,/<dt>Login credentials<\/dt>/,'the other facts stay');
+ const v6=show({name:'r6',address:'3fff::5',port:22,platform:'arista_ceos',enabled:true,container:''});
+ assert.match(v6,/data-copy="\[3fff::5\]:22" data-copy-target="details-fact-endpoint"/);assert.match(v6,/data-copy="3fff::5" data-copy-target="details-fact-address"/);
+ assert.doesNotMatch(v6,/Container kind|<dt>Image/,'kind and image rows are absent when the node names none');
+ const bare=show({name:'r7',address:'',port:22,platform:'arista_ceos',enabled:true,container:'clab-l-r7'});
+ assert.doesNotMatch(bare,/details-fact-address/);assert.doesNotMatch(bare,/data-copy-target="details-fact-kind"/);assert.doesNotMatch(bare,/<dt>Image/);
+ const nasty=show({name:'a"b<i>',address:'10.0.0.1',port:22,platform:'arista_ceos',image:'x"y',kind:'k',enabled:true,container:'c"<b>',discovered_id:'i<d>'});
+ assert.doesNotMatch(nasty,/a"b<i>|c"<b>|i<d>/);assert.match(nasty,/data-copy="a&quot;b&lt;i&gt;"/);assert.match(nasty,/data-copy="x&quot;y"/);assert.match(nasty,/data-copy="c&quot;&lt;b&gt;"/);
+ assert.equal(get('details-endpoint').textContent,'10.0.0.1:22','the header endpoint is untouched');
+ h.context.copyButton=undefined;
+ assert.doesNotMatch(show({name:'r1',address:'1.1.1.1',port:22,platform:'arista_ceos',enabled:true}),/data-copy/,'a page without clipboard.js shows the facts without buttons');
+});
+test('C04: the Container section of a linked device: rows, the "topology names" line, the Console row wordings, State in its own element',()=>{
+ const h=appHarness(),d=drawer(h,VRT);
+ const html=d.info();
+ for(const label of ['Container','ID','Container kind','Image','Addresses','Console'])assert.match(html,new RegExp(`<dt>${label}</dt>`),label);
+ assert.match(html,/id="details-fact-container">clab-parity-vrt</);assert.match(html,/id="details-fact-id">0123456789ab</);
+ assert.match(html,/id="details-fact-ipv4">172\.20\.20\.112</);assert.match(html,/id="details-fact-ipv6">3fff:172:20:20::112</);
+ assert.match(html,/<dt>Console<\/dt><dd>Serial, port 5000 \(Console ↗ above\)<\/dd>/);
+ assert.doesNotMatch(html,/topology names/,'no second line when the running image is the topology image');
+ assert.match(html,/<dl class="health-grid" id="details-container-live"><\/dl>/);
+ assert.match(d.live(),/<dt>State<\/dt><dd>running · Up 2 hours \(healthy\)<\/dd>/);assert.doesNotMatch(html,/Up 2 hours/,'State is not in the static markup');
+ const local=drawer(appHarness(),{...VRT,discovered_image:'localhost/vjunos-router:ivy'}).info();
+ assert.match(local,/id="details-fact-image">localhost\/vjunos-router:ivy<\/span>.*<small class="secondary-text">topology names vrnetlab\/vjunos-router:25\.2<\/small>/);
+ assert.match(local,/data-copy="localhost\/vjunos-router:ivy" data-copy-target="details-fact-image"/,'Copy takes the running image');
+ const noId=drawer(appHarness(),{...VRT,discovered_id:'',discovered_ipv4:'',discovered_ipv6:''}).info();
+ assert.match(noId,/<dt>ID<\/dt><dd>Not reported<\/dd>/);assert.match(noId,/<dt>Addresses<\/dt><dd>No address reported<\/dd>/);assert.doesNotMatch(noId,/details-fact-id|details-fact-ipv/);
+ const v4only=drawer(appHarness(),{...VRT,discovered_ipv6:''}).info();assert.match(v4only,/details-fact-ipv4/);assert.doesNotMatch(v4only,/details-fact-ipv6/);
+ const none=drawer(appHarness(),{...VRT,kind:'arista_ceos',console:false,container:'clab-parity-ceos'}).info();assert.match(none,/<dt>Console<\/dt><dd>None for this kind<\/dd>/);
+ const unknown=drawer(appHarness(),{...VRT,kind:'',console:false}).info();assert.match(unknown,/<dt>Console<\/dt><dd>Not known: the manager has no topology kind for this device<\/dd>/);assert.doesNotMatch(unknown,/<dt>Container kind/);
+ const gone=drawer(appHarness(),{...VRT,runtime_state:'absent',runtime_status:''});assert.match(gone.live(),/<dt>State<\/dt><dd>Not on the VM<\/dd>/);
+});
+test('C04: a device the manager knows no container for shows one sentence, kind and image only when known, and no discovered value',()=>{
+ const n={...VRT,container:'',console:false,console_hold:'',discovered_id:'stale1',discovered_ipv4:'10.9.9.9',discovered_image:'stale:img'};
+ const h=appHarness(),d=drawer(h,n),html=d.info();
+ assert.match(html,/<h3>Container<\/h3><p class="caption">Container facts come from the VM\. This lab is not linked to a running lab \(Advanced › Link to a running lab…\)\.<\/p>/);
+ assert.match(html,/<dt>Container kind<\/dt>/);assert.match(html,/id="details-fact-image">vrnetlab\/vjunos-router:25\.2</,'the topology image, not the stale discovered one');
+ assert.doesNotMatch(html,/<dt>ID<\/dt>|<dt>State|<dt>Addresses|<dt>Console|stale1|10\.9\.9\.9|stale:img|details-container-live/);
+ assert.equal(d.live(),'','no State row');
+ const bare=drawer(appHarness(),{name:'inv',address:'1.1.1.1',port:22,platform:'arista_ceos',enabled:true,container:''}).info();
+ assert.match(bare,/Container facts come from the VM/);assert.doesNotMatch(bare.slice(bare.indexOf('<h3>Container</h3>')),/<dt>/,'a device with no kind or image has only the sentence');
+ const old=drawer(appHarness(),{name:'old',address:'1.1.1.1',port:22,platform:'arista_ceos',enabled:true}).info();
+ assert.doesNotMatch(old,/<h3>Container<\/h3>|not linked/,'an older manager without the field gets no section and no claim');
+ const oldKind=drawer(appHarness(),{name:'old',address:'1.1.1.1',port:22,platform:'arista_ceos',enabled:true,kind:'ceos',image:'ceos:1'}).info();
+ assert.match(oldKind,/<h3>Container<\/h3>/);assert.match(oldKind,/<dt>Container kind/);assert.doesNotMatch(oldKind,/not linked|<dt>ID/,'topology facts alone, no claim about linking');
+});
+test('C04: the live rows appear only while diagnosticsFacts returns facts, and are gone when it returns null or is undefined',()=>{
+ const facts={present:true,id:'x',pid:4242,status:'running',health:'healthy',started:'2026-10-23T02:03:04.5Z',ports:[{container:'22/tcp',host:'2222'},{container:'830/tcp',host:'8300'}]};
+ const on=drawer(appHarness(),VRT,{facts}).live();
+ assert.match(on,/<dt>Process<\/dt><dd>4242<\/dd>/);assert.match(on,/<dt>Health<\/dt><dd>healthy<\/dd>/);assert.match(on,/<dt>Started<\/dt><dd>2026-10-23 02:03:04 UTC<\/dd>/);
+ assert.match(on,/<dt>Published ports<\/dt><dd><div class="mono">2222 → 22\/tcp<\/div><div class="mono">8300 → 830\/tcp<\/div><\/dd>/);assert.match(on,/From the Interfaces or Logs section while it is open\./);
+ const bare=drawer(appHarness(),VRT,{facts:{present:true,pid:0,health:'',started:'',ports:[]}}).live();assert.match(bare,/no health check/);assert.match(bare,/<dt>Published ports<\/dt><dd>none<\/dd>/);
+ for(const off of [null,{present:false}]){const live=drawer(appHarness(),VRT,{facts:off}).live();assert.doesNotMatch(live,/Process|Health|From the Interfaces/);assert.match(live,/State/);}
+ const h=appHarness(),d=drawer(h,VRT);assert.match(d.info(),/<h3>Container<\/h3>/,'the section renders without diagnosticsFacts defined');
+ const calls=[];h.context.diagnosticsFacts=key=>{calls.push(key);return facts;};h.context.renderDetails();assert.deepEqual(calls,['lab/clab-parity-vrt']);assert.match(d.live(),/Process/);
+ h.context.diagnosticsFacts=()=>null;h.context.renderDetails();assert.doesNotMatch(d.live(),/Process/,'the live rows drop at once');
+});
+test('C04: focus survives the poll: a status change rewrites only the live rows, never the static markup with the Copy buttons',()=>{
+ const h=appHarness(),writes={info:0,live:0},info=h.document.getElementById('details-info'),live=h.document.getElementById('details-container-live');
+ for(const [el,key] of [[info,'info'],[live,'live']]){let value='';Object.defineProperty(el,'innerHTML',{get:()=>value,set:v=>{value=v;writes[key]++;}});}
+ const d=drawer(h,VRT),copyButton={tag:'the focused Copy button'};h.document.activeElement=copyButton;
+ const staticBefore=info.innerHTML,infoWrites=writes.info,liveWrites=writes.live;
+ for(const status of ['Up 2 hours (healthy)','Up 2 hours (unhealthy)','Up 3 hours (healthy)']){
+  vm.runInContext(`state.labs[0].nodes[0].runtime_status=${JSON.stringify(status)};`,h.context);h.context.renderDetails();
+ }
+ assert.equal(h.document.activeElement,copyButton,'the same element is still focused');
+ assert.equal(info.innerHTML,staticBefore);assert.equal(writes.info,infoWrites,'the static markup was not rewritten');
+ assert.match(live.innerHTML,/Up 3 hours \(healthy\)/);assert.ok(writes.live>liveWrites,'the volatile rows were');
+ const liveBefore=writes.live;h.context.renderDetails();assert.equal(writes.live,liveBefore,'an unchanged render writes nothing');
+ vm.runInContext(`state.labs[0].nodes[0].discovered_ipv4='172.20.20.99';`,h.context);h.context.renderDetails();assert.ok(writes.info>infoWrites,'a changed static value does rebuild the static rows');
+});
+
+test('C05: the lab banner offers Review changes… for a pending plan on a Running lab, replaces Start on a Partially running lab with a device to create, and keeps Start for a started-only plan',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),h.context);
+ const lab=status=>({id:'lab',name:'L',nodes:[],profiles:[],defaults:{},deployment:{status},nos_readiness:{status:'idle'}});
+ const paint=(status,plan,dismissed=[])=>{h.context.noticeDismissed=key=>dismissed.some(d=>key.includes(d));vm.runInContext(`state=${JSON.stringify({labs:[lab(status)],jobs:[],platforms:{},operations:[]})};activeId='lab';opPlanCache=${JSON.stringify(plan?{lab:{answer:{changed:true,plan,failed:''},error:'',at:1}}:{})};renderLabBanner();`,h.context);};
+ paint('Running',{added:['r3'],reasons:{}});
+ assert.equal(get('banner-review').hidden,false);assert.equal(get('banner-review').textContent,'Review changes…');assert.equal(get('lab-banner-text').textContent,'The topology file differs from the running lab.');assert.equal(get('lab-banner-detail-text').textContent,'r3 to create');
+ paint('Running',null);assert.equal(get('lab-banner').hidden,true,'no differences: no notice');
+ const identity=h.context.opPlanIdentity({added:['r3'],reasons:{}});
+ paint('Partially running',{added:['r3'],reasons:{}});
+ assert.equal(get('banner-review').hidden,false,'a destroyed device needs the plan\'s review');assert.equal(get('banner-start').hidden,true,'Start cannot recreate it');assert.equal(get('lab-banner-detail-text').textContent,'r3 to create');
+ paint('Partially running',{started:['r2'],reasons:{}});
+ assert.equal(get('banner-start').hidden,false,'a stopped device is started');assert.equal(get('banner-review').hidden,true);
+ assert.ok(vm.runInContext('BANNER_BUTTONS["lab-banner"]',h.context).includes('banner-review'));
+ assert.ok(typeof identity==='string'&&identity.length>0);
+});

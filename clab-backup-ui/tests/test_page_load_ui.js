@@ -7,7 +7,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const dir=path.join(__dirname,'../app/static');
 const html=fs.readFileSync(path.join(dir,'index.html'),'utf8');
-const scripts=[...html.matchAll(/<script src="\/static\/([^"?]+\.js)\?v=[^"]*" defer><\/script>/g)].map(m=>m[1]);
+const listed=[...html.matchAll(/<script src="\/static\/([^"?]+\.js)\?v=[^"]*" defer><\/script>/g)].map(m=>m[1]);
+const scripts=listed;
 // A document whose every element exists: the scripts wire their static controls at load (`$('new-lab').onclick=…`).
 function fakeElement(id){
  const listeners={},el={id:id||'',hidden:false,disabled:false,value:'',textContent:'',innerHTML:'',className:'',title:'',open:false,checked:false,tabIndex:0,dataset:{},style:{},children:[],listeners,
@@ -48,6 +49,20 @@ test('index.html lists the page scripts once each, with the header, the drawers 
 test('every script of the page loads into one context, in the page’s order: no script throws, no top-level name is declared twice',()=>{
  const page=loadPage();
  assert.deepEqual(page.failures,[],'a script that throws while loading never runs in a browser');
+});
+test('clipboard.js loads once, before operations.js, into the shared scope and defines copyText, copyFeedback and copyButton',()=>{
+ assert.ok(listed.includes('clipboard.js'),'index.html lists clipboard.js');assert.ok(listed.indexOf('clipboard.js')<listed.indexOf('operations.js'),'index.html lists clipboard.js before operations.js');
+ const page=loadPage();
+ for(const name of ['copyText','copyFeedback','copyButton'])assert.equal(typeof get(page.context,name),'function',name);
+ // the page's one delegated click is registered on the document, and the markup helper uses the page's esc()
+ assert.match(vm.runInContext('copyButton("a\\"b","x","t")',page.context),/data-copy="a&quot;b"/);
+});
+test('every page that loads operations.js or terminal.js loads clipboard.js first (vm-connection.html has no Copy buttons by design)',()=>{
+ for(const file of ['index.html','workspace.html','lab-builder.html','terminal.html']){
+  const order=[...fs.readFileSync(path.join(dir,file),'utf8').matchAll(/<script[^>]*\ssrc="\/static\/([^"?]+\.js)\?v=[^"]*"/g)].map(m=>m[1]);
+  const users=order.filter(name=>name==='operations.js'||name==='terminal.js');assert.ok(users.length>=1,file+' loads operations.js or terminal.js');
+  for(const name of users){assert.ok(order.includes('clipboard.js'),file+' loads clipboard.js');assert.ok(order.indexOf('clipboard.js')<order.indexOf(name),file+': clipboard.js before '+name);}
+ }
 });
 test('a name declared at the top level of two scripts is caught by this harness (the saveDrawer collision)',()=>{
  const context=vm.createContext({});
@@ -170,4 +185,26 @@ test('the differences of a load carry Load’s own Back: the drawer’s head sho
  vm.runInContext('saveDrawerOpen("different",{review:null})',context);
  assert.equal(vm.runInContext('saveDrawer.kind',context),'different');assert.equal(vm.runInContext('saveDrawer.back',context),null);
  assert.match(vm.runInContext('loadDifferentMarkup({labId:"lab",name:"Final",review:{source:{},targets:[]},chosen:new Set(),sending:false,error:""}).html',context),/id="load-diff-back" data-load-action="diff-back">Back</);
+});
+
+test('device-diagnostics.js (C03) loads after shell.js, app.js and operations.js and defines the hooks shell.js and app.js call',async()=>{
+ for(const before of ['shell.js','app.js','operations.js','capture.js'])assert.ok(listed.includes(before));
+ assert.ok(listed.indexOf('device-diagnostics.js')>listed.indexOf('operations.js'),'index.html lists device-diagnostics.js after operations.js');
+ assert.equal(listed.filter(n=>n==='device-diagnostics.js').length,1);
+ const page=loadPage();
+ assert.deepEqual(page.failures,[]);
+ for(const name of ['renderDeviceDiagnostics','resetDeviceDiagnostics','diagVisibilityChanged','diagPollNext','diagRate','pageVisible','opInspectionSort','opInspectionFilter','opImages','opView'])assert.equal(typeof get(page.context,name),'function',name);
+ assert.match(fs.readFileSync(path.join(dir,'app.js'),'utf8'),/if\(typeof renderDeviceDiagnostics==='function'\)renderDeviceDiagnostics\(n\);/,'renderDetails calls the one hook');
+ assert.match(fs.readFileSync(path.join(dir,'shell.js'),'utf8'),/resetDeviceDiagnostics\(\)/);
+ // The hook is safe on the page's own scripts: no capabilities yet, then a helper that cannot do diagnostics, then one that can.
+ assert.doesNotThrow(()=>vm.runInContext('renderDeviceDiagnostics({name:"r1"})',page.context));
+ vm.runInContext('opCaps={diagnostics:false}',page.context);vm.runInContext('renderDeviceDiagnostics({name:"r1"})',page.context);
+ assert.equal(page.element('details-diagnostics').hidden,true);
+ vm.runInContext('opCaps={diagnostics:true}',page.context);vm.runInContext('renderDeviceDiagnostics({name:"r1"})',page.context);
+ assert.equal(page.element('details-diagnostics').hidden,false);
+ assert.equal(vm.runInContext('pageVisible()',page.context),true);
+});
+test('no page other than index.html loads device-diagnostics.js, and the standalone pages stay free of it',()=>{
+ for(const file of fs.readdirSync(dir).filter(n=>n.endsWith('.html')&&n!=='index.html'))assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/device-diagnostics\.js/,file);
+ assert.doesNotMatch(html,/style="/,'/ keeps no inline styles');
 });

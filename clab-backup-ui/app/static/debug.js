@@ -24,6 +24,7 @@ function debugCheckLine(check){
  const parts=[(debugCheckNames[check.check]||check.check)+' — '+word];
  if(check.entry_count!==undefined)parts.push(check.entry_count+' entries');
  if(check.helper_version)parts.push('VM helper '+check.helper_version);
+ if(check.containerlab_version)parts.push('containerlab '+check.containerlab_version);
  parts.push(check.duration_ms+' ms');
  let line=parts.join(' · ');
  const sentence=status==='fail'?debugCodeSentences[check.code]:check.check==='capabilities'&&status!=='pass'&&check.helper_version?`The VM helper (${check.helper_version}) and the manager are different releases — update the VM from the same release.`:'';

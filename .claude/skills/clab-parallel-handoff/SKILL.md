@@ -5,9 +5,14 @@ description: "Coordinate two VM-local Fable sessions using exact file ownership 
 
 # clab-parallel-handoff
 
-Applies only while the owner has declared two VMs active
-(`.claude/rules/00-clab-two-worker-routing.md`). A single session is its own lead and
-needs none of this; inside one VM the lead hands a worker its files or a worktree.
+Applies only while the owner has declared two VMs active: the signal is `.claude/worker.local.json`
+(ignored by Git, written per VM) naming the worker, with `CLAB_WORKER_ID` in
+`.claude/settings.local.json`; `.claude/rules/00-clab-two-worker-routing.md` says so. A single
+session is its own lead and needs none of this; inside one VM the lead hands a worker its files or
+a worktree. The starting lanes (A: backend, host and NOS; B: vanilla UI, editor and browser QA) are
+not silos: A may move one once the new ownership is acknowledged before editing. `set-release.py`
+touches many files: A runs it only after local editors have stopped and B's incoming changes are
+coordinated; each lead verifies the remote commit after pushing a checkpoint.
 
 Worker A owns cross-VM integration, release numbers and the shared coordination
 issue. Worker B takes tasks explicitly assigned there. Each VM has a separate clone,
@@ -27,6 +32,6 @@ editors are active. Separate worktrees must be created from the assignment's exp
 base SHA; never assume a default worktree contains the parent's in-progress changes.
 
 Before handing off record HEAD, base, files, tests, evidence, runtime routing,
-uncommitted work, known gaps and next step. Push checkpoints before long operations,
+uncommitted work, known gaps and next step; `TASK-HANDOFF.md` beside this file is the template. Push checkpoints before long operations,
 verify remote SHA and never force-push or silently discard another worker's work.
 No shared filesystem, Redis service or always-running agent framework is required.
