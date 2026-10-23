@@ -2201,6 +2201,15 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 .capture-presets { display: flex; gap: 8px; margin-bottom: 8px; }
 .capture-end .form-help { margin: 0 0 6px; }
 .capture-dialog[data-mode="link"] .capture-device-only { display: none; }
+/* C07 fixes: a row wraps instead of squeezing its label to a character; the link ends use one column on a phone; the launch
+   links start at the content edge and wrap their label. */
+.capture-interface { flex-wrap: wrap; }
+.capture-end { min-width: 0; }
+#capture-ends-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+#capture-ends-list .button { white-space: normal; max-width: 100%; text-align: left; height: auto; }
+#capture-launches { justify-content: flex-start; }
+#capture-launches .button { white-space: normal; max-width: 100%; text-align: left; height: auto; }
+@media (max-width: 420px) { #capture-ends-list { grid-template-columns: minmax(0, 1fr); } }
 
 /* viewer page (body.capture-viewer) */
 body.capture-viewer { height: 100vh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; margin: 0; }
@@ -2435,7 +2444,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .op-inspection th { white-space: normal; }
   .op-inspection td { min-width: 80px; }
   .workspace-choice { padding: 20px; min-height: 140px; }
-  .capture-interfaces { grid-template-columns: 1fr 1fr; }
+  .capture-interfaces { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   .side-button { margin: 10px 0 0; width: 100%; }
 }

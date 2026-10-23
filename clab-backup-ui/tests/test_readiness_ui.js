@@ -421,6 +421,15 @@ test('C05: the lab banner offers Review changes… for a pending plan on a Runni
  assert.ok(typeof identity==='string'&&identity.length>0);
 });
 
+test('C07 fix: the state poll calls showTab(tools) again and must not ask for the sessions again; leaving Tools and coming back does',()=>{
+ const h=appHarness();let refreshed=0;
+ vm.runInContext("state={labs:[{id:'l',name:'L',nodes:[],jobs:[]}],jobs:[],platforms:{},loaded:true};activeId='l';",h.context);
+ h.context.syncRoute=()=>{};h.context.refreshCaptureSessions=()=>{refreshed++;};
+ vm.runInContext("showTab('tools')",h.context);assert.equal(refreshed,1);
+ for(let i=0;i<5;i++)vm.runInContext("showTab('tools')",h.context);
+ assert.equal(refreshed,1,'five polls while Tools stays shown ask nothing more');
+ vm.runInContext("showTab('devices');showTab('tools')",h.context);assert.equal(refreshed,2,'a real tab change asks once');
+});
 test('showTab refreshes the capture sessions for the Tools view only, also through the arrow keys and when the function is absent',()=>{
  const h=appHarness();let refreshed=0;
  vm.runInContext("state={labs:[{id:'l',name:'L',nodes:[],jobs:[]}],jobs:[],platforms:{},loaded:true};activeId='l';",h.context);

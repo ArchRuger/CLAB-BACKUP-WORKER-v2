@@ -211,7 +211,7 @@ test('no page other than index.html loads device-diagnostics.js, and the standal
 
 test('C07: the capture dialog, the Tools card and the wire menu have the ids capture.js and shell.js use; the replaced ids are gone from page and scripts; the page keeps no inline style',()=>{
  for(const id of ['capture-ends','capture-ends-list','capture-openas','capture-openas-one','capture-openas-each','capture-all','capture-none','capture-presets','capture-launches','capture-end-all','capture-sessions-caption','tools-capture-end-all','link-context-menu'])assert.match(html,new RegExp('id="'+id+'"'),id);
- assert.match(html,/id="link-context-menu" class="node-context-menu" role="menu" aria-label="Link actions" hidden/);
+ assert.match(html,/id="link-context-menu" class="node-context-menu" role="menu" aria-label="Link actions" tabindex="-1" hidden/);
  for(const file of ['index.html','capture.js','shell.js','app.js','device-diagnostics.js']){
   const text=fs.readFileSync(path.join(dir,file),'utf8');
   for(const old of ['capture-'+'launch','capture-'+'endpoints'])assert.equal(text.includes(`$('${old}')`)||text.includes(`id="${old}"`),false,file+' no longer uses the replaced id '+old);
