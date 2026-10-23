@@ -24,6 +24,7 @@ import app.lab_operations as lab_operations
 from app.host_operations import HostOperations, LIFECYCLE, digest, capture, stream
 from app.lab_operations import LabOperations, OutputWindow, scrub, drawio
 from app.discovery import stamp
+from app.topology import parse_drawing
 from app.main import create_app
 from app.store import Store
 import test_discovery as discovery_tests
@@ -1246,7 +1247,7 @@ class OperationAPITests(unittest.TestCase):
             lab=self.store.lab(self.lab_id);alias=lab['drawing']['nodes'][0]['alias']
             response=self.client.put('/api/labs/'+self.lab_id+'/layout',headers=self.auth,json={'positions':{alias:[600,300]}})
             self.assertEqual(response.status_code,200,response.text)
-            for layout in ('interactive',):
+            for layout in ('interactive','map&theme=manager'):
                 response=self.client.get('/api/labs/'+self.lab_id+'/drawio?layout='+layout,headers=self.auth)
                 self.assertEqual(response.status_code,200);root=ET.fromstring(response.content)
                 self.assertEqual(len(root.findall('.//mxCell[@id="node-0"]')),1)
@@ -1438,11 +1439,87 @@ class OperationAPITests(unittest.TestCase):
             keep_document(lab,b'');self.assertNotIn('annotations',lab);self.assertIn('nodeAnnotations',map_document(lab))
             keep_document(lab,'x'*(1024*1024+1));self.assertNotIn('annotations',lab,'an oversized text is not stored')
 
-    def test_removed_drawio_layouts_rejected(self):
-        with self.fixture():
-            for layout in ('horizontal','vertical'):
-                self.assertEqual(self.client.get('/api/labs/'+self.lab_id+'/drawio?layout='+layout).status_code,400)
+    def drawio_get(self,query):
+        return self.client.get('/api/labs/'+self.lab_id+'/drawio'+query,headers=self.auth)
 
+    def test_drawio_layouts_and_themes(self):
+        with self.fixture():
+            # The helper-run horizontal and vertical graph stays removed, beside any other unknown value.
+            for layout in ('horizontal','vertical','diagonal'):
+                response=self.drawio_get('?layout='+layout)
+                self.assertEqual(response.status_code,400,layout)
+                self.assertEqual(response.json()['detail'],'Choose a supported layout.')
+            for theme in ('neon','Print',''):
+                response=self.drawio_get('?theme='+theme)
+                self.assertEqual(response.status_code,400,theme)
+                self.assertEqual(response.json()['detail'],'Choose a supported theme.')
+            default=self.drawio_get('')
+            self.assertEqual(default.status_code,200)
+            for query in ('?layout=map','?layout=interactive','?theme=manager','?layout=map&theme=manager'):
+                self.assertEqual(self.drawio_get(query).content,default.content,query)
+            for layout in ('rows','columns'):
+                response=self.drawio_get('?layout='+layout)
+                self.assertEqual(response.status_code,200,response.text)
+                ids=[c.get('id') for c in ET.fromstring(response.content).findall('.//mxCell')]
+                self.assertTrue(any(i.startswith('node-') for i in ids));self.assertTrue(any(i.startswith('link-') for i in ids))
+                self.assertFalse([i for i in ids if i.startswith('annotation-')])
+                self.assertIn('-'+layout+'.drawio',response.headers['content-disposition'])
+            self.assertNotIn('-rows',default.headers['content-disposition'])
+            printed=self.drawio_get('?theme=print')
+            self.assertEqual(printed.status_code,200)
+            self.assertNotIn(b'#0066ff',printed.content)
+            self.assertEqual(ET.fromstring(printed.content).find('.//mxGraphModel').get('background'),'#ffffff')
+
+    def test_drawio_manager_map_is_byte_identical_to_the_golden_output(self):
+        fixture=Path(__file__).parent/'fixtures'/'drawio'
+        drawing=parse_drawing((fixture/'annotations.json').read_bytes(),(fixture/'topology.json').read_bytes())
+        self.assertFalse([d for d in drawing['decorations'] if d['type']=='text'],'the golden fixture has no text decorations')
+        golden=(fixture/'golden-map-manager.drawio').read_bytes()
+        lab={'name':'Golden','drawing':drawing}
+        self.assertEqual(drawio(lab),golden)
+        self.assertEqual(drawio(lab,'map','manager'),golden)
+        self.assertEqual(drawio(lab,'interactive','manager'),golden)
+        for layout in ('horizontal','vertical','diagonal'):
+            with self.assertRaises(ValueError):drawio(lab,layout)
+        with self.assertRaises(ValueError):drawio(lab,'map','neon')
+
+    def test_drawio_rows_columns_do_not_touch_the_stored_map_and_drop_decorations(self):
+        fixture=Path(__file__).parent/'fixtures'/'drawio'
+        drawing=parse_drawing((fixture/'annotations.json').read_bytes(),(fixture/'topology.json').read_bytes())
+        lab={'name':'Golden','drawing':drawing};before=copy.deepcopy(lab)
+        rows=ET.fromstring(drawio(lab,'rows'));columns=ET.fromstring(drawio(lab,'columns'))
+        self.assertEqual(lab,before)
+        for root in (rows,columns):
+            ids=[c.get('id') for c in root.findall('.//mxCell')]
+            self.assertFalse([i for i in ids if i.startswith('annotation-')])
+            self.assertEqual(len([i for i in ids if i.startswith('node-')]),4)
+        pos=lambda root:[(c.find('mxGeometry').get('x'),c.find('mxGeometry').get('y')) for c in root.findall('.//mxCell') if c.get('id','').startswith('node-')]
+        self.assertEqual(pos(rows),[(y,x) for x,y in pos(columns)])
+        self.assertEqual(drawio(lab,'rows'),drawio(lab,'rows'))
+
+    def test_drawio_print_theme_and_new_styles(self):
+        drawing={'nodes':[{'id':'a','alias':'a','label':'A','x':0,'y':0,'icon':'router','iconColor':'#0066ff'},
+                          {'id':'b','alias':'b','label':'B','x':300,'y':0,'icon':'switch'}],
+                 'links':[[{'node':'a','interface':'eth1'},{'node':'b','interface':'eth1'}]],
+                 'decorations':[dict(type='line',x=0,y=50,x2=100,y2=50,width=100,height=1,text='',lineStartArrow=True,lineEndArrow=True,lineArrowSize=14,borderColor='#ff0000'),
+                                dict(type='text',x=0,y=80,width=100,height=30,text='Note',roundedBackground=True,fontColor='#ff0000'),
+                                dict(type='text',x=0,y=120,width=100,height=30,text='Plain',roundedBackground=False)],
+                 'settings':{'nodeStyle':'boxed','boxSpacing':'narrow','linkStyle':'elbow','background':'#fdf6e3'}}
+        lab={'name':'Styles','drawing':drawing}
+        manager=drawio(lab).decode()
+        self.assertIn('startArrow=classic',manager);self.assertIn('endArrow=classic',manager)
+        self.assertIn('startSize=14',manager);self.assertIn('endSize=14',manager)
+        self.assertIn('edgeStyle=orthogonalEdgeStyle',manager)
+        root=ET.fromstring(drawio(lab))
+        cells={c.get('id'):c for c in root.findall('.//mxCell')}
+        self.assertIn('rounded=1',cells['annotation-1'].get('style'));self.assertNotIn('rounded=1',cells['annotation-2'].get('style'))
+        g=cells['node-0'].find('mxGeometry');self.assertEqual((g.get('width'),g.get('height')),('64','64'))
+        drawing['settings']['boxSpacing']='default'
+        self.assertEqual(ET.fromstring(drawio(lab)).find('.//mxCell[@id="node-0"]/mxGeometry').get('width'),'80')
+        printed=drawio(lab,'map','print').decode()
+        for forbidden in ('#0066ff','#ff0000','#79df87','#454545','#fdf6e3','#fff8e5'):self.assertNotIn(forbidden,printed)
+        self.assertIn('strokeColor=#000000',printed);self.assertIn('background="#ffffff"',printed)
+        self.assertIn('startArrow=classic',printed)
 
 class FakeStopChannel:
     """A helper session that answers from a script: bytes are stdout, ('hook', fn) runs fn first, b'' is end of output."""

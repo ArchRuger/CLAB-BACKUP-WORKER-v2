@@ -870,12 +870,13 @@ class LabOperations:
             return {'saved': True}
 
         @app.get('/api/labs/{lab_id}/drawio')
-        def export(lab_id: str, layout: str = 'interactive'):
-            if layout != 'interactive': raise HTTPException(400, 'Choose a supported layout.')
+        def export(lab_id: str, layout: str = 'map', theme: str = 'manager'):
+            if layout not in ('map', 'interactive', 'rows', 'columns'): raise HTTPException(400, 'Choose a supported layout.')
+            if theme not in ('manager', 'print'): raise HTTPException(400, 'Choose a supported theme.')
             with self.store.lock:
                 lab = self.store.lab(lab_id)
                 if not lab: raise HTTPException(404, 'Lab not found.')
-                content = drawio(lab, layout); filename = lab['name'] + '.drawio'
+                content = drawio(lab, layout, theme); filename = lab['name'] + ('' if layout in ('map', 'interactive') else '-' + layout) + '.drawio'
             return Response(content, media_type='application/xml', headers={'Content-Disposition': "attachment; filename=topology.drawio; filename*=UTF-8''" + quote(filename, safe='')})
 
         class Layout(BaseModel):
