@@ -147,6 +147,7 @@ function render(){
  const version=state.version||'1.31.5';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
+ if($('help-student-guide'))$('help-student-guide').hidden=!state.student_guide;
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;
  if($('home'))$('home').hidden=!home;
  if($('home-skeleton'))$('home-skeleton').hidden=loaded;
@@ -288,7 +289,7 @@ function renderLabBanner(){
  else if(lab.telemetry_retired)spec={tone:'info',icon:'info',text:retiredBannerText(lab.telemetry_retired),actions:{'banner-retired-review':{label:'Review and remove…',run:()=>{if(typeof openTelemetryRetired==='function'&&typeof opTask==='function')opTask(null,()=>openTelemetryRetired(lab.id));}}}};
  setBanner('lab-banner',spec);
 }
-function renderNodes(){const lab=current();if(!lab||!devicesTechnical)return;const term=$('search').value.toLowerCase();const nodes=lab.nodes.filter(n=>(n.name+' '+n.address+' '+platformLabel(n.platform)).toLowerCase().includes(term));
+function renderNodes(){const lab=current();if(!lab||!devicesTechnical)return;const term=$('search').value;const nodes=lab.nodes.filter(n=>textMatch(term,[n.name,n.address,platformLabel(n.platform)]));
  const markup=nodes.map(n=>{const h=nodeHealth(n.name);return `<tr><td><input type="checkbox" data-enable="${esc(n.name)}" ${n.enabled?'checked':''} ${!n.platform?'disabled title="Choose a network OS first (Edit connection)"':''} aria-label="Include ${esc(n.name)} in backups"></td><td><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="endpoint">${esc(n.address)}:${n.port}</span></td><td><span class="badge platform">${esc(platformLabel(n.platform))}</span><span class="secondary-text">${esc(profileName(lab,n))}</span></td><td>${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<span class="timestamp">${h?.ssh?.at?esc(utcDisplay(h.ssh.at)):'No check yet'}</span></td><td>${h?.backup?badge(h.backup.status):'<span class="status-neutral">No backup yet</span>'}<span class="timestamp">${h?.backup?.at?esc(utcDisplay(h.backup.at)):''}</span></td><td><div class="node-actions">${nodeActions(n)}</div></td></tr>`;}).join('')||'<tr><td colspan="6" class="table-empty">No devices match. Try another name, address or platform.</td></tr>';setMarkup($('nodes'),markup);
 }
 // The per-device actions of the Devices view (its technical table and the device panel): Open CLI,
@@ -325,8 +326,8 @@ function deviceRow(n,rail){
  return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span></div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':consoleButton(n)}${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}</div></li>`;
 }
 function renderDeviceList(){
- const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();
- const nodes=lab.nodes.filter(n=>(n.name+' '+n.address+' '+platformLabel(n.platform)).toLowerCase().includes(term));
+ const lab=current();if(!lab)return;const term=$('search').value;
+ const nodes=lab.nodes.filter(n=>textMatch(term,[n.name,n.address,platformLabel(n.platform)]));
  if(!devicesTechnical)setMarkup($('device-list'),nodes.map(n=>deviceRow(n,false)).join('')||(lab.nodes.length?'<li class="table-empty">No devices match. Try another name, address or platform.</li>':'<li class="table-empty">This lab has no devices yet.</li>'));
  setMarkup($('topology-devices'),lab.nodes.map(n=>deviceRow(n,true)).join('')||'<li class="table-empty">This lab has no devices yet.</li>');
  devicesPainted=devicesTechnical;

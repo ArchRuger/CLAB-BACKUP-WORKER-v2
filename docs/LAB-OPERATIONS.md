@@ -36,7 +36,10 @@ retired telemetry feature added, **Retired telemetry configuration…** (see [TE
 says why underneath it (the VM is not connected, the lab is not running, another
 operation is running, the lab has no topology file on the VM). The **Manager ▾** menu in
 the top bar holds the actions that are not about one lab: **Deploy a new lab…**,
-**Running labs on the VM…** and **Operation history…**.
+**Running labs on the VM…**, **Operation history…**, **Manager settings…**,
+**Browser preferences…**, a **Help** group (**Keyboard shortcuts…** and links to the
+containerlab documentation, which open in a new tab) and **Diagnostics**. See
+[Help, keyboard shortcuts and browser preferences](#help-keyboard-shortcuts-and-browser-preferences).
 
 | Action | Behaviour |
 |---|---|
@@ -145,6 +148,74 @@ container from the lab's deployment name and refuses a container that is not lab
   list. Nothing is pulled or removed. Without the updated helper only the references appear.
 - **containerlab version.** The Manager menu's footer and the Diagnostics page's *VM commands* row name the
   containerlab release when the manager has asked the VM for its capabilities.
+
+## Help, keyboard shortcuts and browser preferences
+
+All three live in the **Manager ▾** menu in the top bar and send nothing to the manager.
+
+**Help.** **Help** is a group at the bottom of the Manager menu, just above **Diagnostics**. It is
+folded every time the menu opens: click it, or press Enter, Space or ArrowRight, to unfold it, and
+ArrowLeft to fold it again. It holds **Keyboard shortcuts…** and four links that open in a new tab
+(they leave the manager, so a classroom without internet access sees the browser's own error):
+*containerlab documentation* (containerlab.dev), *Lab examples* (containerlab.dev),
+*Device kinds and their images* (the containerlab.dev kinds page, a pointer to the vendor image
+notes there and not a check of your own images; **Images on this VM…** in the same menu is that
+check) and *srl-labs lab repositories on GitHub*. The menu markup also carries a *Student quick
+start (PDF)* item, but the manager links the student guide only once it is served, and it is not
+served yet: the item stays hidden until the guide is revised for the current manager.
+
+**Keyboard shortcuts.** **Manager ▾ › Help › Keyboard shortcuts…** opens a dialog that lists the
+keys the manager's pages bind: the menus (ArrowDown, ArrowUp, Home, End, ArrowRight and ArrowLeft for
+groups, Escape, Tab), the tabs and lists, Shift+F10 or the Menu key for a lab's or device's menu, the
+topology map, the Save and Load panels, the folder chooser, the terminal page (Alt+ArrowUp,
+Alt+ArrowDown, Alt+0, Alt+T, Ctrl+Insert), undo and redo on the Edit map page and the lab builder's
+YAML panel. It lists only keys that exist, and everything in it can also be done with the mouse.
+There is deliberately no `?` key to open it: `?` is a character in every text field, and its position
+differs between keyboard layouts.
+
+**Browser preferences.** **Manager ▾ › Browser preferences…** shows what this browser remembers for
+the manager. Nothing in it is sent to the manager or shared with other browsers; it is stored by the
+browser only.
+
+- *Terminal text size* is the one setting you can change here (11 to 18 px, default 14). It applies to
+  terminals opened from then on; a terminal that is already open keeps its size.
+- *Remembered in this browser* lists the terminal text size, the *Last opened* times of labs, the
+  warnings about failed operations that you closed, the topology editor's view settings (grid style,
+  grid line width, which side its panel opens on, colour mode, in the lab builder and Edit map) and
+  the remembered capture choices.
+- *Remembered in this tab* lists the Home list tab (Recent labs or All labs) and the notices you
+  closed with ×. A different browser tab keeps its own.
+- *Kept by Reset* names what is never cleared: Network design drafts, lab builder drafts and
+  templates, the *Try again* requests, a save being sent, the return marker of the lab builder and the
+  lab that was open before a reload. Drafts exist only in this browser, so Reset leaves them alone;
+  discard them on the Network design card or with **Drafts…** in the lab builder.
+- *Not stored*: the open folders of the save chooser and the Home filter are kept only while the page
+  is open, and a reload forgets them.
+- *Display settings the manager follows* shows reduced motion, more contrast and forced colours as on
+  or off. They come from your system or browser and the manager stores nothing for them. The
+  appearance is light; there is no dark mode setting (the terminal page is dark by design).
+
+**Reset browser preferences…** asks first. The confirmation names what changes, with counts, and
+**Keep** is focused so that Enter changes nothing. **Reset** then forgets, in this browser, the terminal
+text size, the *Last opened* times, the editor view settings, the remembered capture choices and
+which warnings about failed operations you closed; those warnings show again and their labs read
+*Needs attention* until you close them again. In this tab only it forgets the Home list tab and the
+closed notices; other open tabs keep theirs. Drafts, templates and *Try again* requests are kept.
+If the browser blocks site storage (a private window, or site data blocked), the dialog says there is
+nothing to show or reset and **Reset** is disabled with that reason. If storage is full or
+read-only, the inventory still shows, the text size select is disabled with a sentence saying so, and
+**Reset** still works because removing items does not need free space.
+
+**Find a lab on Home.** With two or more labs, a **Find a lab** field sits above the cards. A lab
+matches when what you typed is part of its name or part of a device's name, or when it is exactly the
+lab's state word (*Running*, *Stopped*, *Starting*, *Needs attention*): `running` finds the running
+labs, while `run` matches only names. Case and surrounding spaces do not matter, and there are no
+wildcards. A card shown because of a device carries *has device <name>*. The count (*3 of 7 labs*)
+and, when nothing matches, a sentence that names what you typed appear beside the field; for a screen
+reader the result is announced once, half a second after you stop typing. **Clear** empties the field
+and keeps focus in it. The filter covers the labs Home lists (hidden labs stay hidden), is never
+stored and is not part of the address, so a reload starts without it; the page itself does not clear it on Escape. The
+Devices tab search uses the same matching.
 
 ## Device readiness after deployment
 

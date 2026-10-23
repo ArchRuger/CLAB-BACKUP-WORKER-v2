@@ -633,6 +633,7 @@ footer {
 .menu-group-toggle[aria-expanded="true"] .icon { transform: rotate(180deg); }
 .menu-group { margin: 0 0 2px 10px; padding-left: 6px; border-left: 2px solid var(--line); }
 #lab-actions-menu { max-height: calc(100vh - 120px); overflow-y: auto; overscroll-behavior: contain; }
+#manager-menu-list { max-height: calc(100vh - 120px); overflow-y: auto; overscroll-behavior: contain; }
 .menu-sep { display: block; height: 1px; margin: 6px 4px; padding: 0; border: 0; background: var(--line); }
 .menu-danger button, .menu-list button.danger { color: var(--danger); }
 .menu-danger button:hover:not(:disabled), .menu-list button.danger:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger-strong); }
@@ -2742,3 +2743,18 @@ th[aria-sort=descending] > .op-sort::after { content: " ▼"; font-size: 10px; }
 .impairments-table td small.form-help { display: block; max-width: 14ch; white-space: normal; overflow-wrap: anywhere; }
 .imp-question { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-left: 3px solid var(--danger); border-radius: var(--radius); background: var(--surface-2); }
 .imp-question .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+/* C09: the keyboard shortcuts dialog, the Home filter row and the Browser preferences dialog */
+kbd { font: 12px/1.4 var(--mono); padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; background: var(--surface-2); white-space: nowrap; }
+.shortcuts dt { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.home-list-tools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 0 12px; }
+.home-list-tools label { margin: 0; font-weight: 600; }
+.home-list-tools input { flex: 1 1 140px; min-width: 0; }   /* label, field and Clear share one line at 390: the field grows into Clear's place while it is hidden */
+.home-list-tools .caption, .home-filter-empty { overflow-wrap: anywhere; min-width: 0; }
+#prefs-reset-confirm { flex-direction: column; align-items: stretch; }
+#prefs-reset-confirm > div { flex: none; }   /* column direction: the 320px row basis would become a 320px-tall box */
+#prefs-reset-confirm .dialog-actions { margin-top: 0; }
+#prefs-reset-confirm details { margin-top: 6px; }
+#preferences-body h4 { margin: 16px 0 8px; font-size: 13px; }
+/* One label column for every section of the two dialogs; one column when the dialog is narrow (dl.kv outranks the generic .kv rule of the phone media query) */
+#shortcuts-dialog dl.kv, #preferences-dialog dl.kv { grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); }
+@media (max-width: 420px) { #shortcuts-dialog dl.kv, #preferences-dialog dl.kv { grid-template-columns: 1fr; gap: 2px 0; } #shortcuts-dialog dd, #preferences-dialog dd { margin-bottom: 8px; } }
