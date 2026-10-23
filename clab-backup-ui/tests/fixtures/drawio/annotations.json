@@ -1,0 +1,10 @@
+{"nodeAnnotations":[
+ {"id":"r1","position":{"x":100,"y":100},"icon":"router","direction":"right"},
+ {"id":"s1","position":{"x":300,"y":100},"icon":"switch","label":"Core","labelPosition":"top"},
+ {"id":"h1","position":{"x":300,"y":300},"icon":"server","iconColor":"#336699"},
+ {"id":"r2","position":{"x":600,"y":260}}],
+ "groupStyleAnnotations":[{"name":"Site A","position":{"x":50,"y":50},"width":400,"height":200,"backgroundColor":"#ffcaab","backgroundOpacity":0.4,"borderWidth":2}],
+ "freeShapeAnnotations":[{"shapeType":"rectangle","position":{"x":520,"y":200},"width":200,"height":150,"borderStyle":"dashed"},
+   {"shapeType":"line","position":{"x":10,"y":400},"endPosition":{"x":500,"y":420},"borderWidth":3}],
+ "edgeAnnotations":[{"source":"r1","sourceEndpoint":"eth1","target":"s1","targetEndpoint":"eth1","endpointLabelOffsetEnabled":true,"endpointLabelOffset":30}],
+ "viewerSettings":{"gridBgColor":"#fdf6e3"}}

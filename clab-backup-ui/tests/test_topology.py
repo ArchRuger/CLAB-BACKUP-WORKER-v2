@@ -85,6 +85,34 @@ class TopologyTests(unittest.TestCase):
         self.assertEqual(d['decorations'][0]['fillOpacity'],.4)
         self.assertEqual(d['decorations'][1]['fontSize'],28)
         self.assertEqual(d['decorations'][1]['fontWeight'],'bold')
+    def test_stored_styles_the_renderer_honours(self):
+        a=copy.deepcopy(self.annotations)
+        a['freeShapeAnnotations']=[{'shapeType':'line','position':{'x':0,'y':0},'lineStartArrow':True,'lineEndArrow':True,'lineArrowSize':99},
+                                   {'shapeType':'line','position':{'x':0,'y':0},'lineStartArrow':'true','lineArrowSize':1},
+                                   {'shapeType':'rectangle','position':{'x':0,'y':0}}]
+        a['freeTextAnnotations']=[{'text':'a','position':{'x':0,'y':0}},{'text':'b','position':{'x':0,'y':0},'roundedBackground':False},
+                                  {'text':'c','position':{'x':0,'y':0},'roundedBackground':'false'}]
+        a['groupStyleAnnotations']=[{'name':'g','position':{'x':0,'y':0},'level':3},{'name':'h','position':{'x':0,'y':0},'level':99},
+                                    {'name':'i','position':{'x':0,'y':0}},{'name':'j','position':{'x':0,'y':0},'level':'2'},{'name':'k','position':{'x':0,'y':0},'level':'x'}]
+        d=self.parse(a)['decorations']
+        lines=[x for x in d if x['type']=='line'];texts=[x for x in d if x['type']=='text'];groups=[x for x in d if x['type']=='group']
+        self.assertEqual([(x['lineStartArrow'],x['lineEndArrow'],x['lineArrowSize']) for x in lines],[(True,True,40),(False,False,4)])
+        self.assertNotIn('lineEndArrow',[x for x in d if x['type']=='rectangle'][0])
+        self.assertEqual([x['roundedBackground'] for x in texts],[True,False,True])
+        self.assertEqual([x['level'] for x in groups],[3,10,1,2,1],'the editor stores level as a string')
+        self.assertEqual([x['zIndex'] for x in groups],[-1]*5,'level does not change the default zIndex')
+    def test_viewer_settings_nodestyle_boxspacing_linkstyle(self):
+        defaults=self.parse()['settings']
+        self.assertEqual((defaults['nodeStyle'],defaults['boxSpacing'],defaults['linkStyle']),('icon','default','straight'))
+        said=self.parse({**self.annotations,'viewerSettings':{'nodeStyle':'boxed','boxSpacing':'narrow','linkStyle':'elbow'}})['settings']
+        self.assertEqual((said['nodeStyle'],said['boxSpacing'],said['linkStyle']),('boxed','narrow','elbow'))
+        odd=self.parse({**self.annotations,'viewerSettings':{'nodeStyle':'neon','boxSpacing':7,'linkStyle':None}})['settings']
+        self.assertEqual((odd['nodeStyle'],odd['boxSpacing'],odd['linkStyle']),('icon','default','straight'))
+    def test_new_defaults_move_no_geometry(self):
+        topo={'topology':{'nodes':{'r1':{},'r2':{}},'links':[{'endpoints':['r1:eth1','r2:eth2']}]}}
+        d=self.parse(topo=topo)
+        self.assertEqual([(n['id'],n['x'],n['y']) for n in d['nodes']],[('r1',12,34),('r2',*grid_position(1))])
+        self.assertEqual(d['links'],[[{'node':'r1','interface':'eth1'},{'node':'r2','interface':'eth2'}]])
     def test_center_label_position_survives_the_import(self):
         a=copy.deepcopy(self.annotations)
         a['nodeAnnotations'][0].update(labelPosition='center')
