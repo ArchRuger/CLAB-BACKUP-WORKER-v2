@@ -573,6 +573,10 @@ test('C02: a stopped job reads Stopped by you in the history, a warning banner w
  c.jobRequest=id=>({start:{action:'start',lab_id:'old',options:{}},apply:{action:'apply',lab_id:'old',options:{a:1}},restart:{action:'restart',lab_id:'old',options:{}}}[id]||null);
  for(const action of ['start','apply','restart'])assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:action,action,status:'cancelled'},'lab'))),{action:'redeploy',lab_id:'lab',options:action==='apply'?{a:1}:{}},action+' becomes a redeploy review');
  assert.equal(c.opRetryRequest({id:'start',action:'start',status:'failed'},'lab').action,'start','a failed start is repeated as before');
+ // a stopped start, apply or restart from an earlier session (no remembered request) still gets the one-click redeploy review; deploy stays null (its options may have been the cleanup variant)
+ c.jobRequest=()=>null;
+ for(const action of ['start','apply','restart'])assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:'old-'+action,action,status:'cancelled'},'lab'))),{lab_id:'lab',action:'redeploy',options:{}},action+' without a stored request becomes a redeploy review');
+ assert.equal(c.opRetryRequest({id:'old-deploy',action:'deploy',status:'cancelled'},'lab'),null,'deploy without a stored request is never guessed');
 });
 
 test('C02: the Stop block is offered only for stoppable actions while queued or running, and walks ask, confirmation, Stopping… with focus kept',async()=>{

@@ -50,7 +50,7 @@ function opRetryRequest(job,labId){
  const stored=typeof jobRequest==='function'?jobRequest(job?.id):null;
  // A stopped deploy may have left some devices started: the repair is Redeploy lab, with the options the student confirmed.
  // Start, apply and restart end in the same aftermath (Redeploy lab), so they take the same way back.
- if(job?.status==='cancelled'&&opRedeployActions.includes(job.action))return stored&&stored.action===job.action?{...stored,action:'redeploy',lab_id:labId}:null;
+ if(job?.status==='cancelled'&&opRedeployActions.includes(job.action))return stored&&stored.action===job.action?{...stored,action:'redeploy',lab_id:labId}:(job.action==='deploy'?null:{lab_id:labId,action:'redeploy',options:{}});
  if(stored&&stored.action===job.action)return {...stored,lab_id:labId,...(job.node&&!stored.node?{node:job.node}:{})};
  if(job?.action==='destroy')return {lab_id:labId,action:'destroy',options:opDestroyOptions()};
  if(job?.action==='restart-node'&&job.node)return {lab_id:labId,action:'restart-node',node:job.node,options:{}};
