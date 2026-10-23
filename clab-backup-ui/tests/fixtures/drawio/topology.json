@@ -1,0 +1,2 @@
+{"topology":{"nodes":{"r1":{},"s1":{},"h1":{},"r2":{}},"links":[
+ {"endpoints":["r1:eth1","s1:eth1"]},{"endpoints":["s1:eth2","h1:eth1"]},{"endpoints":["s1:eth3","r2:eth1"]}]}}

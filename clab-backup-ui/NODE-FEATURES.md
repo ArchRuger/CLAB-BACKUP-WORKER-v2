@@ -289,14 +289,19 @@ its label. Keyboard users can focus a device and press Shift+F10, navigate with 
 keys, and press Escape to close the menu. Actions have the same credential/readiness
 requirements as the Devices tab. Each device carries a state dot (ready, starting,
 needs attention, unavailable) taken from the same readiness check as the Devices tab.
-Links show the imported wiring, never live connectivity.
+Links show the imported wiring; while the lab runs on a VM whose helper reports `link_state`, a link whose
+container interface is not up on either end is also drawn red and dotted (the container links from the VM's
+interface listing, not from the devices; see *Link state on the map* in
+[`docs/LAB-OPERATIONS.md`](../docs/LAB-OPERATIONS.md)), and for a device that runs as a virtual machine inside its
+container the state is the container's link to it, not the port inside it.
 
 This is an operational map, not a complete VS Code topology editor: custom icons,
 HTML/Markdown text styling, geographic layouts, nested relative geometry, traffic
 annotations and link editing are not reproduced. Line arrows, rounded text
 backgrounds and nested group levels made in **Edit map** are kept in the lab's map
-document and shown by that editor, but are not drawn on the Topology tab or in the
-draw.io export. Unsupported/one-ended links are
+document and drawn by the editor, the Topology tab and the draw.io export, as are the boxed
+node style and elbow links of a map saved by the VS Code extension (its per-device box colours
+are not). Unsupported/one-ended links are
 counted in the map status. Mapping uses unique inventory names, stored short names,
 or the exact `clab-<lab name>-` prefix. Ambiguous or unknown nodes have no actions;
 correct the node's short name in Edit connection (or reimport inventory with

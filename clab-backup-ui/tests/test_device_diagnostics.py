@@ -497,5 +497,178 @@ class DiagnosticsAPITests(unittest.TestCase):
         self.assertEqual(self.get('logs').status_code, 422)
 
 
+def link_row(name, state='up', alias=''):
+    """One interface row of the helper's `all` answer (C06 S0: four strings, nothing else)."""
+    return {'name': name, 'alias': alias, 'state': state, 'type': 'veth'}
+
+
+class LinkStateAPITests(unittest.TestCase):
+    """C06 S1b: GET /api/operations/link-state?lab_id= (docs/parity-campaign/C06-DESIGN.md §2.2). One lab-wide helper
+    call per poll, answered 200 with `available: false` and a reason in every degraded case. The harness of
+    DiagnosticsAPITests, borrowed method by method so its own tests do not run twice."""
+    setUp = DiagnosticsAPITests.setUp
+    register = DiagnosticsAPITests.register
+    host = DiagnosticsAPITests.host
+    tearDown = DiagnosticsAPITests.tearDown
+    get = DiagnosticsAPITests.get
+    events = DiagnosticsAPITests.events
+    CAPS = {'protocol': 'clab-manager-operations-v1', 'version': __import__('app').__version__, 'actions': {}, 'roots': [], 'diagnostics': True,
+            'containerlab': '0.79.0', 'link_state': True}
+
+    def start(self, handler=None):
+        DiagnosticsAPITests.start(self, handler)
+        with self.store.lock:
+            lab = self.store.lab(self.lab_id)
+            self.names = [n['name'] for n in lab['nodes']]
+            self.containers = [dd.expected_container(lab, n) for n in lab['nodes']]
+        self.answers['interfaces'] = lambda req: {'present': True, 'nodes': [
+            {'name': self.containers[0], 'interfaces': [link_row('eth0'), link_row('eth1'), link_row('eth2', 'dormant'), link_row('cpu', 'unknown')]},
+            {'name': self.containers[1], 'interfaces': [link_row('eth0'), link_row('eth1'), link_row('eth4', 'down', 'et-0/0/0')]}]}
+
+    def cache(self, caps, ttl=60):
+        self.app.state.operations.cap_cache = ('rev', time.monotonic() + ttl, caps)
+
+    def link_state(self, lab_id=None):
+        response = self.get('link-state', lab_id=lab_id or self.lab_id)
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
+    def test_link_state_request_shape_and_public_answer(self):
+        self.start(); self.cache(self.CAPS)
+        before = time.time(); body = self.link_state()
+        self.assertEqual(self.requests, [({'mode': 'interfaces', 'name': 'training', 'options': {'all': True}}, 30)], 'one lab-wide helper call per poll')
+        self.assertEqual(set(body), {'available', 'devices', 'listed', 'of', 'fetched_at'})
+        self.assertTrue(body['available']); self.assertEqual((body['listed'], body['of']), (2, 2))
+        self.assertTrue(before <= body['fetched_at'] <= time.time())
+        r1, r2 = (body['devices'][n] for n in self.names)
+        self.assertEqual(set(body['devices']), set(self.names), 'keyed by the manager\'s device name, never by container')
+        self.assertEqual(r1, {'listed': True, 'vm': True, 'interfaces': [
+            {'name': 'eth0', 'alias': '', 'state': 'up', 'port': '', 'role': 'management'},
+            {'name': 'eth1', 'alias': '', 'state': 'up', 'port': 'Gi0/0/0/0', 'role': 'data'},
+            {'name': 'eth2', 'alias': '', 'state': 'dormant', 'port': 'Gi0/0/0/1', 'role': 'data'},
+            {'name': 'cpu', 'alias': '', 'state': 'unknown', 'port': '', 'role': 'internal'}]})
+        self.assertEqual(r2, {'listed': True, 'interfaces': [
+            {'name': 'eth0', 'alias': '', 'state': 'up', 'port': '', 'role': 'management'},
+            {'name': 'eth1', 'alias': '', 'state': 'up', 'port': '', 'role': 'internal'},
+            {'name': 'eth4', 'alias': 'et-0/0/0', 'state': 'down', 'port': 'et-0/0/0', 'role': 'data'}]}, 'cJunosEvolved is not a VM kind: no `vm` key')
+
+    def test_link_state_never_carries_mac_mtu_ifindex_facts_ids_or_raw_helper_fields(self):
+        self.start(); self.cache(self.CAPS)
+        self.answers['interfaces'] = lambda req: {'present': True, 'facts': FACTS, 'counters': {'eth1': COUNTERS}, 'raw': 'helper-raw-zz1', 'nodes': [
+            {'name': self.containers[0], 'id': ID, 'pid': 4242, 'interfaces': [dict(link_row('eth1'), mac='02:aa:bb:cc:dd:ee', mtu=9500, ifindex=77, secret='x')] * 300},
+            'junk', {'name': 5}, {'name': self.containers[1], 'interfaces': 'not a list'}]}
+        body = self.link_state(); text = json.dumps(body)
+        # (The fixture's device names equal their container names, so a container name is no leak marker here.)
+        for word in ('mac', 'mtu', 'ifindex', 'facts', 'counters', 'secret', 'pid', '"id"', ID, '02:aa:bb', 'helper-raw-zz1'):
+            self.assertFalse(word in text, word)
+        self.assertEqual(len(body['devices'][self.names[0]]['interfaces']), dd.INTERFACE_LIMIT)
+        self.assertEqual(set(body['devices'][self.names[0]]['interfaces'][0]), {'name', 'alias', 'state', 'port', 'role'})
+        self.assertEqual(body['devices'][self.names[1]], {'listed': True, 'interfaces': []})
+
+    def test_link_state_a_device_absent_from_the_listing_is_not_listed_and_a_device_without_a_node_is_absent(self):
+        self.start(); self.cache(self.CAPS)
+        self.answers['interfaces'] = lambda req: {'present': True, 'nodes': [{'name': self.containers[1], 'interfaces': [link_row('eth4')]}]}
+        body = self.link_state()
+        self.assertEqual(body['devices'][self.names[0]], {'listed': False, 'vm': True, 'interfaces': []})
+        self.assertEqual((body['listed'], body['of']), (1, 2))
+        with self.store.lock:
+            node = self.store.lab(self.lab_id)['nodes'][0]; node['definition_node'] = ''; node['short_name'] = ''
+        body = self.link_state()
+        self.assertEqual(set(body['devices']), {self.names[1]}, 'a device the manager cannot name a container for is left out (unknown in the browser)')
+        self.assertEqual((body['listed'], body['of']), (1, 1))
+
+    def test_link_state_binds_devices_through_expected_container_for_any_prefix(self):
+        self.start(); self.cache(self.CAPS)
+        for prefix, wanted in (('', 'r1'), ('__lab-name', 'training-r1'), ('lab', 'lab-training-r1')):
+            with self.store.lock: self.store.lab(self.lab_id)['container_prefix'] = prefix
+            self.answers['interfaces'] = lambda req, wanted=wanted: {'present': True, 'nodes': [
+                {'name': 'clab-training-r1', 'interfaces': [link_row('eth1', 'down')]}, {'name': wanted, 'interfaces': [link_row('eth1')]}]}
+            body = self.link_state()
+            self.assertEqual(body['devices'][self.names[0]]['interfaces'][0]['state'], 'up', prefix)
+            self.assertEqual(self.requests[-1][0], {'mode': 'interfaces', 'name': 'training', 'options': {'all': True}})
+
+    def test_link_state_a_lab_that_does_not_run_is_not_running(self):
+        self.start(); self.cache(self.CAPS)
+        self.answers['interfaces'] = {'present': False, 'nodes': []}
+        self.assertEqual(self.link_state(), {'available': False, 'reason': 'not running', 'text': dd.LINK_NOT_RUNNING_SENTENCE})
+        self.assertEqual(dd.LINK_NOT_RUNNING_SENTENCE, 'Links are drawn from the topology file; the lab is not running.')
+
+    def test_link_state_unlinked_lab_and_unknown_lab(self):
+        self.start(); self.cache(self.CAPS)
+        with self.store.lock: self.store.lab(self.lab_id)['deployment_name'] = ''
+        self.assertEqual(self.link_state(), {'available': False, 'reason': 'unlinked', 'text': dd.LINK_UNLINKED_SENTENCE})
+        self.assertEqual(dd.LINK_UNLINKED_SENTENCE, 'This lab is not linked to a lab on the VM. Link it under Advanced › Link to a running lab… to see link state.')
+        response = self.get('link-state', lab_id='nope')
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(self.get('link-state', lab_id='x' * 65).status_code, 422)
+        self.assertEqual(self.get('link-state').status_code, 422)
+        self.assertEqual(self.requests, [])
+
+    def test_link_state_from_cached_capabilities_an_old_helper_and_an_old_containerlab_ask_nothing(self):
+        self.start()
+        self.cache({k: v for k, v in self.CAPS.items() if k != 'link_state'})
+        self.assertEqual(self.link_state(), {'available': False, 'reason': 'helper', 'text': dd.LINK_HELPER_SENTENCE})
+        self.assertEqual(dd.LINK_HELPER_SENTENCE, 'Link state needs the updated VM helper (ask your instructor or administrator). Links are drawn from the topology file.')
+        self.cache(dict(self.CAPS, link_state=False, containerlab='0.60.0'))
+        self.assertEqual(self.link_state(), {'available': False, 'reason': 'containerlab',
+                                             'text': 'Link state needs containerlab 0.64 or later on the VM (it has 0.60.0). Links are drawn from the topology file.'})
+        self.cache({k: v for k, v in dict(self.CAPS, link_state=False).items() if k != 'containerlab'})
+        self.assertEqual(self.link_state()['text'], 'Link state needs containerlab 0.64 or later on the VM. Links are drawn from the topology file.')
+        self.cache(dict(self.CAPS, link_state=False, version='0.0.1'))
+        self.assertEqual(self.link_state()['reason'], 'helper', 'a helper of another release is the helper to update')
+        self.assertEqual(self.requests, [], 'the cached capabilities decide without a helper call')
+
+    def test_link_state_without_cached_capabilities_asks_and_maps_an_old_helper_to_its_answer(self):
+        self.start()
+        for cache in (None, ('rev', time.monotonic() - 1, dict(self.CAPS, link_state=False))):
+            self.app.state.operations.cap_cache = cache
+            for error in (ValueError('Unknown request mode.'), ValueError('Unsupported interface options.')):
+                self.answers['interfaces'] = error
+                self.assertEqual(self.link_state(), {'available': False, 'reason': 'helper', 'text': dd.LINK_HELPER_SENTENCE}, (cache, error))
+        self.assertEqual(len(self.requests), 4, 'no cache (or an expired one): the helper is asked')
+        self.answers['interfaces'] = ValueError('Containerlab on the VM did not list the interfaces of this lab.')
+        response = self.get('link-state', lab_id=self.lab_id)
+        self.assertEqual((response.status_code, response.json()['detail']), (409, 'Containerlab on the VM did not list the interfaces of this lab.'))
+        self.answers['interfaces'] = ValueError('This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.')
+        self.assertEqual(self.get('link-state', lab_id=self.lab_id).status_code, 409)
+        self.answers['interfaces'] = RuntimeError('socket detail 10.0.0.1')
+        response = self.get('link-state', lab_id=self.lab_id)
+        self.assertEqual((response.status_code, response.json()['detail']), (409, dd.UNREACHABLE_SENTENCE))
+
+    def test_link_state_twenty_polls_leave_events_and_the_store_untouched(self):
+        self.start(); self.cache(self.CAPS)
+        before = self.events(); state_before = json.dumps(self.store.state, sort_keys=True, default=str)
+        for _ in range(20): self.link_state()
+        self.assertEqual(self.events(), before, 'a GET poll writes no event and no api.request line')
+        self.assertEqual(json.dumps(self.store.state, sort_keys=True, default=str), state_before)
+        self.assertNotIn('dormant', json.dumps(self.store.state, default=str))
+
+    def test_link_state_the_fourth_concurrent_call_is_a_503(self):
+        self.start(); self.cache(self.CAPS)
+        slots = self.app.state.device_diagnostics.slots
+        for _ in range(3): self.assertTrue(slots.acquire(blocking=False))
+        response = self.get('link-state', lab_id=self.lab_id)
+        self.assertEqual((response.status_code, response.json()['detail']), (503, dd.BUSY_SENTENCE))
+        self.assertEqual(self.requests, [])
+        for _ in range(3): slots.release()
+        self.assertTrue(self.link_state()['available'])
+
+    def test_link_state_vm_kinds_follow_the_node_kind_then_platform(self):
+        self.start(); self.cache(self.CAPS)
+        self.assertEqual(dd.VM_KINDS, ('juniper_vjunosswitch', 'juniper_vjunosevolved', 'juniper_vjunosrouter', 'juniper_vqfx', 'cisco_xrv9k', 'vr-xrv9k'))
+        for kind, vm in (('juniper_vjunosswitch', True), ('arista_ceos', False), ('juniper_cjunosevolved', False), ('vr-xrv9k', True), ('linux', False)):
+            with self.store.lock: self.store.lab(self.lab_id)['nodes'][1]['kind'] = kind
+            self.assertEqual(self.link_state()['devices'][self.names[1]].get('vm'), True if vm else None, kind)
+        with self.store.lock:
+            node = self.store.lab(self.lab_id)['nodes'][1]; node.pop('kind', None); node['platform'] = 'juniper_vqfx'
+        self.assertTrue(self.link_state()['devices'][self.names[1]]['vm'], 'the platform is the fallback')
+
+    def test_link_state_sits_before_the_job_route_and_guards_the_origin(self):
+        self.start(); self.cache(self.CAPS)
+        response = self.client.get('/api/operations/link-state', headers={**self.auth, 'Origin': 'https://other.example'}, params={'lab_id': self.lab_id})
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('devices', self.link_state(), '/link-state is not taken by GET /api/operations/{job_id}')
+
+
 if __name__ == '__main__':
     unittest.main()

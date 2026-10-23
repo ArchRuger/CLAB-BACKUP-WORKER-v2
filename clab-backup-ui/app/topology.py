@@ -40,6 +40,13 @@ def color(value, default):
     return default
 
 
+def style_number(value, default, minimum, maximum):
+    """A render-only style the editor may store as a number or as a numeral in a string ("level": "1"); anything else is the default."""
+    if isinstance(value,str) and re.fullmatch(r'\d{1,6}(\.\d+)?',value): value=float(value)
+    if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value): value=default
+    return min(maximum,max(minimum,value))
+
+
 def bounded(value, default, minimum, maximum):
     return min(maximum,max(minimum,number(value,default)))
 
@@ -248,7 +255,13 @@ def parse_drawing(raw, topology=None):
                      rotation=number(item.get('rotation'),0),zIndex=number(item.get('zIndex'),-1 if key!='freeTextAnnotations' else 1))
             if ('backgroundOpacity' if is_group else 'fillOpacity') in item:
                 d['fillColor']=opaque_color(d['fillColor'])
+            # Stored styles the renderer honours; each belongs to one kind of annotation.
+            if d['type']=='line':
+                d.update(lineStartArrow=item.get('lineStartArrow') is True,lineEndArrow=item.get('lineEndArrow') is True,
+                         lineArrowSize=style_number(item.get('lineArrowSize'),10,4,40))
+            if is_group: d['level']=int(style_number(item.get('level'),1,1,10))
             if key=='freeTextAnnotations':
+                d['roundedBackground']=item.get('roundedBackground') is not False
                 # Legacy auto-sized markdown notes have a 1em paragraph margin.
                 # Their saved position is the outer box, not the first glyph.
                 d['paragraphMargin']=bounded(item.get('paragraphMargin'),d['fontSize'] if item.get('height') is None else 0,0,160)
@@ -266,7 +279,10 @@ def parse_drawing(raw, topology=None):
             'settings':{'background':color(settings.get('gridBgColor'),'#fdf6e3'),
                         'gridColor':color(settings.get('gridColor'),'#d2cbb5'),
                         'labelMode':settings.get('linkLabelMode') if settings.get('linkLabelMode') in ('show-all','on-select','hide') else 'show-all',
-                        'endpointOffset':bounded(settings.get('endpointLabelOffset'),20,0,200)}}
+                        'endpointOffset':bounded(settings.get('endpointLabelOffset'),20,0,200),
+                        'nodeStyle':'boxed' if settings.get('nodeStyle')=='boxed' else 'icon',
+                        'boxSpacing':'narrow' if settings.get('boxSpacing')=='narrow' else 'default',
+                        'linkStyle':'elbow' if settings.get('linkStyle')=='elbow' else 'straight'}}
 
 
 def bind_drawing(lab):

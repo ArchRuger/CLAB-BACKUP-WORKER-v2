@@ -17,7 +17,7 @@ from pathlib import PurePosixPath
 from fastapi import HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import lab_operations
+from . import __version__, lab_operations
 from .discovery import expected_container
 from .host_operations import LOGS_SINCE, LOGS_TAIL_LIMIT
 from .lab_operations import secret_values, topology_images
@@ -34,6 +34,17 @@ NO_FOLDER_SENTENCE = "The manager does not know this lab's folder on the VM. Syn
 OUTSIDE_FOLDER_SENTENCE = "That file is not in this lab's folder."
 UNREACHABLE_SENTENCE = 'Cannot reach the VM operations helper. Check setup and SSH settings.'
 UNUSABLE_SENTENCE = 'The VM operations helper returned an answer the manager cannot use.'
+# Link state on the map (C06 §2.2): every degraded case is a 200 with `available: false`, a reason and one of these.
+LINK_UNLINKED_SENTENCE = ('This lab is not linked to a lab on the VM. Link it under Advanced › Link to a running lab… '
+                          'to see link state.')
+LINK_HELPER_SENTENCE = ('Link state needs the updated VM helper (ask your instructor or administrator). '
+                        'Links are drawn from the topology file.')
+LINK_CONTAINERLAB_SENTENCE = 'Link state needs containerlab 0.64 or later on the VM%s. Links are drawn from the topology file.'
+LINK_NOT_RUNNING_SENTENCE = 'Links are drawn from the topology file; the lab is not running.'
+# The kinds whose data ports are wired to a QEMU guest inside the container: the container veth is the VM's link to the
+# device, and a port shut down inside the guest may leave it up (C06 assumption A1; the live pass settles each kind).
+VM_KINDS = ('juniper_vjunosswitch', 'juniper_vjunosevolved', 'juniper_vjunosrouter', 'juniper_vqfx', 'cisco_xrv9k', 'vr-xrv9k')
+LINK_CONTAINER_LIMIT = 512
 TAIL_SENTENCE = 'Ask for 1 to %d log lines.' % LOGS_TAIL_LIMIT
 SINCE_SENTENCE = 'The log start must be a UTC timestamp.'
 DEFAULT_TAIL = 200
@@ -249,6 +260,56 @@ class DeviceDiagnostics:
     def secrets(self):
         with self.store.lock: return secret_values(self.store.state)
 
+    # Link state on the map (C06 §2.2) -----------------------------------------------------------------------------
+
+    def link_state(self, lab_id):
+        """Which container interfaces of a linked lab are up, per manager device, from one lab-wide helper call (the
+        `all` option of `interfaces`). Nothing is stored, logged or put in an event; a degraded case is an answer
+        (`available: false`, a reason and its sentence), never an error, so a poll can tell "off here" from trouble."""
+        with self.store.lock:
+            lab = self.store.lab(lab_id)
+            if not lab: raise HTTPException(404, 'Lab not found')
+            nodes = [{k: n.get(k) for k in ('name', 'short_name', 'definition_node', 'kind', 'platform')} for n in lab.get('nodes') or [] if isinstance(n, dict)]
+            lab = {k: lab[k] for k in ('id', 'name', 'deployment_name', 'container_prefix') if k in lab}
+        off = lambda reason, text: {'available': False, 'reason': reason, 'text': text}
+        if not lab.get('deployment_name'): return off('unlinked', LINK_UNLINKED_SENTENCE)
+        cached = self.operations.cap_cache   # the cached capabilities answer while it is fresh; no new helper call
+        caps = cached[2] if cached and cached[1] > time.monotonic() and isinstance(cached[2], dict) else None
+        if caps is not None:
+            if 'link_state' not in caps: return off('helper', LINK_HELPER_SENTENCE)
+            if caps['link_state'] is not True:
+                if caps.get('version') != __version__: return off('helper', LINK_HELPER_SENTENCE)
+                version = caps.get('containerlab')
+                return off('containerlab', LINK_CONTAINERLAB_SENTENCE % (' (it has %s)' % version[:32] if isinstance(version, str) and version else ''))
+        try: result = self.diagnose({'mode': 'interfaces', 'name': lab['deployment_name'], 'options': {'all': True}}, 30)
+        except HTTPException as exc:
+            # A helper before C03 does not know the mode; one before C06 refuses the option. Either is the helper to update.
+            if exc.status_code == 409 and exc.detail in (OLD_HELPER_SENTENCE, 'Unsupported interface options.'): return off('helper', LINK_HELPER_SENTENCE)
+            raise
+        if result.get('present') is not True: return off('not running', LINK_NOT_RUNNING_SENTENCE)
+        listing = {}
+        for entry in (result.get('nodes') if isinstance(result.get('nodes'), list) else [])[:LINK_CONTAINER_LIMIT]:
+            if isinstance(entry, dict) and isinstance(entry.get('name'), str) and entry['name'] not in listing:
+                listing[entry['name']] = entry.get('interfaces') if isinstance(entry.get('interfaces'), list) else []
+        devices = {}
+        for node in nodes:
+            container = expected_container(lab, node)
+            if not container or not isinstance(node.get('name'), str): continue   # unknown in the browser: never drawn down
+            kind = node.get('kind') or node.get('platform') or ''
+            kind = kind if isinstance(kind, str) else ''
+            rows = []
+            for item in listing.get(container, [])[:INTERFACE_LIMIT]:
+                if not isinstance(item, dict) or not isinstance(item.get('name'), str) or not item['name']: continue
+                name = item['name'][:64]; role = interface_role(kind, name)
+                shown = displayed_interface(kind, name) if role == 'data' else name
+                rows.append({'name': name, 'alias': text_value(item.get('alias'), 64), 'state': text_value(item.get('state'), 64),
+                             'port': shown if shown != name else '', 'role': role})
+            device = {'listed': container in listing, 'interfaces': rows}
+            if kind in VM_KINDS: device['vm'] = True
+            devices[node['name']] = device
+        return {'available': True, 'devices': devices, 'listed': sum(1 for d in devices.values() if d['listed']), 'of': len(devices),
+                'fetched_at': time.time()}
+
     # The VM's images ---------------------------------------------------------------------------------------------
 
     def vm_images(self):
@@ -343,6 +404,9 @@ class DeviceDiagnostics:
                 reason = result.get('counters_reason')
                 answer['counters_reason'] = reason if reason in ('pid', 'host') else 'pid'
             return answer
+
+        @app.get('/api/operations/link-state')
+        def link_state(lab_id: str = Query(max_length=64)): return self.link_state(lab_id)
 
         @app.get('/api/operations/netem')
         def netem(lab_id: str = Query(max_length=64), node: str = Query(max_length=253)):
