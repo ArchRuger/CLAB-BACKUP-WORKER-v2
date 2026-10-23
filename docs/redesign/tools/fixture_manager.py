@@ -677,8 +677,10 @@ def build(data_dir, port, classic=False, capture=False):
             for a in ho.NODE_ACTIONS:
                 actions[a] = {'available': True}
             actions['impairments'] = {'available': True}
-            return {'protocol': 'clab-manager-operations-v1', 'version': __version__, 'actions': actions, 'roots': roots, 'network': False,
+            caps = {'protocol': 'clab-manager-operations-v1', 'version': __version__, 'actions': actions, 'roots': roots, 'network': False,
                     'diagnostics': True, 'lifecycle_options': True, 'containerlab': '0.79.0'}
+            c06_link_capabilities(caps, control)     # C06
+            return caps
         if mode == 'browse':
             if (request.get('options') or {}).get('files'):
                 return ops_files_browse(str(request.get('path', '')))
@@ -686,6 +688,8 @@ def build(data_dir, port, classic=False, capture=False):
         if mode == 'logs':
             return ops_logs(request)
         if mode == 'interfaces':
+            if 'all' in (request.get('options') or {}):     # C06: the lab-wide listing of the link-state poll
+                return c06_link_listing(store, control, ops_lab_rows, request)
             return ops_interfaces(request)
         if mode == 'netem-show':
             return ops_netem(request)
@@ -804,6 +808,7 @@ def build(data_dir, port, classic=False, capture=False):
 
     actions = {'helper': helper, 'edit_device': devices.edit, 'device_config': devices.set_tag, 'lab_state': lab_state, 'hand_commit': hand_commit, 'reset': reset,
                'remote_readme': remote_readme, 'prefer_repository': prefer_repository, 'pending_changes': pending_changes}
+    actions.update(c06_actions(app, store))     # C06: refresh_capabilities, busy_lab
 
     def describe():
         with store.lock:
@@ -819,6 +824,112 @@ def build(data_dir, port, classic=False, capture=False):
     for lab in store.state['labs']:
         print(f"  {lab['name']}: {lab['id']}", flush=True)
     return app
+
+
+# ======================================================================================================================
+# C06: scripted link state and a lab that can be made busy. Self-contained block: nothing above or below depends on it except
+# the three hook lines marked "C06" in build() (the capabilities answer, the `interfaces` branch of fake_remote, the actions).
+#
+# The helper's `interfaces` mode with {'all': True} (host_operations.lab_links) answers every running container of the lab
+# with rows {name, alias, state, type}; the real manager's GET /api/operations/link-state turns that into the map's link
+# colours. The listing is derived from the lab's own drawing (GET /topology), so every link end has a row on its device:
+# the row name is the end's capture_interface (eth4), the alias its drawn name (et-0/0/0) when they differ.
+#
+# Switches (fixture_control.py):
+#   link_state  = {"<device>": {"<interface>": "down" | "dormant" | "lowerlayerdown" | "unknown" | "missing"}, "<device>": "absent"}
+#                 <device> is a manager device name, its short name, its topology node or its container; <interface> matches a
+#                 row's name or alias. A state word is the kernel word the row reports (the matcher counts anything but `up`
+#                 as down); `missing` drops the row; `absent` leaves the whole container out of the listing (not running).
+#                 An EOS shutdown reads `dormant` at both ends: set both devices to see "down at both ends".
+#   link_helper = "old" | "containerlab": "old" is a helper before this release (capabilities carry no `link_state`, and a
+#                 lab-wide request is refused with 'Unsupported interface options.'); "containerlab" is a current helper on
+#                 containerlab 0.60.0 (`link_state: false`; asked cold it answers the helper's 'did not list the interfaces'
+#                 409). The manager caches capabilities for 60 s and /link-state reads only that cache: run the action
+#                 refresh_capabilities after setting it, then reload the page.
+# Actions: refresh_capabilities (drops the cached capabilities answer and reads it again now) and busy_lab {"on": true | false, "lab": name}
+# (an operation of that lab appears to be running, so /arrange answers its busy 409; "on": false removes it).
+
+
+def c06_link_capabilities(caps, control):
+    mode = control.get('link_helper')
+    if mode == 'old':
+        return caps
+    caps['link_state'] = mode != 'containerlab'
+    if mode == 'containerlab':
+        caps['containerlab'] = '0.60.0'
+    return caps
+
+
+def c06_link_listing(store, control, running_rows, request):
+    """The answer of the helper's `interfaces` mode with {'all': True}: {'nodes': [{'name': container, 'interfaces': rows}], 'present'}."""
+    from app.device_diagnostics import expected_container
+    from app.topology import bind_drawing
+    options = request.get('options') or {}
+    if control.get('link_helper') == 'old' or set(options) != {'all'} or options['all'] is not True:
+        raise ValueError('Unsupported interface options.')
+    if control.get('link_helper') == 'containerlab':     # no `inspect interfaces` on containerlab 0.60.0: the helper's own sentence
+        raise ValueError('Containerlab on the VM did not list the interfaces of this lab.')
+    name = str(request.get('name', ''))
+    present = {row['name'] for row in running_rows(name)}
+    if not present:
+        return {'nodes': [], 'present': False}
+    config = control.get('link_state') or {}
+    with store.lock:
+        lab = next((l for l in store.state['labs'] if (l.get('deployment_name') or l['name']) == name), None)
+        if not lab:
+            return {'nodes': [], 'present': False}
+        bound = bind_drawing(lab) or {'nodes': [], 'links': []}
+        view = {k: lab[k] for k in ('id', 'name', 'deployment_name', 'container_prefix') if k in lab}
+        nodes = [{k: n.get(k) for k in ('name', 'short_name', 'definition_node', 'kind', 'platform')} for n in lab['nodes']]
+    owner = {n['id']: n.get('inventory_name') for n in bound['nodes']}
+    ends = {}
+    for pair in bound['links']:
+        for end in pair:
+            device = owner.get(end['node'])
+            port = end.get('capture_interface') or end['interface']
+            alias = end['interface'] if end['interface'] != port else ''
+            if device and (port, alias) not in ends.setdefault(device, []):
+                ends[device].append((port, alias))
+    listing = []
+    for node in nodes:
+        container = expected_container(view, node)
+        if not container or node['name'] not in present:
+            continue
+        mine = next((config[k] for k in (node['name'], node.get('short_name'), node.get('definition_node'), container) if k and k in config), {})
+        if mine == 'absent':
+            continue
+        rows = [{'name': 'eth0', 'alias': '', 'state': 'up', 'type': 'veth'}]
+        for port, alias in ends.get(node['name'], []):
+            word = next((v for k, v in (mine.items() if isinstance(mine, dict) else []) if k in (port, alias)), 'up')
+            if word != 'missing':
+                rows.append({'name': port, 'alias': alias, 'state': str(word), 'type': 'veth'})
+        listing.append({'name': container, 'interfaces': rows})
+    return {'nodes': listing, 'present': True}
+
+
+def c06_actions(app, store):
+    def refresh_capabilities():
+        # Drop the cached capabilities and read them again now: the manager keeps the answer for 60 s and the link-state route
+        # reads only that cache, so a changed `link_helper` shows in the capabilities (and the sentence) for the next minute.
+        ops = app.state.operations
+        ops.cap_cache = None
+        key = ops.host().get('revision')
+        ops.cap_cache = (key, time.monotonic() + 60, ops.invoke({'mode': 'capabilities'}))
+        return {'capabilities': ops.cap_cache[2].get('link_state', 'no link_state key')}
+
+    def busy_lab(on=True, lab=''):
+        with store.lock:
+            rows = store.state.setdefault('operations', [])
+            rows[:] = [r for r in rows if r.get('id') != 'c06-busy-fixture']
+            if on:
+                target = next((l for l in store.state['labs'] if l['name'] == lab), None) if lab else (store.state['labs'] or [None])[0]
+                if not target:
+                    raise ValueError('No such lab: ' + str(lab))
+                rows.append(dict(id='c06-busy-fixture', lab_id=target['id'], action='deploy', name=target['name'], path='/etc/containerlab/busy.clab.yaml',
+                                 created=stamp(), status='running', options={}, output='INFO containerlab deploy\n', message='Running'))
+            store.save()
+        return {'busy': bool(on)}
+    return {'refresh_capabilities': refresh_capabilities, 'busy_lab': busy_lab}
 
 
 # ======================================================================================================================

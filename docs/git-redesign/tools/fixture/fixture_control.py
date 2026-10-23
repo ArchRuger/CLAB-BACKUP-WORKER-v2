@@ -33,6 +33,8 @@ SWITCHES = {
     'load_device': 'device (short or full name) the one-* presets act on, default xrv9k',
     'load_script': '{device: failed | rolled_back | uncertain | unreachable | blocked | blocked-editing | bad-login | slow | ok}, overrides the preset',
     'capture': '(fixture_manager.py --capture) {fail_next_start: n, after: k, mode: refuse | unavailable | lost_reply}: the first k fresh session starts succeed, then the next n fail (refuse: 429, unavailable: 503, lost_reply: the desktop is created and the reply is lost, 502); counters count down',
+    'link_state': '(fixture_manager.py, C06) {"<device>": {"<interface>": "down|dormant|lowerlayerdown|unknown|missing"}, "<device>": "absent"}: what the helper\'s lab-wide interface listing reports for the map\'s link colours; "missing" drops the row, "absent" leaves the container out',
+    'link_helper': '(fixture_manager.py, C06) old | containerlab: old = a helper before link state (no capability, the lab-wide request refused); containerlab = containerlab 0.60.0 without `inspect interfaces`. Run the action refresh_capabilities afterwards (the manager caches capabilities for 60 s)',
     'load_seconds': 'seconds per device rank for `slow` (device k settles after k*load_seconds), default 5',
 }
 
