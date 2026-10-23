@@ -28,7 +28,7 @@ async function opTask(dialog,fn){
 function opPath(lab){return lab?.vm_project_path||lab?.vm_source?.files?.definition?.path||'';}
 function opName(lab){return lab?.deployment_name||lab?.name||'';}
 function opWhen(value){if(!value)return '';return typeof relativeTime==='function'?relativeTime(value):new Date(value).toLocaleString();}
-function opStatusWord(status){return {succeeded:'Completed',failed:'Failed',interrupted:'Interrupted',running:'Running',queued:'Waiting'}[status]||String(status||'');}
+function opStatusWord(status){return {succeeded:'Completed',failed:'Failed',interrupted:'Interrupted',cancelled:'Stopped by you',running:'Running',queued:'Waiting'}[status]||String(status||'');}
 async function opCapabilities(){opCaps=await(await api('/operations/capabilities')).json();return opCaps;}
 function opCommand(action,label=opLabels[action],options={}){
  const cap=opCaps?.actions?.[action], unavailable=cap&&!cap.available;
@@ -47,6 +47,8 @@ function opDestroyOptions(caps=opCaps){return caps?.actions?.destroy?.cleanup===
 const opPlainRetry=['start','stop','restart','apply','inspect','inspect-all','save','delete'];
 function opRetryRequest(job,labId){
  const stored=typeof jobRequest==='function'?jobRequest(job?.id):null;
+ // A stopped deploy may have left some devices started: the repair is Redeploy lab, with the options the student confirmed.
+ if(job?.status==='cancelled'&&job.action==='deploy')return stored&&stored.action==='deploy'?{...stored,action:'redeploy',lab_id:labId}:null;
  if(stored&&stored.action===job.action)return {...stored,lab_id:labId,...(job.node&&!stored.node?{node:job.node}:{})};
  if(job?.action==='destroy')return {lab_id:labId,action:'destroy',options:opDestroyOptions()};
  if(job?.action==='restart-node'&&job.node)return {lab_id:labId,action:'restart-node',node:job.node,options:{}};
@@ -291,10 +293,38 @@ function opJobHint(job){
  return '';
 }
 function opJobBanner(job){
- const label=opLabels[job.action]||job.action,done=job.status==='succeeded',failed=['failed','interrupted'].includes(job.status);
+ const label=opLabels[job.action]||job.action,done=job.status==='succeeded',failed=['failed','interrupted'].includes(job.status),stopped=job.status==='cancelled';
  const detail=[job.name,job.node_label,job.message].filter(Boolean).join(' · ');
  const exit=job.exit_code===null||job.exit_code===undefined?'':'Exit code '+job.exit_code;
- return {tone:done?'good':failed?'bad':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:`${label} ${job.status}…`,detail,exit,...(opJobHint(job)?{hint:opJobHint(job)}:{})};
+ return {tone:done?'good':failed?'bad':stopped?'warn':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:stopped?`■ ${label} ended early: you stopped it`:`${label} ${job.status}…`,detail,exit,...(opJobHint(job)?{hint:opJobHint(job)}:{})};
+}
+// The Stop block of the output window. Pure: which of none | ask | asking | stopping applies. Only the actions that die with the
+// helper's channel (STATUS_STOPPABLE, status.js) are ever offered, and only while the job is queued or running.
+function opStopMode(job,asked,requested){
+ const list=typeof STATUS_STOPPABLE!=='undefined'?STATUS_STOPPABLE:[];
+ if(!job||!list.includes(job.action)||!['queued','running'].includes(job.status))return 'none';
+ if(job.cancel_requested||requested)return 'stopping';
+ return asked?'asking':'ask';
+}
+function opStopMarkup(mode,job){
+ if(mode==='ask')return '<button type="button" class="button secondary small" id="op-stop-ask">Stop this operation…</button>';
+ if(mode==='asking'){
+  const label=opLabels[job.action]||job.action,question=typeof statusStopQuestion==='function'?statusStopQuestion(job.action,label,job.name||'the lab'):`End the running command (${label}) on ${job.name||'the lab'}?`;
+  return `<p id="op-stop-question">${esc(question)}</p><div class="actions"><button type="button" class="button secondary small" id="op-stop-keep">Keep running</button><button type="button" class="button danger small" id="op-stop-confirm">Stop</button></div>`;
+ }
+ if(mode==='stopping')return '<p id="op-stop-status" role="status" tabindex="-1">Stopping… the manager has asked the lab VM to end the command.</p>';
+ return '';
+}
+// The Copy output button: a click of its own (this page may not load shell.js), the Copied flip and announcement from
+// clipboard.js (copyFeedback), and nothing to copy while the output is still "Waiting for the VM…".
+function opBindCopyOutput(getOutput){
+ const button=$('op-copy-output');if(!button)return null;
+ button.onclick=async()=>{
+  const text=getOutput();if(!text||typeof copyText!=='function')return;
+  const ok=await copyText(text,button);
+  if(typeof copyFeedback==='function')copyFeedback(button,ok);
+ };
+ return button;
 }
 // Auto-opened right after a confirmed launch (Start lab today), with no second "View output" click; a
 // student who closes it on purpose does not have it pop back up on the next poll tick — its job id goes
@@ -303,10 +333,33 @@ function opJobBanner(job){
 // holds it back. Moving to another lab closes an auto-opened dialog instead of leaving it open over a lab
 // it is not about, and — being closed the same way — it does not come back there on its own either.
 const opClosedOutputs=new Set();
-async function opShowJob(id,{auto=false}={}){
+async function opShowJob(id,{auto=false,stop=false}={}){
  if(auto&&opClosedOutputs.has(id))return;
  clearTimeout(opOutputTimer);
- const dialog=opDialog('operation-output','Lab operation','<div id="op-job-banner" class="op-banner" hidden></div><pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
+ const dialog=opDialog('operation-output','Lab operation','<div id="op-job-banner" class="op-banner" tabindex="-1" hidden></div><div id="op-job-stop" class="op-stop" hidden></div>'+(typeof copyText==='function'?'<div class="op-output-tools"><button type="button" id="op-copy-output" class="button ghost small" data-label="Copy output" aria-label="Copy the command output" data-copy-target="op-job-output" disabled>Copy output</button><span class="copy-status" role="status"></span></div>':'')+'<pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
+ // Stop: the block is rebuilt only when its mode changes; focus moves only after the person's own action, or when the block they were in goes away.
+ let latest=null,asked=stop,requested=false,shownMode='',focusNext=stop?'keep':'',lastOutput='';
+ const copyOutputButton=opBindCopyOutput(()=>lastOutput);
+ const renderStop=()=>{
+  const box=$('op-job-stop');if(!box||!latest)return;
+  const mode=opStopMode(latest,asked,requested);
+  if(mode!==shownMode){
+   const held=typeof document!=='undefined'&&document.activeElement&&typeof box.contains==='function'&&box.contains(document.activeElement);
+   shownMode=mode;box.innerHTML=opStopMarkup(mode,latest);box.hidden=mode==='none';
+   if(mode==='none'&&held){const banner=$('op-job-banner');if(banner&&typeof banner.focus==='function')banner.focus();}
+   $('op-stop-ask')?.addEventListener('click',()=>{asked=true;focusNext='keep';renderStop();});
+   $('op-stop-keep')?.addEventListener('click',()=>{asked=false;focusNext='ask';renderStop();});
+   $('op-stop-confirm')?.addEventListener('click',async()=>{
+    let sent=false;
+    await opTask(dialog,async()=>{await json('/operations/'+id+'/cancel','POST',{});sent=true;});
+    if(sent){requested=true;focusNext='status';}else{asked=false;focusNext='ask';}
+    renderStop();
+   });
+  }
+  const target={keep:'op-stop-keep',ask:'op-stop-ask',status:'op-stop-status'}[focusNext];
+  if(target&&$(target)&&typeof $(target).focus==='function')$(target).focus();
+  focusNext='';
+ };
  // A page that acts on the outcome (the lab builder's opJobDone) hears it even when this dialog was closed
  // while the job ran; a poll that fails is repeated, because one lost answer must not hide how the job ended.
  let fails=0;const follows=typeof opJobDone==='function';
@@ -318,7 +371,8 @@ async function opShowJob(id,{auto=false}={}){
    if(!dialog.open){if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(follows)opJobDone(job);}return;}
    const heading=dialog.querySelector('h2');if(heading)heading.textContent=(opLabels[job.action]||job.action)+(job.name?' · '+job.name:'');
    const banner=opJobBanner(job),shown=$('op-job-banner');shown.hidden=false;shown.className='op-banner '+banner.tone;shown.innerHTML=`<strong>${esc(banner.title)}</strong><span>${esc(banner.detail)}</span>${banner.exit?`<small class="${job.exit_code?'op-exit-bad':''}">${esc(banner.exit)}</small>`:''}${banner.hint?`<p class="op-banner-hint">${esc(banner.hint)}</p>`:''}`;
-   const pre=$('op-job-output'),follow=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;pre.textContent=job.output||'Waiting for the VM…';if(follow)pre.scrollTop=pre.scrollHeight;
+   latest=job;renderStop();
+   const pre=$('op-job-output'),follow=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;pre.textContent=job.output||'Waiting for the VM…';lastOutput=job.output||'';if(copyOutputButton)copyOutputButton.disabled=!lastOutput;if(follow)pre.scrollTop=pre.scrollHeight;
    const rows=opInspectionRows(job.output||'');
    const inspectAction=['inspect','inspect-all'].includes(job.action);
    dialog.classList.toggle('inspection-dialog',inspectAction);

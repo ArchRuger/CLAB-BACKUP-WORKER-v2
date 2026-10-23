@@ -699,3 +699,31 @@ test('a save written over a newer save the online copy held says so at the end o
  assert.equal(c.saveChangeSentence(one,also,{target:'latest',replaces_online:true}),c.saveChangeSentence(one,also,{target:'latest'})+end,'after everything else the upload sends');
  for(const job of [undefined,{target:'latest'},{target:'latest',replaces_online:false},{target:'latest',replaces_online:'yes'}])assert.doesNotMatch(c.saveChangeSentence(one,null,job),/online copy/);
 });
+
+test('C02: a stopped operation needs attention as a warning in the person\'s own words, and Dismiss clears it',()=>{
+ const c=makeContext(),lab={...running,deployment:{status:'Not deployed'}};
+ const stopped={id:'op-s',lab_id:'lab',action:'deploy',status:'cancelled',created:'2026-09-16T11:00:00Z',finished:'2026-09-16T11:01:00Z'};
+ const s=c.labState(lab,{operations:[stopped]});
+ assert.equal(s.key,'attention');assert.equal(s.label,'Needs attention');assert.equal(s.pill,'warn','a stop the person asked for is not a red failure');
+ assert.equal(s.detail,'Starting lab was stopped by you before it finished.');assert.equal(s.job.id,'op-s');
+ assert.equal(c.labState(lab,{operations:[stopped],dismissed:new Set(['op-s'])}).label,'Stopped','a dismissed stop leaves the attention state');
+ assert.equal(c.labState(lab,{operations:[{...stopped,status:'failed'}]}).pill,'danger','a real failure keeps its red pill');
+ const g=name=>vm.runInContext(name,c);assert.ok(g('STATUS_OPERATION_FAILED').includes('cancelled'));assert.equal(c.badgeLabel('cancelled'),'Stopped by you');
+ const redone={id:'op-2',lab_id:'lab',action:'deploy',status:'succeeded',created:'2026-09-16T11:05:00Z',finished:'2026-09-16T11:06:00Z'};
+ assert.equal(c.labState(running,{operations:[stopped,redone]}).label,'Running','a later successful operation clears the stop');
+});
+
+test('C02: STATUS_STOPPABLE names the actions that die with the helper channel, and the confirmation names what may be left half done and the way back',()=>{
+ const c=makeContext(),g=name=>vm.runInContext(name,c);
+ assert.deepEqual([...g('STATUS_STOPPABLE')],['deploy','redeploy','destroy','apply','start','stop','restart','restart-node','save','clone','inspect-all']);
+ for(const refused of ['create','delete','publish','revise','inspect'])assert.ok(!g('STATUS_STOPPABLE').includes(refused),refused+' finishes on its own and has no Stop');
+ for(const action of g('STATUS_STOPPABLE'))assert.ok(g('STATUS_STOP_AFTERMATH')[action],action+' has aftermath words');
+ assert.equal(c.statusStopQuestion('deploy','Start lab','demo'),'End the running command (Start lab) on demo? The manager asks the lab VM to end it now. The lab may be only partly started; afterwards: Redeploy lab.');
+ assert.match(c.statusStopQuestion('destroy','Destroy lab','demo'),/only partly removed; afterwards: run Destroy lab again\.$/);
+ assert.match(c.statusStopQuestion('stop','Stop devices','demo'),/only partly stopped; afterwards: run Stop devices again\.$/);
+ assert.match(c.statusStopQuestion('restart-node','Restart device','demo'),/afterwards: Restart device again \(Redeploy lab also works but clears unsaved configuration on every device\)\.$/);
+ for(const [action,again] of [['save','run Save device configurations again'],['clone','run Download lab again'],['inspect-all','run it again']]){
+  const q=c.statusStopQuestion(action,'x','demo');assert.doesNotMatch(q,/only partly/);assert.ok(q.endsWith('Afterwards: '+again+'.'),q);
+ }
+ assert.doesNotMatch([...Object.values(g('STATUS_STOP_AFTERMATH'))].map(a=>a.repair).join(' '),/rolled back/i);
+});

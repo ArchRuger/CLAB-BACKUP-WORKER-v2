@@ -527,3 +527,109 @@ test('no manager script writes or clears the remembered lab in sessionStorage wi
   assert.doesNotMatch(source,/(?<!try\{)sessionStorage\.(setItem|removeItem)\('activeLab'/,file+': blocked site data throws SecurityError; shell.js shellSet/shellRemove or a try/catch must wrap the call');
  }
 });
+
+// C02: Stop a running lifecycle operation and Copy output. A tiny DOM: every id in written markup becomes an element, so the
+// Stop block can rebuild itself and the test can click, focus and read it.
+function stopHarness(jobs,{clipboard=true}={}){
+ const elements=new Map(),log={focus:[],copies:[],feedback:[],posts:[],bodies:[]};
+ let active=null;
+ const make=id=>{
+  const el={id,hidden:false,disabled:false,className:'',textContent:'',scrollTop:0,scrollHeight:0,clientHeight:0,children:new Set(),handlers:{},_html:'',
+   get innerHTML(){return this._html;},
+   set innerHTML(html){this._html=html;this.children.clear();for(const m of String(html).matchAll(/ id="([\w-]+)"/g)){const child=make(m[1]);this.children.add(child);}},
+   addEventListener(name,fn){this.handlers[name]=fn;},focus(){active=this;log.focus.push(id);},
+   contains(other){return other===this||this.children.has(other);}};
+  elements.set(id,el);return el;
+ };
+ const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs:[]},activeId:'lab1',console,
+  document:{getElementById:()=>null,get activeElement(){return active;}},setTimeout:()=>1,clearTimeout(){},
+  api:async()=>({json:async()=>jobs.current}),refresh:async()=>{},
+  json:async(url,method,body)=>{log.posts.push([url,method,body]);if(jobs.postError)throw new Error(jobs.postError);return {status:'running'};}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),c);
+ if(clipboard)vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/clipboard.js'),'utf8'),c);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ if(clipboard){c.copyText=async(text,source)=>{log.copies.push([text,source.id]);return jobs.copyOk!==false;};c.copyFeedback=(button,ok)=>log.feedback.push([button.id,ok]);}
+ const dialog={id:'operation-output',open:true,classList:{toggle(){}},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]};
+ c.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))make(m[1]);log.html=html;return dialog;};
+ const stopBox=()=>elements.get('op-job-stop');
+ return {c,elements,log,dialog,box:stopBox,get:id=>elements.get(id)};
+}
+const stopJob=extra=>({id:'a',action:'deploy',name:'demo',lab_id:'lab1',status:'running',output:'',...extra});
+
+test('C02: a stopped job reads Stopped by you in the history, a warning banner without a hint, and Try again turns a stopped deploy into a redeploy review',()=>{
+ const c=vm.createContext({$:()=>null,esc:s=>String(s)});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ assert.equal(c.opStatusWord('cancelled'),'Stopped by you');
+ const pull='level=error msg="Failed to pull image image=docker.io/library/x:1"';
+ const banner=c.opJobBanner({action:'deploy',name:'demo',status:'cancelled',exit_code:null,message:'You stopped Start lab.',output:pull});
+ assert.equal(banner.tone,'warn');assert.equal(banner.title,'■ Start lab ended early: you stopped it');assert.equal(banner.hint,undefined,'a stop is not a failure to explain');assert.equal(banner.exit,'');
+ assert.equal(c.opJobBanner({action:'destroy',name:'demo',status:'failed',exit_code:1}).tone,'bad','failures keep their tone');
+ c.jobRequest=id=>id==='j'?{action:'deploy',lab_id:'old',options:{cleanup:true}}:null;
+ assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:'j',action:'deploy',status:'cancelled'},'lab'))),{action:'redeploy',lab_id:'lab',options:{cleanup:true}},'same options, the redeploy review');
+ assert.equal(c.opRetryRequest({id:'zz',action:'deploy',status:'cancelled'},'lab'),null,'no remembered request: the dialog, as for a failed deploy');
+ assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:'x',action:'destroy',status:'cancelled'},'lab'))),{lab_id:'lab',action:'destroy',options:{cleanup:true}},'every other stopped action repeats itself');
+ assert.equal(c.opRetryRequest({id:'j',action:'deploy',status:'failed'},'lab').action,'deploy','a failed deploy is repeated as before');
+});
+
+test('C02: the Stop block is offered only for stoppable actions while queued or running, and walks ask, confirmation, Stopping… with focus kept',async()=>{
+ const jobs={current:stopJob({})},h=stopHarness(jobs);
+ await h.c.opShowJob('a');
+ assert.equal(h.box().hidden,false);assert.match(h.box().innerHTML,/id="op-stop-ask">Stop this operation…</);assert.doesNotMatch(h.box().innerHTML,/op-stop-confirm/);
+ assert.deepEqual(h.log.focus,[],'opening the window moves no focus');
+ h.get('op-stop-ask').handlers.click();
+ assert.match(h.box().innerHTML,/End the running command \(Start lab\) on demo\? The manager asks the lab VM to end it now\. The lab may be only partly started; afterwards: Redeploy lab\./);
+ assert.match(h.box().innerHTML,/id="op-stop-keep">Keep running</);assert.match(h.box().innerHTML,/class="button danger small" id="op-stop-confirm">Stop</);
+ assert.equal(h.log.focus.at(-1),'op-stop-keep','focus starts on the safe choice');
+ h.get('op-stop-keep').handlers.click();
+ assert.match(h.box().innerHTML,/op-stop-ask/);assert.equal(h.log.focus.at(-1),'op-stop-ask','Keep running returns focus to the ask button');
+ h.get('op-stop-ask').handlers.click();
+ await h.get('op-stop-confirm').handlers.click();
+ assert.deepEqual(JSON.parse(JSON.stringify(h.log.posts)),[['/operations/a/cancel','POST',{}]]);
+ assert.match(h.box().innerHTML,/<p id="op-stop-status" role="status" tabindex="-1">Stopping… the manager has asked the lab VM to end the command\.<\/p>/);
+ assert.equal(h.log.focus.at(-1),'op-stop-status');
+ // The record carries the request: a later poll with cancel_requested keeps the same block, and a reopened window shows it unasked.
+ const before=h.log.focus.length;jobs.current=stopJob({cancel_requested:'2026-10-20T10:00:05Z'});
+ await h.c.opShowJob('a');assert.match(h.box().innerHTML,/op-stop-status/);assert.equal(h.log.focus.length,before,'a reopened window does not steal focus');
+});
+
+test('C02: Stop is not drawn for actions that finish on their own or for finished jobs, and the block hands focus to the banner when it goes away under the person',async()=>{
+ for(const action of ['create','delete','publish','revise','inspect']){
+  const h=stopHarness({current:stopJob({action})});await h.c.opShowJob('a');
+  assert.equal(h.box().hidden,true,action);assert.equal(h.box().innerHTML,'');
+ }
+ for(const status of ['succeeded','failed','cancelled','interrupted']){const h=stopHarness({current:stopJob({status})});await h.c.opShowJob('a');assert.equal(h.box().hidden,true,status);}
+ const queued=stopHarness({current:stopJob({status:'queued'})});await queued.c.opShowJob('a');assert.match(queued.box().innerHTML,/op-stop-ask/,'queued can be stopped');
+ // The block holds focus (the confirmation), then the job ends: focus moves to the job banner, not to the page.
+ const jobs={current:stopJob({})},h=stopHarness(jobs);let poll;h.c.setTimeout=fn=>{poll=fn;return 1;};
+ await h.c.opShowJob('a');h.get('op-stop-ask').handlers.click();assert.equal(h.log.focus.at(-1),'op-stop-keep');
+ jobs.current=stopJob({status:'cancelled',message:'You stopped Start lab.'});await poll();
+ assert.equal(h.box().hidden,true);assert.equal(h.log.focus.at(-1),'op-job-banner');assert.match(h.log.html,/id="op-job-banner" class="op-banner" tabindex="-1"/);
+ assert.equal(h.get('op-job-banner').className,'op-banner warn');assert.match(h.get('op-job-banner').innerHTML,/ended early: you stopped it/);
+});
+
+test('C02: opening with {stop:true} unfolds the confirmation on Keep running; a refused stop shows the error and brings the ask button back',async()=>{
+ const jobs={current:stopJob({action:'destroy'})},h=stopHarness(jobs);
+ await h.c.opShowJob('a',{stop:true});
+ assert.match(h.box().innerHTML,/End the running command \(Destroy lab\) on demo\?.*only partly removed; afterwards: run Destroy lab again\./);assert.equal(h.log.focus.at(-1),'op-stop-keep');
+ jobs.postError='This operation has already finished.';
+ const errors=[];h.dialog.querySelector=sel=>sel==='.form-error'?{set textContent(v){errors.push(v);},get textContent(){return '';},scrollIntoView(){}}:{textContent:''};
+ await h.get('op-stop-confirm').handlers.click();
+ assert.ok(errors.includes('This operation has already finished.'),'the refusal lands in the dialog\'s error line');
+ assert.match(h.box().innerHTML,/op-stop-ask/);assert.equal(h.log.focus.at(-1),'op-stop-ask');
+});
+
+test('C02: Copy output is disabled while the output is empty, copies the job output through its own click and flips through copyFeedback',async()=>{
+ const jobs={current:stopJob({action:'inspect',output:''})},h=stopHarness(jobs);
+ await h.c.opShowJob('a');
+ assert.match(h.log.html,/<div class="op-output-tools"><button type="button" id="op-copy-output" class="button ghost small" data-label="Copy output" aria-label="Copy the command output" data-copy-target="op-job-output" disabled>Copy output<\/button><span class="copy-status" role="status"><\/span><\/div><pre class="op-output" id="op-job-output"/);
+ assert.doesNotMatch(h.log.html,/data-copy=/,'no data-copy: the document-level delegation never copies this a second time');
+ const button=h.get('op-copy-output');assert.equal(button.disabled,true,'Waiting for the VM… is never copied');
+ await button.onclick();assert.deepEqual(h.log.copies,[]);
+ jobs.current=stopJob({action:'inspect',output:'line 1\nline 2'});
+ let poll;h.c.setTimeout=fn=>{poll=fn;return 1;};jobs.current.status='running';await h.c.opShowJob('a');
+ const again=h.get('op-copy-output');assert.equal(again.disabled,false);
+ await again.onclick();assert.deepEqual(h.log.copies,[['line 1\nline 2','op-copy-output']]);assert.deepEqual(h.log.feedback,[['op-copy-output',true]]);
+ jobs.copyOk=false;await again.onclick();assert.deepEqual(h.log.feedback.at(-1),['op-copy-output',false],'a failed copy is reported, never shown as Copied');
+ const bare=stopHarness({current:stopJob({output:'x'})},{clipboard:false});await bare.c.opShowJob('a');
+ assert.doesNotMatch(bare.log.html,/op-copy-output/,'a page without clipboard.js has no dead button');
+});

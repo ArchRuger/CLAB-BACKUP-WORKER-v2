@@ -219,3 +219,51 @@ test('V3: a save location problem is the chip\'s, never a closable banner; a dif
  const second=chip();assert.equal(second.key,'cant');assert.notEqual(second.sentence,first.sentence,'a different problem states itself');
  assert.equal(get('lab-banner').hidden,true);
 });
+
+// C02: Stop in the lab banner, the stopped job in the vocabulary sites of app.js, and the Copy buttons of the device drawer.
+test('C02: the banner offers Stop only while the job is queued or running, stoppable and not yet asked to stop; a stop reads as a warning badge and Dismiss clears it',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id);
+ const lab={id:'lab',name:'L',nodes:[],profiles:[],defaults:{},deployment:{status:'Running'},nos_readiness:{status:'idle'}};
+ const opened=[];h.context.opShowJob=(id,opts)=>opened.push([id,opts]);
+ const paint=ops=>vm.runInContext(`state=${JSON.stringify({labs:[lab],jobs:[],platforms:{},operations:ops})};activeId='lab';renderLabBanner();`,h.context);
+ const job=extra=>({id:'op-1',lab_id:'lab',action:'deploy',status:'running',created:'2026-10-20T10:00:00Z',message:'Executing on the VM',...extra});
+ paint([job({})]);
+ assert.equal(get('banner-stop').hidden,false);assert.equal(get('banner-stop').textContent,'Stop…');assert.equal(get('banner-output').hidden,false);
+ get('banner-stop').onclick();assert.equal(opened.length,1);assert.equal(opened[0][0],'op-1');assert.equal(opened[0][1].stop,true,'opens the output with the confirmation unfolded');
+ paint([job({status:'queued'})]);assert.equal(get('banner-stop').hidden,false);
+ paint([job({cancel_requested:'2026-10-20T10:00:05Z'})]);assert.equal(get('banner-stop').hidden,true,'already asked: no second Stop');assert.equal(get('banner-output').hidden,false);
+ for(const action of ['create','delete','publish','revise','inspect']){paint([job({action})]);assert.equal(get('banner-stop').hidden,true,action+' has no Stop');}
+ paint([job({status:'succeeded',finished:'2026-10-20T10:01:00Z'})]);assert.equal(get('banner-stop').hidden,true,'a finished job has none');
+ assert.ok(vm.runInContext('BANNER_BUTTONS["lab-banner"]',h.context).includes('banner-stop'));
+});
+test('C02: badge(cancelled) is a warning in the student\'s words, and a dismissed stopped job leaves the needs-attention set',()=>{
+ const h=appHarness();
+ const html=vm.runInContext("badge('cancelled')",h.context);
+ assert.match(html,/class="badge warn"/);assert.match(html,/>Stopped by you</);assert.match(html,/title="cancelled"/);
+ h.context.isDismissed=id=>id==='gone';
+ vm.runInContext(`state={labs:[],jobs:[],platforms:{},operations:[{id:'gone',status:'cancelled'},{id:'kept',status:'cancelled'},{id:'f',status:'failed'},{id:'ok',status:'succeeded'}],restore_jobs:[{id:'gone',status:'partial'}]}`,h.context);
+ assert.deepEqual([...vm.runInContext('dismissedSet()',h.context)],['gone'],'a stopped job the student dismissed is in the set');
+ h.context.isDismissed=()=>true;
+ assert.deepEqual([...vm.runInContext('dismissedSet()',h.context)].sort(),['f','gone','kept'],'every status of the three sets of status.js counts, a succeeded job never');
+});
+test('C02: the device drawer facts carry Copy buttons for the name, endpoint, address, kind and image; absent facts have none; IPv6 is bracketed; values are escaped',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/clipboard.js'),'utf8'),h.context);
+ const show=n=>{const lab={id:'lab',name:'L',nodes:[n],profiles:[],defaults:{},deployment:{status:'Running'}};vm.runInContext(`state.labs=[${JSON.stringify(lab)}];activeId='lab';detailName=${JSON.stringify(n.name)};`,h.context);get('details-dialog').open=true;h.context.renderDetails();return get('details-info').innerHTML;};
+ const html=show({name:'clab-l-r1',short_name:'r1',address:'172.20.20.2',port:22,platform:'arista_ceos',kind:'ceos',image:'ceos:4.32',enabled:true});
+ const targets=[...html.matchAll(/data-copy="([^"]*)" data-copy-target="([^"]*)"/g)].map(m=>[m[1],m[2]]);
+ assert.deepEqual(targets,[['clab-l-r1','details-fact-name'],['172.20.20.2:22','details-fact-endpoint'],['172.20.20.2','details-fact-address'],['ceos','details-fact-kind'],['ceos:4.32','details-fact-image']]);
+ for(const id of ['details-fact-name','details-fact-endpoint','details-fact-address','details-fact-kind','details-fact-image'])assert.match(html,new RegExp(`id="${id}"`),id+' exists for the button to select');
+ assert.match(html,/aria-label="Copy the address only"/);assert.match(html,/<dt>Container kind<\/dt>/);assert.match(html,/<dt>Image<\/dt>/);
+ assert.match(html,/<dt>Name in lab files<\/dt>/);assert.match(html,/<dt>Network OS<\/dt>/);assert.match(html,/<dt>Login credentials<\/dt>/,'the other facts stay');
+ const v6=show({name:'r6',address:'3fff::5',port:22,platform:'arista_ceos',enabled:true});
+ assert.match(v6,/data-copy="\[3fff::5\]:22" data-copy-target="details-fact-endpoint"/);assert.match(v6,/data-copy="3fff::5" data-copy-target="details-fact-address"/);
+ assert.doesNotMatch(v6,/Container kind|<dt>Image/,'kind and image rows are absent when the node names none');
+ const bare=show({name:'r7',address:'',port:22,platform:'arista_ceos',enabled:true});
+ assert.doesNotMatch(bare,/details-fact-address/);assert.doesNotMatch(bare,/data-copy-target="details-fact-kind"/);
+ const nasty=show({name:'a"b<i>',address:'10.0.0.1',port:22,platform:'arista_ceos',image:'x"y',kind:'k',enabled:true});
+ assert.doesNotMatch(nasty,/a"b<i>/);assert.match(nasty,/data-copy="a&quot;b&lt;i&gt;"/);assert.match(nasty,/data-copy="x&quot;y"/);
+ assert.equal(get('details-endpoint').textContent,'10.0.0.1:22','the header endpoint is untouched');
+ h.context.copyButton=undefined;
+ assert.doesNotMatch(show({name:'r1',address:'1.1.1.1',port:22,platform:'arista_ceos',enabled:true}),/data-copy/,'a page without clipboard.js shows the facts without buttons');
+});

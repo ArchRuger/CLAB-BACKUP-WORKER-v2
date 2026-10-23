@@ -15,6 +15,8 @@ import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
+import threading
+
 import app.host_operations as host_operations
 import app.lab_operations as lab_operations
 from app.host_operations import HostOperations, LIFECYCLE, digest, capture, stream
@@ -23,6 +25,8 @@ from app.discovery import stamp
 from app.store import Store
 import test_discovery as discovery_tests
 from test_discovery import YAML
+
+REAL_REMOTE = lab_operations.remote   # the fixture patches the module attribute; the stop tests also run the real function
 
 # A 49-character VM password (the length of the audit's reproducer) whose three-character pieces occur nowhere else in
 # an operation record, so any piece of it found in stored or served output is a leak.
@@ -1420,3 +1424,263 @@ class OperationAPITests(unittest.TestCase):
         with self.fixture():
             for layout in ('horizontal','vertical'):
                 self.assertEqual(self.client.get('/api/labs/'+self.lab_id+'/drawio?layout='+layout).status_code,400)
+
+
+class FakeStopChannel:
+    """A helper session that answers from a script: bytes are stdout, ('hook', fn) runs fn first, b'' is end of output."""
+    def __init__(self, script, log):
+        self.script = list(script); self.log = log
+    def settimeout(self, value): pass
+    def exec_command(self, command): self.log.append('exec')
+    def sendall(self, data): self.log.append('send')
+    def shutdown_write(self): pass
+    def recv_stderr_ready(self): return False
+    def recv_stderr(self, size): return b''
+    def exit_status_ready(self): return True
+    def recv_exit_status(self): return 0
+    def recv(self, size):
+        while self.script:
+            item = self.script.pop(0)
+            if isinstance(item, tuple): item[1](); continue
+            return item
+        return b''
+
+
+class FakeStopClient:
+    def __init__(self, script, log, on_connect=None):
+        self.script = script; self.log = log; self.on_connect = on_connect
+    def set_missing_host_key_policy(self, policy): pass
+    def connect(self, **options):
+        self.log.append('connect')
+        if self.on_connect: self.on_connect()
+    def get_transport(self): return self
+    def set_keepalive(self, seconds): pass
+    def open_session(self, timeout=None): return FakeStopChannel(self.script, self.log)
+    def close(self): self.log.append('close')
+
+
+class OperationStopTests(unittest.TestCase):
+    """Stop a running lifecycle operation (C02 design 3): the stop route, the per-job event, remote()'s stop condition and the follow-up."""
+    setUp = discovery_tests.DiscoveryTests.setUp
+    register = discovery_tests.DiscoveryTests.register
+    host = discovery_tests.DiscoveryTests.host
+    fixture = OperationAPITests.fixture
+    preview = OperationAPITests.preview
+    confirm = OperationAPITests.confirm
+    tearDown = OperationAPITests.tearDown
+
+    def queued(self, action='deploy'):
+        """Confirm a review with the pool captured: returns the job and the (function, *args) the pool was handed."""
+        with patch.object(self.app.state.operations.pool, 'submit') as submit:
+            job = self.confirm(self.preview(action)['token']).json()
+        return job, submit.call_args.args
+
+    def record(self, ident):
+        return next(j for j in self.store.state['operations'] if j['id'] == ident)
+
+    def stop_route(self, ident, **kwargs):
+        return self.client.post('/api/operations/' + ident + '/cancel', headers=self.auth, json={}, **kwargs)
+
+    def inject(self, action, status='running'):
+        job = {'id': action + '-job', 'lab_id': self.lab_id, 'name': 'training', 'action': action, 'path': '/p', 'created': stamp(),
+               'status': status, 'output': '', 'message': 'Executing on the VM', 'exit_code': None}
+        self.store.state['operations'].append(job); return job
+
+    def scripted(self, fixture, preview_answers, started=None):
+        """Wrap the fixture's fake VM: the run loops on the stop object it is handed (args[1]) in a real thread's wait, then
+        raises OperationStopped; each preview pops one scripted answer (an exception to raise or a dict to return)."""
+        inner = fixture.side_effect; seen = []; answers = list(preview_answers)
+        def remote(host, req, *args, **kwargs):
+            seen.append((req['mode'], 'digest' in req, kwargs.get('timeout')))
+            if req['mode'] == 'run':
+                args[0]('partial output\n')
+                if started: started.set()
+                stop = args[1]
+                while not stop.is_set(): threading.Event().wait(.01)
+                raise lab_operations.OperationStopped('Operation stopped. Inspect the lab before retrying.')
+            if req['mode'] == 'preview' and seen_run_done():
+                answer = answers.pop(0)
+                self.during.append((lab_operations.operation_busy(self.store.state), self.record(self.job_id)['status'], self.record(self.job_id)['message']))
+                if isinstance(answer, Exception): raise answer
+                return answer
+            return inner(host, req, *args, **kwargs)
+        def seen_run_done(): return any(mode == 'run' for mode, _, _ in seen[:-1])
+        fixture.side_effect = remote; self.seen = seen; self.during = []
+        return remote
+
+    @staticmethod
+    def locked():
+        failure = ValueError(lab_operations.LOCK_SENTENCE); failure.from_helper = True; return failure
+
+    def run_stopped(self, action='deploy', preview_answers=None, clock=None):
+        """Confirm, run execute() in a real thread, stop it through the route, and return the final record."""
+        with self.fixture() as fixture, patch.object(self.service, 'refresh'), patch.object(lab_operations.time, 'sleep'):
+            started = threading.Event()
+            self.scripted(fixture, preview_answers if preview_answers is not None else [self.locked(), self.locked(), {'steps': []}], started)
+            job, args = self.queued(action); self.job_id = job['id']
+            worker = threading.Thread(target=args[0], args=args[1:], daemon=True); worker.start()
+            self.assertTrue(started.wait(5), 'the run reached the fake VM')
+            response = self.stop_route(job['id']); self.assertEqual(response.status_code, 202, response.text)
+            worker.join(10); self.assertFalse(worker.is_alive())
+            return job['id'], response.json()
+
+    def test_a_stop_while_queued_ends_cancelled_and_never_touches_the_vm(self):
+        with self.fixture() as fixture, patch.object(self.service, 'refresh'):
+            job, args = self.queued()
+            self.assertIsInstance(self.app.state.operations.cancels[job['id']], threading.Event, 'confirm creates the event before submit')
+            self.assertEqual(self.stop_route(job['id']).status_code, 202)
+            fixture.reset_mock(); args[0](*args[1:])
+            saved = self.record(job['id'])
+            self.assertEqual((saved['status'], saved['exit_code']), ('cancelled', None)); self.assertTrue(saved['finished'])
+            self.assertIn('Nothing was changed on the VM', saved['message'])
+            fixture.assert_not_called()
+            self.assertNotIn(job['id'], self.app.state.operations.cancels)
+
+    def test_a_stopped_running_deploy_stays_busy_until_the_lock_is_free_then_reads_cancelled(self):
+        ident, answer = self.run_stopped()
+        self.assertEqual((answer['status'], answer['id']), ('running', ident)); self.assertTrue(answer['cancel_requested'])
+        saved = self.record(ident)
+        self.assertEqual((saved['status'], saved['exit_code']), ('cancelled', None))
+        self.assertEqual(saved['cancel_requested'], answer['cancel_requested']); self.assertTrue(saved['finished'])
+        self.assertEqual(saved['message'], 'You stopped Start lab. The lab may be only partly started: Redeploy lab.')
+        self.assertIn('partial output', saved['output'])
+        self.assertNotIn('last_deployed', self.store.lab(self.lab_id), 'a stopped deploy records no deployment time')
+        self.assertEqual(self.during, [(True, 'running', lab_operations.STOP_ASKED)] * 3, 'busy and Stopping… at each probe')
+        probes = [m for m in self.seen if m[0] == 'preview'][-3:]
+        self.assertEqual(probes, [('preview', False, 8)] * 3, 'the follow-up asks in preview mode, without the digest, with an 8 s timeout')
+        self.assertFalse(lab_operations.operation_busy(self.store.state))
+        self.assertEqual(self.app.state.operations.active, set())
+
+    def test_the_aftermath_message_names_the_repair_for_each_stoppable_action(self):
+        self.assertEqual(set(lab_operations.STOP_AFTERMATH), set(lab_operations.STOPPABLE))
+        self.assertEqual(lab_operations.stop_message('destroy'), 'You stopped Destroy lab. The lab may be only partly removed: run Destroy lab again.')
+        self.assertEqual(lab_operations.stop_message('stop'), 'You stopped Stop devices. The lab may be only partly stopped: run Stop devices again.')
+        self.assertIn('Redeploy lab also works but clears unsaved configuration', lab_operations.stop_message('restart-node'))
+        for action in ('save', 'clone', 'inspect-all'):
+            self.assertNotIn('only partly', lab_operations.stop_message(action), action)
+        self.assertNotIn('rolled back', ' '.join(lab_operations.stop_message(a) for a in lab_operations.STOPPABLE).lower())
+
+    def test_twenty_seconds_without_proof_reads_cancelled_with_the_still_ending_message(self):
+        clock = [1000.0]
+        fake = SimpleNamespace(monotonic=lambda: clock[0], sleep=lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+        with self.fixture() as fixture, patch.object(self.service, 'refresh'):
+            started = threading.Event()
+            lock_forever = [self.locked() for _ in range(100)]
+            self.scripted(fixture, lock_forever, started)
+            job, args = self.queued(); self.job_id = job['id']
+            worker = threading.Thread(target=args[0], args=args[1:], daemon=True); worker.start()
+            self.assertTrue(started.wait(5))
+            with patch('app.lab_operations.time', fake):
+                self.stop_route(job['id']); worker.join(10)
+            self.assertFalse(worker.is_alive())
+            saved = self.record(job['id'])
+            self.assertEqual((saved['status'], saved['message']), ('cancelled', lab_operations.STOP_UNPROVEN))
+            self.assertLessEqual(len(self.during), 22); self.assertGreaterEqual(len(self.during), 19)
+            self.assertNotIn('last_deployed', self.store.lab(self.lab_id))
+
+    def test_a_connection_failure_in_the_follow_up_is_not_proof(self):
+        broken = [ValueError('Operation connection interrupted. Inspect the lab before retrying.'), OSError('network'), self.locked(), {'steps': []}]
+        ident, _ = self.run_stopped(preview_answers=broken)
+        self.assertEqual(len(self.during), 4, 'it kept asking until a plan came back')
+        self.assertEqual(self.record(ident)['status'], 'cancelled'); self.assertIn('only partly started', self.record(ident)['message'])
+
+    def test_a_different_helper_error_proves_the_lock_is_free(self):
+        other = ValueError('Lab file changed.'); other.from_helper = True
+        ident, _ = self.run_stopped(preview_answers=[other])
+        self.assertEqual(len(self.during), 1); self.assertIn('only partly started', self.record(ident)['message'])
+
+    def test_remote_ignores_a_stop_after_the_result_and_reports_the_helper_error_over_a_stop(self):
+        event = threading.Event(); stop = lab_operations.StopCondition(threading.Event(), event); host = dict(enabled=True, fingerprint='SHA256:x', address='h', port=22, username='u', password='p', auth='password')
+        req = dict(mode='run', action='deploy', name='training', path='/p', options={})
+        log = []; script = [b'{"result": {"exit_code": 0}}\n', ('hook', event.set), b'']
+        with patch('app.lab_operations.vm_password', return_value='p'), patch('app.lab_operations.paramiko.SSHClient', return_value=FakeStopClient(script, log)):
+            self.assertEqual(lab_operations.remote(host, req, None, stop), {'exit_code': 0})
+        event.clear(); log = []; script = [('hook', event.set), b'{"error": "digest mismatch"}\n']
+        with patch('app.lab_operations.vm_password', return_value='p'), patch('app.lab_operations.paramiko.SSHClient', return_value=FakeStopClient(script, log)):
+            with self.assertRaises(ValueError) as caught: lab_operations.remote(host, req, None, stop)
+        self.assertNotIsInstance(caught.exception, lab_operations.OperationStopped); self.assertEqual(str(caught.exception), 'digest mismatch')
+        event.clear(); log = []; script = [('hook', event.set), b'{"output": "x"}\n', b'']
+        with patch('app.lab_operations.vm_password', return_value='p'), patch('app.lab_operations.paramiko.SSHClient', return_value=FakeStopClient(script, log)):
+            with self.assertRaises(lab_operations.OperationStopped): lab_operations.remote(host, req, None, stop)
+
+    def execute_over_fake_ssh(self, make_script, action='deploy'):
+        """Run the real remote() (not the fixture's fake VM) over a scripted helper session; returns (record, ssh log)."""
+        with self.fixture(), patch.object(self.service, 'refresh'):
+            job, args = self.queued(action); self.job_id = job['id']; log = []
+            self.script_hook = lambda: self.app.state.operations.cancels[self.job_id].set()
+            with patch('app.lab_operations.remote', REAL_REMOTE), \
+                 patch('app.lab_operations.paramiko.SSHClient', return_value=FakeStopClient(make_script(self.script_hook), log)), patch('app.lab_operations.vm_password', return_value='p'), \
+                 patch.object(lab_operations.time, 'sleep'):
+                args[0](*args[1:])
+            return self.record(job['id']), log
+
+    def test_through_execute_a_result_then_a_stop_is_succeeded_with_its_deployment_time(self):
+        record, log = self.execute_over_fake_ssh(lambda hook: [b'{"output": "ok\\n"}\n', b'{"result": {"exit_code": 0}}\n', ('hook', hook), b''])
+        self.assertEqual(record['status'], 'succeeded'); self.assertTrue(self.store.lab(self.lab_id)['last_deployed'])
+
+    def test_through_execute_a_helper_error_with_the_stop_set_is_failed_with_the_helpers_message(self):
+        record, log = self.execute_over_fake_ssh(lambda hook: [('hook', hook), b'{"error": "Review changed. Preview again."}\n'])
+        self.assertEqual((record['status'], record['message']), ('failed', 'Review changed. Preview again.'))
+
+    def test_a_non_zero_exit_after_a_stop_request_is_failed_not_cancelled(self):
+        record, log = self.execute_over_fake_ssh(lambda hook: [('hook', hook), b'{"result": {"exit_code": 3}}\n', b''])
+        self.assertEqual(record['status'], 'failed'); self.assertEqual(record['exit_code'], 3)
+
+    def test_a_stop_during_connect_never_sends_the_request(self):
+        event = threading.Event(); log = []
+        host = dict(enabled=True, fingerprint='SHA256:x', address='h', port=22, username='u', password='p', auth='password')
+        with patch('app.lab_operations.vm_password', return_value='p'), patch('app.lab_operations.paramiko.SSHClient', return_value=FakeStopClient([b''], log, on_connect=event.set)):
+            with self.assertRaises(lab_operations.OperationStopped): lab_operations.remote(host, dict(mode='run', action='deploy'), None, event)
+        self.assertEqual(log, ['connect', 'close'], 'no exec_command, no stdin')
+
+    def test_close_before_execute_reads_interrupted_and_never_connects(self):
+        with self.fixture() as fixture, patch.object(self.service, 'refresh'):
+            job, args = self.queued(); fixture.reset_mock()
+            self.app.state.operations.close(); args[0](*args[1:])
+            self.assertEqual(self.record(job['id'])['status'], 'interrupted'); fixture.assert_not_called()
+
+    def test_close_racing_a_stop_reads_interrupted_and_runs_no_follow_up(self):
+        with self.fixture() as fixture, patch.object(self.service, 'refresh'), patch.object(lab_operations.time, 'sleep'):
+            started = threading.Event(); self.scripted(fixture, [self.locked()], started)
+            job, args = self.queued(); self.job_id = job['id']
+            worker = threading.Thread(target=args[0], args=args[1:], daemon=True); worker.start(); self.assertTrue(started.wait(5))
+            self.assertEqual(self.stop_route(job['id']).status_code, 202)
+            self.app.state.operations.close(); worker.join(10); self.assertFalse(worker.is_alive())
+            saved = self.record(job['id']); self.assertEqual(saved['status'], 'interrupted'); self.assertEqual(self.during, [])
+
+    def test_a_second_stop_is_accepted_with_the_same_timestamp_and_one_after_the_end_is_refused(self):
+        with self.fixture(), patch.object(self.service, 'refresh'):
+            job, args = self.queued()
+            first = self.stop_route(job['id']); second = self.stop_route(job['id'])
+            self.assertEqual((first.status_code, second.status_code), (202, 202))
+            self.assertEqual(first.json()['cancel_requested'], second.json()['cancel_requested'])
+            self.assertEqual(set(first.json()), {'id', 'status', 'cancel_requested', 'message'})
+            args[0](*args[1:])
+            late = self.stop_route(job['id']); self.assertEqual(late.status_code, 409); self.assertEqual(late.json()['detail'], 'This operation has already finished.')
+
+    def test_actions_that_finish_on_their_own_cannot_be_stopped(self):
+        with self.fixture():
+            for action in ('create', 'delete', 'publish', 'revise', 'inspect'):
+                job = self.inject(action)
+                response = self.stop_route(job['id']); self.assertEqual(response.status_code, 409, action)
+                self.assertEqual(response.json()['detail'], 'This step finishes on its own in a moment and cannot be stopped.')
+                self.assertNotIn(job['id'], self.app.state.operations.cancels); self.assertNotIn('cancel_requested', job)
+
+    def test_unknown_operation_and_bodyless_stop(self):
+        with self.fixture(), patch.object(self.service, 'refresh'):
+            missing = self.stop_route('nope'); self.assertEqual((missing.status_code, missing.json()['detail']), (404, 'Operation not found.'))
+            job, args = self.queued()
+            empty = self.client.post('/api/operations/' + job['id'] + '/cancel', headers=self.auth, content=b'')
+            self.assertEqual(empty.status_code, 413)
+            self.assertEqual(self.record(job['id'])['status'], 'queued'); self.assertNotIn('cancel_requested', self.record(job['id']))
+            self.assertFalse(self.app.state.operations.cancels[job['id']].is_set())
+
+    def test_the_history_shows_the_stop_fields_and_no_output_and_stoppable_matches_the_page_vocabulary(self):
+        ident, _ = self.run_stopped()
+        for listing in (self.client.get('/api/operations', headers=self.auth).json(), self.client.get('/api/state', headers=self.auth).json()['operations']):
+            row = next(j for j in listing if j['id'] == ident)
+            self.assertEqual(row['status'], 'cancelled'); self.assertTrue(row['cancel_requested']); self.assertNotIn('output', row)
+        source = (Path(__file__).resolve().parents[1] / 'app' / 'static' / 'status.js').read_text()
+        match = re.search(r"const STATUS_STOPPABLE\s*=\s*\[([^\]]*)\]", source)
+        if match is None: self.skipTest('status.js does not carry STATUS_STOPPABLE yet')
+        self.assertEqual(tuple(re.findall(r"'([^']+)'", match.group(1))), lab_operations.STOPPABLE)

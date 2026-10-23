@@ -11,7 +11,16 @@
 // so the harness tests call these functions directly. operations.js keeps its own imperative table.
 const STATUS_OPERATION_LABELS={deploy:'Starting lab',redeploy:'Redeploying lab',destroy:'Destroying lab',start:'Starting devices',stop:'Stopping devices',restart:'Restarting all devices','restart-node':'Restarting device',apply:'Updating the lab from its topology file',save:'Saving device configurations',inspect:'Checking lab status','inspect-all':'Checking running labs',create:'Creating topology file',delete:'Deleting topology file',clone:'Downloading lab files'};
 const STATUS_OPERATION_BUSY=['queued','running'];
-const STATUS_OPERATION_FAILED=['failed','interrupted'];
+const STATUS_OPERATION_FAILED=['failed','interrupted','cancelled'];
+// The actions that run through the VM helper's stream and so end when the manager closes the channel (lab_operations.STOPPABLE; a test pins the two equal).
+const STATUS_STOPPABLE=['deploy','redeploy','destroy','apply','start','stop','restart','restart-node','save','clone','inspect-all'];
+// What a student does after stopping each action (the Python STOP_AFTERMATH holds the same words). verb: how far the lab may have got, '' when the action leaves nothing half done.
+const STATUS_STOP_AFTERMATH={deploy:{verb:'started',repair:'Redeploy lab'},redeploy:{verb:'started',repair:'Redeploy lab'},apply:{verb:'started',repair:'Redeploy lab'},start:{verb:'started',repair:'Redeploy lab'},restart:{verb:'started',repair:'Redeploy lab'},destroy:{verb:'removed',repair:'run Destroy lab again'},stop:{verb:'stopped',repair:'run Stop devices again'},'restart-node':{verb:'started',repair:'Restart device again (Redeploy lab also works but clears unsaved configuration on every device)'},save:{verb:'',repair:'run Save device configurations again'},clone:{verb:'',repair:'run Download lab again'},'inspect-all':{verb:'',repair:'run it again'}};
+// The question before Stop: names the command and the device or lab, then what may be left half done and the way back. Pure.
+function statusStopQuestion(action,label,name){
+ const a=STATUS_STOP_AFTERMATH[action]||{verb:'',repair:'run it again'};
+ return `End the running command (${label}) on ${name}? The manager asks the lab VM to end it now. `+(a.verb?`The lab may be only partly ${a.verb}; afterwards: ${a.repair}.`:`Afterwards: ${a.repair}.`);
+}
 const STATUS_GIT_BUSY=['queued','capturing','exporting','pushing'];
 const STATUS_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
 const STATUS_RESTORE_FAILED=['failed','preflight_failed','interrupted'];
@@ -34,7 +43,7 @@ function statusRestoreActive(job){return STATUS_RESTORE_BUSY.includes(job?.statu
 function statusDesignRechecking(job){return job?.status==='interrupted'&&Array.isArray(job.rechecking)&&job.rechecking.length>0;}
 // `booting` is a Test login whose SSH login was accepted while the CLI has not answered yet: the device panel's "Starting";
 // `checking` is a Test login or Test logins still running (node_services stores it meanwhile): the device panel's "Testing login…".
-const STATUS_BADGE_LABELS={reachable:'Login OK',unreachable:'Login failed',booting:'Starting',checking:'Testing login…',succeeded:'Succeeded',failed:'Failed',interrupted:'Interrupted',partial:'Partly succeeded',queued:'Queued',running:'Running',Ready:'Ready'};
+const STATUS_BADGE_LABELS={reachable:'Login OK',unreachable:'Login failed',booting:'Starting',checking:'Testing login…',succeeded:'Succeeded',failed:'Failed',interrupted:'Interrupted',cancelled:'Stopped by you',partial:'Partly succeeded',queued:'Queued',running:'Running',Ready:'Ready'};
 function plural(count,word,pluralWord){const n=Number(count)||0;return n+' '+(n===1?word:(pluralWord||word+'s'));}
 // Restart device names its one device when the job is at hand ("Restarting ceos"); the table's word otherwise.
 function operationLabel(action,job){if(action==='restart-node'&&job?.node_label)return 'Restarting '+job.node_label;return STATUS_OPERATION_LABELS[action]||'Lab operation';}
@@ -77,7 +86,7 @@ function labActivity(lab,ctx={}){
 function labFailure(lab,ctx={}){
  const dismissed=ctx.dismissed,isDismissed=id=>!!dismissed&&(typeof dismissed.has==='function'?dismissed.has(id):Array.isArray(dismissed)&&dismissed.includes(id));
  const done=[];
- for(const j of ctx.operations||[])if(j.lab_id===lab?.id&&!STATUS_OPERATION_BUSY.includes(j.status))done.push({job:j,failed:STATUS_OPERATION_FAILED.includes(j.status),label:operationLabel(j.action)});
+ for(const j of ctx.operations||[])if(j.lab_id===lab?.id&&!STATUS_OPERATION_BUSY.includes(j.status))done.push({job:j,failed:STATUS_OPERATION_FAILED.includes(j.status),label:operationLabel(j.action),...(j.status==='cancelled'?{detail:`${operationLabel(j.action)} was stopped by you before it finished.`,pill:'warn'}:{})});
  for(const j of ctx.restore_jobs||[])if(j.lab_id===lab?.id&&!statusRestoreActive(j))done.push({job:j,failed:STATUS_RESTORE_FAILED.includes(j.status)||STATUS_RESTORE_ATTENTION.includes(j.status),label:'Loading a saved state',...(STATUS_RESTORE_ATTENTION.includes(j.status)?{detail:STATUS_RESTORE_ATTENTION_DETAIL[j.status],pill:'warn'}:{})});
  const newest=done.sort((a,b)=>statusJobTime(b.job)-statusJobTime(a.job))[0];
  return newest&&newest.failed&&!isDismissed(newest.job.id)?newest:null;

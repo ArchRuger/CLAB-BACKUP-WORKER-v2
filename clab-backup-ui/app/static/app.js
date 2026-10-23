@@ -21,7 +21,7 @@ function restoreRunning(j){return typeof statusRestoreActive==='function'?status
 function restoreRechecking(j){return !APP_RESTORE_BUSY.includes(j?.status)&&restoreRunning(j);}
 function designRechecking(j){return typeof statusDesignRechecking==='function'?statusDesignRechecking(j):j?.status==='interrupted'&&Array.isArray(j.rechecking)&&j.rechecking.length>0;}
 const RECHECK_BANNER='Checking the devices after a manager restart…';
-const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-dismiss'],'home-banner':['home-banner-output']};
+const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-stop','banner-dismiss'],'home-banner':['home-banner-output']};
 const current=()=>state.labs.find(l=>l.id===activeId);
 // What holds the manager right now, as one sentence, or '' when nothing does. It mirrors the server's guard for a save
 // (GitProgress.idle: lab_operations.operation_busy for every lab, plus backup and login jobs, plus a design read-back of
@@ -101,6 +101,8 @@ function openSaveRoute(){
 function syncRoute(push=false){if(!routeApplied||typeof writeRoute!=='function'||typeof currentRoute!=='function')return;writeRoute(currentRoute(),{push});}
 function selectLab(id,view='topology'){if(typeof closeLabDialogs==='function')closeLabDialogs();else if($('details-dialog').open)$('details-dialog').close();activeId=id;setTab(view);try{sessionStorage.setItem('activeLab',id);}catch{/* blocked site data: the route and the page state still carry the open lab */}$('search').value='';$('log-job').value='';if(typeof rememberOpened==='function')rememberOpened(id);if(typeof closeMenus==='function')closeMenus();if(typeof writeRoute==='function')writeRoute({lab:id,view:tab},{push:true});render();}
 function platformLabel(kind){return state.platforms[kind]?.label||(kind==='ssh'?'Generic SSH / Linux':'Unmapped');}
+// Stop is offered only while the job is queued or running, is a stoppable action and no stop was asked for yet.
+function stoppableOp(j){return !!j&&['queued','running'].includes(j.status)&&!j.cancel_requested&&typeof STATUS_STOPPABLE!=='undefined'&&STATUS_STOPPABLE.includes(j.action);}
 function badge(status){const type=['Ready','succeeded','reachable'].includes(status)?'good':['failed','unreachable','interrupted'].includes(status)?'bad':['queued','running'].includes(status)?'running':'warn';const label=typeof badgeLabel==='function'?badgeLabel(status):status;return `<span class="badge ${type}" title="${esc(status)}">${esc(label)}</span>`;}
 function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platform||'ssh'];return lab.profiles.find(p=>p.id===id)?.label||(node.inventory_credentials?'From inventory':node.credential_source==='default'?'Containerlab default login':'Not configured');}
 // Why an SSH action is disabled right now; the readiness monitor clears it on its own. Fallback for
@@ -119,7 +121,7 @@ function retiredBannerText(retired){
 }
 // Vocabulary helpers shared by the header, the lab switcher and home.js. labContext adds the dismissed
 // operation ids so a failed job the student already dismissed stops reading as "Needs attention".
-function dismissedSet(){const ids=new Set();if(typeof isDismissed!=='function')return ids;for(const j of [...(state.operations||[]),...(state.restore_jobs||[])])if(j.id&&['failed','interrupted','preflight_failed','needs_attention','partial'].includes(j.status)&&isDismissed(j.id))ids.add(j.id);return ids;}
+function dismissedSet(){const ids=new Set();if(typeof isDismissed!=='function')return ids;const dismissable=typeof STATUS_OPERATION_FAILED!=='undefined'?[...STATUS_OPERATION_FAILED,...STATUS_RESTORE_FAILED,...STATUS_RESTORE_ATTENTION]:['failed','interrupted','cancelled','preflight_failed','needs_attention','partial'];for(const j of [...(state.operations||[]),...(state.restore_jobs||[])])if(j.id&&dismissable.includes(j.status)&&isDismissed(j.id))ids.add(j.id);return ids;}
 function labContext(){return {...state,dismissed:dismissedSet()};}
 function labStateOf(lab){return typeof labState==='function'?labState(lab,labContext()):{key:'',label:lab.deployment?.status||'Not matched to a running lab',pill:'neutral',detail:''};}
 function readyLine(lab,ls){const total=(lab.nodes||[]).length,ready=(lab.nodes||[]).filter(n=>n.ssh_ready).length;if(ls.key==='stopped')return 'Not running';if(['unlinked','unknown'].includes(ls.key))return '';return `${ready} of ${total} devices ready`;}
@@ -260,7 +262,7 @@ function renderLabBanner(){
  const start=()=>({'banner-start':{label:startLabel(),run:startLab,disabled:!!$('lab-start')?.disabled,title:$('lab-start')?.title||''}});
  let spec={};
  if(err&&err.lab===lab.id)spec={tone:'danger',icon:'alert',text:err.sentence,detail:err.message,identity:'error.'+(err.seq||err.at),onClose:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();},actions:{'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();}}}};
- else if(runningOp)spec={tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(runningOp.action,runningOp):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};
+ else if(runningOp)spec={tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(runningOp.action,runningOp):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}},...(stoppableOp(runningOp)?{'banner-stop':{label:'Stop…',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id,{stop:true});}}}:{})}};
  else if(runningRestore)spec={tone:'info',icon:'clock',running:true,text:restoreRechecking(runningRestore)?RECHECK_BANNER:'Loading a saved state…',detail:runningRestore.message||'',actions:{'banner-restore':{label:'View progress',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(runningRestore.id);}}}};
  else if(recheckDesign)spec={tone:'info',icon:'clock',running:true,text:RECHECK_BANNER,detail:recheckDesign.message||'',actions:{'banner-output':{label:'View progress',run:()=>{if(typeof designApplyShowJob==='function')designApplyShowJob(recheckDesign.id);}}}};
  else if(ls.key==='attention'&&ls.job){
@@ -464,6 +466,12 @@ function recheckPending(n){return !!n&&detailsRecheck.name===n.name&&Date.now()-
 const DETAILS_LOGIN_TEST_HELP='Test login (under Advanced) checks the saved credentials now.';
 function detailsLoginHelp(lab,n){return (lab?.deployment_name&&n?.nos_login?.status!=='unmonitored'?'Running devices are checked automatically until they accept a login. ':'')+DETAILS_LOGIN_TEST_HELP;}
 function statusActions(n,ds){if(!ds)return '';if(recheckPending(n))return `<button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='attention')return `<button data-edit="${esc(n.name)}">Check credentials</button><button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='credentials')return ds.next==='Edit connection'?`<button data-edit="${esc(n.name)}">Edit connection…</button>`:`<button data-profile="">Add credentials</button>`;return '';}
+// The endpoint as it is typed into a client: [address]:port for IPv6, address:port otherwise.
+function detailsEndpoint(n){const a=String(n.address??'');return (a.includes(':')?'['+a+']':a)+':'+n.port;}
+// The same endpoint as markup: the address sits in its own span so Copy the address only can select it.
+function detailsEndpointMarkup(n){const a=String(n.address??''),v6=a.includes(':');return (v6?'[':'')+(a?`<span id="details-fact-address">${esc(a)}</span>`:'')+(v6?']':'')+':'+esc(n.port);}
+// Copy buttons come from clipboard.js; a page without it shows the facts as before.
+function copyIf(value,what,targetId){return typeof copyButton==='function'?copyButton(value,what,targetId):'';}
 function renderDetails(){
  const lab=current(),n=lab?.nodes.find(n=>n.name===detailName);if(!n){if($('details-dialog').open)$('details-dialog').close();return;}
  const h=nodeHealth(n.name),ds=typeof deviceState==='function'?deviceState(n):null;
@@ -478,7 +486,7 @@ function renderDetails(){
  if($('details-status-text'))$('details-status-text').textContent=recheckPending(n)?`Checking ${n.short_name||n.name} again… (automatic within a minute — or Test login now)`:ds?ds.detail:(h?.ssh?.message||'');
  setMarkup($('details-status-actions'),statusActions(n,ds));
  setMarkup($('details-status-raw-body'),`<div class="connection-result">${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<p>${esc(h?.ssh?.message||'No login check yet.')}</p>${h?.ssh?.at?`<time>${esc(utcDisplay(h.ssh.at))}${h.ssh.source==='automatic'?' · automatic check':''}</time>`:''}</div><p class="form-help">${detailsLoginHelp(lab,n)}</p>`);
- setMarkup($('details-info'),`<section class="drawer-section"><h3>Connection</h3><dl class="health-grid"><dt>Name in lab files</dt><dd class="mono">${esc(n.name)}</dd><dt>Network OS</dt><dd>${esc(platformLabel(n.platform))}</dd><dt>Login credentials</dt><dd>${esc(profileName(lab,n))}</dd><dt>Address</dt><dd class="mono">${esc(n.address)}:${esc(n.port)}</dd></dl></section>`);
+ setMarkup($('details-info'),`<section class="drawer-section"><h3>Connection</h3><dl class="health-grid"><dt>Name in lab files</dt><dd><span class="mono" id="details-fact-name">${esc(n.name)}</span>${copyIf(n.name,'the name in the lab files','details-fact-name')}</dd><dt>Network OS</dt><dd>${esc(platformLabel(n.platform))}</dd><dt>Login credentials</dt><dd>${esc(profileName(lab,n))}</dd><dt>Address</dt><dd><span class="mono" id="details-fact-endpoint">${detailsEndpointMarkup(n)}</span>${copyIf(detailsEndpoint(n),'the address and port','details-fact-endpoint')}${n.address?copyIf(n.address,'the address only','details-fact-address'):''}</dd>${n.kind?`<dt>Container kind</dt><dd><span class="mono" id="details-fact-kind">${esc(n.kind)}</span>${copyIf(n.kind,'the container kind','details-fact-kind')}</dd>`:''}${n.image?`<dt>Image</dt><dd><span class="mono" id="details-fact-image">${esc(n.image)}</span>${copyIf(n.image,'the image','details-fact-image')}</dd>`:''}</dl></section>`);
  setMarkup($('details-advanced-body'),`<dl class="health-grid"><dt>Included in backups</dt><dd><label class="checkbox-label"><input type="checkbox" data-enable="${esc(n.name)}" ${n.enabled?'checked':''} ${!n.platform?'disabled title="Choose a network OS first (Edit connection)"':''}> Include ${esc(n.short_name||n.name)} in backups</label></dd><dt>Can be backed up</dt><dd>${n.readiness==='Ready'?'Yes':'No'+(n.readiness?' — '+esc(readinessWord(n.readiness)):'')}</dd></dl>`);
  const backups=state.jobs.filter(j=>j.lab_id===activeId&&j.operation==='backup'&&!['queued','running'].includes(j.status));
  const entries=backups.flatMap(j=>j.nodes.map((node,index)=>({j,node,index}))).filter(x=>x.node.name===n.name&&x.node.status==='succeeded'&&x.node.download_name);

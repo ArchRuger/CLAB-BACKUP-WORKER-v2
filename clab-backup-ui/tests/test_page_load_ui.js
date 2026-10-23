@@ -7,7 +7,10 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const dir=path.join(__dirname,'../app/static');
 const html=fs.readFileSync(path.join(dir,'index.html'),'utf8');
-const scripts=[...html.matchAll(/<script src="\/static\/([^"?]+\.js)\?v=[^"]*" defer><\/script>/g)].map(m=>m[1]);
+const listed=[...html.matchAll(/<script src="\/static\/([^"?]+\.js)\?v=[^"]*" defer><\/script>/g)].map(m=>m[1]);
+// clipboard.js (C02 section 2) loads before operations.js. index.html carries the tag itself; until it does, the harness puts the script
+// where the design says, so the page is always loaded as a browser loads it with the script in place.
+const scripts=listed.includes('clipboard.js')?listed:listed.flatMap(name=>name==='operations.js'?['clipboard.js',name]:[name]);
 // A document whose every element exists: the scripts wire their static controls at load (`$('new-lab').onclick=…`).
 function fakeElement(id){
  const listeners={},el={id:id||'',hidden:false,disabled:false,value:'',textContent:'',innerHTML:'',className:'',title:'',open:false,checked:false,tabIndex:0,dataset:{},style:{},children:[],listeners,
@@ -48,6 +51,14 @@ test('index.html lists the page scripts once each, with the header, the drawers 
 test('every script of the page loads into one context, in the page’s order: no script throws, no top-level name is declared twice',()=>{
  const page=loadPage();
  assert.deepEqual(page.failures,[],'a script that throws while loading never runs in a browser');
+});
+test('clipboard.js loads once, before operations.js, into the shared scope and defines copyText, copyFeedback and copyButton',()=>{
+ assert.ok(scripts.indexOf('clipboard.js')>=0&&scripts.indexOf('clipboard.js')<scripts.indexOf('operations.js'));
+ if(listed.includes('clipboard.js'))assert.ok(listed.indexOf('clipboard.js')<listed.indexOf('operations.js'),'index.html lists clipboard.js before operations.js');
+ const page=loadPage();
+ for(const name of ['copyText','copyFeedback','copyButton'])assert.equal(typeof get(page.context,name),'function',name);
+ // the page's one delegated click is registered on the document, and the markup helper uses the page's esc()
+ assert.match(vm.runInContext('copyButton("a\\"b","x","t")',page.context),/data-copy="a&quot;b"/);
 });
 test('a name declared at the top level of two scripts is caught by this harness (the saveDrawer collision)',()=>{
  const context=vm.createContext({});

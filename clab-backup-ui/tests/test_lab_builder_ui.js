@@ -412,6 +412,7 @@ test('a student with no labs finds the builder from the first page, and the buil
 // silently coming back.
 test('every editor control the page hides still exists in the bundled editor',()=>{
  const css=read('lab-builder.css'),ids=[...css.matchAll(/\[data-testid="([a-z-]+)"\]/g)].map(m=>m[1]);assert.ok(ids.length>=7,ids.join());
+ assert.ok(ids.includes('navbar-about'),'the page hides the editor About entry (navbar-about)');
  const dir=path.join(__dirname,'../app/static/lab-builder/assets'),code=fs.readdirSync(dir).filter(f=>f.endsWith('.js')).map(f=>fs.readFileSync(path.join(dir,f),'utf8')).join('\n');
  // Context menu entries and palette tabs get their test id from a template (`context-menu-item-${id}`,
  // `panel-tab-${id}`): the bundle then holds the template and the id, not the joined string.

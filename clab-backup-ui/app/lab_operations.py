@@ -24,6 +24,41 @@ from .drawio_export import drawio
 from .layout import MAX_DOCUMENT, annotations, decorations, keep_document, map_document, revision
 
 BUSY = ('queued', 'running')
+# The actions that run through the helper's stream() and so die with the SSH channel: the only ones a person can stop.
+# create, delete, publish and revise write first and answer once at the end; inspect is one short read.
+# status.js STATUS_STOPPABLE is the same list (a test pins the two equal).
+STOPPABLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'restart-node', 'save', 'clone', 'inspect-all')
+# action -> (how far the lab may have got, what repairs it); status.js STATUS_STOP_AFTERMATH holds the same words.
+STOP_AFTERMATH = {
+    'deploy': ('started', 'Redeploy lab'), 'redeploy': ('started', 'Redeploy lab'), 'apply': ('started', 'Redeploy lab'),
+    'start': ('started', 'Redeploy lab'), 'restart': ('started', 'Redeploy lab'),
+    'destroy': ('removed', 'run Destroy lab again'), 'stop': ('stopped', 'run Stop devices again'),
+    'restart-node': ('started', 'Restart device again (Redeploy lab also works but clears unsaved configuration on every device)'),
+    'save': ('', 'run Save device configurations again'), 'clone': ('', 'run Download lab again'), 'inspect-all': ('', 'run it again'),
+}
+STOP_LABELS = {'deploy': 'Start lab', 'redeploy': 'Redeploy lab', 'destroy': 'Destroy lab', 'apply': 'Apply topology changes', 'start': 'Start devices',
+               'stop': 'Stop devices', 'restart': 'Restart all devices', 'restart-node': 'Restart device', 'save': 'Save device configurations',
+               'clone': 'Download lab', 'inspect-all': 'Running labs on the VM'}
+STOP_ASKED = 'Stopping… the manager has asked the lab VM to end the command'
+STOP_UNPROVEN = 'The lab VM is still ending the command; wait a moment before the next operation.'
+LOCK_SENTENCE = 'Another host lab operation is running.'
+FOLLOW_UP_LIMIT = 20
+
+
+class OperationStopped(ValueError):
+    """A person (or the shutdown) ended the operation while the helper had not yet answered: the outcome is not known."""
+
+
+def stop_message(action):
+    verb, repair = STOP_AFTERMATH.get(action, ('', 'run it again'))
+    label = STOP_LABELS.get(action, action)
+    return 'You stopped ' + label + '. ' + ('The lab may be only partly ' + verb + ': ' + repair + '.' if verb else 'Afterwards: ' + repair + '.')
+
+
+class StopCondition:
+    """What remote() polls: the manager's shutdown or this one job's stop request."""
+    def __init__(self, stopping, event): self.stopping = stopping; self.event = event
+    def is_set(self): return self.stopping.is_set() or bool(self.event and self.event.is_set())
 GIT_BUSY = ('queued', 'capturing', 'exporting', 'pushing')
 # A live restore holds the lab the same way a Git save does. progress_id excludes the
 # restore job's own id so its pre/post backups are not blocked by itself.
@@ -103,16 +138,20 @@ def remote(host, request, output=None, stopping=None, timeout=None):
     opts['password'] = password
     try:
         client.connect(**opts)
+        if stopping and stopping.is_set(): raise OperationStopped('Operation stopped. Inspect the lab before retrying.')
         client.get_transport().set_keepalive(15)
         channel = client.get_transport().open_session(timeout=8); channel.settimeout(15)
+        if stopping and stopping.is_set(): raise OperationStopped('Operation stopped. Inspect the lab before retrying.')
         channel.exec_command('clab-manager-operations')
         channel.sendall((json.dumps(request) + '\n').encode()); channel.shutdown_write()
         channel.settimeout(.2)
         until = time.monotonic() + (timeout if timeout is not None else 1250 if request.get('mode') == 'run' else 180)
         pending = b''; result = None; total = 0; stderr = b''; eof = False
         while True:
-            if time.monotonic() > until or (stopping and stopping.is_set()):
-                raise ValueError('Operation connection interrupted. Inspect the lab before retrying.')
+            if time.monotonic() > until: raise ValueError('Operation connection interrupted. Inspect the lab before retrying.')
+            # Only while the helper has said nothing final: once its result line is in, the loop runs to EOF and
+            # exit status, and a command that completed is never relabelled as stopped.
+            if result is None and stopping and stopping.is_set(): raise OperationStopped('Operation stopped. Inspect the lab before retrying.')
             if channel.recv_stderr_ready():
                 chunk = channel.recv_stderr(65536)
                 stderr = (stderr + chunk)[:8192]
@@ -129,7 +168,9 @@ def remote(host, request, output=None, stopping=None, timeout=None):
                     try: item = json.loads(line)
                     except ValueError: raise ValueError('Operations helper is unavailable or outdated. Run start-manager.sh --enable-operations on the VM.')
                     if not isinstance(item, dict): raise ValueError('Invalid operations helper response.')
-                    if 'error' in item: raise ValueError(str(item['error'])[:1000])
+                    if 'error' in item:
+                        failure = ValueError(str(item['error'])[:1000]); failure.from_helper = True
+                        raise failure
                     if output and 'output' in item: output(str(item['output']))
                     if 'result' in item: result = item['result']
             # Exit status is metadata, not EOF. Some servers deliver it before
@@ -341,6 +382,7 @@ class LabOperations:
         # readiness: the ReadinessMonitor, so a Restart device job can drop the device's proven login
         # (its readiness epoch) when the restart is accepted and again when it has run.
         self.store = store; self.discovery = discovery; self.readiness = readiness; self.previews = {}; self.stopping = threading.Event()
+        self.cancels = {}   # operation id -> threading.Event, set by the stop route and by close()
         self.pool = ThreadPoolExecutor(max_workers=1); self.cap_cache = None; self.active = set()
         # Image questions are read-only and repeat (every builder edit, every review): the VM's image list is kept for
         # a minute and each reference's answer for a while, so the helper is asked once per question, not per page.
@@ -355,7 +397,11 @@ class LabOperations:
             store.save()
 
     def close(self):
-        self.stopping.set(); self.pool.shutdown(wait=False, cancel_futures=True)
+        # The manager-wide flag first: execute() reads it before it classifies a stop, so a shutdown racing a stop is `interrupted`.
+        self.stopping.set()
+        with self.store.lock:
+            for event in list(self.cancels.values()): event.set()
+        self.pool.shutdown(wait=False, cancel_futures=True)
 
     def host(self):
         with self.store.lock: return copy.deepcopy(self.store.state.get('host', {}))
@@ -650,8 +696,10 @@ class LabOperations:
                 except OSError:
                     self.store.state['operations'] = previous_jobs; raise HTTPException(500, 'Could not save the operation; nothing was submitted.')
                 self.previews.pop(data.token)
+                self.cancels[job['id']] = threading.Event()   # before submit: execute() and the stop route both find it
                 try: self.pool.submit(self.execute, job['id'], self.host(), req)
                 except RuntimeError:
+                    self.cancels.pop(job['id'], None)
                     job.update(status='interrupted', message='Manager is shutting down. Preview again after restart.'); self.store.save()
                     raise HTTPException(409, job['message'])
                 return copy.deepcopy(job)
@@ -666,6 +714,21 @@ class LabOperations:
                 found = next((j for j in self.store.state['operations'] if j['id'] == job_id), None)
                 if not found: raise HTTPException(404, 'Operation not found.')
                 return copy.deepcopy(found)
+
+        @app.post('/api/operations/{job_id}/cancel', status_code=202)
+        def cancel(job_id: str):
+            with self.store.lock:
+                found = next((j for j in self.store.state['operations'] if j['id'] == job_id), None)
+                if not found: raise HTTPException(404, 'Operation not found.')
+                if found.get('action') not in STOPPABLE: raise HTTPException(409, 'This step finishes on its own in a moment and cannot be stopped.')
+                if found['status'] not in BUSY: raise HTTPException(409, 'This operation has already finished.')
+                if not found.get('cancel_requested'):
+                    found['cancel_requested'] = stamp()
+                    try: self.store.save()
+                    except OSError: pass   # the memory record and the event carry the request; the job's own saves write it
+                event = self.cancels.get(job_id)
+                if event: event.set()
+                return {'id': job_id, 'status': found['status'], 'cancel_requested': found['cancel_requested'], 'message': STOP_ASKED}
 
         class LabSettings(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -843,9 +906,48 @@ class LabOperations:
         return ('containerlab restarted the device, but its container is ' + state + (' (' + status + ')' if status else '') +
                 ' right after starting. ' + why + ' Redeploy the lab to recreate the device; configuration changes that were not saved to its startup configuration are lost either way.')
 
+    def finish_stopped(self, ident, host, req, ran, clean):
+        """A person stopped the job: keep it busy until the VM proves it ended the command, then record `cancelled`.
+
+        The stop closed the SSH channel; the helper's next heartbeat fails and it ends containerlab's process group.
+        Until its host lock is free the lab may still be written to, so the job stays `running` (and every guard keeps
+        refusing) while a read-only preview, which needs that same lock, is asked once a second for up to 20 s."""
+        def update(**fields):
+            with self.store.lock:
+                job = next(j for j in self.store.state['operations'] if j['id'] == ident)
+                job.update(fields); self.store.save()
+        with self.store.lock:
+            job = next(j for j in self.store.state['operations'] if j['id'] == ident)
+            action = job.get('action', ''); asked = job.get('cancel_requested') or stamp()
+        if not ran:
+            update(status='cancelled', cancel_requested=asked, finished=stamp(), exit_code=None, output=clean,
+                   message='You stopped ' + STOP_LABELS.get(action, action) + ' before it started. Nothing was changed on the VM.')
+            return
+        try: update(status='running', cancel_requested=asked, output=clean, message=STOP_ASKED)
+        except OSError: pass   # the memory record holds it
+        probe = {k: v for k, v in req.items() if k != 'digest'}; probe['mode'] = 'preview'
+        deadline = time.monotonic() + FOLLOW_UP_LIMIT; proven = False
+        while True:
+            if self.stopping.is_set():
+                update(status='interrupted', finished=stamp(), output=clean, message='Operation connection interrupted. Inspect the lab before retrying.')
+                return
+            try:
+                remote(host, probe, None, self.stopping, timeout=8)
+                proven = True
+            except OperationStopped: continue   # the shutdown flag: the next pass ends the job as interrupted
+            except ValueError as exc:
+                # The helper's own answer other than the lock sentence means it took the lock: the command is gone.
+                # A connection failure (ours or the gateway's) proves nothing.
+                proven = bool(getattr(exc, 'from_helper', False)) and str(exc) != LOCK_SENTENCE
+            except Exception: proven = False
+            if proven or time.monotonic() >= deadline: break
+            time.sleep(1)
+        update(status='cancelled', finished=stamp(), exit_code=None, output=clean, message=stop_message(action) if proven else STOP_UNPROVEN)
+
     def execute(self, ident, host, req):
-        with self.store.lock: self.active.add(ident)
-        window = OutputWindow(); last_save = 0
+        with self.store.lock: self.active.add(ident); event = self.cancels.get(ident)
+        stop = StopCondition(self.stopping, event)
+        window = OutputWindow(); last_save = 0; ran = False   # ran: the request was handed to the VM
         def update(**fields):
             with self.store.lock:
                 job = next(j for j in self.store.state['operations'] if j['id'] == ident)
@@ -884,10 +986,13 @@ class LabOperations:
             if restart_key: self.readiness.forget(restart_key)
             for key in lab_keys: self.readiness.forget(key)
         try:
+            # A shutdown, or a stop asked while the job was queued, ends it before the VM is touched.
+            if stop.is_set(): raise OperationStopped('Operation stopped. Inspect the lab before retrying.')
             invalidate_readiness()
             try: update(status='running', started=stamp(), message='Executing on the VM')
             except OSError: raise ValueError("The manager could not save the operation record, so nothing was run on the VM. Check the manager's disk and try again.") from None
-            result = remote(host, req, output, self.stopping)
+            ran = True
+            result = remote(host, req, output, stop)
             invalidate_readiness()   # before the job turns terminal: no window in which an old proof reads as Ready
             add('', True); text = window.text()
             with self.store.lock: clean = scrub(text, self.store.state)
@@ -908,11 +1013,14 @@ class LabOperations:
             finished = stamp()
             if succeeded: self.record_deployment(ident, finished)
         except Exception as exc:
-            message = str(exc) if type(exc) is ValueError else 'SSH connection or operation failed. Inspect the VM before retrying.'
+            stopped = isinstance(exc, OperationStopped)
+            if stopped and self.stopping.is_set(): message = 'Operation connection interrupted. Inspect the lab before retrying.'
+            else: message = str(exc) if type(exc) is ValueError else 'SSH connection or operation failed. Inspect the VM before retrying.'
             add('', True); text = window.text()
             with self.store.lock: clean = scrub(text, self.store.state); message = scrub(message, self.store.state)
             try:
-                update(status='interrupted' if self.stopping.is_set() else 'failed', finished=stamp(), output=clean, message=message)
+                if stopped and not self.stopping.is_set(): self.finish_stopped(ident, host, req, ran, clean)
+                else: update(status='interrupted' if self.stopping.is_set() else 'failed', finished=stamp(), output=clean, message=message)
             except OSError:
                 pass  # update retained the terminal state in memory; restart reconciles disk.
         else:
@@ -934,4 +1042,4 @@ class LabOperations:
             except OSError:
                 pass  # The discovery loop retries storage failures independently.
             finally:
-                with self.store.lock: self.active.discard(ident)
+                with self.store.lock: self.active.discard(ident); self.cancels.pop(ident, None)

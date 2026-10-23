@@ -169,7 +169,7 @@ Every submitted host command requires a preview and confirmation. Review tokens
 expire after five minutes and bind the VM connection, original file digest and
 relevant deployment state. A change requires another preview. Output and outcome
 persist in **Operation history…** (Manager ▾ or Lab actions ▾ › Advanced options); interrupted jobs require
-inspection before retrying. Lifecycle commands can interrupt CLI sessions. Manager
+inspection before retrying. A running lifecycle command (deploy, redeploy, destroy, apply, start, stop, restart, save) can be stopped with `POST /api/operations/{id}/cancel`: the manager closes its SSH channel, the helper ends containerlab's process group, the job stays busy until the helper's host lock is free (up to 20 seconds), and it then reads `cancelled` with the repair for that action (for example Redeploy lab after a stopped deploy); a stopped deploy never records a deployment time. Lifecycle commands can interrupt CLI sessions. Manager
 backups/import changes are blocked during an active lab operation.
 
 Before it plans a command on an existing topology file (the lifecycle commands, *Restart

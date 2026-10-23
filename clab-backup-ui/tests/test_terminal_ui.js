@@ -1,20 +1,28 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const source=fs.readFileSync(path.join(__dirname,'../app/static/terminal.js'),'utf8');
+const source=fs.readFileSync(path.join(__dirname,'../app/static/terminal.js'),'utf8'),clipboardSource=fs.readFileSync(path.join(__dirname,'../app/static/clipboard.js'),'utf8');
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));};
-function harness({hash='#lab=l1&node=r1&label=Demo',protocol='http:',reply=()=>({ok:true,body:{ticket:'T1',endpoint:'admin@172.20.20.2'}}),deferred=false}={}){
- const elements=new Map(),sockets=[],fetched=[],written=[],handlers={};let term=null,pending=null;
- function $(id){if(!elements.has(id))elements.set(id,{textContent:'',hidden:false,disabled:false,href:'',title:'',removeAttribute(name){this[name]='';}});return elements.get(id);}
- const document={getElementById:$,title:''};
- class Terminal{constructor(options){term=this;this.options=options;this.cols=100;this.rows=30;this.focused=0;this.resets=0;}loadAddon(){}open(){}onData(fn){this.dataHandler=fn;}write(bytes){written.push(bytes);}reset(){this.resets++;}focus(){this.focused++;}}
+// A buffer of rows [text, isWrapped] the way xterm's IBuffer shows them.
+function fakeBuffer(rows,viewportY=0){return {length:rows.length,viewportY,getLine:i=>rows[i]?{isWrapped:!!rows[i][1],translateToString:()=>rows[i][0]}:undefined};}
+function harness({hash='#lab=l1&node=r1&label=Demo',protocol='http:',reply=()=>({ok:true,body:{ticket:'T1',endpoint:'admin@172.20.20.2'}}),deferred=false,store=undefined,throwStorage=false,clipboardWrites}={}){
+ const elements=new Map(),sockets=[],fetched=[],written=[],handlers={},downloads=[],copied=[],timers=[],fitted={count:0};let term=null,pending=null;
+ function $(id){if(!elements.has(id)){const attrs={},listeners={};elements.set(id,{id,textContent:'',hidden:false,disabled:false,href:'',title:'',removeAttribute(name){this[name]='';},attrs,listeners,
+   setAttribute(n,v){attrs[n]=String(v);},getAttribute(n){return n in attrs?attrs[n]:null;},addEventListener(type,fn){listeners[type]=fn;},
+   focus(){document.activeElement=this;},press(init){const event={type:'keydown',prevented:false,preventDefault(){this.prevented=true;},...init};listeners.keydown?.(event);return event;}});}return elements.get(id);}
+ const document={getElementById:$,title:'',activeElement:null,createElement:()=>({click(){downloads.push({href:this.href,download:this.download});}})};
+ class Terminal{constructor(options){term=this;this.options=options;this.cols=100;this.rows=30;this.focused=0;this.resets=0;this.selection='';this.cleared=0;this.buffer={active:fakeBuffer([]),normal:fakeBuffer([])};}loadAddon(){}open(){}onData(fn){this.dataHandler=fn;}write(bytes){written.push(bytes);}reset(){this.resets++;}focus(){this.focused++;}
+  getSelection(){return this.selection;}clear(){this.cleared++;}attachCustomKeyEventHandler(fn){this.keyHandler=fn;}}
  class WebSocket{constructor(url){this.url=url;this.readyState=0;this.sent=[];this.closed=0;sockets.push(this);}send(data){this.sent.push(data);}close(){this.closed++;this.readyState=3;}}
  WebSocket.OPEN=1;
+ const storage=store?{getItem:k=>(k in store?store[k]:null),setItem:(k,v)=>{if(throwStorage)throw new Error('blocked');store[k]=String(v);}}:undefined;
+ const navigator={clipboard:{writeText:async text=>{copied.push(text);}}};
  const fetch=(url,options={})=>{fetched.push({url,options});const answer=reply(url,options);const result={ok:answer.ok,json:async()=>answer.body??{}};
   if(!deferred)return Promise.resolve(result);return new Promise(resolve=>{pending=()=>resolve(result);});};
- const c=vm.createContext({document,fetch,Terminal,WebSocket,URLSearchParams,JSON,Uint8Array,ArrayBuffer,Error,String,Math,encodeURIComponent,
-  FitAddon:{FitAddon:class{fit(){this.fits=(this.fits||0)+1;}}},ResizeObserver:class{observe(){}},
+ const c=vm.createContext({document,fetch,Terminal,navigator,Blob:class{constructor(parts,options){this.parts=parts;this.type=options.type;}},URL:{createObjectURL:b=>'blob:'+b.parts.join(''),revokeObjectURL(){}},Date,setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},WebSocket,URLSearchParams,JSON,Uint8Array,ArrayBuffer,Error,String,Math,encodeURIComponent,
+  FitAddon:{FitAddon:class{fit(){fitted.count++;}}},ResizeObserver:class{observe(){}},
   location:{hash,protocol,host:'manager:8080'},window:{addEventListener(name,fn){handlers[name]=fn;}}});
- vm.runInContext(source,c);
- return {c,$,sockets,fetched,written,handlers,document,term:()=>term,release:()=>pending()};
+ if(storage)c.localStorage=storage;
+ vm.runInContext(clipboardSource,c);vm.runInContext(source,c);
+ return {c,$,sockets,fetched,written,handlers,document,downloads,copied,timers,fitted,term:()=>term,release:()=>pending()};
 }
 test('script parses and connects with a single-use ticket over a same-origin WebSocket',async()=>{
  const {$,sockets,fetched,document,term}=harness();
@@ -92,4 +100,116 @@ test('leaving the page closes the socket',async()=>{
  const {sockets,handlers}=harness();
  await settle();sockets[0].onopen();assert.equal(typeof handlers.beforeunload,'function');
  handlers.beforeunload();assert.equal(sockets[0].closed,1);
+});
+
+// ---- terminal tools (C02 section 1) ----
+const key=(init)=>({type:'keydown',altKey:false,ctrlKey:false,metaKey:false,shiftKey:false,prevented:false,preventDefault(){this.prevented=true;},...init});
+test('text size is clamped to 11..18 px, the bounds disable their button and focus moves to the sibling',()=>{
+ const h=harness({store:{}}),{$,term}=h;
+ assert.equal(term().options.fontSize,14);
+ for(let i=0;i<10;i++)$('font-up').onclick({detail:0});
+ assert.equal(term().options.fontSize,18);assert.equal($('font-up').disabled,true);assert.equal($('font-down').disabled,false);assert.equal($('tools-status').textContent,'Text size 18 px');
+ for(let i=0;i<10;i++)$('font-down').onclick({detail:0});
+ assert.equal(term().options.fontSize,11);assert.equal($('font-down').disabled,true);assert.equal($('font-up').disabled,false);
+ $('font-up').focus();for(let i=0;i<7;i++)$('font-up').onclick({detail:0});
+ assert.equal($('font-up').disabled,true);assert.equal(h.document.activeElement,$('font-down'),'the disabled button gives up focus');
+ $('font-reset').onclick({detail:0});assert.equal(term().options.fontSize,14);assert.equal($('font-up').disabled,false);assert.equal($('font-down').disabled,false);
+});
+test('a size change refits the terminal and the remembered size is read back; blocked storage is tolerated',()=>{
+ const store={},a=harness({store});const before=a.fitted.count;a.$('font-up').onclick({detail:0});
+ assert.equal(store['clab.terminal.fontSize'],'15');assert.equal(a.fitted.count,before+1,'a size change refits once');
+ assert.equal(harness({store}).term().options.fontSize,15);
+ assert.equal(harness({store:{'clab.terminal.fontSize':'99'}}).term().options.fontSize,18);
+ assert.equal(harness({store:{'clab.terminal.fontSize':'junk'}}).term().options.fontSize,14);
+ const blocked=harness({store:{},throwStorage:true});blocked.$('font-up').onclick({detail:0});assert.equal(blocked.term().options.fontSize,15);
+ assert.equal(harness().term().options.fontSize,14,'no storage at all');
+});
+test('Alt+ArrowUp changes the size once and is swallowed on keydown, keypress and keyup; other keys pass',()=>{
+ const {term}=harness({store:{}}),t=term();
+ const chord={altKey:true,key:'ArrowUp'};
+ const down=key({...chord});assert.equal(t.keyHandler(down),false);assert.equal(t.options.fontSize,15);assert.equal(down.prevented,true);
+ assert.equal(t.keyHandler(key({...chord,type:'keypress'})),false);assert.equal(t.keyHandler(key({...chord,type:'keyup'})),false);assert.equal(t.options.fontSize,15);
+ assert.equal(t.keyHandler(key({altKey:true,key:'ArrowDown'})),false);assert.equal(t.options.fontSize,14);
+ t.keyHandler(key({altKey:true,key:'ArrowUp'}));t.keyHandler(key({altKey:true,key:'0',code:'Digit0'}));assert.equal(t.options.fontSize,14);
+ for(const other of [{key:'a'},{key:'c',ctrlKey:true},{key:'ArrowUp'},{key:'ArrowUp',altKey:true,shiftKey:true},{key:'Insert'},{key:'C',ctrlKey:true,shiftKey:true}])
+  for(const type of ['keydown','keypress','keyup'])assert.equal(t.keyHandler(key({...other,type})),true,JSON.stringify(other)+type);
+});
+test('Ctrl+Insert copies the selection once, without preventDefault, and is swallowed on every event type',async()=>{
+ const h=harness({store:{}}),t=h.term();t.selection='show version';
+ const down=key({ctrlKey:true,key:'Insert'});assert.equal(t.keyHandler(down),false);assert.equal(down.prevented,false);
+ assert.equal(t.keyHandler(key({ctrlKey:true,key:'Insert',type:'keypress'})),false);assert.equal(t.keyHandler(key({ctrlKey:true,key:'Insert',type:'keyup'})),false);
+ await settle();assert.deepEqual(h.copied,['show version']);assert.equal(h.$('tools-status').textContent,'Copied');
+});
+test('Copy selection with nothing selected says so and copies nothing; Copy screen and Clear',async()=>{
+ const h=harness({store:{}}),t=h.term();
+ h.$('copy-selection').onclick({detail:0});await settle();assert.equal(h.$('tools-status').textContent,'Nothing is selected');assert.deepEqual(h.copied,[]);
+ t.buffer.active=fakeBuffer([['R1# show ver  '],['Arista'],['']],0);t.rows=3;
+ h.$('copy-screen').onclick({detail:0});await settle();assert.deepEqual(h.copied,['R1# show ver\nArista']);
+ h.$('clear').onclick({detail:0});assert.equal(t.cleared,1);assert.equal(h.$('tools-status').textContent,'Screen cleared. The device was not told.');
+ assert.equal(h.sockets.length<=1,true);
+});
+test('a failed copy reports the Ctrl+Insert sentence and never says Copied',async()=>{
+ const h=harness({store:{}}),t=h.term();t.selection='x';
+ h.c.navigator={};h.c.document.createElement=()=>{throw new Error('no dom');};
+ h.$('copy-selection').onclick({detail:0});await settle();
+ assert.equal(h.$('tools-status').textContent,'Could not copy. Select the text and press Ctrl+Insert.');
+});
+test('Alt+T focuses the toolbar current button',()=>{
+ const h=harness({store:{}}),t=h.term();
+ const e=key({altKey:true,key:'t',code:'KeyT'});assert.equal(t.keyHandler(e),false);assert.equal(e.prevented,true);assert.equal(h.document.activeElement,h.$('font-down'));
+ assert.equal(t.keyHandler(key({altKey:true,key:'t',code:'KeyT',type:'keyup'})),false);
+ h.$('copy-screen').focus();h.$('copy-screen').listeners.focus();h.document.activeElement=null;
+ t.keyHandler(key({altKey:true,key:'T',code:'KeyT'}));assert.equal(h.document.activeElement,h.$('copy-screen'));
+});
+test('the toolbar is a roving tabindex: one stop, ArrowLeft and ArrowRight move, Home and End jump',()=>{
+ const h=harness({store:{}});const stops=()=>['font-down','font-up','font-reset','copy-selection','copy-screen','clear','export-screen','export-session'].filter(id=>h.$(id).getAttribute('tabindex')==='0');
+ h.$('font-down').focus();h.$('font-down').listeners.focus?.();
+ const bar=h.$('terminal-tools');
+ bar.press({key:'ArrowRight'});assert.equal(h.document.activeElement,h.$('font-up'));assert.deepEqual(stops(),['font-up']);
+ bar.press({key:'ArrowLeft'});bar.press({key:'ArrowLeft'});assert.equal(h.document.activeElement,h.$('export-session'),'wraps');assert.deepEqual(stops(),['export-session']);
+ bar.press({key:'Home'});assert.equal(h.document.activeElement,h.$('font-down'));bar.press({key:'End'});assert.equal(h.document.activeElement,h.$('export-session'));
+ const tab=bar.press({key:'Tab'});assert.equal(tab.prevented,false,'Tab leaves the toolbar');
+});
+test('a pointer activation hands focus back to the terminal; Enter or Space on the button does not',()=>{
+ const h=harness({store:{}}),t=h.term(),before=t.focused;
+ h.$('font-up').onclick({detail:0});assert.equal(t.focused,before);
+ h.$('font-up').onclick({detail:1});assert.equal(t.focused,before+1);
+ h.$('clear').onclick({detail:0});assert.equal(t.focused,before+1);h.$('clear').onclick({detail:2});assert.equal(t.focused,before+2);
+});
+test('rowsText joins wrapped rows without a newline, trims only at the end of a logical line and drops trailing blanks',()=>{
+ const {c}=harness();
+ const text=rows=>{c.__rows=fakeBuffer(rows);return vm.runInContext('rowsText(__rows,0,__rows.length-1)',c);};
+ assert.equal(text([['interface Ethernet1 descri'],['ption uplink   ',true],['!'],['  keep   indent  '],['',false],['x'],['',false],['']]),'interface Ethernet1 description uplink\n!\n  keep   indent\n\nx');
+ assert.equal(text([['abc '],['def',true],['ghi',true]]),'abc defghi','a space at the wrap point stays');
+ assert.equal(text([[''],['']]),'');
+ assert.equal(text([['tail',true],['next']]),'tail\nnext','a screen that starts on a wrapped row still starts a line');
+});
+test('screenText reads the viewport of the active buffer and sessionText the normal buffer, also while the alternate screen is active',()=>{
+ const {c,term}=harness(),t=term();
+ t.rows=2;t.buffer.normal=fakeBuffer([['one'],['two'],['three'],['four']]);t.buffer.active=fakeBuffer([['alt-a'],['alt-b'],['alt-c']],1);
+ assert.equal(vm.runInContext('screenText()',c),'alt-b\nalt-c');assert.equal(vm.runInContext('sessionText()',c),'one\ntwo\nthree\nfour');
+});
+test('exportName keeps only safe characters and falls back to lab and device',()=>{
+ const {c}=harness(),d=new Date(Date.UTC(2026,9,23,10,11,12,345)),name=(a,b)=>{c.__a=a;c.__b=b;c.__d=d;return vm.runInContext('exportName(__a,__b,__d)',c);};
+ assert.equal(name('Demo Lab','r1'),'Demo-Lab-r1-20261023T101112Z.txt');
+ assert.equal(name('../../etc','a/b\\c:d'),'etc-a-b-c-d-20261023T101112Z.txt');
+ assert.equal(name('','…'),'lab-device-20261023T101112Z.txt');assert.equal(name('.hidden','r_1.2-x'),'hidden-r_1.2-x-20261023T101112Z.txt');
+});
+test('Save as text downloads in the browser only: nothing goes over fetch or the socket, and the 3,000 line limit is named',async()=>{
+ const h=harness({store:{}}),t=h.term();await settle();h.sockets[0].readyState=1;h.sockets[0].onopen();
+ const fetched=h.fetched.length,sent=h.sockets[0].sent.length;
+ t.rows=2;t.buffer.active=fakeBuffer([['a'],['b']]);t.buffer.normal=fakeBuffer([['a'],['b']]);
+ h.$('export-screen').onclick({detail:0});
+ assert.equal(h.downloads.length,1);assert.match(h.downloads[0].download,/^Demo-r1-\d{8}T\d{6}Z\.txt$/);assert.equal(h.downloads[0].href,'blob:a\nb\n');
+ assert.equal(h.$('tools-status').textContent,'Saved on this computer only. The manager keeps no copy of this session.');
+ t.buffer.normal=fakeBuffer(Array.from({length:3000},(_,i)=>['line '+i]));
+ h.$('export-session').onclick({detail:0});assert.equal(h.downloads.length,2);assert.match(h.$('tools-status').textContent,/the last 3,000 lines/);
+ t.buffer.normal=fakeBuffer([]);t.buffer.active=fakeBuffer([]);h.$('export-session').onclick({detail:0});assert.equal(h.downloads[2].href,'blob:\n','an empty buffer exports one empty line');
+ assert.equal(h.fetched.length,fetched);assert.equal(h.sockets[0].sent.length,sent);
+});
+test('a reconnect clears the screen and says so, the first connection does not; the size persists',async()=>{
+ const h=harness({store:{}});await settle();h.$('font-up').onclick({detail:0});
+ h.sockets[0].onopen();assert.notEqual(h.$('tools-status').textContent,'Reconnected; the previous screen was cleared');
+ h.$('connect').onclick();await settle();h.sockets[1].onopen();
+ assert.equal(h.$('tools-status').textContent,'Reconnected; the previous screen was cleared');assert.equal(h.term().options.fontSize,15);
 });
