@@ -817,3 +817,12 @@ are binding and are marked.
 | Low: an idempotent repeat logged `capture.launch` again and reset the record's `started` | Accepted: `begin()` runs only for a session id not yet in `known` | §2.3; `capture.py` |
 | Cosmetic: the dialog and plan say `label: port` while the session rows show the NOS name from `displayed_interface` | Open: one naming rule needs the NOS name on the link ends or a plan wording change with many pinned sentences; recorded for the release's handoff | §3.1 |
 | Held with a note: the pre-check excludes only the current (possibly narrowed) set's ids, which counts a request's already started sessions; the single form also returns `sessions` and `refused` (additive); the public row carries no `started` | Accepted as more accurate than §2.2 step 4 and consistent with §2.2 step 6 and §2.3 | §2.2, §2.3 |
+
+## 11. Live-pass answers (the parity lab, the real session service, 2026-10-23)
+
+| Finding | Answer | Where |
+|---|---|---|
+| Every step held: both ends from a wire click (one set request, two viewers), one end from the menu, All connected as one Wireshark on `ceos`, the page's pre-check at four and at three sessions, End all my sessions emptying the list and the containers, memory written only after a full success and ignored by a menu item | Recorded in VALIDATION; no change | §3, §4 |
+| Cosmetic: two sessions on the same end share a row label | Open with §10's naming rule: the row gains the session's start time or the NOS name once one rule covers the dialog and the card | §3.3 |
+| Log only: the relay logs a `WebSocketDisconnect` traceback when the viewer closed first; an optional viewer asset (`core/rfb.js`) answers 404 | Accepted as noise: `desktop` may catch the disconnect on close in a later tidy; the asset probe is the viewer's own and harmless | `capture_sessions.py` |
+| The Tools card shows the caption and End all; the labelled rows live in the dialog's session list | As designed (§3.3) | §3.3 |
