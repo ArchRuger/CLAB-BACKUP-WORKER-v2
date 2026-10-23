@@ -455,7 +455,11 @@ class LabOperations:
         # browse gained a files mode and images its details there; the helper modes behind them are unchanged.
 
         @app.post('/api/operations/read')
-        def read(data: Request): return self.invoke({'mode': 'read', 'path': data.path})
+        def read(data: Request):
+            # The helper also reads configuration names and .md for the redacted viewer (device_diagnostics /view);
+            # this raw route keeps the file types it always served.
+            if not data.path.lower().endswith(('.yaml', '.yml', '.json', '.drawio', '.txt', '.cfg', '.conf', '.set')): raise HTTPException(409, 'This file type cannot be viewed in the manager.')
+            return self.invoke({'mode': 'read', 'path': data.path})
 
         @app.get('/api/operations/popular')
         def popular(): return self.invoke({'mode': 'popular'})

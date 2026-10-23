@@ -1467,15 +1467,17 @@ class FakeStopChannel:
 
 
 class FakeStopClient:
-    def __init__(self, script, log, on_connect=None, on_exec=None):
-        self.script = script; self.log = log; self.on_connect = on_connect; self.on_exec = on_exec
+    def __init__(self, script, log, on_connect=None, on_exec=None, on_open=None):
+        self.script = script; self.log = log; self.on_connect = on_connect; self.on_exec = on_exec; self.on_open = on_open
     def set_missing_host_key_policy(self, policy): pass
     def connect(self, **options):
         self.log.append('connect')
         if self.on_connect: self.on_connect()
     def get_transport(self): return self
     def set_keepalive(self, seconds): pass
-    def open_session(self, timeout=None): return FakeStopChannel(self.script, self.log, self.on_exec)
+    def open_session(self, timeout=None):
+        if self.on_open: self.on_open()
+        return FakeStopChannel(self.script, self.log, self.on_exec)
     def close(self): self.log.append('close')
 
 
@@ -1667,6 +1669,12 @@ class OperationStopTests(unittest.TestCase):
         self.assertEqual(record['status'], 'cancelled')
         self.assertEqual(record['message'], 'You stopped Start lab before it started. Nothing was changed on the VM.')
         self.assertEqual(log, ['connect', 'close'], 'nothing sent, no follow-up probe')
+
+    def test_a_stop_while_the_session_opens_through_execute_is_the_queued_wording_and_never_execs(self):
+        record, log = self.execute_over_fake_ssh(lambda hook: [b''], where='on_open')
+        self.assertEqual(record['status'], 'cancelled')
+        self.assertEqual(record['message'], 'You stopped Start lab before it started. Nothing was changed on the VM.')
+        self.assertEqual(log, ['connect', 'close'], 'the second unsent-stop check ends before exec_command')
 
     def test_a_cross_origin_stop_is_refused_and_changes_nothing(self):
         with self.fixture(), patch.object(self.service, 'refresh'):

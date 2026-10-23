@@ -78,3 +78,15 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   (base `d00ccf1`, covering the fixes and the C03 helper and manager checkpoints), a QA re-check of the fixes, the
   full Python suite. Next: release 1.31.2 (C01, C02, the C03 helper and API; records drafted in the session), rebuild
   with `sudo bash deploy/start-manager.sh` because the helper changed, then the C03 UI slice.
+- 2026-10-23 04:45 UTC, **release 1.31.2** (C01, C02, the C03 helper and API): the second `/clab-review-changes`
+  (`d00ccf1..c3f3d94`, 21 confirmed, none must-fix) was answered in C02-DESIGN §8a and C03-DESIGN §10 and every
+  should-fix applied (log and viewer redaction across window cuts, the raw `/read` route kept to its old file types,
+  `container_prefix`, images, the terminal status row and Save session after Clear); the manager and helpers were
+  rebuilt from the tree and the diagnostics routes exercised live on `vrt` (VALIDATION). Built in parallel and NOT in
+  this release: the C03 UI slice (worktree `agent-a47614a36aae4bd74`, commit `ac73779`; `/clab-slice-verify` running),
+  `C04-DESIGN.md` (reviewed: 22 confirmed, 2 must-fix on the console-before-launcher race; the designer is answering
+  them in §9) and `C05-DESIGN.md` (lead's amendment §1.2: netem modes under a non-blocking flock with a request
+  digest; `/clab-design-review` running). Next: integrate the C03 UI slice onto this release (its `?v=` tag moves to
+  1.31.2, `test_device_diagnostics_ui.js` joins the CI node line, the deferred Try again mapping for start, apply and
+  restart lands with it), `/clab-review-changes`, a live pass on the parity lab, release 1.31.3; then C04 and C05
+  builds from their answered designs.

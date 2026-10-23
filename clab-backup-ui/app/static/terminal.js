@@ -36,7 +36,7 @@ async function connect(){
   get('endpoint').textContent=data.endpoint||'';
   if(request!==generation)return;
   const ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api/terminal');socket=ws;ws.binaryType='arraybuffer';
-  ws.onopen=()=>{ws.send(JSON.stringify({ticket:data.ticket}));terminal.reset();clearedText='';terminal.focus();if(opened)toolsStatus('Reconnected; the previous screen was cleared');opened=true;};
+  ws.onopen=()=>{ws.send(JSON.stringify({ticket:data.ticket}));terminal.reset();clearedText='';clearedLimited=false;terminal.focus();if(opened)toolsStatus('Reconnected; the previous screen was cleared');opened=true;};
   ws.onmessage=event=>{if(request!==generation)return;if(event.data instanceof ArrayBuffer)terminal.write(new Uint8Array(event.data));else{const message=JSON.parse(event.data);setStatus(message.message);if(message.message==='Connected')resize();}};
   // On close the reason (if any) is kept after "Disconnected" instead of being appended to whatever was shown.
   ws.onclose=()=>{if(request!==generation)return;socket=null;setConnectEnabled(true);const shown=get('status').textContent;const reason=/^(Connected|Connecting|Disconnected)/.test(shown)?'':shown;get('status').textContent=reason?'Disconnected — '+reason:'Disconnected';get('status').removeAttribute('title');};
@@ -46,7 +46,7 @@ async function connect(){
 // ---- terminal tools (docs/parity-campaign/C02-DESIGN.md section 1): text size, copy, clear, save as text; nothing is sent to the manager ----
 const TOOL_IDS=['font-down','font-up','font-reset','copy-selection','copy-screen','clear','export-screen','export-session'];
 let roving=0;
-// One line that never changes the toolbar's height (terminal.css); the full sentence is also the title for when it is cut short.
+// The sentence sits in its own two-line row that terminal.css reserves, so the toolbar's height never changes; it is also the title.
 function toolsStatus(text){const el=get('tools-status');if(el){el.textContent=text;el.title=text;}}
 function toolButton(id){return get(id);}
 function setRoving(index){roving=index;TOOL_IDS.forEach((id,i)=>{const b=toolButton(id);if(b)b.setAttribute('tabindex',i===index?'0':'-1');});}
@@ -88,8 +88,10 @@ function rowsText(buffer,from,to){
 }
 function screenText(){const b=terminal.buffer.active;return rowsText(b,b.viewportY,b.viewportY+terminal.rows-1);}
 // Clear drops the scrollback inside xterm; the session export keeps what was on the screen before it (the snapshot is taken by sessionText() just before clear()).
-let clearedText='';
-function sessionText(){const b=terminal.buffer.normal,now=rowsText(b,0,b.length-1);return clearedText?(now?clearedText+'\n'+now:clearedText):now;}
+// It never holds more than SCROLLBACK lines, and clearedLimited remembers that lines were already cut before or by a Clear.
+let clearedText='',clearedLimited=false;
+function sessionParts(){const b=terminal.buffer.normal,now=rowsText(b,0,b.length-1),all=(clearedText?(now?clearedText+'\n'+now:clearedText):now).split('\n');return {text:all.slice(-SCROLLBACK).join('\n'),cut:all.length>SCROLLBACK};}
+function sessionText(){return sessionParts().text;}
 function exportName(labText,deviceText,date,kind){
  const clean=(value,fallback)=>String(value??'').replace(/[^A-Za-z0-9_.-]+/g,'-').replace(/^[-.]+|-+$/g,'')||fallback;
  const stamp=date.toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'Z');
@@ -100,15 +102,20 @@ function download(text,filename){
  a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function exportText(kind){
- const text=(kind==='session'?sessionText():screenText())+'\n';
+ const parts=kind==='session'?sessionParts():null,text=(parts?parts.text:screenText())+'\n';
  download(text,exportName(labLabel,name,new Date(),kind==='session'?'session':'screen'));
- const limited=kind==='session'&&terminal.buffer.normal.length>=SCROLLBACK;
+ const limited=!!parts&&(clearedLimited||parts.cut||terminal.buffer.normal.length>=SCROLLBACK);
  toolsStatus('Saved on this computer only. The manager keeps no copy of this session.'+(limited?' The file holds the last 3,000 lines.':''));
 }
 async function copyTool(text,button){const ok=await copyText(text,button);toolsStatus(ok?'Copied':'Could not copy. Select the text and press Ctrl+Insert.');return ok;}
 async function copySelection(button){const text=terminal.getSelection();if(!text){toolsStatus('Nothing is selected');return false;}return copyTool(text,button||get('copy-selection'));}
 async function copyScreen(button){return copyTool(screenText(),button||get('copy-screen'));}
-function clearScreen(){const earlier=sessionText();terminal.clear();clearedText=earlier;toolsStatus('Screen cleared. The device was not told; Save session still includes the earlier lines.');}
+// terminal.clear() keeps the cursor row as the new first row, so the snapshot drops that row (the prompt) instead of repeating it.
+function clearScreen(){
+ const b=terminal.buffer.normal,parts=sessionParts(),lines=parts.text.split('\n'),kept=b.getLine(b.baseY+b.cursorY),keptText=kept&&!kept.isWrapped?kept.translateToString(true).replace(/\s+$/,''):null;
+ if(keptText&&lines[lines.length-1]===keptText)lines.pop();
+ clearedLimited=clearedLimited||parts.cut||b.length>=SCROLLBACK;
+ terminal.clear();clearedText=lines.join('\n');toolsStatus('Screen cleared. The device was not told; Save session still includes the earlier lines.');}
 // A button hands focus back to the terminal only after a pointer activation, so Enter on a button never reaches the device.
 function afterTool(event){if(event&&event.detail>0)terminal.focus();}
 const TOOL_ACTIONS={'font-down':()=>setFont(fontSize-1),'font-up':()=>setFont(fontSize+1),'font-reset':()=>setFont(FONT_DEFAULT),'copy-selection':()=>copySelection(),'copy-screen':()=>copyScreen(),'clear':clearScreen,'export-screen':()=>exportText('screen'),'export-session':()=>exportText('session')};

@@ -51,6 +51,9 @@ LINE_MASK = '[sensitive output omitted]'
 KEY_BEGIN = re.compile(r'-----BEGIN [^-]*PRIVATE KEY-----')
 KEY_END = re.compile(r'-----END [^-]*PRIVATE KEY-----')
 SENSITIVE_LINE = re.compile(r'(?i)^.*(?:password|passphrase|private.key|community|secret)\s*[:= ].*$')
+# View and log only (scrub() is unchanged): key-style secrets in configuration files, such as a Junos $9$ secret,
+# an authentication or pre-shared key, or an EOS/IOS `key 7 ...` line.
+KEY_STYLE_LINE = re.compile(r'(?i)^.*(?:\b(?:authentication-key|pre-shared-key|key\s+[0-9]\b)|\$9\$).*$')
 
 ESCAPE_CSI = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 ESCAPE_OSC = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?')
@@ -74,21 +77,28 @@ def strip_escapes(text):
 def redact_lines(lines, secrets, stamped=False):
     """Each line redacted on its own, with a private-key block carried across lines. With `stamped` a line
     is first split into its `--timestamps` stamp and its body and only the body is redacted, so a redacted
-    line keeps its stamp. Returns [(stamp, body)]; the stamp is '' for a line without one (or unstamped text)."""
-    result = []; in_key = False
+    line keeps its stamp. Returns [(stamp, body)]; the stamp is '' for a line without one (or unstamped text).
+    A window can start inside a block (docker --tail, the since cursor, a byte cut): an END marker seen with
+    no BEGIN before it in this window masks every earlier line of the window, and after an END a further
+    BEGIN on the same line opens the next block."""
+    result = []; in_key = False; seen_begin = False
     for line in lines:
         stamp = ''; body = line
         if stamped:
             match = STAMP.fullmatch(line)
             if match: stamp, body = match.group(1), match.group(2)
-        begin = KEY_BEGIN.search(body)
-        if in_key or begin:
-            ended = KEY_END.search(body, begin.end() if begin and not in_key else 0)
+        events = sorted([(m.start(), 'begin') for m in KEY_BEGIN.finditer(body)] + [(m.start(), 'end') for m in KEY_END.finditer(body)])
+        if in_key or events:
+            for _, kind in events:
+                if kind == 'begin': in_key = True; seen_begin = True
+                else:
+                    if not in_key and not seen_begin: result = [(at, KEY_BLOCK_MASK) for at, _ in result]   # the block began before this window
+                    in_key = False
             body = KEY_BLOCK_MASK
-            in_key = not ended
         else:
             for secret in secrets: body = body.replace(secret, SECRET_MASK)
             body = SENSITIVE_LINE.sub(LINE_MASK, body)
+            body = KEY_STYLE_LINE.sub(LINE_MASK, body)
         result.append((stamp, body))
     return result
 
@@ -182,7 +192,7 @@ class DeviceDiagnostics:
     def __init__(self, store, operations, discovery):
         self.store = store; self.operations = operations; self.discovery = discovery
         self.slots = threading.BoundedSemaphore(DIAGNOSTIC_SLOTS)
-        self.images_cache = None; self.images_lock = threading.Lock(); self.images_flight = threading.Lock()
+        self.images_cache = None; self.images_lock = threading.Lock()
 
     # The transport -----------------------------------------------------------------------------------------------
 
@@ -211,7 +221,7 @@ class DeviceDiagnostics:
             if not lab: raise HTTPException(404, 'Lab not found')
             node = next((n for n in lab['nodes'] if n['name'] == node_name), None)
             if not node: raise HTTPException(404, 'Device not found')
-            lab = {k: lab.get(k) for k in ('id', 'name', 'deployment_name', 'container_prefix', 'vm_project_path', 'vm_source')}
+            lab = {k: lab[k] for k in ('id', 'name', 'deployment_name', 'container_prefix', 'vm_project_path', 'vm_source') if k in lab}
             node = {k: node.get(k) for k in ('name', 'short_name', 'definition_node', 'kind', 'platform')}
         container = expected_container(lab, node)
         if not container:
@@ -230,7 +240,11 @@ class DeviceDiagnostics:
             source = lab.get('vm_source') if isinstance(lab.get('vm_source'), dict) else {}
             path = lab.get('vm_project_path') or ((source.get('files') or {}).get('definition') or {}).get('path', '')
         if not isinstance(path, str) or not path.startswith('/'): raise HTTPException(409, NO_FOLDER_SENTENCE)
-        return PurePosixPath(path).parent
+        folder = PurePosixPath(path).parent
+        cached = self.operations.cap_cache   # the cached capabilities answer; no new helper call
+        roots = cached[2].get('roots') if cached and isinstance(cached[2], dict) and isinstance(cached[2].get('roots'), list) else []
+        if any(isinstance(r, str) and PurePosixPath(r) == folder for r in roots): raise HTTPException(409, NO_FOLDER_SENTENCE)
+        return folder
 
     def secrets(self):
         with self.store.lock: return secret_values(self.store.state)
@@ -239,7 +253,7 @@ class DeviceDiagnostics:
 
     def vm_images(self):
         host = self.operations.host(); key = host.get('revision')
-        with self.images_flight:
+        with self.operations.image_flight:   # the one image question on the VM at a time, shared with image-check
             with self.images_lock:
                 if self.images_cache and self.images_cache[0] == key and self.images_cache[1] > time.monotonic(): return self.images_cache[2]
             result = self.ask({'mode': 'images'}, None)
@@ -271,7 +285,7 @@ class DeviceDiagnostics:
                     if '@' not in reference and reference not in missing: missing.append(reference)
                 names = used_by.setdefault(reference, [])
                 if name not in names: names.append(name)
-        return {**value, 'used_by': used_by, 'missing': missing}
+        return {**value, 'used_by': used_by, 'missing': missing if value['available'] else []}   # the VM said nothing when it has no Docker client
 
     # The routes --------------------------------------------------------------------------------------------------
 
@@ -373,5 +387,5 @@ class DeviceDiagnostics:
             if full == folder or folder not in full.parents: raise HTTPException(400, OUTSIDE_FOLDER_SENTENCE)
             result = self.ask({'mode': 'read', 'path': str(full)}, None)
             text = strip_escapes(result.get('text') if isinstance(result.get('text'), str) else '')
-            text, truncated = cut_last(text, VIEW_LIMIT)
-            return {'name': full.name, 'text': redact_text(text, self.secrets()), 'truncated': truncated}
+            text, truncated = cut_last(redact_text(text, self.secrets()), VIEW_LIMIT)   # redact the whole text, then cut
+            return {'name': full.name, 'text': text, 'truncated': truncated}

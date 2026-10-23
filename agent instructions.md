@@ -1,3 +1,32 @@
+# Parity campaign, chunks C01 and C02, the C03 helper and API — 1.31.2
+
+The campaign's plan, research and the per-chunk designs with their review answers are under
+`docs/parity-campaign/`; `PICKUP.md` there is the dated checkpoint. Preserve:
+
+1. **The stop model** (`lab_operations.py`, C02-DESIGN §3, §8). `OperationStopped` is raised only while no result line
+   has been read and nothing is buffered on the channel; a result that arrived before the stop keeps its outcome. The
+   stoppable set is one list in two places and a test pins `STOPPABLE == STATUS_STOPPABLE`; `cancelled` is in
+   `STATUS_OPERATION_FAILED` and `dismissedSet` in `app.js` derives from the status sets. After a stop the job stays
+   `running` with `cancel_requested` until a read-only `preview` proves the lock free (20 s at most); the lock sentence
+   is proven against the helper's source. The helper's heartbeat, not the manager, ends the process group.
+2. **`clipboard.js` loads before `operations.js`** on every page that loads it (`test_page_load_ui.js`); the fallback
+   text area is appended inside the open dialog and the focus is handed back to the source button; nothing from the
+   terminal page (copies, exports) reaches the manager; the toolbar's status line never changes the toolbar's height.
+3. **The helper's diagnostics modes run outside the host lock** with `container_of()` binding every container by its
+   `containerlab` and `clab-node-name` labels and the topology path under a trusted root; `read` opens through a
+   directory fd with `O_NOFOLLOW`; counters come from `/proc/<pid>/net/dev` through one directory fd with the
+   host-namespace check; the browser never names a container (`lab_id` and the manager's node name only).
+   `device_diagnostics.py` is installed before `LabOperations` and owns `browse`, `images`, `view`, `logs`,
+   `interfaces` and `netem`; the `images` reference list is unchanged. Log text is redacted per line on the manager and
+   never stored, logged or put in a job.
+4. **vJunos-router** has no `restore*` keys in PLATFORMS and no design driver until C10 proves the transaction live;
+   the catalog keeps the published image tag; the nested-virtualization derivative is test-only and never pushed.
+5. **Open points.** The C03 UI slice (`device-diagnostics.js`, the drawer's Interfaces and Logs, the inspect table's ID
+   and Owner, Lab files, Images on this VM) is built and verified separately. The `scrub` constants are duplicated in
+   `device_diagnostics.py` (a shared module would be better). The lab header overlaps its banner at 760 px while an
+   operation runs (pre-existing). The next chunks in order: C04 (console, container facts), C05 (impairments and the
+   mutating lifecycle modes), C06 to C09, C10 (the router restore proof); C11 waits for `@containerlab/clab-ui` 0.4.0.
+
 # Agent routing embedded in the repository — 1.31.1
 
 `.claude/` is the source of truth for how a session is staffed; `docs/AGENT-ROUTING.md` is the guide. Preserve:

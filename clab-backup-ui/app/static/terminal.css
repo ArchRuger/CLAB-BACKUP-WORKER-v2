@@ -83,8 +83,9 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .terminal-tools button { min-height: 30px; padding: 4px 10px; font-size: 12px; }
 .tools-sep { width: 1px; height: 18px; background: var(--control-line); margin: 0 4px; }
 /* A status sentence never changes the toolbar's height (a taller toolbar shrinks the terminal and sends the device a resize):
-   the box is the same with or without text, the sentence is cut with an ellipsis and also sits in the title. */
-#tools-status { flex: 1 1 0; min-width: 8em; min-height: 18px; margin-left: 6px; font-size: 12px; line-height: 18px; color: var(--rail-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+   it has a full-width row of its own that is two lines high with or without text, so the warning clauses at the end of the
+   long sentences stay readable (a longer one is clipped at two lines and also sits in the title). */
+#tools-status { flex: 1 1 100%; height: 36px; margin-left: 0; font-size: 12px; line-height: 18px; color: var(--rail-muted); white-space: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .copy-button { margin-left: 8px; min-height: 26px; padding: 2px 8px; font-size: 12px; }
 .copy-status { margin-left: 6px; font-size: 12px; color: var(--rail-muted); }
 .copy-sink { position: fixed; left: -9999px; top: 0; opacity: 0; }

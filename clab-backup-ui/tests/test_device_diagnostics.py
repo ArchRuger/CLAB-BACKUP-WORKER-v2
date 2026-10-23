@@ -47,6 +47,23 @@ class PureTests(unittest.TestCase):
         unfinished = redact_lines(['-----BEGIN PRIVATE KEY-----', 'abc', 'def'], [])
         self.assertEqual({b for _, b in unfinished}, {dd.KEY_BLOCK_MASK})
 
+    def test_a_window_that_starts_inside_a_key_block_masks_from_its_start_through_the_end_marker(self):
+        end = '-----END OPENSSH PRIVATE KEY-----'
+        got = redact_lines(['QUFBQUFBQUFBQUFBQUFBQQ==', 'b3BlbnNzaC1rZXktdjEAAAAA', end, 'ready'], [])
+        self.assertEqual([b for _, b in got], [dd.KEY_BLOCK_MASK] * 3 + ['ready'])
+        got = redact_lines([STAMP + ' QUFBQUFBQUFBQUFBQUFBQQ==', STAMP + ' b3Blbn', STAMP + ' ' + end, STAMP + ' ready'], [], stamped=True)
+        self.assertEqual(got, [(STAMP, dd.KEY_BLOCK_MASK)] * 3 + [(STAMP, 'ready')], 'stamps survive the masking')
+        both = redact_lines(['body-of-the-cut-block', end + ' -----BEGIN RSA PRIVATE KEY-----', 'second-block-body', '-----END RSA PRIVATE KEY-----', 'after'], [])
+        self.assertEqual([b for _, b in both], [dd.KEY_BLOCK_MASK] * 4 + ['after'], 'END then BEGIN on one line opens the next block')
+        whole = redact_lines(['before', '-----BEGIN PRIVATE KEY-----', 'abc', '-----END PRIVATE KEY-----', 'x'], [])
+        self.assertEqual([b for _, b in whole], ['before'] + [dd.KEY_BLOCK_MASK] * 3 + ['x'], 'a complete block keeps the lines before it')
+
+    def test_key_style_secrets_in_configuration_text_are_masked_for_view_and_logs_only(self):
+        lines = ['username a secret 9 xyz', 'authentication-key "$9$abcDEF"', 'ntp authentication-key 1 md5 abc', 'key 7 0822455D0A16', 'encrypted-password "$9$q1w2e3"',
+                 'pre-shared-key hexabc', 'monkey 12 bananas', 'hostname r1']
+        self.assertEqual([b for _, b in redact_lines(lines, [])], [dd.LINE_MASK] * 6 + ['monkey 12 bananas', 'hostname r1'])
+        self.assertEqual(scrub('key 7 0822455D0A16\n', {'host': {}, 'labs': []}), 'key 7 0822455D0A16\n', 'scrub() is unchanged')
+
     def test_the_shared_rules_give_the_answers_scrub_gives_for_lines_and_secrets(self):
         state = {'host': {'password': 'pw-secret'}, 'labs': []}
         text = 'ok\nPASSWORD: abc\nuse pw-secret now\nsnmp community public\nplain\n'
@@ -144,6 +161,29 @@ class DiagnosticsAPITests(unittest.TestCase):
             {'at': STAMP, 'text': dd.SECRET_MASK + ' leaked'}] + [{'at': STAMP, 'text': dd.KEY_BLOCK_MASK}] * 4 + [{'at': STAMP, 'text': 'done'}])
         self.assertNotIn('b3Blbn', response.text); self.assertNotIn('hunter2', response.text); self.assertNotIn('\\u001b', response.text)
 
+    def test_logs_window_that_starts_inside_a_key_block_does_not_leak_the_body_or_the_end_line(self):
+        self.start()
+        end = '-----END OPENSSH PRIVATE KEY-----'
+        self.answers['logs'] = {'facts': FACTS, 'text': '\n'.join([STAMP + ' b3BlbnNzaC1rZXktdjEAAAAA', STAMP + ' QUFBQUFBQUFBQQ==', STAMP + ' ' + end, STAMP + ' ready']) + '\n', 'truncated': True}
+        body = self.logs().json()
+        self.assertEqual([l['text'] for l in body['lines']], [dd.KEY_BLOCK_MASK] * 3 + ['ready'])
+        self.assertNotIn('b3Blbn', json.dumps(body)); self.assertNotIn('END OPENSSH', json.dumps(body))
+
+    def test_a_lab_stored_without_a_container_prefix_gets_the_default_container(self):
+        self.start(); self.answers['logs'] = {'facts': FACTS, 'text': '', 'truncated': False}
+        with self.store.lock: self.store.lab(self.lab_id).pop('container_prefix', None)
+        body = self.logs().json()
+        self.assertEqual(body['container'], 'clab-training-r1')
+        self.assertEqual(self.requests[-1][0]['options']['container'], 'clab-training-r1')
+
+    def test_logs_and_interfaces_are_bounded_at_their_caps(self):
+        self.start()
+        self.answers['logs'] = {'facts': FACTS, 'text': ''.join('line %d\n' % i for i in range(4001)), 'truncated': False}
+        lines = self.logs().json()['lines']
+        self.assertEqual((len(lines), lines[0]['text'], lines[-1]['text']), (dd.LOG_LINE_LIMIT, 'line 1', 'line 4000'))
+        self.answers['interfaces'] = {'facts': FACTS, 'interfaces': [{'name': 'eth%d' % i} for i in range(300)], 'counters': {}, 'sampled_at': 1.0}
+        self.assertEqual(len(self.get('interfaces', lab_id=self.lab_id, node=self.node).json()['interfaces']), dd.INTERFACE_LIMIT)
+
     def test_since_is_left_out_when_not_asked_and_the_default_tail_is_200(self):
         self.start(); self.answers['logs'] = {'facts': FACTS, 'text': '', 'truncated': False}
         self.assertEqual(self.logs().status_code, 200)
@@ -180,6 +220,15 @@ class DiagnosticsAPITests(unittest.TestCase):
         before = self.events()
         for path in ('interfaces', 'netem'): self.assertEqual(self.get(path, lab_id=self.lab_id, node=self.node).status_code, 200)
         self.assertEqual(self.events(), before)
+        marker = 'audit-marker-text-qq7'; where = 'distinctive-dir-zz9/notes-ww3.txt'
+        self.answers['read'] = {'path': 'p', 'text': marker + '\n', 'sha256': 'x'}
+        response = self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': where})
+        self.assertEqual((response.status_code, response.json()['text']), (200, marker + '\n'))
+        added = self.events()[len(before):].decode().strip().splitlines()
+        self.assertEqual(len(added), 1, added); self.assertIn('api.request', added[0]); self.assertIn('POST /api/operations/view -> 200', added[0])
+        for private in (marker, 'distinctive-dir-zz9', 'notes-ww3'):
+            self.assertNotIn(private.encode(), self.events(), private)
+            self.assertNotIn(private, json.dumps(self.store.state, default=str), private)
 
     def test_absent_container_is_not_an_error(self):
         self.start()
@@ -320,6 +369,39 @@ class DiagnosticsAPITests(unittest.TestCase):
         with self.store.lock: self.store.lab(self.lab_id)['vm_project_path'] = ''
         self.assertEqual(view('x').status_code, 409)
 
+    def test_view_masks_a_key_block_that_a_byte_cut_would_have_split(self):
+        self.start()
+        filler = ''.join('line %06d filler filler filler filler\n' % i for i in range(20))
+        body = ''.join('QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU2Nzg5%04d\n' % (i % 10000) for i in range(11000))   # about 580 KiB inside the key: the byte cut lands in the block
+        raw = filler + '-----BEGIN OPENSSH PRIVATE KEY-----\n' + body + '-----END OPENSSH PRIVATE KEY-----\nafter\n'
+        self.assertGreater(len(raw.encode()), dd.VIEW_LIMIT + 32 * 1024)
+        self.answers['read'] = {'path': 'p', 'text': raw, 'sha256': 'x'}
+        response = self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': 'big.txt'})
+        text = response.json()['text']
+        self.assertNotIn('QUJDREVG', text); self.assertNotIn('END OPENSSH', text); self.assertTrue(text.endswith('after\n'))
+        self.assertLessEqual(len(text.encode()), dd.VIEW_LIMIT)
+
+    def test_read_keeps_its_old_file_types_so_a_configuration_file_is_only_opened_redacted_by_view(self):
+        self.start(); folder = '/etc/containerlab/training/'
+        self.answers['read'] = lambda req: {'path': req['path'], 'text': 'username admin password 0 s3cret\n', 'sha256': 'x'}
+        read = lambda name: self.client.post('/api/operations/read', headers=self.auth, json={'path': folder + name})
+        for name in ('clab-training/r1/startup-config', 'README.md', 'clab-training/r1/juniper'):
+            response = read(name)
+            self.assertEqual((response.status_code, response.json()['detail']), (409, 'This file type cannot be viewed in the manager.'), name)
+        self.assertEqual(self.requests, [], 'refused before the helper is asked')
+        for name in ('training.clab.yaml', 'a.yml', 'a.json', 'a.drawio', 'a.txt', 'r1.cfg', 'juniper.conf', 'a.set', 'UPPER.YAML'):
+            self.assertEqual(read(name).status_code, 200, name)
+        view = self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': 'clab-training/r1/startup-config'})
+        self.assertEqual((view.status_code, view.json()['text']), (200, dd.LINE_MASK + '\n'))
+
+    def test_view_refuses_a_lab_folder_that_is_a_whole_trusted_root(self):
+        self.start(); self.answers['read'] = {'path': 'p', 'text': 'x\n', 'sha256': 'x'}
+        self.app.state.operations.cap_cache = ('rev', time.monotonic() + 60, {'roots': ['/etc/containerlab/training']})
+        response = self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': 'other-lab/startup-config'})
+        self.assertEqual((response.status_code, response.json()['detail']), (409, dd.NO_FOLDER_SENTENCE)); self.assertEqual(self.requests, [])
+        self.app.state.operations.cap_cache = ('rev', time.monotonic() + 60, {'roots': ['/etc/containerlab']})
+        self.assertEqual(self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': 'a.txt'}).status_code, 200)
+
     def test_view_replaces_stored_secrets(self):
         self.start()
         self.answers['read'] = {'path': 'p', 'text': 'login host-secret ok\n', 'sha256': 'x'}
@@ -343,6 +425,11 @@ class DiagnosticsAPITests(unittest.TestCase):
             {'name': 'clab-t', 'path': '/e/t/clab-t', 'directory': True, 'kind': 'directory'},
             {'name': 't.clab.yaml', 'path': '/e/t/t.clab.yaml', 'directory': False, 'kind': 'topology', 'size': 120},
             {'name': 'startup-config', 'path': '/e/t/startup-config', 'directory': False, 'kind': 'file', 'size': 2100}])
+        self.answers['browse'] = {'path': '/e', 'parent': '', 'entries': [
+            {'name': 'd', 'path': '/e/d', 'directory': True}, {'name': 'f.clab.yaml', 'path': '/e/f.clab.yaml', 'directory': False}]}
+        self.assertEqual(post(path='/e', files=True).json()['entries'], [
+            {'name': 'd', 'path': '/e/d', 'directory': True, 'kind': 'directory'}, {'name': 'f.clab.yaml', 'path': '/e/f.clab.yaml', 'directory': False, 'kind': 'topology'}],
+            'a helper without `kind` is read by its `directory` flag')
         self.assertEqual(post(path='/e', files='yes please').status_code, 422)
         self.assertEqual(post(path='/e', options={}).status_code, 422)
 
@@ -364,6 +451,12 @@ class DiagnosticsAPITests(unittest.TestCase):
             {'reference': 'alpine:latest', 'id': 'abc', 'size': '7.8MB', 'created': '2026-01-01', 'extra': 'x'}, 'junk']}
         body = self.get('images').json()
         self.assertEqual(body['details'], [{'reference': 'alpine:latest', 'id': 'abc', 'size': '7.8MB', 'created': '2026-01-01'}])
+        self.app.state.device_diagnostics.images_cache = None
+        self.answers['images'] = {'available': False, 'images': []}
+        body = self.get('images').json()
+        self.assertEqual(body['missing'], [], 'a VM without a Docker client said nothing about the lab images')
+        self.assertIn('alpine', ''.join(body['used_by']))
+        self.assertIs(self.app.state.device_diagnostics.operations.image_flight, self.app.state.operations.image_flight)
 
     def test_images_error_maps_like_the_other_routes(self):
         self.start(); self.answers['images'] = ValueError('Unknown request mode.')

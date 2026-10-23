@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const source=fs.readFileSync(path.join(__dirname,'../app/static/terminal.js'),'utf8'),clipboardSource=fs.readFileSync(path.join(__dirname,'../app/static/clipboard.js'),'utf8');
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));};
 // A buffer of rows [text, isWrapped] the way xterm's IBuffer shows them.
-function fakeBuffer(rows,viewportY=0){return {length:rows.length,viewportY,getLine:i=>rows[i]?{isWrapped:!!rows[i][1],translateToString:()=>rows[i][0]}:undefined};}
+function fakeBuffer(rows,viewportY=0,cursorY=Math.max(0,rows.length-1)){return {length:rows.length,viewportY,baseY:0,cursorY,getLine:i=>rows[i]?{isWrapped:!!rows[i][1],translateToString:()=>rows[i][0]}:undefined};}
 function harness({hash='#lab=l1&node=r1&label=Demo',protocol='http:',reply=()=>({ok:true,body:{ticket:'T1',endpoint:'admin@172.20.20.2'}}),deferred=false,store=undefined,throwStorage=false,clipboardWrites,fallback=false,blurOnDisable=false}={}){
  const elements=new Map(),sockets=[],fetched=[],written=[],handlers={},downloads=[],copied=[],timers=[],fitted={count:0};let term=null,pending=null;
  function $(id){if(!elements.has(id)){const attrs={},listeners={};elements.set(id,{id,textContent:'',hidden:false,href:'',title:'',removeAttribute(name){this[name]='';},attrs,listeners,
@@ -248,15 +248,32 @@ test('Clear keeps the earlier lines in Save session and says so; a reconnect sta
  t.rows=2;t.buffer.normal=fakeBuffer([['one'],['two'],['R1# ']]);t.buffer.active=t.buffer.normal;
  h.$('clear').onclick({detail:0});assert.equal(t.cleared,1);
  t.buffer.normal=fakeBuffer([['R1# '],['three']]);t.buffer.active=t.buffer.normal;   // xterm dropped the scrollback
- h.$('export-session').onclick({detail:0});assert.equal(h.downloads.at(-1).href,'blob:one\ntwo\nR1#\nR1#\nthree\n');
+ h.$('export-session').onclick({detail:0});assert.equal(h.downloads.at(-1).href,'blob:one\ntwo\nR1#\nthree\n','the prompt row xterm keeps is not repeated');
  h.$('export-screen').onclick({detail:0});assert.doesNotMatch(h.downloads.at(-1).href,/one/,'Save screen is the screen only');
  h.$('connect').onclick();await settle();h.sockets[1].onopen();
  t.buffer.normal=fakeBuffer([['fresh']]);h.$('export-session').onclick({detail:0});assert.equal(h.downloads.at(-1).href,'blob:fresh\n');
 });
-test('the tools status is one line: the sentence is also the title, and terminal.css keeps the box the same with or without text',()=>{
+test('after Clear, Save session names the 3,000 line limit when earlier lines were already cut, and repeated Clears stay capped',async()=>{
+ const h=harness({store:{}}),t=h.term();await settle();h.sockets[0].readyState=1;h.sockets[0].onopen();
+ const full=Array.from({length:3000},(_,i)=>['line '+i]);
+ t.buffer.normal=fakeBuffer(full);t.buffer.active=t.buffer.normal;h.$('clear').onclick({detail:0});
+ t.buffer.normal=fakeBuffer([['line 2999'],['next']]);t.buffer.active=t.buffer.normal;
+ h.$('export-session').onclick({detail:0});assert.match(h.$('tools-status').textContent,/The file holds the last 3,000 lines\./,'the limit is named although the live buffer is short');
+ const lines=h.downloads.at(-1).href.slice(5).split('\n');assert.equal(lines.length,3001,'3,000 lines plus the closing newline');assert.equal(lines.at(-2),'next');
+ h.$('clear').onclick({detail:0});h.$('clear').onclick({detail:0});t.buffer.normal=fakeBuffer([['x']]);
+ h.$('export-session').onclick({detail:0});assert.ok(h.downloads.at(-1).href.slice(5).split('\n').length<=3001,'repeated Clears never grow the export past the limit');
+ // without a Clear, a short session carries no note
+ const g=harness({store:{}}),u=g.term();await settle();u.buffer.normal=fakeBuffer([['a'],['R1#']]);g.$('clear').onclick({detail:0});u.buffer.normal=fakeBuffer([['R1#']]);
+ g.$('export-session').onclick({detail:0});assert.equal(g.downloads.at(-1).href,'blob:a\nR1#\n');assert.doesNotMatch(g.$('tools-status').textContent,/3,000/);
+ // a cursor row that differs from the last snapshot row is kept (nothing is dropped)
+ const k=harness({store:{}}),w=k.term();await settle();w.buffer.normal=fakeBuffer([['a'],['b'],['']],0,0);k.$('clear').onclick({detail:0});w.buffer.normal=fakeBuffer([['a']]);
+ k.$('export-session').onclick({detail:0});assert.equal(k.downloads.at(-1).href,'blob:a\nb\na\n');
+});
+test('the tools status keeps its own two-line row: the sentence is also the title, and terminal.css reserves the box with or without text',()=>{
  const h=harness({store:{}});h.$('clear').onclick({detail:0});assert.equal(h.$('tools-status').title,h.$('tools-status').textContent);
  const css=fs.readFileSync(path.join(__dirname,'../app/static/terminal.css'),'utf8'),rule=css.match(/#tools-status\s*\{([^}]*)\}/)[1];
- for(const part of [/white-space:\s*nowrap/,/overflow:\s*hidden/,/text-overflow:\s*ellipsis/,/min-width:\s*\d/,/flex:\s*1 1 /,/min-height:\s*\d/])assert.match(rule,part);
+ assert.match(rule,/flex:\s*1 1 100%/,'a row of its own');assert.match(rule,/(?:^|[;\s])height:\s*36px/,'a fixed height, not a min-height that text can outgrow');
+ assert.match(rule,/line-height:\s*18px/,'two lines fill the 36px');assert.match(rule,/white-space:\s*normal/);assert.match(rule,/overflow:\s*hidden/);assert.match(rule,/line-clamp:\s*2/);assert.doesNotMatch(rule,/nowrap|ellipsis/,'the warning clause is not cut to one line');
  assert.match(css.match(/\.terminal-tools\s*\{([^}]*)\}/)[1],/min-height:\s*\d+px/);
 });
 test('the notice names the Esc route to a shell\'s own Alt shortcuts',()=>{

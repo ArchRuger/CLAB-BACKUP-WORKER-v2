@@ -4,6 +4,50 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.31.2
+
+**Parity campaign, chunks C01 and C02, and the helper and API half of C03.** The campaign (feature parity with
+`containerlab-app` and the VS Code extension, within the manager's architecture) is recorded in
+[`docs/parity-campaign/`](parity-campaign/README.md): the research and gap matrix, each chunk's design with the
+answers to its reviews, the pickup log and the live evidence.
+
+- **A terminal toolbar** ([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md)). The CLI page gains text size (Smaller,
+  Larger, Reset; Alt+Up, Alt+Down, Alt+0; remembered per browser), Copy selection and Copy screen (Ctrl+Insert copies
+  the selection), Clear, and two text exports built in the browser alone, of the screen or of the whole session (the
+  manager keeps no copy of a session; Clear keeps the earlier lines in the session export). Alt+T moves the keyboard
+  to the toolbar. Wrapped lines are joined back when copied or exported. The chords act on key down only, so a
+  device never sees them.
+- **Copy buttons.** The device drawer's facts (name in the lab files, address and port, address only, container kind,
+  image) and the command output of an operation carry Copy, through the new `clipboard.js`: the Clipboard API on a
+  secure origin; on the plain `http://` address most students use, a hidden text area inside the open dialog, and
+  the focus returns to the button; a failure selects the value so Ctrl+C still works.
+- **Stop a running lab operation** ([LAB-OPERATIONS](LAB-OPERATIONS.md)). View output of a running Start, Redeploy,
+  Destroy, Stop devices, Restart, Restart device, Save configurations, Download lab or Inspect all offers **Stop this
+  operation…**, and the lab banner offers **Stop…**. The manager closes its channel to the VM helper, whose heartbeat
+  ends the containerlab process group; the job stays busy ("Stopping…") until a read-only probe proves the host lock
+  free (at most 20 s), then ends **Stopped by you** with the repair for that action (Redeploy lab, run Destroy lab
+  again, …), and Try again on a stopped deploy opens a redeploy review. A command whose result had already arrived is
+  never relabelled; a real error keeps its own message; the file actions (create, delete, publish, revise) and the
+  short inspect cannot be stopped and say so. New route `POST /api/operations/{id}/cancel` (body `{}`), answering
+  404, 409 and 202.
+- **The lab builder's Stop.** `lab-builder.html` now loads the status vocabulary, so a deploy started from the builder
+  can be stopped from its output window; the upstream editor's About entry is hidden on both editor pages.
+- **vJunos-router** (`juniper_vjunosrouter`, image `n24l/juniper_vjunos-router:26.2R1.7`): a managed kind for logins
+  (`admin` / `admin@123`, the image's published default), readiness, backups (download name
+  `vJunos-router_<node>_…cfg`), saves (`junos-display-set`), the lab-builder catalog and the Sync from VM mapping.
+  Restore and network design stay off for it until a live proof (the saved-version list says why). On a
+  nested-virtualization VM the published image's launcher (`-cpu host`) makes the inner Junos VM abort; the
+  campaign's lab runs a local derivative with the vJunos-switch CPU model (`docs/parity-campaign/PICKUP.md`, C00).
+- **Read-only diagnostics in the operations helper and the API** (the first half of C03; the device drawer sections
+  that show them are the next release). The helper gains `logs`, `interfaces` (with one counter sample from
+  `/proc/<pid>/net/dev`), `netem-show`, image details, lab-folder files and the containerlab version, dispatched
+  outside the host lock with a fixed argv each, every container bound by its labels and its topology path under a
+  trusted root, and `read` opening files with `O_NOFOLLOW`. The new `device_diagnostics.py` owns
+  `GET /api/operations/logs|interfaces|netem`, `GET /api/operations/images` (now with `details`, `used_by` and
+  `missing`; the reference list is unchanged), `POST /api/operations/browse` (a `files` mode) and
+  `POST /api/operations/view`, redacting log lines on the manager and never storing them; three calls are admitted at
+  once (a fourth answers 503). The helper's `VERSION` moves with the release, so the usual refresh installs it.
+
 ## Changes in 1.31.1
 
 **The agent routing lives in the repository**, and one application fix for a dependency change. The helpers moved by

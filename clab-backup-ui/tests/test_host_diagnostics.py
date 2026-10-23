@@ -452,6 +452,17 @@ class ReadModeTests(DiagnosticsHarness):
             with self.assertRaisesRegex(ValueError, 'Symlink'): self.host.read(str(link))
         self.assertTrue(target.read_text() == 'secret', 'nothing is written')
 
+    def test_a_symlinked_parent_directory_is_refused_by_the_directory_open_and_a_missing_parent_has_its_sentence(self):
+        real = self.root / 'real-dir'; real.mkdir(); (real / 'a.cfg').write_text('x\n')
+        link = self.root / 'linked-dir'; link.symlink_to(real)
+        # Past the by-path checks (the race): only O_NOFOLLOW on the parent stands between the link and a read.
+        with patch.object(HostOperations, 'path', lambda self, value, exists=True: Path(value)):
+            # Linux answers ENOTDIR (not ELOOP) for O_DIRECTORY | O_NOFOLLOW on a symlink, so the helper's
+            # sentence here is the missing-path one; what is pinned is that the link is refused and nothing is read.
+            with self.assertRaisesRegex(ValueError, 'Symlink|no longer exists'): self.host.read(str(link / 'a.cfg'))
+            with patch.object(Path, 'is_file', lambda self: True), patch.object(Path, 'stat', lambda self, **kw: os.stat_result((0o100644, 0, 0, 1, 0, 0, 1, 0, 0, 0))):
+                with self.assertRaisesRegex(ValueError, 'no longer exists'): self.host.read(str(self.root / 'gone-dir' / 'a.cfg'))
+
     def test_a_fifo_at_the_name_does_not_hang_and_is_refused(self):
         fifo = self.node / 'r1.cfg'; os.mkfifo(fifo)
         outcome = {}
@@ -508,6 +519,38 @@ class DispatchTests(unittest.TestCase):
             self.assertLess(source.index(line), lock, line + ' is dispatched outside the host lock')
         self.assertEqual(source.count('fcntl.flock('), 1, 'one host lock')
         self.assertEqual(len(re.findall(r"^\s+elif mode == '([a-z-]+)'", source, re.MULTILINE)), 8, 'read, browse, popular, images, image-check, logs, interfaces, netem-show')
+
+    def run_main(self, request, **methods):
+        """main() with the host lock held by someone else and a stub runner; returns (exit code, answer)."""
+        import contextlib, fcntl, io
+        from contextlib import redirect_stdout
+        from types import SimpleNamespace
+        root = Path(tempfile.mkdtemp()); self.addCleanup(lambda: __import__('shutil').rmtree(root, ignore_errors=True))
+        config = dict(clab='/usr/bin/containerlab', docker=str(root / 'no-docker'), roots=[str(root)], projects=str(root))
+        real_path, real_open = host_operations.Path, open
+        class ConfigFile:
+            def read_text(self): return json.dumps(config)
+        def fake_path(value): return ConfigFile() if value == '/etc/clab-manager/operations.json' else real_path(value)
+        lock_file = root / 'operations.lock'
+        def fake_open(name, *args, **kwargs): return real_open(lock_file if name == '/run/clab-manager-operations.lock' else name, *args, **kwargs)
+        stdin = SimpleNamespace(buffer=io.BytesIO(json.dumps(request).encode() + b'\n')); output = io.StringIO()
+        with open(lock_file, 'a') as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with patch.object(host_operations, 'Path', side_effect=fake_path), patch.object(host_operations, 'signal'), \
+                 patch.object(host_operations.sys, 'stdin', stdin), patch.object(host_operations, 'open', fake_open, create=True), \
+                 patch.object(host_operations.subprocess, 'Popen') as popen, redirect_stdout(output), \
+                 (patch.multiple(HostOperations, **methods) if methods else contextlib.nullcontext()):
+                code = host_operations.main()
+        popen.assert_not_called()
+        return code, json.loads(output.getvalue())
+
+    def test_the_read_only_modes_answer_while_the_host_lock_is_held(self):
+        code, answer = self.run_main({'mode': 'images'}, images=lambda self: {'available': False, 'images': []})
+        self.assertEqual((code, answer), (0, {'result': {'available': False, 'images': []}}))
+        code, answer = self.run_main({'mode': 'logs', 'name': 'parity', 'options': {}}, logs=lambda self, name, options: {'facts': {'present': False}})
+        self.assertEqual((code, answer), (0, {'result': {'facts': {'present': False}}}))
+        code, answer = self.run_main({'mode': 'preview', 'action': 'deploy', 'name': 'x', 'path': '/x', 'options': {}})
+        self.assertEqual((code, answer), (1, {'error': 'Another host lab operation is running.'}), 'the lock really is held')
 
     def test_nothing_execs_follows_writes_or_contacts_a_device(self):
         source = Path(host_operations.__file__).read_text()
