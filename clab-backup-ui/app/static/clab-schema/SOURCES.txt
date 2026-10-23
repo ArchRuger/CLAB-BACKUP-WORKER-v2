@@ -1,0 +1,5 @@
+# The containerlab topology schemas the lab builder's YAML check uses, verbatim from containerlab's repository, and
+# containerlab's licence (BSD-3-Clause, Nokia). Written by clab-backup-ui/lab-builder/fetch-schema.mjs; never edit a
+# schema by hand. Fields, two spaces apart: file, tag, source URL, sha256 digest, date fetched.
+0.79.0.json  v0.79.0  https://raw.githubusercontent.com/srl-labs/containerlab/v0.79.0/schemas/clab.schema.json  sha256 51a7025041d90fcded90911d4947773794464ccd903f01c03d5b2ff988f58d02  fetched 2026-10-23
+LICENSE  v0.79.0  https://raw.githubusercontent.com/srl-labs/containerlab/v0.79.0/LICENSE  sha256 cfa4516b59e739451d86b192c5e4aa15c42108e889e0eeceaa01e4aa956acbb7  fetched 2026-10-23
