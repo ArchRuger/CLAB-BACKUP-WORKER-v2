@@ -122,3 +122,34 @@ was saved with a recovery copy and the lab deployed.
   (both exercised by the browser runs only); the ≤900 px rule of the sticky review row was checked in a
   browser at 911 px, not below.
 - No student took part. Everything here is a browser walkthrough, failure injection and review.
+
+## 2026-10-23 · YAML panel checks against the VM's containerlab (parity chunk C08)
+
+What this entry records is the state of the YAML panel's Problems list as merged, its documentation, and the
+points that are not proven. It is not a test report: the checks that were run are in `clab-backup-ui/VALIDATION.md`.
+
+- **Gap closed.** A misspelt device setting (`imge:`), a `wait-for` naming a device that does not exist or forming a
+  loop, and a missing kind used to open, store and save without a word and fail at deploy. The panel now lists
+  them (*Error* / *Warning*, line, sentence), marks the gutter and, for errors, shows one line under the bar even
+  when the panel was never opened. Apply and Save are never blocked by it (a design decision, see
+  [C08-DESIGN.md](../parity-campaign/C08-DESIGN.md) section 1.4); the panel's refusals of a text the editor cannot
+  draw are unchanged.
+- **Source of the severities.** They come from `containerlab validate` probes made during the C08 design on a
+  development VM (containerlab 0.79.0; recorded in section 0 of the design), not from this entry: an unknown key at the
+  top of the file, under `mgmt`, on a device, in `stages` and in a `wait-for` entry, a missing or unknown kind, a
+  one-ended link and an unknown link endpoint were refused; the object form of a stage's `exec` was refused although
+  the 0.79.0 schema allows it (the binary wins in the rule). The same record says `validate` and `deploy --dry-run`
+  accepted a wait loop, a wait for a missing device and `stage: ready`.
+- **Not proven.** (1) That a real `deploy` refuses a wait loop or an unknown wait-for target: the sentence
+  *containerlab will not deploy the lab* follows the editor's own Stages tab and was not checked with a deploy; the
+  disposable loop lab named in the design (section 7.4) is the proof still to run. (2) Whether containerlab refuses an unknown key in
+  `defaults`, `kinds`, `groups`, a stage, an `exec` entry, `healthcheck` and the other sections not in
+  `BUILDER_PROBED_LEVELS`; those stay warnings until a probe is recorded in the constant. (3) That `healthy` never
+  completes on cEOS and cJunosEvolved on every VM: it was read from `docker ps` on one development VM. (4) The patch
+  releases between vendored schemas are treated as different releases, so findings there are warnings.
+- **Known limits.** No completion or hover (they come with the editor upgrade); the vendored schema is the
+  one at the containerlab tag, which is not the schema the editor package bundles (a snapshot of the upstream
+  main branch); a document nested deeper than 64 levels is reported as one error and not checked.
+- **Documented in** [LAB-BUILDER.md](../LAB-BUILDER.md) (*What the panel checks*, *Boot order (stages)*, *Vendoring the schema
+  of a newer containerlab*). Browser and live evidence for the panel is whatever VALIDATION.md and the C08 evidence
+  folder state; none is claimed here.

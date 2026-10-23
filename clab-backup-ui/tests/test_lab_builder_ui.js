@@ -492,3 +492,128 @@ test('the file drop zone takes file drags only and leaves the palette’s drags 
  }
  assert.equal(tasks.length,2,'only the two file drops open anything');
 });
+
+// ---- the topology check note under the bar (C08 S3, docs/parity-campaign/C08-DESIGN.md section 4.4) ---------------
+const SCHEMA=JSON.parse(fs.readFileSync(path.join(__dirname,'../app/static/clab-schema/0.79.0.json'),'utf8'));
+const isObj=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+function located(root){
+ let n=0;
+ const scalar=(v,line)=>({kind:'scalar',line,value:v,tag:v===null?'null':typeof v==='boolean'?'bool':typeof v==='number'?(Number.isInteger(v)?'int':'float'):'str'});
+ const value=(v,keyLine)=>{if(isObj(v)&&Object.keys(v).length)return map(v,false);if(Array.isArray(v)&&v.length)return seq(v);if(Array.isArray(v))return {kind:'seq',line:keyLine,items:[]};if(isObj(v))return {kind:'map',line:keyLine,items:[]};return scalar(v,keyLine);};
+ const map=(o,first)=>{const items=[];let line=0;Object.entries(o).forEach(([k,v],i)=>{const keyLine=i===0&&first?n:++n;if(i===0)line=keyLine;items.push({key:k,keyLine,value:value(v,keyLine)});});return {kind:'map',line,items};};
+ const seq=a=>({kind:'seq',line:n+1,items:a.map(v=>{if(isObj(v)&&Object.keys(v).length){++n;return map(v,true);}++n;if(Array.isArray(v)&&v.length){const line=n,s=seq(v);s.line=line;return s;}return value(v,n);})});
+ if(isObj(root)&&Object.keys(root).length)return map(root,false);
+ return value(root,1);
+}
+
+const settle=()=>new Promise(r=>setImmediate(r));
+const NOTE_TEXT='name: lab1\ntopology:\n  nodes:\n    a:\n      kind: arista_ceos\n      image: ceos:4.33\n      imge: x\n';
+const NOTE_DOC={name:'lab1',topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',imge:'x'}}}};
+const CLEAN_DOC={name:'lab1',topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33'}}}};
+const LOOP_DOC={name:'lab1',topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',stages:{create:{'wait-for':[{node:'b',stage:'healthy'}]}}},b:{kind:'linux',image:'x:1',stages:{create:{'wait-for':[{node:'a',stage:'create'}]}}}}}};
+// A page with the check and the panel scripts beside it, a fake adapter handle and timers that remember their delay.
+function notePage(doc=NOTE_DOC,{version='0.79.0'}={}){
+ const fetched=[],p=page({answer:url=>{if(url.startsWith('/static/clab-schema/')){fetched.push(url);return SCHEMA;}return {images:[]};}});
+ vm.runInContext(read('lab-builder-check.js'),p.c);vm.runInContext(read('lab-builder-yaml.js'),p.c);
+ const timers=[];p.c.setTimeout=(fn,ms)=>{timers.push({fn,ms});return timers.length;};
+ const handle={located:[],doc,locateYaml(text){handle.located.push(text);return {tree:located(handle.doc)};}};p.c.handle=handle;
+ p.run(`builderYaml.editor=handle;builderYamlContext({containerlab:${JSON.stringify(version)}});builderDraft=draftWrite(builderStore,{id:'new:lab1',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(NOTE_TEXT)}},undefined);`);
+ p.fired=async()=>{const due=timers.splice(0);for(const t of due)t.fn();for(let i=0;i<4;i++)await settle();};
+ p.timersNow=timers;p.fetched=fetched;p.handle=handle;return p;
+}
+test('persist() makes no synchronous check: the note’s timer is armed and the check runs only inside it',async()=>{
+ const p=notePage();let located_=0;const orig=p.c.builderYamlLocate;p.c.builderYamlLocate=t=>{located_++;return orig(t);};
+ const before=p.run('builderBlocked()');
+ p.run(`builderPage.persist(${JSON.stringify(NOTE_TEXT+'# edit\n')},'')`);
+ assert.equal(located_,0,'nothing parsed inside persist');assert.ok(p.timersNow.some(t=>t.ms===1200),'the note’s debounced timer');
+ await p.fired();assert.ok(located_>=1,'the timer ran the check');
+ assert.equal(p.run('builderBlocked()'),before,'advice never changes builderBlocked()');
+});
+test('the note shows one error with its line and message, Show in YAML and Dismiss; warnings alone show nothing',async()=>{
+ const p=notePage();p.run('builderCheckStatus()');await p.fired();
+ const note=p.el('builder-check');assert.equal(note.hidden,false);
+ assert.equal(p.el('builder-check-text').textContent,'1 error containerlab will refuse when deploying: line 7, `imge` is not a device setting containerlab 0.79.0 knows. Did you mean `image`? Open YAML to see it.');
+ const html=read('lab-builder.html');assert.match(html,/id="builder-check" role="status" hidden/);assert.match(html,/id="builder-check-show"[^>]*>Show in YAML</);assert.match(html,/id="builder-check-dismiss"[^>]*aria-label="[^"]+"[^>]*>Dismiss</);
+ p.handle.doc=CLEAN_DOC;p.run('builderCheckStatus()');await p.fired();assert.equal(note.hidden,true,'a clean text hides it');
+ const loose=notePage(NOTE_DOC,{version:'0.81.0'});loose.run('builderCheckStatus()');await loose.fired();assert.equal(loose.el('builder-check').hidden,true,'an unknown key is only a warning on another version');
+});
+test('an error that is an error on any version (a wait loop) shows although the version does not match',async()=>{
+ const p=notePage(LOOP_DOC,{version:'0.81.0'});p.run('builderCheckStatus()');await p.fired();
+ assert.equal(p.el('builder-check').hidden,false);assert.match(p.el('builder-check-text').textContent,/^1 error containerlab will refuse when deploying: line \d+, Devices wait for each other in a loop/);
+});
+test('two errors say how many and name the first',async()=>{
+ const doc={name:'lab1',topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',imge:'x',imgx:'y'}}}};
+ const p=notePage(doc);p.run('builderCheckStatus()');await p.fired();assert.match(p.el('builder-check-text').textContent,/^2 errors containerlab will refuse when deploying: the first is line 7, /);
+});
+test('the schema is asked for once from the note, and the rules that need none run before it arrives',async()=>{
+ const p=notePage();p.run('builderCheckStatus()');await p.fired();p.run('builderCheckStatus()');await p.fired();p.run('builderCheckStatus()');await p.fired();
+ assert.equal(p.fetched.length,1,'one fetch for the page’s life');assert.match(p.fetched[0],/^\/static\/clab-schema\/0\.79\.0\.json/);
+ // Before it arrives: a loop is found, a settings error is not.
+ const q=notePage(LOOP_DOC);let release;const gate=new Promise(r=>{release=r;});const loopFetch=q.c.fetch;q.c.fetch=async(u,i)=>{if(String(u).startsWith('/static/clab-schema/'))await gate;return loopFetch(u,i);};
+ q.run('builderCheckStatus()');for(const t of q.timersNow.splice(0))t.fn();await settle();assert.equal(q.el('builder-check').hidden,false,'shown with the schema-free rules');
+ release();for(let i=0;i<4;i++)await settle();assert.equal(q.el('builder-check').hidden,false);
+});
+test('Dismiss is remembered for that draft, text and count, and focus goes to Save (or the YAML button)',async()=>{
+ const p=notePage();let focused='';for(const id of ['builder-save','builder-yaml'])p.el(id).focus=()=>{focused=id;};
+ p.el('builder-save').disabled=false;p.run('builderCheckStatus()');await p.fired();p.el('builder-check-dismiss').onclick();
+ assert.equal(p.el('builder-check').hidden,true);assert.equal(focused,'builder-save');
+ p.run('builderCheckStatus()');await p.fired();assert.equal(p.el('builder-check').hidden,true,'the same draft, text and count stay dismissed');
+ p.handle.doc={name:'lab1',topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',imge:'x',imgx:'y'}}}};p.run('builderCheckStatus()');await p.fired();assert.equal(p.el('builder-check').hidden,false,'another count is news again');
+ p.el('builder-save').disabled=true;p.el('builder-check-dismiss').onclick();assert.equal(focused,'builder-yaml');
+});
+test('a locateYaml or builderCheck that throws hides the note and changes nothing else',async()=>{
+ const p=notePage();p.run('builderCheckStatus()');await p.fired();assert.equal(p.el('builder-check').hidden,false);
+ const blocked=p.run('builderBlocked()');
+ p.handle.locateYaml=()=>{throw new RangeError('Maximum call stack size exceeded');};
+ assert.doesNotThrow(()=>p.run(`builderPage.persist(${JSON.stringify(NOTE_TEXT+'# one\n')},'')`));await p.fired();
+ assert.equal(p.el('builder-check').hidden,true);assert.equal(p.run('builderUnstored'),null);assert.equal(p.run('builderPaused'),null);assert.equal(p.run('builderBlocked()'),blocked);assert.equal(p.el('root').inert,undefined);
+ assert.equal(p.run('builderDraft.yaml'),NOTE_TEXT+'# one\n','the edit was stored');
+ p.handle.locateYaml=()=>({tree:located(NOTE_DOC)});p.c.builderCheck=()=>{throw new Error('boom');};
+ assert.doesNotThrow(()=>p.run(`builderPage.persist(${JSON.stringify(NOTE_TEXT+'# two\n')},'')`));await p.fired();
+ assert.equal(p.el('builder-check').hidden,true);assert.equal(p.run('builderUnstored'),null);assert.equal(p.run('builderPaused'),null);assert.equal(p.run('builderBlocked()'),blocked);
+ // And a check that throws when the timer is armed cannot reach persist() either.
+ p.c.setTimeout=()=>{throw new Error('no timers');};assert.doesNotThrow(()=>p.run('builderCheckStatus()'));
+});
+test('nothing is checked before an editor is attached',async()=>{
+ const p=notePage();p.run('builderYaml.editor=null;builderCheckStatus()');await p.fired();assert.equal(p.el('builder-check').hidden,true);assert.equal(p.handle.located.length,0);
+});
+test('Show in YAML opens the panel with the caret on the finding when the panel is clean, and at its own list when it holds edits',async()=>{
+ const p=notePage(),log=[];p.c.builderYamlPanelToggle=o=>{log.push(['toggle',o]);return true;};p.c.builderYamlGoto=(l,o)=>{log.push(['goto',l,o&&o.select]);};
+ p.c.builderYamlPanelState=()=>({dirty:false,canvasChanged:false,applying:false});
+ p.run('builderCheckStatus()');await p.fired();p.el('builder-check-show').onclick();
+ assert.deepEqual(log,[['toggle',true],['goto',7,false]]);
+ log.length=0;p.c.builderYamlPanelState=()=>({dirty:true,canvasChanged:false,applying:false});
+ let focused=false;p.el('builder-yaml-list').querySelector=sel=>sel==='button'?{focus(){focused=true;}}:null;
+ p.el('builder-check-show').onclick();assert.deepEqual(log,[['toggle',true]],'a dirty panel: the toggle only, the caret does not move');assert.equal(focused,true,'focus lands on the first problem');
+});
+test('the page’s capabilities reach the panel: the VM’s containerlab picks the schema',()=>{
+ const p=notePage(),seen=[];p.c.builderYamlContext=c=>seen.push(c&&c.containerlab);
+ p.c.opCapabilities=async()=>({containerlab:'0.79.0',actions:{}});
+ return p.run('builderConnect()').then(()=>assert.deepEqual(seen,['0.79.0']));
+});
+
+test('an error the manager’s import refuses is worded as that, and the generic sentence counts only containerlab’s errors',async()=>{
+ const base={name:'lab1',prefix:'${CLAB_PREFIX:=""}',topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33'}}}};
+ const p=notePage(base);p.run('builderCheckStatus()');await p.fired();
+ assert.equal(p.el('builder-check').hidden,false);
+ const text=p.el('builder-check-text').textContent;
+ assert.match(text,/^1 error the manager’s import refuses: line 2, the manager’s import refuses this prefix /);assert.doesNotMatch(text,/containerlab will refuse/);
+ const mixed=notePage({...base,topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',imge:'x'}}}});mixed.run('builderCheckStatus()');await mixed.fired();
+ const both=mixed.el('builder-check-text').textContent;
+ assert.match(both,/^1 error containerlab will refuse when deploying: line \d+, `imge` is not a device setting/);assert.match(both,/The manager’s import also refuses 1 more\.$/);
+});
+test('Dismiss is remembered across a reload in the tab (sessionStorage, per draft, text and count) until the text changes',async()=>{
+ const session=(()=>{const m=new Map();return {getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>{m.set(k,String(v));},removeItem:k=>{m.delete(k);}};})();
+ const first=notePage();first.c.window.sessionStorage=session;
+ first.run('builderCheckStatus()');await first.fired();assert.equal(first.el('builder-check').hidden,false);
+ first.el('builder-check-dismiss').onclick();assert.equal(first.el('builder-check').hidden,true);
+ // A reload: a new page (nothing in memory) in the same tab.
+ const second=notePage();second.c.window.sessionStorage=session;
+ second.run('builderCheckStatus()');await second.fired();assert.equal(second.el('builder-check').hidden,true,'the same problems stay dismissed after a reload');
+ second.handle.doc={name:'lab1',topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',imge:'x',imgx:'y'}}}};second.run('builderCheckStatus()');await second.fired();
+ assert.equal(second.el('builder-check').hidden,false,'other problems are news again');
+ // A browser that refuses sessionStorage: Dismiss still works for the page’s life.
+ const refused=notePage();Object.defineProperty(refused.c.window,'sessionStorage',{get(){throw new Error('denied');}});
+ refused.run('builderCheckStatus()');await refused.fired();refused.el('builder-check-dismiss').onclick();
+ assert.equal(refused.el('builder-check').hidden,true);refused.run('builderCheckStatus()');await refused.fired();assert.equal(refused.el('builder-check').hidden,true);
+});

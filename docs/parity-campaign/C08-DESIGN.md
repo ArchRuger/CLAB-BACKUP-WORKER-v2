@@ -133,6 +133,8 @@ levels, which no lab file needs.', line, severity: 'error'}}` and no tree. `loca
 inside it (a `RangeError` included) becomes that `{error}` shape with the exception's first line, so a caller on the
 page's persist path cannot be tripped by it (finding 0).
 
+An `{error}` that `checkYaml` does not also report (the depth, size and time limits) is a limit of the advisory check, not a parse error: the panel writes it into the count as a warning-toned `Not checked: <sentence>` and never into the status line or `aria-invalid`.
+
 The panel passes `tree` to the validator together with the schema and the context; the fake editor in the tests
 builds trees by hand or with the test helper of §6.
 
@@ -231,7 +233,7 @@ with its source in a comment):
 | `binds` (R6c) | `binds[]` | Not a string, or a string without `:`. | error (P for a number) / warning (S) | *Line 8: a bind is `host-path:container-path[:ro]`; `1` is not one.* |
 | `link-brief` (R7a) | a link without `type` | `endpoints` missing, not two items, an item not `node:interface`, the two items equal. | error (P) | *Line 14: a link needs exactly two endpoints as `device:interface`.* |
 | `link-type` (R7b) | a link with `type` | `type` outside veth, veth-stitch, mgmt-net, host, macvlan, vxlan, vxlan-stitch, dummy; a required key of that form missing (`endpoint`, `host-interface`, `remote`, `vni`, `dst-port` per form); a key the form does not take (R1 at that level). | error when `exact` (P/S), else warning | *Line 16: a `host` link needs `endpoint` and `host-interface`.* |
-| `link-node` (R7c) | each endpoint `node` (brief `node:iface` or long `node:`), except `host`, `mgmt-net`, `macvlan`, `vxlan`, `vxlan-stitch`, `dummy`, `bridge` | Not in `topology.nodes`. | error (P: `Unable to find node zz`) | *Line 15: the link endpoint `zz` is not a device in topology.nodes.* (the list carries this error whenever a tree exists; the `checkYaml` warning is written to the status line only when no tree exists, §4.1) |
+| `link-node` (R7c) | each endpoint `node` (brief `node:iface` or long `node:`), except `host`, `mgmt-net`, `macvlan` (`containerlab validate` 0.79.0: `bridge`, `vxlan`, `vxlan-stitch` and `dummy` as a brief endpoint fail with `Unable to find node`; a bridge is a `kind: bridge` node that must be listed) | Not in `topology.nodes`. | error (P: `Unable to find node zz`) | *Line 15: the link endpoint `zz` is not a device in topology.nodes.* (the list carries this error whenever a tree exists; the `checkYaml` warning is written to the status line only when no tree exists, §4.1) |
 | `link-duplicate` (R7d) | all endpoints | The same `node:interface` used twice in the lab. | warning (S) | *Line 17: `vsw:ge-0/0/0` is already used by the link on line 14.* |
 | `wait-node` (R8a) | each effective `wait-for` entry (own and inherited) | `node` not in `topology.nodes`. | error (U) | *Line 12: There is no device named `vws`. Did you mean `vsw`?* |
 | `wait-self` (R8b) | same | `node` equals the waiting node (also through `defaults`/`kinds`/`groups`). | error (U) | *Line 12: A device cannot wait for itself (`vsw` waits for `vsw` through topology.defaults).* |
@@ -653,3 +655,17 @@ amended accordingly.
 | 20 optional: some finding wordings would mislead a student | Accepted as proposed: R2c distinguishes a short name (*a short name for `arista_ceos`*) from an old `vr-*` name, once per lab; "device" throughout with upstream's sentence shape; the `linux` wording of R8d; the link text *More about `<key>`*; the example's sentence says which block to copy and that the images are the course's | §1.7, §1.8, §3 R2c, R8a–d, §4.3, §4.5 |
 | 21 optional: the caret help can describe the wrong key between a keystroke and the next validation | Accepted as proposed: help only when the tree's key at the caret line equals the key read from the current text; otherwise cleared; tested | §4.3, §6.1 |
 | 22 optional: lost functionality against the inventories and parity records (none found) | Accepted as proposed: S3's acceptance states that the gutter tests keep "one number per text line" in the new markup and that the describedby string test is rewritten, not deleted | §4.2, §6.1, §8 S3 |
+
+## 10. Verification answers (`/clab-slice-verify` on `wt-c08-s3` at 0fc010b, six workers; every acceptance check held; the fixture passes at 1440, 760 and 390)
+
+| Finding | Answer | Where |
+|---|---|---|
+| Medium: `locateYaml` resolved each alias through the library with no context, so an alias-heavy draft froze the tab for seconds through the bar note | Accepted: aliases are resolved in one pass over the document (1,000 / 3,000 / 6,000 aliases in 33 / 107 / 372 ms, from 387 / 2,852 / 11,303 ms) and a 1,500 ms time bound returns `{error}` instead of blocking; the parser's own cost (yaml 2.9.0) remains and is bounded by the 1 MiB input cap | §2.1; `main.tsx`, the bundle |
+| Medium-low: YAML merge keys (`<<: *anchor`) produced false errors on a topology containerlab accepts | Accepted twice: the located tree applies merge keys as Go yaml does (the map's own keys win, merged keys at the `<<` line), and the validator applies a `<<` entry itself when a tree still carries one | §2.1, §3; `main.tsx`, `lab-builder-check.js` |
+| Low: the SR OS free-form `type` pattern was never tested, so a wrong type was never reported | Accepted: tested behind a guard (at most 64 characters from the characters a type line uses), so a wrong short type gets the enum warning and a 300-character value returns in about a millisecond | §3; the old test's claim rewritten |
+| Low: the wait-loop message listed every name | Accepted: at most eight names, then "… (n more)" | §3 |
+| Low: an environment-variable prefix was attributed to containerlab while the manager's import refuses it | Accepted: the error keeps its severity, reads "the manager's import refuses this prefix", carries `refuser: 'manager'`, and the bar note counts containerlab's errors apart | §3, §4.4 |
+| Low: the Problems list rebuild dropped keyboard focus | Accepted: the same item (line and code) is refocused, else the list (`tabindex=-1`) | §4.1 |
+| Low to medium: at 760 and 390 the Problems list shrank to a sliver with the disclosure open | Accepted: a minimum of about three items (84 px), the 42 % cap removed, the panel's own scroll carries the rest, the textarea keeps 160 px (measured 253 px at 390×844) | §4.6; `lab-builder.css` |
+| Info: the bar note's Dismiss was not remembered across a reload | Accepted: remembered per draft digest in `sessionStorage` until the text changes | §4.4 |
+| Info: nesting beyond 64 levels shows a status error while Apply still works; a throwing check leaves no trace | Accepted as designed: the advisory check never blocks and never pauses the builder | §1, §4 |

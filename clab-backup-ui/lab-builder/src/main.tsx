@@ -9,8 +9,8 @@ import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-
 import { TopologySessionCore, mergeCustomNodeTemplates, parseCustomNodeTemplatesExport } from "@containerlab/clab-ui/session";
 import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 import { applyThemeVars } from "@containerlab/clab-ui/theme";
-import { LineCounter, isMap, isSeq, isScalar, parseDocument } from "yaml";
-import type { Node as YamlNode } from "yaml";
+import { LineCounter, isAlias, isMap, isSeq, isScalar, parseDocument, visit } from "yaml";
+import type { Document as YamlDocument, Node as YamlNode } from "yaml";
 import "@containerlab/clab-ui/styles/global.css";
 
 // mapOnly: the page is the manager's map editor (../../app/static/map-editor-page.js). The topology is an
@@ -41,6 +41,12 @@ interface MapEditorHandle { applyAnnotations(text: string): Promise<void> }
 interface MapLookPage { applyLook?(id: string, look: Record<string, unknown>): string }
 // A refusal found before the engine is asked: `line` is 1-based when the text points at one.
 interface YamlFlaw { message: string; line?: number; severity: "error" | "warning" }
+// One node of the located tree (line and col are 1-based). A map key is String(key); a key that is not a scalar
+// is the text the yaml library prints. Aliases are resolved to a copy of their anchor's value at the alias's place.
+type YamlLocated =
+  | { kind: "map"; line: number; col: number; items: Array<{ key: string; keyLine: number; keyCol: number; value: YamlLocated }> }
+  | { kind: "seq"; line: number; col: number; items: YamlLocated[] }
+  | { kind: "scalar"; line: number; col: number; value: string | number | boolean | null; tag: "str" | "int" | "float" | "bool" | "null" };
 interface YamlEditorHandle {
   // Replaces the whole topology text as one engine step (the editor's own undo takes it back). Rejects with
   // an Error carrying `code: "yaml"` and `line` when the text is refused; the graph is then untouched.
@@ -49,6 +55,10 @@ interface YamlEditorHandle {
   getYaml(): string;
   // Parser and shape check only, no engine call: the first error, else the first warning, else null.
   checkYaml(text: string): YamlFlaw | null;
+  // The parsed text as plain data with a 1-based line and column per node, for the page's validator. `error` is
+  // the parser's first error (as checkYaml reports it) and `tree` is then absent. It validates nothing, makes no
+  // engine call and never throws: any failure, a too deep or too large document included, comes back as `error`.
+  locateYaml(text: string): { tree?: YamlLocated; error?: YamlFlaw };
   // Hears every stored state, after the page stored it. Returns the unsubscribe function.
   subscribe(listener: (yaml: string, annotations: string) => void): () => void;
 }
@@ -83,11 +93,15 @@ function lookFromEditNode(command: unknown): { id: string; look: Record<string, 
 // list, `topology: 5`, nodes written as a list) it accepts, and the canvas then shows nothing: such a text is
 // refused here, so the last good graph is never replaced by an empty one. Links naming a device that is not
 // in topology.nodes are kept by the engine but not drawn: that is a warning, not a refusal.
+const parseFlaw = (doc: YamlDocument): YamlFlaw | null => {
+  const error = doc.errors[0];
+  return error ? { message: error.message.split("\n")[0].replace(/ at line \d+, column \d+:?$/, ""), line: error.linePos?.[0]?.line, severity: "error" } : null;
+};
 function yamlFlaw(text: string): YamlFlaw | null {
   const lines = new LineCounter(), doc = parseDocument(text, { prettyErrors: true, lineCounter: lines });
   const lineOf = (node: unknown) => { const r = (node as YamlNode | null)?.range; return r ? lines.linePos(r[0]).line : undefined; };
-  const error = doc.errors[0];
-  if (error) return { message: error.message.split("\n")[0].replace(/ at line \d+, column \d+:?$/, ""), line: error.linePos?.[0]?.line, severity: "error" };
+  const error = parseFlaw(doc);
+  if (error) return error;
   const shape = (message: string, node?: unknown): YamlFlaw => ({ message, line: lineOf(node), severity: "error" });
   if (!isMap(doc.contents)) return shape("A topology file is a mapping with name: and topology: at the top.", doc.contents);
   const topology = doc.contents.get("topology", true);
@@ -105,6 +119,79 @@ function yamlFlaw(text: string): YamlFlaw | null {
     }
   }
   return null;
+}
+// The located tree for the page's validator. Depth (nested maps and lists) is capped at 64 and the number of nodes
+// at 200,000 (aliases are copied, so a document of aliases could otherwise grow without bound); both, and any
+// exception, are returned as `error` and never thrown.
+const LOCATE_MAX_DEPTH = 64, LOCATE_MAX_NODES = 200000, LOCATE_MAX_MS = 1500;
+const LOCATE_TOO_DEEP = `The topology nests deeper than ${LOCATE_MAX_DEPTH} levels, which no lab file needs.`;
+function locateYaml(text: string): { tree?: YamlLocated; error?: YamlFlaw } {
+  try {
+    const lines = new LineCounter(), doc = parseDocument(text, { prettyErrors: true, lineCounter: lines });
+    const flaw = parseFlaw(doc);
+    if (flaw) return { error: flaw };
+    const pos = (node: unknown): { line: number; col: number } => {
+      const r = (node as YamlNode | null)?.range;
+      const p = r ? lines.linePos(r[0]) : undefined;
+      return { line: p?.line ?? 1, col: p?.col ?? 1 };
+    };
+    let count = 0;
+    const deadline = Date.now() + LOCATE_MAX_MS;
+    // Every alias is resolved once, in one pass in document order (the last anchor of that name before the alias,
+    // as the library defines it). The library's own resolve() lists the whole document again for each alias.
+    const anchored = new Map<string, unknown>(), resolved = new Map<unknown, unknown>();
+    visit(doc, { Node: (_key, node) => {
+      if (isAlias(node)) resolved.set(node, anchored.get(node.source) ?? null);
+      else if ((node as YamlNode).anchor) anchored.set((node as YamlNode).anchor as string, node);
+    } });
+    const resolveAlias = (alias: unknown) => resolved.get(alias) ?? null;
+    // A merge key (`<<: *base`, a list of them, or an inline map) is applied the way containerlab's YAML reader
+    // does: the map's own keys win, earlier merged maps win over later ones, and a merged key stands where
+    // the `<<` line is. The validator never sees a `<<` key.
+    const isMergeKey = (key: unknown) => isScalar(key) && key.value === "<<" && key.type === "PLAIN";
+    const mergeSources = (value: unknown): unknown[] => {
+      const one = (v: unknown) => isAlias(v) ? resolveAlias(v) : v;
+      if (isSeq(value)) return value.items.map(one).filter(isMap);
+      const m = one(value);
+      return isMap(m) ? [m] : [];
+    };
+    const walk = (node: unknown, depth: number, at?: { line: number; col: number }): YamlLocated => {
+      if (++count > LOCATE_MAX_NODES) throw Object.assign(new Error("The topology has too many entries to check."), { located: true });
+      if ((count & 255) === 0 && Date.now() > deadline) throw Object.assign(new Error("The topology is too large to check."), { located: true });
+      const n = isAlias(node) ? resolveAlias(node) : node;
+      const here = isAlias(node) ? pos(node) : at ?? pos(n);
+      if (isMap(n) || isSeq(n)) {
+        if (depth > LOCATE_MAX_DEPTH) throw Object.assign(new Error(LOCATE_TOO_DEEP), { located: true, line: here.line });
+        if (isSeq(n)) return { kind: "seq", ...here, items: n.items.map((item) => walk(item, depth + 1)) };
+        const keyText = (key: unknown) => isScalar(key) ? String(key.value) : key === null || key === undefined ? "" : String(key);
+        const own = new Set(n.items.filter((pair) => !isMergeKey(pair.key)).map((pair) => keyText(pair.key)));
+        const items: Extract<YamlLocated, { kind: "map" }>["items"] = [];
+        const taken = new Set<string>();
+        const add = (pair: { key: unknown; value: unknown }, k: { line: number; col: number }, merged: boolean) => {
+          const key = keyText(pair.key);
+          if (merged ? own.has(key) || taken.has(key) : false) return;
+          if (merged) taken.add(key);
+          items.push({ key, keyLine: k.line, keyCol: k.col, value: walk(pair.value, depth + 1, pair.value && !merged ? undefined : k) });
+        };
+        for (const pair of n.items) {
+          const k = pos(pair.key);
+          if (!isMergeKey(pair.key)) { add(pair, k, false); continue; }
+          for (const source of mergeSources(pair.value)) for (const inner of source.items) if (!isMergeKey(inner.key)) add(inner, k, true);
+        }
+        return { kind: "map", ...here, items };
+      }
+      const v = isScalar(n) ? n.value : null;
+      if (v === null || v === undefined) return { kind: "scalar", ...here, value: null, tag: "null" };
+      if (typeof v === "boolean") return { kind: "scalar", ...here, value: v, tag: "bool" };
+      if (typeof v === "number") return { kind: "scalar", ...here, value: v, tag: Number.isInteger(v) ? "int" : "float" };
+      return { kind: "scalar", ...here, value: String(v), tag: "str" };
+    };
+    return { tree: walk(doc.contents, 1) };
+  } catch (e) {
+    const err = e as { message?: unknown; located?: boolean; line?: number };
+    const first = String(err?.message ?? "").split("\n")[0] || "The text could not be read.";
+    return { error: { message: first, ...(err?.located && err.line ? { line: err.line } : {}), severity: "error" } };
+  }
 }
 const yamlRefusal = (flaw: YamlFlaw) => Object.assign(new Error(flaw.line ? `Line ${flaw.line}: ${flaw.message}` : flaw.message), { code: "yaml", line: flaw.line });
 
@@ -195,6 +282,7 @@ async function mount(draft: BuilderDraft): Promise<void> {
     },
     getYaml: () => storedYaml,
     checkYaml: yamlFlaw,
+    locateYaml,
     subscribe(listener: (yaml: string, annotations: string) => void) { yamlListeners.add(listener); return () => { yamlListeners.delete(listener); }; }
   });
 
