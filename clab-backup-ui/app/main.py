@@ -15,13 +15,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.background import BackgroundTask
-from .inventory import PLATFORMS, parse_inventory, literal, address, port
+from .inventory import PLATFORMS, console_port, parse_inventory, literal, address, port
 from .store import Store
 from .runner import Runner, readiness, now, effective_credentials, credential_source
-from .node_services import NodeServices
+from .node_services import NodeServices, console_gate
 from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
-from .discovery import Discovery, lab_status, node_available, reconcile
+from .discovery import Discovery, expected_container, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path, stored_file, topology_names
 from .lab_operations import LabOperations, design_rechecking, last_deployed, operation_busy, restarting_nodes
 from .device_diagnostics import DeviceDiagnostics
@@ -165,6 +165,12 @@ def create_app(data_dir=None):
         for n in lab['nodes']:
             row={k:copy.deepcopy(v) for k,v in n.items() if k not in ('username','password','enable_password','container_name')}
             row['available']=node_available(store.state,lab,n)
+            # Container facts for the drawer: the name the formula gives (container_name itself stays private) and the
+            # console decision, from the same function the ticket route runs.
+            row['container']=expected_container(lab,n)
+            row['console']=bool(console_port(n.get('kind')) and row['container'])
+            with store.lock: hold=console_gate(store.state,lab,n)
+            row['console_hold']='' if hold is None else {'key':hold[1],'text':hold[2]}
             row['readiness']=readiness(lab,n) if row['available'] else 'Lab unavailable'
             row['inventory_credentials']=bool(n.get('username') and n.get('password'))
             row['credential_source']=credential_source(lab,n)
@@ -214,8 +220,8 @@ def create_app(data_dir=None):
                 if design_rechecking(store.state): raise HTTPException(409, 'Wait for the current lab operation to finish.')
                 git_progress.guard_pending()
                 network_design.guard_idle()
-                if services.clients or services.checking:
-                    raise HTTPException(409, 'Close SSH sessions and wait for connection checks before resetting.')
+                if services.clients or services.checking or services.consoles:
+                    raise HTTPException(409, 'Close SSH sessions and serial consoles and wait for connection checks before resetting.')
                 try: store.reset()
                 except OSError: raise HTTPException(500, 'Storage reset could not finish. Check data directory permissions and free space, then retry Start fresh to complete it. A manager restart completes only a reset that was fully prepared; otherwise the labs, credentials and backups stay as they were and Start fresh must be chosen again.')
                 services.checks.clear(); services.tickets.clear(); readiness_monitor.reset()

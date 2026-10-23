@@ -67,6 +67,12 @@ class ManagerResetTests(unittest.TestCase):
         self.app.state.node_services.clients.add('fixture')
         self.assertEqual(self.reset().status_code,409)
         self.app.state.node_services.clients.clear()
+        # An open serial console blocks the reset with its own sentence, and the reset proceeds once it is closed.
+        self.app.state.node_services.consoles[('fixture','r1')]={'opened':0,'writer':None,'loop':None}
+        blocked=self.reset();self.assertEqual(blocked.status_code,409)
+        self.assertEqual(blocked.json()['detail'],'Close SSH sessions and serial consoles and wait for connection checks before resetting.')
+        self.assertEqual(len(self.store.state['labs']),1)
+        self.app.state.node_services.consoles.clear()
         self.service.lock.acquire()
         try:self.assertEqual(self.reset().status_code,409)
         finally:self.service.lock.release()
