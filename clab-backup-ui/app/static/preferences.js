@@ -3,8 +3,6 @@
 // sections 3 and 5). This script touches no browser storage and registers no document or window listener: the storage, the family
 // table and the media queries live in shell.js (preferenceInventory, resetPreferences, mediaMatches, terminalFontPreference,
 // setTerminalFontPreference); the dialogs' buttons are wired on their own elements. It sends nothing to the manager.
-// The shell.js helpers are called behind typeof guards; the PREFS_FALLBACK_* block below stands in until shell.js has them and
-// is deleted with the guards once it does.
 
 // Every keydown listener of the page scripts that is deliberately not a row of the shortcuts dialog, with its reason (section 3).
 // The reverse pin in tests/test_shell_ui.js requires each keydown site to be a data-source of a row in index.html or to be listed here.
@@ -26,54 +24,11 @@ const PREFS_FULL='This browser is not letting the page store anything new (stora
 const PREFS_NOT_STORED='The open folders of the save chooser and the Home filter are kept only while this page is open.';
 const PREFS_APPEARANCE='Appearance: light. The terminal page is dark by design; there is no dark mode setting.';
 
-// --- stand-ins for the shell.js helpers (removed once shell.js carries them) -------------------------------------------------
-const PREFS_STORE_LOCAL='local'+'Storage',PREFS_STORE_SESSION='session'+'Storage';
-const PREFS_FALLBACK_EDITOR=['react-topoviewer-grid-line-width','react-topoviewer-grid-style','contextPanelSide','mui-mode','mui-color-scheme-light','mui-color-scheme-dark'];
-const PREFS_FALLBACK_FAMILIES=[
- {kind:PREFS_STORE_LOCAL,match:k=>k==='clab.terminal.fontSize',id:'terminal-font',reset:true},
- {kind:PREFS_STORE_LOCAL,match:k=>k.startsWith('clab.opened.'),id:'opened',reset:true},
- {kind:PREFS_STORE_LOCAL,match:k=>k.startsWith('clab.dismissed.'),id:'dismissed',reset:true},
- {kind:PREFS_STORE_LOCAL,match:k=>k.startsWith('clab.design.draft.'),id:'design-drafts',reset:false},
- {kind:PREFS_STORE_LOCAL,match:k=>k.startsWith('clab-builder:draft:'),id:'builder-drafts',reset:false},
- {kind:PREFS_STORE_LOCAL,match:k=>k==='clab-builder:templates'||k==='clab-builder:templates-version',id:'builder-templates',reset:false},
- {kind:PREFS_STORE_LOCAL,match:k=>PREFS_FALLBACK_EDITOR.includes(k),id:'editor-view',reset:true},
- {kind:PREFS_STORE_LOCAL,match:k=>k.startsWith('clab.capture.'),id:'capture',reset:true},
- {kind:PREFS_STORE_SESSION,match:k=>k==='clab.homeTab',id:'home-tab',reset:true},
- {kind:PREFS_STORE_SESSION,match:k=>k.startsWith('clab.notice.'),id:'notices',reset:true},
- {kind:PREFS_STORE_SESSION,match:k=>k==='activeLab',id:'active-lab',reset:false},
- {kind:PREFS_STORE_SESSION,match:k=>k.startsWith('clab.request.'),id:'requests',reset:false},
- {kind:PREFS_STORE_SESSION,match:k=>k.startsWith('git-save-request:'),id:'save-requests',reset:false},
- {kind:PREFS_STORE_SESSION,match:k=>k==='op-return',id:'op-return',reset:false}];
-function prefsFallbackStore(kind){try{return globalThis[kind]||null;}catch{return null;}}
-function prefsFallbackKeys(kind){try{const s=prefsFallbackStore(kind),out=[];for(let i=0;i<s.length;i++){const k=s.key(i);if(k!==null)out.push(k);}return out;}catch{return null;}}
-function prefsFallbackInventory(){
- const local=prefsFallbackKeys(PREFS_STORE_LOCAL),session=prefsFallbackKeys(PREFS_STORE_SESSION);
- let writable=false;
- try{const s=prefsFallbackStore(PREFS_STORE_LOCAL);s.setItem('clab.probe','1');s.removeItem('clab.probe');writable=true;}catch{/* full or read-only */}
- const lists={[PREFS_STORE_LOCAL]:local||[],[PREFS_STORE_SESSION]:session||[]};
- const families=PREFS_FALLBACK_FAMILIES.map(f=>{const keys=lists[f.kind].filter(f.match);return {id:f.id,kind:f.kind,reset:f.reset,count:keys.length,keys};});
- return {blocked:local===null,writable,families};
-}
-function prefsFallbackReset(){
- const inv=prefsFallbackInventory();if(inv.blocked)return {cleared:0,blocked:true};
- let cleared=0;
- for(const f of inv.families){if(!f.reset)continue;for(const k of f.keys){try{prefsFallbackStore(f.kind).removeItem(k);cleared++;}catch{/* kept */}}}
- return {cleared,blocked:false};
-}
-function prefsFallbackFont(){try{const v=Number(prefsFallbackStore(PREFS_STORE_LOCAL).getItem('clab.terminal.fontSize'));return PREFS_FONT_SIZES.includes(v)?v:PREFS_FONT_DEFAULT;}catch{return PREFS_FONT_DEFAULT;}}
-function prefsFallbackSetFont(value){const v=Number(value);if(!PREFS_FONT_SIZES.includes(v))return false;try{prefsFallbackStore(PREFS_STORE_LOCAL).setItem('clab.terminal.fontSize',String(v));return true;}catch{return false;}}
-function prefsFallbackMedia(query){try{return !!(typeof matchMedia==='function'&&matchMedia(query).matches);}catch{return false;}}
-
-function prefsInventory(){return typeof preferenceInventory==='function'?preferenceInventory():prefsFallbackInventory();}
-function prefsDoReset(){return typeof resetPreferences==='function'?resetPreferences():prefsFallbackReset();}
-function prefsFont(){return typeof terminalFontPreference==='function'?terminalFontPreference():prefsFallbackFont();}
-function prefsSetFont(value){return typeof setTerminalFontPreference==='function'?setTerminalFontPreference(value):prefsFallbackSetFont(value);}
-function prefsMedia(query){return typeof mediaMatches==='function'?mediaMatches(query):prefsFallbackMedia(query);}
-function prefsDisplay(){return {motion:prefsMedia('(prefers-reduced-motion: reduce)'),contrast:prefsMedia('(prefers-contrast: more)'),forced:prefsMedia('(forced-colors: active)')};}
+function prefsDisplay(){return {motion:mediaMatches('(prefers-reduced-motion: reduce)'),contrast:mediaMatches('(prefers-contrast: more)'),forced:mediaMatches('(forced-colors: active)')};}
 // The Home list tab as a word the markup knows ('recent', 'all' or ''): the raw stored value is never interpolated.
 function prefsHomeWord(inventory){
  const f=prefsFamily(inventory,'home-tab');if(!f.count)return '';
- const tab=typeof homeTab==='function'?homeTab():'recent';
+ const tab=homeTab();
  return tab==='all'?'all':'recent';
 }
 
@@ -146,13 +101,13 @@ function prefsStatus(text){const el=$('prefs-status');if(el)el.textContent=text;
 function prefsFocus(id){const el=$(id);if(el&&typeof el.focus==='function')el.focus();}
 function prefsRender(){
  const body=$('preferences-body');if(!body)return;
- const inventory=prefsInventory();
- body.innerHTML=prefsMarkup(inventory,prefsDisplay(),prefsFont(),prefsHomeWord(inventory));
+ const inventory=preferenceInventory();
+ body.innerHTML=prefsMarkup(inventory,prefsDisplay(),terminalFontPreference(),prefsHomeWord(inventory));
  const select=$('pref-terminal-font');
  if(select)select.onchange=()=>{
   const v=Number(select.value);
-  if(prefsSetFont(v))prefsStatus(`Terminal text size ${v} px. Applies to terminals opened from now on; open terminals keep theirs.`);
-  else{select.value=String(prefsFont());prefsStatus(PREFS_STATUS_KEPT);}
+  if(setTerminalFontPreference(v))prefsStatus(`Terminal text size ${v} px. Applies to terminals opened from now on; open terminals keep theirs.`);
+  else{select.value=String(terminalFontPreference());prefsStatus(PREFS_STATUS_KEPT);}
  };
  const open=$('prefs-reset'),confirm=$('prefs-reset-confirm'),keep=$('prefs-reset-keep'),go=$('prefs-reset-go');
  if(open&&confirm)open.onclick=()=>{confirm.hidden=false;prefsFocus('prefs-reset-keep');};
@@ -161,7 +116,7 @@ function prefsRender(){
 }
 // The only caller of resetPreferences: the Reset button of the confirm row.
 function prefsReset(){
- const result=prefsDoReset()||{cleared:0};
+ const result=resetPreferences()||{cleared:0};
  prefsRender();prefsFocus('prefs-reset');
  if(result.blocked){prefsStatus(PREFS_BLOCKED_RESET);return result;}
  prefsStatus(`Browser preferences reset: ${prefsPlural(Number(result.cleared)||0,'item')} cleared. Terminals opened from now on use the default text size.`);

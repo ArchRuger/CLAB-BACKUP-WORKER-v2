@@ -43,7 +43,10 @@ function dom(){
 function harness({hash='',session={},local={},throwStorage=false,labs=[{id:'a',name:'A'},{id:'b',name:'B'}],loaded=true}={}){
  const {doc,el}=dom();
  const item=(id,attrs={},text='')=>el('button',{id,role:'menuitem',text,...attrs});
- const managerList=el('div',{id:'manager-menu-list',class:'menu-list'},[item('vm-settings',{},'VM connection…'),item('vm-refresh',{disabled:true},'Refresh lab list'),item('inspect-all',{},'Running labs on the VM…')]);
+ const managerList=el('div',{id:'manager-menu-list',class:'menu-list'},[item('vm-settings',{},'VM connection…'),item('vm-refresh',{disabled:true},'Refresh lab list'),item('inspect-all',{},'Running labs on the VM…'),
+  item('manager-help-toggle',{class:'menu-group-toggle','data-menu-group':'manager-help','aria-expanded':'false','aria-controls':'manager-help'},'Help'),
+  el('div',{id:'manager-help',class:'menu-group','data-menu-panel':'',role:'group',hidden:true},[item('manager-shortcuts',{},'Keyboard shortcuts…'),el('a',{id:'help-student-guide',role:'menuitem',href:'/student-guide',hidden:true,text:'Student quick start (PDF)'}),el('a',{id:'help-containerlab',role:'menuitem',href:'https://containerlab.dev/',text:'containerlab documentation'})]),
+  el('a',{id:'diagnostics',role:'menuitem',href:'/static/debug.html',text:'Diagnostics'})]);
  const managerButton=el('button',{id:'manager-button',class:'button secondary menu-button','aria-expanded':'false',text:'Manager'});
  const manager=el('span',{id:'manager-menu',class:'menu'},[managerButton,managerList]);
  const labList=el('div',{id:'lab-actions-menu',class:'menu-list'},[item('lab-start',{},'Start lab'),item('menu-destroy',{},'Destroy lab…'),item('lab-actions-advanced-toggle',{'data-menu-group':'lab-actions-advanced','aria-expanded':'false'},'Advanced options'),el('div',{id:'lab-actions-advanced','data-menu-panel':'',role:'group',hidden:true},[item('menu-import-map',{},'Import map…'),item('menu-map-edit',{disabled:true},'Edit map'),item('menu-telemetry-retired',{hidden:true},'Retired telemetry configuration…'),item('menu-operation-history',{},'Operation history…')])]);
@@ -68,7 +71,7 @@ function harness({hash='',session={},local={},throwStorage=false,labs=[{id:'a',n
  const navHome=el('a',{id:'nav-home',href:'/'});const crumbHome=el('button',{id:'crumb-home'});
  const outside=el('main',{id:'outside'});
  doc.body.append(navHome,crumbHome,switcher,manager,saveControl,labActions,dialog,saveDrawer,nodeMenu,linkMenu,banner,skeleton,outside);
- const storage=map=>{const m=new Map(Object.entries(map));return throwStorage?{getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');},removeItem(){throw new Error('blocked');}}:{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),map:m};};
+ const storage=map=>{const m=new Map(Object.entries(map));return throwStorage?{getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');},removeItem(){throw new Error('blocked');}}:{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),get length(){return m.size;},key:i=>[...m.keys()][i]??null,map:m};};
  const history=[],location={hash,pathname:'/',search:''};
  const setUrl=url=>{location.hash=url.includes('#')?url.slice(url.indexOf('#')):'';};
  const calls={selectLab:[],showTab:[],openDetails:[],render:0,renderLabBanner:0,notify:[]};
@@ -131,14 +134,17 @@ test('goHome clears the lab, the hash and sessionStorage, closes the drawer and 
 });
 
 test('initMenu: open focuses the first enabled item, arrows rove, Escape closes and returns focus to the button',()=>{
- const h=harness();const [settings,refresh,inspect]=h.managerList.children;
+ const h=harness();const [settings,refresh,inspect,helpToggle,helpPanel,diagnostics]=h.managerList.children;
+ assert.ok(refresh&&helpPanel);
  assert.equal(h.managerButton.getAttribute('aria-controls'),'manager-menu-list');assert.equal(h.managerList.getAttribute('role'),'menu');
  h.managerButton.dispatch('click');
  assert.equal(h.managerList.hidden,false);assert.equal(h.managerButton.getAttribute('aria-expanded'),'true');
  assert.equal(h.doc.activeElement,settings,'the first enabled item takes focus');
  h.managerList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,inspect,'the disabled item is skipped');
+ h.managerList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,helpToggle,'the Help toggle is an item');
+ h.managerList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,diagnostics,'the collapsed Help items are skipped');
  h.managerList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,settings,'roving wraps');
- h.managerList.dispatch('keydown',{key:'End'});assert.equal(h.doc.activeElement,inspect);
+ h.managerList.dispatch('keydown',{key:'End'});assert.equal(h.doc.activeElement,diagnostics,'Diagnostics stays the last item');
  h.managerList.dispatch('keydown',{key:'Home'});assert.equal(h.doc.activeElement,settings);
  const escape=settings.dispatch('keydown',{key:'Escape'});
  assert.equal(h.managerList.hidden,true);assert.equal(h.managerButton.getAttribute('aria-expanded'),'false');
@@ -811,4 +817,169 @@ test('wire menu exception 3: resize, blur and a capture-phase scroll call only c
  h.linkMenu.hidden=false;h.context.closeMenus();assert.equal(h.linkMenu.hidden,false,'closeMenus() itself never touches the link menu');
  // without capture.js the three are harmless
  const bare=harness();assert.doesNotThrow(()=>{bare.context.windowListeners.resize();bare.context.windowListeners.blur();bare.doc.listeners.scroll[0].fn({});bare.outside.dispatch('pointerdown');});
+});
+
+// ---- C09 S1: the Help group, the two dialogs' markup, the Home filter row, the storage and media helpers --------------------------
+const STATIC=path.join(__dirname,'../app/static'),INDEX=fs.readFileSync(path.join(STATIC,'index.html'),'utf8');
+const pageScripts=()=>fs.readdirSync(STATIC).filter(f=>f.endsWith('.js')).map(f=>[f,fs.readFileSync(path.join(STATIC,f),'utf8')]);
+const idsIn=html=>[...html.matchAll(/id="([\w-]+)"/g)].map(m=>m[1]);
+test('index.html: the Manager menu keeps Browser preferences after Manager settings, then a separator, the collapsed Help group, and Diagnostics last',()=>{
+ const start=INDEX.indexOf('id="manager-menu-list"'),end=INDEX.indexOf('<div class="menu-foot"',start),menu=INDEX.slice(start,end);
+ const order=[...menu.matchAll(/<(?:button|a|hr)[^>]*?(?:id="([\w-]+)"|href="(\/static\/debug\.html)"|class="(menu-sep)")/g)].map(m=>m[1]||m[2]||m[3]);
+ assert.deepEqual(order.slice(order.indexOf('manager-settings')),['manager-settings','manager-preferences','menu-sep','manager-help-toggle','manager-shortcuts','help-student-guide','help-containerlab','help-lab-examples','help-kinds','help-srl-labs','/static/debug.html'],'Diagnostics is the last item, outside the group');
+ assert.match(menu,/<button type="button" role="menuitem" class="menu-group-toggle" id="manager-help-toggle" data-menu-group="manager-help" aria-expanded="false" aria-controls="manager-help"><span>Help<\/span>/);
+ const panel=menu.slice(menu.indexOf('id="manager-help" data-menu-panel'),menu.indexOf('</div>',menu.indexOf('id="manager-help" data-menu-panel')));
+ assert.match(panel,/^id="manager-help" data-menu-panel role="group" aria-labelledby="manager-help-toggle" hidden>/);
+ assert.deepEqual(idsIn(panel),['manager-help','manager-shortcuts','help-student-guide','help-containerlab','help-lab-examples','help-kinds','help-srl-labs']);
+ assert.match(panel,/id="help-student-guide" href="\/student-guide"[^>]*\bhidden>/,'the guide item is hidden: the PDF is not staged');
+ const links=[...panel.matchAll(/<a [^>]*>/g)].map(m=>m[0]);assert.equal(links.length,5);
+ for(const a of links.filter(a=>/href="https:/.test(a)))assert.match(a,/target="_blank" rel="noopener noreferrer"/,a);
+ assert.deepEqual(links.filter(a=>/href="https:/.test(a)).map(a=>a.match(/href="([^"]+)"/)[1]),['https://containerlab.dev/','https://containerlab.dev/lab-examples/lab-examples/','https://containerlab.dev/manual/kinds/','https://github.com/srl-labs']);
+ assert.equal((panel.match(/<span aria-hidden="true">↗<\/span>/g)||[]).length,5);
+});
+test('index.html: the two dialogs, the Home filter row and the one preferences script, with no foreign script, stylesheet or image anywhere',()=>{
+ for(const id of ['shortcuts-dialog','preferences-dialog']){const at=INDEX.indexOf(`<dialog id="${id}" aria-labelledby="`);assert.ok(at>0,id);const body=INDEX.slice(at,INDEX.indexOf('</dialog>',at));assert.match(body,/class="icon-button close" aria-label="Close"/,id);assert.ok(INDEX.includes(`id="${body.match(/aria-labelledby="([\w-]+)"/)[1]}"`),id);}
+ const prefs=INDEX.slice(INDEX.indexOf('<dialog id="preferences-dialog"'),INDEX.indexOf('</dialog>',INDEX.indexOf('<dialog id="preferences-dialog"')));
+ assert.match(prefs,/<div id="preferences-body"><\/div><p id="prefs-status" class="caption" role="status"><\/p>$/,'the status is outside the body, so a body rewrite does not drop it');
+ assert.ok(INDEX.indexOf('<dialog id="shortcuts-dialog"')>INDEX.indexOf('</main>'),'a dialog is never inside a hidden tab panel');
+ const short=INDEX.slice(INDEX.indexOf('<dialog id="shortcuts-dialog"'),INDEX.indexOf('</dialog>',INDEX.indexOf('<dialog id="shortcuts-dialog"')));
+ assert.ok(short.includes('On macOS, Alt is Option; on the Edit map page Cmd works for undo and redo. Ctrl+Insert has no Mac equivalent: use Copy selection.'));
+ assert.equal((short.match(/<dl class="kv shortcuts">/g)||[]).length,(short.match(/<section>/g)||[]).length);
+ for(const dd of short.match(/<dd[^>]*>/g))assert.match(dd,/^<dd data-source="[\w-]+\.js:\d+( [\w-]+\.js:\d+)*">$/,dd);
+ const row=INDEX.slice(INDEX.indexOf('<div class="home-list-tools" id="home-filter-row" hidden>'),INDEX.indexOf('id="lab-cards"'));
+ assert.ok(row.length>40,'the filter row sits above the cards');
+ assert.match(row,/<label for="home-filter">Find a lab<\/label>/);assert.match(row,/<input id="home-filter" type="search" autocomplete="off" placeholder="Name, state or device…">/);
+ assert.match(row,/<button type="button" class="button secondary small" id="home-filter-clear" hidden>Clear<\/button>/);assert.match(row,/<span class="caption" id="home-filter-count"><\/span>/);
+ const after=INDEX.slice(INDEX.indexOf('id="lab-cards"'),INDEX.indexOf('</section>',INDEX.indexOf('id="lab-cards"')));
+ assert.match(after,/<p class="table-empty home-filter-empty" id="home-filter-empty" hidden><\/p>/,'the visible sentence has no live role');
+ assert.match(after,/<p class="sr-only" id="home-filter-live" role="status" aria-live="polite"><\/p>/);
+ assert.equal((INDEX.match(/id="home-filter-live"/g)||[]).length,1);
+ assert.equal((INDEX.match(/\/static\/preferences\.js\?v=[\d.]+/g)||[]).length,1);
+ const scripts=[...INDEX.matchAll(/<script src="\/static\/([\w-]+\.js)\?v=[\d.]+" defer>/g)].map(m=>m[1]);assert.equal(scripts.indexOf('preferences.js'),scripts.indexOf('app.js')+1,'after app.js');
+ for(const name of fs.readdirSync(STATIC).filter(f=>f.endsWith('.html')))assert.doesNotMatch(fs.readFileSync(path.join(STATIC,name),'utf8'),/<(?:script|link|img)\b[^>]*\b(?:src|href)="https?:/,name);
+ assert.doesNotMatch(INDEX,/\sstyle="/,'/ keeps no inline style');
+});
+test('style.css: the Manager list scrolls like Lab actions, kbd and the filter row are styled',()=>{
+ const css=fs.readFileSync(path.join(STATIC,'style.css'),'utf8');
+ const rule=id=>(css.match(new RegExp(`${id} \\{([^}]*)\\}`))||[])[1].replace(/\s+/g,' ').trim();
+ assert.equal(rule('#manager-menu-list'),rule('#lab-actions-menu'));assert.match(rule('#manager-menu-list'),/max-height: calc\(100vh - 120px\); overflow-y: auto; overscroll-behavior: contain;/);
+ assert.match(css,/^kbd \{[^}]*border-bottom-width: 2px/m);assert.match(css,/^\.shortcuts dt \{ display: flex; flex-wrap: wrap/m);assert.match(css,/^\.home-list-tools \{ display: flex; flex-wrap: wrap/m);
+});
+test('the Manager menu Help group: the toggle never closes the menu, collapsed items are skipped, ArrowRight opens and enters, reopening collapses',()=>{
+ const h=harness();const [,, ,toggle,panel,diagnostics]=h.managerList.children,[shortcuts,guide,containerlab]=panel.children;
+ h.managerButton.dispatch('click');assert.equal(panel.hidden,true);assert.equal(toggle.getAttribute('aria-expanded'),'false');
+ toggle.focus();toggle.dispatch('click');assert.equal(h.managerList.hidden,false,'the toggle keeps the menu open');assert.equal(panel.hidden,false);assert.equal(h.doc.activeElement,toggle,'a click expands without moving focus');
+ h.managerList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,shortcuts);
+ h.managerList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,containerlab,'the hidden guide item is skipped by the arrows');assert.ok(guide.hidden);
+ h.managerList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,diagnostics);
+ shortcuts.focus();const left=h.managerList.dispatch('keydown',{key:'ArrowLeft'});assert.equal(panel.hidden,true);assert.equal(h.doc.activeElement,toggle);assert.equal(left.prevented,true);
+ h.managerList.dispatch('keydown',{key:'ArrowRight'});assert.equal(panel.hidden,false);assert.equal(h.doc.activeElement,shortcuts);
+ let ran=0;shortcuts.onclick=()=>{ran++;assert.equal(h.managerList.hidden,true,'the menu closes before the item runs');};
+ shortcuts.dispatch('click');assert.equal(ran,1);assert.equal(h.doc.activeElement,h.managerButton,'focus is on the button when the dialog opens, so closing it returns there');
+ h.managerButton.dispatch('click');assert.equal(panel.hidden,true,'collapsed again on every open');
+ h.managerList.dispatch('keydown',{key:'End'});assert.equal(h.doc.activeElement,diagnostics);
+ toggle.dispatch('click');const link=containerlab.dispatch('click');assert.equal(link.prevented,false,'a link is never prevented: the browser opens its tab');assert.equal(h.managerList.hidden,true);
+});
+const FAMILY_SEED={local:{'clab.terminal.fontSize':'16','clab.opened.l':'t','clab.dismissed.j':'t','clab.design.draft.l':'{}','clab-builder:draft:x':'{}','clab-builder:templates':'{}','clab-builder:templates-version':'1','react-topoviewer-grid-style':'dots','contextPanelSide':'left','mui-mode':'light','clab.capture.l.node:r1':'[]','clab.capture.openas':'one','other.thing':'1'},
+ session:{'clab.homeTab':'all','clab.notice.k':'1','activeLab':'l','clab.request.j':'{}','git-save-request:l':'{}','op-return':'{}'}};
+const plain=value=>JSON.parse(JSON.stringify(value));
+test('preferenceInventory counts every family once, ignores foreign keys and leaves no probe behind',()=>{
+ const h=harness(FAMILY_SEED);const inv=plain(h.context.preferenceInventory());
+ assert.equal(inv.blocked,false);assert.equal(inv.writable,true);assert.equal(h.context.localStorage.getItem('clab.probe'),null);
+ const count=Object.fromEntries(inv.families.map(f=>[f.id,f.count]));
+ assert.deepEqual(count,{'terminal-font':1,opened:1,dismissed:1,'design-drafts':1,'builder-drafts':1,'builder-templates':2,'editor-view':3,capture:2,'home-tab':1,notices:1,'active-lab':1,requests:1,'save-requests':1,'op-return':1});
+ assert.ok(!inv.families.some(f=>f.keys.includes('other.thing')||f.keys.includes('clab.probe')));assert.equal(inv.terminalFont,16);
+ assert.deepEqual(inv.families.filter(f=>!f.reset).map(f=>f.id),['design-drafts','builder-drafts','builder-templates','active-lab','requests','save-requests','op-return']);
+ const families=vm.runInContext('PREFERENCE_FAMILIES',h.context);assert.equal(families.length,14);
+ for(const f of families)assert.equal(f.match('clab.opened'),false,'a prefix family needs its trailing dot: '+f.id);
+});
+test('preferenceInventory: a blocked store is blocked with empty families; a full store is not blocked but not writable',()=>{
+ const blocked=harness({throwStorage:true}),inv=plain(blocked.context.preferenceInventory());
+ assert.equal(inv.blocked,true);assert.equal(inv.writable,false);assert.ok(inv.families.every(f=>f.count===0&&f.keys.length===0));assert.equal(inv.terminalFont,14);
+ const denied=harness();Object.defineProperty(denied.context,'localStorage',{get(){throw new Error('SecurityError');},configurable:true});
+ assert.equal(plain(denied.context.preferenceInventory()).blocked,true,'reading window.localStorage itself can throw');
+ const full=harness({local:{'clab.opened.a':'t'}}),real=full.context.localStorage;
+ full.context.localStorage={getItem:k=>real.getItem(k),setItem(){throw new Error('QuotaExceededError');},removeItem:k=>real.removeItem(k),get length(){return real.length;},key:i=>real.key(i)};
+ const q=plain(full.context.preferenceInventory());assert.equal(q.blocked,false);assert.equal(q.writable,false);assert.equal(q.families.find(f=>f.id==='opened').count,1);
+ const r=plain(full.context.resetPreferences());assert.deepEqual(r,{cleared:1,blocked:false},'removal still works on a full store and is counted');
+});
+test('resetPreferences removes exactly the reset:true keys and never a draft, template, request or consumed marker',()=>{
+ const h=harness(FAMILY_SEED);const r=plain(h.context.resetPreferences());
+ assert.deepEqual(r,{cleared:10,blocked:false});
+ const left=[...h.context.localStorage.map.keys()].sort();
+ assert.deepEqual(left,['clab-builder:draft:x','clab-builder:templates','clab-builder:templates-version','clab.design.draft.l','other.thing']);
+ assert.deepEqual([...h.context.sessionStorage.map.keys()].sort(),['activeLab','clab.request.j','git-save-request:l','op-return']);
+ assert.deepEqual(plain(h.context.resetPreferences()),{cleared:0,blocked:false},'nothing left to clear reports 0');
+ assert.deepEqual(plain(harness({throwStorage:true}).context.resetPreferences()),{cleared:0,blocked:true});
+});
+test('terminalFontPreference and setTerminalFontPreference stay inside the eight sizes and never throw',()=>{
+ const h=harness();assert.equal(h.context.terminalFontPreference(),14);
+ assert.equal(h.context.setTerminalFontPreference(16),true);assert.equal(h.context.localStorage.getItem('clab.terminal.fontSize'),'16');assert.equal(h.context.terminalFontPreference(),16);
+ assert.equal(h.context.setTerminalFontPreference(19),false);assert.equal(h.context.setTerminalFontPreference('abc'),false);assert.equal(h.context.localStorage.getItem('clab.terminal.fontSize'),'16','nothing written');
+ for(const bad of ['9','abc','']){h.context.localStorage.setItem('clab.terminal.fontSize',bad);assert.equal(h.context.terminalFontPreference(),14,bad);}
+ const blocked=harness({throwStorage:true});assert.equal(blocked.context.terminalFontPreference(),14);assert.equal(blocked.context.setTerminalFontPreference(15),false);
+});
+test('mediaMatches answers false without matchMedia or when it throws, and the query result otherwise',()=>{
+ const h=harness();assert.equal(h.context.mediaMatches('(prefers-reduced-motion: reduce)'),false);
+ h.context.matchMedia=q=>({matches:q.includes('reduce')});assert.equal(h.context.mediaMatches('(prefers-reduced-motion: reduce)'),true);assert.equal(h.context.mediaMatches('(forced-colors: active)'),false);
+ h.context.matchMedia=()=>{throw new Error('no');};assert.equal(h.context.mediaMatches('x'),false);
+});
+test('source pins: no "?" shortcut key, the font list equals terminal.js, and the preference helpers add no document or window listener',()=>{
+ const shell=fs.readFileSync(path.join(STATIC,'shell.js'),'utf8'),terminal=fs.readFileSync(path.join(STATIC,'terminal.js'),'utf8');
+ assert.doesNotMatch(shell,/===\s*['"]\?['"]/);
+ const sizes=(src,name)=>src.match(new RegExp(`${name}=\\[([\\d,]+)\\]`))[1],dflt=(src,name)=>src.match(new RegExp(`${name}=(\\d+)`))[1];
+ assert.equal(sizes(shell,'TERMINAL_FONT_SIZES'),sizes(terminal,'FONT_SIZES'));assert.equal(dflt(shell,'TERMINAL_FONT_DEFAULT'),dflt(terminal,'FONT_DEFAULT'));
+ const listeners=l=>(l.match(/(?:document|window)\.addEventListener\('/g)||[]).length;
+ assert.equal(listeners(shell),9,'the preference helpers add no document or window listener (nine existed before them)');
+});
+// Every key literal a page script stores must belong to a family of the Browser preferences dialog; a new key joins PREFERENCE_FAMILIES.
+function storedKeys(){
+ const out=[];
+ for(const [name,src] of pageScripts()){
+  const consts=Object.fromEntries([...src.matchAll(/\bconst\s+([A-Z_]+)\s*=\s*'([^']*)'/g)].map(m=>[m[1],m[2]]));
+  for(const m of src.matchAll(/(?:\b(?:shellGet|shellSet|shellRemove)\(\s*(?:'(?:local|session)Storage'|[\w.]+)\s*,|\.(?:getItem|setItem|removeItem)\(|\b(?:prefGet|prefSet)\()\s*([^,)]*)/g)){
+   const expr=m[1].trim(),lit=expr.match(/^'([^']*)'/);
+   let key=null;
+   if(lit)key=lit[1];
+   else if(consts[expr.split('+')[0].trim()]!==undefined){const [head,...rest]=expr.split('+');key=consts[head.trim()]+(rest.length?(rest[0].trim().match(/^'([^']*)'/)||['',''])[1]:'');}
+   else if(/^designDraftKey\(/.test(expr))key='clab.design.draft.';
+   else if(/^storageKey$/.test(expr)&&/const storageKey='([^']*)'/.test(src))key=src.match(/const storageKey='([^']*)'/)[1];
+   if(key!==null)out.push({file:name,key});
+  }
+ }
+ return out;
+}
+test('forward storage pin: every key a page script stores belongs to a PREFERENCE_FAMILIES entry (clab.probe, and the lab builder read-only clab-builder:probe, are the named exceptions)',()=>{
+ const h=harness(),found=storedKeys();
+ assert.ok(found.length>25,'the scan reads the tree: '+found.length);
+ for(const k of ['clab.opened.','clab.homeTab','clab.capture.openas','git-save-request:','op-return','activeLab','clab-builder:draft:','clab-builder:templates','clab.terminal.fontSize'])assert.ok(found.some(f=>f.key===k||f.key.startsWith(k)),'the scan sees '+k);
+ const unknown=found.filter(f=>!['clab.probe','clab-builder:probe'].includes(f.key)&&!vm.runInContext('PREFERENCE_FAMILIES',h.context).some(fam=>fam.match(f.key+(f.key.endsWith('.')||f.key.endsWith(':')?'x':''))));
+ assert.deepEqual(unknown,[],'a key no family matches: add it to PREFERENCE_FAMILIES in shell.js and to the Browser preferences dialog');
+});
+test('bundle pin: the editor bundle writes only keys that EDITOR_VIEW_KEYS lists',()=>{
+ const dir=path.join(STATIC,'lab-builder/assets'),keys=new Set(),h=harness();
+ for(const name of fs.readdirSync(dir).filter(f=>f.endsWith('.js'))){
+  const src=fs.readFileSync(path.join(dir,name),'utf8');
+  for(const m of src.matchAll(/localStorage\.setItem\(\s*(?:"([^"]+)"|([A-Za-z_$][\w$]*))/g)){
+   if(m[1])keys.add(m[1]);
+   else{const bound=src.match(new RegExp(`[,;{\\s]${m[2].replace(/\$/g,'\\$')}="([^"]+)"`));if(bound)keys.add(bound[1]);}
+  }
+  for(const m of src.matchAll(/modeStorageKey:"([^"]+)"/g))keys.add(m[1]);
+  for(const m of src.matchAll(/colorSchemeStorageKey:"([^"]+)"/g)){keys.add(m[1]+'-light');keys.add(m[1]+'-dark');}
+ }
+ for(const k of ['react-topoviewer-grid-line-width','react-topoviewer-grid-style','contextPanelSide','mui-mode','mui-color-scheme-light','mui-color-scheme-dark'])assert.ok(keys.has(k),'the bundle scan sees '+k);
+ const listed=vm.runInContext('EDITOR_VIEW_KEYS',h.context);
+ assert.deepEqual([...keys].filter(k=>!listed.includes(k)),[],'an editor upgrade wrote a key the dialog does not know');
+});
+// Every keyboard handler of the page scripts is either a row of the shortcuts dialog (data-source) or an exclusion with its reason.
+test('reverse shortcut pin: every keydown site is a data-source of a shortcuts row or a SHORTCUT_EXCLUSIONS entry, and every cited line exists',()=>{
+ const sites=[];
+ for(const [name,src] of pageScripts())src.split('\n').forEach((line,i)=>{if(!line.trim().startsWith('//')&&/addEventListener\('keydown'|\.onkeydown=|attachCustomKeyEventHandler\(/.test(line))sites.push(`${name}:${i+1}`);});
+ assert.ok(sites.length>=20,sites.join(' '));
+ const short=INDEX.slice(INDEX.indexOf('<dialog id="shortcuts-dialog"'),INDEX.indexOf('</dialog>',INDEX.indexOf('<dialog id="shortcuts-dialog"')));
+ const rows=[...short.matchAll(/data-source="([^"]+)"/g)].flatMap(m=>m[1].split(/\s+/));
+ const exclusions=[...fs.readFileSync(path.join(STATIC,'preferences.js'),'utf8').matchAll(/source:'([\w-]+\.js:\d+)'/g)].map(m=>m[1]);
+ const covered=new Set([...rows,...exclusions]);
+ assert.deepEqual(sites.filter(s=>!covered.has(s)),[],'a keyboard handler with no row in the shortcuts dialog and no exclusion: add its row to index.html or its reason to SHORTCUT_EXCLUSIONS');
+ for(const cite of rows){const [file,line]=cite.split(':'),src=fs.readFileSync(path.join(STATIC,file),'utf8');assert.ok(Number(line)<=src.split('\n').length,cite+' exists');}
 });

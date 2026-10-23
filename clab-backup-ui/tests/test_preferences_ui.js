@@ -112,25 +112,11 @@ test('reset wording: 1 item, 0 items',()=>{
   assert.ok(h.els['prefs-status'].textContent.includes(`reset: ${w} cleared.`),h.els['prefs-status'].textContent);
  }
 });
-test('without the shell.js helpers the stand-ins read storage in try/catch: seeded keys counted, reset spares drafts, a throwing store is blocked',()=>{
- const mk=()=>{const m=new Map();return {get length(){return m.size;},key:i=>[...m.keys()][i]??null,getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),m};};
- const local=mk(),session=mk();
- for(const k of ['clab.opened.a','clab.dismissed.j','react-topoviewer-grid-style','clab.capture.openas','clab.design.draft.a','clab-builder:draft:x','other.thing'])local.setItem(k,'1');
- session.setItem('clab.homeTab','all');session.setItem('clab.request.j','x');
- const ctx={$:()=>null,esc,localStorage:local,sessionStorage:session};vm.createContext(ctx);vm.runInContext(source,ctx);
- const inv=vm.runInContext('prefsInventory()',ctx);
- assert.equal(inv.blocked,false);assert.equal(inv.writable,true);assert.equal(local.getItem('clab.probe'),null);
- assert.equal(inv.families.find(f=>f.id==='opened').count,1);assert.equal(inv.families.find(f=>f.id==='requests').count,1);
- const r=vm.runInContext('prefsDoReset()',ctx);assert.deepEqual([r.cleared,r.blocked],[5,false]);
- assert.deepEqual([...local.m.keys()].sort(),['clab-builder:draft:x','clab.design.draft.a','other.thing']);
- assert.ok(session.m.has('clab.request.j'));assert.equal(session.m.has('clab.homeTab'),false);
- const bad={get length(){throw new Error('blocked');}};
- const c2={$:()=>null,esc,localStorage:bad,sessionStorage:bad};vm.createContext(c2);vm.runInContext(source,c2);
- assert.equal(vm.runInContext('prefsInventory()',c2).blocked,true);
- assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext('prefsDoReset()',c2))),{cleared:0,blocked:true});
- const quota={...mk(),setItem(){throw new Error('QuotaExceededError');}};
- const c3={$:()=>null,esc,localStorage:quota,sessionStorage:mk()};vm.createContext(c3);vm.runInContext(source,c3);
- const q=vm.runInContext('prefsInventory()',c3);assert.equal(q.blocked,false);assert.equal(q.writable,false);
+test('the dialog reads storage only through the shell.js helpers: no stand-ins, no typeof guards on them (their storage claims are pinned in test_shell_ui.js)',()=>{
+ assert.doesNotMatch(source,/FALLBACK|prefsFallback/);
+ for(const name of ['preferenceInventory','resetPreferences','mediaMatches','terminalFontPreference','setTerminalFontPreference','homeTab'])assert.doesNotMatch(source,new RegExp(`typeof ${name}\\b`),name);
+ const h=harness({media:{'(prefers-reduced-motion: reduce)':true}});
+ assert.deepEqual(JSON.parse(JSON.stringify(run(h,'prefsDisplay()'))),{motion:true,contrast:false,forced:false});
 });
 test('SHORTCUT_EXCLUSIONS lists each file:line with a reason',()=>{
  const h=harness();const list=run(h,'SHORTCUT_EXCLUSIONS');

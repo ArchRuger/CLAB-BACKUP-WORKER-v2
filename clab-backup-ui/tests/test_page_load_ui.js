@@ -222,3 +222,11 @@ test('C07: the capture dialog, the Tools card and the wire menu have the ids cap
  const page=loadPage();assert.deepEqual(page.failures,[]);
  for(const name of ['captureSummary','openLinkMenu','closeLinkMenu','endAllCaptureSessions','refreshCaptureSessions','captureMemory','rememberCapture','captureOpenAs','rememberOpenAs'])assert.equal(typeof get(page.context,name),'function',name);
 });
+test('C09: preferences.js loads once, after app.js, and the Browser preferences and shortcuts functions exist once the page is loaded',()=>{
+ assert.equal(scripts.filter(n=>n==='preferences.js').length,1);assert.equal(scripts.indexOf('preferences.js'),scripts.indexOf('app.js')+1);
+ const page=loadPage();assert.deepEqual(page.failures,[]);
+ for(const name of ['prefsMarkup','prefsRender','prefsOpen','shortcutsOpen','preferenceInventory','resetPreferences','mediaMatches','terminalFontPreference','setTerminalFontPreference','shellStorageKeys'])assert.equal(typeof get(page.context,name),'function',name);
+ for(const name of ['PREFERENCE_FAMILIES','EDITOR_VIEW_KEYS','SHORTCUT_EXCLUSIONS'])assert.ok(Array.isArray(get(page.context,name)),name);
+ assert.equal(typeof page.element('manager-shortcuts').onclick,'function','the Help item opens the dialog');assert.equal(typeof page.element('manager-preferences').onclick,'function');
+ assert.equal(get(page.context,'preferenceInventory')().blocked,true,'the fake storage of this harness cannot be listed: blocked, not a throw');
+});
