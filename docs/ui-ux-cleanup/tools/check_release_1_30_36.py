@@ -109,8 +109,9 @@ def check_b2_b4(r):
     open_topology_file_dialog(r)
     r.shot('b2-topology-file-dialog')
     buttons = r.js('() => [...document.querySelectorAll("#op-editor .actions button")].map(b => b.textContent.trim())')
-    r.rec('B2: dialog button label is "Open in Lab Builder..." not "Edit visually..."',
-          'Open in Lab Builder…' in buttons and 'Edit visually…' not in buttons, buttons)
+    # The label became "Edit topology…" in campaign 2 (2026-10-27): the check keeps its claim (not "Edit visually…").
+    r.rec('B2: dialog button label is "Edit topology..." (was "Open in Lab Builder...") not "Edit visually..."',
+          'Edit topology…' in buttons and 'Edit visually…' not in buttons, buttons)
 
     # Click Open in Lab Builder...
     p.click('#op-build-edit')
