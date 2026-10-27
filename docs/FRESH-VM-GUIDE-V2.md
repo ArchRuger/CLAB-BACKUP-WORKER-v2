@@ -288,8 +288,9 @@ check must pass. To upgrade later, pull into the same folder
 
 **Bootstrap APT failure:** if the initial Git installation fails with
 `file:/cdrom ... Release`, go to [recovery A](#recovery-a) below. If the error
-happens inside the installer, return to its menu and select installation-media
-repair when reviewing the install plan. Neither case requires a new VM.
+happens inside the installer, rerun it: the standard path already backs up and
+disables obsolete installation-media entries (`install.sh --advanced` asks first).
+Neither case requires a new VM.
 For `Release file ... is not valid yet` or `expired`, use
 [clock recovery](#recovery-c) instead. Media-source repair and clock correction
 address different errors.
@@ -297,17 +298,21 @@ address different errors.
 ## 5. Complete the full installation menu
 
 Choose **1. Install or update manager, then set up Git**. For a fresh standalone
-VM, the normal selections are:
+VM the standard path takes the routine choices itself and prints the plan without
+asking to confirm it; it asks only for two passwords:
 
-| Prompt or setting | What to choose |
+| Prompt or setting | What happens |
 |---|---|
-| Manager bind/port settings | With no existing `.env`, defaults are all VM interfaces and port **8081**; there is no separate port prompt |
-| Lab operation access | Enable reviewed lab operations |
-| VS Code / Containerlab extension access | **1** to set it up now (docker and clab_admins groups, writable lab folders, containerlab SUID); the VS Code block in step 7 then needs no command |
-| Back up and disable obsolete installation-media APT entries | **y** to repair the common leftover ISO/CD-ROM source; network sources are retained |
-| Installation plan | Review the source folder and account, then **y** |
-| sudo password | Your ordinary Ubuntu account password |
-| Create `clab-discovery` password | Choose a password and enter it twice; save it for the manager's VM connection |
+| Manager bind/port settings | With no existing `.env`, defaults are all VM interfaces and port **8081**; there is no port prompt |
+| Lab operation access | Reviewed lab operations are enabled |
+| VS Code / Containerlab extension access | Set up for your account (docker and clab_admins groups, writable lab folders, containerlab SUID); the VS Code block in step 7 then needs no command |
+| Obsolete installation-media APT entries | Backed up and disabled if present (the common leftover ISO/CD-ROM source); network sources are retained |
+| sudo password | You type your ordinary Ubuntu account password |
+| Create `clab-discovery` password | You choose a password and enter it twice; save it for the manager's VM connection |
+
+To be asked the first four questions (and the plan confirmation, and whether to set
+up Git now or later) yourself, start the installer with `--advanced`:
+`bash "$HOME/projects/clab-manager/deploy/install.sh" --advanced`.
 
 The installer handles missing Git, SSH, Docker/Compose and Containerlab;
 prepares persistent manager storage; installs and verifies helpers; builds and
@@ -339,9 +344,11 @@ WinSCP transfer, device backup or Git push; the next steps verify those.
 
 ## 6. Set up the engineer's Git checkout
 
-When offered **Set up or repair Git now**, choose it if your GitHub repository
-with its initial README is ready. Otherwise choose **Finish; set up Git later**.
-You can reopen the Git wizard without rebuilding:
+The Git wizard starts by itself once the manager is ready, so have your GitHub
+repository with its initial README ready. If it is not, press Ctrl+C at the first
+prompt (completed work is kept) and run the wizard later; with `--advanced` the
+installer offers **Set up or repair Git now** or **Finish; set up Git later**
+instead. You can reopen the Git wizard without rebuilding:
 
 ```bash
 bash "$HOME/projects/clab-manager/deploy/install.sh" --git
@@ -356,9 +363,10 @@ The six phases guide you through:
    GitHub **Code → HTTPS** URL, such as `https://github.com/OWNER/REPOSITORY.git`.
    A `/tree/main` browser URL is not the clone URL; the wizard offers a correction.
    Accept a persistent checkout path such as `/home/archtop/labs/my-lab`.
-3. **GitHub login:** copy the device code, press Enter when requested, and open
-   the displayed authorization URL on your workstation. Keep the VM terminal
-   waiting. A missing browser on the VM is expected.
+3. **GitHub login:** copy the device code the terminal prints and open the
+   displayed authorization URL (`github.com/login/device`) on your workstation.
+   Keep the VM terminal waiting; there is no Enter prompt. A missing browser on the
+   VM is expected. The wizard installs GitHub CLI by itself when it is missing.
 4. **Checkout:** let the wizard clone or validate that directory. It holds your
    saved configurations and is separate from the application source.
 5. **Identity and access:** enter your intended commit author name and email if
@@ -508,12 +516,13 @@ Error: EACCES: permission denied, mkdir '/etc/containerlab/my-lab'
 The extension checks the groups of the account it runs under and needs both
 `docker` and `clab_admins`; the explorer needs a lab folder you can write; and
 `containerlab deploy` from its terminal needs the sudo-less SUID mode. The
-installer deliberately leaves your account out of those groups, keeps the lab
-folders root-owned and removes the SUID bit, because the manager only needs its
-restricted `clab-discovery` account. `bash "$HOME/projects/clab-manager/deploy/install.sh"` therefore offers
-**VS Code / Containerlab extension access** in its standard flow, and as menu
-option 3 for an installation that already exists. The equivalent one command,
-run from any directory as your normal account, is:
+manager itself needs none of it: a fresh containerlab install keeps normal file
+modes, the lab folders stay root-owned and your account stays out of those groups,
+because the manager only uses its restricted `clab-discovery` account. The installer
+therefore runs the **VS Code / Containerlab extension access** step in its standard
+flow (as *Engineer access for VS Code*), and offers it as menu option 3 for an
+installation that already exists. The equivalent one command, run from any
+directory as your normal account, is (it needs lab operations enabled first):
 
 ```bash
 sudo bash "$HOME/projects/clab-manager/deploy/setup-engineer-access.sh" --owner "$(id -un)"
@@ -633,7 +642,10 @@ topology before deployment.
 On the **workstation**, open `http://10.150.2.213:8081/`, replacing the address
 and any customized port. There is no separate manager UI account setup.
 
-Open **VM connection** and enter:
+The **VM connection** dialog opens by itself, already filled in by the installer
+(notice *Prepared by VM setup*, see [VM-CONNECTION.md](VM-CONNECTION.md#the-prefilled-vm-connection));
+check the values and choose **Save and test connection**. If a field is empty
+(setup could not hand the password over), enter:
 
 | Field | Value for this standalone installation |
 |---|---|
@@ -821,8 +833,8 @@ or clone everything again to recover a failed check.
 
 ## Recovery A — APT installation media blocks bootstrap
 
-If the source is already present, the terminal installer can back up and repair
-media entries after your confirmation. If APT failed **before you could clone
+If the source is already present, the terminal installer backs up and disables
+media entries itself (`--advanced` asks first). If APT failed **before you could clone
 the source**, use the VM console to find the obsolete entry:
 
 ```bash
@@ -1038,7 +1050,7 @@ Retry the same installation step only after APT succeeds.
 | Obtain source | Step 4; VM console/SSH bootstrap |
 | Docker, SSH, Containerlab, manager storage/password/helpers/build/start | Installer in step 5 |
 | Browser Wireshark stack | Installer phase 4 in step 5; menu 4 reinstalls it; checked in step 11 |
-| Git login, identity, checkout and registration | Git terminal wizard in step 6 |
+| Git login, identity, checkout and registration | Git terminal wizard in step 6 (starts right after the install on the standard path) |
 | Ordinary-user SFTP and actual workstation transfer | Explicit checkpoint in step 7 |
 | Optional administrative WinSCP access | Paste-in sudoers rule and matching WinSCP setting in step 7; not added by the installer |
 | VS Code Remote - SSH and the Containerlab extension | Installer option (VS Code / Containerlab extension access) or `setup-engineer-access.sh` in step 7; reapplied by the launcher |

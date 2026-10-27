@@ -67,6 +67,8 @@ This is an **illustrative excerpt**, not output from your VM:
 Containerlab Node Manager - installation health report
 ==============================================================
 FAILURES FOUND
+PASS: 2 | FAIL: 2 | WARN: 1 | SKIP: 0 | INFO: 1
+Source: 1.31.6
 
 [PASS] Manager container
   The backup-ui container is running.
@@ -102,6 +104,7 @@ FAILURES FOUND (exit 1)
 | Docker and manager | Local rootful daemon, Compose, running manager container, restart policy, host networking, version and actual configured HTTP address/port |
 | Persistent storage | Persistent writable mount, container UID, saved key/state presence and successful decryption without printing contents |
 | Containerlab | CLI response and deployed-node inspection; no deployed labs is valid before the first deployment |
+| Helper files | Root ownership, modes, regular files and content of the installed inspect, operate and Git helpers compared with this source, and sudoers syntax; a stale or missing operate helper fails here and skips the SSH checks that need it |
 | Restricted helpers | Actual discovery/operations gateway and sudo execution as `clab-discovery`, matching protocols/versions and core command availability |
 | Manager-to-VM path | An uncached topology-browser request using the manager's saved SSH connection and pinned host fingerprint |
 | Lab folders | Real folder browsing through that connection, including subfolders within the configured coverage limit |

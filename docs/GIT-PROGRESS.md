@@ -320,7 +320,7 @@ folder…** in **Save settings** all open the same chooser, titled `Where should
 has two or more repositories it starts with a **Repository** list; under it the chooser says where uploads
 go (`Uploads go to github.com/you/Course-Labs, branch main.`) and offers **Connect by URL…**, which
 replaces the list with a **Repository address (HTTPS)** field. Typing an address skips the folder tree (its
-folders are listed once the repository is connected) and the button becomes **Connect and save here**;
+folders are listed once the repository is connected) and the button stays **Save here**, off until an address is typed;
 **Use a repository on this VM** goes back. Then:
 
 - **Folder** is a field you can type a whole path into, such as `Week-04/BGP/Final-State`. The line
@@ -502,7 +502,7 @@ with `Saved 3 days ago.` and one row per device, each with a tick and what diffe
 | `Already matches` | The device already runs the saved configuration. |
 | `Not in this state` | The lab has this device but the state does not; it is left as it is. |
 | `Not in this lab` | The state holds a device that no running node of this lab matches. |
-| `Not reachable`, `Blocked`, `Can't load` | The device cannot be loaded now, with the reason under its name and, where one exists, a button to fix it. |
+| `Not reachable`, `Blocked`, `Can’t load` | The device cannot be loaded now, with the reason under its name and, where one exists, a button to fix it. |
 
 Devices are matched to saved devices by their full node name. A state fits the lab it was saved from
 and a lab deployed from the same topology under the same name (a student's copy of a course lab). It
@@ -521,7 +521,7 @@ The buttons:
 
 - the red **Load** is the confirmation. It loads the ticked devices. It is off, with the reason beside
   it, while `A save is running.` or when `Tick at least one device.`;
-- **See what’s different** opens the drawer `What's different`: for each ticked device, the saved
+- **See what’s different** opens the drawer `What’s different`: for each ticked device, the saved
   configuration against what the device runs now, with its own button `Load on 3 devices` and **Back**;
 - **Cancel** goes back to the list.
 
