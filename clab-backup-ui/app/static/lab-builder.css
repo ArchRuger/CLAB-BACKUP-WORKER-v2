@@ -16,6 +16,12 @@ body.lab-builder{display:flex;flex-direction:column}
    stays on screen instead of being pushed past the right edge. */
 @media (max-width:640px){.builder-bar{height:auto;min-height:52px;flex-wrap:wrap;row-gap:6px;padding-top:8px;padding-bottom:8px}.builder-spacer{display:none}.builder-bar .builder-name{max-width:14ch}.builder-bar .button{padding:6px 9px;font-size:13px}}
 .builder-spacer{flex:1}
+/* The lab line under the bar (the lab's state, what a save left to apply, a continued draft) and its one control. A plain paragraph, not a live region. */
+.builder-line{flex:none;display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2);margin:0;padding:var(--space-2) var(--space-4);font-size:13px;line-height:1.5;color:var(--ink);background:var(--surface-2);border-bottom:1px solid var(--line)}
+.builder-line #builder-review{flex:none;padding:2px 10px;min-height:0;font-size:13px;text-decoration:none}
+.builder-line[hidden],.builder-line [hidden]{display:none}
+/* A medium window: the bar wraps before the extra Undo and Redo buttons push Save out of it. */
+@media (max-width:960px){.lab-builder .builder-bar{height:auto;min-height:52px;flex-wrap:wrap;row-gap:6px;padding-top:8px;padding-bottom:8px}.lab-builder .builder-spacer{display:none}}
 .builder-note{flex:none;margin:0;padding:var(--space-2) var(--space-4);background:var(--warn-soft);color:var(--warn-strong);border-bottom:1px solid var(--line)}
 .builder-note .button{margin-left:var(--space-2);padding:2px 10px;min-height:0}
 /* The one image-check notice, in the app's banner language: info (info-soft, accent edge, "Info:" lead), warning
@@ -79,6 +85,7 @@ body.lab-builder{display:flex;flex-direction:column}
 .builder-yaml-example-code{margin:0 0 var(--space-1);padding:8px;overflow:auto;font:12.5px/18px var(--mono);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius)}
 .builder-yaml-example-actions{padding-bottom:var(--space-2)}
 .builder-yaml-line.is-error{color:var(--danger-strong);font-weight:700;background:var(--danger-soft)}
+.builder-yaml-line.is-info{color:var(--muted)}
 .builder-yaml-line.is-warning{color:var(--warn-strong);font-weight:700;background:var(--warn-soft)}
 .builder-yaml-problems{flex:none;display:flex;flex-direction:column;min-height:0;padding:0 var(--space-3) var(--space-2)}
 .builder-yaml-problems-title{margin:var(--space-2) 0 0;font-size:13px;color:var(--ink)}
@@ -94,6 +101,7 @@ body.lab-builder{display:flex;flex-direction:column}
 .builder-yaml-sev{font-weight:700}
 .builder-yaml-list li.is-error .builder-yaml-sev{color:var(--danger-strong)}
 .builder-yaml-list li.is-warning .builder-yaml-sev{color:var(--warn-strong)}
+.builder-yaml-list li.is-info .builder-yaml-sev{color:var(--muted)}
 .builder-yaml-more>summary{cursor:pointer;margin-top:var(--space-1);font-size:12.5px;color:var(--accent-strong)}
 /* Wider than 900 px the caption and the key help are always shown, so the disclosure's summary is not offered. */
 @media (min-width:901px){.builder-yaml-more>summary{display:none}}

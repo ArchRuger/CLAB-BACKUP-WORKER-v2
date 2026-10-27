@@ -239,7 +239,7 @@ function builderYamlRenderList(list){
   if(f.line>0){
    const b=builderYamlMake('button','builder-yaml-problem');b.setAttribute('type','button');b.setAttribute('data-line',String(f.line));b.setAttribute('data-code',String(f.code||''));
    if(had&&!had.list&&!again&&String(f.line)===had.line&&String(f.code||'')===had.code)again=b;
-   b.append(builderYamlMake('span','builder-yaml-sev',f.severity==='error'?'Error':'Warning'),' Line '+f.line+': '+f.message);li.append(b);
+   b.append(builderYamlMake('span','builder-yaml-sev',f.severity==='error'?'Error':f.severity==='info'?'Note':'Warning'),' Line '+f.line+': '+f.message);li.append(b);
   }else li.append(f.message);
   ol.append(li);
  }

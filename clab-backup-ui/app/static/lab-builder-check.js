@@ -172,7 +172,7 @@ function builderCheckStart(schema,context){
  const ctx=context&&typeof context==='object'?context:{};
  const version=typeof ctx.schemaVersion==='string'?ctx.schemaVersion:'';
  return {schema:schema&&typeof schema==='object'?schema:null,exact:ctx.exact===true,version,
-  out:[],aliases:new Set(),probed:BUILDER_PROBED_LEVELS[version]||[],extras:BUILDER_SCHEMA_EXTRA_KEYS[version]||{}};
+  out:[],aliases:new Set(),caps:new Set(),probed:BUILDER_PROBED_LEVELS[version]||[],extras:BUILDER_SCHEMA_EXTRA_KEYS[version]||{}};
 }
 function builderCheckSub(r){return Object.assign({},r,{out:[]});}
 // A finding has no `refuser` unless the manager's own import refuses it where containerlab does not: then refuser is 'manager'.
@@ -413,6 +413,53 @@ function builderCheckMap(r,loc,sch,path,line,o){
 }
 
 // --- the topology: devices, inheritance, kinds, images ----------------------------------------------------
+// --- the manager's device catalog (GET /api/catalog), which the page leaves in window.builderCatalog (read as a global, so this file names no browser object) -------------------------------
+// undefined: not asked (a bare test context); null: asked and not loaded; otherwise the answer {entries:[{kind, label, aliases,
+// interfaces:{pattern, flags, prefix, first_port, reserved, container_pattern}|null, …}]}. Everything from it is advisory.
+function builderCheckCatalogNow(){try{const c=globalThis.builderCatalog;return c&&Array.isArray(c.entries)?c:null;}catch{return null;}}
+function builderCheckCatalogFailed(){try{return globalThis.builderCatalog===null;}catch{return false;}}
+// The entry of a kind written the way containerlab accepts it: the kind itself or one of its aliases.
+function builderCheckCatalogEntry(kind){
+ const catalog=builderCheckCatalogNow(),low=String(kind||'').toLowerCase();if(!catalog||!low)return null;
+ return catalog.entries.find(e=>e&&typeof e.kind==='string'&&(e.kind.toLowerCase()===low||(Array.isArray(e.aliases)&&e.aliases.some(a=>String(a).toLowerCase()===low))))||null;
+}
+const BUILDER_CHECK_CATALOG_REGEX=new Map();
+function builderCheckCatalogRegex(source,flags){
+ if(typeof source!=='string'||!source)return null;
+ const key=source+'/'+(flags||'');if(BUILDER_CHECK_CATALOG_REGEX.has(key))return BUILDER_CHECK_CATALOG_REGEX.get(key);
+ let re=null;try{re=new RegExp(source,typeof flags==='string'&&/^[ims]*$/.test(flags)?flags:'');}catch{re=null;}
+ BUILDER_CHECK_CATALOG_REGEX.set(key,re);return re;
+}
+// "cJunosEvolved" for the template "Juniper cJunosEvolved": the vendor word is dropped from a name of two words or more.
+function builderCheckCatalogWho(entry){
+ const name=entry&&entry.template&&typeof entry.template.name==='string'?entry.template.name.trim():'',words=name.split(/\s+/);
+ return words.length>1?words.slice(1).join(' '):(name||entry.kind);
+}
+// R13/#17/#19: one interface name on a device whose kind the catalog has rules for. A name the image reserves, and a name outside both the
+// NOS scheme and the container's own ethN/eN form, are warnings: the student may know better. The templates' own patterns raise nothing.
+function builderCheckIface(r,device,iface,line,path){
+ const entry=device&&device.kind?builderCheckCatalogEntry(device.kind):null,rule=entry&&entry.interfaces;
+ if(!rule||typeof rule!=='object'||typeof iface!=='string'||!iface.trim())return;
+ const name=iface.trim(),low=name.toLowerCase(),shown='`'+builderCheckShow(name)+'`';
+ const reserved=Array.isArray(rule.reserved)?rule.reserved.map(String):[];
+ if(reserved.some(x=>x.toLowerCase()===low)){
+  const range=reserved.length>1?reserved[0]+' to '+reserved[reserved.length-1]:reserved[0],last=/^eth(\d+)$/i.exec(reserved[reserved.length-1]);
+  const first=rule.first_port?'; the first data port is '+rule.first_port+(last?' (eth'+(Number(last[1])+1)+')':''):'';
+  builderCheckAdd(r,'warning',line,'iface-reserved',path,shown+' on a '+builderCheckCatalogWho(entry)+' device is reserved by the image ('+range+')'+first+'.');
+  return;
+ }
+ const nos=builderCheckCatalogRegex(rule.pattern,rule.flags),box=builderCheckCatalogRegex(rule.container_pattern,rule.flags||'i');
+ if(!nos&&!box)return;
+ if((nos&&nos.test(name))||(box&&box.test(name)))return;
+ builderCheckAdd(r,'warning',line,'iface-scheme',path,shown+' is not a '+(rule.prefix||'')+'N port name of this kind, nor a container interface name like eth1.');
+}
+// #18: once per kind, never for `linux`: a kind containerlab deploys that the manager's catalog does not have. Informational ('info').
+function builderCheckCapability(r,kind,name,line){
+ if(!builderCheckCatalogNow()||!r.schema||!kind||kind==='linux'||BUILDER_NO_IMAGE_KINDS.includes(kind)||r.caps.has(kind)||builderCheckCatalogEntry(kind))return;
+ if(!builderCheckKindEnum(r).includes(kind)&&!builderCheckAlias(kind))return;
+ r.caps.add(kind);
+ builderCheckAdd(r,'info',line,'kind-capability',['topology','nodes',name,'kind'],'Devices of kind `'+builderCheckShow(kind)+'`: containerlab deploys them; the manager has no backup, restore or design support for this kind.');
+}
 function builderCheckAlias(kind){return kind.startsWith(BUILDER_KIND_ALIASES.prefix)||BUILDER_KIND_ALIASES.short.includes(kind);}
 function builderCheckKindEnum(r){const s=builderCheckDef(r,'node-config');const k=s&&s.properties?builderCheckResolve(r,s.properties.kind):null;return k&&Array.isArray(k.enum)?k.enum.map(String):[];}
 // A device's own settings, its group's, its kind section's and the defaults: the order containerlab resolves a
@@ -461,6 +508,7 @@ function builderCheckDevice(r,t,name,entry){
   }
   else if(kinds.length&&!kinds.includes(kind))builderCheckAdd(r,builderCheckExact(r),kindEntry.keyLine,'kind-unknown',path.concat('kind'),builderCheckClab(r)+' knows no kind `'+builderCheckShow(kind)+'`.'+builderCheckMean(kind,kinds));
  }
+ builderCheckCapability(r,kind,name,kindEntry?kindEntry.keyLine:entry.keyLine);
  const chain=builderCheckChain(t,nodeMap,kind);
  if(!BUILDER_NO_IMAGE_KINDS.includes(kind)&&!builderCheckSetting(chain,'image'))builderCheckAdd(r,'warning',entry.keyLine,'image-missing',path.concat('image'),'`'+builderCheckShow(name)+'` has no image. containerlab needs one to create the container; the deploy fails without it.');
  return {name,kind,chain,line:entry.keyLine};
@@ -607,13 +655,14 @@ function builderCheckLinkDef(r,type){
  for(const b of forms&&Array.isArray(forms.anyOf)?forms.anyOf:[]){const d=builderCheckResolve(r,b);const t=d&&d.properties?builderCheckResolve(r,d.properties.type):null;if(t&&t.const===type)return d;}
  return null;
 }
-function builderCheckLinks(r,linksEntry,names){
+function builderCheckLinks(r,linksEntry,names,devices){
  const list=linksEntry.value;if(!builderCheckIsSeq(list))return;
- const used=new Map();
+ const used=new Map(),byName=new Map((Array.isArray(devices)?devices:[]).map(d=>[d.name,d]));
  const endpoint=(node,iface,line,linkLine,path,link)=>{
   if(!node)return;
   if(!BUILDER_CHECK_LINK_SPECIAL.includes(node)&&!names.includes(node))builderCheckAdd(r,'error',line,'link-node',path,'the link endpoint `'+builderCheckShow(node)+'` is not a device in topology.nodes.');
   if(!iface)return;
+  builderCheckIface(r,byName.get(node),iface,line,path);
   const id=node+':'+iface,first=used.get(id);
   // Both ends of one link the same: R7a has said so.
   if(first&&first.link!==link)builderCheckAdd(r,'warning',line,'link-duplicate',path,'`'+builderCheckShow(id)+'` is already used by the link on line '+first.line+'.');
@@ -781,14 +830,15 @@ function builderCheckTopology(r,topo){
   const device=builderCheckDevice(r,t,name,entry);devices.push(device);
   if(builderCheckIsMap(entry.value))builderCheckNodeConfig(r,entry.value,here,device.kind,entry.keyLine);
  }
- if(links)builderCheckLinks(r,links,names);
+ if(links)builderCheckLinks(r,links,names,devices);
  builderCheckGraph(r,devices);
 }
 // Sorted by line, errors first on a line; duplicates (an inherited entry reported for every device) once; capped.
 function builderCheckFinish(r){
  const seen=new Set(),list=[];
  for(const f of r.out){const id=f.code+'|'+f.line+'|'+f.message;if(seen.has(id))continue;seen.add(id);list.push(f);}
- list.sort((a,b)=>a.line-b.line||(a.severity===b.severity?0:a.severity==='error'?-1:1));
+ const rank={error:0,warning:1,info:2};
+ list.sort((a,b)=>a.line-b.line||(rank[a.severity]??1)-(rank[b.severity]??1));
  if(list.length<=BUILDER_CHECK_LIMIT)return list;
  const rest=list.slice(BUILDER_CHECK_LIMIT),errors=rest.filter(f=>f.severity==='error').length;
  return list.slice(0,BUILDER_CHECK_LIMIT).concat([{severity:errors?'error':'warning',line:0,message:'… and '+rest.length+' more.',code:'more',path:[],more:{errors,warnings:rest.length-errors}}]);
@@ -810,6 +860,11 @@ function builderSchemaCompare(a,b){for(let i=0;i<3;i++)if(a[i]!==b[i])return a[i
 // builderSchemaChoice(vmVersion, available) → {schemaVersion, exact, reason, vmVersion, caption}. `exact` needs the
 // whole VM string to equal a vendored version; the fetch URL is built from the list entry, never from the VM's string.
 function builderSchemaChoice(vmVersion,available){
+ const choice=builderSchemaPick(vmVersion,available);
+ // #17: the interface rules need the manager's catalog; when it did not load the caption says so.
+ return builderCheckCatalogFailed()?Object.assign({},choice,{caption:choice.caption+' Interface names were not checked: the manager\'s catalog did not load.'}):choice;
+}
+function builderSchemaPick(vmVersion,available){
  const vm=typeof vmVersion==='string'?vmVersion:'';
  const list=(Array.isArray(available)?available:BUILDER_SCHEMA_VERSIONS).filter(v=>typeof v==='string'&&/^\d+\.\d+\.\d+$/.test(v)).slice().sort((a,b)=>builderSchemaCompare(builderSchemaParts(a),builderSchemaParts(b)));
  if(!list.length)return {schemaVersion:'',exact:false,reason:'none',vmVersion:vm,caption:'The manager carries no topology schema, so settings and kinds are not checked; links and boot order still are.'};

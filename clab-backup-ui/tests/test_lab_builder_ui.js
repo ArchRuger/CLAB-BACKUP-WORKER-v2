@@ -171,14 +171,14 @@ test('the first save publishes a new folder; later saves revise the versions tha
 // --- the page itself, over a fake document: the behaviours a student depends on when something goes wrong ---
 function page(options={}){
  const elements=new Map(),el=id=>{if(!elements.has(id))elements.set(id,{id,textContent:'',hidden:false,disabled:false,title:'',className:'',value:'',focus(){},click(){},addEventListener(){},append(){},querySelector:()=>null,querySelectorAll:()=>[]});return elements.get(id);};
- const store=options.storage||storage(),calls=[],toasts=[],timers=[];
+ const store=options.storage||storage(),calls=[],toasts=[],timers=[],forms=[];
  const context=vm.createContext({console,crypto:options.crypto||require('node:crypto').webcrypto,TextEncoder,URLSearchParams,FormData,Blob,setTimeout:fn=>timers.push(fn),clearTimeout(){},confirm:()=>options.confirm??true,alert(){},
   window:{localStorage:store},location:{hash:'',reload(){calls.push('reload');}},document:{title:'',getElementById:el,querySelector:()=>null,querySelectorAll:()=>[],createElement:()=>el('made'),body:{append(){}}},
-  fetch:async(url,init)=>{const body=init?.body&&typeof init.body==='string'?JSON.parse(init.body):null;calls.push([url,body]);const answer=await options.answer(url,body);if(answer instanceof Error)throw new TypeError('network');return {ok:!answer.refused,json:async()=>answer.refused?{detail:answer.refused}:answer};}});
+  fetch:async(url,init)=>{const body=init?.body&&typeof init.body==='string'?JSON.parse(init.body):null;calls.push([url,body]);if(init?.body&&typeof init.body!=='string'&&typeof init.body.entries==='function')forms.push([url,Object.fromEntries([...init.body.entries()].map(([k,v])=>[k,typeof v==='string'?v:'<file>']))]);const answer=await options.answer(url,body);if(answer instanceof Error)throw new TypeError('network');return {ok:!answer.refused,status:answer.status,json:async()=>answer.refused?{detail:answer.refused}:answer};}});
  vm.runInContext(read('lab-builder-page.js'),context);vm.runInContext(read('operations.js'),context);
  // operations.js dialogs need a real DOM; the page logic under test only needs to know one was asked for
- vm.runInContext("opDialog=(id,title,body)=>{dialogs.push({id,title,body});return {close(){},querySelector:()=>null,querySelectorAll:()=>[]};};notify=m=>toasts.push(m);",Object.assign(context,{dialogs:[],toasts}));
- return {c:context,el,store,calls,toasts,timers,run:code=>vm.runInContext(code,context)};
+ vm.runInContext("opDialog=(id,title,body)=>{const dialog={close(){},querySelector:()=>null,querySelectorAll:()=>[]};dialogs.push({id,title,body,dialog});return dialog;};notify=m=>toasts.push(m);",Object.assign(context,{dialogs:[],toasts}));
+ return {c:context,el,store,calls,toasts,timers,forms,run:code=>vm.runInContext(code,context)};
 }
 const VM_PATH='/srv/labs/lab1/lab1.clab.yml',TOPOLOGY='name: lab1\ntopology:\n  nodes:\n    r1:\n      kind: linux\n';
 test('the lab name is what the topology says: a new draft follows a rename, a saved lab is told to set it back',()=>{
@@ -345,7 +345,7 @@ test('Save is never off without the reason being on the page',()=>{
  p.run(`builderCaps={actions:{publish:{available:true}}};builderRenderBar();`);assert.equal(p.el('builder-save').disabled,false);assert.equal(p.el('builder-note').hidden,true);
  // a lab that is deployed: said when the draft opens, not only when the save is refused
  p.run(`state.labs=[{id:'1',name:'lab1',vm_project_path:'${VM_PATH}',deployment:{status:'Running'}}];builderCaps.actions.revise={available:true};builderDraft=draftWrite(builderStore,{...builderDraft,vm:{path:'${VM_PATH}',yaml:builderDraft.yaml,annotations:''}},builderDraft.revision);builderRenderBar();`);
- assert.match(p.el('builder-note-text').textContent,/lab1 is deployed\..*after the lab is destroyed/);assert.equal(p.el('builder-save').disabled,false);
+ assert.equal(p.el('builder-note-text').textContent,'This lab is running: saving changes the file and the map, not the devices; applying is a separate step.');assert.doesNotMatch(p.el('builder-note-text').textContent,/destroy/i);assert.equal(p.el('builder-save').disabled,false);
 });
 test('a browser that refuses storage still builds: the draft lives in the tab and the page says so',()=>{
  const p=page({answer:()=>({})});Object.defineProperty(p.c.window,'localStorage',{get(){throw new Error('denied');}});
@@ -369,12 +369,30 @@ test('the outcome of a save reaches the draft when its dialog was closed, and a 
  // the result of another job is not taken for this one
  p.run(`builderPending={yaml:'x',annotations:'',action:'publish',job:'job2'};opJobDone({id:'job1',action:'publish',status:'succeeded',result:{published_path:'/other'}})`);assert.equal(p.run('builderPending.job'),'job2');
 });
+// A9: the native confirm() is gone. The student chooses in a dialog; Escape (or ×) keeps both and does nothing.
+async function shown(p){for(let i=0;i<100&&!p.c.dialogs.length;i++)await new Promise(done=>setImmediate(done));return p.c.dialogs.at(-1);}
 test('opening the VM version never discards a draft with unsaved changes unasked, whichever draft is newer',async()=>{
  const changed=TOPOLOGY+'# changed on the VM\n',answer=(url,body)=>url.endsWith('/operations/read')?(body.path===VM_PATH?{text:changed,sha256:'h2'}:{refused:'The selected VM path no longer exists.'}):url.endsWith('/operations/parse-yaml')?{name:'lab1'}:{};
  const seed=`draftWrite(builderStore,{id:'new:lab1:x',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY+'# my work\n')},vm:{path:'${VM_PATH}',yaml:${JSON.stringify(TOPOLOGY)},annotations:''}},undefined);draftWrite(builderStore,{id:'vm:${VM_PATH}',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY)},vm:{path:'${VM_PATH}',yaml:${JSON.stringify(TOPOLOGY)},annotations:''}},undefined);`;
- let asked=0;const keep=page({answer});keep.c.confirm=()=>{asked++;return false;};keep.run(seed);
- const kept=await keep.run(`builderOpenFromVm('${VM_PATH}')`);assert.equal(asked,1,'the student is asked');assert.match(kept.yaml,/my work/);assert.match(keep.c.draftRead(keep.store,'new:lab1:x').yaml,/my work/,'Cancel keeps the work');
- const drop=page({answer});drop.c.confirm=()=>true;drop.run(seed);const fresh=await drop.run(`builderOpenFromVm('${VM_PATH}')`);assert.match(fresh.yaml,/changed on the VM/);assert.equal(drop.c.draftList(drop.store).length,1);
+ let asked=0,focused='';const keep=page({answer});keep.c.confirm=()=>{asked++;return false;};keep.run(seed);keep.el('builder-old-vm').focus=()=>{focused='vm';};
+ const pending=keep.run(`builderOpenFromVm('${VM_PATH}')`);const dialog=await shown(keep);
+ assert.equal(dialog.id,'builder-old-draft');assert.equal(asked,0,'no native confirm');
+ assert.match(dialog.body,/Start from the VM version/);assert.match(dialog.body,/Continue my draft \(from /);assert.match(dialog.body,/Download my draft/);
+ assert.equal(focused,'vm','Start from the VM version is the focused default');
+ dialog.dialog.onclose();const kept=await pending;
+ assert.match(kept.yaml,/my work/,'Escape keeps both');assert.match(keep.c.draftRead(keep.store,'new:lab1:x').yaml,/my work/,'nothing was discarded');
+ assert.equal(keep.run('builderContinued'),keep.c.draftRead(keep.store,'new:lab1:x').updated);
+ // Continue my draft is the same, Start from the VM version removes the drafts
+ const go=page({answer});go.run(seed);const p2=go.run(`builderOpenFromVm('${VM_PATH}')`);await shown(go);go.el('builder-old-continue').onclick();assert.match((await p2).yaml,/my work/);
+ const drop=page({answer});drop.run(seed);const p3=drop.run(`builderOpenFromVm('${VM_PATH}')`);await shown(drop);drop.el('builder-old-vm').onclick();
+ const fresh=await p3;assert.match(fresh.yaml,/changed on the VM/);assert.equal(drop.c.draftList(drop.store).length,1);assert.equal(drop.run('builderContinued'),'');
+ // Download my draft offers the draft in the dialog without closing it
+ const dl=page({answer});dl.run(seed);dl.run("var downloaded=[];builderDownloadDraft=d=>downloaded.push(d.id);");const p4=dl.run(`builderOpenFromVm('${VM_PATH}')`);await shown(dl);dl.el('builder-old-download').onclick();assert.deepEqual(JSON.parse(JSON.stringify(dl.run('downloaded'))),['new:lab1:x']);dl.el('builder-old-continue').onclick();await p4;
+ // an unchanged VM file continues the stale draft, and says since when (no dialog)
+ const same=page({answer:(url,body)=>url.endsWith('/operations/read')?(body.path===VM_PATH?{text:TOPOLOGY,sha256:'h'}:{refused:'The selected VM path no longer exists.'}):url.endsWith('/operations/parse-yaml')?{name:'lab1'}:{}});same.run(seed);
+ const since=same.c.draftRead(same.store,'new:lab1:x').updated;
+ const cont=await same.run(`builderOpenFromVm('${VM_PATH}')`);assert.match(cont.yaml,/my work/);assert.equal(same.c.dialogs.length,0);assert.equal(same.run('builderContinued'),since,'the date of the draft as the person left it');
+ same.c.cont=cont;same.run('builderUse(cont)');assert.match(same.el('builder-line-text').textContent,/^Continuing your draft from .*; its changes are not on the VM yet\.$/);assert.equal(same.el('builder-line').hidden,false);
 });
 test('a save remembers where it went: a rename after a lost answer does not orphan the lab on the VM',async()=>{
  const p=page({answer:(url,body)=>url.endsWith('/operations/read')?(body.path===VM_PATH?{text:TOPOLOGY,sha256:'h1'}:{refused:'The selected VM path no longer exists.'}):{}});
@@ -626,4 +644,191 @@ test('Dismiss is remembered across a reload in the tab (sessionStorage, per draf
  const refused=notePage();Object.defineProperty(refused.c.window,'sessionStorage',{get(){throw new Error('denied');}});
  refused.run('builderCheckStatus()');await refused.fired();refused.el('builder-check-dismiss').onclick();
  assert.equal(refused.el('builder-check').hidden,true);refused.run('builderCheckStatus()');await refused.fired();assert.equal(refused.el('builder-check').hidden,true);
+});
+
+// ---- editing a lab's own file: the Topology view opens this page at #path=…&lab=<id> (docs/parity-campaign/TOPOLOGY-EDIT-DESIGN.md 12) ----
+const LAB={id:'lab-1',name:'Parity',deployment_name:'parity',vm_project_path:VM_PATH,deployment:{status:'Running'},nodes:[{name:'a',runtime_state:'running'},{name:'b',runtime_state:'exited'}]};
+const PREVIEW={action:'revise',name:'lab1',path:VM_PATH,token:'t1',warnings:[],affected:[],argv:[],steps:[],images:[],diff:'-a\n+b\n',deployed:true};
+const labSettle=async()=>{for(let i=0;i<30;i++)await new Promise(done=>setImmediate(done));};
+function labPage(status='Running',options={}){
+ const p=page({answer:options.answer||(()=>({}))});
+ p.run(`state.labs=[${JSON.stringify({...LAB,deployment:{status}})}];builderLabId='${options.lab===undefined?'lab-1':options.lab}';builderCaps={actions:{publish:{available:true},revise:{available:true,deployed:true}}};builderDraft=draftWrite(builderStore,{id:'vm:${VM_PATH}',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY+'# edited\n')},annotations:'',mapRevision:'r7',vm:{path:'${VM_PATH}',yaml:${JSON.stringify(TOPOLOGY)},annotations:''}},undefined);builderRenderBar();`);
+ return p;
+}
+test('#lab: the title and the bar name the lab, Back to lab replaces My labs, and a plain line says the lab’s state without ever saying destroy',()=>{
+ const p=labPage('Running'),line=()=>p.el('builder-line-text').textContent;
+ assert.equal(p.run('document.title'),'Parity · Edit topology · Containerlab Node Manager');assert.equal(p.el('builder-name').textContent,'Editing Parity');
+ assert.equal(p.el('builder-back').textContent,'← Back to lab');assert.equal(p.el('builder-back').href,'/#lab=lab-1&view=topology');
+ const sentences={
+  Running:'This lab is running on the VM (2 devices). Saving changes the file and the map, not the devices; applying is a separate step.',
+  'Partially running':'Some devices of this lab are running on the VM (1 of 2). Saving changes the file and the map, not the devices; applying is a separate step.',
+  Stopped:'This lab is stopped on the VM (2 devices). Saving changes the file and the map, not the devices; applying is a separate step.',
+  'Not deployed':'This lab is not deployed.',
+  Unknown:'Whether this lab is running is not known right now. Saving changes the file and the map, not any devices that may be running; applying is a separate step.',
+ };
+ for(const [status,text] of Object.entries(sentences)){const q=labPage(status);assert.equal(q.el('builder-line-text').textContent,text,status);assert.doesNotMatch(q.el('builder-line-text').textContent,/destroy/i);assert.equal(q.el('builder-line').hidden,false);}
+ assert.equal(line(),sentences.Running);
+ // the line is its own element: not a live region, and the older note under the bar does not repeat it
+ assert.equal(p.el('builder-note').hidden,true);
+ const html=read('lab-builder.html'),tag=/<p class="builder-line" id="builder-line"[^>]*>/.exec(html)[0];assert.doesNotMatch(tag,/role=|aria-live/);assert.match(tag,/ hidden/);
+ // no lab (an old address), or a lab that left the manager: the file name and My labs
+ for(const q of [labPage('Running',{lab:''}),labPage('Running',{lab:'gone'})]){assert.equal(q.el('builder-back').textContent,'← My labs');assert.equal(q.el('builder-back').href,'/');assert.equal(q.el('builder-name').textContent,'lab1');assert.equal(q.el('builder-line').hidden,true);assert.match(q.run('document.title'),/^lab1 · Lab builder/);}
+});
+test('#lab is kept in the address while the page moves between drafts and versions of the same file, and only then',()=>{
+ const p=labPage('Running');
+ p.run(`draftWrite(builderStore,{id:'new:lab1',name:'lab1',root:'/srv/labs',yaml:'y',vm:{path:'${VM_PATH}',yaml:'y',annotations:''}},undefined);draftWrite(builderStore,{id:'new:other',name:'other',root:'/srv/labs',yaml:'y'},undefined);`);
+ p.run("builderGo({draft:'new:lab1'})");assert.equal(new URLSearchParams(p.run('location.hash')).get('lab'),'lab-1','Drafts… › Open of this lab\'s draft');
+ p.run(`builderGo({path:'${VM_PATH}'})`);assert.equal(new URLSearchParams(p.run('location.hash')).get('lab'),'lab-1','Open the VM version');
+ p.run("builderGo({draft:'new:other'})");assert.equal(new URLSearchParams(p.run('location.hash')).get('lab'),null,'another lab\'s draft is not this lab');
+});
+test('with #lab the annotations are the manager\'s kept map document and its revision is remembered; the VM file\'s map hash stays the base of the stale check',async()=>{
+ const read=(url,body)=>url.endsWith('/operations/read')?(body.path===VM_PATH?{text:TOPOLOGY,sha256:'h'}:body.path===VM_PATH+'.annotations.json'?{text:'{"vm":1}',sha256:'lh'}:{refused:'The selected VM path no longer exists.'}):url.endsWith('/operations/parse-yaml')?{name:'lab1'}:null;
+ const p=page({answer:(url,body)=>read(url,body)||(url.endsWith('/labs/lab-1/map-document')?{name:'lab1',yaml:TOPOLOGY,annotations:'{"manager":1}',revision:'r7'}:{})});
+ const d=await p.run(`builderOpenFromVm('${VM_PATH}','lab-1')`);
+ assert.equal(d.annotations,'{"manager":1}');assert.equal(d.mapRevision,'r7');assert.equal(d.vm.annotations,'{"vm":1}');assert.equal(d.vm.layoutHash,'lh');
+ const request=await p.c.builderSaveRequest(JSON.parse(JSON.stringify(d)),async t=>'sha:'+t);
+ assert.equal(request.options.annotations,'{"manager":1}','the save writes the manager\'s document beside the file');assert.equal(request.options.base.annotations,'lh','the stale check compares the VM file\'s own map');
+ // without #lab, or without a kept document, the VM file's map is used as before
+ const none=page({answer:(url,body)=>read(url,body)||(url.endsWith('/map-document')?{name:'lab1',yaml:TOPOLOGY,annotations:'',revision:'r0'}:{})});
+ const v=await none.run(`builderOpenFromVm('${VM_PATH}','lab-1')`);assert.equal(v.annotations,'{"vm":1}');assert.equal(v.mapRevision,undefined);
+ const refused=page({answer:(url,body)=>read(url,body)||{refused:'Import a topology map first.',status:404}});
+ assert.equal((await refused.run(`builderOpenFromVm('${VM_PATH}','lab-1')`)).annotations,'{"vm":1}');
+ const plain=page({answer:(url,body)=>read(url,body)||{}});assert.equal((await plain.run(`builderOpenFromVm('${VM_PATH}')`)).annotations,'{"vm":1}');assert.ok(!plain.calls.some(c=>Array.isArray(c)&&/map-document/.test(c[0])),'no document is asked for without #lab');
+ // a draft that continues takes the newer document while its own map is untouched; with map edits of its own it keeps them under a revision that is no longer current
+ const seed=(annotations,extra='')=>`draftWrite(builderStore,{id:'vm:${VM_PATH}',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY)},annotations:${JSON.stringify(annotations)},mapRevision:'r1',${extra}vm:{path:'${VM_PATH}',yaml:${JSON.stringify(TOPOLOGY)},annotations:'{"vm":1}'}},undefined);`;
+ const open=async(code)=>{const q=page({answer:(url,body)=>read(url,body)||(url.endsWith('/map-document')?{name:'lab1',yaml:TOPOLOGY,annotations:'{"manager":2}',revision:'r8'}:{})});q.run(code);return q.run(`builderOpenFromVm('${VM_PATH}','lab-1')`);};
+ const untouched=await open(seed('{"vm":1}'));assert.equal(untouched.annotations,'{"manager":2}');assert.equal(untouched.mapRevision,'r8');
+ const touched=await open(seed('{"mine":1}'));assert.equal(touched.annotations,'{"mine":1}');assert.equal(touched.mapRevision,'r1','a stale revision: the manager refuses the save until the person reopens');
+ const old=await open(seed('{"mine":1}').replace("mapRevision:'r1',",''));assert.equal(old.mapRevision,'unknown','an older draft with map edits is never sent as current');
+ const reopened=await open(seed('{"mine":1}','mapStale:true,'));assert.equal(reopened.annotations,'{"manager":2}');assert.equal(reopened.mapRevision,'r8');
+});
+test('a revision sends deployed:true whenever the helper offers it, the lab it belongs to and the map revision; the labs are read first',async()=>{
+ const p=labPage('Stopped',{answer:(url,body)=>url.endsWith('/operations/preview')?PREVIEW:url.endsWith('/state')?{labs:[{...LAB,deployment:{status:'Stopped'}}],jobs:[],operations:[]}:{}});
+ await p.run('builderSave()');
+ const urls=p.calls.map(c=>c[0]),sent=p.calls.find(c=>c[0].endsWith('/operations/preview'))[1];
+ assert.ok(urls.findIndex(u=>u.endsWith('/state'))>=0&&urls.findIndex(u=>u.endsWith('/state'))<urls.findIndex(u=>u.endsWith('/operations/preview')),'the state is read before the request');
+ assert.equal(sent.action,'revise');assert.equal(sent.options.deployed,true,'also for a lab that is not running now: the helper judges');assert.equal(sent.lab_id,'lab-1');assert.equal(sent.map_revision,'r7');assert.equal(sent.path,VM_PATH);
+ assert.equal(p.run('builderPending.deployed'),true,'the review\'s answer is kept with the pending save');
+ // an older helper (no deployed flag in its capabilities) gets the old request; a lab no longer in the list a path-only one; publish none of it
+ const old=labPage('Running',{answer:(url,body)=>url.endsWith('/operations/preview')?PREVIEW:url.endsWith('/state')?{labs:[],jobs:[],operations:[]}:{}});
+ old.run("builderCaps={actions:{revise:{available:true}}}");await old.run('builderSave()');
+ const o=old.calls.find(c=>c[0].endsWith('/operations/preview'))[1];assert.equal(o.options.deployed,undefined);assert.equal(o.lab_id,undefined);assert.equal(o.map_revision,undefined);
+ const fresh=page({answer:(url)=>url.endsWith('/operations/preview')?{...PREVIEW,action:'publish',deployed:false}:{}});
+ fresh.run(`builderCaps={actions:{publish:{available:true}}};builderDraft=draftWrite(builderStore,{id:'new:lab1',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY)}},undefined);`);await fresh.run('builderSave()');
+ const f=fresh.calls.find(c=>c[0].endsWith('/operations/preview'))[1];assert.equal(f.action,'publish');assert.equal(f.lab_id,undefined);assert.equal(f.options.deployed,undefined);
+});
+test('a lab that left the manager: the 404 is answered once with a path-only save; a moved map is explained with Reopen and Download',async()=>{
+ let first=true;
+ const p=labPage('Running',{answer:(url,body)=>url.endsWith('/operations/preview')?(body.lab_id&&first?(first=false,{refused:'Lab not found.',status:404}):PREVIEW):url.endsWith('/state')?{labs:[{...LAB}],jobs:[],operations:[]}:{}});
+ await p.run('builderSave()');
+ const previews=p.calls.filter(c=>c[0].endsWith('/operations/preview')).map(c=>c[1]);
+ assert.equal(previews.length,2);assert.equal(previews[0].lab_id,'lab-1');assert.equal(previews[1].lab_id,undefined);assert.equal(previews[1].map_revision,undefined);assert.equal(previews[1].path,VM_PATH);
+ assert.equal(p.run('builderLabId'),'','the page stops presenting itself as that lab');assert.ok(p.run('builderPending'),'the second review is the pending save');
+ // 409: the sentence is in the save-problem dialog, nothing else is offered as a way on
+ const text='The map changed in the manager since you opened Edit topology. Reopen it; your topology changes stay in this browser.';
+ const q=labPage('Running',{answer:(url)=>url.endsWith('/operations/preview')?{refused:text,status:409}:url.endsWith('/state')?{labs:[{...LAB}],jobs:[],operations:[]}:{}});
+ q.run("var downloads=0;builderDownload=()=>{downloads++;}");await q.run('builderSave()');
+ const dialog=q.c.dialogs.at(-1);assert.equal(dialog.id,'builder-save-problem');assert.equal(q.el('builder-save-problem-text').textContent,text);
+ assert.match(dialog.body,/Reopen/);assert.match(dialog.body,/Download my draft/);assert.doesNotMatch(dialog.body,/Review the differences|Open the VM version/);assert.match(dialog.body,/Nothing on the VM was changed/);
+ q.el('builder-save-problem-download').onclick();assert.equal(q.run('downloads'),1);
+ q.el('builder-save-problem-reopen').onclick();assert.equal(q.run('location.href'),'/#lab=lab-1&view=topology');assert.equal(q.run('builderDraft.mapStale'),true,'the next open takes the manager\'s map');
+});
+function savedJob(p,preview,extra={}){
+ p.run(`builderPending={yaml:builderDraft.yaml,annotations:'',action:'revise',path:'${VM_PATH}',baseYaml:${JSON.stringify(extra.baseYaml===undefined?TOPOLOGY:extra.baseYaml)},deployed:${preview.deployed}};opJobStarted({id:'j1',action:'revise'});`);
+ p.run(`opJobDone({id:'j1',action:'revise',status:'succeeded',result:{published_path:'${VM_PATH}'}})`);
+}
+test('a deployed save registers nothing, says the running lab is unchanged, shows the warning pill while the plan has changes and leads to the lab page\'s own review',async()=>{
+ let plan={changed:true,failed:false,plan:{added:['r3'],links_added:['r3:eth1 - r1:eth2']}};
+ const p=labPage('Running',{answer:url=>url.includes('/operations/apply-plan')?plan:url.endsWith('/state')?{labs:[{...LAB}],jobs:[],operations:[]}:{}});
+ let focused=0;p.el('builder-review').focus=()=>{focused++;};
+ savedJob(p,PREVIEW);
+ assert.equal(p.toasts.at(-1),'Saved to the VM. The running lab is unchanged until you apply the changes.');
+ assert.equal(p.el('builder-status').textContent,'Saved on the VM · not applied','before the plan is known nothing reads as applied');assert.equal(p.el('builder-status').className,'pill warn');
+ assert.equal(p.el('builder-review').hidden,false);assert.equal(p.el('builder-review').href,'/#lab=lab-1&view=topology&review=apply');assert.match(read('lab-builder.html'),/<a class="button secondary" id="builder-review" href="\/" hidden>Back to lab and review changes…<\/a>/);
+ assert.match(p.el('builder-line-text').textContent,/Checking what applying would change…/);
+ assert.equal(focused,1,'focus moves to the control when no output dialog is open');
+ await labSettle();
+ assert.ok(p.calls.some(c=>c[0]==='/api/operations/apply-plan?lab_id=lab-1&refresh=1'),'the plan is read again for the lab');
+ assert.ok(!p.calls.some(c=>/lab-definitions/.test(c[0]))&&p.forms.length===0,'a deployed save never registers the lab again');
+ assert.equal(p.el('builder-status').textContent,'Saved on the VM · not applied');
+ assert.match(p.el('builder-line-text').textContent,/^Saved on the VM, not applied\. The running lab differs from the file: r3 to create · 1 link to connect\. Back to lab and review changes… shows the plan; Lab actions ▾ › Apply topology changes… applies it\.$/);
+ assert.ok(!/My labs now shows/.test(p.toasts.join('|')));
+ // nothing to apply: the existing words, the control goes; a map-only save says so
+ plan={changed:false,failed:false,plan:{}};await p.run("builderLabPlan('lab-1')");
+ assert.equal(p.el('builder-status').textContent,'Saved on the VM');assert.equal(p.el('builder-status').className,'pill ok');assert.equal(p.el('builder-review').hidden,true);
+ assert.match(p.el('builder-line-text').textContent,/Saved on the VM\. The running lab already matches the file: there is nothing to apply\./);
+ p.run("builderAfter.mapOnly=true;builderRenderBar()");assert.match(p.el('builder-line-text').textContent,/Only the map layout changed, and the running lab matches the file: there is nothing to apply\./);
+ // the plan could not be made or checked: still not applied, and the sentence says why
+ plan={changed:false,failed:'unsupported',plan:null};await p.run("builderLabPlan('lab-1')");
+ assert.equal(p.el('builder-status').textContent,'Saved on the VM · not applied');assert.match(p.el('builder-line-text').textContent,/The installed containerlab cannot show what applying will change; Lab actions ▾ › Apply topology changes… runs without a plan\./);
+ plan={changed:false,failed:'error',error:'the file could not be read',plan:null};await p.run("builderLabPlan('lab-1')");
+ assert.match(p.el('builder-line-text').textContent,/could not be checked: the file could not be read\. Lab actions ▾ › Apply topology changes… shows the review\./);
+});
+test('the focus waits for the output dialog to close (#15)',()=>{
+ const p=labPage('Running',{answer:()=>({})});let focused=0,closed;
+ p.el('builder-review').focus=()=>{focused++;};
+ p.el('operation-output').open=true;p.el('operation-output').addEventListener=(kind,fn)=>{closed=fn;};
+ savedJob(p,PREVIEW);assert.equal(focused,0,'not while the output is on screen');closed();
+ assert.equal(p.timers.length>0,true);while(p.timers.length)p.timers.shift()();assert.equal(focused,1);
+});
+test('an undeployed save keeps the old behaviour: the lab is registered again with its deployed name and My labs says so',async()=>{
+ const p=labPage('Not deployed',{answer:url=>url.endsWith('/labs/lab-1/map-document')?{name:'lab1',yaml:TOPOLOGY,annotations:'{"x":1}',revision:'r9'}:url.endsWith('/state')?{labs:[{...LAB,deployment:{status:'Not deployed'}}],jobs:[],operations:[]}:{}});
+ savedJob(p,{...PREVIEW,deployed:false});await labSettle();
+ assert.equal(p.forms.length,1);assert.equal(p.forms[0][0],'/api/lab-definitions');assert.equal(p.forms[0][1].lab_id,'lab-1');assert.equal(p.forms[0][1].deployed_name,'parity');
+ assert.match(p.toasts.at(-1),/^My labs now shows the saved topology of Parity\.$/);assert.ok(!p.toasts.some(t=>/unchanged until you apply/.test(t)));
+ assert.equal(p.el('builder-status').textContent,'Saved on the VM');assert.equal(p.el('builder-review').hidden,true);
+ assert.equal(p.run('builderDraft.mapRevision'),'r7','the revision is taken over only when the manager now holds the map this page saved');
+});
+test('no page text tells the student to destroy the lab, and the notice for a running lab without #lab says what a save leaves alone',()=>{
+ for(const file of ['lab-builder-page.js','lab-builder.html','lab-builder-check.js'])assert.doesNotMatch(read(file),/destroy/i,file);
+});
+
+// ---- the device templates come from the manager's catalog (T04b); BUILDER_TEMPLATES is the offline fallback ----
+function catalogOf(templates,change=t=>t){return {entries:templates.map(change).map(t=>{const {name,kind,image,...rest}=t;return {kind,label:name,image,aliases:[],login_default:true,interfaces:null,capabilities:{},template:{name,...rest}};}),kinds:templates.map(t=>t.kind)};}
+test('the default templates are the catalog\'s entries in the shape of BUILDER_TEMPLATES, and the built-in list is the fallback',()=>{
+ const p=page({answer:()=>({})}),plain=v=>JSON.parse(JSON.stringify(v)),builtin=plain(p.run('BUILDER_TEMPLATES'));
+ assert.deepEqual(plain(p.run('builderBaseTemplates()')),builtin,'no catalog: the built-in list');
+ p.c.catalog=catalogOf(builtin);p.run('builderCatalogAnswer=catalog');
+ assert.deepEqual(plain(p.run('builderCatalogTemplates(builderCatalogAnswer)')),builtin,'the catalog round-trips every field (name, kind, image, pinned, env, match, baseName, interfacePattern, icon)');
+ const changed=catalogOf(builtin,t=>t.kind==='arista_ceos'?{...t,image:'n24l/ceos:9.9'}:t);p.c.catalog=changed;p.run('builderCatalogAnswer=catalog');
+ assert.equal(plain(p.run('builderTemplateList({},[])')).find(t=>t.kind==='arista_ceos').image,'n24l/ceos:9.9','a pinned kind takes the catalog\'s image');
+ // an entry without the template's shape is skipped, an empty catalog is no catalog
+ p.c.catalog={entries:[{kind:'x'},{kind:'y',image:'i:1',template:{}},null,...catalogOf(builtin).entries.slice(0,1)]};p.run('builderCatalogAnswer=catalog');assert.equal(plain(p.run('builderBaseTemplates()')).length,1);
+ p.c.catalog={entries:[]};p.run('builderCatalogAnswer=catalog');assert.deepEqual(plain(p.run('builderBaseTemplates()')),builtin);
+});
+test('stored templates keep precedence; catalog kinds the stored list lacks are appended, never replacing a stored entry',()=>{
+ const s=storage(),win={localStorage:s},c=load(win),plain=v=>JSON.parse(JSON.stringify(v)),builtin=plain(c.BUILDER_TEMPLATES);
+ const extra={name:'Nokia SR Linux',kind:'nokia_srlinux',image:'ghcr.io/nokia/srlinux:latest',match:['srlinux'],baseName:'srl',interfacePattern:'e1-{n}',icon:'switch'};
+ vm.runInContext('builderCatalogAnswer='+JSON.stringify(catalogOf([...builtin,extra])),c);
+ s.setItem('clab-builder:templates',JSON.stringify({list:[{name:'My host',kind:'linux',image:'alpine:3'},{name:'Arista cEOS',kind:'arista_ceos',image:'ceos:old'}],defaultName:'My host'}));
+ s.setItem('clab-builder:templates-version','2');
+ const got=plain(win.labBuilderPage.templates());
+ assert.equal(got.defaultName,'My host');assert.deepEqual(got.list.slice(0,2).map(t=>[t.name,t.image]),[['My host','alpine:3'],['Arista cEOS','ceos:old']],'the stored entries stay first and unchanged');
+ assert.deepEqual(got.list.slice(2).map(t=>t.kind),['juniper_cjunosevolved','juniper_vjunosswitch','juniper_vjunosrouter','juniper_vsrx','cisco_xrv9k','nokia_srlinux'],'every catalog kind missing from the stored list, once');
+ assert.equal(got.list.filter(t=>t.kind==='linux').length,1,'a kind the stored list has is not appended again');
+ assert.ok(win.labBuilderPage.images().includes('ghcr.io/nokia/srlinux:latest'));
+ // without a catalog nothing is appended
+ const q=storage(),w2={localStorage:q},c2=load(w2);q.setItem('clab-builder:templates',JSON.stringify({list:[{name:'Mine',kind:'linux',image:'a:1'}],defaultName:''}));q.setItem('clab-builder:templates-version','2');
+ assert.equal(plain(w2.labBuilderPage.templates()).list.length,1);
+});
+test('the catalog is asked for at start beside the other calls, shared with the check, and a failure leaves the built-in list and a null the check can see',async()=>{
+ const good=page({answer:url=>url.endsWith('/api/catalog')||url==='/api/catalog'?catalogOf([{name:'Linux host',kind:'linux',image:'a:1',match:[],baseName:'host',interfacePattern:'eth{n}',icon:'client'}]):{}});
+ const got=await good.run('builderCatalogLoad()');assert.equal(got.entries.length,1);assert.equal(good.run('builderCatalogAnswer.entries.length'),1);assert.equal(good.run('window.builderCatalog.entries.length'),1);
+ for(const answer of [{refused:'down',status:500},new Error('x'),{entries:[]},{}]){const bad=page({answer:()=>answer});assert.equal(await bad.run('builderCatalogLoad()'),null);assert.equal(bad.run('builderCatalogAnswer'),null);assert.equal(bad.run('window.builderCatalog'),null);}
+ const source=read('lab-builder-page.js');assert.match(source,/Promise\.all\(\[builderConnect\(\),api\('\/operations\/known-images'\)[^]*?builderCatalogLoad\(\)\]\)/,'one race with the existing calls');
+});
+
+// ---- Undo and Redo in the bar (T05 gives the handle undo(), redo(), history() and a third subscribe argument) ----
+test('the bar has Undo and Redo, shown when the handle has them, enabled from the history and answered through the handle; errors go to the toast',async()=>{
+ const html=read('lab-builder.html');for(const id of ['builder-undo','builder-redo'])assert.match(html,new RegExp('<button class="button secondary" id="'+id+'" disabled hidden'));
+ assert.ok(html.indexOf('id="builder-undo"')<html.indexOf('id="builder-save"'));
+ const p=page({answer:()=>({})}),calls=[];let listener;
+ const handle={subscribe:fn=>{listener=fn;return()=>{};},undo:async()=>{calls.push('undo');},redo:async()=>{calls.push('redo');throw new Error('The engine refused redo.');},history:async()=>({canUndo:true,canRedo:false})};
+ p.c.handle=handle;p.run('builderHistoryWire(handle)');await labSettle();
+ assert.equal(p.el('builder-undo').hidden,false);assert.equal(p.el('builder-redo').hidden,false);assert.equal(p.el('builder-undo').disabled,false);assert.equal(p.el('builder-redo').disabled,true);
+ listener('y','a',{canUndo:false,canRedo:true});assert.equal(p.el('builder-undo').disabled,true);assert.equal(p.el('builder-redo').disabled,false);
+ await p.run("builderHistoryStep('undo')");await p.run("builderHistoryStep('redo')");assert.deepEqual(calls,['undo','redo']);assert.equal(p.toasts.at(-1),'The engine refused redo.');
+ // an adapter without them (an older bundle) shows no buttons
+ const old=page({answer:()=>({})});old.c.handle={subscribe(){return()=>{};}};old.run('builderHistoryWire(handle)');assert.equal(old.el('builder-undo').hidden,true);assert.equal(old.el('builder-redo').hidden,true);
+ assert.match(read('lab-builder-page.js'),/\['builder-undo',\(\)=>builderHistoryStep\('undo'\)\],\['builder-redo',\(\)=>builderHistoryStep\('redo'\)\]/);
 });

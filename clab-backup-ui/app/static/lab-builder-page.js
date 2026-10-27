@@ -5,6 +5,9 @@
 // through the same preview and confirm as every other lab operation (operations.js).
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state={labs:[],jobs:[],operations:[]},activeId='',toastTimer,builderDraft=null,builderPending=null,builderMount=null,builderCaps=null,builderCapsError='',builderKnown={},builderVmImages=[];
+// The lab this page edits (#lab=<id>), the manager's device catalog (null until it answers or when it did not), the date of a continued
+// draft, what a deployed save left behind ({deployed, mapOnly}) and the editor's handle (undo, redo).
+let builderLabId='',builderCatalogAnswer=null,builderContinued='',builderAfter=null,builderEditor=null;
 // What the editor holds while this browser could not store it (null while everything is stored).
 let builderUnstored=null;
 // Set while the problem overlay is up: nothing the editor still does is stored over it (its keyboard
@@ -12,7 +15,12 @@ let builderUnstored=null;
 let builderPaused=null;
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6000);}
 async function api(path,options={}){let response;try{response=await fetch('/api'+path,options);}catch{throw Object.assign(new Error('The manager did not answer. Check that it is running and that this computer can reach it.'),{network:true});}if(!response.ok){const value=await response.json().catch(()=>({}));throw Object.assign(new Error(value.detail||'Request failed.'),{status:response.status});}return response;}
-async function json(path,method,data){return(await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}
+async function json(path,method,data){
+ const value=await(await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();
+ // The review's own answer says whether the save met a deployed lab (operations.js does not hand it back).
+ if(path==='/operations/preview'&&typeof builderPreviewSeen==='function')builderPreviewSeen(data,value);
+ return value;
+}
 async function refresh(){state=await(await api('/state')).json();}
 
 // --- names and device templates (pure) --------------------------------------------------------------
@@ -77,7 +85,29 @@ function builderVmImageFor(template,vmImages){
  return fits.length?fits[fits.length-1]:'';
 }
 // known: {kind:[image,…]} from the topologies already in My labs; vmImages: the images on the VM.
-function builderTemplateList(known,vmImages){return BUILDER_TEMPLATES.map(t=>({...t,image:t.pinned?t.image:(known&&known[t.kind]&&known[t.kind][0])||builderVmImageFor(t,vmImages)||t.image}));}
+// The manager's catalog (GET /api/catalog) is the source of the default templates; BUILDER_TEMPLATES stays as the offline fallback
+// and tests/test_catalog.py keeps the two equal. An entry that does not have the template's shape is skipped.
+function builderCatalogTemplates(catalog){
+ const out=[];
+ for(const e of Array.isArray(catalog&&catalog.entries)?catalog.entries:[]){
+  const t=e&&e.template;
+  if(!e||typeof e.kind!=='string'||!e.kind||typeof e.image!=='string'||!e.image||!t||typeof t.name!=='string'||!t.name)continue;
+  const item={name:t.name,kind:e.kind,image:e.image};
+  if(t.pinned===true)item.pinned=true;
+  if(t.env&&typeof t.env==='object'&&!Array.isArray(t.env))item.env={...t.env};
+  if(Array.isArray(t.match))item.match=t.match.filter(m=>typeof m==='string');
+  for(const key of ['baseName','interfacePattern','icon'])if(typeof t[key]==='string')item[key]=t[key];
+  out.push(item);
+ }
+ return out;
+}
+function builderBaseTemplates(){const list=builderCatalogTemplates(builderCatalogAnswer);return list.length?list:BUILDER_TEMPLATES;}
+// Stored templates keep precedence; a catalog kind the stored list has no template for is appended (never replacing a stored entry).
+function builderAppendCatalog(list,known,vmImages){
+ const have=new Set(list.map(t=>t&&t.kind)),add=builderCatalogTemplates(builderCatalogAnswer).filter(t=>!have.has(t.kind)).map(t=>t.kind);
+ return add.length?list.concat(builderTemplateList(known,vmImages).filter(t=>add.includes(t.kind))):list;
+}
+function builderTemplateList(known,vmImages){return builderBaseTemplates().map(t=>({...t,image:t.pinned?t.image:(known&&known[t.kind]&&known[t.kind][0])||builderVmImageFor(t,vmImages)||t.image}));}
 function builderImages(templates,known,vmImages){return [...new Set([...templates.map(t=>t.image),...Object.values(known||{}).flat(),...(vmImages||[])].filter(i=>typeof i==='string'&&i))];}
 // The images a draft's topology names (an `image:` line per device or kind; templated values left out).
 function builderYamlImages(yaml){
@@ -212,11 +242,67 @@ function builderBlocked(){
 }
 // Worth knowing before the work is done, not only when the save is refused.
 function builderNotice(){
- if(!builderDraft?.vm)return '';const lab=(state.labs||[]).find(l=>opPath(l)===builderDraft.vm.path);
- return lab&&/^(running|starting|partial)/i.test(lab.deployment?.status||'')?lab.name+' is deployed. You can edit the draft, but it can only be saved to the VM after the lab is destroyed (My labs → the lab → Destroy). Nothing in the running lab changes while you edit.':'';
+ // With #lab the line under the bar says it (builderLine).
+ if(!builderDraft?.vm||builderLab())return '';const lab=(state.labs||[]).find(l=>opPath(l)===builderDraft.vm.path);
+ return lab&&/^(running|starting|partial)/i.test(lab.deployment?.status||'')?'This lab is running: saving changes the file and the map, not the devices; applying is a separate step.':'';
+}
+// --- the lab this page edits (#lab=<id>) -------------------------------------------------------------------------------------------
+// A lab that left the manager while the page was open is no longer "the lab": the bar falls back to the file name and My labs.
+function builderLab(){return builderLabId?(state.labs||[]).find(l=>l.id===builderLabId)||null:null;}
+function builderLabUrl(extra){return '/#lab='+encodeURIComponent(builderLabId)+'&view=topology'+(extra||'');}
+function builderLabRunning(lab){return !!lab&&['Running','Partially running'].includes(lab.deployment?.status);}
+function builderDate(value){const d=new Date(value);return Number.isNaN(d.getTime())?String(value||''):d.toLocaleString();}
+function builderTitle(){
+ const lab=builderLab();
+ return builderDraft?(lab?lab.name+' · Edit topology':builderDraft.name+' · Lab builder')+' · Containerlab Node Manager':'Lab builder · Containerlab Node Manager';
+}
+// The plan the last deployed save left (operations.js reads it with opLoadPlan): changes, or a check that gave no answer.
+function builderPlanAnswer(lab){const entry=lab&&opPlanCache[lab.id];return entry&&entry.answer?entry.answer:null;}
+function builderPlanChanges(lab){const a=builderPlanAnswer(lab);return !!a&&a.changed===true&&!a.failed&&!!a.plan&&opPlanChanges(a.plan);}
+// True while a deployed lab runs something other than the saved file, or after a deployed save while nobody knows yet.
+function builderNotApplied(lab){
+ if(!builderLabRunning(lab))return false;
+ if(builderPlanChanges(lab))return true;
+ if(!builderAfter||!builderAfter.deployed)return false;
+ const a=builderPlanAnswer(lab);return !a||!!a.failed;
+}
+function builderLabState(lab){
+ const status=lab.deployment?.status||'',nodes=lab.nodes||[],n=nodes.length,devices=n+' device'+(n===1?'':'s');
+ const tail=' Saving changes the file and the map, not the devices; applying is a separate step.';
+ if(status==='Running')return 'This lab is running on the VM ('+devices+').'+tail;
+ if(status==='Partially running')return 'Some devices of this lab are running on the VM ('+nodes.filter(x=>x.runtime_state==='running').length+' of '+n+').'+tail;
+ if(status==='Stopped')return 'This lab is stopped on the VM ('+devices+').'+tail;
+ if(status==='Not deployed')return 'This lab is not deployed.';
+ return 'Whether this lab is running is not known right now.'+tail.replace('the devices','any devices that may be running');
+}
+// What the plan says about the file just saved (or saved earlier) against the running lab; '' when there is nothing to say yet.
+function builderPlanSentence(lab){
+ const after=!!builderAfter&&builderAfter.deployed;
+ if(!after&&!builderPlanChanges(lab))return '';
+ if(!builderLabRunning(lab))return 'Saved on the VM. The devices are not running, so there is no running lab to compare the file with.';
+ const entry=opPlanCache[lab.id],a=entry&&entry.answer;
+ if(!entry)return 'Saved on the VM. Checking what applying would change…';
+ if(!a)return 'Saved on the VM. What applying would change could not be checked ('+(entry.error||'no answer')+'). Back to lab and review changes… asks again.';
+ if(a.failed==='unsupported')return 'Saved on the VM. The installed containerlab cannot show what applying will change; Lab actions ▾ › Apply topology changes… runs without a plan.';
+ if(a.failed)return 'Saved on the VM. What applying would change could not be checked: '+(a.error||'the topology file could not be read')+'. Lab actions ▾ › Apply topology changes… shows the review.';
+ if(builderPlanChanges(lab))return (after?'Saved on the VM, not applied. ':'')+'The running lab differs from the file: '+opPlanSummary(a.plan)+'. Back to lab and review changes… shows the plan; Lab actions ▾ › Apply topology changes… applies it.';
+ return builderAfter&&builderAfter.mapOnly?'Saved on the VM. Only the map layout changed, and the running lab matches the file: there is nothing to apply.':'Saved on the VM. The running lab already matches the file: there is nothing to apply.';
+}
+// The one plain line under the bar (its own element, not a live region): the lab's state, the plan, a continued draft.
+function builderLine(){
+ const lab=builderLab(),parts=[];
+ if(lab){
+  const plan=builderPlanSentence(lab);
+  parts.push(plan&&builderAfter&&builderAfter.deployed?plan:[builderLabState(lab),plan].filter(Boolean).join(' '));
+ }else if(builderAfter&&builderAfter.deployed)parts.push('Saved on the VM. The running lab is unchanged until you apply the changes.');
+ if(builderContinued&&builderHasUnsaved())parts.push('Continuing your draft from '+builderDate(builderContinued)+'; its changes are not on the VM yet.');
+ return parts.join(' ');
 }
 function builderRenderBar(){
- const s=draftStatus(builderDraft,builderUnstored);$('builder-name').textContent=builderDraft?builderDraft.name:'';$('builder-status').textContent=s.text;$('builder-status').title=[s.text,s.detail].filter(Boolean).join(' · ');$('builder-status').className='pill '+s.tone;
+ const lab=builderLab(),base=draftStatus(builderDraft,builderUnstored),s=lab&&base.tone==='ok'&&builderNotApplied(lab)?{...base,tone:'warn',text:'Saved on the VM · not applied'}:base;
+ $('builder-name').textContent=builderDraft?(lab?'Editing '+lab.name:builderDraft.name):'';
+ const back=$('builder-back');back.textContent=lab?'← Back to lab':'← My labs';back.href=lab?builderLabUrl():'/';
+ if(builderDraft)document.title=builderTitle();$('builder-status').textContent=s.text;$('builder-status').title=[s.text,s.detail].filter(Boolean).join(' · ');$('builder-status').className='pill '+s.tone;
  // Nothing to say when no draft is open: the pill carries no text then, so it stays out of the way
  // (and out of the accessibility tree) instead of showing an empty, colourless chip.
  $('builder-status').hidden=!s.text;
@@ -224,6 +310,9 @@ function builderRenderBar(){
  $('builder-save').disabled=!can;$('builder-save').title=blocked;$('builder-save').textContent=builderDraft?.vm?'Save changes to the VM…':'Save to the VM…';
  for(const id of ['builder-yaml','builder-download'])$(id).disabled=!builderDraft;
  const note=blocked||builderNotice()||builderStorageNote;$('builder-note-text').textContent=note;$('builder-note').hidden=!note||!!builderUnstored;$('builder-note-retry').hidden=!builderCapsError||note!==blocked;
+ const line=builderLine(),review=lab&&builderNotApplied(lab);
+ $('builder-line-text').textContent=line;$('builder-review').hidden=!review;if(review)$('builder-review').href=builderLabUrl('&review=apply');
+ $('builder-line').hidden=!line&&!review;
 }
 function builderHint(){const hint=$('builder-hint');if(hint)hint.hidden=!builderMounted||!!document.querySelector('.react-flow__node');}
 function builderProblem(message,code){builderPaused=builderPaused||Object.assign(new Error(message),{code});$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem-retry').hidden=code!=='storage';$('builder-problem').hidden=false;$('builder-problem-download').focus();builderRenderBar();}
@@ -237,9 +326,9 @@ const builderPage={
   if(!builderUnstored&&yaml===builderDraft.yaml&&annotations===(builderDraft.annotations||''))return;
   try{builderDraft=draftWrite(builderStore,builderNamed({...builderDraft,yaml,annotations}),builderDraft.revision);builderUnstored=null;}
   catch(e){builderUnstored={yaml,annotations};builderRenderBar();throw e;}
-  document.title=builderDraft.name+' · Lab builder · Containerlab Node Manager';builderRenderBar();builderImageStatus();builderCheckStatus();
+  document.title=builderTitle();builderRenderBar();builderImageStatus();builderCheckStatus();
  },
- templates(){const stored=builderTemplatesStored();return stored?{list:stored.list,defaultName:stored.defaultName||''}:{list:builderTemplateList(builderKnown,builderVmImages),defaultName:BUILDER_TEMPLATES[0].name};},
+ templates(){const stored=builderTemplatesStored();return stored?{list:builderAppendCatalog(stored.list,builderKnown,builderVmImages),defaultName:stored.defaultName||''}:{list:builderTemplateList(builderKnown,builderVmImages),defaultName:BUILDER_TEMPLATES[0].name};},
  saveTemplates(list,defaultName){try{builderStore.setItem(BUILDER_PREFIX+'templates',JSON.stringify({list,defaultName}));builderMarkTemplatesCurrent();}catch{notify('This browser could not keep the device template.');}},
  images(){return builderImages(this.templates().list,builderKnown,builderVmImages);},
  // The palette's Import templates: the editor leaves the file dialog to its host.
@@ -249,7 +338,7 @@ const builderPage={
  problem(message,code){builderProblem(message,code);},
  ready(mount){builderMount=mount;if(builderDraft)builderOpenEditor();},
  // The editor's topology text handle (applyYaml, getYaml, checkYaml, subscribe): the YAML panel's engine.
- attach(editor){if(typeof builderYamlPanelInit==='function')builderYamlPanelInit(builderYamlOptions(editor));builderCheckStatus();},
+ attach(editor){if(typeof builderYamlPanelInit==='function')builderYamlPanelInit(builderYamlOptions(editor));builderHistoryWire(editor);builderCheckStatus();},
 };
 if(typeof window!=='undefined')window.labBuilderPage=builderPage;
 let builderMounted=false;
@@ -261,15 +350,21 @@ function builderOpenEditor(){
   $('builder-welcome').hidden=false;$('builder-welcome-message').textContent='This topology cannot be edited visually: '+e.message+' Correct the file as text (on the VM, or in the downloaded draft), then open it again. Nothing was changed.';
  });
 }
+// #lab stays in the address while the page moves between drafts and versions of the same file (Drafts… › Open, Open the VM version).
+function builderKeepLab(values){
+ if(!builderLabId||values.lab)return values;
+ const mine=builderDraft&&builderVmPath(builderDraft),target=values.draft?draftRead(builderStore,values.draft):null;
+ return (values.path&&values.path===mine)||(target&&target.vm&&target.vm.path===mine)?{...values,lab:builderLabId}:values;
+}
 // One editor per page load: opening another draft reloads the page with it.
 function builderGo(values){
  // Without browser storage a reload would lose the draft; before an editor is mounted none is needed.
  const kept=builderStorageNote&&!builderMounted&&values.draft?draftRead(builderStore,values.draft):null;
  if(!kept&&builderStorageNote&&builderMounted&&!confirm('This browser does not store drafts, and opening another lab reloads the page: the drafts of this tab are lost unless you downloaded them. Continue?'))return;
- location.hash=new URLSearchParams(values).toString();
+ location.hash=new URLSearchParams(builderKeepLab(values)).toString();
  if(kept){document.querySelectorAll('dialog[open]').forEach(d=>d.close());builderUse(kept);}else location.reload();
 }
-function builderUse(draft){builderDraft=builderNamed(draft);builderRenderBar();document.title=draft.name+' · Lab builder · Containerlab Node Manager';builderOpenEditor();builderImageStatus();builderCheckStatus();}
+function builderUse(draft){builderDraft=builderNamed(draft);builderRenderBar();document.title=builderTitle();builderOpenEditor();builderImageStatus();builderCheckStatus();}
 // The background image check: after every stored change (debounced) the draft's images are sent to the manager,
 // which asks the VM once per image and keeps the answers. The answer is dropped when the draft or the request
 // number changed while it was on its way. The editor is never waited on; a request that fails is shown too.
@@ -498,7 +593,8 @@ function builderYamlShown(open,hadFocus){
 }
 function builderYamlOptions(editor){return {editor,getDraftYaml:builderYamlDraft,onApplied:()=>builderRenderBar(),onToggle:builderYamlShown};}
 // The newest work, also when this browser could not store it.
-function builderDownload(){if(!builderDraft)return;const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([draftExport({...builderDraft,...(builderUnstored||{})})],{type:'application/json'}));link.download=builderDraft.name+'.lab-draft.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
+function builderDownload(){if(builderDraft)builderDownloadDraft({...builderDraft,...(builderUnstored||{})});}
+function builderDownloadDraft(draft){const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([draftExport(draft)],{type:'application/json'}));link.download=draft.name+'.lab-draft.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
 // Storing again what the editor holds; the editor itself restarts from the stored draft.
 function builderStoreAgain(){if(!builderDraft)return;try{builderDraft=draftWrite(builderStore,builderNamed({...builderDraft,...(builderUnstored||{})}),builderDraft.revision);builderUnstored=null;location.reload();}catch(e){builderProblem(e.message,e.code);}}
 function builderSame(a,b){return !!a&&!!b&&a.yaml===b.yaml&&(a.annotations||'')===(b.annotations||'');}
@@ -517,6 +613,8 @@ function builderMarkSaved(path,texts){builderDraft=draftWrite(builderStore,{...b
 // A save the VM refused. When the file on the VM is not the version this draft knows (an earlier save whose
 // answer never arrived, an edit on the VM, another computer), the way on is to look at the differences.
 async function builderSaveRefused(error){
+ // The manager's map moved on since this page opened (Edit map, Arrange, another save): the topology changes stay in this browser.
+ if(error.status===409&&/map changed in the manager/i.test(error.message||'')){builderMapChanged(error);return;}
  const path=builderVmPath(builderDraft);let found=null;
  if(!error.network)try{found=await builderVmRead(path);}catch{}
  if(found&&builderSame(found,builderDraft)){builderMarkSaved(path,found);notify('This lab is already on the VM with the same content.');return;}
@@ -527,17 +625,53 @@ async function builderSaveRefused(error){
  if(!differs)return;
  $('builder-save-problem-open').onclick=()=>builderGo({path});
  // From here the draft descends from the version that is on the VM, so the next save is a reviewed
- // revision: it shows the differences, keeps a recovery copy and is refused while the lab is deployed.
+ // revision: it shows the differences, keeps a recovery copy and, for a lab with devices, says what it leaves alone.
  $('builder-save-problem-compare').onclick=()=>opTask(dialog,async()=>{builderDraft=draftWrite(builderStore,{...builderDraft,vm:{path,...found}},builderDraft.revision);builderRenderBar();dialog.close();await builderSave();});
+}
+function builderMapChanged(error){
+ const dialog=opDialog('builder-save-problem','Not saved to the VM',`<p id="builder-save-problem-text"></p><p>Nothing on the VM was changed. Your topology changes stay in this browser.</p><div class="dialog-actions"><button class="button secondary" id="builder-save-problem-close">Close</button><button class="button secondary" id="builder-save-problem-download">Download my draft</button><button class="button primary" id="builder-save-problem-reopen">Reopen</button></div>`);
+ $('builder-save-problem-text').textContent=error.message;$('builder-save-problem-close').onclick=()=>dialog.close();
+ $('builder-save-problem-download').onclick=builderDownload;
+ // Reopen: back to the lab, where Edit topology… reads the manager's map again; this draft takes it over and keeps its topology text.
+ $('builder-save-problem-reopen').onclick=()=>{try{builderDraft=draftWrite(builderStore,{...builderDraft,mapStale:true},builderDraft.revision);}catch{}location.href=builderLab()?builderLabUrl():'/';};
+}
+// The review's answer, kept with the pending save (see json()): a deployed save does not re-register the lab afterwards.
+function builderPreviewSeen(request,value){
+ if(!builderPending||!request||request.action!==builderPending.action||request.action!=='revise'||!value)return;
+ builderPending.deployed=value.deployed===true;
+}
+// A revision also carries the lab it belongs to and the map revision it started from, when the page knows them (the manager
+// answers 404 "Lab not found" for a lab that left, and 409 when the map moved on).
+function builderSaveExtras(request,lab){
+ if(request.action!=='revise')return request;
+ if(builderCaps?.actions?.revise?.deployed===true)request.options.deployed=true;
+ if(lab){
+  request.lab_id=lab.id;
+  const revision=builderDraft.mapRevision;if(revision!==undefined&&revision!=='')request.map_revision=revision;
+ }
+ return request;
 }
 async function builderSave(){
  if(!builderDraft||builderBlocked())return;
  if(builderPending?.job){notify('The previous save is still running on the VM. Its result will show here.');return;}
- const request=await builderSaveRequest(builderDraft);builderPending={yaml:builderDraft.yaml,annotations:builderDraft.annotations||'',action:request.action,path:builderVmPath(builderDraft)};
+ const request=await builderSaveRequest(builderDraft);
+ // The labs and their states as they are now, before the request says what it knows about them.
+ try{await refresh();}catch{}
+ const lab=builderLab()||(state.labs||[]).find(l=>opPath(l)===builderVmPath(builderDraft))||null;
+ builderSaveExtras(request,lab);
+ builderPending={yaml:builderDraft.yaml,annotations:builderDraft.annotations||'',action:request.action,path:builderVmPath(builderDraft),baseYaml:builderDraft.vm?builderDraft.vm.yaml:''};
  // Remembered with the draft (as hashes of what is sent): if this page never hears the outcome, the next
  // visit asks the VM and recognises its own save, also after further edits.
  try{builderDraft=draftWrite(builderStore,{...builderDraft,saving:{path:builderPending.path,yaml:await builderHash(builderPending.yaml),annotations:builderPending.annotations?await builderHash(builderPending.annotations):''}},builderDraft.revision);}catch(e){builderPending=null;builderProblem(e.message,e.code);return;}
- try{await opReview(request);}catch(e){builderPending=null;await builderSaveRefused(e);}
+ try{await opReview(request);}
+ catch(e){
+  if(request.lab_id&&e.status===404&&/lab not found/i.test(e.message||'')){
+   // The lab left the manager since the page opened: a path-only save, as before the page knew labs.
+   delete request.lab_id;delete request.map_revision;builderLabId='';builderRenderBar();
+   try{await opReview(request);return;}catch(again){e=again;}
+  }
+  builderPending=null;await builderSaveRefused(e);
+ }
 }
 // Called by operations.js when the review was confirmed and the job exists.
 function opJobStarted(job){if(builderPending&&job.action===builderPending.action)builderPending.job=job.id;}
@@ -547,15 +681,40 @@ function opJobDone(job){
  const saved=builderPending,done=job.status==='succeeded'&&(job.result?.published_path||job.result?.already_published),path=job.result?.published_path||saved.path||builderVmPath(builderDraft);builderPending=null;
  try{if(done)builderMarkSaved(path,saved);else builderDraft=draftWrite(builderStore,{...builderDraft,saving:undefined},builderDraft.revision);}catch(e){builderProblem(e.message,e.code);}
  builderRenderBar();if(!done)return;
+ const lab=(state.labs||[]).find(l=>opPath(l)===path);
+ // A deployed save changed the file and the map, not the devices: the manager keeps the lab as it runs until an apply succeeds,
+ // so nothing is registered again here and nothing reads as applied.
+ if(saved.action==='revise'&&saved.deployed){builderDeployedSaved(saved,lab||builderLab());return;}
  // A lab that is already in My labs keeps the devices and the map it was registered with. After a
  // revision the manager takes the new topology and layout, so its own map and device list follow.
- const lab=(state.labs||[]).find(l=>opPath(l)===path);
  if(lab&&saved.action==='revise')opTask(null,async()=>{
   const form=new FormData(),name=path.split('/').pop();form.append('lab_id',lab.id);
   form.append('definition',new Blob([saved.yaml],{type:'text/yaml'}),name);
   if(saved.annotations)form.append('annotations',new Blob([saved.annotations],{type:'application/json'}),name+'.annotations.json');
+  if(lab.deployment_name)form.append('deployed_name',lab.deployment_name);
   await api('/lab-definitions',{method:'POST',body:form});await refresh();notify('My labs now shows the saved topology of '+lab.name+'.');
+  // The registration made a new map revision: the next save starts from it.
+  if(lab.id===builderLabId)try{
+   const doc=await builderMapDocument(lab.id);
+   if(doc&&doc.annotations===saved.annotations)builderDraft=draftWrite(builderStore,{...builderDraft,mapRevision:doc.revision,mapBase:doc.annotations},builderDraft.revision);
+  }catch{}
  });
+}
+// After a deployed save: the toast, the plan read again for the lab (the old answer was about the old file), and focus on the control
+// that leads to the lab page's own apply review once the output dialog is closed.
+function builderDeployedSaved(saved,lab){
+ builderAfter={deployed:true,mapOnly:saved.yaml===saved.baseYaml};
+ notify('Saved to the VM. The running lab is unchanged until you apply the changes.');
+ if(builderLabRunning(lab))delete opPlanCache[lab.id];
+ builderRenderBar();
+ const review=$('builder-review'),output=$('operation-output'),focus=()=>{if(!review.hidden&&typeof review.focus==='function')review.focus();};
+ if(output&&output.open&&typeof output.addEventListener==='function')output.addEventListener('close',()=>setTimeout(focus,0),{once:true});else focus();
+ if(builderLabRunning(lab))builderLabPlan(lab.id);
+}
+// The plan for the running lab: asked when the page opens with #lab and after a deployed save (opLoadPlan keeps the answer).
+async function builderLabPlan(labId){
+ try{await opLoadPlan(labId,true);}catch{}
+ builderRenderBar();
 }
 // Called by operations.js when it gave up following a job (the manager did not answer for a while).
 function opJobLost(){if(!builderPending?.job)return;builderPending=null;opTask(null,builderReconcile);}
@@ -574,18 +733,74 @@ async function builderReconcile(){
  }catch{}
  builderRenderBar();
 }
-async function builderOpenFromVm(path){
+// The manager's kept map document of a lab (what Edit map and Arrange edit): {annotations, revision}, or null when the lab has none.
+async function builderMapDocument(labId){
+ try{
+  const doc=await(await api('/labs/'+encodeURIComponent(labId)+'/map-document')).json();
+  return doc&&typeof doc.annotations==='string'&&doc.annotations.trim()?{annotations:doc.annotations,revision:doc.revision}:null;
+ }catch{return null;}
+}
+// A draft takes the manager's map document when its own map was not edited since it took the last one (or when the person was told the
+// map moved and reopened). Otherwise it keeps its map and a revision that is no longer current, so the manager refuses the save first.
+function builderAdoptMap(draft,doc){
+ if(!doc||draft.mapRevision===doc.revision)return draft;
+ const base=draft.mapBase!==undefined?draft.mapBase:(draft.vm&&draft.vm.annotations)||'';
+ if((draft.annotations||'')===base||draft.mapStale)return draftWrite(builderStore,{...draft,annotations:doc.annotations,mapRevision:doc.revision,mapBase:doc.annotations,mapStale:undefined},draft.revision);
+ return {...draft,mapRevision:draft.mapRevision===undefined?'unknown':draft.mapRevision};
+}
+// The VM file changed since a draft with changes was made: nothing is decided for the person. Escape or × keeps both (the draft stays).
+function builderOldDraft(draft,count){
+ return new Promise(resolve=>{
+  const dialog=opDialog('builder-old-draft','Your draft and the VM file differ',`<p>The topology on the VM changed since your draft was made, and ${count>1?count+' drafts of this lab in this browser have':'the draft has'} changes that are not on the VM.</p><p>Start from the VM version to work on the file as it is now: ${count>1?'those drafts are':'the draft is'} then removed from this browser. Continue your draft to keep your changes; saving then shows the differences. Download my draft first to keep a copy.</p><div class="dialog-actions"><button class="button secondary" id="builder-old-download">Download my draft</button><button class="button secondary" id="builder-old-continue">Continue my draft (from ${esc(builderDate(draft.updated))})</button><button class="button primary" id="builder-old-vm">Start from the VM version</button></div>`);
+  let settled=false;const done=value=>{if(settled)return;settled=true;resolve(value);dialog.close();};
+  $('builder-old-vm').onclick=()=>done('vm');$('builder-old-continue').onclick=()=>done('draft');$('builder-old-download').onclick=()=>builderDownloadDraft(draft);
+  dialog.onclose=()=>done('draft');
+  $('builder-old-vm').focus();
+ });
+}
+async function builderOpenFromVm(path,labId=''){
  const found=await builderVmRead(path);if(!found)throw new Error('This topology file is no longer on the VM: '+path);
  const parsed=await json('/operations/parse-yaml','POST',{options:{text:found.yaml}});
+ // With #lab the map is the manager's kept document; the VM file's map hash still goes in as the base of the stale check.
+ const mapDoc=labId?await builderMapDocument(labId):null;
  // One draft per lab: the drafts that were saved to this path from this browser, or opened from it (newest first).
  // A draft with changes that are not on the VM comes first: it is the one that holds work.
  const drafts=draftList(builderStore).filter(d=>d.vm&&d.vm.path===path),dirty=drafts.filter(d=>!builderSame(d,d.vm)),existing=dirty[0]||drafts[0]||null;
  // Keep working on the local draft only while it still descends from the version that is on the VM. Its
  // base takes the hashes the VM gave now (the page's own save knows the texts only).
- if(existing&&builderSame(existing.vm,found))return existing.vm.hash===found.hash?existing:draftWrite(builderStore,{...existing,vm:{path,...found}},existing.revision);
- if(dirty.length&&!confirm('The topology on the VM changed since your draft was made, and '+(dirty.length>1?dirty.length+' drafts of this lab in this browser have':'the draft has')+' changes that are not on the VM.\n\nOK opens the VM version and discards '+(dirty.length>1?'those drafts':'the draft')+' in this browser.\nCancel keeps your draft: you can download it, or save it and review the differences.'))return existing;
+ builderContinued='';
+ if(existing&&builderSame(existing.vm,found)){
+  if(dirty.includes(existing))builderContinued=existing.updated;
+  return builderAdoptMap(existing.vm.hash===found.hash?existing:draftWrite(builderStore,{...existing,vm:{path,...found}},existing.revision),mapDoc);
+ }
+ if(dirty.length&&await builderOldDraft(existing,dirty.length)!=='vm'){builderContinued=existing.updated;return builderAdoptMap(existing,mapDoc);}
  for(const d of drafts)draftDelete(builderStore,d.id);draftDelete(builderStore,'vm:'+path);
- return draftWrite(builderStore,{id:'vm:'+path,name:parsed.name,root:path.slice(0,path.lastIndexOf('/')),yaml:found.yaml,annotations:found.annotations,vm:{path,...found}},undefined);
+ return draftWrite(builderStore,{id:'vm:'+path,name:parsed.name,root:path.slice(0,path.lastIndexOf('/')),yaml:found.yaml,annotations:mapDoc?mapDoc.annotations:found.annotations,vm:{path,...found},...(mapDoc?{mapRevision:mapDoc.revision,mapBase:mapDoc.annotations}:{})},undefined);
+}
+// The manager's device catalog: the templates and the check's interface rules come from it. window.builderCatalog is the answer, or null
+// when it did not load (the check's caption says so); the built-in templates stay the fallback.
+async function builderCatalogLoad(){
+ let answer=null;
+ try{const v=await(await api('/catalog')).json();answer=v&&Array.isArray(v.entries)&&v.entries.length?v:null;}catch{answer=null;}
+ builderCatalogAnswer=answer;if(typeof window!=='undefined')window.builderCatalog=answer;
+ try{builderCheckStatus();}catch{}
+ return answer;
+}
+// Undo and Redo: the editor's own, through the handle the adapter gives (shown only when it has them).
+function builderHistorySet(h){$('builder-undo').disabled=!(h&&h.canUndo);$('builder-redo').disabled=!(h&&h.canRedo);}
+function builderHistoryWire(editor){
+ builderEditor=editor;
+ if(!$('builder-undo')||!$('builder-redo'))return;
+ const can=!!editor&&typeof editor.undo==='function'&&typeof editor.redo==='function';
+ for(const id of ['builder-undo','builder-redo'])$(id).hidden=!can;
+ if(!can)return;
+ builderHistorySet(null);
+ if(typeof editor.subscribe==='function')editor.subscribe((yaml,annotations,history)=>builderHistorySet(history));
+ if(typeof editor.history==='function')Promise.resolve().then(()=>editor.history()).then(builderHistorySet).catch(()=>{});
+}
+async function builderHistoryStep(step){
+ if(!builderEditor||typeof builderEditor[step]!=='function')return;
+ try{await builderEditor[step]();if(typeof builderEditor.history==='function')builderHistorySet(await builderEditor.history());}catch(e){notify((e&&e.message)||'The editor could not '+step+' that.');}
 }
 async function builderConnect(){
  try{builderCaps=await opCapabilities();builderCapsError='';}catch(e){builderCaps=null;builderCapsError=e.message;}
@@ -595,22 +810,25 @@ async function builderConnect(){
 }
 async function builderStart(){
  const params=new URLSearchParams(location.hash.slice(1));
- for(const [id,fn] of [['builder-save',()=>opTask(null,builderSave)],['builder-yaml',()=>builderYamlPanelToggle()],['builder-download',builderDownload],['builder-drafts',builderDraftsDialog],['builder-welcome-new',()=>builderNewDialog(params.get('root')||opBuilderRoot('',builderCaps?.roots))],['builder-welcome-drafts',builderDraftsDialog],['builder-drop-pick',()=>$('builder-drop-file').click()],['builder-problem-reload',()=>location.reload()],['builder-problem-download',builderDownload],['builder-problem-retry',builderStoreAgain],['builder-note-retry',()=>opTask(null,builderConnect)]])$(id).onclick=fn;
+ builderLabId=params.get('lab')||'';
+ for(const [id,fn] of [['builder-save',()=>opTask(null,builderSave)],['builder-yaml',()=>builderYamlPanelToggle()],['builder-undo',()=>builderHistoryStep('undo')],['builder-redo',()=>builderHistoryStep('redo')],['builder-download',builderDownload],['builder-drafts',builderDraftsDialog],['builder-welcome-new',()=>builderNewDialog(params.get('root')||opBuilderRoot('',builderCaps?.roots))],['builder-welcome-drafts',builderDraftsDialog],['builder-drop-pick',()=>$('builder-drop-file').click()],['builder-problem-reload',()=>location.reload()],['builder-problem-download',builderDownload],['builder-problem-retry',builderStoreAgain],['builder-note-retry',()=>opTask(null,builderConnect)]])$(id).onclick=fn;
  builderDropWire();
  $('root').insertAdjacentHTML('afterend',builderYamlPanelMarkup());builderYamlPanelInit(builderYamlOptions(null));
  builderRenderBar();
  // The editor takes its device templates when it opens, and they carry the images this site already uses,
  // so the manager is asked first. A draft is in this browser: it opens even when the manager never answers.
- const asked=(async()=>{await refresh();[,builderKnown,builderVmImages]=await Promise.all([builderConnect(),api('/operations/known-images').then(r=>r.json()).then(v=>v.images||{}).catch(()=>({})),api('/operations/images').then(r=>r.json()).then(v=>Array.isArray(v.images)?v.images:[]).catch(()=>[])]);})();
+ const asked=(async()=>{await refresh();[,builderKnown,builderVmImages]=await Promise.all([builderConnect(),api('/operations/known-images').then(r=>r.json()).then(v=>v.images||{}).catch(()=>({})),api('/operations/images').then(r=>r.json()).then(v=>Array.isArray(v.images)?v.images:[]).catch(()=>[]),builderCatalogLoad()]);})();
  await Promise.race([asked.catch(()=>{}),new Promise(done=>setTimeout(done,5000))]);
  const local=params.get('draft')?draftRead(builderStore,params.get('draft')):null;
  if(local)builderUse(local);else if(params.get('draft'))$('builder-welcome-message').textContent='That draft is not in this browser. Drafts stay in the browser they were made in: open a downloaded draft file, or start a new lab.';
  try{
   await asked;
-  if(params.get('path'))builderUse(await builderOpenFromVm(params.get('path')));
+  if(params.get('path'))builderUse(await builderOpenFromVm(params.get('path'),builderLabId));
   else if(!local&&params.get('root'))builderNewDialog(params.get('root'));
   await builderReconcile();
  }catch(e){if(builderDraft){builderCapsError=builderCapsError||e.message;}else $('builder-welcome-message').textContent=e.message;}
  builderRenderBar();
+ // What applying would change, for a running lab: the pill and the line under the bar follow when it answers.
+ const lab=builderLab();if(builderDraft&&lab&&builderLabRunning(lab))builderLabPlan(lab.id);
 }
 if(typeof document!=='undefined'&&document.addEventListener)document.addEventListener('DOMContentLoaded',builderStart);
