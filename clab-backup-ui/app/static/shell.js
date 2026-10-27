@@ -34,7 +34,7 @@ function applyRoute(){
  let route=readRoute();
  if(!route.lab&&!shellSessionConsumed){const stored=shellGet('sessionStorage','activeLab');if(stored)route={lab:String(stored),view:'',device:''};}
  if(!shellSessionConsumed){shellSessionConsumed=true;shellRemove('sessionStorage','activeLab');}
- const known=!!route.lab&&(state.labs||[]).some(l=>l.id===route.lab);
+ const known=!!route.lab&&(state.labs||[]).some(l=>l.id===route.lab),review=known&&readRoute().lab===route.lab&&readReview()==='apply'?route.lab:'';
  shellApplying=true;
  if(typeof closeLinkMenu==='function')closeLinkMenu();   // a route change ends the wire menu: it belongs to one lab's map
  try{
@@ -46,7 +46,7 @@ function applyRoute(){
   if(route.device&&route.device!==openDevice){if(typeof openDetails==='function')openDetails(route.device);}
   else if(!route.device&&openDevice&&dialog&&typeof dialog.close==='function')dialog.close();
   writeRoute(currentRoute());
- }finally{shellApplying=false;}
+ }finally{shellApplying=false;}if(review)runRouteReview(review);
  return true;
 }
 // Dialogs that speak for one lab (the device drawer and every dialog marked data-lab-dialog: the design's
@@ -358,3 +358,7 @@ function terminalFontPreference(){
  const v=Math.round(Number(raw));return Number.isFinite(v)?Math.max(TERMINAL_FONT_SIZES[0],Math.min(TERMINAL_FONT_SIZES[TERMINAL_FONT_SIZES.length-1],v)):TERMINAL_FONT_DEFAULT;
 }
 function setTerminalFontPreference(value){const v=Number(value);return TERMINAL_FONT_SIZES.includes(v)&&shellSet('localStorage','clab.terminal.fontSize',String(v));}
+// The lab builder's "Back to lab and review changes…" sends #lab=<id>&view=topology&review=apply: the lab page opens the apply
+// review once. applyRoute reads the parameter before it rewrites the hash (which drops it); it is not part of the route.
+function readReview(){return new URLSearchParams(shellHash().replace(/^#/,'')).get('review')||'';}
+function runRouteReview(labId){if(typeof opTask!=='function'||typeof opReviewChanges!=='function')return false;opTask(null,()=>opReviewChanges(labId));return true;}

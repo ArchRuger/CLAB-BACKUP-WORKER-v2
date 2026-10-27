@@ -185,7 +185,7 @@ function mapStage(kind){
  map.hidden=kind!=='map';
  const off=kind!=='map';
  for(const id of ['map-fit','map-in','map-out','map-expand'])if($(id)){$(id).disabled=off;$(id).title=off?'No map yet':'';}
- if($('map-edit')){$('map-edit').disabled=off;$('map-edit').title=off?'Import a map first.':'';}
+ if($('map-edit')){$('map-edit').disabled=off;$('map-edit').title=off?'Import a map first.':'Positions and drawing, kept in the manager';}
  // C06: Find, the three map-tool menu items (each with its visible reason) and the chips follow the stage.
  if($('map-find')){$('map-find').disabled=off;$('map-find').title=off?'No map yet':'Name, address or platform';}
  for(const id of ['map-picture','map-drawio-export','map-arrange']){const el=$(id);if(!el)continue;el.disabled=off;el.title=off?'No map yet':'';const small=typeof el.querySelector==='function'?el.querySelector('.menu-reason'):null;if(small){small.textContent=off?'No map yet':'';small.hidden=!off;}}

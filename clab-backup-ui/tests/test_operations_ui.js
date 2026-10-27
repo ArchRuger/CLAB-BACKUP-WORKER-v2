@@ -89,7 +89,7 @@ test('operation output leads with a green success banner and a red failure banne
  // A failure a student can act on is said in words: an image the VM does not have, named as the topology names it.
  const pull='INFO Pulling image image=docker.io/library/cjunosevolved:26.2R1.7-EVO\nERRO Failed to pull image image=docker.io/vrnetlab/juniper_vjunos-switch:23.2R1.14 err="pull access denied"\nERRO Failed to pull image image=docker.io/library/cjunosevolved:26.2R1.7-EVO err="pull access denied"\nERRO Failed to pull image image=ghcr.io/org/x:1 err="denied"\n';
  const hint=context.opJobBanner({action:'deploy',name:'l',status:'failed',exit_code:1,message:'Host command returned an error',output:pull}).hint;
- assert.match(hint,/these images .*: vrnetlab\/juniper_vjunos-switch:23\.2R1\.14, cjunosevolved:26\.2R1\.7-EVO, ghcr\.io\/org\/x:1\./);assert.match(hint,/Open in Lab Builder…/);
+ assert.match(hint,/these images .*: vrnetlab\/juniper_vjunos-switch:23\.2R1\.14, cjunosevolved:26\.2R1\.7-EVO, ghcr\.io\/org\/x:1\./);assert.match(hint,/choose Edit topology…/);
  assert.equal(context.opJobBanner({action:'deploy',name:'l',status:'succeeded',exit_code:0,output:pull}).hint,undefined);assert.equal(bad.hint,undefined);
 });
 test('deploy lab saves the workspace first and reuses one that already tracks the deployment',async()=>{
@@ -248,7 +248,7 @@ test('the dialog left for the lab builder is remembered and reopened once, on th
  // Built inside the vm context: compared by content (deepEqual sees a cross-realm object as unequal).
  assert.equal(JSON.stringify(value),JSON.stringify({kind:'vm',path:'/etc/containerlab/demo.clab.yaml',name:'demo.clab.yaml'}));
  assert.equal(page.opConsumeReturn(),null,'consumed once: a second read finds nothing, so a later, unrelated load never reopens it');
- // An upload has no "Open in Lab Builder…" button yet (it has no VM path to hand the builder), so a
+ // An upload has no "Edit topology…" button yet (it has no VM path to hand the builder), so a
  // remembered 'upload' marker is never produced by this page; opConsumeReturn refuses one anyway.
  store.set('op-return',JSON.stringify({kind:'upload',path:'/srv/containerlab-node-manager/projects/bgp.clab.yaml',name:'bgp.clab.yaml',text:'name: bgp\n'}));
  assert.equal(page.opConsumeReturn(),null,'an upload marker is not a kind this page reopens');
@@ -1176,4 +1176,58 @@ test('C05: a Start device or Stop device job that finishes while the page is ope
  run([{id:'j1',lab_id:'a',action:'stop-node',status:'succeeded',node_label:'ceos'}]);assert.equal(toasts().length,1,'once');
  run([{id:'j2',lab_id:'a',action:'start-node',status:'queued',node_label:'ceos'}]);
  run([{id:'j2',lab_id:'a',action:'start-node',status:'failed',node_label:'ceos'}]);assert.match(toasts()[1],/^✖ Start device failed|^✖ .*failed/);
+});
+
+// T06b (campaign 2, topology editing): the lab page's side of Edit topology…, the plan limits and the retired destroy sentence.
+test('T06b: the Edit topology… entry opens the lab builder on the lab file with the lab id, and says why when it cannot',()=>{
+ const lab={id:'demo',vm_project_path:'/srv/containerlab-node-manager/projects/demo/demo.clab.yml',deployment:{status:'Running'}},up={connected:true};
+ const reason=(l,d,busy,caps)=>context.opTopologyEditReason(l,d,busy,caps);
+ assert.equal(reason(lab,up,false,null),'','capabilities not loaded yet: the entry is offered, the server decides');
+ assert.equal(reason(lab,up,false,{actions:{revise:{available:true,deployed:true}},roots:['/srv/containerlab-node-manager/projects']}),'');
+ assert.equal(reason(null,up,false,null),'','no lab on screen: nothing to explain');
+ assert.equal(reason({...lab,vm_project_path:''},up,false,null),'This lab has no topology file on the VM (Advanced › Deployment details)');
+ assert.equal(reason(lab,{connected:false},false,null),'Connect the VM first');
+ assert.match(reason(lab,up,false,{actions:{revise:{available:false}}}),/^The VM helpers are older than the manager/);
+ assert.equal(reason(lab,up,false,{actions:{revise:{available:false,reason:'Not available on this VM'}}}),'Not available on this VM','a reason the capabilities carry wins');
+ assert.equal(reason(lab,up,true,null),'Wait for the current operation to finish');
+ assert.equal(reason({...lab,deployment:{status:'Unknown'}},up,false,null),'Lab status is unknown — refresh the lab list');
+ assert.equal(reason(lab,up,false,{roots:['/etc/containerlab']}),'The topology file is outside the folders the manager may edit');
+ assert.equal(reason({...lab,vm_project_path:'/etc/containerlab/x.clab.yml'},up,false,{roots:['/etc/containerlab/']}),'','a trailing slash on a root changes nothing');
+ for(const status of ['Not deployed','Running','Stopped','Partially running'])assert.equal(reason({...lab,deployment:{status}},up,false,null),'',status);
+  const navigated=[];const c=vm.createContext({$:()=>null,URLSearchParams,esc:context.esc,location:{pathname:'/',assign:u=>navigated.push(u)},state:{labs:[lab,{id:'bare',vm_project_path:''}]}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ assert.equal(c.opTopologyEdit('demo'),true);assert.deepEqual(navigated,['/static/lab-builder.html#path=%2Fsrv%2Fcontainerlab-node-manager%2Fprojects%2Fdemo%2Fdemo.clab.yml&lab=demo']);
+ assert.equal(c.opTopologyEdit('bare'),false);assert.equal(c.opTopologyEdit('missing'),false);assert.equal(navigated.length,1,'no file, no lab: no navigation');
+});
+test('T06b: the Topology-file dialog offers Edit topology… (one name) and hands the builder the lab it belongs to',()=>{
+ const src=fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8');
+ assert.match(src,/id="op-build-edit"[^>]*>Edit topology…<\/button>/);assert.equal(src.includes('Open in Lab Builder…'),false,'one name for the entry everywhere');
+ assert.match(src,/opBuilderOpen\(\{path,lab:labId\}\)/,'a dialog opened from a lab in My labs carries the lab; a free file has an empty id, which opBuilderUrl drops');
+});
+test('T06b: the plan prints a device\'s limit under its restart or recreate row, only there, and the limits never change the plan identity',()=>{
+ const plan={restarted:['xr1'],recreated:['v1'],added:['r3'],reasons:{v1:'image changed'},limits:{xr1:'Restart keeps the configuration only after a commit on this kind.',v1:'A recreated vJunos starts empty.',r3:'never shown on a created row'}};
+ const html=context.opPlanMarkup(plan,'');
+ assert.match(html,/<li>xr1<br><small class="op-plan-reason">Restart keeps the configuration only after a commit on this kind\.<\/small><\/li>/);
+ assert.match(html,/<li>v1 <small class="op-plan-reason">· image changed<\/small><br><small class="op-plan-reason">A recreated vJunos starts empty\.<\/small><\/li>/);
+ assert.doesNotMatch(html,/never shown/);
+ assert.equal(context.opPlanMarkup({restarted:['a'],limits:{a:'<b>x</b>'}},'').includes('&lt;b&gt;x&lt;/b&gt;'),true,'escaped');
+ assert.doesNotThrow(()=>context.opPlanMarkup({restarted:['a'],limits:'text'},''));
+ const {limits,...without}=plan;
+ assert.equal(context.opPlanIdentity(plan),context.opPlanIdentity(without),'the same plan with other limits is the same plan');
+ assert.equal(context.opPlanIdentity({...plan,limits:{xr1:'other'}}),context.opPlanIdentity(plan));
+});
+test('T06b: the apply review names the devices to back up first, above the plan, and says nothing when the list is empty',async()=>{
+ const run=async value=>{const h=c05Context({caps:c05Caps,preview:async()=>c05Value(value)});await h.c.opReview({lab_id:'a',action:'apply',options:{}});return h.shown.at(-1).body;};
+ const body=await run({plan:{restarted:['xr1'],reasons:{}},plan_failed:'',backup_first:['xr1','v<1>']});
+ assert.match(body,/<p class="op-notice" id="op-backup-first">Back up these devices first: xr1, v&lt;1&gt; — their configuration is lost when they restart or are recreated\. Save \(lab header\) or Back up configuration keeps it\.<\/p>/);
+ assert.ok(body.indexOf('id="op-backup-first"')<body.indexOf('id="op-plan"'),'above the plan');
+ for(const none of [[],undefined,'xr1'])assert.doesNotMatch(await run({plan:{restarted:['xr1'],reasons:{}},plan_failed:'',backup_first:none}),/op-backup-first/,JSON.stringify(none));
+ assert.equal(context.opBackupFirstMarkup(['a']).includes('Back up these devices first: a'),true);
+});
+test('T06b (A6): the revise review no longer says a deployed lab cannot be saved; the server\'s warnings carry the deployed sentences',()=>{
+ const copy=vm.runInContext("opReviewCopy.revise",context),body=copy.body({});
+ assert.equal(body,'Replaces the topology file and the map layout on the VM. A copy of the previous version is kept in the lab folder.');
+ assert.doesNotMatch(body,/not deployed|destroy/i);
+ const src=fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),top=fs.readFileSync(path.join(__dirname,'../app/static/topology.js'),'utf8');
+ for(const [name,text] of [['operations.js',src],['topology.js',top]])assert.doesNotMatch(text,/(destroyed? (the lab )?first|only possible while the lab is not deployed)/i,name+' keeps no "destroy first" sentence about saving a topology');
 });

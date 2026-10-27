@@ -101,6 +101,22 @@ test('route precedence: the hash wins, sessionStorage is consumed once, unknown 
  assert.deepEqual(sameLab.calls.selectLab,[]);assert.deepEqual(sameLab.calls.showTab,['progress']);assert.deepEqual(sameLab.calls.openDetails,['R1']);
 });
 
+// T06b (amendment A4): the lab builder's "Back to lab and review changes…" sends review=apply; the lab page opens the apply review once and drops the parameter.
+test('review=apply: the lab page runs opReviewChanges(lab) through opTask once, after the route is applied, and the hash loses the parameter',()=>{
+ const run=(hash,extra={})=>{const h=harness({hash,...extra});const reviewed=[];h.context.opReviewChanges=id=>{reviewed.push(id);return Promise.resolve();};h.context.opTask=(dialog,fn)=>{reviewed.push(['task',dialog]);return fn();};return {h,reviewed};};
+ const {h,reviewed}=run('#lab=b&view=topology&review=apply');
+ assert.equal(JSON.stringify(h.context.readRoute()),JSON.stringify({lab:'b',view:'topology',device:''}),'review is not part of the route');
+ assert.equal(h.context.readReview(),'apply');
+ assert.equal(h.context.applyRoute(),true);
+ assert.deepEqual(JSON.parse(JSON.stringify(reviewed)),[['task',null],'b'],'one review for the lab named in the hash, through opTask without a dialog');
+ assert.equal(h.location.hash,'#lab=b&view=topology','the parameter is removed without a reload');assert.equal(h.context.readReview(),'');
+ h.context.applyRoute();assert.equal(reviewed.length,2,'a later route change does not repeat the review');
+ const unknown=run('#lab=zzz&view=topology&review=apply');unknown.h.context.applyRoute();assert.deepEqual(unknown.reviewed,[],'an unknown lab opens no review');
+ const other=run('#lab=b&view=topology&review=destroy');other.h.context.applyRoute();assert.deepEqual(other.reviewed,[],'only the apply review is a route');
+ const stored=run('#review=apply',{session:{activeLab:'a'}});stored.h.context.applyRoute();assert.deepEqual(stored.reviewed,[],'a stored lab never inherits a review that named none');
+ const bare=harness({hash:'#lab=b&view=topology&review=apply'});assert.doesNotThrow(()=>bare.context.applyRoute(),'the page routes without operations.js');assert.equal(bare.location.hash,'#lab=b&view=topology');
+});
+
 test('writeRoute no-ops when the hash already matches; polls replace, navigation pushes, routes never push while applying',()=>{
  const h=harness({hash:'#lab=a&view=topology'});
  assert.equal(h.context.writeRoute({lab:'a',view:'topology'}),false);assert.equal(h.history.length,0);
@@ -360,12 +376,12 @@ test('index.html: Lab actions ends with an Advanced options group holding the fo
  const at=menu.indexOf('id="lab-actions-advanced" data-menu-panel'),outside=menu.slice(0,at),group=menu.slice(at);
  assert.ok(at>0);assert.match(menu,/id="lab-actions-advanced-toggle" data-menu-group="lab-actions-advanced" aria-expanded="false" aria-controls="lab-actions-advanced"><span>Advanced options<\/span>/);
  assert.match(group,/^id="lab-actions-advanced" data-menu-panel role="group" aria-labelledby="lab-actions-advanced-toggle" hidden>/);
- assert.deepEqual([...group.matchAll(/role="menuitem" id="([\w-]+)"/g)].map(m=>m[1]),['menu-import-map','menu-map-edit','menu-telemetry-retired','menu-operation-history']);
- assert.match(group,/id="menu-import-map" data-proxy="import-map"/);assert.match(group,/id="menu-map-edit" data-proxy="map-edit"/);
+ assert.deepEqual([...group.matchAll(/role="menuitem" id="([\w-]+)"/g)].map(m=>m[1]),['menu-import-map','menu-map-edit','menu-topology-edit','menu-telemetry-retired','menu-operation-history']);
+ assert.match(group,/id="menu-import-map" data-proxy="import-map"/);assert.match(group,/id="menu-map-edit" data-proxy="map-edit"/);assert.match(group,/id="menu-topology-edit" data-proxy="topology-edit"><span>Edit topology…<\/span>/,'Edit topology… sits beside Edit map (T06b)');
  assert.match(group,/id="menu-telemetry-retired" hidden><span>Retired telemetry configuration…<\/span><\/button>/,'present in the markup, but hidden until the render path shows it');
  for(const id of ['lab-start','menu-sync-vm','menu-capture','menu-lab-files','lab-actions','menu-destroy','menu-remove-lab','lab-actions-advanced-toggle'])assert.match(outside,new RegExp('id="'+id+'"'),id+' stays in the main list');
  assert.ok(outside.indexOf('class="menu-danger"')<outside.indexOf('lab-actions-advanced-toggle'),'the group is the last thing in the menu, after the destructive actions');
- assert.match(html,/id="map-edit" class="button secondary small">Edit map</,'Edit map stays on the map toolbar');assert.match(html,/id="advanced-operation-history"/);assert.match(html,/role="menuitem" id="import-map"/);
+ assert.match(html,/id="map-edit" class="button secondary small">Edit map</,'Edit map stays on the map toolbar');assert.match(html,/id="topology-edit" class="button secondary small">Edit topology…</,'Edit topology… is the second button of the editor group');assert.match(html,/<div class="map-edit-group" role="group" aria-label="Edit this lab">/);assert.match(html,/id="map-more-edit" data-proxy="map-edit"/,'both editors are items of More ▾ (the toolbar group hides on a narrow screen)');assert.match(html,/id="map-more-topology-edit" data-proxy="topology-edit"/);assert.match(html,/id="tools-topology-edit" data-proxy="topology-edit"/);assert.match(html,/id="advanced-operation-history"/);assert.match(html,/role="menuitem" id="import-map"/);
 });
 
 test('style.css: the device lists carry no list indent and the Devices tab is one grid whose rows are subgrids, single column on a narrow window',()=>{
@@ -849,7 +865,7 @@ test('index.html: the two dialogs, the Home filter row and the one preferences s
  const short=INDEX.slice(INDEX.indexOf('<dialog id="shortcuts-dialog"'),INDEX.indexOf('</dialog>',INDEX.indexOf('<dialog id="shortcuts-dialog"')));
  assert.ok(short.includes('On macOS, Alt is Option; on the Edit map page Cmd works for undo and redo. Ctrl+Insert has no Mac equivalent: use Copy selection.'));
  assert.equal((short.match(/<dl class="kv shortcuts">/g)||[]).length,(short.match(/<section>/g)||[]).length);
- for(const dd of short.match(/<dd[^>]*>/g))assert.match(dd,/^<dd data-source="[\w-]+\.js:\d+( [\w-]+\.js:\d+)*">$/,dd);
+ for(const dd of short.match(/<dd[^>]*>/g))assert.match(dd,/^<dd data-source="[\w-]+\.(js|tsx):\d+( [\w-]+\.(js|tsx):\d+)*">$/,dd);
  const row=INDEX.slice(INDEX.indexOf('<div class="home-list-tools" id="home-filter-row" hidden>'),INDEX.indexOf('id="lab-cards"'));
  assert.ok(row.length>40,'the filter row sits above the cards');
  assert.match(row,/<label for="home-filter">Find a lab<\/label>/);assert.match(row,/<input id="home-filter" type="search" autocomplete="off" placeholder="Name, state or device…">/);
@@ -987,7 +1003,11 @@ test('reverse shortcut pin: every keydown site is a data-source of a shortcuts r
  assert.deepEqual(sites.filter(s=>!covered.has(s)),[],'a keyboard handler with no row in the shortcuts dialog and no exclusion: add its row to index.html or its reason to SHORTCUT_EXCLUSIONS');
  const keyLine=/addEventListener\('keydown'|\.onkeydown=|attachCustomKeyEventHandler\(|,\s*'keydown'\s*,/,folderKey=/case '|\bkey\b/;   // the folder chooser's rows cite the key decisions of its pure intent function
  for(const cite of [...rows,...exclusions]){
-  const [file,line]=cite.split(':'),text=fs.readFileSync(path.join(STATIC,file),'utf8').split('\n')[Number(line)-1]||'';
+  const [file,line]=cite.split(':');
+  // T06b: the lab builder's undo and redo keys belong to the embedded editor (third-party bundle, no keydown site of ours); a row for
+  // them cites the adapter's `undo:` / `redo:` handle in lab-builder/src/main.tsx, the one place our code answers those keys.
+  if(file==='main.tsx'){const adapter=(fs.readFileSync(path.join(__dirname,'../lab-builder/src/main.tsx'),'utf8').split('\n')[Number(line)-1]||'');assert.ok(rows.includes(cite)&&/^\s*(undo|redo): /.test(adapter),cite+' is not the adapter\'s undo/redo handle any more: '+adapter.trim().slice(0,80));continue;}
+  const text=fs.readFileSync(path.join(STATIC,file),'utf8').split('\n')[Number(line)-1]||'';
   assert.ok(keyLine.test(text)||(file==='git-places.js'&&rows.includes(cite)&&folderKey.test(text)),cite+' is not a keydown site any more (a stale cite): '+text.trim().slice(0,80));
   if(file==='git-places.js'&&rows.includes(cite)){   // a folder-chooser row must cite the line that decides its own (first) key, not any key line of folderKey
    const dt=[...short.matchAll(/<dt>(.*?)<\/dt><dd data-source="([^"]+)"/g)].find(m=>m[2].split(/\s+/).includes(cite));
