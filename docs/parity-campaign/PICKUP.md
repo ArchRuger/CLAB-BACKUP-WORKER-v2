@@ -222,3 +222,14 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   (helpers reinstalled); B04 phase 2 + B06-after run against it now (`camp-vsrx`, `parity`). Next: commit the fixes,
   rebuild the live manager from the fixed commit, T07 live acceptance on `parity`, B05 phase 2, D03/D04 docs, D10
   student guide, release 1.31.7 (draft records in the session scratchpad: redraft from CHANGELOG style if lost).
+- 2026-10-27 05:50 UTC, **campaign 2 checkpoint 5** (`36d9235` pushed): the slice verification's fixes landed
+  (T04-fix `a5b9792`: merge of the VM map by device at the re-registration, the map revision checked again at
+  confirm, the catalog's first port; T06-fix `973668e`: review=apply on a cold load, the deployed save's output
+  dialog, the old-draft focus, the map baseline and revision, VM-only positions, pristine open, Undo focus;
+  LAB-BUILDER.md and student_workflow.py 45/45), D03 (`1671f64`), CLAUDE.md carries the new invariants. The live
+  manager runs `973668e`. Running: B04 phase 2 + B06-after (manager-path Load on vsrx and vrt; told about the
+  manager restart at ~05:35), T07 (live topology editing on a new lab `camp-topo`: two cEOS, adds a linux host and a
+  vSRX, link edits, stale/invalid/failure cases, `camp-topo-2` undeployed), D10 (the student guide replayed on the
+  live manager; private repositories `campaign2-*` under ArchRuger, recorded in its PICKUP). Next: their records, the
+  release 1.31.7 (set-release, CHANGELOG, VALIDATION, handoff: draft in the scratchpad), the agent-docs pass, B05
+  phase 2, T08 docs, D11 (external links: `check_external_links.py` and `EXTERNAL-LINKS.md`).
