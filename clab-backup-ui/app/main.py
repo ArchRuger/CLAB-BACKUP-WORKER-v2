@@ -89,6 +89,7 @@ def create_app(data_dir=None):
     app.state.impairments=impairments
     impairments.install(app)   # after device_diagnostics and before operations.install: its GET /api/operations/{job_id} would take /impairments and /apply-plan
     operations.install(app)
+    from .catalog import Catalog; app.state.catalog=Catalog(); app.state.catalog.install(app)   # the one device catalog (docs/parity-campaign/TOPOLOGY-EDIT-DESIGN.md 3)
     app.state.git_progress=git_progress
     git_progress.install(app)
     from . import git_place; git_place.install(app,git_progress)   # placing a lab in any folder (docs/git-redesign/DESIGN.md 2.4-2.8)

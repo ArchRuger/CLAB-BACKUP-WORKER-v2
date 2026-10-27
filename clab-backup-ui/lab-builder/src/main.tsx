@@ -60,7 +60,13 @@ interface YamlEditorHandle {
   // engine call and never throws: any failure, a too deep or too large document included, comes back as `error`.
   locateYaml(text: string): { tree?: YamlLocated; error?: YamlFlaw };
   // Hears every stored state, after the page stored it. Returns the unsubscribe function.
-  subscribe(listener: (yaml: string, annotations: string) => void): () => void;
+  // The third argument is the engine's undo state after that operation (lab builder only).
+  subscribe(listener: (yaml: string, annotations: string, history: { canUndo: boolean; canRedo: boolean }) => void): () => void;
+  // The engine's own undo and redo, as the palette dispatches them. They reject with an Error carrying the
+  // engine's message when it refuses; the canvas redraws from the snapshot afterwards.
+  undo(): Promise<void>;
+  redo(): Promise<void>;
+  history(): Promise<{ canUndo: boolean; canRedo: boolean }>;
 }
 declare global { interface Window { labBuilderPage: BuilderPage & MapLookPage; __DOCKER_IMAGES__?: string[]; __CLAB_MAP_LOOK__?: boolean } }
 
@@ -231,7 +237,8 @@ async function mount(draft: BuilderDraft): Promise<void> {
   let queue: Promise<unknown> = Promise.resolve();
   // The texts as of the last settled operation, and the page's listeners for them (the YAML panel).
   let storedYaml = draft.yaml;
-  const yamlListeners = new Set<(yaml: string, annotations: string) => void>();
+  const yamlListeners = new Set<(yaml: string, annotations: string, history: { canUndo: boolean; canRedo: boolean }) => void>();
+  const readHistory = async () => { const s = await core.getSnapshot() as { canUndo?: boolean; canRedo?: boolean }; return { canUndo: s.canUndo === true, canRedo: s.canRedo === true }; };
   const settled = <T,>(work: () => Promise<T>): Promise<T> => {
     const run = queue.then(work).then((value) => {
       // Second line of defence in the map editor: whatever happened, the topology text leaves as it came.
@@ -243,7 +250,12 @@ async function mount(draft: BuilderDraft): Promise<void> {
       try { page.persist(yaml, annotations); }
       catch (e) { page.problem(e instanceof Error ? e.message : String(e), (e as { code?: string }).code); throw e; }
       storedYaml = yaml;
-      for (const listener of Array.from(yamlListeners)) { try { listener(yaml, annotations); } catch (e) { console.error(e); } }
+      return { value, yaml, annotations };
+    }).then(async ({ value, yaml, annotations }) => {
+      if (yamlListeners.size) {
+        const history = mapOnly ? { canUndo: false, canRedo: false } : await readHistory().catch(() => ({ canUndo: false, canRedo: false }));
+        for (const listener of Array.from(yamlListeners)) { try { listener(yaml, annotations, history); } catch (e) { console.error(e); } }
+      }
       return value;
     });
     queue = run.catch(() => undefined);
@@ -266,6 +278,13 @@ async function mount(draft: BuilderDraft): Promise<void> {
   // with history, so the editor's own undo takes an apply back in one step; the editor redraws from the
   // snapshot it is sent, as for a file changed outside it. The engine keeps the text exactly as given; its next
   // visual edit reprints the whole document in its own style (see docs/LAB-BUILDER.md).
+  const historyStep = (step: "undo" | "redo") => settled(async () => {
+    const before = await core.getSnapshot() as { revision: number };
+    const answer = await core.applyCommand({ command: step } as never, before.revision) as { type?: string; error?: string };
+    if (answer?.type === "topology-host:error" || answer?.type === "topology-host:reject") throw new Error(answer.error || "The editor did not accept that " + step + ".");
+    const snapshot = await core.getSnapshot();
+    window.postMessage({ type: "topology-host:snapshot", protocolVersion: 1, snapshot, reason: "external-change" }, window.location.origin);
+  });
   if (!mapOnly && page.attach) page.attach({
     applyYaml: (text: string) => {
       const flaw = yamlFlaw(text);
@@ -280,10 +299,13 @@ async function mount(draft: BuilderDraft): Promise<void> {
         window.postMessage({ type: "topology-host:snapshot", protocolVersion: 1, snapshot, reason: "external-change" }, window.location.origin);
       });
     },
+    undo: () => historyStep("undo"),
+    redo: () => historyStep("redo"),
+    history: () => settled(readHistory),
     getYaml: () => storedYaml,
     checkYaml: yamlFlaw,
     locateYaml,
-    subscribe(listener: (yaml: string, annotations: string) => void) { yamlListeners.add(listener); return () => { yamlListeners.delete(listener); }; }
+    subscribe(listener: (yaml: string, annotations: string, history: { canUndo: boolean; canRedo: boolean }) => void) { yamlListeners.add(listener); return () => { yamlListeners.delete(listener); }; }
   });
 
   const listeners = new Set<(e: unknown) => void>();
