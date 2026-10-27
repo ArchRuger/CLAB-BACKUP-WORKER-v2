@@ -352,7 +352,7 @@ per-kind reconcile facts first, then runs the acceptance list.
   path, with duplicates removed; the digest of a `revise` binds container name and id, every other action keeps the
   state as before (`test_revise_deployed.py`).
 
-### 12.7 Slice verification (campaign 2, `/clab-slice-verify`, 2026-10-27 04:40 UTC) and its amendments
+### 12.7 Slice verification (campaign 2, `/clab-slice-verify`, 2026-10-27 about 02:30 UTC) and its amendments
 
 Six workers that did not write the slice: the test runner (7 commands: 6 exit 0; `test_catalog.py` failed on the
 vSRX pin that the parallel B04/B05 slices flipped, rewritten by the lead), the Opus attacker (19 acceptance checks:

@@ -187,7 +187,7 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   on the 1.31.5→1.31.6 diff), B03a (`clab-devops-engineer`: vSRX pull and solo boot in `camp-vsrx`, the `parity` lab
   redeployed). Next: the topology-editing design (T01) from the editor's integrator documentation, B02 (vSRX registry)
   once B03a reports the image's console and interface facts.
-- 2026-10-27 02:30 UTC, **campaign 2 checkpoint 2** (`1400fbc` pushed, the A02 fixes committed next): A01 done
+- 2026-10-27 01:50 UTC, **campaign 2 checkpoint 2** (`1400fbc` pushed, the A02 fixes committed next): A01 done
   (`ACCEPTANCE.md`: 98 rows; 38 shipped, 22 at parity before, 4 partial, 9 not started, 25 not pursued); A02 done
   (the two full reviewer passes on `fcdde64..4067aa9`: no must-fix; 1 + 3 should-fix and 6 + 5 low, every one fixed
   or recorded in C06-DESIGN §13, C08 §11, C09 §11; the helper's link-state binding now tells "not found" from a
@@ -198,7 +198,7 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   run; they run now. Labs on the VM: `parity` (5 nodes, Running), `camp-vsrx` (vsrx .121, host1 .122). Running next:
   T02 (design review), A04 (impairment persistence, live), A05 + B06-vsrx (capture with real packets and the vSRX
   kind through the manager on `camp-vsrx`), A06/A07 (fixture and live browser checks, `verify_after.py`).
-- 2026-10-27 03:45 UTC, **campaign 2 checkpoint 3** (`3a990c3` pushed; CI red at 1400fbc for a test pin fixed in
+- 2026-10-27 02:15 UTC, **campaign 2 checkpoint 3** (`3a990c3` pushed; CI red at 1400fbc for a test pin fixed in
   0752662, the later runs pending): A04 (impairments do not survive the device's own operations; C05 §13), A05 (40
   ICMP packets through the manager's capture; C07 §13), A06/A07 (C06 live read-only items; `verify_after.py`
   107/107), D02a/b/c (install, Git, overview, architecture and capture guides matched to the code; reports under
@@ -213,7 +213,7 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   and T04a land (`sudo bash deploy/start-manager.sh` from the main checkout once the tree is clean, or a worktree
   build with the main checkout's `.env`). Next: commit T03+T04a, rewrite the two pins, run the suites; T06a/T06b →
   `/clab-slice-verify`; rebuild the live manager; B06 "after" and B04 phase 2 through the manager; T07.
-- 2026-10-27 04:50 UTC, **campaign 2 checkpoint 4** (`3c15dee` pushed): T03–T06 built and committed (helper
+- 2026-10-27 02:40 UTC, **campaign 2 checkpoint 4** (`3c15dee` pushed): T03–T06 built and committed (helper
   `revise` on a deployed lab, manager sentences and plan limits and re-registration after Apply, the catalog, the
   adapter's undo/redo, the builder page as the Topology view's editor, Edit topology… on the lab page);
   `/clab-slice-verify` ran (16 of 19 held, 9 breaks: TOPOLOGY-EDIT-DESIGN §12.7) and the fixes are in build (T06-fix on
@@ -222,14 +222,16 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   (helpers reinstalled); B04 phase 2 + B06-after run against it now (`camp-vsrx`, `parity`). Next: commit the fixes,
   rebuild the live manager from the fixed commit, T07 live acceptance on `parity`, B05 phase 2, D03/D04 docs, D10
   student guide, release 1.31.7 (draft records in the session scratchpad: redraft from CHANGELOG style if lost).
-- 2026-10-27 05:50 UTC, **campaign 2 checkpoint 5** (`36d9235` pushed): the slice verification's fixes landed
+- 2026-10-27 03:05 UTC, **campaign 2 checkpoint 5** (`36d9235` pushed): the slice verification's fixes landed
   (T04-fix `a5b9792`: merge of the VM map by device at the re-registration, the map revision checked again at
   confirm, the catalog's first port; T06-fix `973668e`: review=apply on a cold load, the deployed save's output
   dialog, the old-draft focus, the map baseline and revision, VM-only positions, pristine open, Undo focus;
   LAB-BUILDER.md and student_workflow.py 45/45), D03 (`1671f64`), CLAUDE.md carries the new invariants. The live
   manager runs `973668e`. Running: B04 phase 2 + B06-after (manager-path Load on vsrx and vrt; told about the
-  manager restart at ~05:35), T07 (live topology editing on a new lab `camp-topo`: two cEOS, adds a linux host and a
+  manager restart at 02:50 UTC; its jobs were untouched), T07 (live topology editing on a new lab `camp-topo`: two cEOS, adds a linux host and a
   vSRX, link edits, stale/invalid/failure cases, `camp-topo-2` undeployed), D10 (the student guide replayed on the
   live manager; private repositories `campaign2-*` under ArchRuger, recorded in its PICKUP). Next: their records, the
   release 1.31.7 (set-release, CHANGELOG, VALIDATION, handoff: draft in the scratchpad), the agent-docs pass, B05
   phase 2, T08 docs, D11 (external links: `check_external_links.py` and `EXTERNAL-LINKS.md`).
+- 2026-10-27 03:20 UTC: the times of checkpoints 2 to 5 above were corrected from estimates to the clock (`date -u`); B04
+  phase 2 landed (`437e7e4`); B05 phase 2 (live netlab apply on `vrt` and `vsrx`) started; T07 and D10 still running.
