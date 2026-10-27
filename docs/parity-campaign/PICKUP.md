@@ -246,3 +246,5 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   on the VM: `parity`, `camp-vsrx`, `camp-topo` (five devices), `camp-topo-2` (undeployed), `link-basics` and
   `my-first-lab` (the guide's); the private repositories `campaign2-netlab-course-student` and
   `campaign2-my-network-labs` under ArchRuger are the owner's to delete.
+- 2026-10-27 04:20 UTC: CI green on the release commit `1673a49` and on `48fdeda`; the live manager runs 1.31.7 with
+  `/student-guide` served and capture ready. Pull request 78 is ready for the owner to merge.
