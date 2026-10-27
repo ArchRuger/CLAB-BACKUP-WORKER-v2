@@ -198,3 +198,18 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   run; they run now. Labs on the VM: `parity` (5 nodes, Running), `camp-vsrx` (vsrx .121, host1 .122). Running next:
   T02 (design review), A04 (impairment persistence, live), A05 + B06-vsrx (capture with real packets and the vSRX
   kind through the manager on `camp-vsrx`), A06/A07 (fixture and live browser checks, `verify_after.py`).
+- 2026-10-27 03:45 UTC, **campaign 2 checkpoint 3** (`3a990c3` pushed; CI red at 1400fbc for a test pin fixed in
+  0752662, the later runs pending): A04 (impairments do not survive the device's own operations; C05 §13), A05 (40
+  ICMP packets through the manager's capture; C07 §13), A06/A07 (C06 live read-only items; `verify_after.py`
+  107/107), D02a/b/c (install, Git, overview, architecture and capture guides matched to the code; reports under
+  `docs/maintenance-audit/reports/`), T02 (both design reviews answered: 14 must-fix among 45 findings; the amendments
+  in TOPOLOGY-EDIT-DESIGN §12 bind), T04b (`app/catalog.py`, `GET /api/catalog`), T05 (adapter undo/redo handle,
+  bundle rebuilt). In the tree, uncommitted: T03 (the helper's deployed `revise`, 14 tests in `test_revise_deployed.py`;
+  two pins to rewrite: `test_lab_operations.py:591,593`), with T04a (manager: sentences, plan limits, re-registration
+  after Apply, fixture), T06a (builder page), T06b (lab page), B04 phase 1 (restore proof on `vrt` and `vsrx`, direct
+  driver) and B05 phase 1 (netlab profiles) still running. Live: `parity` five nodes Running (redeployed 01:40),
+  `camp-vsrx` running and imported into the manager (lab id `99bb84d5d39f4ba992b5f69eb1e3666e`, profile "vsrx
+  published default" on `vsrx`); the live manager is still the 1.31.6 image: rebuild from a committed tree after T03
+  and T04a land (`sudo bash deploy/start-manager.sh` from the main checkout once the tree is clean, or a worktree
+  build with the main checkout's `.env`). Next: commit T03+T04a, rewrite the two pins, run the suites; T06a/T06b →
+  `/clab-slice-verify`; rebuild the live manager; B06 "after" and B04 phase 2 through the manager; T07.

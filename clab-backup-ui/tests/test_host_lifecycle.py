@@ -546,8 +546,9 @@ class NodeActionTests(LifecycleHarness):
 
 
 class OptionTests(LifecycleHarness):
-    TABLE = {'nodes': ('deploy', 'destroy', 'save'), 'max_workers': ('deploy', 'redeploy', 'destroy'), 'skip_post_deploy': ('deploy', 'redeploy'), 'keep_mgmt_net': ('redeploy', 'destroy')}
-    SAMPLE = {'nodes': ['r1'], 'max_workers': 4, 'skip_post_deploy': True, 'keep_mgmt_net': True}
+    # `deployed` (campaign 2, the deployed save): revise only; its own contract is in test_revise_deployed.py.
+    TABLE = {'nodes': ('deploy', 'destroy', 'save'), 'max_workers': ('deploy', 'redeploy', 'destroy'), 'skip_post_deploy': ('deploy', 'redeploy'), 'keep_mgmt_net': ('redeploy', 'destroy'), 'deployed': ('revise',)}
+    SAMPLE = {'nodes': ['r1'], 'max_workers': 4, 'skip_post_deploy': True, 'keep_mgmt_net': True, 'deployed': True}
 
     def test_every_new_key_against_every_action_is_the_table(self):
         self.assertEqual(host_operations.OPTION_ACTIONS, self.TABLE)
