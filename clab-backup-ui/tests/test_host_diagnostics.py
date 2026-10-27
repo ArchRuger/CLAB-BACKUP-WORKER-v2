@@ -368,10 +368,16 @@ class LinkStateModeTests(DiagnosticsHarness):
         self.list_answer = None   # None: the harness's interfaces_output with exit 0
         def run(argv, **bounds):
             self.log.append((argv, bounds))
-            if argv[:3] == [self.clab, 'inspect', '--name']: return self.bind_answer
             if argv[:3] == [self.clab, 'inspect', 'interfaces']: return self.list_answer or (0, self.interfaces_output)
             raise AssertionError('unexpected argv ' + ' '.join(argv))
-        self.host.run = run
+        # The binding keeps stderr (probe); a two-element bind_answer is served with an empty stderr. Every other
+        # probe (the per-device form's docker inspect) is the harness's own.
+        harness_probe = self.host.probe
+        def probe(argv, timeout):
+            if argv[:3] != [self.clab, 'inspect', '--name']: return harness_probe(argv, timeout)
+            self.log.append((argv, {'timeout': timeout}))
+            return self.bind_answer if len(self.bind_answer) == 3 else (*self.bind_answer, '')
+        self.host.run = run; self.host.probe = probe
 
     def bind_row(self, name, path=None, key='labPath'):
         """One row of `containerlab inspect --name <lab> -f json` as containerlab 0.79 prints it (fact 0.3)."""
@@ -385,7 +391,8 @@ class LinkStateModeTests(DiagnosticsHarness):
     def test_two_fixed_argvs_in_order_and_never_docker(self):
         result = self.host.interfaces(LAB, {'all': True})
         bounds = {'timeout': host_operations.INSPECT_TIMEOUT, 'limit': host_operations.INSPECT_LIMIT}
-        self.assertEqual(self.log, [([self.clab, 'inspect', '--name', LAB, '-f', 'json'], bounds),
+        # The binding runs through probe (stderr kept, stdout capped by probe's own LIMIT), the listing through run.
+        self.assertEqual(self.log, [([self.clab, 'inspect', '--name', LAB, '-f', 'json'], {'timeout': host_operations.INSPECT_TIMEOUT}),
                                     ([self.clab, 'inspect', 'interfaces', '--name', LAB, '-f', 'json'], bounds)])
         self.assertEqual((self.probes, self.merged), ([], []), 'no docker inspect, no docker logs: nothing Docker runs')
         self.assertEqual(result, {'present': True, 'nodes': [
@@ -397,8 +404,10 @@ class LinkStateModeTests(DiagnosticsHarness):
         source = Path(host_operations.__file__).read_text()
         start = source.index('    def lab_links(')
         body = source[start:source.index('\n    def ', start + 1)]
-        for word in ('DOCKER', 'self.counters(', 'self.container_of(', 'self.probe(', 'self.run_merged(', "'set'", "'reset'"): self.assertNotIn(word, body, word)
-        self.assertEqual(body.count('self.run('), 2, 'two fixed argvs, nothing else runs')
+        for word in ('DOCKER', 'self.counters(', 'self.container_of(', 'self.run_merged(', "'set'", "'reset'"): self.assertNotIn(word, body, word)
+        # The one probe is the containerlab binding (stderr kept for the "not found" answer); never a Docker argv.
+        self.assertEqual(body.count('self.probe('), 1); self.assertIn("self.probe([self.clab, 'inspect', '--name', lab, '-f', 'json']", body)
+        self.assertEqual(body.count('self.run('), 1, 'two fixed argvs (one probe, one run), nothing else runs')
 
     def test_a_binding_row_outside_the_trusted_roots_stops_before_the_listing(self):
         sentence = 'This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.'
@@ -414,11 +423,24 @@ class LinkStateModeTests(DiagnosticsHarness):
                 self.assertEqual(self.argvs(), [[self.clab, 'inspect', '--name', LAB, '-f', 'json']], 'the interfaces listing never runs')
         self.assertEqual(self.probes, [])
 
-    def test_a_binding_that_is_not_json_empty_or_failed_is_not_present_and_runs_nothing_more(self):
-        for answer in ((1, ''), (1, json.dumps({LAB: [self.bind_row(CONTAINER)]})), (0, 'no containers found'), (0, '{}'), (0, '[]'), (0, json.dumps({LAB: []})), (0, '"text"')):
+    def test_a_binding_that_is_not_json_empty_or_absent_is_not_present_and_runs_nothing_more(self):
+        absent = "Lab '%s' not found - no running containers." % LAB   # containerlab 0.79, exit 1 (checked live 2026-10-27)
+        for answer in ((1, '', absent), (1, json.dumps({LAB: [self.bind_row(CONTAINER)]}), absent), (0, 'no containers found'), (0, '{}'), (0, '[]'), (0, json.dumps({LAB: []})), (0, '"text"')):
             self.log.clear(); self.bind_answer = answer
             self.assertEqual(self.host.interfaces(LAB, {'all': True}), {'nodes': [], 'present': False}, repr(answer))
             self.assertEqual(len(self.log), 1, repr(answer))
+
+    def test_a_binding_that_failed_for_any_other_reason_is_an_error_not_a_stopped_lab(self):
+        # Risk review of 1.31.6 (C06-DESIGN section 13): Docker unreachable, a busy daemon killed at the timeout, or any
+        # other non-zero exit without containerlab's "not found" sentence is a 409 for the manager (the browser keeps
+        # its last colours and retries), never `present: False` (the map would say the lab is not running, for good).
+        sentence = 'Containerlab on the VM did not list this lab.'
+        self.assertEqual(host_operations.BINDING_FAILED_SENTENCE, sentence)
+        for answer in ((1, '', 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock'), (124, '', 'timed out after 25s'), (1, '', ''), (2, json.dumps({LAB: [self.bind_row(CONTAINER)]}), 'ERRO something else')):
+            self.log.clear(); self.bind_answer = answer
+            with self.assertRaises(ValueError, msg=repr(answer)) as raised: self.host.interfaces(LAB, {'all': True})
+            self.assertEqual(str(raised.exception), sentence)
+            self.assertEqual(self.argvs(), [[self.clab, 'inspect', '--name', LAB, '-f', 'json']], 'the interfaces listing never runs')
 
     def test_the_listing_failing_is_the_existing_sentence_and_text_is_not_present(self):
         self.list_answer = (1, 'Error: unknown command "interfaces" for "containerlab inspect"')

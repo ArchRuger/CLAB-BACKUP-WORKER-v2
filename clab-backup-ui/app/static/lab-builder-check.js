@@ -560,8 +560,8 @@ function builderCheckGraph(r,devices){
  for(const w of waits){
   const path=['topology','nodes',w.waiter,'stages'];
   if(!w.target){builderCheckAdd(r,'warning',w.line,'wait-node',path,'this wait-for entry names no device (`node:`), so it waits for nothing.');continue;}
-  if(!byName.has(w.target)){builderCheckAdd(r,'error',w.line,'wait-node',path,'There is no device named `'+builderCheckShow(w.target)+'`.'+builderCheckMean(w.target,names));continue;}
-  if(w.target===w.waiter){builderCheckAdd(r,'error',w.line,'wait-self',path,'A device cannot wait for itself (`'+builderCheckShow(w.waiter)+'` waits for `'+builderCheckShow(w.waiter)+'`'+(w.where?' through '+w.where:'')+').');continue;}
+  if(!byName.has(w.target)){builderCheckAdd(r,'error',w.line,'wait-node',path,'There is no device named `'+builderCheckShow(w.target)+'`.'+builderCheckMean(w.target,names)+' The deploy cannot finish: the wait has nothing to wait for.');continue;}
+  if(w.target===w.waiter){builderCheckAdd(r,'error',w.line,'wait-self',path,'A device cannot wait for itself (`'+builderCheckShow(w.waiter)+'` waits for `'+builderCheckShow(w.waiter)+'`'+(w.where?' through '+w.where:'')+'). The deploy cannot finish.');continue;}
   const target=byName.get(w.target);
   if(w.stage==='healthy'&&BUILDER_NO_HEALTHCHECK_KINDS.includes(target.kind)&&!builderCheckHas(target.chain,'healthcheck')){
    const n='`'+builderCheckShow(target.name)+'`';
@@ -595,7 +595,7 @@ function builderCheckGraph(r,devices){
   // The way back from the waited-for device to the waiting one closes the loop: waiter → target → … → waiter.
   const tail=[];let v=first.waiter;while(v!==first.target&&back.has(v)&&tail.length<=group.size){tail.unshift(v);v=back.get(v);}
   const loop=[first.waiter,first.target,...tail.slice(0,-1),first.waiter];
-  builderCheckAdd(r,'error',first.line,'wait-loop',['topology','nodes',first.waiter,'stages'],'Devices wait for each other in a loop ('+builderCheckCycle(loop)+'). containerlab will not deploy the lab.');
+  builderCheckAdd(r,'error',first.line,'wait-loop',['topology','nodes',first.waiter,'stages'],'Devices wait for each other in a loop ('+builderCheckCycle(loop)+'). The deploy cannot finish.');
  }
 }
 

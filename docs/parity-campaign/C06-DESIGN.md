@@ -985,3 +985,36 @@ refuted, which need no row), in the review's order, with the lead's binding deci
 | `POST /arrange {undo: true}` | 200, positions and revision back exactly; a second Undo with the old revision → 412 `stale` with the sentence |
 | `GET /drawio?layout=rows&theme=print` and `layout=map&theme=manager` | 200, XML documents; `layout=bogus` → 400 "Choose a supported layout." |
 | Not run live | the browser chip, Find, hover and Download picture on the live lab (covered by the fixture QA at three widths and `check_c06.py`); the link-state helper on a VM with an old containerlab |
+
+## 13. The deferred full branch review (campaign 2, A02, 2026-10-27)
+
+Release 1.31.6 shipped C06, C08 and C09 after single reviewer passes (PICKUP 17:30). Campaign 2 ran the two full
+read-only passes on the 1.31.5 → 1.31.6 diff (`fcdde64..4067aa9`, split into backend+tests and UI+editor+docs):
+`risk-reviewer` (Opus 5.5, effort high, 7 findings: no must-fix, 1 should-fix, 6 low; no privilege widening in the
+helper's `interfaces {all: true}` mode, no state loss in arrange/Undo, no lost poll state) and `clab-ui-reviewer`
+(Opus 5.5, high, 8 findings: no must-fix, 3 should-fix, 5 low; no `esc()` gap, no inline style on `/`, no duplicate
+top-level name, no lost functionality). Both routes were read from the agent transcripts. The C08 and C09 rows are in
+their own section 11. Dispositions:
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| R1 | should-fix | `lab_links` answered `present: False` for any non-zero exit of the binding `inspect --name`, so a Docker hiccup or the 25 s kill turned link state off for good with "the lab is not running" (a 200, so no retry). | **Fixed** (helper): the binding runs through `probe` (stderr kept); containerlab 0.79 answers an absent lab with exit 1 and `Lab 'x' not found - no running containers.` (checked live 2026-10-27), which stays `present: False`; every other failure raises `BINDING_FAILED_SENTENCE` → 409 → the browser keeps its colours and backs off. `test_host_diagnostics.py`: the absent cases carry the sentence, a new test covers the daemon-down, timeout and other-exit cases, and the never-Docker pin counts one probe (the binding) and one run. |
+| R2 | low | `layout.annotations()` now writes `nodeStyle`, `boxSpacing`, `linkStyle` defaults into `viewerSettings`, so the generated map text of a lab without a stored document changes once after the upgrade and the first save after 1.31.6 can report "map changed". | **Recorded**, not changed: the three keys are what the editor reads; one spurious "map changed" per lab without a stored document is the cost, noted in VALIDATION. |
+| R3 | low | `ArrangeTests` patched a stand-in `arrange` with `create=True`, so the class passed with `layout.arrange` removed. | **Fixed** (`clab-test-engineer`): the stand-in is gone; the tests drive the real route. Found on the way: a module-level `def` had been placed inside the preceding class, so four tests of `test_lab_operations.py` never ran; they run and pass now (146 tests). |
+| R4 | low | `test_never_replaces_a_vendored_release` checked a sentence, not the comparison before the write. | **Fixed**: the test asserts the existence guard, the byte comparison and `process.exit(0)` before the one `put(file, schema)`, in source order. |
+| R5 | low | One link-state poll can hold a diagnostics slot up to 30 s while the helper's worst case is 50 s (two 25 s calls). | **Recorded**: availability only; a per-call budget below the manager's 30 s is the fix if it bites (the risk reviewer's words); not changed in this campaign. |
+| R6 | low | `arranged_document` appends an unplaced drawn node to `nodeAnnotations` even when it is a network node. | **Recorded**: the manager's own reparse reads both lists; whether the editor ignores such an entry is checked in the T07 fixture pass (Edit map after Arrange on a lab with a `host:` endpoint). |
+| R7 | low | C09 §9 rows 0–1 record a `/student-guide` route, a `student_guide` state flag and `test_student_guide.py` that do not exist; the Help item stays hidden because the flag is never sent. | **Amended** in C09 §11: the backend half of S0 was not shipped; the Help entry is restored by D10 of campaign 2 with the regenerated guide. |
+| U1 | should-fix | Discovery stale → status `Unknown` → the map cleared the colours and said "the lab is not running", contradicting the status vocabulary. | **Fixed** (`clab-ui-builder`): a `paused` branch keeps the colours, sends nothing and says `Link state paused: the lab VM cannot be reached right now.`; `test_map_tools_ui.js`. |
+| U2 | should-fix | The note and the guide said containerlab "will refuse" the `wait-*` errors (loop, self-wait, unknown target) while §0 shows `validate` and the dry run accept them and the deploy may hang. | **Fixed**: those three messages end in "The deploy cannot finish…", the note's sentence says "keep the deploy from finishing", LAB-BUILDER.md qualified the same way; tests rewritten. |
+| U3 | should-fix | Find's Enter and Escape had no shortcuts row and the reverse pin missed the `on(…,'keydown',…)` form. | **Fixed**: two "Topology map" rows with their cite; the pin regex widened in both places; the moved cites refreshed. |
+| U4 | low | The `#map-links` chip was rebuilt with `innerHTML` on every word change, dropping focus from Retry, Resume, Undo arrange. | **Fixed**: the message is written by `textContent`, the markup only when its shape changes; focus goes to More ▾ after Undo (a fallback rebuild remains when the span is absent). |
+| U5 | low | An Arrange failure after the dialog was closed went into the closed dialog. | **Fixed**: the chip shows it. |
+| U6 | low | LAB-OPERATIONS.md said Undo arrange lasts until the map changes or the manager restarts; a lab switch and a reload also forget it. | **Fixed** in the guide. |
+| U7 | low | The YAML panel's count was a polite live region rewritten 400 ms after each pause in typing. | **Fixed**: `aria-live="off"`; a one-shot announcement after Apply, Revert and on open. |
+| U8 | low | Escape or × hid the YAML panel without returning focus to the toggle. | **Fixed**: focus returns to `#builder-yaml` when it was inside the panel. |
+
+Open points re-examined by both reviewers: §10's 3 MiB line limit, §11's two-call window, the re-serialised document,
+Undo entries of removed labs, the capabilities cache and the host revision, §12's "not run live" items all **stand**
+(the live browser items are A06 of campaign 2). The focus behaviour of U4, U5 and U8 is verified against the fake
+DOM only until the A06/A08 fixture pass.

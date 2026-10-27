@@ -116,7 +116,20 @@ class FetchScript(unittest.TestCase):
         self.assertIn('JSON.parse(schema.toString("utf8"))', self.source)
 
     def test_never_replaces_a_vendored_release(self):
+        # The behaviour is the comparison of the bytes already on disk with the download, and it runs, with a failure
+        # that stops the script, before the first put(file, schema) can write anything.
+        compare = 'if (!readFileSync(existing).equals(schema)) fail('
+        self.assertIn('const file = `${version}.json`, existing = join(out, file);', self.source)
+        self.assertIn('if (existsSync(existing)) {', self.source)
+        self.assertIn(compare, self.source)
         self.assertIn('a vendored release is never replaced', self.source)
+        self.assertEqual(self.source.count('put(file, schema)'), 1)
+        self.assertLess(self.source.index('if (existsSync(existing)) {'), self.source.index(compare))
+        self.assertLess(self.source.index(compare), self.source.index('put(file, schema)'))
+        # Identical bytes end the run without a write; nothing else can fall through to the writes.
+        identical = self.source.index('nothing written.`);', self.source.index(compare))
+        self.assertLess(identical, self.source.index('put(file, schema)'))
+        self.assertIn('process.exit(0);', self.source[identical:self.source.index('put(file, schema)')])
 
 
 if __name__ == '__main__':

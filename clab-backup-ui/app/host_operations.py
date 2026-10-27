@@ -64,6 +64,7 @@ INTERFACE_LIMIT = 256
 # The `all` option of `interfaces` (C06 link state): at most this many containers of one lab are answered.
 LINK_CONTAINER_LIMIT = 512
 TRUSTED_ROOTS_SENTENCE = 'This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.'
+BINDING_FAILED_SENTENCE = 'Containerlab on the VM did not list this lab.'
 # lab_links: a containerlab before 0.64 has no `inspect interfaces`; it answers the plain `inspect` JSON (an object), not a list.
 INTERFACES_LISTING_SENTENCE = 'Containerlab on the VM cannot list interfaces (0.64 or later is needed).'
 # The text files the lab browser lists beside the topologies (`files` option) and the viewer reads:
@@ -587,8 +588,16 @@ class HostOperations:
         `present: False`, not an error. Then the same lab-wide listing the per-device form reads, kept to the
         containers the binding listed and reduced by link_rows. No Docker command, no counters, no facts; binding
         a container to a manager device is the manager's job."""
-        code, out = self.run([self.clab, 'inspect', '--name', lab, '-f', 'json'], timeout=INSPECT_TIMEOUT, limit=INSPECT_LIMIT)
-        try: listing = json.loads(out) if code == 0 else None
+        # The binding keeps stderr (probe): containerlab 0.79 answers a lab with no container with exit 1 and
+        # "Lab 'x' not found - no running containers." (checked live 2026-10-27), the one failure that means
+        # "not running". Every other failure (Docker unreachable, a killed command) is an error, so the manager
+        # answers 409 and the browser keeps its colours and retries, instead of showing a running lab as stopped
+        # for good (the independent risk review of 1.31.6, docs/parity-campaign/C06-DESIGN.md section 13).
+        code, out, err = self.probe([self.clab, 'inspect', '--name', lab, '-f', 'json'], INSPECT_TIMEOUT)
+        if code:
+            if 'not found' in (err or '').lower(): return {'nodes': [], 'present': False}
+            raise ValueError(BINDING_FAILED_SENTENCE)
+        try: listing = json.loads(out)
         except ValueError: listing = None
         if isinstance(listing, dict): rows = [row for group in listing.values() for row in (group if isinstance(group, list) else [group])]
         else: rows = listing if isinstance(listing, list) else []

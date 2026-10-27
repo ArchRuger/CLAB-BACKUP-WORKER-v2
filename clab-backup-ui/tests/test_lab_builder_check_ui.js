@@ -317,29 +317,29 @@ test('R7d: the same device:interface twice is a warning naming the first link',(
 const waitFor=(node,stage='create',on='create')=>({stages:{[on]:{'wait-for':[{node,stage}]}}});
 test('R8a: a wait for a device that does not exist (with a suggestion), on any VM',()=>{
  const doc=JSON.parse(JSON.stringify(EXAMPLE));doc.topology.nodes.vrt.stages.create['wait-for'][0].node='vws';
- assert.deepEqual(check(doc,LOOSE).map(brief),[[13,'error','wait-node','There is no device named `vws`. Did you mean `vsw`?']]);
- assert.deepEqual(check(doc,EXACT,null).map(brief),[[13,'error','wait-node','There is no device named `vws`. Did you mean `vsw`?']]);
+ assert.deepEqual(check(doc,LOOSE).map(brief),[[13,'error','wait-node','There is no device named `vws`. Did you mean `vsw`? The deploy cannot finish: the wait has nothing to wait for.']]);
+ assert.deepEqual(check(doc,EXACT,null).map(brief),[[13,'error','wait-node','There is no device named `vws`. Did you mean `vsw`? The deploy cannot finish: the wait has nothing to wait for.']]);
  assert.deepEqual(brief(only(lab({stages:{create:{'wait-for':[{stage:'create'}]}}}))),[10,'warning','wait-node','this wait-for entry names no device (`node:`), so it waits for nothing.']);
 });
 test('R8b: a device waiting for itself, directly or through the defaults, a kind section or a group',()=>{
- assert.deepEqual(brief(only(lab(waitFor('a')))),[10,'error','wait-self','A device cannot wait for itself (`a` waits for `a`).']);
+ assert.deepEqual(brief(only(lab(waitFor('a')))),[10,'error','wait-self','A device cannot wait for itself (`a` waits for `a`). The deploy cannot finish.']);
  const viaDefaults=check({name:'x',topology:{defaults:Object.assign({kind:'linux',image:'i'},waitFor('a')),nodes:{a:{},b:{}}}});
- assert.deepEqual(viaDefaults.map(brief),[[9,'error','wait-self','A device cannot wait for itself (`a` waits for `a` through topology.defaults).']]);
- assert.equal(check({name:'x',topology:{kinds:{linux:waitFor('a')},nodes:{a:{kind:'linux',image:'i'}}}})[0].message,'A device cannot wait for itself (`a` waits for `a` through topology.kinds.linux).');
- assert.equal(check({name:'x',topology:{groups:{g:waitFor('a')},nodes:{a:{kind:'linux',image:'i',group:'g'}}}})[0].message,'A device cannot wait for itself (`a` waits for `a` through topology.groups.g).');
+ assert.deepEqual(viaDefaults.map(brief),[[9,'error','wait-self','A device cannot wait for itself (`a` waits for `a` through topology.defaults). The deploy cannot finish.']]);
+ assert.equal(check({name:'x',topology:{kinds:{linux:waitFor('a')},nodes:{a:{kind:'linux',image:'i'}}}})[0].message,'A device cannot wait for itself (`a` waits for `a` through topology.kinds.linux). The deploy cannot finish.');
+ assert.equal(check({name:'x',topology:{groups:{g:waitFor('a')},nodes:{a:{kind:'linux',image:'i',group:'g'}}}})[0].message,'A device cannot wait for itself (`a` waits for `a` through topology.groups.g). The deploy cannot finish.');
 });
 test('R8c: a loop of two, a loop of three reported once at its first entry, a chain is no loop, whatever the stages',()=>{
  const n=(wait)=>Object.assign({kind:'linux',image:'i'},wait);
  assert.deepEqual(check({name:'x',topology:{nodes:{vsw:n(waitFor('vrt')),vrt:n(waitFor('vsw','configure','healthy'))}}}).map(brief),
-  [[10,'error','wait-loop','Devices wait for each other in a loop (vsw → vrt → vsw). containerlab will not deploy the lab.']]);
+  [[10,'error','wait-loop','Devices wait for each other in a loop (vsw → vrt → vsw). The deploy cannot finish.']]);
  const three=check({name:'x',topology:{nodes:{a:n(waitFor('b')),b:n(waitFor('c')),c:n(waitFor('a'))}}},LOOSE,null);
- assert.deepEqual(three.map(brief),[[10,'error','wait-loop','Devices wait for each other in a loop (a → b → c → a). containerlab will not deploy the lab.']]);
+ assert.deepEqual(three.map(brief),[[10,'error','wait-loop','Devices wait for each other in a loop (a → b → c → a). The deploy cannot finish.']]);
  assert.deepEqual(check({name:'x',topology:{nodes:{a:n(waitFor('b')),b:n(waitFor('c')),c:n({})}}}),[]);
  // Two separate loops: two findings.
  assert.equal(check({name:'x',topology:{nodes:{a:n(waitFor('b')),b:n(waitFor('a')),c:n(waitFor('d')),d:n(waitFor('c'))}}}).filter(f=>f.code==='wait-loop').length,2);
  // A loop made through the defaults: every device waits for a, and a waits for b.
  const viaDefaults=check({name:'x',topology:{defaults:Object.assign({kind:'linux',image:'i'},waitFor('a')),nodes:{a:waitFor('b','create','configure'),b:{}}}}).filter(f=>f.code==='wait-loop');
- assert.deepEqual(viaDefaults.map(f=>f.message),['Devices wait for each other in a loop (b → a → b). containerlab will not deploy the lab.']);
+ assert.deepEqual(viaDefaults.map(f=>f.message),['Devices wait for each other in a loop (b → a → b). The deploy cannot finish.']);
 });
 test('R8d: waiting for healthy on a device with no health check, own or inherited; the linux wording',()=>{
  const doc=(target,extra={})=>({name:'x',topology:Object.assign({nodes:{c1:Object.assign({kind:'arista_ceos',image:'ceos'},target),r1:Object.assign({kind:'linux',image:'i'},waitFor('c1','healthy'))}},extra)});
@@ -534,7 +534,7 @@ test('a wait loop names at most eight devices and counts the rest',()=>{
  for(let i=0;i<n;i++)nodes['n'+i]={kind:'linux',image:'i',stages:{create:{'wait-for':[{node:'n'+((i+1)%n),stage:'create'}]}}};
  const f=check({name:'x',topology:{nodes}}).filter(x=>x.code==='wait-loop');
  assert.equal(f.length,1);
- assert.match(f[0].message,/^Devices wait for each other in a loop \((n\d+ → ){8}… \(5 more\)\)\. containerlab will not deploy the lab\.$/);
+ assert.match(f[0].message,/^Devices wait for each other in a loop \((n\d+ → ){8}… \(5 more\)\)\. The deploy cannot finish\.$/);
  const small=check({name:'x',topology:{nodes:{a:{kind:'linux',image:'i',stages:{create:{'wait-for':[{node:'b',stage:'create'}]}}},b:{kind:'linux',image:'i',stages:{create:{'wait-for':[{node:'a',stage:'create'}]}}}}}}).filter(x=>x.code==='wait-loop');
  assert.match(small[0].message,/\(a → b → a\)/);
 });

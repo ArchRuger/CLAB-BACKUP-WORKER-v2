@@ -673,7 +673,7 @@ class LinkStateAPITests(unittest.TestCase):
 
     def test_link_state_vm_kinds_follow_the_node_kind_then_platform(self):
         self.start(); self.cache(self.CAPS)
-        self.assertEqual(dd.VM_KINDS, ('juniper_vjunosswitch', 'juniper_vjunosevolved', 'juniper_vjunosrouter', 'juniper_vqfx', 'cisco_xrv9k', 'vr-xrv9k'))
+        self.assertEqual(dd.VM_KINDS, ('juniper_vjunosswitch', 'juniper_vjunosevolved', 'juniper_vjunosrouter', 'juniper_vsrx', 'juniper_vqfx', 'cisco_xrv9k', 'vr-xrv9k'))
         for kind, vm in (('juniper_vjunosswitch', True), ('arista_ceos', False), ('juniper_cjunosevolved', False), ('vr-xrv9k', True), ('linux', False)):
             with self.store.lock: self.store.lab(self.lab_id)['nodes'][1]['kind'] = kind
             self.assertEqual(self.link_state()['devices'][self.names[1]].get('vm'), True if vm else None, kind)

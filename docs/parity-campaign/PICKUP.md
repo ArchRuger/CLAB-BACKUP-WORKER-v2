@@ -187,3 +187,14 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   on the 1.31.5→1.31.6 diff), B03a (`clab-devops-engineer`: vSRX pull and solo boot in `camp-vsrx`, the `parity` lab
   redeployed). Next: the topology-editing design (T01) from the editor's integrator documentation, B02 (vSRX registry)
   once B03a reports the image's console and interface facts.
+- 2026-10-27 02:30 UTC, **campaign 2 checkpoint 2** (`1400fbc` pushed, the A02 fixes committed next): A01 done
+  (`ACCEPTANCE.md`: 98 rows; 38 shipped, 22 at parity before, 4 partial, 9 not started, 25 not pursued); A02 done
+  (the two full reviewer passes on `fcdde64..4067aa9`: no must-fix; 1 + 3 should-fix and 6 + 5 low, every one fixed
+  or recorded in C06-DESIGN §13, C08 §11, C09 §11; the helper's link-state binding now tells "not found" from a
+  failed Docker call); B02 done (vSRX in every registry site, 25 unit tests); B03a done (`camp-vsrx` boots the exact
+  image in 2.5 min with a console on 5000 and a permanently unhealthy Docker health; `parity` back up after the reboot
+  with `--reconfigure`; `evidence/b03-vsrx-boot-2026-10-27.md`); T01 written (`TOPOLOGY-EDIT-DESIGN.md`). On the way
+  the test engineer found four tests of `test_lab_operations.py` nested inside a stray module-level `def` and never
+  run; they run now. Labs on the VM: `parity` (5 nodes, Running), `camp-vsrx` (vsrx .121, host1 .122). Running next:
+  T02 (design review), A04 (impairment persistence, live), A05 + B06-vsrx (capture with real packets and the vSRX
+  kind through the manager on `camp-vsrx`), A06/A07 (fixture and live browser checks, `verify_after.py`).

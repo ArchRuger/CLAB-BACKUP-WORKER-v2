@@ -978,14 +978,14 @@ test('bundle pin: the editor bundle writes only keys that EDITOR_VIEW_KEYS lists
 // Every keyboard handler of the page scripts is either a row of the shortcuts dialog (data-source) or an exclusion with its reason.
 test('reverse shortcut pin: every keydown site is a data-source of a shortcuts row or a SHORTCUT_EXCLUSIONS entry, and every cited line is a keydown site',()=>{
  const sites=[];
- for(const [name,src] of pageScripts())src.split('\n').forEach((line,i)=>{if(!line.trim().startsWith('//')&&/addEventListener\('keydown'|\.onkeydown=|attachCustomKeyEventHandler\(/.test(line))sites.push(`${name}:${i+1}`);});
+ for(const [name,src] of pageScripts())src.split('\n').forEach((line,i)=>{if(!line.trim().startsWith('//')&&/addEventListener\('keydown'|\.onkeydown=|attachCustomKeyEventHandler\(|,\s*'keydown'\s*,/.test(line))sites.push(`${name}:${i+1}`);});
  assert.ok(sites.length>=20,sites.join(' '));
  const short=INDEX.slice(INDEX.indexOf('<dialog id="shortcuts-dialog"'),INDEX.indexOf('</dialog>',INDEX.indexOf('<dialog id="shortcuts-dialog"')));
  const rows=[...short.matchAll(/data-source="([^"]+)"/g)].flatMap(m=>m[1].split(/\s+/));
  const exclusions=[...fs.readFileSync(path.join(STATIC,'preferences.js'),'utf8').matchAll(/source:'([\w-]+\.js:\d+)'/g)].map(m=>m[1]);
  const covered=new Set([...rows,...exclusions]);
  assert.deepEqual(sites.filter(s=>!covered.has(s)),[],'a keyboard handler with no row in the shortcuts dialog and no exclusion: add its row to index.html or its reason to SHORTCUT_EXCLUSIONS');
- const keyLine=/addEventListener\('keydown'|\.onkeydown=|attachCustomKeyEventHandler\(/,folderKey=/case '|\bkey\b/;   // the folder chooser's rows cite the key decisions of its pure intent function
+ const keyLine=/addEventListener\('keydown'|\.onkeydown=|attachCustomKeyEventHandler\(|,\s*'keydown'\s*,/,folderKey=/case '|\bkey\b/;   // the folder chooser's rows cite the key decisions of its pure intent function
  for(const cite of [...rows,...exclusions]){
   const [file,line]=cite.split(':'),text=fs.readFileSync(path.join(STATIC,file),'utf8').split('\n')[Number(line)-1]||'';
   assert.ok(keyLine.test(text)||(file==='git-places.js'&&rows.includes(cite)&&folderKey.test(text)),cite+' is not a keydown site any more (a stale cite): '+text.trim().slice(0,80));

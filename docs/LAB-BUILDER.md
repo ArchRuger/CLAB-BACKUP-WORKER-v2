@@ -94,8 +94,8 @@ shows the editor's text again.
 
 Under the text the panel lists **Problems** found in the topology, so a misspelt setting or a boot-order
 mistake shows up before the deploy and not as containerlab's message afterwards. The list is a check of
-the text, not a gate: **these do not stop Apply or Save**; containerlab refuses errors when the lab is
-deployed, and the review and the deploy keep their own refusals (containerlab's own message names the line).
+the text, not a gate: **these do not stop Apply or Save**; containerlab refuses most errors when the lab is
+deployed (a wait loop, a device waiting for itself and a `wait-for` target that does not exist are accepted by `containerlab validate` and `deploy --dry-run`, and the deploy then cannot finish), and the review and the deploy keep their own refusals (containerlab's own message names the line).
 The panel says so in one sentence above the list.
 
 - **When it runs.** About 0.4 seconds after you stop typing, and also when the canvas changes the text,
@@ -123,7 +123,7 @@ The panel says so in one sentence above the list.
     through `topology.defaults`, `kinds` or `groups`), devices that wait for each other in a loop, a `wait-for`
     entry without a valid `stage`, a wait for `healthy` on a device that has no health check (warning), and stage
     commands (`exec`) written as `on-enter:` / `on-exit:` sections instead of a list of `- command:` entries.
-- **Error and Warning.** *Error* means containerlab is expected to refuse the deploy, *Warning* means the text
+- **Error and Warning.** *Error* means containerlab is expected to refuse the deploy (for the three `wait-for` errors, a loop, a device waiting for itself and a target that does not exist, containerlab accepts the file and the deploy cannot finish, so those messages say that instead), *Warning* means the text
   may work but probably is not what you meant, or the manager cannot be sure. A missing kind, an endpoint or
   a `wait-for` target that does not exist, a wait loop and the stage-command form are errors on any VM. A
   kind the schema does not list is an error only when the VM's containerlab is exactly the release the manager
@@ -146,7 +146,7 @@ The panel says so in one sentence above the list.
   from the schema and a link *More about `<setting>`* to its page on containerlab.dev (only links to that site
   are offered). It is not announced as you move, and it is shown only when the schema has loaded.
 - **The same errors without the panel.** A line under the bar (*1 error containerlab will refuse when deploying:
-  line 7, … Open YAML to see it.*, *2 errors …: the first is line 7, …*) appears a moment after a stored change, even when
+  line 7, … Open YAML to see it.*, *2 errors …: the first is line 7, …*; when every error is one of the three `wait-for` ones it reads *1 error that keeps the deploy from finishing: …*) appears a moment after a stored change, even when
   the YAML panel was never opened. **Show in YAML** opens the panel (on the line when the panel holds no unapplied
   edits, at its own list when it does) and **Dismiss** hides it for that text. It lists errors only and never
   turns *Save to the VM…* off.

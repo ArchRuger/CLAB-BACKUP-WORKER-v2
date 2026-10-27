@@ -273,7 +273,7 @@ a device with no link goes below the rest. They are disabled, with the reason *T
 by*, when the map has no links, and a map with one device cannot be arranged. Arranging changes only the
 stored map, never the topology, the devices or the running lab. **Undo arrange** appears under the map after
 an arrangement and is kept only while the map is as the arrangement left it: if the map was changed by anyone
-else, or the manager restarted, it is removed and the map is reloaded. A lab whose map still sits on the
+else, you open another lab or reload the page, or the manager restarted, it is removed and the map is reloaded. A lab whose map still sits on the
 default grid (two devices or more) says *Devices sit on the default grid.* under the map, with a button that
 opens the same dialog.
 
@@ -296,7 +296,7 @@ connected, and the count says *connected* instead of *up* (`dotted red = down (c
 Nothing of this is stored. When the answer is not available the links are drawn from the topology file, the
 colours are cleared and the line says why, once: `Link state off: …` for a VM helper that needs the update, a
 containerlab older than 0.64 (the VM's version is named), or a lab not linked to a lab on the VM; `Links are drawn
-from the topology file; the lab is not running.` for a lab that is not running (nothing is asked). If the manager
+from the topology file; the lab is not running.` for a lab that is not running (nothing is asked); and, while the manager's view of the lab is stale (status Unknown), the last colours stay under `Link state paused: the lab VM cannot be reached right now.` with no request. If the manager
 gets no answer (the VM is busy or does not reply), the last colours stay under `Link state paused, retrying…`; after three failures the line reads
 `Link state stopped (as of 14:02).` with **Retry**, and after thirty minutes `Link state paused (as of 14:02).` with
 **Resume**, and the hover words of a kept colour carry the same time.

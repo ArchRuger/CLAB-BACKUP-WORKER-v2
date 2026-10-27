@@ -2105,12 +2105,6 @@ class NodeActionAndOptionTests(unittest.TestCase):
             self.assertIn(self.lab_id, operations.plan_cache, 'a settings change without a path keeps it')
             operations.forget_plan(self.lab_id); self.assertNotIn(self.lab_id, operations.plan_cache); self.assertEqual(operations.plan_gen[self.lab_id], gen + 1)
 
-
-def stand_in_arrange(drawing, mode):
-    """Used only while layout.arrange (C06 S1a) is not in this tree: deterministic, integers, every node moved."""
-    if mode not in ('rows', 'columns', 'ring'): raise ValueError('Choose rows, columns or a ring.')
-    shift = {'rows': (1000, 500), 'columns': (500, 1000), 'ring': (700, 700)}[mode]
-    return {n['id']: [int(n['x']) + shift[0] + 10 * i, int(n['y']) + shift[1]] for i, n in enumerate(drawing['nodes'])}
     # Review follow-ups for C05: where the plan cache is dropped, per-action run options, the link counts and the settings path.
     def cache_states(self, effect, cancel_first=False, stopping_during=False, probe_effect=None, expect=None):
         """Run one confirmed Apply with the fake VM changed by `effect` (what the run does) and `probe_effect` (the follow-up preview);
@@ -2227,12 +2221,6 @@ class ArrangeTests(unittest.TestCase):
     STALE = 'The map changed since you looked at it. The map was reloaded; try again.'
     KEYS = ('drawing', 'annotations', 'annotations_for', 'map_written_at')
 
-    def arrange_function(self):
-        import contextlib
-        import app.layout as layout
-        if hasattr(layout, 'arrange'): return layout.arrange, contextlib.nullcontext()
-        return stand_in_arrange, patch.object(layout, 'arrange', stand_in_arrange, create=True)
-
     def post(self, **body):
         return self.client.post('/api/labs/' + self.lab_id + '/arrange', headers=self.auth, json=body)
 
@@ -2262,8 +2250,8 @@ class ArrangeTests(unittest.TestCase):
     def test_arrange_rows_moves_every_node_and_rewrites_the_stored_document(self):
         from app.layout import revision
         from app.topology import parse_drawing
-        arrange, stub = self.arrange_function()
-        with self.fixture() as remote, stub:
+        from app.layout import arrange
+        with self.fixture() as remote:
             ids = [n['id'] for n in self.lab()['drawing']['nodes']]
             original = self.document(ids); self.save_document(original)
             old = copy.deepcopy(self.lab()['drawing']); old_rev = self.rev(); expected = arrange(copy.deepcopy(old), 'rows')
@@ -2297,8 +2285,7 @@ class ArrangeTests(unittest.TestCase):
         from app.layout import revision
         from app.runner import Runner
         from app.topology import unplaced
-        arrange, stub = self.arrange_function()
-        with self.fixture() as remote, stub:
+        with self.fixture() as remote:
             ids = [n['id'] for n in self.lab()['drawing']['nodes']]
             for case in ('drawing only', 'stored document', 'synced document'):
                 with self.subTest(case=case):
@@ -2323,8 +2310,7 @@ class ArrangeTests(unittest.TestCase):
             self.assertEqual(remote.call_count, 0)
 
     def test_arrange_a_stale_revision_is_412_and_changes_nothing(self):
-        arrange, stub = self.arrange_function()
-        with self.fixture(), stub:
+        with self.fixture():
             before = copy.deepcopy(self.lab())
             for body in ({'mode': 'rows', 'revision': 'f' * 64}, {'undo': True, 'revision': self.rev()}):
                 response = self.post(**body)
@@ -2337,8 +2323,7 @@ class ArrangeTests(unittest.TestCase):
             self.assertEqual(self.lab(), after)
 
     def test_arrange_undo_after_another_map_change_is_refused(self):
-        arrange, stub = self.arrange_function()
-        with self.fixture(), stub:
+        with self.fixture():
             ids = [n['id'] for n in self.lab()['drawing']['nodes']]
             for change in ('map-document', 'layout'):
                 arranged = self.post(mode='rows', revision=self.rev()).json()
@@ -2351,8 +2336,7 @@ class ArrangeTests(unittest.TestCase):
                 self.assertEqual(self.lab(), current, 'Undo is never applied over a later change')
 
     def test_arrange_undo_after_a_restart_is_refused(self):
-        arrange, stub = self.arrange_function()
-        with self.fixture(), stub:
+        with self.fixture():
             arranged = self.post(mode='rows', revision=self.rev()).json()
             fresh = create_app(self.tmp.name); client = TestClient(fresh)
             try:
@@ -2363,8 +2347,7 @@ class ArrangeTests(unittest.TestCase):
                 client.close()
 
     def test_arrange_a_running_operation_is_409_for_both_and_keeps_the_undo(self):
-        arrange, stub = self.arrange_function()
-        with self.fixture(), stub:
+        with self.fixture():
             arranged = self.post(mode='rows', revision=self.rev()).json(); after = copy.deepcopy(self.lab())
             self.store.state['operations'].append(dict(id='busy', lab_id=self.lab_id, action='deploy', status='running', name='x'))
             for body in ({'mode': 'ring', 'revision': arranged['revision']}, {'undo': True, 'revision': arranged['revision']}):
@@ -2376,8 +2359,7 @@ class ArrangeTests(unittest.TestCase):
             self.assertEqual(self.post(undo=True, revision=arranged['revision']).status_code, 200, 'Undo works once the operation is over')
 
     def test_arrange_requests_are_checked_before_anything_changes(self):
-        arrange, stub = self.arrange_function()
-        with self.fixture(), stub:
+        with self.fixture():
             before = copy.deepcopy(self.lab()); rev = self.rev()
             for body in ({'mode': 'rows', 'undo': True, 'revision': rev}, {'revision': rev}, {'undo': False, 'revision': rev}):
                 response = self.post(**body)
@@ -2397,8 +2379,7 @@ class ArrangeTests(unittest.TestCase):
             self.assertEqual(self.events(), [])
 
     def test_arrange_a_failed_save_restores_every_key_and_keeps_no_new_undo(self):
-        arrange, stub = self.arrange_function()
-        with self.fixture(), stub:
+        with self.fixture():
             ids = [n['id'] for n in self.lab()['drawing']['nodes']]; self.save_document(self.document(ids))
             before = copy.deepcopy(self.lab()); operations = self.app.state.operations
             with patch.object(self.store, 'save', side_effect=OSError('disk fixture')):
@@ -2415,8 +2396,7 @@ class ArrangeTests(unittest.TestCase):
 
     def test_arrange_a_document_that_would_outgrow_the_limit_indented_is_kept_compact(self):
         from app.layout import MAX_DOCUMENT, revision
-        arrange, stub = self.arrange_function()
-        with self.fixture(), stub:
+        with self.fixture():
             ids = [n['id'] for n in self.lab()['drawing']['nodes']]
             document = dict(self.document(ids), somethingNew=[1] * 160000)
             url = '/api/labs/' + self.lab_id + '/map-document'
@@ -2432,8 +2412,7 @@ class ArrangeTests(unittest.TestCase):
         # Risk review of C06: a map-document save that changes only what parse_drawing does not carry into the drawing (an
         # unknown key, a groupId, geo coordinates) keeps the drawing's revision. Undo must still refuse to throw it away.
         from app.layout import revision
-        arrange, stub = self.arrange_function()
-        with self.fixture() as remote, stub:
+        with self.fixture() as remote:
             ids = [n['id'] for n in self.lab()['drawing']['nodes']]
             for case in ('drawing only', 'stored document'):
                 with self.subTest(case=case):

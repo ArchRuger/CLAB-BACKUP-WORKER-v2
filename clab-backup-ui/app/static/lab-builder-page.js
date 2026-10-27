@@ -320,10 +320,13 @@ function builderNoteSession(){try{const s=window.sessionStorage;return s&&typeof
 function builderNoteStored(){try{const s=builderNoteSession();return s?s.getItem(BUILDER_PREFIX+'note-dismissed')||'':'';}catch{return '';}}
 function builderNoteRemember(key){try{const s=builderNoteSession();if(s&&key)s.setItem(BUILDER_PREFIX+'note-dismissed',key);}catch{}}
 // `errors` counts what containerlab refuses; `first` is the first of them. The manager's own refusals (finding.refuser === 'manager') are counted apart.
-function builderNoteSentence(errors,first,manager){
+// `waits` counts how many of the errors are wait-* codes: containerlab's validate and deploy --dry-run accept those and the deploy
+// then never finishes, so a note made of them alone says what happens, not that containerlab refuses.
+function builderNoteSentence(errors,first,manager,waits){
  let message=String(first.message||'').trim();if(!/[.!?]$/.test(message))message+='.';
  if(!errors)return (manager===1?'1 error':manager+' errors')+' the manager’s import refuses: '+(manager===1?'':'the first is ')+'line '+first.line+', '+message+' Open YAML to see it.';
- return errors+' error'+(errors===1?'':'s')+' containerlab will refuse when deploying: '+(errors===1?'':'the first is ')+'line '+first.line+', '+message+' Open YAML to see it.'
+ const kind=!waits?' containerlab will refuse when deploying:':waits>=errors?(errors===1?' that keeps':' that keep')+' the deploy from finishing:':(errors===1?' that stops':' that stop')+' the deploy:';
+ return errors+' error'+(errors===1?'':'s')+kind+' '+(errors===1?'':'the first is ')+'line '+first.line+', '+message+' Open YAML to see it.'
   +(manager?' The manager’s import also refuses '+manager+' more.':'');
 }
 function builderNoteRender(result){
@@ -338,7 +341,7 @@ function builderNoteFor(draft,text,list){
  if(!errors||!first)return null;
  // The generic sentence counts containerlab's errors only; an error the manager's own import refuses is worded as that.
  const clab=Math.max(0,errors-manager);
- return {key:[draft.id,builderNoteHash(text),errors].join('|'),text:builderNoteSentence(clab,first,manager),line:first.line};
+ return {key:[draft.id,builderNoteHash(text),errors].join('|'),text:builderNoteSentence(clab,first,manager,list.filter(f=>f.severity==='error'&&f.refuser!=='manager'&&/^wait-/.test(String(f.code))).length),line:first.line};
 }
 async function builderNoteRun(){
  const seq=++builderNoteSeq;
@@ -488,7 +491,11 @@ function builderDraftsDialog(){
 // The editable YAML panel (lab-builder-yaml.js) drives the editor's engine through the adapter's handle; the
 // page only places it, feeds it the draft's newest text and mirrors its open state in the bar and the layout.
 function builderYamlDraft(){return builderDraft?(builderUnstored||builderDraft).yaml:'';}
-function builderYamlShown(open){$('builder-yaml').setAttribute('aria-expanded',String(!!open));$('builder-stage').classList.toggle('yaml-open',!!open);}
+// hadFocus: focus sat inside the panel when it closed (Escape or ×); it returns to the toggle, as the shortcuts dialog says.
+function builderYamlShown(open,hadFocus){
+ const toggle=$('builder-yaml');toggle.setAttribute('aria-expanded',String(!!open));$('builder-stage').classList.toggle('yaml-open',!!open);
+ if(!open&&hadFocus&&typeof toggle.focus==='function')toggle.focus();
+}
 function builderYamlOptions(editor){return {editor,getDraftYaml:builderYamlDraft,onApplied:()=>builderRenderBar(),onToggle:builderYamlShown};}
 // The newest work, also when this browser could not store it.
 function builderDownload(){if(!builderDraft)return;const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([draftExport({...builderDraft,...(builderUnstored||{})})],{type:'application/json'}));link.download=builderDraft.name+'.lab-draft.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}

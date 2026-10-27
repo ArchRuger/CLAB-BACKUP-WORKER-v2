@@ -26,11 +26,11 @@ digest, running container image id, NOS-reported version, containerlab version, 
 | Image | Requested tag | Digest (RepoDigest) | Running image id | NOS version | containerlab | Manager | Host | Result |
 |---|---|---|---|---|---|---|---|---|
 | vJunos-router | `n24l/juniper_vjunos-router:26.2R1.7` | `sha256:0d039c60…41bb` | - | - | 0.79.0 | 1.31.6 | nested KVM VM (24 vCPU, 72 GB) | **BLOCKED** on this host: the inner qemu aborts (`kvm_put_msrs` assertion) under `-cpu host`; containerlab.dev: "cannot be used in any deployments that launch it from within a VM". The local derivative `local/juniper_vjunos-router:26.2R1.7-nested` (one `sed` on `/launch.py`, the switch's IvyBridge model) boots and is diagnostic evidence only. Supported environment: a bare-metal KVM host. |
-| vSRX | `n24l/juniper_vsrx:23.2R2.21` | B03a | B03a | B03a | 0.79.0 | 1.31.6 | nested KVM VM | B03a |
-| vJunos-switch | `n24l/vjunos-switch:23.2R1.14` | `sha256:12832fcb…71d62` | B03a | B03a | 0.79.0 | 1.31.6 | nested KVM VM | B03a |
-| cEOS | `n24l/ceos:4.35.0F` | `sha256:47b25129…1007` | B03a | B03a | 0.79.0 | 1.31.6 | container | B03a |
-| cJunosEvolved | `n24l/cjunosevolved:26.2R1.7-EVO` | `sha256:d1dfc8bc…9455` | B03a | B03a | 0.79.0 | 1.31.6 | nested KVM VM | B03a |
-| XRv9k | `n24l/cisco_xrv9k:24.3.1` | `sha256:1409cf12…9d2b` | B03a | B03a | 0.79.0 | 1.31.6 | nested KVM VM | B03a |
+| vSRX | `n24l/juniper_vsrx:23.2R2.21` | `sha256:fc9b9fa2…3051a` | `384db297beb1` (= the pulled image) | Junos 23.2R2.21, Model vSRX | 0.79.0 | 1.31.6 (lab outside the manager) | nested KVM VM | **PASS** boot: the launcher uses a fixed `-cpu SandyBridge,…,vmx=on` (2 vCPU, 4096 MB), `Startup complete` in 2 min 25 s, no relaunch; SSH `admin` with the published default; `ge-0/0/0` and FPC 0 online about 3.6 min after deploy (before that only `fxp0`); serial console answers on port 5000 (`FreeBSD/amd64 (vsrx) (ttyu0)` login after Enter); **Docker health is permanently `unhealthy`** (`/healthcheck.py: exec format error`, no `#!`), so container health must never gate this kind. `evidence/b03-vsrx-boot-2026-10-27.md` |
+| vJunos-switch | `n24l/vjunos-switch:23.2R1.14` | `sha256:12832fcb…71d62` | `1b9ec888863e` | Junos 23.2R1.14 | 0.79.0 | 1.31.6 | nested KVM VM | PASS boot and SSH (B03a, `parity` redeployed with `--reconfigure` after the VM reboot; 17.6 min to SSH beside five other boots) |
+| cEOS | `n24l/ceos:4.35.0F` | `sha256:47b25129…1007` | `dcddd2f9c2b2` | EOS 4.35.0F | 0.79.0 | 1.31.6 | container | PASS boot and SSH (B03a, under 5.4 min) |
+| cJunosEvolved | `n24l/cjunosevolved:26.2R1.7-EVO` | `sha256:d1dfc8bc…9455` | `3b253da2d8cf` | Junos 26.2R1.7-EVO (hostname `HOSTNAME`: no CPTX_AUTO_CONFIG in `parity.clab.yaml`) | 0.79.0 | 1.31.6 | nested KVM VM | PASS boot and SSH (B03a, 17.2 min) |
+| XRv9k | `n24l/cisco_xrv9k:24.3.1` | `sha256:1409cf12…9d2b` | `a22e6bba366d` | IOS XR 24.3.1 | 0.79.0 | 1.31.6 | nested KVM VM | PASS boot and SSH (B03a, 11.7 min) |
 
 ## Capabilities per image
 
@@ -41,19 +41,19 @@ pin it; it is not a live result.
 |---|---|---|---|---|---|---|
 | Catalog entry, exact default image | PASS static (`BUILDER_TEMPLATES`) | PASS static (B02) | PASS static | PASS static | PASS static | PASS static |
 | Kind identity on import and sync (static and script inventories, topology hints, aliases) | PASS unit (`test_junos_kinds.py`) | unit in B02 | PASS unit | PASS unit | PASS unit | PASS unit |
-| Interface naming | PASS static+live (`ge-0/0/N`=`eth(N+1)`, C05 live) | static (B02); live in B03a | PASS live | PASS live | PASS live (`et-0/0/N`=`eth(N+4)`) | PASS live |
-| Boot and readiness (real `show version`) | PASS live on the nested derivative only (C01) | B03a | PASS live (C01) | PASS live (C01) | PASS live (C01) | PASS live (C01) |
-| Default login | PASS live (C01, derivative) | B03a | PASS live | PASS live | PASS live | PASS live |
+| Interface naming | PASS static+live (`ge-0/0/N`=`eth(N+1)`, C05 live) | PASS static (B02) + live (B03a: `eth1` is `ge-0/0/0`) | PASS live | PASS live | PASS live (`et-0/0/N`=`eth(N+4)`) | PASS live |
+| Boot and readiness (real `show version`) | PASS live on the nested derivative only (C01) | PASS live (B03a, outside the manager; the manager's readiness on this kind is B06) | PASS live (C01) | PASS live (C01) | PASS live (C01) | PASS live (C01) |
+| Default login | PASS live (C01, derivative) | PASS live (B03a, direct SSH) | PASS live | PASS live | PASS live | PASS live |
 | Credential overrides (profile > inventory > kind default) | unit (`test_junos_kinds.py`, `test_nodes.py`) | unit in B02 | unit | unit | unit | unit |
 | Browser SSH terminal | PASS live (C02/C03) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
-| Serial console | PASS live (C04, derivative) | NOT TESTED (gated: not in `CONSOLE_PORTS` until the image's console is proven) | registered, NOT TESTED live (ACCEPTANCE R021) | NOT APPLICABLE (no qemu console) | NOT APPLICABLE | registered, NOT TESTED live |
+| Serial console | PASS live (C04, derivative) | port 5000 answers live (B03a); gated in the manager until the C04 gate is adapted (Docker health never `healthy` on this image) | registered, NOT TESTED live (ACCEPTANCE R021) | NOT APPLICABLE (no qemu console) | NOT APPLICABLE | registered, NOT TESTED live |
 | Logs, interfaces, diagnostics drawer | PASS live (C03) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
 | Backup (display set / running-config), download name | PASS live (C01: `vJunos-router_vrt_…cfg`) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
 | Restore-grade artifact | gated (no `restore` keys) until B04 | gated until B04 | PASS | PASS | PASS | PASS |
 | Save to Git, manifest identity | PASS live (C01 save) | NOT TESTED | PASS | PASS | PASS | PASS |
 | Load (whole-configuration replacement, timed recovery, readback, persistence) | NOT TESTED (C10 / B04) | NOT TESTED (B04) | PASS live (1.30.27–29) | PASS live | PASS live | PASS live |
 | Device start/stop/restart | PASS live (C05) | NOT TESTED | PASS live (known second-start limit) | PASS live | PASS live | PASS live |
-| Lab deploy/apply/redeploy/destroy | PASS live (C05) | B03a deploy | PASS | PASS | PASS | PASS |
+| Lab deploy/apply/redeploy/destroy | PASS live (C05) | deploy PASS live outside the manager (B03a); manager path B06 | PASS | PASS | PASS | PASS |
 | Capture | PASS live (C07, viewer) | NOT TESTED | PASS | PASS | PASS | PASS |
 | Topology / map integration, link state | PASS live (C06) | NOT TESTED | PASS | PASS | PASS | PASS |
 | Network Design (netlab mapping, generation, apply, readback) | unsupported by design (`dc.resolve` → unsupported) until B05 | unsupported until B05 | PASS | PASS | PASS (stand-in profile) | PASS |

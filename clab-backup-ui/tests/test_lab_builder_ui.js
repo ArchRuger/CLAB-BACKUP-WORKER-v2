@@ -474,6 +474,9 @@ test('the YAML button opens the editable panel, and the panel shows the draft’
  const attrs={},classes=new Set();c.document.getElementById=id=>id==='builder-yaml'?{setAttribute:(k,v)=>{attrs[k]=v;}}:{classList:{toggle:(n,on)=>on?classes.add(n):classes.delete(n)}};
  inits[0].onToggle(true);assert.equal(attrs['aria-expanded'],'true');assert.ok(classes.has('yaml-open'));
  inits[0].onToggle(false);assert.equal(attrs['aria-expanded'],'false');assert.ok(!classes.has('yaml-open'));
+ // Escape or × with focus inside the panel hands focus back to the toggle; a close with focus elsewhere leaves it.
+ const toggle={setAttribute:(k,v)=>{attrs[k]=v;},focused:0,focus(){this.focused++;}};c.document.getElementById=id=>id==='builder-yaml'?toggle:{classList:{toggle:(n,on)=>on?classes.add(n):classes.delete(n)}};
+ inits[0].onToggle(false,false);assert.equal(toggle.focused,0);inits[0].onToggle(false,true);assert.equal(toggle.focused,1);inits[0].onToggle(true,true);assert.equal(toggle.focused,1,'opening never moves focus here');
  const css=read('lab-builder.css');assert.match(css,/\.builder-stage\.yaml-open #root\{right:/);assert.match(css,/\.builder-yaml-gutter,\.builder-yaml-editor\{[^}]*font:13px\/20px var\(--mono\)/,'gutter and text share their font metrics');
 });
 // The file drop zone listens on the whole stage. A device dragged from the editor's palette crosses the
@@ -539,7 +542,7 @@ test('the note shows one error with its line and message, Show in YAML and Dismi
 });
 test('an error that is an error on any version (a wait loop) shows although the version does not match',async()=>{
  const p=notePage(LOOP_DOC,{version:'0.81.0'});p.run('builderCheckStatus()');await p.fired();
- assert.equal(p.el('builder-check').hidden,false);assert.match(p.el('builder-check-text').textContent,/^1 error containerlab will refuse when deploying: line \d+, Devices wait for each other in a loop/);
+ assert.equal(p.el('builder-check').hidden,false);assert.match(p.el('builder-check-text').textContent,/^1 error that keeps the deploy from finishing: line \d+, Devices wait for each other in a loop/);
 });
 test('two errors say how many and name the first',async()=>{
  const doc={name:'lab1',topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',imge:'x',imgx:'y'}}}};
@@ -601,6 +604,13 @@ test('an error the manager’s import refuses is worded as that, and the generic
  const mixed=notePage({...base,topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',imge:'x'}}}});mixed.run('builderCheckStatus()');await mixed.fired();
  const both=mixed.el('builder-check-text').textContent;
  assert.match(both,/^1 error containerlab will refuse when deploying: line \d+, `imge` is not a device setting/);assert.match(both,/The manager’s import also refuses 1 more\.$/);
+});
+test('the note words wait errors as what happens (the deploy cannot finish), a mix as "stop the deploy", and keeps the refuse wording for the rest',async()=>{
+ const wait={stages:{create:{'wait-for':[{node:'zz',stage:'create'}]}}};
+ const w=notePage({...LOOP_DOC,topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',...wait}}}});w.run('builderCheckStatus()');await w.fired();
+ const text=w.el('builder-check-text').textContent;assert.match(text,/^1 error that keeps the deploy from finishing: line \d+, There is no device named `zz`/);assert.doesNotMatch(text,/will refuse/);
+ const mix=notePage({...LOOP_DOC,topology:{nodes:{a:{kind:'arista_ceos',image:'ceos:4.33',imge:'x',...wait}}}});mix.run('builderCheckStatus()');await mix.fired();
+ assert.match(mix.el('builder-check-text').textContent,/^2 errors that stop the deploy: the first is line \d+, /);
 });
 test('Dismiss is remembered across a reload in the tab (sessionStorage, per draft, text and count) until the text changes',async()=>{
  const session=(()=>{const m=new Map();return {getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>{m.set(k,String(v));},removeItem:k=>{m.delete(k);}};})();

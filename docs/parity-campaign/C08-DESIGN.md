@@ -669,3 +669,16 @@ amended accordingly.
 | Low to medium: at 760 and 390 the Problems list shrank to a sliver with the disclosure open | Accepted: a minimum of about three items (84 px), the 42 % cap removed, the panel's own scroll carries the rest, the textarea keeps 160 px (measured 253 px at 390×844) | §4.6; `lab-builder.css` |
 | Info: the bar note's Dismiss was not remembered across a reload | Accepted: remembered per draft digest in `sessionStorage` until the text changes | §4.4 |
 | Info: nesting beyond 64 levels shows a status error while Apply still works; a throwing check leaves no trace | Accepted as designed: the advisory check never blocks and never pauses the builder | §1, §4 |
+
+## 11. The deferred full branch review (campaign 2, A02, 2026-10-27)
+
+The two full reviewer passes on the 1.31.5 → 1.31.6 diff (C06-DESIGN §13 has the method and the whole table). C08
+rows: **U2** (should-fix, fixed): the bar note and LAB-BUILDER.md said containerlab "will refuse" the three `wait-*`
+errors while §0 shows `validate` and `deploy --dry-run` accept them and §7.2 says the deploy waits for ever; the
+messages now say "The deploy cannot finish…", the note "keep the deploy from finishing", the guide the same. **R4**
+(low, fixed): `test_never_replaces_a_vendored_release` now asserts the byte comparison and the exit before the one
+write, in source order. **U7**, **U8** (low, fixed): the YAML panel's count is no longer a live region (one-shot
+announcement after Apply, Revert, open) and closing the panel returns focus to the YAML toggle. Note from A01: the
+evidence file `evidence/c08-live.md` planned in §7.4 was never written and VALIDATION records no C08 live pass; the
+wait-loop deploy behaviour stays unverified live and the wording above no longer claims a refusal. The reviewer
+answers VALIDATION cites as "C08-DESIGN §11" are the §9/§10 sections above (the cite was off by one).
