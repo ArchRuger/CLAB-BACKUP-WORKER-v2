@@ -185,6 +185,15 @@ class TopologyEditTests(unittest.TestCase):
         self.dry_run = False; self.operations.cap_cache = None
         self.assertEqual(self.revise(lab_id=self.lab_id, options={'deployed': True}).json()['warnings'], [HELPER_SENTENCE, REMOVED, CHANGED, NO_DRY_RUN])
 
+    def test_the_job_of_a_deployed_save_carries_the_flag_and_an_undeployed_one_does_not(self):
+        # A16: the page's output dialog reads job.deployed, so it never offers a deploy of a lab that runs.
+        self.deployed()
+        token = self.revise(lab_id=self.lab_id, options={'deployed': True}).json()['token']
+        self.assertIs(self.execute(token).get('deployed'), True)
+        self.setUp()
+        token = self.revise(options={'deployed': True}).json()['token']
+        self.assertNotIn('deployed', self.execute(token))
+
     def test_an_undeployed_save_is_marked_so_and_carries_no_deployed_sentence(self):
         result = self.revise(options={'deployed': True}).json()
         self.assertIs(result['deployed'], False); self.assertEqual(result.get('warnings', []), [])

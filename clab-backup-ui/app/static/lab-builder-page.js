@@ -170,7 +170,7 @@ function draftStatus(draft,unstored){
  if(!draft)return {tone:'neutral',text:''};
  if(unstored)return {tone:'danger',text:'Last change not kept in this browser'};
  if(!draft.vm)return {tone:'warn',text:'Draft · kept in this browser only · not on the VM yet'};
- const same=draft.vm.yaml===draft.yaml&&(draft.vm.annotations||'')===(draft.annotations||'');
+ const same=!draftUnsaved(draft);
  return same?{tone:'ok',text:'Saved on the VM',detail:draft.vm.path}:{tone:'warn',text:'Changes not saved to the VM yet',detail:draft.vm.path};
 }
 // SHA-256 of a text. Browsers offer crypto.subtle to secure contexts only, and the manager is normally opened
@@ -609,7 +609,7 @@ async function builderVmRead(path){
  try{layout=await json('/operations/read','POST',{path:path+'.annotations.json'});}catch(e){if(!builderAbsent(e))throw e;}
  return {yaml:source.text,annotations:layout?.text||'',hash:source.sha256||'',layoutHash:layout?.text?layout.sha256||'':''};
 }
-function builderMarkSaved(path,texts){builderDraft=draftWrite(builderStore,{...builderDraft,saving:undefined,vm:{path,yaml:texts.yaml,annotations:texts.annotations||'',...(texts.hash?{hash:texts.hash,layoutHash:texts.layoutHash||''}:{})}},builderDraft.revision);builderRenderBar();}
+function builderMarkSaved(path,texts){builderDraft=draftWrite(builderStore,{...builderDraft,saving:undefined,mapBase:texts.annotations||'',vm:{path,yaml:texts.yaml,annotations:texts.annotations||'',...(texts.hash?{hash:texts.hash,layoutHash:texts.layoutHash||''}:{})}},builderDraft.revision);builderRenderBar();}
 // A save the VM refused. When the file on the VM is not the version this draft knows (an earlier save whose
 // answer never arrived, an edit on the VM, another computer), the way on is to look at the differences.
 async function builderSaveRefused(error){
@@ -740,12 +740,36 @@ async function builderMapDocument(labId){
   return doc&&typeof doc.annotations==='string'&&doc.annotations.trim()?{annotations:doc.annotations,revision:doc.revision}:null;
  }catch{return null;}
 }
-// A draft takes the manager's map document when its own map was not edited since it took the last one (or when the person was told the
-// map moved and reopened). Otherwise it keeps its map and a revision that is no longer current, so the manager refuses the save first.
+// The same map document, read as data: key order and spacing do not make two documents different.
+function builderMapCanon(value){if(Array.isArray(value))return value.map(builderMapCanon);if(value&&typeof value==='object'){const out={};for(const k of Object.keys(value).sort())out[k]=builderMapCanon(value[k]);return out;}return value;}
+function builderMapSame(a,b){
+ if((a||'')===(b||''))return true;
+ try{return JSON.stringify(builderMapCanon(JSON.parse(a)))===JSON.stringify(builderMapCanon(JSON.parse(b)));}catch{return false;}
+}
+// The manager's document does not change on a deployed save, but the VM file's map does (a device added in the editor has its place only
+// there). A device the file's map knows and the document does not keeps the file's entry (position, look); the manager's entries win.
+function builderMapComplete(docText,fileText){
+ if(!docText||!fileText||docText===fileText)return docText;
+ try{
+  const doc=JSON.parse(docText),file=JSON.parse(fileText);let added=false;
+  if(!doc||typeof doc!=='object'||Array.isArray(doc)||!file||typeof file!=='object'||Array.isArray(file))return docText;
+  for(const key of ['nodeAnnotations','networkNodeAnnotations']){
+   if(!Array.isArray(file[key]))continue;
+   const have=new Set((Array.isArray(doc[key])?doc[key]:[]).map(n=>n&&n.id));
+   for(const entry of file[key])if(entry&&typeof entry.id==='string'&&!have.has(entry.id)){if(!Array.isArray(doc[key]))doc[key]=[];doc[key].push(entry);have.add(entry.id);added=true;}
+  }
+  return added?JSON.stringify(doc,null,2):docText;
+ }catch{return docText;}
+}
+// Opening with #lab starts the next save from the manager's current map document. A draft whose own map is untouched (or that was told the
+// map moved and reopened) takes the document and its revision. A draft with map edits of its own keeps them, and takes only the new revision
+// when the document is still what the draft started from; otherwise it keeps a revision that is no longer current, so the manager refuses
+// the save first and the person decides (Reopen or Download).
 function builderAdoptMap(draft,doc){
  if(!doc||draft.mapRevision===doc.revision)return draft;
- const base=draft.mapBase!==undefined?draft.mapBase:(draft.vm&&draft.vm.annotations)||'';
- if((draft.annotations||'')===base||draft.mapStale)return draftWrite(builderStore,{...draft,annotations:doc.annotations,mapRevision:doc.revision,mapBase:doc.annotations,mapStale:undefined},draft.revision);
+ const base=draftMapBaseline(draft),vmMap=(draft.vm&&draft.vm.annotations)||'',merged=builderMapComplete(doc.annotations,vmMap);
+ if(builderMapSame(draft.annotations||'',base)||draft.mapStale)return draftWrite(builderStore,{...draft,annotations:merged,mapRevision:doc.revision,mapBase:merged,mapStale:undefined},draft.revision);
+ if(builderMapSame(merged,base))return draftWrite(builderStore,{...draft,mapRevision:doc.revision},draft.revision);
  return {...draft,mapRevision:draft.mapRevision===undefined?'unknown':draft.mapRevision};
 }
 // The VM file changed since a draft with changes was made: nothing is decided for the person. Escape or × keeps both (the draft stays).
@@ -755,7 +779,7 @@ function builderOldDraft(draft,count){
   let settled=false;const done=value=>{if(settled)return;settled=true;resolve(value);dialog.close();};
   $('builder-old-vm').onclick=()=>done('vm');$('builder-old-continue').onclick=()=>done('draft');$('builder-old-download').onclick=()=>builderDownloadDraft(draft);
   dialog.onclose=()=>done('draft');
-  $('builder-old-vm').focus();
+  $('builder-old-continue').focus();   // the non-destructive choice: Enter never discards the draft
  });
 }
 async function builderOpenFromVm(path,labId=''){
@@ -765,7 +789,7 @@ async function builderOpenFromVm(path,labId=''){
  const mapDoc=labId?await builderMapDocument(labId):null;
  // One draft per lab: the drafts that were saved to this path from this browser, or opened from it (newest first).
  // A draft with changes that are not on the VM comes first: it is the one that holds work.
- const drafts=draftList(builderStore).filter(d=>d.vm&&d.vm.path===path),dirty=drafts.filter(d=>!builderSame(d,d.vm)),existing=dirty[0]||drafts[0]||null;
+ const drafts=draftList(builderStore).filter(d=>d.vm&&d.vm.path===path),dirty=drafts.filter(draftUnsaved),existing=dirty[0]||drafts[0]||null;
  // Keep working on the local draft only while it still descends from the version that is on the VM. Its
  // base takes the hashes the VM gave now (the page's own save knows the texts only).
  builderContinued='';
@@ -775,7 +799,7 @@ async function builderOpenFromVm(path,labId=''){
  }
  if(dirty.length&&await builderOldDraft(existing,dirty.length)!=='vm'){builderContinued=existing.updated;return builderAdoptMap(existing,mapDoc);}
  for(const d of drafts)draftDelete(builderStore,d.id);draftDelete(builderStore,'vm:'+path);
- return draftWrite(builderStore,{id:'vm:'+path,name:parsed.name,root:path.slice(0,path.lastIndexOf('/')),yaml:found.yaml,annotations:mapDoc?mapDoc.annotations:found.annotations,vm:{path,...found},...(mapDoc?{mapRevision:mapDoc.revision,mapBase:mapDoc.annotations}:{})},undefined);
+ return draftWrite(builderStore,{id:'vm:'+path,name:parsed.name,root:path.slice(0,path.lastIndexOf('/')),yaml:found.yaml,annotations:mapDoc?builderMapComplete(mapDoc.annotations,found.annotations):found.annotations,vm:{path,...found},...(mapDoc?{mapRevision:mapDoc.revision,mapBase:builderMapComplete(mapDoc.annotations,found.annotations)}:{})},undefined);
 }
 // The manager's device catalog: the templates and the check's interface rules come from it. window.builderCatalog is the answer, or null
 // when it did not load (the check's caption says so); the built-in templates stay the fallback.
@@ -787,7 +811,15 @@ async function builderCatalogLoad(){
  return answer;
 }
 // Undo and Redo: the editor's own, through the handle the adapter gives (shown only when it has them).
-function builderHistorySet(h){$('builder-undo').disabled=!(h&&h.canUndo);$('builder-redo').disabled=!(h&&h.canRedo);}
+// A button that turns disabled while it holds focus would drop focus to the page: it goes to the other history button when that is on,
+// else to the first enabled control of the bar.
+function builderHistorySet(h){
+ const undo=$('builder-undo'),redo=$('builder-redo'),active=typeof document!=='undefined'?document.activeElement:null;
+ undo.disabled=!(h&&h.canUndo);redo.disabled=!(h&&h.canRedo);
+ const lost=active&&[undo,redo].find(b=>b===active&&b.disabled);if(!lost)return;
+ const other=lost===undo?redo:undo,target=!other.disabled&&!other.hidden?other:['builder-save','builder-yaml','builder-download','builder-drafts'].map($).find(b=>b&&!b.disabled&&!b.hidden);
+ if(target&&typeof target.focus==='function')target.focus();
+}
 function builderHistoryWire(editor){
  builderEditor=editor;
  if(!$('builder-undo')||!$('builder-redo'))return;
@@ -832,3 +864,7 @@ async function builderStart(){
  const lab=builderLab();if(builderDraft&&lab&&builderLabRunning(lab))builderLabPlan(lab.id);
 }
 if(typeof document!=='undefined'&&document.addEventListener)document.addEventListener('DOMContentLoaded',builderStart);
+// The map text a draft counts as unchanged against: what it opened with (the manager's document, completed from the VM file) or what
+// it saved last; the VM file's own map text for a draft that took neither. The hash sent as base.annotations is always the VM file's.
+function draftMapBaseline(draft){return draft.mapBase!==undefined?draft.mapBase:(draft.vm&&draft.vm.annotations)||'';}
+function draftUnsaved(draft){return !!draft.vm&&(draft.vm.yaml!==draft.yaml||(draft.annotations||'')!==draftMapBaseline(draft));}

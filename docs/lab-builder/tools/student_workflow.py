@@ -126,47 +126,40 @@ def run(p):
     placed = [n for n in drawing.get('nodes', []) if n.get('x') is not None]
     check("the manager's own map uses the layout drawn in the builder", drawing.get('placed') is True and len(placed) == 3, {k: drawing.get(k) for k in ('placed',)})
 
-    # 5. Saving again: refused while deployed, allowed after destroy, with the changes shown
-    pg.goto(args.base + f'/static/lab-builder.html#draft=new:{LAB}'); pg.wait_for_selector('.react-flow__node', timeout=20000); pg.wait_for_timeout(1000)
-    bx = pg.get_by_text('Linux host', exact=True).bounding_box(); pg.mouse.move(bx['x'] + 10, bx['y'] + 8); pg.mouse.down(); pg.mouse.move(640, 560, steps=12); pg.mouse.up(); pg.wait_for_timeout(900)
-    check('a later edit shows as not saved to the VM', 'Changes not saved' in pg.inner_text('#builder-status') and 'Save changes' in pg.inner_text('#builder-save'))
-    for attempt in range(30):  # the manager learns from discovery that the lab runs; the refusal below needs that
+    # 5. Saving again while the lab runs: the lab-state line says it, the review names the running devices, the save leaves
+    #    the running lab alone and the output dialog leads back to the lab's own apply review
+    lab_id = pg.evaluate(f"fetch('/api/state').then(r => r.json()).then(s => s.labs.find(l => l.name === '{LAB}').id)")
+    for attempt in range(30):  # the manager learns from discovery that the lab runs
         if pg.evaluate(f"fetch('/api/state').then(r => r.json()).then(s => /running/i.test(s.labs.find(l => l.name === '{LAB}')?.deployment?.status || ''))"): break
         pg.wait_for_timeout(2000)
-    pg.reload(); pg.wait_for_selector('.react-flow__node', timeout=20000); pg.wait_for_timeout(1500)
-    check('a deployed lab is announced when its draft opens, before any work is lost', pg.locator('#builder-note').is_visible() and 'is deployed' in pg.inner_text('#builder-note'), pg.inner_text('#builder-note'))
-    for attempt in range(20):  # while the automatic login test of the new lab runs, the refusal is "wait for the job": also a dialog, not the one meant here
-        pg.click('#builder-save'); pg.wait_for_selector('#builder-save-problem', timeout=20000); pg.wait_for_timeout(400)
-        refusal = pg.inner_text('#builder-save-problem')
-        if 'deployed' in refusal.lower(): break
-        pg.click('#builder-save-problem-close'); pg.wait_for_timeout(3000)
-    check('saving over a deployed lab is refused with the reason, in a dialog that stays', 'deployed' in refusal.lower() and 'Your draft is kept' in refusal and not pg.locator('#op-confirm').is_visible(), refusal[:200]); shot('11-refused-while-deployed')
-    pg.click('#builder-save-problem-close')
-    lab_id = pg.evaluate(f"fetch('/api/state').then(r => r.json()).then(s => s.labs.find(l => l.name === '{LAB}').id)")
-    token = None
-    for attempt in range(30):  # refused while another job runs for the lab (the automatic login test of a lab that just came up)
-        token = pg.evaluate(f"fetch('/api/operations/preview', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{action:'destroy', lab_id:'{lab_id}', options:{{cleanup:true}}}})}}).then(r => r.json()).then(v => v.token || null)")
-        if token: break
-        pg.wait_for_timeout(2000)
-    job_id = pg.evaluate(f"fetch('/api/operations/confirm', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{token:'{token}'}})}}).then(r => r.json()).then(j => j.id)")
-    pg.wait_for_function(f"fetch('/api/operations/{job_id}').then(r => r.json()).then(j => j.status === 'succeeded')", timeout=90000, polling=1000)
-    pg.wait_for_timeout(4000)  # the manager refreshes discovery before it accepts the next operation
-    for attempt in range(10):  # discovery needs a poll to see that the lab is gone; a review may open late
-        if pg.locator('#op-confirm').is_visible(): break
-        if pg.locator('#builder-save-problem-close').is_visible(): pg.click('#builder-save-problem-close')  # still refused: the dialog stays until closed
-        try: pg.click('#builder-save', timeout=3000); pg.wait_for_selector('#op-confirm', timeout=10000)
-        except Exception: pg.wait_for_timeout(2000)
-    check('after destroy the save review shows what changes', pg.locator('#op-confirm').is_visible() and '+' in pg.inner_text('#operation-review') and 'kind: linux' in pg.inner_text('#operation-review')); shot('12-revise-review')
+    pg.goto(args.base + f'/static/lab-builder.html#draft=new:{LAB}&lab={lab_id}'); pg.reload(); pg.wait_for_selector('.react-flow__node', timeout=20000); pg.wait_for_timeout(1500)
+    bx = pg.get_by_text('Linux host', exact=True).bounding_box(); pg.mouse.move(bx['x'] + 10, bx['y'] + 8); pg.mouse.down(); pg.mouse.move(640, 560, steps=12); pg.mouse.up(); pg.wait_for_timeout(900)
+    check('a later edit shows as not saved to the VM', 'Changes not saved' in pg.inner_text('#builder-status') and 'Save changes' in pg.inner_text('#builder-save'))
+    check('the lab-state line says the lab is running and that applying is a separate step', 'running' in pg.inner_text('#builder-line-text') and 'applying is a separate step' in pg.inner_text('#builder-line-text'), pg.inner_text('#builder-line-text'))
+    for attempt in range(20):  # while the automatic login test of the new lab runs, the answer is "wait for the job": a dialog that is closed and retried
+        pg.click('#builder-save')
+        try: pg.wait_for_selector('#op-confirm', timeout=8000); break
+        except Exception:
+            if pg.locator('#builder-save-problem-close').is_visible(): pg.click('#builder-save-problem-close')
+            pg.wait_for_timeout(3000)
+    review = pg.inner_text('#operation-review')
+    check('saving over a running lab opens a review that names the running devices and shows what changes', pg.locator('#op-confirm').is_visible() and 'running' in review.lower() and '+' in review and 'kind: linux' in review, review[:300]); shot('11-revise-review-deployed')
     for attempt in range(6):  # 'Wait for the current lab operation' while discovery is still refreshing
         pg.click('#op-confirm'); pg.wait_for_timeout(2500)
         if not pg.locator('#operation-review').evaluate('d => d.open'): break
-    pg.wait_for_selector('#op-published-status', timeout=args.job_timeout)  # the lab is already in My labs: the result offers Deploy now / Go to My labs
-    check('the revision is saved and a recovery copy is reported', 'succeeded' in pg.inner_text('#op-job-banner') and 'Saved on the VM' in pg.inner_text('#builder-status') and 'A recovery copy of the previous version was kept at' in pg.inner_text('#operation-output #op-job-result'), pg.inner_text('#operation-output #op-job-result')[:300])
-    pg.click('#operation-output [data-op-close]')
+    pg.wait_for_selector('#op-back-review', timeout=args.job_timeout)
+    result = pg.inner_text('#operation-output #op-job-result')
+    check('the save succeeds and says the running lab is unchanged until the changes are applied', 'succeeded' in pg.inner_text('#op-job-banner') and 'The running lab is unchanged until you apply the changes' in result and 'not running yet' not in result, result[:300])
+    check('the output dialog offers only Back to lab and review changes…, no Deploy now', 'Back to lab and review changes' in pg.inner_text('#op-back-review') and not pg.locator('#op-published-deploy').count() and not pg.locator('#op-published-go').count())
+    check('the status reads Saved on the VM (not applied while the plan differs)', pg.inner_text('#builder-status').startswith('Saved on the VM'), pg.inner_text('#builder-status'))
+    check('a recovery copy of the previous version is reported', 'A recovery copy of the previous version was kept at' in result, result[:300])
+    pg.click('#op-back-review'); pg.wait_for_selector('#op-confirm', timeout=30000)
+    check('Back to lab and review changes… opens the lab with its apply review, once', pg.locator('#op-confirm').is_visible() and 'review=' not in pg.url and f'lab={lab_id}' in pg.url, pg.url); shot('12-apply-review')
+    pg.click('#operation-review [data-op-close]')
 
     # 6. Opening an existing topology from the Deploy dialog
     updated = pg.evaluate(f"fetch('/api/state').then(r => r.json()).then(s => s.labs.find(l => l.name === '{LAB}').nodes.length)")
-    check('My labs follows the revised topology (four devices)', updated == 4, updated)
+    check('My labs keeps the running lab as it is until the changes are applied (three devices)', updated == 3, updated)
     pg.goto(args.base + '/'); pg.wait_for_timeout(1500)
     if pg.locator('#crumb-home').is_visible(): pg.click('#crumb-home')  # the router reopens the last lab
     pg.wait_for_selector('#home-deploy'); pg.click('#home-deploy'); pg.wait_for_selector('#op-file-tree'); pg.wait_for_timeout(800)

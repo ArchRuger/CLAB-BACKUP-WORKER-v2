@@ -374,11 +374,11 @@ async function shown(p){for(let i=0;i<100&&!p.c.dialogs.length;i++)await new Pro
 test('opening the VM version never discards a draft with unsaved changes unasked, whichever draft is newer',async()=>{
  const changed=TOPOLOGY+'# changed on the VM\n',answer=(url,body)=>url.endsWith('/operations/read')?(body.path===VM_PATH?{text:changed,sha256:'h2'}:{refused:'The selected VM path no longer exists.'}):url.endsWith('/operations/parse-yaml')?{name:'lab1'}:{};
  const seed=`draftWrite(builderStore,{id:'new:lab1:x',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY+'# my work\n')},vm:{path:'${VM_PATH}',yaml:${JSON.stringify(TOPOLOGY)},annotations:''}},undefined);draftWrite(builderStore,{id:'vm:${VM_PATH}',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY)},vm:{path:'${VM_PATH}',yaml:${JSON.stringify(TOPOLOGY)},annotations:''}},undefined);`;
- let asked=0,focused='';const keep=page({answer});keep.c.confirm=()=>{asked++;return false;};keep.run(seed);keep.el('builder-old-vm').focus=()=>{focused='vm';};
+ let asked=0,focused='';const keep=page({answer});keep.c.confirm=()=>{asked++;return false;};keep.run(seed);keep.el('builder-old-vm').focus=()=>{focused='vm';};keep.el('builder-old-continue').focus=()=>{focused='continue';};
  const pending=keep.run(`builderOpenFromVm('${VM_PATH}')`);const dialog=await shown(keep);
  assert.equal(dialog.id,'builder-old-draft');assert.equal(asked,0,'no native confirm');
  assert.match(dialog.body,/Start from the VM version/);assert.match(dialog.body,/Continue my draft \(from /);assert.match(dialog.body,/Download my draft/);
- assert.equal(focused,'vm','Start from the VM version is the focused default');
+ assert.equal(focused,'continue','Continue my draft (the non-destructive choice) is the focused default: Enter never discards the draft');
  dialog.dialog.onclose();const kept=await pending;
  assert.match(kept.yaml,/my work/,'Escape keeps both');assert.match(keep.c.draftRead(keep.store,'new:lab1:x').yaml,/my work/,'nothing was discarded');
  assert.equal(keep.run('builderContinued'),keep.c.draftRead(keep.store,'new:lab1:x').updated);
@@ -831,4 +831,61 @@ test('the bar has Undo and Redo, shown when the handle has them, enabled from th
  // an adapter without them (an older bundle) shows no buttons
  const old=page({answer:()=>({})});old.c.handle={subscribe(){return()=>{};}};old.run('builderHistoryWire(handle)');assert.equal(old.el('builder-undo').hidden,true);assert.equal(old.el('builder-redo').hidden,true);
  assert.match(read('lab-builder-page.js'),/\['builder-undo',\(\)=>builderHistoryStep\('undo'\)\],\['builder-redo',\(\)=>builderHistoryStep\('redo'\)\]/);
+});
+
+// ---- T06-fix 4 to 7: the map base, the pristine pill, the focus after Undo ----
+const NODE=(id,x)=>({id,position:{x,y:x},icon:'router'});
+const ANN=(...nodes)=>JSON.stringify({nodeAnnotations:nodes});
+function mapRead(file,doc,extra={}){
+ return (url,body)=>url.endsWith('/operations/read')?(body.path===VM_PATH?{text:TOPOLOGY,sha256:'h'}:body.path===VM_PATH+'.annotations.json'?{text:file,sha256:'lh'}:{refused:'The selected VM path no longer exists.'}):url.endsWith('/operations/parse-yaml')?{name:'lab1'}:url.endsWith('/map-document')?doc:(extra.other&&extra.other(url,body))||{};
+}
+test('T06-fix 5/6: a device placed only in the VM file is carried into the adopted document, the manager\'s entries win, and a pristine open reads Saved on the VM',async()=>{
+ const file=ANN(NODE('r1',1),NODE('r2',22)),doc={name:'lab1',yaml:TOPOLOGY,annotations:ANN(NODE('r1',100)),revision:'r5'};
+ const p=page({answer:mapRead(file,doc)});
+ const d=await p.run(`builderOpenFromVm('${VM_PATH}','lab-1')`),got=JSON.parse(d.annotations).nodeAnnotations;
+ assert.deepEqual(JSON.parse(JSON.stringify(got)),[NODE('r1',100),NODE('r2',22)],'r1 from the manager, r2 from the VM file');
+ assert.equal(d.mapRevision,'r5');assert.equal(d.vm.annotations,file,'the VM file text stays the stale-check base');assert.equal(d.vm.layoutHash,'lh');
+ const request=await p.c.builderSaveRequest(JSON.parse(JSON.stringify(d)),async t=>'sha:'+t);assert.equal(request.options.base.annotations,'lh');
+ p.c.d=d;p.run('builderUse(d)');
+ assert.equal(p.el('builder-status').textContent,'Saved on the VM','a pristine open has nothing unsaved');
+ // an edit shows the change, Undo back to the start clears it again
+ const edited=ANN(NODE('r1',5),NODE('r2',22));
+ p.run(`builderPage.persist(${JSON.stringify(d.yaml)},${JSON.stringify(edited)})`);assert.equal(p.el('builder-status').textContent,'Changes not saved to the VM yet');
+ p.run(`builderPage.persist(${JSON.stringify(d.yaml)},${JSON.stringify(d.annotations)})`);assert.equal(p.el('builder-status').textContent,'Saved on the VM');
+ // a draft made before the field existed (no mapBase) is compared with the VM file as before
+ assert.equal(p.c.draftStatus({yaml:'a',annotations:'x',vm:{yaml:'a',annotations:'x'}}).text,'Saved on the VM');assert.equal(p.c.draftStatus({yaml:'a',annotations:'y',vm:{yaml:'a',annotations:'x'}}).text,'Changes not saved to the VM yet');
+ // entries are merged only into a document that has none of that id; broken text is left alone
+ assert.equal(p.c.builderMapComplete('not json',file),'not json');assert.equal(p.c.builderMapComplete(ANN(NODE('r1',1)),'{'),ANN(NODE('r1',1)));
+});
+test('T06-fix 4: after a save the map base moves to the saved map, and the next open takes the manager\'s current revision instead of a false 409',async()=>{
+ const saved=ANN(NODE('r1',1),NODE('r2',22));
+ const seed=`draftWrite(builderStore,{id:'vm:${VM_PATH}',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY)},annotations:${JSON.stringify(saved)},mapRevision:'r7',mapBase:${JSON.stringify(ANN(NODE('r1',1)))},vm:{path:'${VM_PATH}',yaml:${JSON.stringify(TOPOLOGY)},annotations:${JSON.stringify(ANN(NODE('r1',1)))}}},undefined);`;
+ const p=page({answer:()=>({})});p.run(seed);p.run(`builderDraft=draftRead(builderStore,'vm:${VM_PATH}');builderMarkSaved('${VM_PATH}',{yaml:${JSON.stringify(TOPOLOGY)},annotations:${JSON.stringify(saved)}})`);
+ assert.equal(p.run('builderDraft.mapBase'),saved,'builderMarkSaved moves the base');assert.equal(p.run('builderDraft.vm.annotations'),saved);
+ // the manager's document moved on (the apply re-registered the lab) to the same map written another way
+ const reordered=JSON.stringify({nodeAnnotations:[{icon:'router',position:{y:1,x:1},id:'r1'},{icon:'router',position:{y:22,x:22},id:'r2'}]});
+ const q=page({answer:mapRead(saved,{name:'lab1',yaml:TOPOLOGY,annotations:reordered,revision:'r9'})});
+ const later=p.store;for(const k of [...Array(later.length).keys()].map(i=>later.key(i)))q.store.setItem(k,later.getItem(k));
+ const open=await q.run(`builderOpenFromVm('${VM_PATH}','lab-1')`);
+ assert.equal(open.mapRevision,'r9','the next save carries the current revision');
+ // a draft with edits of its own keeps them and takes the revision when the document is still what it started from
+ const edited=page({answer:mapRead(saved,{name:'lab1',yaml:TOPOLOGY,annotations:reordered,revision:'r9'})});
+ edited.run(seed.replace(`annotations:${JSON.stringify(saved)}`,`annotations:${JSON.stringify(ANN(NODE('r1',9),NODE('r2',22)))}`).replace(`mapBase:${JSON.stringify(ANN(NODE('r1',1)))}`,`mapBase:${JSON.stringify(saved)}`).replace(`annotations:${JSON.stringify(ANN(NODE('r1',1)))}}},undefined`,`annotations:${JSON.stringify(saved)}}},undefined`));
+ const kept=await edited.run(`builderOpenFromVm('${VM_PATH}','lab-1')`);
+ assert.equal(kept.mapRevision,'r9');assert.equal(JSON.parse(kept.annotations).nodeAnnotations[0].position.x,9,'its map edits stay');
+ // a document that is no longer what the draft started from: the revision stays stale and the manager refuses first
+ const other=page({answer:mapRead(ANN(NODE('r1',1)),{name:'lab1',yaml:TOPOLOGY,annotations:ANN(NODE('r1',77)),revision:'r10'})});
+ other.run(seed.replace(`annotations:${JSON.stringify(saved)}`,`annotations:${JSON.stringify(ANN(NODE('r1',9)))}`));
+ assert.equal((await other.run(`builderOpenFromVm('${VM_PATH}','lab-1')`)).mapRevision,'r7');
+});
+test('T06-fix 7: Undo and Redo keep focus in the bar when the pressed button turns disabled',()=>{
+ const p=page({answer:()=>({})}),focus=[];
+ for(const id of ['builder-undo','builder-redo','builder-save','builder-yaml'])p.el(id).focus=function(){focus.push(id);p.c.document.activeElement=this;};
+ p.el('builder-save').disabled=true;
+ p.run('builderHistorySet({canUndo:true,canRedo:false})');
+ p.c.document.activeElement=p.el('builder-undo');p.run('builderHistorySet({canUndo:false,canRedo:true})');
+ assert.deepEqual(focus,['builder-redo'],'the other history button when it is on');
+ focus.length=0;p.c.document.activeElement=p.el('builder-redo');p.run('builderHistorySet({canUndo:false,canRedo:false})');
+ assert.deepEqual(focus,['builder-yaml'],'else the first enabled control of the bar (Save is off here)');
+ focus.length=0;p.c.document.activeElement=p.el('builder-save');p.run('builderHistorySet({canUndo:false,canRedo:false})');assert.deepEqual(focus,[],'focus elsewhere is left alone');
 });

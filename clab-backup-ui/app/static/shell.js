@@ -46,7 +46,7 @@ function applyRoute(){
   if(route.device&&route.device!==openDevice){if(typeof openDetails==='function')openDetails(route.device);}
   else if(!route.device&&openDevice&&dialog&&typeof dialog.close==='function')dialog.close();
   writeRoute(currentRoute());
- }finally{shellApplying=false;}if(review)runRouteReview(review);
+ }finally{shellApplying=false;}if(review)queueRouteReview(review);
  return true;
 }
 // Dialogs that speak for one lab (the device drawer and every dialog marked data-lab-dialog: the design's
@@ -309,7 +309,7 @@ setTimeout(()=>{const skeleton=shellEl('home-skeleton');if(skeleton&&!(typeof st
 // Deferred scripts run in order, and a fast first /api/state answer can render before the later scripts
 // (operations, Git, capture) have defined their renderers; those parts would then wait for the next poll.
 // One more render once every script is in keeps the menus and cards right from the first paint.
-if(typeof document!=='undefined'&&typeof document.addEventListener==='function')document.addEventListener('DOMContentLoaded',()=>{if(typeof state!=='undefined'&&state&&state.loaded&&typeof render==='function')render();});
+if(typeof document!=='undefined'&&typeof document.addEventListener==='function')document.addEventListener('DOMContentLoaded',()=>{if(typeof state!=='undefined'&&state&&state.loaded&&typeof render==='function')render();tryRouteReview();});
 // Browser preferences (preferences.js; docs/parity-campaign/C09-DESIGN.md section 5): the manager's own storage keys by family, so
 // the dialog can count them and Reset can clear exactly the preferences. Drafts and in-flight requests are data and are never
 // cleared here. EDITOR_VIEW_KEYS are the exact keys the committed editor bundle writes (app/static/lab-builder/assets, clab-ui
@@ -362,3 +362,23 @@ function setTerminalFontPreference(value){const v=Number(value);return TERMINAL_
 // review once. applyRoute reads the parameter before it rewrites the hash (which drops it); it is not part of the route.
 function readReview(){return new URLSearchParams(shellHash().replace(/^#/,'')).get('review')||'';}
 function runRouteReview(labId){if(typeof opTask!=='function'||typeof opReviewChanges!=='function')return false;opTask(null,()=>opReviewChanges(labId));return true;}
+// On a cold load applyRoute runs when /api/state answers, before operations.js has executed (and the hash has already lost the parameter): the
+// review waits here until the lab is the open one and operations.js is there, runs exactly once, and is dropped when the person leaves the lab.
+// It is tried again on DOMContentLoaded (the listener above) and on a short bounded poll (100 ms, 10 s).
+let shellPendingReview='',shellReviewTimer=null,shellReviewTries=0;
+function pendingRouteReview(){return shellPendingReview;}
+function tryRouteReview(){
+ if(!shellPendingReview)return false;
+ if(typeof activeId==='string'&&activeId&&activeId!==shellPendingReview){shellPendingReview='';return false;}
+ if(typeof activeId!=='string'||activeId!==shellPendingReview)return false;
+ if(typeof opTask!=='function'||typeof opReviewChanges!=='function')return false;
+ const lab=shellPendingReview;shellPendingReview='';if(shellReviewTimer!==null&&typeof clearTimeout==='function')clearTimeout(shellReviewTimer);shellReviewTimer=null;
+ return runRouteReview(lab);
+}
+function queueRouteReview(labId){
+ shellPendingReview=labId;shellReviewTries=0;
+ if(tryRouteReview()||!shellPendingReview||typeof setTimeout!=='function')return;
+ if(shellReviewTimer!==null&&typeof clearTimeout==='function')clearTimeout(shellReviewTimer);
+ const again=()=>{shellReviewTimer=null;if(tryRouteReview()||!shellPendingReview)return;if(++shellReviewTries>=100){shellPendingReview='';return;}shellReviewTimer=setTimeout(again,100);};
+ shellReviewTimer=setTimeout(again,100);
+}

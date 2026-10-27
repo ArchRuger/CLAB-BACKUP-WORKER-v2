@@ -616,10 +616,10 @@ async function opShowJob(id,{auto=false,stop=false}={}){
    const emptyInspection=inspectAction&&job.status==='succeeded'&&/(^|\n)\s*(?:\[\s*\]|\{\s*\})\s*(?=\n|$)/.test(job.output||'');
    pre.hidden=!!inspected||emptyInspection;
    const inspectView=dialog._inspectView||(dialog._inspectView={key:'',dir:'',filter:''});
-   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows,inspectView):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p>${opOnBuilder()?'<div id="op-published-block"></div>':'<button class="button primary" id="op-open-published">Deploy or add this lab…</button>'}`:'');
+   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows,inspectView):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?(opDeployedSave(job)?opDeployedSaveMarkup(job):`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p>${opOnBuilder()?'<div id="op-published-block"></div>':'<button class="button primary" id="op-open-published">Deploy or add this lab…</button>'}`):'');
    if(inspected)opInspectionBind($('op-job-result'),rows,inspectView);
-   if(opPublishedPath(job)&&opOnBuilder())opRenderPublished(dialog,opPublishedPath(job));
-   $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(opPublishedPath(job))));
+   if(opPublishedPath(job)&&opOnBuilder()&&!opDeployedSave(job))opRenderPublished(dialog,opPublishedPath(job));
+   $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(opPublishedPath(job))));$('op-back-review')?.addEventListener('click',()=>opBackToReview(job));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(typeof opJobDone==='function')opJobDone(job);}
   }catch(e){if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);else if(typeof opJobLost==='function')opJobLost(id);}
@@ -1262,3 +1262,19 @@ if($('import-top')){
  // normal navigation to this page, so the dialog the student left is reopened once, here, on load.
  opTask(null,()=>opReopenReturn(opConsumeReturn()));
 }
+
+// A deployed save (revise with deployed:true) leaves the running lab unchanged: its output dialog says so and offers
+// the one next step, the apply review, instead of Deploy now / Go to My labs (which would claim "not running").
+// The job record does not say it (no `options`, and the helper's result carries no `deployed`): the builder page remembers that the review it
+// confirmed was a deployed save (builderPending.deployed), and the dialog keeps that for the job while it is open and when it is shown again.
+const opDeployedJobs=new Set();
+function opDeployedSave(job){
+ if(!job||job.action!=='revise')return false;
+ if(job.deployed===true||job.options?.deployed===true||job.result?.deployed===true)return true;
+ if(typeof builderPending!=='undefined'&&builderPending&&builderPending.deployed===true&&builderPending.job&&builderPending.job===job.id)opDeployedJobs.add(job.id);
+ return opDeployedJobs.has(job.id);
+}
+function opBackToReviewLab(job){return (job&&job.lab_id)||opLabAtPath(opPublishedPath(job))?.id||'';}
+function opBackToReviewHash(job){const id=opBackToReviewLab(job);return id?'/#lab='+encodeURIComponent(id)+'&view=topology&review=apply':'/';}
+function opDeployedSaveMarkup(job){return `<p class="op-notice ok" id="op-published-status" tabindex="-1">Saved to the VM. The running lab is unchanged until you apply the changes.</p><div class="actions"><button class="button primary" id="op-back-review">Back to lab and review changes…</button></div>`;}
+function opBackToReview(job){location.assign(opBackToReviewHash(job));}

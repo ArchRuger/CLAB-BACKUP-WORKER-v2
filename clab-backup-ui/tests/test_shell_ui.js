@@ -1029,3 +1029,28 @@ test('C07 fix: a route change (applyRoute, so also a hashchange) closes the wire
  h.linkMenu.hidden=false;h.location.hash='#lab=b';h.context.windowListeners.hashchange();
  assert.equal(closed.length,2,'the hashchange route closes it too');assert.equal(h.linkMenu.hidden,true);
 });
+
+// T06-fix 1: a cold page load answers /api/state before operations.js has run: the review waits, runs once, and is dropped on leaving the lab.
+test('review=apply on a cold load: it waits for operations.js, opens the review exactly once, and the hash already lost the parameter',()=>{
+ const h=harness({hash:'#lab=b&view=topology&review=apply'}),reviewed=[];h.context.timers.length=0;
+ assert.equal(h.context.applyRoute(),true);
+ assert.deepEqual(reviewed,[]);assert.equal(h.location.hash,'#lab=b&view=topology','the parameter leaves the address at once');
+ assert.equal(h.context.pendingRouteReview(),'b','the review is kept while operations.js is not there');assert.equal(h.context.timers.length,1,'a bounded poll is armed');
+ h.context.timers.shift()();assert.deepEqual(reviewed,[],'still waiting');assert.equal(h.context.timers.length,1);
+ h.context.opReviewChanges=id=>{reviewed.push(id);return Promise.resolve();};h.context.opTask=(dialog,fn)=>fn();
+ h.context.timers.shift()();
+ assert.deepEqual(reviewed,['b'],'operations.js arrived: the review opens');assert.equal(h.context.pendingRouteReview(),'');assert.equal(h.context.timers.length,0);
+ h.context.tryRouteReview();h.context.applyRoute();assert.equal(reviewed.length,1,'exactly once');
+ // the DOMContentLoaded listener tries too
+ const late=harness({hash:'#lab=b&view=topology&review=apply'}),got=[];late.context.timers.length=0;late.context.applyRoute();
+ late.context.opReviewChanges=id=>{got.push(id);return Promise.resolve();};late.context.opTask=(d,fn)=>fn();
+ late.doc.listeners.DOMContentLoaded.forEach(l=>l.fn());assert.deepEqual(got,['b']);
+ // leaving the lab drops the review; the poll is bounded
+ const left=harness({hash:'#lab=b&view=topology&review=apply'});left.context.timers.length=0;left.context.applyRoute();left.context.activeId='a';left.context.timers.shift()();
+ assert.equal(left.context.pendingRouteReview(),'');assert.equal(left.context.timers.length,0);
+ const never=harness({hash:'#lab=b&view=topology&review=apply'});never.context.timers.length=0;never.context.applyRoute();let n=0;while(never.context.timers.length&&n<500){never.context.timers.shift()();n++;}
+ assert.equal(n,100,'ten seconds of 100 ms');assert.equal(never.context.pendingRouteReview(),'');
+ // a same-page hashchange still works
+ const warm=harness({hash:'#lab=b&view=topology'}),w=[];warm.context.opReviewChanges=id=>{w.push(id);return Promise.resolve();};warm.context.opTask=(d,fn)=>fn();warm.context.applyRoute();
+ warm.location.hash='#lab=b&view=topology&review=apply';warm.context.applyRoute();assert.deepEqual(w,['b']);
+});

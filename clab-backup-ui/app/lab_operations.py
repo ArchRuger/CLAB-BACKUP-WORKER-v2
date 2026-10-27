@@ -890,6 +890,9 @@ class LabOperations:
                     raise HTTPException(409, 'Another lab operation ran while this review was being prepared. Review the ' + data.action[:-5] + ' again.')
                 self.previews[token] = {'request': req, 'digest': result['digest'], 'revision': host_revision,
                                         'lab_id': data.lab_id, 'expires': time.monotonic() + 300,
+                                        # A revise on a lab with containers (the deployed save): the job carries the flag so the
+                                        # page's output dialog never offers a deploy of a lab that runs (TOPOLOGY-EDIT-DESIGN A16).
+                                        'deployed': result.get('deployed') is True,
                                         'node': node_name, 'node_label': node_label, 'stamp': review_stamp,
                                         'links_expected': links_expected, 'neighbours_down': neighbours_down, 'neighbours_absent': neighbours_absent,
                                         'nodes': chosen_nodes,
@@ -941,6 +944,7 @@ class LabOperations:
                 if preview.get('node'): job.update(node=preview['node'], node_label=preview.get('node_label') or preview['node'], links_expected=preview.get('links_expected') or 0, neighbours_down=list(preview.get('neighbours_down') or []),
                                                  neighbours_absent=list(preview.get('neighbours_absent') or []))
                 if preview.get('nodes'): job['nodes'] = list(preview['nodes'])   # the devices a filtered job names: topology node names the review showed
+                if preview.get('deployed'): job['deployed'] = True   # a deployed save (revise on a lab with containers)
                 previous_jobs = self.store.state['operations']
                 self.store.state['operations'] = (previous_jobs + [job])[-200:]
                 try: self.store.save()

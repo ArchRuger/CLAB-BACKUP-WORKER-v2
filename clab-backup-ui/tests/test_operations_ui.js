@@ -1231,3 +1231,43 @@ test('T06b (A6): the revise review no longer says a deployed lab cannot be saved
  const src=fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),top=fs.readFileSync(path.join(__dirname,'../app/static/topology.js'),'utf8');
  for(const [name,text] of [['operations.js',src],['topology.js',top]])assert.doesNotMatch(text,/(destroyed? (the lab )?first|only possible while the lab is not deployed)/i,name+' keeps no "destroy first" sentence about saving a topology');
 });
+
+// T06-fix 2: the output dialog of a deployed save never says "It is not running yet." and never offers Deploy now.
+test('a deployed save (revise with deployed) says the running lab is unchanged and offers only Back to lab and review changes…',async()=>{
+ const run=async(job,labs)=>{
+  const elements=new Map(),assigned=[],listeners={};
+  for(const id of ['op-job-banner','op-job-output','op-job-result'])elements.set(id,{hidden:false,className:'',textContent:'',innerHTML:'',scrollTop:0,scrollHeight:0,clientHeight:0,addEventListener(){}});
+  elements.set('op-back-review',{addEventListener(name,fn){listeners[name]=fn;}});
+  const rendered=[];
+  const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs},console,document:{getElementById:()=>null},setTimeout:()=>1,clearTimeout(){},location:{assign:u=>assigned.push(u)},
+   api:async()=>({json:async()=>job}),refresh:async()=>{},builderGo(){}});
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+  c.opDialog=()=>({open:true,classList:{toggle(){}},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]});
+  c.opRenderPublished=(d,p)=>rendered.push(p);
+  await c.opShowJob('j');
+  return {html:elements.get('op-job-result').innerHTML,rendered,assigned,click:()=>listeners.click&&listeners.click()};
+ };
+ const labs=[{id:'L 1',vm_project_path:'/srv/p/demo/demo.clab.yml'}];
+ for(const job of [{id:'j',action:'revise',name:'demo',lab_id:'L 1',status:'succeeded',output:'',options:{deployed:true},result:{published_path:'/srv/p/demo/demo.clab.yml'}},{id:'j',action:'revise',name:'demo',status:'succeeded',output:'',result:{published_path:'/srv/p/demo/demo.clab.yml',deployed:true}}]){
+  const r=await run(job,labs);
+  assert.match(r.html,/Saved to the VM\. The running lab is unchanged until you apply the changes\./);
+  assert.match(r.html,/id="op-back-review">Back to lab and review changes…/);
+  assert.doesNotMatch(r.html,/not running yet|op-published-deploy|op-published-go|op-published-block|op-open-published|Deploy now/,'no Deploy now for a lab that keeps running');
+  assert.deepEqual(r.rendered,[],'the Add / Deploy block is not rendered');
+  r.click();assert.deepEqual(r.assigned,['/#lab=L%201&view=topology&review=apply']);
+ }
+ const plain=await run({id:'j',action:'revise',name:'demo',status:'succeeded',output:'',result:{published_path:'/srv/p/demo/demo.clab.yml'}},labs);
+ assert.match(plain.html,/It is not running yet\./,'a revision of a lab that was not deployed keeps the old words');assert.match(plain.html,/op-published-block/);
+});
+
+test('a deployed save is recognised from the builder page when the job record itself does not say so, and the memory is per job',async()=>{
+ const c=vm.createContext({$:()=>null,esc:s=>String(s),state:{labs:[]},console,document:{getElementById:()=>null}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ const job={id:'j1',action:'revise',status:'succeeded',result:{published_path:'/p/a.clab.yml'}};
+ assert.equal(c.opDeployedSave(job),false,'nothing says it');
+ vm.runInContext("var builderPending={action:'revise',deployed:true,job:'j1'}",c);
+ assert.equal(c.opDeployedSave(job),true);
+ vm.runInContext("builderPending=null",c);assert.equal(c.opDeployedSave(job),true,'remembered once the page forgot the pending save');
+ assert.equal(c.opDeployedSave({...job,id:'j2'}),false,'another job is not');assert.equal(c.opDeployedSave({...job,action:'publish'}),false);
+ assert.equal(c.opDeployedSave({...job,id:'j3',deployed:true}),true,'the job record carries the flag (the manager sets it at confirm)');
+});
