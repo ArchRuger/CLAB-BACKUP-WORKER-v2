@@ -1,7 +1,9 @@
-"""Stage, arm and confirm a network-design candidate on Junos (cJunosEvolved, vJunos-switch): the merge
-transaction of PROVISIONING.md §2, with the provisioning driver contract documented in :mod:`design_eos`.
+"""Stage, arm and confirm a network-design candidate on Junos (cJunosEvolved, vJunos-switch; vJunos-router and vSRX
+as a static mapping since campaign 2 B05, see ``KIND_EVIDENCE``): the merge transaction of PROVISIONING.md §2, with
+the provisioning driver contract documented in :mod:`design_eos`.
 
-What differs from EOS, all proven live on the lab images (docs/netlab-integration/evidence/junos-transaction-facts.md):
+What differs from EOS, all proven live on the cJunosEvolved and vJunos-switch lab images (one Junos kind never proves
+another: nothing below is proven on vJunos-router or vSRX until B05 phase 2) (docs/netlab-integration/evidence/junos-transaction-facts.md):
 
 * the transaction is an exclusive candidate (`configure exclusive`, refused while anybody has uncommitted edits in
   the shared candidate or a confirmed commit is waiting); the running configuration cannot change under it, so
@@ -28,7 +30,14 @@ from .restore_junos import (CHECK_OK, COMMIT_FAILED, COMMIT_OK, COMMIT_TIMEOUT, 
 from .restore_junos import confirm_shell as _restore_confirm_shell
 from .restore_shell import ANSI, PROMPT_TIMEOUT, RestoreError, SessionLost, close_channel, open_shell
 
-SUPPORTED_KINDS = ('juniper_cjunosevolved', 'juniper_vjunosswitch')
+SUPPORTED_KINDS = ('juniper_cjunosevolved', 'juniper_vjunosswitch', 'juniper_vjunosrouter', 'juniper_vsrx')
+# Per kind, what the claim of this driver rests on.
+KIND_EVIDENCE = {
+    'juniper_cjunosevolved': 'live: docs/netlab-integration/evidence/junos-transaction-facts.md',
+    'juniper_vjunosswitch': 'live: docs/netlab-integration/evidence/junos-transaction-facts.md',
+    'juniper_vjunosrouter': 'static mapping; live apply pending (campaign 2 B05 phase 2)',
+    'juniper_vsrx': 'static mapping; live apply pending (campaign 2 B05 phase 2)',
+}
 NAME = re.compile(r'^clabdsg-[0-9a-f]{8}$')
 FOREIGN_EDITS = ('Someone has uncommitted configuration changes open on this node. The design was not applied, '
                  'so their work is not lost.')

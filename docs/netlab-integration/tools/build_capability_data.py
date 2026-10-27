@@ -30,9 +30,10 @@ picks a different form is a real risk this docstring exists to catch):
 * ``netlab show attributes --system --format yaml -m <module>`` for each of the 18 modules in
   ``MODULES`` (the exact list the assignment names: bfd, bgp, dhcp, eigrp, evpn, gateway, isis, lag,
   mpls, ospf, ripv2, routing, sr, srv6, stp, vlan, vrf, vxlan).
-* ``netlab show defaults devices.<device>.features --format yaml`` for each of the four device
-  profiles (``eos``, ``vjunos-switch``, ``vptx``, ``iosxr``). This is kept as its own JSON section
-  (``device_features``) even though its per-module content overlaps ``module_support`` for those four
+* ``netlab show defaults devices.<device>.features --format yaml`` for each of the six device
+  profiles (``eos``, ``vjunos-switch``, ``vptx``, ``iosxr``, and since campaign 2 B05 ``vjunos-router``
+  and ``vsrx``). This is kept as its own JSON section
+  (``device_features``) even though its per-module content overlaps ``module_support`` for those
   devices, because it is also the only source for feature blocks outside the module registry that
   ``design_capabilities.py`` needs for its ``feature_flag`` lookups (for example ``gateway.protocol``,
   ``lag.mlag``, ``mpls.6pe``): ``module-support`` only ever exposes modules netlab treats as a formal
@@ -59,8 +60,9 @@ MODULES = [
     'routing', 'sr', 'srv6', 'stp', 'vlan', 'vrf', 'vxlan',
 ]
 
-# The four containerlab-kind stand-in profiles this integration targets (D3.2).
-PROFILE_DEVICES = ['eos', 'vjunos-switch', 'vptx', 'iosxr']
+# The device profiles of the containerlab kinds this integration maps (D3.2; vjunos-router and vsrx added by
+# campaign 2 B05 for juniper_vjunosrouter and juniper_vsrx).
+PROFILE_DEVICES = ['eos', 'vjunos-switch', 'vptx', 'iosxr', 'vjunos-router', 'vsrx']
 
 # Top-level `netlab show attributes` sections the manager needs: the addressing/vlan/vrf scopes plus
 # the named types behind route_policy/prefix_list/aspath_filter/static_routes/redistribution.

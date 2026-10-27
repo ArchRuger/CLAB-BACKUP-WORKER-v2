@@ -558,6 +558,27 @@ class DesignJunosDriverTests(unittest.TestCase):
         self.assertEqual(design_junos.options(None), {})
 
 
+class KindTests(unittest.TestCase):
+    """Campaign 2 B05: which kinds this driver serves, and what each claim rests on."""
+
+    def test_vjunos_router_and_vsrx_are_served_as_a_static_mapping(self):
+        from app import design_apply
+        for kind in ('juniper_cjunosevolved', 'juniper_vjunosswitch', 'juniper_vjunosrouter', 'juniper_vsrx'):
+            self.assertIn(kind, design_junos.SUPPORTED_KINDS)
+            self.assertIs(design_apply.DRIVERS[kind], design_junos, kind)
+        self.assertEqual(set(design_junos.KIND_EVIDENCE), set(design_junos.SUPPORTED_KINDS))
+        for kind in ('juniper_vjunosrouter', 'juniper_vsrx'):
+            self.assertEqual(design_junos.KIND_EVIDENCE[kind], 'static mapping; live apply pending (campaign 2 B05 phase 2)')
+        for kind in ('juniper_cjunosevolved', 'juniper_vjunosswitch'):
+            self.assertTrue(design_junos.KIND_EVIDENCE[kind].startswith('live: '), kind)
+
+    def test_every_served_kind_has_a_preparer_and_the_set_form(self):
+        from app import design_ownership, design_provision
+        for kind in design_junos.SUPPORTED_KINDS:
+            self.assertIn(kind, design_provision.PREPARERS, kind)
+            self.assertIn(kind, design_ownership.SET_KINDS, kind)
+
+
 class CheckReasonTests(unittest.TestCase):
     def test_commit_check_errors_become_fixed_phrases_never_device_text(self):
         text = ("warning: requires 'vxlan' license\nwarning: requires 'bgp' license\n[edit vlans red]\n"

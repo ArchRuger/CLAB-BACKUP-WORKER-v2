@@ -15,7 +15,9 @@ in the application decides what is protected:
 * interface MAC addresses never go: runtime identity, disruptive on a running device;
 * cEOS's `normalize` file never goes: it shuts and re-addresses interfaces for a fresh deploy;
 * Junos `delete: <hierarchy>;` tags never go: they wipe a whole stanza, manual statements included;
-  removal is the ownership ledger's job.
+  removal is the ownership ledger's job;
+* vSRX (campaign 2 B05, :func:`prepare_vsrx`): nothing under `security` may name the management interface, and
+  no `functional-zone management` goes (see that function for the management rule of the security zones).
 
 Everything else is candidate text, kept in the fragments' order. The functions are pure (text in, text
 out) so the tests can use the real fragments of the acceptance topology.
@@ -130,19 +132,23 @@ def _junos_blocks(text):
     return rows
 
 
+# The management interface named as a whole word anywhere in a line (vSRX security rule).
+JUNOS_MGMT_WORD = re.compile(r'(?<![\w/:.-])(?:fxp0|em0|re0:mgmt-0|me0)(?:\.\d+)?(?![\w/:-])')
+JUNOS_FUNCTIONAL_ZONE = re.compile(r'^\s*functional-zone\s+management\b')
 JUNOS_MGMT_LLDP = re.compile(r'^\s*interface\s+(?:fxp0|em0|re0:mgmt-0|me0)(?:\.\d+)?\s*\{\s*$')
 # The management interface as its own block under `interfaces { … }` (netlab never renders it; a fragment that did would be wrong).
 JUNOS_MGMT_INTERFACE = re.compile(r'^\s*(?:fxp0|em0|re0:mgmt-0|me0)(?:\.\d+)?\s*\{\s*$')
 
 
-def prepare_junos(fragments):
+def prepare_junos(fragments, security_rule=False):
     """(candidate, left_out) for Junos fragments (curly-brace form as `load merge terminal` takes it).
 
     A block is dropped whole when its header is protected (`static-host-mapping`, `login`, ...). The
     management interface may appear only under `protocols lldp` as `interface <mgmt> { disable; }`, which
     keeps LLDP off the shared management network and is kept; anywhere else a management interface block
     is protected. `name { }` presence blocks are meaningful Junos syntax (`interface lo0.0 { }` puts the
-    loopback in an OSPF area) and stay; only a block this filter emptied itself is pruned."""
+    loopback in an OSPF area) and stay; only a block this filter emptied itself is pruned. `security_rule` adds the
+    vSRX rule of :func:`prepare_vsrx`."""
     kept, left_out = [], []
     for module, text in fragments:
         if module in SKIPPED_MODULES:
@@ -161,6 +167,12 @@ def prepare_junos(fragments):
                 _mark_emptied(kept, stack, emptied); continue
             if JUNOS_PROTECTED_LEAF.match(line) or JUNOS_PROTECTED_BARE_LEAF.match(line):
                 left_out.append({'module': module, 'statement': stripped, 'reason': 'device identity, access or management'})
+                _mark_emptied(kept, stack, emptied); continue
+            under_security = any(re.match(r'^\s*security\b', header) for _, header in stack)
+            if security_rule and ((under_security and (JUNOS_MGMT_WORD.search(stripped) or JUNOS_FUNCTIONAL_ZONE.match(line)))
+                                  or (not stack and re.match(r'^\s*security\s', line) and (JUNOS_MGMT_WORD.search(stripped) or 'functional-zone' in stripped))):
+                left_out.append({'module': module, 'statement': stripped.rstrip('{').strip(), 'reason': 'management interface in a security zone or policy'})
+                if opens: skip_until = depth
                 _mark_emptied(kept, stack, emptied); continue
             under_lldp = any(header.strip().startswith('lldp') for _, header in stack)
             under_interfaces = bool(stack) and stack[-1][1].strip().startswith('interfaces')
@@ -200,8 +212,29 @@ def _prune_emptied(kept, emptied):
                 break
 
 
+def prepare_vsrx(fragments):
+    """(candidate, left_out) for vSRX: :func:`prepare_junos` plus the security rule (campaign 2 B05).
+
+    The management rule of an SRX's security zones, written down here because a zone-less or narrowed configuration
+    loses whatever path it guards: an interface that carries management must stay in a zone whose
+    `host-inbound-traffic system-services` keeps ssh and ping, or not be in the zone model at all. On the
+    containerlab vSRX the management interface is `fxp0`, which is outside the zone model (live, docs/parity-campaign/
+    evidence/b03-vsrx-boot-2026-10-27.md: Junos 23.2R2.21 boots with no zone at all and SSH reaches it), so the design
+    keeps management by never touching it: anything under `security` that names the management interface, and a
+    `functional-zone management` block, is left out here; a `delete:` tag (which could wipe a zone's host-inbound
+    services) is left out by :func:`prepare_junos`; and the ownership ledger never removes or replaces an unowned
+    statement, so an existing zone's `host-inbound-traffic` (for example a `trust` zone a person configured) is never
+    narrowed. netlab 26.09 writes no security zone for vsrx in the modules this design accepts (only its
+    firewall.zonebased plugin does, and plugins are refused); it writes `security forwarding-options family iso|mpls
+    mode packet-based` for IS-IS and MPLS, which is kept. Data ports the design addresses are therefore left out of
+    every zone: on a flow-mode vSRX their traffic, the routing protocols included, is dropped until a zone admits it.
+    Whether the design should add such a zone is decided by the live pass of B05 phase 2, not here."""
+    return prepare_junos(fragments, security_rule=True)
+
+
 PREPARERS = {'arista_ceos': prepare_eos, 'cisco_xrv9k': prepare_iosxr,
-             'juniper_cjunosevolved': prepare_junos, 'juniper_vjunosswitch': prepare_junos}
+             'juniper_cjunosevolved': prepare_junos, 'juniper_vjunosswitch': prepare_junos,
+             'juniper_vjunosrouter': prepare_junos, 'juniper_vsrx': prepare_vsrx}
 
 
 def prepare(kind, fragments):

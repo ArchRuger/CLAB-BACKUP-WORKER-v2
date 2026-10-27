@@ -48,6 +48,17 @@ class TestProfiles(unittest.TestCase):
         self.assertEqual(dc.profile_for('juniper_cjunosevolved')['profile'], 'vptx')
         self.assertEqual(dc.profile_for('cisco_xrv9k')['profile'], 'iosxr')
 
+    def test_vjunos_router_and_vsrx_map_to_their_exact_netlab_profiles(self):
+        # Campaign 2 B05 phase 1: netlab 26.09 ships devices/vjunos-router.yml (clab kind juniper_vjunosrouter) and
+        # devices/vsrx.yml (vSRX 3.0); both put management on fxp0 and data ports on ge-0/0/N.
+        for kind, profile in (('juniper_vjunosrouter', 'vjunos-router'), ('juniper_vsrx', 'vsrx')):
+            entry = dc.profile_for(kind)
+            self.assertEqual((entry['profile'], entry['netlab_device'], entry['exact']), (profile, profile, True), kind)
+            self.assertEqual((entry['mgmt_if'], entry['interfaces']), ('fxp0', 'ge-0/0/N'), kind)
+            self.assertIn('exact profile match', entry['evidence'])
+            self.assertIn('live apply pending (campaign 2 B05 phase 2)', entry['evidence'], 'the static mapping says it is not proven live')
+            self.assertNotIn('role', entry, 'a router or firewall, not a support host')
+
     def test_unmapped_kind_is_none(self):
         self.assertIsNone(dc.profile_for('juniper_crpd'))
         self.assertIsNone(dc.profile_for('not_a_real_kind'))
@@ -58,7 +69,8 @@ class TestProfiles(unittest.TestCase):
         self.assertEqual(dc.profile_for('arista_ceos')['profile'], 'eos')
 
 
-ALL_KINDS = ['arista_ceos', 'juniper_vjunosswitch', 'juniper_cjunosevolved', 'cisco_xrv9k']
+ALL_KINDS = ['arista_ceos', 'juniper_vjunosswitch', 'juniper_cjunosevolved', 'cisco_xrv9k', 'juniper_vjunosrouter', 'juniper_vsrx']
+NEW_JUNOS = ('juniper_vjunosrouter', 'juniper_vsrx')
 
 
 class TestResolve(unittest.TestCase):
@@ -94,8 +106,9 @@ class TestResolve(unittest.TestCase):
             self.assertFalse(r['engine'], kind)
 
     def test_gre_follows_the_engines_tunnel_flag_eos_only(self):
-        # The resolved device features carry tunnel.gre for eos only; the Junos profiles declare no tunnel
-        # flag, so GRE stays unsupported there until the engine says otherwise (fail closed).
+        # Of the original four profiles the resolved device features carry tunnel.gre for eos only; vjunos-switch
+        # and vptx declare no tunnel flag, so GRE stays unsupported there until the engine says otherwise (fail
+        # closed). vjunos-router and vsrx do declare it (test_gre_follows_the_tunnel_flag_on_vjunos_router_and_vsrx).
         r = dc.resolve('gre', 'arista_ceos')
         self.assertTrue(r['engine'])
         self.assertNotEqual(r['level'], 'unsupported')
@@ -104,6 +117,46 @@ class TestResolve(unittest.TestCase):
             r = dc.resolve('gre', kind)
             self.assertFalse(r['engine'], kind)
             self.assertEqual(r['level'], 'unsupported', kind)
+
+    def test_gre_follows_the_tunnel_flag_on_vjunos_router_and_vsrx(self):
+        for kind, profile in (('juniper_vjunosrouter', 'vjunos-router'), ('juniper_vsrx', 'vsrx')):
+            self.assertIn('gre', dc.engine_data()['device_features'][profile].get('tunnel', {}), profile)
+            r = dc.resolve('gre', kind)
+            self.assertTrue(r['engine'], kind)
+            self.assertEqual(r['level'], 'generated_not_live_tested', kind)
+
+    def test_vjunos_router_and_vsrx_answer_from_the_capability_data_and_nothing_is_verified(self):
+        # No VALIDATION entry exists for either kind: every feature the engine renders is generated_not_live_tested.
+        for kind in NEW_JUNOS:
+            for feature_id in dc.FEATURES:
+                r = dc.resolve(feature_id, kind)
+                self.assertIn(r['level'], ('generated_not_live_tested', 'unsupported'), (kind, feature_id))
+                self.assertEqual(r['level'] == 'unsupported', not r['engine'], (kind, feature_id))
+                self.assertEqual(r['evidence'], '', (kind, feature_id))
+            for feature_id in ('ipv4', 'ipv6', 'ospfv2', 'ospfv3', 'isis', 'bgp', 'bfd', 'static_routes', 'vrf', 'vlan',
+                               'route_policy', 'prefix_list', 'aspath_filter', 'default_originate', 'mpls_ldp', 'l3vpn',
+                               'sr_mpls', 'vrrp', 'lldp'):
+                self.assertEqual(dc.resolve(feature_id, kind)['level'], 'generated_not_live_tested', (kind, feature_id))
+            for feature_id in ('eigrp', 'ripv2', 'ripng', 'stp', 'srv6', 'dhcp', 'dhcpv6', 'mlag', 'bgp_lu', 'sixpe', 'wireguard'):
+                self.assertEqual(dc.resolve(feature_id, kind)['level'], 'unsupported', (kind, feature_id))
+
+    def test_the_two_profiles_differ_where_the_engine_says(self):
+        # vjunos-router: no lag module (devices/vjunos-router.yml has no lag block); evpn/vxlan and anycast present.
+        for feature_id in ('lag', 'lacp'):
+            self.assertEqual(dc.resolve(feature_id, 'juniper_vjunosrouter')['level'], 'unsupported', feature_id)
+            self.assertEqual(dc.resolve(feature_id, 'juniper_vsrx')['level'], 'generated_not_live_tested', feature_id)
+        for feature_id in ('evpn', 'vxlan', 'anycast_gateway'):
+            self.assertEqual(dc.resolve(feature_id, 'juniper_vjunosrouter')['level'], 'generated_not_live_tested', feature_id)
+            r = dc.resolve(feature_id, 'juniper_vsrx')
+            self.assertEqual(r['level'], 'unsupported', feature_id)
+            self.assertIn('vsrx', r['reason'])
+        self.assertEqual(dc.engine_data()['device_features']['vsrx']['gateway']['protocol'], ['vrrp'])
+
+    def test_the_retired_policy_covers_the_new_kinds_too(self):
+        rows = {(r['kind'], r['feature']): r for r in dc.public_matrix(list(NEW_JUNOS))}
+        self.assertEqual(rows[('juniper_vjunosrouter', 'vxlan')]['level'], 'retired')
+        self.assertEqual(rows[('juniper_vjunosrouter', 'vxlan')]['engine_level'], 'generated_not_live_tested')
+        self.assertEqual(rows[('juniper_vsrx', 'bgp')]['level'], 'generated_not_live_tested')
 
     def test_unknown_kind_unsupported_with_mapping_reason(self):
         r = dc.resolve('bgp', 'not_a_real_kind')

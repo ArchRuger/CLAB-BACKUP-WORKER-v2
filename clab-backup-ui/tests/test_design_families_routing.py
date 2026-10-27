@@ -516,5 +516,76 @@ class BfdFamilyTests(RoutingFamilyTestCase):
         self.assert_stable(built['topology'])
 
 
+
+# --- 7. vJunos-router and vSRX (campaign 2 B05 phase 1: generation only, nothing applied) ------------------
+
+B05_YAML = '''name: b05
+mgmt:
+  network: clab
+  ipv4-subnet: 172.20.20.0/24
+topology:
+  nodes:
+    ceos: {kind: arista_ceos, image: n24l/ceos:4.35.0F, mgmt-ipv4: 172.20.20.101}
+    vrt: {kind: juniper_vjunosrouter, image: n24l/juniper_vjunos-router:26.2R1.7, mgmt-ipv4: 172.20.20.102}
+    vsrx: {kind: juniper_vsrx, image: n24l/juniper_vsrx:23.2R2.21, mgmt-ipv4: 172.20.20.103}
+  links:
+    - endpoints: ["ceos:eth1", "vrt:ge-0/0/0"]
+    - endpoints: ["vrt:ge-0/0/1", "vsrx:ge-0/0/0"]
+    - endpoints: ["vsrx:eth2", "ceos:eth2"]
+'''
+
+
+@unittest.skipUnless(HAS_NETLAB, SKIP_REASON)
+class NewJunosKindsGenerationTests(RoutingFamilyTestCase):
+    """The real engine on a ceos / vJunos-router / vSRX triangle: OSPF, IS-IS, BGP and MPLS generate for both new
+    kinds with ge-0/0/N.0 ports and fxp0 management; vSRX gets the engine's packet-mode lines and no zone."""
+
+    def run_b05(self, modules):
+        nodes = parse_definition(B05_YAML.encode())['nodes']
+        intent = di.empty_intent()
+        intent['modules'] = modules
+        intent['ospf'] = {'area': '0.0.0.0'}
+        intent['isis'] = {'area': '49.0001', 'type': 'level-2'}
+        intent['bgp'] = {'as': 65000}
+        intent = {k: v for k, v in intent.items() if k not in ('ospf', 'isis', 'bgp') or k in modules}
+        links = [l['key'] for l in da.parse_links(B05_YAML) if not l['problem']]
+        problems = di.validate(intent, lab_nodes={n['definition_node']: n['kind'] for n in nodes}, lab_links=links,
+                               schema=caps.engine_data(), management=da.management_networks(B05_YAML, nodes))
+        self.assertEqual(problems, [], problems)
+        built = da.build(B05_YAML, nodes, intent, caps.profile_for)
+        result = engine.run_generation(self.work_root, built['topology'])
+        self.addCleanup(shutil.rmtree, result.get('workdir', ''), ignore_errors=True)
+        self.assertTrue(result['ok'], result.get('errors'))
+        return built, result
+
+    def test_ospf_isis_bgp_and_mpls_generate_on_both_kinds_with_ge_ports(self):
+        from app import design_provision as dp
+        built, result = self.run_b05(['ospf', 'isis', 'bgp', 'mpls'])
+        self.assertEqual((built['nodes']['vrt']['profile'], built['nodes']['vsrx']['profile']), ('vjunos-router', 'vsrx'))
+        for node, kind in (('vrt', 'juniper_vjunosrouter'), ('vsrx', 'juniper_vsrx')):
+            modules = [m for m, _ in result['artifacts'][node]]
+            self.assertEqual(modules, ['initial', 'ospf', 'isis', 'bgp', 'mpls'], node)
+            initial = self.artifact(result, node, 'initial')
+            self.assertIn('ge-0/0/0.0 {', initial, node)
+            self.assertIn('interface fxp0 {\n      disable;', initial, 'LLDP off on the management interface: ' + node)
+            self.assertIn('interface ge-0/0/0.0', self.artifact(result, node, 'ospf'), node)
+            whole = ''.join(text for _, text in result['artifacts'][node])
+            self.assertNotIn('security-zone', whole, 'netlab writes no zone for ' + node)
+            candidate, left = dp.prepare(kind, result['artifacts'][node])
+            self.assertNotIn('host-name', candidate, node)
+            self.assertNotIn('delete:', candidate, node)
+            self.assertNotIn('static-host-mapping', candidate, node)
+            self.assertEqual({l['reason'] for l in left} - {'device identity, access or management', 'management, access or static host mapping',
+                                                            "a delete tag wipes a whole stanza; removal is the ledger's"}, set(), node)
+        self.assertIn('ge-0/0/1.0 {\n    description "vsrx -> ceos"', self.artifact(result, 'vsrx', 'initial'), 'vsrx eth2 is ge-0/0/1')
+        for module, family in (('isis', 'iso'), ('mpls', 'mpls')):
+            self.assertIn(family + ' {\n        mode packet-based;', self.artifact(result, 'vsrx', module), module)
+            self.assertNotIn('packet-based', self.artifact(result, 'vrt', module), 'the packet mode is vSRX only: ' + module)
+
+    def test_the_new_kinds_are_deterministic(self):
+        built, _ = self.run_b05(['ospf', 'bgp'])
+        self.assert_stable(built['topology'])
+
+
 if __name__ == '__main__':
     unittest.main()

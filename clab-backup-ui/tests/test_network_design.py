@@ -173,6 +173,28 @@ class DesignViewTests(unittest.TestCase):
         self.assertIn('ospf', data['modules'])
         self.assertIn('loopback', data['pools'])
 
+    def test_view_of_a_lab_with_vjunos_router_and_vsrx(self):
+        """Campaign 2 B05 phase 1: both kinds are design devices with their exact profiles; the matrix answers from the
+        capability data and claims nothing beyond generated_not_live_tested."""
+        yaml_text = ('name: b05\nmgmt:\n  network: clab\n  ipv4-subnet: 172.20.20.0/24\ntopology:\n  nodes:\n'
+                     '    vrt: {kind: juniper_vjunosrouter, image: n24l/juniper_vjunos-router:26.2R1.7, mgmt-ipv4: 172.20.20.102}\n'
+                     '    vsrx: {kind: juniper_vsrx, image: n24l/juniper_vsrx:23.2R2.21, mgmt-ipv4: 172.20.20.103}\n'
+                     '  links:\n    - endpoints: ["vrt:ge-0/0/1", "vsrx:eth1"]\n')
+        lab_id = add_lab(self.app, name='b05', definition_yaml=yaml_text)
+        data = self.client.get(f'/api/labs/{lab_id}/design').json()
+        self.assertEqual({n: (v['profile'], v['included']) for n, v in data['nodes'].items()},
+                         {'vrt': ('vjunos-router', True), 'vsrx': ('vsrx', True)})
+        self.assertEqual(data['kinds'], ['juniper_vjunosrouter', 'juniper_vsrx'])
+        endpoints = data['links'][0]['endpoints']
+        self.assertEqual((endpoints['vrt']['nos'], endpoints['vsrx']['nos']), ('ge-0/0/1', 'ge-0/0/0'))
+        rows = {(r['kind'], r['feature']): r['level'] for r in data['capabilities']}
+        for kind in data['kinds']:
+            self.assertEqual(rows[(kind, 'bgp')], 'generated_not_live_tested', kind)
+            self.assertEqual(rows[(kind, 'ospfv2')], 'generated_not_live_tested', kind)
+            self.assertNotIn('verified_on_image', {level for (k, _), level in rows.items() if k == kind}, kind)
+        self.assertEqual(rows[('juniper_vsrx', 'evpn')], 'retired', 'EVPN is under review on every kind')
+        self.assertEqual(rows[('juniper_vjunosrouter', 'lag')], 'unsupported')
+
     def test_view_of_a_lab_without_a_topology_file(self):
         lab_id = add_lab(self.app, name='no-topology', definition_yaml='')
         response = self.client.get(f'/api/labs/{lab_id}/design')

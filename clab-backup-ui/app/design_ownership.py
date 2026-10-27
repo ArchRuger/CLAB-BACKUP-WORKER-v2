@@ -22,7 +22,7 @@ import re
 from .restore_compare import JUNOS_VOLATILE, indented_statements, set_lines
 
 INDENTED_KINDS = ('arista_ceos', 'cisco_xrv9k')
-SET_KINDS = ('juniper_cjunosevolved', 'juniper_vjunosswitch')
+SET_KINDS = ('juniper_cjunosevolved', 'juniper_vjunosswitch', 'juniper_vjunosrouter', 'juniper_vsrx')
 JUNOS_BANNER = re.compile(r'^\s*\[edit\]\s*$')
 XR_HEADER = re.compile(r'^(?:!!|!\s*$|\w{3}\s+\w{3}\s+\d{1,2}\s+\d\d:\d\d:\d\d)')
 # Where two values would both stay beside each other on a merge (Junos every address, IPv6 addresses on all
@@ -34,7 +34,18 @@ EXCLUSIVE = {
     'cisco_xrv9k': (re.compile(r'^interface \S+ > ipv6 address '), re.compile(r'^interface \S+ > ipv4 address ')),
     'juniper_cjunosevolved': (re.compile(r'^set interfaces \S+ unit \d+ family inet6? address '), re.compile(r'^set protocols bgp group \S+ export ')),
     'juniper_vjunosswitch': (re.compile(r'^set interfaces \S+ unit \d+ family inet6? address '), re.compile(r'^set protocols bgp group \S+ export ')),
+    'juniper_vjunosrouter': (re.compile(r'^set interfaces \S+ unit \d+ family inet6? address '), re.compile(r'^set protocols bgp group \S+ export ')),
+    'juniper_vsrx': (re.compile(r'^set interfaces \S+ unit \d+ family inet6? address '), re.compile(r'^set protocols bgp group \S+ export ')),
 }
+# vSRX (campaign 2 B05): a logical interface belongs to one security zone only, and Junos refuses a commit that binds
+# it to two. The bindings sit under different parents (`... security-zone A interfaces X` and `... security-zone B
+# interfaces X`), so the sibling rule above cannot see the clash: an addition that binds an interface which an
+# unowned statement already binds to another zone is a conflict, never a second binding. netlab 26.09 writes no zone
+# for vsrx in the modules this design accepts (only its firewall.zonebased plugin does, and plugins are refused), so
+# this guards a later zone rule and a fragment that carries one; the zone and policy lines themselves follow the
+# ordinary set-form algebra (owned when added, removed only when owned and stale).
+ZONE_BINDING = re.compile(r'^set security zones security-zone (\S+) interfaces (\S+?)(?:\.0)?(?: |$)')
+ZONE_KINDS = ('juniper_vsrx',)
 # Leaves whose inverse changes something beyond themselves: never removed silently while an unowned sibling
 # sits under the same parent (review M3). `switchport` back on a Layer-3 interface drops its addresses.
 SIDE_EFFECT_LEAVES = {'arista_ceos': (re.compile(r'^interface \S+ > no switchport$'),)}
@@ -155,6 +166,14 @@ def diff(kind, before, would_be, owned, desired, anc=()):
             for old in before:
                 if old == statement or old in owned_all: continue
                 if (old.rsplit(' > ', 1)[0] if kind in INDENTED_KINDS else ' '.join(_split_words(old)[:-1])) == parent and pattern.match(old):
+                    conflicts.add(old)
+    if kind in ZONE_KINDS:
+        for statement in added:
+            match = ZONE_BINDING.match(statement)
+            if not match: continue
+            for old in before:
+                other = ZONE_BINDING.match(old)
+                if other and other.group(2) == match.group(2) and other.group(1) != match.group(1) and old not in owned_all:
                     conflicts.add(old)
     return {'added': added, 'removed': removed, 'stale': stale, 'conflicts': conflicts, 'expected': expected}
 

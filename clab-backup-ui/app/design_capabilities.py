@@ -18,7 +18,9 @@ three separate axes, never flattened to one mark:
 Nothing in this module runs the engine: :func:`engine_data` only ever reads the committed JSON.
 
 ``PROFILES`` is the kind -> netlab device profile table from D3.2, with its evidence per entry:
-``arista_ceos`` and ``juniper_vjunosswitch`` are exact profile matches; ``juniper_cjunosevolved`` and
+``arista_ceos``, ``juniper_vjunosswitch``, ``juniper_vjunosrouter`` and ``juniper_vsrx`` are exact profile
+matches (the last two since campaign 2 B05, a static mapping: nothing on them is ``verified_on_image`` until
+the live apply of B05 phase 2); ``juniper_cjunosevolved`` and
 ``cisco_xrv9k`` are stand-ins (Junos Evolved / IOS XR lineage, but a different image and containerlab
 kind than the netlab profile they borrow), so nothing on them is ``verified_on_image`` until proven
 live; ``linux`` is a support host only, never applied by this integration. Any other kind is
@@ -53,6 +55,22 @@ PROFILES = {
     'juniper_vjunosswitch': {
         'profile': 'vjunos-switch', 'netlab_device': 'vjunos-switch', 'exact': True,
         'evidence': 'exact profile match',
+        'mgmt_if': 'fxp0', 'interfaces': 'ge-0/0/N',
+    },
+    # Campaign 2 B05 phase 1: static mappings, read from netlab 26.09's own profiles (devices/vjunos-router.yml:
+    # clab kind juniper_vjunosrouter, interface_name ge-0/0/{ifindex}, parent vmx; devices/vsrx.yml: vSRX 3.0, parent
+    # junos, interface naming inherited from junos). No VALIDATION entry exists for either kind: every feature the
+    # engine supports reads generated_not_live_tested until the live apply and read-back of phase 2.
+    'juniper_vjunosrouter': {
+        'profile': 'vjunos-router', 'netlab_device': 'vjunos-router', 'exact': True,
+        'evidence': ('exact profile match (netlab vjunos-router targets the vJunos-router image); '
+                     'static mapping, live apply pending (campaign 2 B05 phase 2)'),
+        'mgmt_if': 'fxp0', 'interfaces': 'ge-0/0/N',
+    },
+    'juniper_vsrx': {
+        'profile': 'vsrx', 'netlab_device': 'vsrx', 'exact': True,
+        'evidence': ('exact profile match (netlab vsrx targets vSRX 3.0, the image of containerlab kind juniper_vsrx); '
+                     'static mapping, live apply pending (campaign 2 B05 phase 2)'),
         'mgmt_if': 'fxp0', 'interfaces': 'ge-0/0/N',
     },
     'juniper_cjunosevolved': {
@@ -97,10 +115,11 @@ VALIDATION = {}
 # borrow the generic junos.j2 template) but none for iosxr; WireGuard has no template for any of eos,
 # iosxr or the junos family.
 PLUGIN_DEVICES = {
-    # The engine's resolved device features carry a `tunnel.gre` flag for eos only (design_capability_data.json,
-    # features.eos.tunnel); the generic junos GRE template exists upstream but no Junos profile declares the flag,
-    # so GRE is unsupported on the Junos kinds until the engine says otherwise (fail closed).
-    'tunnel.gre': {'eos'},
+    # The engine's resolved device features carry a `tunnel.gre` flag (design_capability_data.json,
+    # device_features.<profile>.tunnel) for eos, vjunos-router and vsrx only; vjunos-switch and vptx declare none,
+    # so GRE stays unsupported there until the engine says otherwise (fail closed). GRE is not authorable in this
+    # schema version (design_intent denies plugins): this only decides what the capability matrix shows.
+    'tunnel.gre': {'eos', 'vjunos-router', 'vsrx'},
     'tunnel.wireguard': set(),
 }
 
