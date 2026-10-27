@@ -41,6 +41,7 @@ const BUILDER_TEMPLATES=[
  {name:'Juniper cJunosEvolved',kind:'juniper_cjunosevolved',image:'n24l/cjunosevolved:26.2R1.7-EVO',pinned:true,env:{CPTX_AUTO_CONFIG:'1'},match:['cjunosevolved'],baseName:'ptx',interfacePattern:'et-0/0/{n:0}',icon:'pe'},
  {name:'Juniper vJunos-switch',kind:'juniper_vjunosswitch',image:'n24l/vjunos-switch:23.2R1.14',pinned:true,match:['vjunos-switch','juniper_vjunos-switch','vjunosswitch'],baseName:'sw',interfacePattern:'ge-0/0/{n:0}',icon:'switch'},
  {name:'Juniper vJunos-router',kind:'juniper_vjunosrouter',image:'n24l/juniper_vjunos-router:26.2R1.7',pinned:true,match:['vjunos-router','juniper_vjunos-router','vjunosrouter'],baseName:'rtr',interfacePattern:'ge-0/0/{n:0}',icon:'pe'},
+ {name:'Juniper vSRX',kind:'juniper_vsrx',image:'n24l/juniper_vsrx:23.2R2.21',pinned:true,match:['vsrx','juniper_vsrx'],baseName:'srx',interfacePattern:'ge-0/0/{n:0}',icon:'pe'},
  {name:'Cisco XRv9k',kind:'cisco_xrv9k',image:'n24l/cisco_xrv9k:24.3.1',pinned:true,match:['cisco_xrv9k','xrv9k'],baseName:'xr',interfacePattern:'Gi0/0/0/{n:0}',icon:'pe'},
  {name:'Linux host',kind:'linux',image:'ghcr.io/srl-labs/network-multitool:latest',match:['network-multitool'],baseName:'host',interfacePattern:'eth{n}',icon:'client'},
 ];

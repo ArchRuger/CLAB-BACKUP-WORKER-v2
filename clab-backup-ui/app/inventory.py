@@ -16,7 +16,8 @@ JUNOS_DRIVER = {'os': 'junipernetworks.junos.junos', 'command': 'show configurat
                 'suffix': 'set', 'snapshot_suffix': 'cfg',
                 'restore': 'show configuration | no-more', 'restore_format': 'junos-hierarchical', 'restore_suffix': 'jcfg'}
 JUNOS_SWITCHES = ('juniper_vqfx', 'juniper_vjunosswitch')
-JUNOS_ROUTERS = ('juniper_vjunosrouter',)
+# vSRX is a Junos firewall: the same NOS contract as the routers for backups, downloads and saves.
+JUNOS_ROUTERS = ('juniper_vjunosrouter', 'juniper_vsrx')
 JUNOS_PLATFORMS = ('juniper_cjunosevolved', *JUNOS_SWITCHES, *JUNOS_ROUTERS)
 GENERIC_JUNOS = ('junos', 'junipernetworks.junos.junos')
 PLATFORMS = {
@@ -27,6 +28,10 @@ PLATFORMS = {
     # on this kind (restore_drivers.py lists the supported kinds), so no restore-grade candidate is captured.
     'juniper_vjunosrouter': {'label': 'Junos (vJunos-router)',
                              **{k: v for k, v in JUNOS_DRIVER.items() if not k.startswith('restore')}},
+    # vSRX (https://containerlab.dev/manual/kinds/vr-vsrx/, checked 2026-10-27): the same rule as vJunos-router,
+    # backups, downloads and saves only until Load is proven live on the exact image (docs/parity-campaign/DEVICES.md).
+    'juniper_vsrx': {'label': 'Junos (vSRX)',
+                     **{k: v for k, v in JUNOS_DRIVER.items() if not k.startswith('restore')}},
     # IOS XR and EOS: the running-config itself is a complete, loadable candidate; the companion artifact
     # is the same capture kept under its own name and hash so a restore never relabels backup text.
     'cisco_xrv9k': {'label': 'IOS-XR', 'os': 'cisco.iosxr.iosxr', 'command': 'show running-config', 'suffix': 'cfg',
@@ -43,6 +48,7 @@ DEFAULT_CREDENTIALS = {
     'juniper_vqfx': ('admin', 'admin@123'),
     'juniper_vjunosswitch': ('admin', 'admin@123'),
     'juniper_vjunosrouter': ('admin', 'admin@123'),
+    'juniper_vsrx': ('admin', 'admin@123'),
     'cisco_xrv9k': ('clab', 'clab@123'),
     'arista_ceos': ('admin', 'admin'),
 }
@@ -81,6 +87,7 @@ ALIASES = {'junos': 'juniper_cjunosevolved', 'junipernetworks.junos.junos': 'jun
            'vr-vqfx': 'juniper_vqfx', 'vqfx': 'juniper_vqfx',
            'vr-vjunosswitch': 'juniper_vjunosswitch', 'vjunosswitch': 'juniper_vjunosswitch',
            'vr-vjunosrouter': 'juniper_vjunosrouter', 'vjunosrouter': 'juniper_vjunosrouter',
+           'vr-vsrx': 'juniper_vsrx', 'vsrx': 'juniper_vsrx',
            'iosxr': 'cisco_xrv9k', 'cisco.iosxr.iosxr': 'cisco_xrv9k',
            'ceos': 'arista_ceos', 'vr-xrv9k': 'cisco_xrv9k', 'cjunosevolved': 'juniper_cjunosevolved', 'eos': 'arista_ceos', 'arista.eos.eos': 'arista_ceos', **{k:k for k in PLATFORMS}}
 # The serial console port of the vrnetlab-based kinds: qemu's telnet chardev on TCP 5000, the one fixed pass-through

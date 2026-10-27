@@ -43,7 +43,7 @@ LINK_CONTAINERLAB_SENTENCE = 'Link state needs containerlab 0.64 or later on the
 LINK_NOT_RUNNING_SENTENCE = 'Links are drawn from the topology file; the lab is not running.'
 # The kinds whose data ports are wired to a QEMU guest inside the container: the container veth is the VM's link to the
 # device, and a port shut down inside the guest may leave it up (C06 assumption A1; the live pass settles each kind).
-VM_KINDS = ('juniper_vjunosswitch', 'juniper_vjunosevolved', 'juniper_vjunosrouter', 'juniper_vqfx', 'cisco_xrv9k', 'vr-xrv9k')
+VM_KINDS = ('juniper_vjunosswitch', 'juniper_vjunosevolved', 'juniper_vjunosrouter', 'juniper_vsrx', 'juniper_vqfx', 'cisco_xrv9k', 'vr-xrv9k')
 LINK_CONTAINER_LIMIT = 512
 TAIL_SENTENCE = 'Ask for 1 to %d log lines.' % LOGS_TAIL_LIMIT
 SINCE_SENTENCE = 'The log start must be a UTC timestamp.'

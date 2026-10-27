@@ -1,0 +1,64 @@
+# Per-image capability and evidence matrix (campaign 2)
+
+The six exact images of the 2026-10-27 instruction, their canonical kinds, and what the manager does with each,
+with the evidence type per cell. Vocabulary: **PASS**, **FAIL**, **BLOCKED** (an external condition), **NOT TESTED**,
+**NOT APPLICABLE** (only with a reason). Evidence kinds are kept apart: *static* (the registry), *unit*, *fixture*
+(the real app on scripted VM answers), *live* (the development VM, exact image). A kind listed in a dropdown is not
+support; a cell is PASS only with its evidence. The official defaults and their sources are in
+[CAMPAIGN-2.md](CAMPAIGN-2.md); the acceptance list per chunk is in the ledger there.
+
+## Identity
+
+| Image (exact) | Kind | Aliases known to the manager | Login default (registry) | Registry status at 1.31.6 | Change in campaign 2 |
+|---|---|---|---|---|---|
+| `n24l/juniper_vjunos-router:26.2R1.7` | `juniper_vjunosrouter` | `vr-vjunosrouter`, `vjunosrouter` | admin / admin@123 | backups, downloads, saves, catalog, console; restore and design gated | restore and design after the live proof (B04, B05) |
+| `n24l/juniper_vsrx:23.2R2.21` | `juniper_vsrx` | `vr-vsrx`, `vsrx` | admin / admin@123 | absent | B02: registry, aliases, download name `vSRX`, save format, interface map `ge-0/0/N` = `eth(N+1)`, builder template, VM kind for diagnostics; restore, design and console gated until proven |
+| `n24l/vjunos-switch:23.2R1.14` | `juniper_vjunosswitch` | `vr-vjunosswitch`, `vjunosswitch` | admin / admin@123 | full (restore proven live in 1.30.27–29; design; console) | regression only |
+| `n24l/ceos:4.35.0F` | `arista_ceos` | `ceos`, `eos`, `arista.eos.eos` | admin / admin | full (restore, design) | regression only |
+| `n24l/cjunosevolved:26.2R1.7-EVO` | `juniper_cjunosevolved` | `cjunosevolved`, `junos`, `junipernetworks.junos.junos` (generic fallback) | admin / admin@123 | full (restore, design) | regression only |
+| `n24l/cisco_xrv9k:24.3.1` | `cisco_xrv9k` | `vr-xrv9k`, `iosxr`, `cisco.iosxr.iosxr` | clab / clab@123 | full (restore, design, console) | regression only |
+
+## Exact-image qualification (live)
+
+Filled from the evidence files under `evidence/` as each boot and pass happens. Columns: requested tag, resolved
+digest, running container image id, NOS-reported version, containerlab version, manager build, host facts, result.
+
+| Image | Requested tag | Digest (RepoDigest) | Running image id | NOS version | containerlab | Manager | Host | Result |
+|---|---|---|---|---|---|---|---|---|
+| vJunos-router | `n24l/juniper_vjunos-router:26.2R1.7` | `sha256:0d039c60…41bb` | - | - | 0.79.0 | 1.31.6 | nested KVM VM (24 vCPU, 72 GB) | **BLOCKED** on this host: the inner qemu aborts (`kvm_put_msrs` assertion) under `-cpu host`; containerlab.dev: "cannot be used in any deployments that launch it from within a VM". The local derivative `local/juniper_vjunos-router:26.2R1.7-nested` (one `sed` on `/launch.py`, the switch's IvyBridge model) boots and is diagnostic evidence only. Supported environment: a bare-metal KVM host. |
+| vSRX | `n24l/juniper_vsrx:23.2R2.21` | B03a | B03a | B03a | 0.79.0 | 1.31.6 | nested KVM VM | B03a |
+| vJunos-switch | `n24l/vjunos-switch:23.2R1.14` | `sha256:12832fcb…71d62` | B03a | B03a | 0.79.0 | 1.31.6 | nested KVM VM | B03a |
+| cEOS | `n24l/ceos:4.35.0F` | `sha256:47b25129…1007` | B03a | B03a | 0.79.0 | 1.31.6 | container | B03a |
+| cJunosEvolved | `n24l/cjunosevolved:26.2R1.7-EVO` | `sha256:d1dfc8bc…9455` | B03a | B03a | 0.79.0 | 1.31.6 | nested KVM VM | B03a |
+| XRv9k | `n24l/cisco_xrv9k:24.3.1` | `sha256:1409cf12…9d2b` | B03a | B03a | 0.79.0 | 1.31.6 | nested KVM VM | B03a |
+
+## Capabilities per image
+
+Each cell: status, evidence kind, pointer. "registry" means the static registry has the entry and the unit tests
+pin it; it is not a live result.
+
+| Capability | vJunos-router | vSRX | vJunos-switch | cEOS | cJunosEvolved | XRv9k |
+|---|---|---|---|---|---|---|
+| Catalog entry, exact default image | PASS static (`BUILDER_TEMPLATES`) | PASS static (B02) | PASS static | PASS static | PASS static | PASS static |
+| Kind identity on import and sync (static and script inventories, topology hints, aliases) | PASS unit (`test_junos_kinds.py`) | unit in B02 | PASS unit | PASS unit | PASS unit | PASS unit |
+| Interface naming | PASS static+live (`ge-0/0/N`=`eth(N+1)`, C05 live) | static (B02); live in B03a | PASS live | PASS live | PASS live (`et-0/0/N`=`eth(N+4)`) | PASS live |
+| Boot and readiness (real `show version`) | PASS live on the nested derivative only (C01) | B03a | PASS live (C01) | PASS live (C01) | PASS live (C01) | PASS live (C01) |
+| Default login | PASS live (C01, derivative) | B03a | PASS live | PASS live | PASS live | PASS live |
+| Credential overrides (profile > inventory > kind default) | unit (`test_junos_kinds.py`, `test_nodes.py`) | unit in B02 | unit | unit | unit | unit |
+| Browser SSH terminal | PASS live (C02/C03) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
+| Serial console | PASS live (C04, derivative) | NOT TESTED (gated: not in `CONSOLE_PORTS` until the image's console is proven) | registered, NOT TESTED live (ACCEPTANCE R021) | NOT APPLICABLE (no qemu console) | NOT APPLICABLE | registered, NOT TESTED live |
+| Logs, interfaces, diagnostics drawer | PASS live (C03) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
+| Backup (display set / running-config), download name | PASS live (C01: `vJunos-router_vrt_…cfg`) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
+| Restore-grade artifact | gated (no `restore` keys) until B04 | gated until B04 | PASS | PASS | PASS | PASS |
+| Save to Git, manifest identity | PASS live (C01 save) | NOT TESTED | PASS | PASS | PASS | PASS |
+| Load (whole-configuration replacement, timed recovery, readback, persistence) | NOT TESTED (C10 / B04) | NOT TESTED (B04) | PASS live (1.30.27–29) | PASS live | PASS live | PASS live |
+| Device start/stop/restart | PASS live (C05) | NOT TESTED | PASS live (known second-start limit) | PASS live | PASS live | PASS live |
+| Lab deploy/apply/redeploy/destroy | PASS live (C05) | B03a deploy | PASS | PASS | PASS | PASS |
+| Capture | PASS live (C07, viewer) | NOT TESTED | PASS | PASS | PASS | PASS |
+| Topology / map integration, link state | PASS live (C06) | NOT TESTED | PASS | PASS | PASS | PASS |
+| Network Design (netlab mapping, generation, apply, readback) | unsupported by design (`dc.resolve` → unsupported) until B05 | unsupported until B05 | PASS | PASS | PASS (stand-in profile) | PASS |
+
+## Open blockers
+
+- vJunos-router exact published image on this host: BLOCKED (official host limitation above). Qualification of the
+  exact tag needs a bare-metal KVM host; every live result for this kind on this VM is on the derivative and says so.

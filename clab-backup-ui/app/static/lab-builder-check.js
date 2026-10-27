@@ -36,7 +36,7 @@ const BUILDER_PROBED_LEVELS={'0.79.0':['root','mgmt','node','stages','wait-for']
 // `kind "nosuchkind" is not supported. Supported kinds are …` prints): every vr-* name and these short names.
 const BUILDER_KIND_ALIASES={prefix:'vr-',short:['ceos','srl','xrd','cvx','cumulus_cvx','crpd','cjunosevolved','c8000']};
 // The current name of an alias where the manager's own catalog names one (mirrored from inventory.ALIASES in app/inventory.py).
-const BUILDER_KIND_LONG={ceos:'arista_ceos',cjunosevolved:'juniper_cjunosevolved','vr-vqfx':'juniper_vqfx','vr-vjunosswitch':'juniper_vjunosswitch','vr-vjunosrouter':'juniper_vjunosrouter','vr-xrv9k':'cisco_xrv9k'};
+const BUILDER_KIND_LONG={ceos:'arista_ceos',cjunosevolved:'juniper_cjunosevolved','vr-vqfx':'juniper_vqfx','vr-vjunosswitch':'juniper_vjunosswitch','vr-vjunosrouter':'juniper_vjunosrouter','vr-vsrx':'juniper_vsrx','vr-xrv9k':'cisco_xrv9k'};
 const BUILDER_NO_IMAGE_KINDS=['bridge','ovs-bridge','host','ext-container'];
 // Kinds whose containers define no health check on the development VM (§0, `docker ps`): a wait for healthy never ends.
 const BUILDER_NO_HEALTHCHECK_KINDS=['arista_ceos','ceos','juniper_cjunosevolved','cjunosevolved','linux'];
