@@ -40,7 +40,7 @@ dated 2026-10-27 in `inventory.py`.
 
 ## Checks
 
-- `python3 deploy/verify-release.py --docs`: exit 0 ("Documentation names only release 1.31.6.")
+- `python3 deploy/verify-release.py --docs`: exit 0 ("Documentation names only the tree audited as of 1.31.6.")
 - `python3 docs/maintenance-audit/tools/check_links.py`: exit 0 (339 files, 0 problems)
 - `git diff --check`: exit 0
 

@@ -1,6 +1,6 @@
 # D02b: Git save and load, course structure, naming, telemetry retirement (2026-10-27)
 
-Release 1.31.6, branch `claude/parity-campaign`. Files audited: `docs/GIT-SETUP.md`, `docs/GIT-PROGRESS.md`,
+Audited as of 1.31.6 (the tree before 1.31.7), branch `claude/parity-campaign`. Files audited: `docs/GIT-SETUP.md`, `docs/GIT-PROGRESS.md`,
 `docs/COURSE-STATES.md`, `docs/NAMING.md`, `docs/TELEMETRY.md`. Method: every bold label and inline-code
 string was extracted and searched in `clab-backup-ui/app` and `deploy` (a script, then reading the matching line),
 and the rest of each claim (routes, options, defaults, layout) was read against the code. Static reading only:

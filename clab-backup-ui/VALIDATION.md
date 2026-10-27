@@ -1,3 +1,60 @@
+# Campaign 2: topology editing, vSRX, Load and Network Design on the Junos VMs, the documentation audit — 1.31.7
+
+Evidence is named by kind. Branch `claude/parity-campaign`; the ledger is `docs/parity-campaign/CAMPAIGN-2.md`, the
+per-image matrix `docs/parity-campaign/DEVICES.md`, the parity matrix `ACCEPTANCE.md`, the records under
+`docs/parity-campaign/evidence/` and `docs/maintenance-audit/reports/`.
+
+**Static and unit (this checkout).** `python3 deploy/verify-release.py` (runtime and documentation), `python3
+docs/maintenance-audit/tools/check_links.py`, `python3 docs/maintenance-audit/tools/check_external_links.py` (82 links:
+65 answer, 2 server errors at packages.ubuntu.com, placeholders and local hosts skipped), `git diff --check`,
+`node --check` on every page script, `claude plugin validate .claude/agents --strict`, `test_claude_config.py`,
+`test_claude_workflows.js`, `node build.mjs --check` (132 bundle files match). The full Python suite on the release tree:
+2988 tests, OK (2 skipped, the opt-in SSH fixtures); the full browser suite (`node --test tests/*.js`) passed;
+`test_release_consistency.py` and `test_claude_config.py` with the system Python passed. New test files, all in CI:
+`test_catalog.py`, `test_revise_deployed.py`, `test_topology_edit.py`, `test_student_guide.py`.
+
+**Fixture and browser.** `/clab-slice-verify` on the topology-editing slice (six workers that did not write it: the
+exact test commands, an Opus attacker over 19 acceptance checks, the fixture QA at 1440, 760 and 390 px): 16 of 19
+held and 9 breaks, every one fixed and re-tested (`docs/parity-campaign/TOPOLOGY-EDIT-DESIGN.md` §12.7);
+`docs/lab-builder/tools/student_workflow.py` 45 of 45 and `docs/redesign/tools/verify_after.py` 107 of 107 at three
+viewports on fresh fixtures; the 15 tour screenshots retaken on the fixture.
+
+**Live, on the development VM** (24 CPUs, 72 GB, nested KVM; containerlab 0.79.0; the manager rebuilt from the
+campaign commits through a clean worktree with the helpers reinstalled; the facts below were produced on the images
+built from `796892c` and `973668e`, which differ from this release by the fixes named in §12.7, the plan-limit
+wording, the guide route and the documentation):
+- Topology editing on `camp-topo` (two cEOS; a linux host and a vSRX added from the palette with their exact images;
+  a link endpoint changed and a link removed; stale revision refused; duplicate endpoint and missing device named;
+  a missing image fails only its device; an undeployed lab's save; two tabs; 390 px by keyboard): 12 of 12 steps
+  (`evidence/t07-live-topology-editing-2026-10-27.md`). Facts: a link change restarts cEOS in place (same container,
+  running configuration not written to startup lost) and recreates vSRX (new container, configuration lost); a linux
+  host's link changes without a restart.
+- vSRX `n24l/juniper_vsrx:23.2R2.21` (digest `fc9b9fa2…`, image id `384db297…`): boots in 2.5 min with the console on
+  port 5000 and a permanently unhealthy Docker health (`b03-vsrx-boot`); through the manager: Sync maps the kind, the
+  profile wins over the inventory login, backup with the `.jcfg` artifact, download `vSRX_vsrx_…cfg`, console not
+  offered, capture with 40 ICMP packets of a 20-ping exchange counted in the viewer and in the pcap (`a05-b06-vsrx`);
+  Load with the direct driver (`b04-vsrx-restore-driver`) and through the manager (`b04-phase2-manager-load`: B→A
+  `verified`, A onto A, back-to-back, reboot 162 s, the expired timer read back `rolled_back` only after the previous
+  configuration); Network Design (`b05-phase2-live-apply`: static route verified; OSPF and IS-IS applied passive on a
+  host link; packet mode without a reboot; MPLS refused by the device with security policies and, without them,
+  switches IPv4 to packet mode: hence the image limit).
+- vJunos-router on the nested derivative of `n24l/juniper_vjunos-router:26.2R1.7` (the published image cannot boot on
+  a VM host: an official containerlab limitation; every result on this kind is on the derivative and says so): Load
+  with the driver and through the manager (`verified`, reboot 923 s, a selected-device job, a mixed job with a foreign
+  EOS timer refused truthfully), Network Design (OSPF Full with vJunos-switch, loopbacks, static route, no-op, stale
+  removal, a manual conflict refused with 409).
+- The four other exact images: boot and SSH after the VM reboot (`b03`), impairment persistence across Restart,
+  Stop/Start and Redeploy on cEOS and XRv9k (`a04`: the device's own impairment never survives; a peer's does), the
+  C06 items read-only on `parity` (`a06`).
+- The student guide replayed end to end (Scenario A 11 of 11, Scenario B 9 of 9) on the live manager with two
+  private repositories under the owner's account; the PDF rebuilt (26 pages, SHA-256 in
+  `docs/student-quick-start/VALIDATION.md`); the Help entry's route and flag are unit-tested only
+  (`test_student_guide.py`): the live manager is rebuilt from this release after it is pushed.
+
+**Not run.** vJunos-router's exact published image (BLOCKED on this host; needs a bare-metal KVM host); the C08
+stage-ordering deploy; Git save of the vSRX lab (not bound to a repository); Firefox and 760 px of the live topology
+pass; the vSRX serial console through the manager (not offered by design); a human student with the guide.
+
 # Parity campaign, chunks C06, C08 and C09: Topology tab, builder checks, Help and preferences — 1.31.6
 
 Evidence by kind (this checkout on the owner's development VM; the `parity` lab). Three chunks in one release, each built, independently verified and fixed on its own branch (`claude/c06-int`, `wt-c08-s3`, `claude/c09-int`) before the merge.

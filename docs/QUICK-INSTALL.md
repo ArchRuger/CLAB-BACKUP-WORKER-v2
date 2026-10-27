@@ -73,7 +73,7 @@ these prompts are left:
 Add `--advanced` to the `install.sh` command to be asked those other questions instead
 ([INSTALL.md](INSTALL.md#what-the-full-installation-does)). The browser Wireshark phase runs
 without questions. Wait for
-`Manager 1.31.6: running; HTTP and version checks passed.` The image build and the
+`Manager 1.31.7: running; HTTP and version checks passed.` The image build and the
 capture stack take several minutes. The Git wizard of step 5 then starts by itself. If a step fails, read the error, fix it in a second
 terminal, then type `1` to retry (the default is `2`, return to the menu). A `not valid yet` APT error is the clock:
 redo step 2 in the second terminal, then retry.

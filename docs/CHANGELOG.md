@@ -4,6 +4,60 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.31.7
+
+Campaign 2 (2026-10-27), first release: the parity campaign's recorded gaps closed, vSRX as a managed kind with
+Load and Network Design, vJunos-router with Load and Network Design, topology editing from the Topology view, the
+documentation audit and the student guide regenerated. The ledger is `docs/parity-campaign/CAMPAIGN-2.md`.
+
+- **Edit topology… on the Topology tab.** The lab builder opens the lab's own file (`#path` and `#lab`): the bar names
+  the lab, offers *Back to lab*, says whether the lab runs, and the map comes from the manager's kept document so Edit
+  map and Arrange work survive a topology save. Devices come from one catalog (`GET /api/catalog`: seven entries with
+  their exact images, interface rules and capabilities; `BUILDER_TEMPLATES` is its offline copy); the YAML check
+  warns on a reserved cJunosEvolved port (`eth1` to `eth3`) and on a name outside the kind's scheme; Undo and Redo sit in
+  the bar; an old draft against a changed VM file asks (*Continue my draft* / *Start from the VM version*).
+- **Saving a running lab.** *Save changes to the VM…* no longer demands a destroy. On a lab with containers the review
+  names the running and stopped devices, the devices the new file no longer defines, and the devices whose definition
+  changed (recreated when applied, configuration lost unless saved), and says that applying is a separate, reviewed
+  step. The file and the map are replaced and the recovery copy kept; nothing deploys. The page then shows *Saved on
+  the VM · not applied* and *Back to lab and review changes…*, which opens the existing Apply review on the lab page.
+  The apply review and the pending-changes check print, under each restarted or recreated device, what containerlab
+  does to it (a link change restarts cEOS in place and loses running configuration not written to startup; it
+  recreates a kind without live link support, proven on vSRX, which loses its configuration) and *Back up these
+  devices first*. After a successful apply, deploy or redeploy the manager re-registers the lab's definition from the
+  VM file (deployment name, Hide from Home and the manager's map kept; new devices take their position from the file).
+- **Helper (`host_operations.py`, `revise`).** On a lab with containers the save runs only with `deployed: true`, binds
+  every container found by name or by topology path into the review digest (name and id), never runs a containerlab
+  command, and the unflagged refusal reads "This lab has running devices. Reopen the lab in the manager and save
+  again." Capabilities report `revise.deployed`. The map revision the page opened is checked at preview and again at
+  confirm.
+- **vSRX (`juniper_vsrx`, `n24l/juniper_vsrx:23.2R2.21`).** Registry, aliases `vr-vsrx` and `vsrx`, the official default
+  login (containerlab.dev, checked 2026-10-27), download name `vSRX`, `ge/xe/et-0/0/N` = `eth(N+1)`, the builder
+  template, Load through the Junos driver (proven live on the exact image, direct and through the manager, with the
+  expired-timer read-back), Network Design through netlab's `vsrx` profile (the static route verified on the image,
+  the rest generated and not live-tested; the design writes no security zone; the MPLS family is refused by an image
+  limit because netlab's packet-mode line turns the firewall off). The serial console is not offered for this kind.
+- **vJunos-router.** Load through the Junos driver and Network Design through netlab's `vjunos-router` profile (OSPF,
+  loopbacks and static routes verified), both proven on a nested derivative of the published image: the published
+  image cannot boot on a VM host, an official containerlab limitation, and stays BLOCKED on this development VM.
+- **The student quick start** is served by the manager again: `start-manager.sh` copies the PDF into the data
+  directory's `guide/` folder, `GET /student-guide` serves it, and the Help group's entry shows while it is there. The
+  guide itself was replayed on the current manager and regenerated (26 pages) for the lab header's save chip, Save
+  and Load and the builder's Save to the VM.
+- **Link state.** A failed Docker call during the lab binding is a retried 409, never "the lab is not running" for
+  good; a stale discovery pauses the chip and keeps the colours.
+- **Builder YAML check wording.** The wait-for loop, self-wait and unknown-target errors say the deploy cannot finish
+  (containerlab accepts them and may hang) instead of claiming a refusal.
+- **Shortcuts dialog.** Find's Enter and Escape; the builder's undo and redo keys.
+- **Smaller fixes** from the independent reviews of 1.31.6: the link-state chip keeps its buttons and focus across
+  polls, an Arrange error after the dialog closed is shown, the YAML panel's count is no longer a live region and
+  closing the panel returns focus, the builder's entry has one name everywhere (*Edit topology…*), the catalog's cEOS
+  first data port is `Ethernet1`.
+- **Documentation.** Install, Git, overview, architecture, capture, device-features, Network Design and lab-operations
+  guides matched to the code (reports under `docs/maintenance-audit/reports/`); the 19 user-guide screenshots
+  retaken; a documentation inventory tool and an external-link checker; the `vm-local/` snapshot marked historical;
+  the parity acceptance matrix, the per-image matrix and the campaign ledger under `docs/parity-campaign/`.
+
 ## Changes in 1.31.6
 
 **Parity campaign, chunks C06 (Topology tab parity), C08 (builder YAML checks) and C09 (Help, shortcuts, Home filter, browser preferences)** ([LAB-OPERATIONS](LAB-OPERATIONS.md), [MAP-PARITY](ui-review-001/MAP-PARITY.md), [LAB-BUILDER](LAB-BUILDER.md), [TOUR](TOUR.md)).

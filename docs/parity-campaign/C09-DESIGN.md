@@ -736,3 +736,7 @@ of S0 was deferred; campaign 2's D10 regenerates the guide from its sources and 
 and its test in the same release. **A07** (the stale device-menu order in `verify_after.py`, §10) is a campaign 2
 chunk. The reviewer answers VALIDATION cites as "C09-DESIGN §11" are the §9/§10 sections above (the cite was off by
 one; this section is the campaign 2 review).
+
+Update (1.31.7): the backend half of S0 shipped with campaign 2's D10: `GET /student-guide` serves the PDF from the data
+directory's `guide/` folder (copied by `start-manager.sh`), `student_guide` in the state shows the Help entry, and the
+guide itself was replayed and regenerated (`docs/student-quick-start/VALIDATION.md`).

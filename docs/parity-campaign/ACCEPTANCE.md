@@ -224,3 +224,7 @@ Evidence inconsistencies found while building this file:
   packet mode and so turns the firewall off: refused by an image limit from this campaign). Open point found: after a
   Load the design ownership ledger still claims statements no longer on the device until the next apply (pre-existing
   behaviour, recorded for the saving/design streams).
+- 2026-10-27 D10: the student guide replayed on the live manager (Scenario A 11 of 11, Scenario B 9 of 9), regenerated
+  (26 pages), and served again by the manager (`/student-guide`, the Help entry; C09 §9 rows 0–1 and §11 closed).
+- 2026-10-27 T07: topology editing proven live on `camp-topo` (12 of 12); the per-kind reconcile facts are in the apply
+  plan; the fixture verification's nine breaks fixed (TOPOLOGY-EDIT-DESIGN §12.7); release 1.31.7.
