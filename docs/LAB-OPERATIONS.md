@@ -31,7 +31,7 @@ actions — **Start lab** (or *Start stopped devices*), **Stop devices**, **Rest
 devices…**, **Redeploy lab…**, **Destroy lab…** — and **All lab operations…** opens the
 complete list in three groups: *Deployment*, *Lab tools* and *Danger*. **Advanced options**
 at the bottom of the menu unfolds in place (click, Enter or ArrowRight) and holds **Import map…**,
-**Edit map**, **Operation history…** and, only while the lab still records configuration lines the
+**Edit map**, **Edit topology…**, **Operation history…** and, only while the lab still records configuration lines the
 retired telemetry feature added, **Retired telemetry configuration…** (see [TELEMETRY.md](TELEMETRY.md)). A disabled item
 says why underneath it (the VM is not connected, the lab is not running, another
 operation is running, the lab has no topology file on the VM). The **Manager ▾** menu in
@@ -44,7 +44,7 @@ containerlab documentation, which open in a new tab) and **Diagnostics**. See
 | Action | Behaviour |
 |---|---|
 | Start lab / Deploy lab, Redeploy lab, Destroy lab | Operate on the original VM topology. Destroy runs `containerlab destroy --cleanup` (whenever the installed containerlab offers `--cleanup`; there is no variant without it), so the containers and the generated lab folder (`clab-<name>`) go together and the next deploy starts clean; the review names the folder under *Technical details* before you confirm. Redeploy keeps that folder unless you choose *Redeploy and clear the lab folder…* (*Redeploy lab and clear the lab folder…* under All lab operations…), and falls back to destroy then deploy when necessary. |
-| Apply topology changes | Applies the original VM YAML to the running lab when the installed containerlab supports it. |
+| Apply topology changes… | Applies the topology file on the VM to the running lab when the installed containerlab supports it. The review is made from a fresh dry run and lists what will happen device by device, with the limits that matter (see *Apply topology changes* below). |
 | Start / Stop / Restart all devices | Every device of the lab. Stop keeps the containers; Destroy removes them. *Restart all devices…* is containerlab's lab-wide restart (every container stops and starts with its links kept); one device is *Restart device…* below. |
 | Restart device… (one device: right-click it on the map, or *Details* in the Devices view) | containerlab's node-scoped restart of that one device (`containerlab restart --node <device>`, the operation the Containerlab VS Code extension's *Restart node* runs): the container stops and starts again with its links kept, so neighbours keep their wiring; a stopped device takes the start/restore path. The review names the device and the lab, warns that its CLI sessions and traffic through it drop and that neighbours lose their adjacencies to it, and lists that one device as affected. Nothing is saved, backed up, reset or reapplied; the device reads *Restarting*, then *Starting* until it accepts a login again (a login refused in the fifteen minutes after a restart, start or deploy the manager performed still reads *Starting*: IOS XR answers SSH before it accepts logins). A device stopped with `docker stop` outside containerlab has already lost its links; the job says how many links were restored. When a neighbour's container is not running, the review names it and says what follows: a neighbour stopped by the manager, the extension or `containerlab stop` keeps its link ends parked and the link comes back; one that exited on its own or was stopped with `docker stop` took the link with it, the job then reports *n of m links restored* with the neighbour named, and the device waits for all its interfaces before it boots (containerlab tells the image how many to expect: cEOS gives up waiting after five minutes, a VM-based image waits for good). Start the neighbour first, or redeploy the lab. Known limits, each named in the review before the student confirms: a vJunos-switch container cannot be started a second time (its launcher fails without the `init.conf` it renamed on the first start), so its restart is reported as failed by the job, with *Redeploy lab* as the way out; an XRv9k container's launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (back up first, then *Replace running configuration*). |
 | Show running devices, Running labs on the VM | A readable table (topology, lab, device, type/image, state/health, IPv4/IPv6) in the operation window. Failed or incomplete output stays visible for diagnosis. |
@@ -52,18 +52,18 @@ containerlab documentation, which open in a new tab) and **Diagnostics**. See
 | Open all CLIs ↗ | A launcher page with one row per device (state pill, Open CLI ↗) and *Open all ready CLIs*. Allow pop-ups; at most 32 CLIs at once. |
 | Add to / Remove from favourites | Sorts the lab first under *All labs* on Home; *Recent labs* is ordered by the last successful deploy or redeploy this manager ran, and nothing else (visits, saves and favourites do not reorder it). |
 | Hide from Home / Show on Home | Takes the lab's card off Home (both tabs) and nothing else: the lab stays in My labs with its devices, backups, backup history, saved progress and Git binding; nothing on the VM changes, a running lab keeps running, and the background discovery never puts the card back by itself. Home says how many labs are hidden. Two ways back: **Choose a file on the lab VM…** › the lab's topology › *Add to My labs without starting* or *Deploy lab* (the same lab, not a second workspace), or **Manager ▾ › Labs found on the VM…** › *Hidden from Home* › **Show on Home**. This is not *Remove from this manager* (Advanced › Danger zone), which forgets the workspace. |
-| Edit map | Move devices and notes, add text, boxes, circles, lines and groups, style, undo and redo, save and export the map as JSON or draw.io; never changes devices, links or the topology file (see *The map and its editor*). |
+| Edit map | Positions and drawing, kept in the manager: move devices and notes, add text, boxes, circles, lines and groups, style, undo and redo, save and export the map as JSON or draw.io; never changes devices, links or the topology file (see *The map and its editor*). Devices and links are *Edit topology…* below. |
 | Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the file is deployed, also when it is deployed under another lab name (found by its topology path). |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
 | Lab files (Lab actions ▾, and the Advanced tab) | The same dialog opened for one lab, titled *Lab files · <lab>*. On a VM whose helper reports `diagnostics` it is in *files mode*: every listing it makes (the first, a folder you expand, **Up one folder**, **All lab folders**) also shows the text and configuration files the manager can read (`.yaml`, `.yml`, `.json`, `.drawio`, `.txt`, `.cfg`, `.conf`, `.set`, `.md`, and the containerlab files named `startup-config` and `juniper.conf`) with their sizes, topology files first, so a device's startup configuration under `clab-<lab>/<device>/` is reachable. A topology file opens as before; any other file opens a read-only *File on the VM* viewer that hides lines with passwords, secrets or SNMP communities, says so, and shows at most the last 512 KiB of a longer file (**Copy** when the browser can copy). Keys, certificates, `.env` files and binaries are never listed. Without the flag (an older helper) the dialog is the topology browser above. |
 | Upload a file from this computer… (Home › Deploy, and the link in the topology browser) | For a topology file that is on your computer: the browser reads it, the manager checks that it is a topology it can read, you see the text and where it will be written, **Create file on the VM…** runs as a reviewed operation, and **Deploy or add this lab…** continues as for any file on the VM. Only that one file is uploaded (up to 1 MiB); files it refers to must be on the VM. A copied lab's saved map (`<topology>.annotations.json`, up to 1 MiB) can be added at the same time so devices keep their positions; it travels through the same review and is written beside the topology under its own name regardless of what the file on your computer was called, with a notice when that name differs and, if a map file is already there, a "Replaces the existing map file" notice in the review. |
-| Build a lab visually… / Edit topology… | Opens the [lab builder](LAB-BUILDER.md): draw devices and links, then save the lab folder to the VM through a review. *Edit topology…* (in the topology file dialog, the Topology tab's map tools beside *Edit map*, Lab actions ▾ › Advanced options and the Tools › Map card) opens an existing topology file; saving again keeps a copy of the previous version, and on a running lab it changes the file and the map only: applying the changes is a separate, reviewed step (*Lab actions ▾ › Apply topology changes…*). Opened from the topology file dialog, the builder's **← My labs** link and the browser Back button return to that same dialog (read fresh from the VM); opening it directly from the Build card returns to My labs as usual. |
+| Build a lab visually… / Edit topology… | Opens the [lab builder](LAB-BUILDER.md): draw devices and links, then save the lab folder to the VM through a review. *Edit topology…* (devices and links, saved to the lab file on the VM; in the topology file dialog, the Topology tab's map tools beside *Edit map*, Lab actions ▾ › Advanced options and the Tools › Map card) opens an existing topology file; saving again keeps a copy of the previous version, and on a running lab it changes the file and the map only: applying the changes is a separate, reviewed step (*Lab actions ▾ › Apply topology changes…*). See *Edit topology: devices and links* below for the entry's conditions, the deployed save and what applying does to each kind. Opened from the topology file dialog, the builder's **← My labs** link and the browser Back button return to that same dialog (read fresh from the VM); opening it directly from the Build card returns to My labs as usual. |
 | Write a new topology… | Creates a new topology file on the VM after a structure preview and confirmation; never replaces an existing file. |
 | Add to My labs without starting / Deploy lab | Read an existing file and add the lab to My labs without deploying, or deploy it: *Deploy lab* saves the workspace (devices, map, VM source path) first and then reviews the containerlab command, so the lab is in My labs at once and nothing needs importing afterwards. |
 | Preview topology (in the topology file dialog) | Draws the file as the Topology tab will: devices where the map file beside it (or the map file uploaded with it) puts them, with their icons and label positions, links with their interface names kept clear of the device labels. A preview is a file, not a lab: no device is a button and none is called *Not in this lab*; a device the map file names but the topology does not is captioned *Not in the topology file*. |
 | Download a lab from GitHub… / Browse popular labs… | Optional HTTPS download into the VM's lab folder, followed by a review of the files and a separate deployment. |
 
-Removed in earlier releases: editing existing VM YAML as text (the lab builder's reviewed *Save changes to the VM…* is the only way the manager replaces a topology file, and only for a lab that is not deployed), copy topology path, manual
+Removed in earlier releases: editing existing VM YAML as text (the lab builder's reviewed *Save changes to the VM…* is the only way the manager replaces a topology file; on a lab that has devices on the VM it changes the file and the map layout only and never deploys, restarts or removes anything), copy topology path, manual
 Select/link VM project shortcut, Open VM folder lab shortcut, separate Edit
 layout, horizontal/vertical diagram exports, SSHX/GoTTY and SR Linux fcli. These
 commands are rejected by the current manager and installed helper (`layout=horizontal` and `layout=vertical`
@@ -101,6 +101,36 @@ something to read, such as *Show running devices*. The same banner also carries 
 notices that are not tied to one operation, such as configuration lines the retired
 telemetry feature left on a device, with a **Review and remove…** action (see
 [TELEMETRY.md](TELEMETRY.md)).
+
+**Apply topology changes.** The review (*Lab actions ▾ › Apply topology changes…*, or the notice's **Review
+changes…**) asks containerlab for a dry run and shows the plan: devices to create, start, restart, recreate and
+remove, links to connect and link ends to disconnect, each recreate or restart with containerlab's reason. The
+plan is part of what you confirm: a lab that changed between the review and the run is refused and reviewed again.
+containerlab reconciles the running lab with the file, and what it does to a running device depends on its kind
+(measured with containerlab 0.79; the review prints the sentence under the device's row):
+
+- A **linux** host's link changes without a restart.
+- A **cEOS** is restarted in place when a link is added or removed (same container, about two seconds): the running
+  configuration that was not written to the startup configuration is lost, the startup configuration is kept
+  (*write memory*, or **Save** in the lab header, first).
+- A kind that declares no live link support (**vSRX** proven; the other virtual-machine kinds are expected to
+  behave the same) is recreated: containerlab builds a new container, it boots from its image and its
+  configuration is lost. A recreated device (changed image, kind, environment or startup configuration, too)
+  loses the configuration that was not saved the same way, and the neighbours of a changed link may be
+  recreated with it.
+- A device that is removed loses its configuration with its container.
+
+When any listed device loses its configuration, the review begins with **Back up these devices first**, naming
+them (the lab header's **Save**, or **Back up configuration**, keeps it). Nothing in the review is a backup: it
+only tells you. If the installed containerlab has no dry run, the review says the command runs without a plan.
+When an apply, a deploy or a redeploy succeeds, the manager reads the topology file from the VM and updates the
+lab it shows (devices, the map for new devices, saved settings and the deployment name stay); a map you changed
+in the manager is kept.
+
+The pending-changes notice (the lab banner's *The topology file differs from the running lab* and the line
+*Differs from the running lab* in Advanced › Deployment details) is the same dry run on demand, one line of what
+would change (*r3 to create · 1 link to connect*) and **Review changes…**. It prints no limit sentences: those
+(and **Back up these devices first**) appear in the review it opens.
 
 ## Diagnostics: logs, interfaces, inspect and images
 
@@ -168,8 +198,8 @@ served yet: the item stays hidden until the guide is revised for the current man
 keys the manager's pages bind: the menus (ArrowDown, ArrowUp, Home, End, ArrowRight and ArrowLeft for
 groups, Escape, Tab), the tabs and lists, Shift+F10 or the Menu key for a lab's or device's menu, the
 topology map, the Save and Load panels, the folder chooser, the terminal page (Alt+ArrowUp,
-Alt+ArrowDown, Alt+0, Alt+T, Ctrl+Insert), undo and redo on the Edit map page and the lab builder's
-YAML panel. It lists only keys that exist, and everything in it can also be done with the mouse.
+Alt+ArrowDown, Alt+0, Alt+T, Ctrl+Insert), Enter and Escape in the map's Find field, undo and redo on the
+Edit map page and in the lab builder's drawing, and the lab builder's YAML panel (Ctrl+Enter, Escape). It lists only keys that exist, and everything in it can also be done with the mouse.
 There is deliberately no `?` key to open it: `?` is a character in every text field, and its position
 differs between keyboard layouts.
 
@@ -277,6 +307,37 @@ else, you open another lab or reload the page, or the manager restarted, it is r
 default grid (two devices or more) says *Devices sit on the default grid.* under the map, with a button that
 opens the same dialog.
 
+**Edit topology: devices and links.** *Edit map* and *Edit topology…* sit side by side in the Topology tab's
+map tools, and are named by what they change. *Edit map* changes positions and the drawing and keeps them in the
+manager. *Edit topology…* opens the lab builder on the lab's own topology file: add devices, connect them, change
+or delete links, and save the lab file on the VM through a review ([lab builder](LAB-BUILDER.md)); nothing
+reaches the running devices until you apply the changes as a separate step. The entry has three places that
+mirror each other, the button beside *Edit map*, **Lab actions ▾ › Advanced options › Edit topology…** and the
+Tools › Map card (at phone width the map's buttons are in **More ▾**). When it is unavailable the reason is
+shown where you are: under the menu item, under the Tools card and as the button's tooltip. The reasons are:
+the lab has no topology file on the VM; the VM is not connected; the VM helpers are older than the manager
+(refresh them, see Diagnostics); another operation is running (*Wait for the current operation to finish*); the
+lab status is unknown (refresh the lab list); the topology file is outside the folders the manager may edit.
+A lab imported from an inventory has no VM file and keeps only the simpler *Edit map* dialog.
+
+*Saving a lab that has devices on the VM.* The save review shows the difference against the file on the VM, the
+images, and the manager's own sentences, from the file and the devices as they are now: how many devices are
+running and how many are stopped; *Running devices the new file does not define* (they keep running until the
+changes are applied; applying removes them and their unsaved configuration); *Devices whose definition changed*
+with what changed (kind, image, environment, startup configuration; a device the file renames is listed there
+as *renamed to*; applying recreates them, and configuration not saved is lost then; **Save** in the lab header
+first keeps it); that saving replaces the topology file and the map layout only and the devices are not
+changed; that applying is a separate, reviewed step; and, on a containerlab with no dry run, that it cannot show
+what applying will change. The review is bound to the devices it listed: if one stops, starts or is recreated
+before you confirm, the run is refused and the review is made again. A save never deploys, restarts, recreates
+or removes anything, and until you apply, the lab, its Devices tab and its map keep showing what runs.
+Afterwards the save's dialog says *Saved to the VM. The running lab is unchanged until you apply the changes*,
+and the builder's status reads **Saved on the VM · not applied** while the running lab differs from the file.
+**Back to lab and review changes…** (under the builder's bar, and in the save's dialog) opens the lab's
+Topology tab with the apply review already open, with the same safeguards as *Apply topology changes…* (the
+last-save line, **Save first**, the re-check after the job). Lab state, the plan and the map are read again
+after the save; a map you changed with *Edit map* survives an *Edit topology…* session.
+
 **Link state on the map.** On a VM whose helper reports `link_state` (containerlab 0.64 or later), the Topology tab asks the VM every ten
 seconds which container links are up, while the lab is *Running* or *Partially running*, the Topology tab is
 shown, the browser tab is visible and the device panel is closed (opening the panel stops it; closing the panel
@@ -318,17 +379,17 @@ The exported `.drawio` is uncompressed editable XML, following the
 Open it in diagrams.net or its desktop application. No external service is used
 for export. Live CLI and backup actions stay in Node Manager and are not embedded in
 the exported file. This is the manager's layout editor, not an embedded copy of
-the full diagrams.net application. Structural topology changes are made in the
-original VM YAML and imported/synced separately.
+the full diagrams.net application. Structural topology changes are made with *Edit topology…*
+(saved to the original VM YAML, then applied) and imported/synced separately.
 
 The map's **More ▾** menu (also in the expanded map) offers **Import map…**, **Download picture…**,
 **Export to draw.io…**, **Arrange devices…**, **Open all CLIs ↗** and **Back up all configurations**; the three
 new items are disabled with the reason *No map yet* while a lab has no map. Back up all covers every device that can be backed up
 now, including devices not selected for scheduled backups. When every device is ready it
 starts at once; when some cannot be backed up, or a job is already running, it first lists
-the devices it will skip and why, and you confirm with **Back up N devices**. Right-click a device on the map for Open CLI, Console ↗ (the three kinds above; disabled with the reason while
-the console cannot open), Capture traffic, Back
-up configuration, Restart device… and Device details. Right-click a link for Capture both ends or one end
+the devices it will skip and why, and you confirm with **Back up N devices**. Right-click a device on the map for Open CLI, Console ↗ (the three kinds above, offered only for them; disabled with the reason while
+the console cannot open), Capture traffic…, Back up configuration, Restart device…, Stop device… and Start device… (the one that does
+not fit the device's state is disabled with the reason) and Device details. Right-click a link for Capture both ends or one end
 (a click on the link opens the capture dialog with both ends ticked, one Wireshark each); the Tools tab's
 Packet capture card says how many Wireshark sessions run from this browser and offers End all my sessions
 ([CAPTURE.md](CAPTURE.md)).

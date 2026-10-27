@@ -93,7 +93,7 @@ this load** puts the backup from before the load back. Load never changes the to
 ![The Load confirmation for the state Solution: a tick box for each device with 1 line differs, Already matches, Not reachable and why, or Not in this state, then Load, Cancel and See what’s different](images/ui/36-load-confirmation.png)
 
 **Tools.** Packet capture and the manager's own configuration backups, with *Open all
-CLIs* and *Edit map* (which also downloads the map file) under *More tools*. The Topology
+CLIs*, *Edit map* (positions and drawing; it also downloads the map file) and *Edit topology…* (devices and links, saved to the lab file on the VM; applying them is a separate, reviewed step) under *More tools*. The Topology
 tab's **More ▾** menu has *Download picture…* and *Export to draw.io…*. See
 [Browser Wireshark](CAPTURE.md) for capturing one interface, a whole device or both ends of a link.
 
@@ -110,7 +110,7 @@ list of lab operations, technical details, the danger zone and the *Experimental
 ## Every lab operation is reviewed before it runs
 
 **Lab actions ▾** starts, stops, restarts, redeploys and destroys the lab; its *Advanced
-options* group holds *Import map…*, *Edit map* and *Operation history…*. The review
+options* group holds *Import map…*, *Edit map*, *Edit topology…* and *Operation history…*. The review
 names the action, says what happens to the devices, warns that unsaved configuration
 changes are lost, shows when the lab was last saved (*Last saved 3 min ago.*, or in red *Never saved.*) and
 offers **Save first**; the exact containerlab command sits under *Technical
