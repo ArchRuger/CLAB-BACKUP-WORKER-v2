@@ -225,7 +225,9 @@ class Runner:
         no longer matches the stored document (or has none) and is `placed`; a document a person wrote (Edit map,
         an uploaded map) carries `map_written_at` equal to the sync stamp still in effect, while a sync overwrites
         the stamp right after it wrote the document (layout.keep_document). A lab without the marker (stored
-        before it existed, or placed from the VM by discovery) counts as unchanged: the VM file wins, as before."""
+        before it existed, or placed from the VM by discovery) counts as unchanged: the VM file wins, as before.
+        Every path that places the map from a file (Sync from VM, discovery, `POST /api/lab-definitions`, the
+        re-registration from the VM's map file after an apply) removes the marker (campaign 2, T04-fix)."""
         from .layout import revision
         from .topology import unplaced
         drawing=lab.get('drawing')

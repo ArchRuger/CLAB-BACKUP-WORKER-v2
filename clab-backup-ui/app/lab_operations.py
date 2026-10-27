@@ -892,7 +892,10 @@ class LabOperations:
                                         'lab_id': data.lab_id, 'expires': time.monotonic() + 300,
                                         'node': node_name, 'node_label': node_label, 'stamp': review_stamp,
                                         'links_expected': links_expected, 'neighbours_down': neighbours_down, 'neighbours_absent': neighbours_absent,
-                                        'nodes': chosen_nodes}
+                                        'nodes': chosen_nodes,
+                                        # The map revision the page opened (A19): checked again at confirm, so a map changed
+                                        # in the manager between this review and the confirmation is never saved over.
+                                        'map_revision': data.map_revision if lab else None}
             if node_name:
                 if len(result.get('affected', [])) != 1 or result['affected'][0].get('name') != options['container']:
                     raise HTTPException(409, 'The helper did not bind the restart to exactly this device. Review again.')
@@ -910,6 +913,11 @@ class LabOperations:
                 if not preview or preview['expires'] < time.monotonic(): raise HTTPException(409, 'Review expired; preview the operation again.')
                 if preview['revision'] != self.store.state.get('host', {}).get('revision'): raise HTTPException(409, 'VM changed. Preview again.')
                 if preview['lab_id'] and not self.store.lab(preview['lab_id']): raise HTTPException(409, 'Saved lab was removed. Preview again.')
+                if preview.get('map_revision') is not None:
+                    # Edit topology's save (A19): the map the review carried must still be the lab's map now, under the same
+                    # lock every map writer takes; otherwise the same refusal as the preview's, and no job.
+                    drawing = self.store.lab(preview['lab_id']).get('drawing')
+                    if preview['map_revision'] != (revision(drawing) if drawing else ''): raise HTTPException(409, MAP_CHANGED_SENTENCE)
                 if preview.get('node'):
                     # Restart device: the consent was for one device of one deployment. The device must
                     # still be that node of the lab, and no lifecycle operation may have run on the lab
@@ -1246,8 +1254,9 @@ class LabOperations:
         ran and the map file beside it, read through the helper's read mode (TOPOLOGY-EDIT-DESIGN A1, R2, R12, R20). The nodes
         follow the file; `deployment_name` (else `name`, the one the job deployed under), Hide from Home and the saved node settings are kept. The map: the VM's map file
         when it has one, unless a person changed the map in the manager since the last sync (then the manager's own map
-        document is read against the new file, so positions placed here are kept and the file's devices still appear).
-        Returns '' or the job's note; never raises, never fails the job."""
+        document is read against the new file, so positions placed here are kept and the file's devices still appear;
+        a device the manager's document lacks takes its entry from the VM's map file, where the builder's save placed it:
+        discovery.merge_map, A18). Returns '' or the job's note; never raises, never fails the job."""
         from .runner import Runner
         from .topology import unplaced
         unread = ('The lab ran, but the manager could not read its topology file on the VM afterwards, so My labs still shows the '
@@ -1272,12 +1281,15 @@ class LabOperations:
             # The VM's map file wins unless a person changed the map here since the last sync; without either, the manager's
             # own map is read against the new file, so the file's devices appear and every position stays where it was.
             use_ours = drawn and (vm_map is None or Runner.map_changed_in_manager(lab))
-            document = map_document(lab) if use_ours else vm_map
+            ours = map_document(lab) if use_ours else None
+            document = ours if use_ours else vm_map
             was_unplaced = use_ours and unplaced(lab['drawing'])
             deployment = lab.get('deployment_name') or name
             before = copy.deepcopy(lab)
             try:
-                try: register_definition(self.store.state, lab, text.encode(), document.encode() if document else None, deployment)
+                try:
+                    if use_ours and ours: register_definition(self.store.state, lab, text.encode(), vm_map.encode() if vm_map else None, deployment, kept=ours.encode())
+                    else: register_definition(self.store.state, lab, text.encode(), document.encode() if document else None, deployment)
                 except (ValueError, TypeError, AttributeError, KeyError, RecursionError):
                     if not document: raise
                     # The map did not fit the new file: the nodes alone, the map kept as it was.

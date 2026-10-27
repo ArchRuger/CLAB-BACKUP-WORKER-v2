@@ -20,6 +20,7 @@ from app.lab_operations import (RECREATE_LIMIT, RESTART_KNOWN_LIMITS, RESTART_UN
                                 annotate_plan, deployed_save_warnings, plan_limits)
 from app.layout import revision
 from app.main import create_app
+from app.runner import Runner
 
 PATH = '/etc/containerlab/training/training.clab.yml'
 OLD = '''name: training
@@ -293,6 +294,95 @@ class TopologyEditTests(unittest.TestCase):
         del self.read_errors[PATH + '.annotations.json']   # an absent map file is not a problem: no note
         self.files[PATH] = OLD
         self.assertNotIn('note', self.execute(self.post(action='apply', lab_id=self.lab_id).json()['token']))
+
+    # 7. The map after Apply: the VM file's devices merged into a kept manager map (A18), the marker of a registration (A18).
+    def placed(self, names=('r1', 'r2', 'r3', 'sw1', 'gone', 'old')):
+        """Register the lab again from a file with a placed map, as the builder's undeployed save does."""
+        ann = json.dumps({'nodeAnnotations': [{'id': n, 'position': {'x': 10 + i * 100, 'y': 10}} for i, n in enumerate(names)]})
+        response = self.client.post('/api/lab-definitions', headers=self.auth, data={'lab_id': self.lab_id},
+                                    files={'definition': ('training.clab.yml', OLD.encode(), 'application/yaml'),
+                                           'annotations': ('training.clab.yml.annotations.json', ann.encode(), 'application/json')})
+        self.assertEqual(response.status_code, 200, response.text)
+
+    def apply_new(self, vm_map):
+        self.files[PATH] = NEW; self.files[PATH + '.annotations.json'] = vm_map
+        self.plan = {'deploys_lab': False, 'added': ['new'], 'removed': ['gone', 'old'], 'recreated': [], 'started': [], 'restarted': [], 'links_added': [], 'endpoints_removed': [], 'reasons': {}}
+        job = self.execute(self.post(action='apply', lab_id=self.lab_id).json()['token'])
+        self.assertEqual(job['status'], 'succeeded', job); self.assertNotIn('note', job)
+        lab = self.store.lab(self.lab_id)
+        return lab, {n['id']: (n['x'], n['y']) for n in lab['drawing']['nodes']}
+
+    def test_a_map_registered_from_a_file_is_the_vm_map_so_the_vm_map_file_wins_after_apply(self):
+        self.placed()
+        lab = self.store.lab(self.lab_id)
+        self.assertNotIn('synced_at', lab.get('vm_source') or {})
+        self.assertNotIn('map_written_at', lab, 'placed from a file, not by a person')
+        self.assertFalse(Runner.map_changed_in_manager(lab), "never changed by the accident of '' == ''")
+        # The builder's deployed save wrote the manager's map plus the new device beside the new file.
+        vm_map = json.dumps({'nodeAnnotations': [{'id': n, 'position': {'x': 10 + i * 100, 'y': 10}} for i, n in enumerate(('r1', 'r2', 'r3', 'sw1'))]
+                            + [{'id': 'new', 'position': {'x': 777, 'y': 333}}]})
+        lab, drawn = self.apply_new(vm_map)
+        self.assertEqual((drawn['r1'], drawn['new']), ((10, 10), (777, 333)))
+        self.assertEqual(lab['annotations'], vm_map)
+        self.assertNotIn('map_written_at', lab, 'the map after Apply is the VM file again'); self.assertFalse(Runner.map_changed_in_manager(lab))
+
+    def test_a_map_changed_in_the_manager_keeps_its_positions_and_takes_the_new_devices_from_the_vm_file(self):
+        self.placed()
+        response = self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {'r1': [11, 22]}})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(Runner.map_changed_in_manager(self.store.lab(self.lab_id)))
+        vm_map = json.dumps({'nodeAnnotations': [{'id': 'r1', 'position': {'x': 999, 'y': 999}}, {'id': 'r2', 'position': {'x': 998, 'y': 998}},
+                                                 {'id': 'new', 'position': {'x': 300, 'y': 70}, 'icon': 'client', 'iconColor': '#123456'}]})
+        lab, drawn = self.apply_new(vm_map)
+        self.assertEqual((drawn['r1'], drawn['r2'], drawn['r3']), ((11, 22), (110, 10), (210, 10)), "the manager's entries win for its devices")
+        self.assertEqual(drawn['new'], (300, 70), 'the device new in the file takes its VM position')
+        new = next(n for n in lab['drawing']['nodes'] if n['id'] == 'new')
+        self.assertEqual((new['icon'], new['iconColor']), ('client', '#123456'), 'and its look')
+        document = json.loads(lab['annotations'])
+        self.assertEqual([r['id'] for r in document['nodeAnnotations']].count('new'), 1)
+        self.assertEqual(lab['annotations_for'], revision(lab['drawing']), 'kept through keep_document, the drawing read from it')
+        self.assertTrue(Runner.map_changed_in_manager(lab), "still the person's map")
+
+    def test_an_old_empty_marker_without_a_sync_still_keeps_the_manager_map_and_merges(self):
+        # A lab stored before registration dropped the marker: ambiguous, so the person's map is kept (and merged).
+        self.placed()
+        with self.store.lock: self.store.lab(self.lab_id)['map_written_at'] = ''; self.store.save()
+        self.assertTrue(Runner.map_changed_in_manager(self.store.lab(self.lab_id)))
+        _, drawn = self.apply_new(json.dumps({'nodeAnnotations': [{'id': 'r1', 'position': {'x': 999, 'y': 999}}, {'id': 'new', 'position': {'x': 5, 'y': 6}}]}))
+        self.assertEqual((drawn['r1'], drawn['new']), ((10, 10), (5, 6)))
+
+    def test_a_device_the_vm_map_file_lacks_takes_nothing_extra(self):
+        self.placed()
+        self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {'r1': [11, 22]}})
+        kept = self.client.get('/api/labs/' + self.lab_id + '/map-document', headers=self.auth).json()
+        vm_map = json.dumps({'nodeAnnotations': [{'id': 'r1', 'position': {'x': 999, 'y': 999}}, {'id': 'ghost', 'position': {'x': 5, 'y': 5}}],
+                             'freeTextAnnotations': [{'id': 't1', 'text': 'from the VM', 'position': {'x': 1, 'y': 1}}]})
+        lab, drawn = self.apply_new(vm_map)
+        self.assertEqual(drawn['r1'], (11, 22)); self.assertIn('new', drawn, 'the new device is on the map, at the default place')
+        self.assertNotIn('ghost', drawn, 'a VM entry for a device the file does not define is not taken')
+        self.assertEqual(lab['annotations'], kept['annotations'], "nothing to add: the manager's document text for text")
+        document = json.loads(lab['annotations'])
+        self.assertFalse({'new', 'ghost'} & {r['id'] for r in document['nodeAnnotations']}, 'no entry invented or taken')
+        self.assertFalse(document.get('freeTextAnnotations'), "the VM file's texts are not taken")
+
+    # 8. The map revision again at confirm (A19).
+    def test_a_map_changed_between_review_and_confirm_refuses_the_confirm_and_creates_no_job(self):
+        self.deployed()
+        current = self.client.get('/api/labs/' + self.lab_id + '/map-document', headers=self.auth).json()['revision']
+        token = self.revise(lab_id=self.lab_id, map_revision=current, options={'deployed': True}).json()['token']
+        response = self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {'r1': [11, 22]}})
+        self.assertEqual(response.status_code, 200, response.text)
+        jobs = len(self.store.state['operations'])
+        with patch.object(self.operations.pool, 'submit') as submit:
+            refused = self.client.post('/api/operations/confirm', headers=self.auth, json={'token': token})
+        self.assertEqual((refused.status_code, refused.json()['detail']), (409, MAP_CHANGED_SENTENCE))
+        submit.assert_not_called(); self.assertEqual(len(self.store.state['operations']), jobs); self.assertEqual(self.files[PATH], OLD)
+        current = self.client.get('/api/labs/' + self.lab_id + '/map-document', headers=self.auth).json()['revision']
+        job = self.execute(self.revise(lab_id=self.lab_id, map_revision=current, options={'deployed': True}).json()['token'])
+        self.assertEqual(job['status'], 'succeeded', job); self.assertEqual(self.files[PATH], NEW)
+        path_only = self.revise(text=OLD, options={'deployed': True}).json()['token']
+        self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {'r1': [33, 44]}})
+        self.assertEqual(self.execute(path_only)['status'], 'succeeded', 'a save without lab_id names no map to compare')
 
     def test_a_failed_apply_registers_nothing(self):
         self.files[PATH] = NEW

@@ -55,6 +55,12 @@ class CatalogTests(unittest.TestCase):
         rx = re.compile(e['interfaces']['pattern'], re.I)
         self.assertTrue(rx.match('GE-0/0/3'))
 
+    def test_first_data_port_follows_the_offset(self):
+        # NOS port N is eth(N + offset) and eth0 is management: the first data port is max(0, 1 - offset).
+        self.assertEqual(self.by['juniper_vjunosswitch']['interfaces']['first_port'], 'ge-0/0/0')   # offset 1
+        self.assertEqual(self.by['juniper_cjunosevolved']['interfaces']['first_port'], 'et-0/0/0')  # offset 4
+        self.assertEqual(self.by['arista_ceos']['interfaces']['first_port'], 'Ethernet1')           # offset 0: eth1
+
     def test_reserved(self):
         self.assertEqual(self.by['juniper_cjunosevolved']['interfaces']['reserved'], ['eth1', 'eth2', 'eth3'])
         self.assertEqual(self.by['arista_ceos']['interfaces']['reserved'], [])

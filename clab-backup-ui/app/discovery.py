@@ -877,12 +877,16 @@ def read_definition(raw, ann=None, deployed_name=''):
     return parsed, drawing
 
 
-def apply_definition(state, lab, parsed, drawing, raw, ann, source=None, unhide=True):
+def apply_definition(state, lab, parsed, drawing, raw, ann, source=None, unhide=True, kept=False):
     """Register a checked definition on a lab record, in place (the caller holds the store lock and saves): the nodes
     follow the file, each node the file still defines keeps its saved record (logins, endpoint mode, identity), and the
     drawing is replaced only when an annotations text came with it or the lab has none (through keep_document).
     `deployment_name` and `container_prefix` follow `parsed`, so a caller that keeps a deployment passes its name to
-    read_definition. `unhide` clears Hide from Home (an explicit Add to My labs); a re-registration keeps it."""
+    read_definition. `unhide` clears Hide from Home (an explicit Add to My labs); a re-registration keeps it.
+    A map placed from a file (the annotations beside the topology, or none) is the VM's map, not a person's: the
+    "changed in the manager" marker goes, as a sync from the VM drops it (runner.map_changed_in_manager), so a lab
+    registered here never reads as changed by the accident of an empty marker equal to an absent sync. `kept` says the
+    text is the manager's own map document (register_definition's `kept`): then the marker keep_document writes stays."""
     from .layout import keep_document
     raw = raw.encode() if isinstance(raw, str) else raw
     old = {n.get('definition_node') or n.get('short_name') or n['name'].removeprefix('clab-'+lab['name']+'-'):n for n in lab['nodes']}
@@ -898,15 +902,47 @@ def apply_definition(state, lab, parsed, drawing, raw, ann, source=None, unhide=
     state['ignored_labs'] = [n for n in state.get('ignored_labs', []) if n != parsed['deployed_name']]
     if ann or not lab.get('drawing'):
         lab['drawing']=drawing; keep_document(lab,ann or b'')
+        if not kept: lab.pop('map_written_at', None)
     reconcile(state)
     return lab
 
 
-def register_definition(state, lab, raw, ann=None, deployed_name='', unhide=False):
+def merge_map(kept, vm, names):
+    """The manager's own map document `kept` with the devices it lacks taken from the VM's map file `vm` (A18): every
+    device of `names` (the new file's device names) that has an entry in the VM file's `nodeAnnotations` and none in `kept`
+    takes that entry whole (position and look); the manager's entries win for every device it has, and nothing else of the
+    VM file (texts, shapes, groups, devices the file does not define) is taken. `kept` comes back unchanged, text for text,
+    when there is nothing to add or either text is not a map document."""
+    try:
+        ours = json.loads(kept); theirs = json.loads(vm) if vm else None
+    except (ValueError, TypeError, RecursionError): return kept
+    if not isinstance(ours, dict) or not isinstance(theirs, dict): return kept
+    def rows(data, key):
+        value = data.get(key)
+        return [r for r in value if isinstance(r, dict)] if isinstance(value, list) else []
+    have = {r.get('id') for key in ('nodeAnnotations', 'networkNodeAnnotations') for r in rows(ours, key)}
+    extra = []
+    for row in rows(theirs, 'nodeAnnotations'):
+        ident = row.get('id')
+        if isinstance(ident, str) and ident in names and ident not in have:
+            have.add(ident); extra.append(copy.deepcopy(row))
+    if not extra: return kept
+    ours['nodeAnnotations'] = (ours['nodeAnnotations'] if isinstance(ours.get('nodeAnnotations'), list) else []) + extra
+    return json.dumps(ours, ensure_ascii=False, indent=2)
+
+
+def register_definition(state, lab, raw, ann=None, deployed_name='', unhide=False, kept=None):
     """read_definition and apply_definition in one step, for a caller that already knows the lab record (the manager's
     re-registration after a successful apply, deploy or redeploy: `deployed_name` is the lab's own, Hide from Home is
-    kept). Nothing changes when the text is refused, or when the deployment belongs to another lab (ValueError)."""
+    kept). Nothing changes when the text is refused, or when the deployment belongs to another lab (ValueError).
+    `ann` is the VM's map file. `kept`, when given, is the manager's own map document, which stays the map: merged by
+    device id with `ann` (merge_map: a device the file defines and the manager's document lacks takes its VM entry), the
+    result goes through keep_document and the drawing is read from it; the "changed in the manager" marker stays."""
+    if kept is not None:
+        names = {n['definition_node'] for n in parse_definition(raw, deployed_name)['nodes']}
+        ann = merge_map(kept, ann, names)
+        if isinstance(ann, str): ann = ann.encode()
     parsed, drawing = read_definition(raw, ann, deployed_name)
     if any(l is not lab and l.get('deployment_name') == parsed['deployed_name'] for l in state['labs']):
         raise ValueError('Deployment already linked to another workspace')
-    return apply_definition(state, lab, parsed, drawing, raw, ann, unhide=unhide)
+    return apply_definition(state, lab, parsed, drawing, raw, ann, unhide=unhide, kept=kept is not None)

@@ -48,7 +48,9 @@ def _interfaces(kind):
     if rule is None:
         return None
     prefix, pattern, offset = rule
-    return {'pattern': pattern.pattern.replace('(?i)', '', 1), 'flags': 'i', 'prefix': prefix, 'first_port': prefix + '0',
+    # The NOS port N is the container's eth(N + offset) and eth0 is management, so the first data port is the
+    # smallest N with N + offset >= 1: ge-0/0/0 for Junos (offset 1) and cJunosEvolved (offset 4), Ethernet1 for cEOS (offset 0).
+    return {'pattern': pattern.pattern.replace('(?i)', '', 1), 'flags': 'i', 'prefix': prefix, 'first_port': prefix + str(max(0, 1 - offset)),
             'reserved': ['eth%d' % n for n in range(1, offset)],
             'container_pattern': CONTAINER_NAME.pattern.replace('(?i)', '', 1)}
 
