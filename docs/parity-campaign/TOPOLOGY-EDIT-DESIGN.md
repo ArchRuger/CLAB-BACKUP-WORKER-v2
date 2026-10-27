@@ -351,3 +351,32 @@ per-kind reconcile facts first, then runs the acceptance list.
 - **The helper's "running" set (T03)** is the union of the containers under the lab's name and those found by topology
   path, with duplicates removed; the digest of a `revise` binds container name and id, every other action keeps the
   state as before (`test_revise_deployed.py`).
+
+### 12.7 Slice verification (campaign 2, `/clab-slice-verify`, 2026-10-27 04:40 UTC) and its amendments
+
+Six workers that did not write the slice: the test runner (7 commands: 6 exit 0; `test_catalog.py` failed on the
+vSRX pin that the parallel B04/B05 slices flipped, rewritten by the lead), the Opus attacker (19 acceptance checks:
+16 held, 3 failed; 9 breaks) and the fixture QA at 1440, 760 and 390 px (every flow held except the ones below).
+Verdict "not ready to integrate" → fixed before integration:
+
+| # | Severity | Finding | Amendment / fix |
+|---|---|---|---|
+| V1 | high | `review=apply` is lost on a cold load: `applyRoute()` runs before `operations.js` executed, `runRouteReview()` finds no `opTask`, and the parameter is already dropped. | **A15**: the pending review is kept until the lab is rendered and the operations functions exist (retry after every render, bounded), run once, then dropped. |
+| V2 | medium | The output dialog after a deployed save says "It is not running yet" and offers Deploy now. | **A16**: the dialog of a deployed save says the running lab is unchanged until applied and offers *Back to lab and review changes…* only. |
+| V3 | medium | The old-draft dialog's default focus is the destructive choice; Enter discards. | **A9 amended**: initial focus on *Continue my draft*; *Start from the VM version* is the other button. |
+| V4 | medium | A false 409 on the next Edit topology after a deployed save and Apply (`mapBase` not moved, the old revision kept). | **A17**: every save moves the map baseline; every open with `#lab` adopts the manager's current revision. |
+| V5 | medium | A device added in a deployed save has its position in the VM file only; reopening places it at (0,0); and the re-registration after Apply keeps the manager's old document whole when the map "counts as changed" (also by the `'' == ''` accident of an absent marker and an absent sync). | **A18**: merge by device id on both sides: the manager's entries win for devices it has, devices it lacks take their entry from the VM file (page: `builderAdoptMap`; manager: `register_definition`); `map_changed_in_manager` never reads an absent marker equal to an absent sync as changed. |
+| V6 | low | The map revision is checked at preview only. | **A19**: it is kept with the preview token and checked again at confirm; a mismatch is the same 409 and no job. |
+| V7 | low | A pristine open shows "Changes not saved to the VM yet" (the dirty baseline was the VM file, the draft the adopted document). | **A20**: the dirty baseline is what was opened; the hash sent for the stale check stays the VM file's. |
+| V8 | low | LAB-BUILDER.md and `student_workflow.py` still describe destroy-first. | Rewritten with the fixes. |
+| V9 | low | Catalog cEOS `first_port` is `Ethernet0`. | The first data port is `max(0, 1 − offset)`. |
+| V10 | low | Undo/Redo drop focus to body when the pressed button becomes disabled. | Focus moves to the other history button or the bar's first enabled control. |
+| V11 | low | At 390 px the embedded editor's palette covers the canvas (the editor's own layout). | **Recorded limit**: on a phone-width screen devices are added through the YAML panel; the bar, dialogs and the review work by keyboard. |
+| V12 | info | The engine re-serialises `[ "a", "b" ]` link lists with inner spaces, so the review diff shows untouched link lines as changed. | **Recorded** (LAB-BUILDER.md already says the editor reprints the document in its own style); the diff is honest about the normalisation, which §1.6 requires. |
+
+Held in the fixture at three widths: the entries and mirrors with their reasons, the builder header and lab line,
+palette add and link, the running-devices sentence and the diff, the toast and the pill, the review opening once from
+a same-page hash change, the undeployed save's old toast, the removed-devices sentence, arranged positions surviving
+Edit map → Edit topology → save, the old-draft dialog's choices, the reserved-interface warning and the kind note,
+Undo/Redo by button and keys, keyboard-only flows at 390 px. The backend contract held in full (binding, 400s, 409,
+warnings, limits, re-registration).
