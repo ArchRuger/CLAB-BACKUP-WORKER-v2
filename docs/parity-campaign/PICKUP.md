@@ -235,3 +235,14 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   phase 2, T08 docs, D11 (external links: `check_external_links.py` and `EXTERNAL-LINKS.md`).
 - 2026-10-27 03:20 UTC: the times of checkpoints 2 to 5 above were corrected from estimates to the clock (`date -u`); B04
   phase 2 landed (`437e7e4`); B05 phase 2 (live netlab apply on `vrt` and `vsrx`) started; T07 and D10 still running.
+- 2026-10-27 04:05 UTC, **release 1.31.7** (`1673a49` pushed; pull request 78 `claude/parity-campaign` → `main` opened
+  for the owner): the full Python suite (2988 OK, 2 skipped) and the browser suite green on the release tree;
+  `verify-release.py`, `check_links.py` (346 files), `check_external_links.py`, the bundle check all pass; the live
+  manager rebuilt from `1673a49` (the student guide copied into `<data>/guide/`, `/student-guide` served). What the
+  release carries and what stayed BLOCKED or NOT TESTED is in `CAMPAIGN-2.md` (ledger), `DEVICES.md`, `ACCEPTANCE.md`
+  and `clab-backup-ui/VALIDATION.md`. Open for a next session: T09 (a reviewed "put back the previous file" after a
+  deployed save), the vrnetlab-restart fact on kinds other than vSRX, the design ownership ledger after a Load, the C07
+  naming rule, C11 (editor 0.4.0, still not on npm), the exact vJunos-router image on a bare-metal host. Campaign labs
+  on the VM: `parity`, `camp-vsrx`, `camp-topo` (five devices), `camp-topo-2` (undeployed), `link-basics` and
+  `my-first-lab` (the guide's); the private repositories `campaign2-netlab-course-student` and
+  `campaign2-my-network-labs` under ArchRuger are the owner's to delete.
