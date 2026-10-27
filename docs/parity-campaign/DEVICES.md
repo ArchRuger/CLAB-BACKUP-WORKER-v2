@@ -40,21 +40,21 @@ pin it; it is not a live result.
 | Capability | vJunos-router | vSRX | vJunos-switch | cEOS | cJunosEvolved | XRv9k |
 |---|---|---|---|---|---|---|
 | Catalog entry, exact default image | PASS static (`BUILDER_TEMPLATES`) | PASS static (B02) | PASS static | PASS static | PASS static | PASS static |
-| Kind identity on import and sync (static and script inventories, topology hints, aliases) | PASS unit (`test_junos_kinds.py`) | unit in B02 | PASS unit | PASS unit | PASS unit | PASS unit |
+| Kind identity on import and sync (static and script inventories, topology hints, aliases) | PASS unit (`test_junos_kinds.py`) | PASS unit (B02) + live (B04 phase 2: a lab imported while the kind was unknown mapped `juniper_vsrx` on Sync, the profile kept, the node left disabled until enabled) | PASS unit | PASS unit | PASS unit | PASS unit |
 | Interface naming | PASS static+live (`ge-0/0/N`=`eth(N+1)`, C05 live) | PASS static (B02) + live (B03a: `eth1` is `ge-0/0/0`) | PASS live | PASS live | PASS live (`et-0/0/N`=`eth(N+4)`) | PASS live |
 | Boot and readiness (real `show version`) | PASS live on the nested derivative only (C01) | PASS live (B03a, outside the manager; the manager's readiness on this kind is B06) | PASS live (C01) | PASS live (C01) | PASS live (C01) | PASS live (C01) |
-| Default login | PASS live (C01, derivative) | PASS live (B03a, direct SSH) | PASS live | PASS live | PASS live | PASS live |
+| Default login | PASS live (C01, derivative) | PASS live (B03a direct SSH; through the manager the lab's generated inventory login comes first, `credential_source: inventory`; the profile wins over it, B04 phase 2) | PASS live | PASS live | PASS live | PASS live |
 | Credential overrides (profile > inventory > kind default) | unit (`test_junos_kinds.py`, `test_nodes.py`) | unit in B02 | unit | unit | unit | unit |
-| Browser SSH terminal | PASS live (C02/C03) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
-| Serial console | PASS live (C04, derivative) | port 5000 answers live (B03a); gated in the manager until the C04 gate is adapted (Docker health never `healthy` on this image) | registered, NOT TESTED live (ACCEPTANCE R021) | NOT APPLICABLE (no qemu console) | NOT APPLICABLE | registered, NOT TESTED live |
-| Logs, interfaces, diagnostics drawer | PASS live (C03) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
-| Backup (display set / running-config), download name | PASS live (C01: `vJunos-router_vrt_…cfg`) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
-| Restore-grade artifact | PASS static (restore keys since B04; manager-path capture in phase 2) | PASS static (B04) | PASS | PASS | PASS | PASS |
-| Save to Git, manifest identity | PASS live (C01 save) | NOT TESTED | PASS | PASS | PASS | PASS |
-| Load (whole-configuration replacement, timed recovery, readback, persistence) | PASS live, direct driver, on the nested derivative only (B04 phase 1: B→A, reboot 989 s, A onto A, back-to-back, failures); manager path phase 2 | PASS live, direct driver, exact image (B04 phase 1: B→A armed 7.8 s, reboot 165 s, A onto A, back-to-back, failures; a candidate without `system services` rolled back at its 1-minute timer); manager path phase 2 | PASS live (1.30.27–29) | PASS live | PASS live | PASS live |
+| Browser SSH terminal | PASS live (C02/C03) | PASS live (A05/B06: `show version` in the browser terminal) | PASS live | PASS live | PASS live | PASS live |
+| Serial console | PASS live (C04, derivative) | NOT OFFERED by design (the drawer says the kind exposes none, B04 phase 2); port 5000 answers live (B03a) but the C04 gate needs Docker health, which this image never reports | registered, NOT TESTED live (ACCEPTANCE R021) | NOT APPLICABLE (no qemu console) | NOT APPLICABLE | registered, NOT TESTED live |
+| Logs, interfaces, diagnostics drawer | PASS live (C03) | PASS live (A05/B06: container facts, logs, interfaces by container name) | PASS live | PASS live | PASS live | PASS live |
+| Backup (display set / running-config), download name | PASS live (C01: `vJunos-router_vrt_…cfg`) | PASS live (B04 phase 2: `vSRX_vsrx_2026-10-27_02-37UTC.cfg`) | PASS live | PASS live | PASS live | PASS live |
+| Restore-grade artifact | PASS live (backup `0d12eefb` with the `.jcfg`, B04 phase 2) | PASS live (backup `790b5d73` with the `.jcfg`; download `vSRX_vsrx_…cfg`, ZIP `camp-vsrx_…zip`) | PASS | PASS | PASS | PASS |
+| Save to Git, manifest identity | PASS live (C01 save) | NOT TESTED (the campaign lab is not bound to a repository; the format table has the kind: unit) | PASS | PASS | PASS | PASS |
+| Load (whole-configuration replacement, timed recovery, readback, persistence) | PASS live on the nested derivative: direct driver (phase 1) and the manager path (phase 2: B→A `verified` `d7a93a64`, A onto A, back-to-back, reboot 923 s with 0 lines lost, selected-device `e6f5ec77`, mixed job `61282b8f` partial with a foreign EOS timer refused truthfully; arming 23–28 s) | PASS live, exact image: direct driver (phase 1) and the manager path (phase 2: `verified` `c49dd700`, A onto A, back-to-back, reboot 162 s, the expired timer read back `rolled_back` only after the previous configuration was read `bfa4c013`; arming 6–7 s) | PASS live (1.30.27–29) | PASS live | PASS live | PASS live |
 | Device start/stop/restart | PASS live (C05) | NOT TESTED | PASS live (known second-start limit) | PASS live | PASS live | PASS live |
 | Lab deploy/apply/redeploy/destroy | PASS live (C05) | deploy PASS live outside the manager (B03a); manager path B06 | PASS | PASS | PASS | PASS |
-| Capture | PASS live (C07, viewer) | NOT TESTED | PASS | PASS | PASS | PASS |
+| Capture | PASS live (C07, viewer) | PASS live from the host end with real packets (A05); a session on the vSRX end starts (B04 phase 2; the link is drawn as `eth1` because the lab was registered before the kind was known) | PASS | PASS | PASS | PASS |
 | Topology / map integration, link state | PASS live (C06) | NOT TESTED | PASS | PASS | PASS | PASS |
 | Network Design (netlab mapping, generation, apply, readback) | unsupported by design (`dc.resolve` → unsupported) until B05 | unsupported until B05 | PASS | PASS | PASS (stand-in profile) | PASS |
 

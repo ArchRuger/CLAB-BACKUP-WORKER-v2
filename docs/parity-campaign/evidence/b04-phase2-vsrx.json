@@ -1,0 +1,1492 @@
+{
+ "node": "clab-camp-vsrx-vsrx",
+ "builds": {
+  "before_02:50:01": {
+   "image": "clab-backup:1.31.6 sha256:3ecaf01c48a3\u2026",
+   "container_started": "2026-10-27T02:29:57Z",
+   "built_from": "796892c (coordinator)"
+  },
+  "after_02:50:01": {
+   "image": "clab-backup:1.31.6 sha256:64b479fc16aa\u2026",
+   "container_started": "2026-10-27T02:50:01Z",
+   "built_from": "973668e (coordinator)"
+  },
+  "note": "manager_restore.build_identity() git_head is the checkout's moving HEAD, not the image source; the image digest identifies the build"
+ },
+ "manager_restart": {
+  "utc": "02:50:01",
+  "by": "the coordinator (rebuild from 973668e)",
+  "jobs_in_flight": [],
+  "jobs_marked_interrupted": [],
+  "last_job_before": "61282b8f5000436e8d2bdd7a1eb115b1 (ended 02:49:44)",
+  "first_jobs_after": [
+   "bfa4c0135d7b4f7c85e32b4668de924d (02:52:54)"
+  ],
+  "off_manager_work_spanning_it": [
+   "vsrx reboot (02:46:42 to about 02:49:24, no manager job)",
+   "mixed run: the foreign 2-minute window on ceos and the peer fingerprints (02:49:46 to 02:51:41, no manager job)"
+  ],
+  "state_rechecked_after": "both nodes A, 0 missing / 0 extra, nothing pending"
+ },
+ "source_backup": "790b5d739a444d309b295db3183fbe68 (taken with A active, 02:37)",
+ "step5_B_to_A": {
+  "manager_version": "1.31.6",
+  "build": {
+   "image": "clab-backup:1.31.6 sha256:3ecaf01c48a3b4dfa34e6fb54f9dc0e1f55c24bb558ac8f6bcb94e9f3ceab500",
+   "container_started": "2026-10-27T02:29:57.24284106Z",
+   "git_head": "1671f6476f76",
+   "git_dirty_files": 6
+  },
+  "lab": "camp-vsrx",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "790b5d739a444d309b295db3183fbe68"
+  },
+  "requested": [
+   "clab-camp-vsrx-vsrx"
+  ],
+  "started_utc": "02:40:21",
+  "preflight": {
+   "http": 200,
+   "body": {
+    "source": {
+     "type": "backup",
+     "backup_job_id": "790b5d739a444d309b295db3183fbe68",
+     "captured_at": "2026-10-27T02:37:11.756684+00:00",
+     "lab_name": "camp-vsrx",
+     "restore_capable_nodes": 1,
+     "saved_nodes": [
+      "clab-camp-vsrx-vsrx"
+     ],
+     "capture_id": "790b5d739a444d309b295db3183fbe68",
+     "topology": {
+      "differs": null,
+      "saved_devices": 1,
+      "matching_devices": 1
+     }
+    },
+    "targets": [
+     {
+      "name": "clab-camp-vsrx-vsrx",
+      "short_name": "vsrx",
+      "platform": "juniper_vsrx",
+      "running_platform": "juniper_vsrx",
+      "eligible": true,
+      "reason": "",
+      "requested": true,
+      "reachable": true,
+      "matches_saved": false,
+      "pending_changes": 16,
+      "diff": {
+       "hunks": [
+        {
+         "old_start": 4,
+         "old_count": 20,
+         "new_start": 4,
+         "new_count": 22,
+         "lines": [
+          {
+           "type": "context",
+           "old": 4,
+           "new": 4,
+           "text": "set system login user admin uid 2000"
+          },
+          {
+           "type": "context",
+           "old": 5,
+           "new": 5,
+           "text": "set system login user admin class super-user"
+          },
+          {
+           "type": "context",
+           "old": 6,
+           "new": 6,
+           "text": "set system login user admin authentication [redacted]"
+          },
+          {
+           "type": "del",
+           "old": 7,
+           "new": null,
+           "text": "set system login message \"B04-A configuration\""
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 7,
+           "text": "set system login message \"B04-B configuration\""
+          },
+          {
+           "type": "context",
+           "old": 8,
+           "new": 8,
+           "text": "set system services ssh root-login allow"
+          },
+          {
+           "type": "context",
+           "old": 9,
+           "new": 9,
+           "text": "set system services netconf ssh"
+          },
+          {
+           "type": "context",
+           "old": 10,
+           "new": 10,
+           "text": "set system management-instance"
+          },
+          {
+           "type": "del",
+           "old": 11,
+           "new": null,
+           "text": "set security policies from-zone trust to-zone trust policy B04-A-allow match source-address any"
+          },
+          {
+           "type": "del",
+           "old": 12,
+           "new": null,
+           "text": "set security policies from-zone trust to-zone trust policy B04-A-allow match destination-address any"
+          },
+          {
+           "type": "del",
+           "old": 13,
+           "new": null,
+           "text": "set security policies from-zone trust to-zone trust policy B04-A-allow match application any"
+          },
+          {
+           "type": "del",
+           "old": 14,
+           "new": null,
+           "text": "set security policies from-zone trust to-zone trust policy B04-A-allow then permit"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 11,
+           "text": "set security policies from-zone trust to-zone B04-B-ONLY policy B04-B-deny match source-address any"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 12,
+           "text": "set security policies from-zone trust to-zone B04-B-ONLY policy B04-B-deny match destination-address any"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 13,
+           "text": "set security policies from-zone trust to-zone B04-B-ONLY policy B04-B-deny match application any"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 14,
+           "text": "set security policies from-zone trust to-zone B04-B-ONLY policy B04-B-deny then deny"
+          },
+          {
+           "type": "context",
+           "old": 15,
+           "new": 15,
+           "text": "set security zones security-zone trust interfaces ge-0/0/0.0 host-inbound-traffic system-services ping"
+          },
+          {
+           "type": "del",
+           "old": 16,
+           "new": null,
+           "text": "set interfaces ge-0/0/0 description \"B04-A uplink\""
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 16,
+           "text": "set security zones security-zone B04-B-ONLY"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 17,
+           "text": "set interfaces ge-0/0/0 description \"B04-B changed\""
+          },
+          {
+           "type": "context",
+           "old": 17,
+           "new": 18,
+           "text": "set interfaces ge-0/0/0 unit 0 family inet address 10.9.9.1/24"
+          },
+          {
+           "type": "context",
+           "old": 18,
+           "new": 19,
+           "text": "set interfaces fxp0 unit 0 family inet address 10.0.0.15/24"
+          },
+          {
+           "type": "context",
+           "old": 19,
+           "new": 20,
+           "text": "set interfaces fxp0 unit 0 family inet6 address 2001:db8::2/64"
+          },
+          {
+           "type": "context",
+           "old": 20,
+           "new": 21,
+           "text": "set interfaces lo0 unit 0 family inet address 192.0.2.121/32"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 22,
+           "text": "set policy-options prefix-list B04-B-ONLY 198.51.100.0/24"
+          },
+          {
+           "type": "context",
+           "old": 21,
+           "new": 23,
+           "text": "set routing-instances mgmt_junos routing-options rib mgmt_junos.inet6.0 static route ::/0 next-hop 2001:db8::1"
+          },
+          {
+           "type": "context",
+           "old": 22,
+           "new": 24,
+           "text": "set routing-instances mgmt_junos routing-options static route 0.0.0.0/0 next-hop 10.0.0.2"
+          },
+          {
+           "type": "del",
+           "old": 23,
+           "new": null,
+           "text": "set routing-options static route 192.0.2.200/32 discard"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 25,
+           "text": "set routing-options static route 198.51.100.0/24 discard"
+          }
+         ]
+        }
+       ],
+       "added": 9,
+       "removed": 7,
+       "truncated": false,
+       "identical": false,
+       "labels": {
+        "old": "Saved (backup 790b5d739a)",
+        "new": "Running now"
+       }
+      }
+     }
+    ],
+    "eligible_count": 1
+   }
+  },
+  "submit": {
+   "http": 200,
+   "body": {
+    "id": "c49dd7006476483cb8c903d52fe57cfe"
+   }
+  },
+  "double_submit": {
+   "http": 200,
+   "same_job": true
+  },
+  "timeline": [
+   {
+    "utc": "02:40:21",
+    "job": "backing_up",
+    "targets": {
+     "vsrx": "backing_up"
+    }
+   },
+   {
+    "utc": "02:40:26",
+    "job": "applying",
+    "targets": {
+     "vsrx": "applying"
+    }
+   },
+   {
+    "utc": "02:40:33",
+    "job": "verifying",
+    "targets": {
+     "vsrx": "applied"
+    }
+   },
+   {
+    "utc": "02:40:35",
+    "job": "succeeded",
+    "targets": {
+     "vsrx": "verified"
+    }
+   }
+  ],
+  "job": {
+   "id": "c49dd7006476483cb8c903d52fe57cfe",
+   "lab_id": "99bb84d5d39f4ba992b5f69eb1e3666e",
+   "lab_name": "camp-vsrx",
+   "created": "2026-10-27T02:40:21.724279+00:00",
+   "finished": "2026-10-27T02:40:35.569624+00:00",
+   "status": "succeeded",
+   "message": "All 1 node(s) restored and verified against the saved state.",
+   "source": {
+    "type": "backup",
+    "backup_job_id": "790b5d739a444d309b295db3183fbe68",
+    "captured_at": "2026-10-27T02:37:11.756684+00:00",
+    "lab_name": "camp-vsrx",
+    "restore_capable_nodes": 1,
+    "saved_nodes": [
+     "clab-camp-vsrx-vsrx"
+    ],
+    "capture_id": "790b5d739a444d309b295db3183fbe68",
+    "topology": {
+     "differs": null,
+     "saved_devices": 1,
+     "matching_devices": 1
+    }
+   },
+   "confirm_minutes": 5,
+   "pre_backup_job_id": "6597190cfaad40798cd7a5ab7699fc2a",
+   "post_backup_job_id": "56639e45b200484ab13e425ff13294f8",
+   "targets": [
+    {
+     "name": "clab-camp-vsrx-vsrx",
+     "short_name": "vsrx",
+     "platform": "juniper_vsrx",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "stage": "replaced",
+     "timeline": {
+      "queued": 1793068821.7242901,
+      "backing_up": 1793068821.7393372,
+      "backed_up": 1793068825.9520464,
+      "connecting": 1793068825.9844706,
+      "applying": 1793068826.049159,
+      "armed": 1793068832.7922966,
+      "verifying": 1793068832.79437,
+      "confirming": 1793068832.9140546,
+      "replaced": 1793068833.3538344,
+      "settled": 1793068833.3538344,
+      "checking": 1793068833.3584251,
+      "checked": 1793068835.5674415
+     },
+     "attempts": 1,
+     "worker": "ThreadPoolExecutor-5_0",
+     "diff_sample": [
+      "[edit system login]",
+      "-   message \"B04-B configuration\";",
+      "+   message \"B04-A configuration\";",
+      "[edit security policies]",
+      "+    from-zone trust to-zone trust {",
+      "+        policy B04-A-allow {",
+      "+            match {",
+      "+                source-address any;",
+      "+                destination-address any;",
+      "+                application any;",
+      "+            }",
+      "+            then {",
+      "+                permit;",
+      "+            }",
+      "+        }",
+      "+    }",
+      "-    from-zone trust to-zone B04-B-ONLY {",
+      "-        policy B04-B-deny {",
+      "-            match {",
+      "-                source-address any;",
+      "-                destination-address any;",
+      "-                application any;",
+      "-            }",
+      "-            then {",
+      "-                deny;",
+      "-            }",
+      "-        }",
+      "-    }",
+      "[edit security zones]",
+      "-    security-zone B04-B-ONLY;",
+      "[edit interfaces ge-0/0/0]",
+      "-   description \"B04-B changed\";",
+      "+   description \"B04-A uplink\";",
+      "[edit]",
+      "-  policy-options {",
+      "-      prefix-list B04-B-ONLY {",
+      "-          198.51.100.0/24;",
+      "-      }",
+      "-  }",
+      "[edit routing-options static]"
+     ],
+     "no_op": false,
+     "root_authentication": "present",
+     "persistence": "saved",
+     "missing_statements": 0,
+     "extra_statements": 0
+    }
+   ],
+   "progress": {
+    "settled": 1,
+    "total": 1
+   },
+   "rechecking": false,
+   "server_time": 1793068835.797323
+  },
+  "finished_utc": "02:40:35",
+  "device_judgement_before": {
+   "vsrx": {
+    "active": "B",
+    "a_markers": "0/4",
+    "b_markers": "6/6",
+    "statements": 24,
+    "pending_confirmation": false,
+    "newest_commit": "0 2026-10-27 02:40:20 UTC by admin via cli",
+    "boot": "System booted: 2026-10-27 01:55:51 UTC",
+    "vs_A_missing": 7,
+    "vs_A_extra": 9
+   }
+  },
+  "device_judgement_after": {
+   "vsrx": {
+    "active": "A",
+    "a_markers": "4/4",
+    "b_markers": "0/6",
+    "statements": 22,
+    "pending_confirmation": false,
+    "newest_commit": "0 2026-10-27 02:40:32 UTC by admin via cli commit confirmed, rollback in 5mins",
+    "boot": "System booted: 2026-10-27 01:55:51 UTC",
+    "vs_A_missing": 0,
+    "vs_A_extra": 0
+   }
+  },
+  "wall_seconds": 14.6,
+  "tool_exit": 0
+ },
+ "step6_A_onto_A_and_back_to_back": {
+  "node": "clab-camp-vsrx-vsrx",
+  "backup": "790b5d739a444d309b295db3183fbe68",
+  "runs": [
+   {
+    "tag": "A onto A",
+    "preflight": {
+     "http": 200,
+     "eligible": true,
+     "pending_changes": 0,
+     "matches_saved": true
+    },
+    "submit_http": 200,
+    "utc_submit": "02:42:59",
+    "job_id": "9dea698de7ff42108f008787f31eb982",
+    "status": "succeeded",
+    "message": "All 1 node(s) restored and verified against the saved state.",
+    "target": "verified",
+    "target_message": "Configuration replaced and verified against the saved desired state.",
+    "no_op": true,
+    "missing": 0,
+    "extra": 0,
+    "persistence": "saved",
+    "stages": {
+     "queued": 0.0,
+     "backing_up": 0.0,
+     "backed_up": 2.2,
+     "connecting": 2.2,
+     "applying": 2.3,
+     "armed": 8.7,
+     "verifying": 8.7,
+     "confirming": 8.8,
+     "matched": 9.3,
+     "settled": 9.3,
+     "checking": 9.3,
+     "checked": 11.5
+    },
+    "seconds": 12.2,
+    "pre_backup": "29bc6644b7144f3a93f16dedd34516fc",
+    "device": {
+     "active": "A",
+     "a_markers": "4/4",
+     "b_markers": "0/6",
+     "statements": 22,
+     "pending_confirmation": false,
+     "newest_commit": "0 2026-10-27 02:43:08 UTC by admin via cli commit confirmed, rollback in 5mins",
+     "boot": "System booted: 2026-10-27 01:55:51 UTC",
+     "vs_A_missing": 0,
+     "vs_A_extra": 0
+    }
+   },
+   {
+    "tag": "drift to B",
+    "commit_ok": true,
+    "errors": 0,
+    "device": {
+     "active": "B",
+     "a_markers": "0/4",
+     "b_markers": "6/6",
+     "statements": 24,
+     "pending_confirmation": false,
+     "newest_commit": "0 2026-10-27 02:43:13 UTC by admin via cli",
+     "boot": "System booted: 2026-10-27 01:55:51 UTC",
+     "vs_A_missing": 7,
+     "vs_A_extra": 9
+    },
+    "utc": "02:43:13"
+   },
+   {
+    "tag": "back-to-back 1: B -> A",
+    "preflight": {
+     "http": 200,
+     "eligible": true,
+     "pending_changes": 16,
+     "matches_saved": false
+    },
+    "submit_http": 200,
+    "utc_submit": "02:43:14",
+    "second_submit_while_running": {
+     "http": 409,
+     "detail": "Wait for the active backup, Git save, restore or lab operation to finish.",
+     "same_job": false
+    },
+    "job_id": "0dd47c2134f6443fad68659ee33fe275",
+    "status": "succeeded",
+    "message": "All 1 node(s) restored and verified against the saved state.",
+    "target": "verified",
+    "target_message": "Configuration replaced and verified against the saved desired state.",
+    "no_op": false,
+    "missing": 0,
+    "extra": 0,
+    "persistence": "saved",
+    "stages": {
+     "queued": 0.0,
+     "backing_up": 0.0,
+     "backed_up": 2.2,
+     "connecting": 2.2,
+     "applying": 2.3,
+     "armed": 8.7,
+     "verifying": 8.7,
+     "confirming": 8.8,
+     "replaced": 9.3,
+     "settled": 9.3,
+     "checking": 9.3,
+     "checked": 11.5
+    },
+    "seconds": 12.2,
+    "pre_backup": "ac52c5a17ca644368fe6b01f15b5f5dd",
+    "device": {
+     "active": "A",
+     "a_markers": "4/4",
+     "b_markers": "0/6",
+     "statements": 22,
+     "pending_confirmation": false,
+     "newest_commit": "0 2026-10-27 02:43:22 UTC by admin via cli commit confirmed, rollback in 5mins",
+     "boot": "System booted: 2026-10-27 01:55:51 UTC",
+     "vs_A_missing": 0,
+     "vs_A_extra": 0
+    }
+   },
+   {
+    "tag": "back-to-back 2: A -> A at once",
+    "preflight": {
+     "http": 200,
+     "eligible": true,
+     "pending_changes": 0,
+     "matches_saved": true
+    },
+    "submit_http": 200,
+    "utc_submit": "02:43:26",
+    "job_id": "1eef2479df4f4850b800657cd7f64ad7",
+    "status": "succeeded",
+    "message": "All 1 node(s) restored and verified against the saved state.",
+    "target": "verified",
+    "target_message": "Configuration replaced and verified against the saved desired state.",
+    "no_op": true,
+    "missing": 0,
+    "extra": 0,
+    "persistence": "saved",
+    "stages": {
+     "queued": 0.0,
+     "backing_up": 0.0,
+     "backed_up": 2.2,
+     "connecting": 2.2,
+     "applying": 2.3,
+     "armed": 8.8,
+     "verifying": 8.8,
+     "confirming": 8.9,
+     "matched": 9.3,
+     "settled": 9.3,
+     "checking": 9.3,
+     "checked": 11.5
+    },
+    "seconds": 12.2,
+    "pre_backup": "46599a6e3aae4507a53c6aad33102496",
+    "device": {
+     "active": "A",
+     "a_markers": "4/4",
+     "b_markers": "0/6",
+     "statements": 22,
+     "pending_confirmation": false,
+     "newest_commit": "0 2026-10-27 02:43:35 UTC by admin via cli commit confirmed, rollback in 5mins",
+     "boot": "System booted: 2026-10-27 01:55:51 UTC",
+     "vs_A_missing": 0,
+     "vs_A_extra": 0
+    }
+   }
+  ]
+ },
+ "unplanned_overlap": {
+  "job": "a1bc2344fe5745e595c0fdc7f8a33dbf",
+  "what": "this tool's poll ended early (it did not know the job status 'backing_up') and drove the node to B while the job's safety backup ran; the driver then replaced B (no_op false), verified, A read back 0/0; not counted as the A-onto-A run (rerun as 9dea698d)"
+ },
+ "step6_persistence_reboot": {
+  "node": "vsrx",
+  "drift_B": {
+   "ok": true,
+   "errors": 0,
+   "device": {
+    "active": "B",
+    "a_markers": "0/4",
+    "b_markers": "6/6",
+    "statements": 24,
+    "pending_confirmation": false,
+    "newest_commit": "0 2026-10-27 02:46:30 UTC by admin via cli",
+    "boot": "System booted: 2026-10-27 01:55:51 UTC",
+    "vs_A_missing": 7,
+    "vs_A_extra": 9
+   }
+  },
+  "load": {
+   "job_id": "399c9383a477461a8350ae749599c835",
+   "status": "succeeded",
+   "target": "verified",
+   "no_op": false,
+   "persistence": "saved"
+  },
+  "device_after_load": {
+   "active": "A",
+   "a_markers": "4/4",
+   "b_markers": "0/6",
+   "statements": 22,
+   "pending_confirmation": false,
+   "newest_commit": "0 2026-10-27 02:46:39 UTC by admin via cli commit confirmed, rollback in 5mins",
+   "boot": "System booted: 2026-10-27 01:55:51 UTC",
+   "vs_A_missing": 0,
+   "vs_A_extra": 0
+  },
+  "reboot_command_accepted": true,
+  "reboot_utc": "02:46:42",
+  "went_down": true,
+  "back": true,
+  "seconds_until_ssh": 162,
+  "data_link_ping_to_host1": "sendto: No route to host . --- 10.9.9.2 ping statistics --- 3 packets transmitted, 0 packets received, 100% packet loss ",
+  "boot_before": "System booted: 2026-10-27 01:55:51 UTC",
+  "boot_after": "System booted: 2026-10-27 02:47:23 UTC",
+  "really_restarted": true,
+  "configuration_lines": 22,
+  "lines_lost": 0,
+  "lines_new": 0,
+  "device_after_reboot": {
+   "active": "A",
+   "a_markers": "4/4",
+   "b_markers": "0/6",
+   "statements": 22,
+   "pending_confirmation": false,
+   "newest_commit": "0 2026-10-27 02:46:39 UTC by admin via cli commit confirmed, rollback in 5mins",
+   "boot": "System booted: 2026-10-27 02:47:23 UTC",
+   "vs_A_missing": 0,
+   "vs_A_extra": 0
+  },
+  "ok": true,
+  "log_tail": [
+   "request system reboot Reboot the system ? [yes,no] (no) <answered yes> yes \u0007*** FINAL System shutdown message from admin@vsrx ***\u0007 System going down IMMEDIATELY Shutdown NOW! [pid 22504] admin@vsrx> "
+  ]
+ },
+ "step8_expired_timer": {
+  "trigger": "armed-cut",
+  "node": "vsrx",
+  "minutes": 2,
+  "started_utc": "02:52:54.909",
+  "method": "connection-identity (apply connection closes, then the confirm reconnect opens)",
+  "build": {
+   "image": "clab-backup:1.31.6 sha256:64b479fc16aab944271726d1bde04c625550b2abb21572d47cfb9c4c8bd88d27",
+   "container_started": "2026-10-27T02:50:01.509479616Z",
+   "git_head": "36d9235bb096",
+   "git_dirty_files": 0
+  },
+  "readback_before": {
+   "active": "B",
+   "a_markers": "0/4",
+   "b_markers": "6/6",
+   "statements": 24,
+   "pending_confirmation": false,
+   "newest_commit": "0 2026-10-27 02:52:54 UTC by admin via cli",
+   "boot": "System booted: 2026-10-27 02:47:23 UTC",
+   "vs_A_missing": 7,
+   "vs_A_extra": 9
+  },
+  "submit": {
+   "http": 200,
+   "id": "bfa4c0135d7b4f7c85e32b4668de924d"
+  },
+  "reached_applying": true,
+  "conn_log": [
+   {
+    "t": 2.428502763000324,
+    "event": "apply_connection_port",
+    "port": "93CE"
+   },
+   {
+    "t": 9.615593945999535,
+    "event": "blocked_on_new_port"
+   }
+  ],
+  "blocked_at_rel_s": 9.615593945999535,
+  "final_job_while_blocked": {
+   "id": "bfa4c0135d7b4f7c85e32b4668de924d",
+   "lab_id": "99bb84d5d39f4ba992b5f69eb1e3666e",
+   "lab_name": "camp-vsrx",
+   "created": "2026-10-27T02:52:55.287023+00:00",
+   "status": "applying",
+   "message": "Applying the saved configuration.",
+   "source": {
+    "type": "backup",
+    "backup_job_id": "790b5d739a444d309b295db3183fbe68",
+    "captured_at": "2026-10-27T02:37:11.756684+00:00",
+    "lab_name": "camp-vsrx",
+    "restore_capable_nodes": 1,
+    "saved_nodes": [
+     "clab-camp-vsrx-vsrx"
+    ],
+    "capture_id": "790b5d739a444d309b295db3183fbe68",
+    "topology": {
+     "differs": null,
+     "saved_devices": 1,
+     "matching_devices": 1
+    }
+   },
+   "confirm_minutes": 2,
+   "pre_backup_job_id": "76bcff5f94874b96849f47780c73a970",
+   "post_backup_job_id": "",
+   "targets": [
+    {
+     "name": "clab-camp-vsrx-vsrx",
+     "short_name": "vsrx",
+     "platform": "juniper_vsrx",
+     "status": "confirming",
+     "message": "Configuration loaded; reconnecting to confirm.",
+     "stage": "verifying",
+     "timeline": {
+      "queued": 1793069575.2870338,
+      "backing_up": 1793069575.2973442,
+      "backed_up": 1793069577.5113916,
+      "connecting": 1793069577.517616,
+      "applying": 1793069577.5810506,
+      "armed": 1793069584.7030416,
+      "verifying": 1793069584.7060273
+     },
+     "attempts": 10,
+     "worker": "ThreadPoolExecutor-5_0",
+     "diff_sample": [
+      "[edit system login]",
+      "-   message \"B04-B configuration\";",
+      "+   message \"B04-A configuration\";",
+      "[edit security policies]",
+      "+    from-zone trust to-zone trust {",
+      "+        policy B04-A-allow {",
+      "+            match {",
+      "+                source-address any;",
+      "+                destination-address any;",
+      "+                application any;",
+      "+            }",
+      "+            then {",
+      "+                permit;",
+      "+            }",
+      "+        }",
+      "+    }",
+      "-    from-zone trust to-zone B04-B-ONLY {",
+      "-        policy B04-B-deny {",
+      "-            match {",
+      "-                source-address any;",
+      "-                destination-address any;",
+      "-                application any;",
+      "-            }",
+      "-            then {",
+      "-                deny;",
+      "-            }",
+      "-        }",
+      "-    }",
+      "[edit security zones]",
+      "-    security-zone B04-B-ONLY;",
+      "[edit interfaces ge-0/0/0]",
+      "-   description \"B04-B changed\";",
+      "+   description \"B04-A uplink\";",
+      "[edit]",
+      "-  policy-options {",
+      "-      prefix-list B04-B-ONLY {",
+      "-          198.51.100.0/24;",
+      "-      }",
+      "-  }",
+      "[edit routing-options static]"
+     ],
+     "no_op": false,
+     "root_authentication": "present"
+    }
+   ],
+   "progress": {
+    "settled": 0,
+    "total": 1
+   },
+   "rechecking": false,
+   "server_time": 1793069754.6513314
+  },
+  "rule_present_before_unblock": true,
+  "rule_present_after_unblock": false,
+  "unblocked_at_rel_s": 179.57229128100062,
+  "final_job": {
+   "id": "bfa4c0135d7b4f7c85e32b4668de924d",
+   "lab_id": "99bb84d5d39f4ba992b5f69eb1e3666e",
+   "lab_name": "camp-vsrx",
+   "created": "2026-10-27T02:52:55.287023+00:00",
+   "finished": "2026-10-27T02:55:55.280098+00:00",
+   "status": "failed",
+   "message": "No node was restored. Existing configurations were preserved by the safety backup.",
+   "source": {
+    "type": "backup",
+    "backup_job_id": "790b5d739a444d309b295db3183fbe68",
+    "captured_at": "2026-10-27T02:37:11.756684+00:00",
+    "lab_name": "camp-vsrx",
+    "restore_capable_nodes": 1,
+    "saved_nodes": [
+     "clab-camp-vsrx-vsrx"
+    ],
+    "capture_id": "790b5d739a444d309b295db3183fbe68",
+    "topology": {
+     "differs": null,
+     "saved_devices": 1,
+     "matching_devices": 1
+    }
+   },
+   "confirm_minutes": 2,
+   "pre_backup_job_id": "76bcff5f94874b96849f47780c73a970",
+   "post_backup_job_id": "",
+   "targets": [
+    {
+     "name": "clab-camp-vsrx-vsrx",
+     "short_name": "vsrx",
+     "platform": "juniper_vsrx",
+     "status": "rolled_back",
+     "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active.",
+     "stage": "rolled_back",
+     "timeline": {
+      "queued": 1793069575.2870338,
+      "backing_up": 1793069575.2973442,
+      "backed_up": 1793069577.5113916,
+      "connecting": 1793069577.517616,
+      "applying": 1793069577.5810506,
+      "armed": 1793069584.7030416,
+      "verifying": 1793069584.7060273,
+      "rolled_back": 1793069755.2762904,
+      "settled": 1793069755.2762904
+     },
+     "attempts": 11,
+     "worker": "ThreadPoolExecutor-5_0",
+     "diff_sample": [
+      "[edit system login]",
+      "-   message \"B04-B configuration\";",
+      "+   message \"B04-A configuration\";",
+      "[edit security policies]",
+      "+    from-zone trust to-zone trust {",
+      "+        policy B04-A-allow {",
+      "+            match {",
+      "+                source-address any;",
+      "+                destination-address any;",
+      "+                application any;",
+      "+            }",
+      "+            then {",
+      "+                permit;",
+      "+            }",
+      "+        }",
+      "+    }",
+      "-    from-zone trust to-zone B04-B-ONLY {",
+      "-        policy B04-B-deny {",
+      "-            match {",
+      "-                source-address any;",
+      "-                destination-address any;",
+      "-                application any;",
+      "-            }",
+      "-            then {",
+      "-                deny;",
+      "-            }",
+      "-        }",
+      "-    }",
+      "[edit security zones]",
+      "-    security-zone B04-B-ONLY;",
+      "[edit interfaces ge-0/0/0]",
+      "-   description \"B04-B changed\";",
+      "+   description \"B04-A uplink\";",
+      "[edit]",
+      "-  policy-options {",
+      "-      prefix-list B04-B-ONLY {",
+      "-          198.51.100.0/24;",
+      "-      }",
+      "-  }",
+      "[edit routing-options static]"
+     ],
+     "no_op": false,
+     "root_authentication": "present"
+    }
+   ],
+   "progress": {
+    "settled": 1,
+    "total": 1
+   },
+   "rechecking": false,
+   "server_time": 1793069755.6767988
+  },
+  "timeline": [
+   {
+    "t": 9.618069617000401,
+    "utc": "02:53:04.719",
+    "job_status": "applying",
+    "target_status": "confirming",
+    "message": "Configuration loaded; reconnecting to confirm."
+   },
+   {
+    "t": 179.57414262899965,
+    "utc": "02:55:54.675",
+    "job_status": "applying",
+    "target_status": "confirming",
+    "message": "Configuration loaded; reconnecting to confirm."
+   },
+   {
+    "t": 180.57655316,
+    "utc": "02:55:55.677",
+    "job_status": "failed",
+    "target_status": "rolled_back",
+    "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active."
+   }
+  ],
+  "finished_utc": "02:55:55.677",
+  "readback_after": {
+   "active": "B",
+   "a_markers": "0/4",
+   "b_markers": "6/6",
+   "statements": 24,
+   "pending_confirmation": false,
+   "newest_commit": "0 2026-10-27 02:55:05 UTC by root via other",
+   "boot": "System booted: 2026-10-27 02:47:23 UTC",
+   "vs_A_missing": 7,
+   "vs_A_extra": 9
+  },
+  "iptables_clean_at_exit": true
+ },
+ "step8_back_to_A": {
+  "manager_version": "1.31.6",
+  "build": {
+   "image": "clab-backup:1.31.6 sha256:64b479fc16aab944271726d1bde04c625550b2abb21572d47cfb9c4c8bd88d27",
+   "container_started": "2026-10-27T02:50:01.509479616Z",
+   "git_head": "4da749e4e3b1",
+   "git_dirty_files": 0
+  },
+  "lab": "camp-vsrx",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "790b5d739a444d309b295db3183fbe68"
+  },
+  "requested": [
+   "clab-camp-vsrx-vsrx"
+  ],
+  "started_utc": "02:56:24",
+  "preflight": {
+   "http": 200,
+   "body": {
+    "source": {
+     "type": "backup",
+     "backup_job_id": "790b5d739a444d309b295db3183fbe68",
+     "captured_at": "2026-10-27T02:37:11.756684+00:00",
+     "lab_name": "camp-vsrx",
+     "restore_capable_nodes": 1,
+     "saved_nodes": [
+      "clab-camp-vsrx-vsrx"
+     ],
+     "capture_id": "790b5d739a444d309b295db3183fbe68",
+     "topology": {
+      "differs": null,
+      "saved_devices": 1,
+      "matching_devices": 1
+     }
+    },
+    "targets": [
+     {
+      "name": "clab-camp-vsrx-vsrx",
+      "short_name": "vsrx",
+      "platform": "juniper_vsrx",
+      "running_platform": "juniper_vsrx",
+      "eligible": true,
+      "reason": "",
+      "requested": true,
+      "reachable": true,
+      "matches_saved": false,
+      "pending_changes": 16,
+      "diff": {
+       "hunks": [
+        {
+         "old_start": 4,
+         "old_count": 20,
+         "new_start": 4,
+         "new_count": 22,
+         "lines": [
+          {
+           "type": "context",
+           "old": 4,
+           "new": 4,
+           "text": "set system login user admin uid 2000"
+          },
+          {
+           "type": "context",
+           "old": 5,
+           "new": 5,
+           "text": "set system login user admin class super-user"
+          },
+          {
+           "type": "context",
+           "old": 6,
+           "new": 6,
+           "text": "set system login user admin authentication [redacted]"
+          },
+          {
+           "type": "del",
+           "old": 7,
+           "new": null,
+           "text": "set system login message \"B04-A configuration\""
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 7,
+           "text": "set system login message \"B04-B configuration\""
+          },
+          {
+           "type": "context",
+           "old": 8,
+           "new": 8,
+           "text": "set system services ssh root-login allow"
+          },
+          {
+           "type": "context",
+           "old": 9,
+           "new": 9,
+           "text": "set system services netconf ssh"
+          },
+          {
+           "type": "context",
+           "old": 10,
+           "new": 10,
+           "text": "set system management-instance"
+          },
+          {
+           "type": "del",
+           "old": 11,
+           "new": null,
+           "text": "set security policies from-zone trust to-zone trust policy B04-A-allow match source-address any"
+          },
+          {
+           "type": "del",
+           "old": 12,
+           "new": null,
+           "text": "set security policies from-zone trust to-zone trust policy B04-A-allow match destination-address any"
+          },
+          {
+           "type": "del",
+           "old": 13,
+           "new": null,
+           "text": "set security policies from-zone trust to-zone trust policy B04-A-allow match application any"
+          },
+          {
+           "type": "del",
+           "old": 14,
+           "new": null,
+           "text": "set security policies from-zone trust to-zone trust policy B04-A-allow then permit"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 11,
+           "text": "set security policies from-zone trust to-zone B04-B-ONLY policy B04-B-deny match source-address any"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 12,
+           "text": "set security policies from-zone trust to-zone B04-B-ONLY policy B04-B-deny match destination-address any"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 13,
+           "text": "set security policies from-zone trust to-zone B04-B-ONLY policy B04-B-deny match application any"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 14,
+           "text": "set security policies from-zone trust to-zone B04-B-ONLY policy B04-B-deny then deny"
+          },
+          {
+           "type": "context",
+           "old": 15,
+           "new": 15,
+           "text": "set security zones security-zone trust interfaces ge-0/0/0.0 host-inbound-traffic system-services ping"
+          },
+          {
+           "type": "del",
+           "old": 16,
+           "new": null,
+           "text": "set interfaces ge-0/0/0 description \"B04-A uplink\""
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 16,
+           "text": "set security zones security-zone B04-B-ONLY"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 17,
+           "text": "set interfaces ge-0/0/0 description \"B04-B changed\""
+          },
+          {
+           "type": "context",
+           "old": 17,
+           "new": 18,
+           "text": "set interfaces ge-0/0/0 unit 0 family inet address 10.9.9.1/24"
+          },
+          {
+           "type": "context",
+           "old": 18,
+           "new": 19,
+           "text": "set interfaces fxp0 unit 0 family inet address 10.0.0.15/24"
+          },
+          {
+           "type": "context",
+           "old": 19,
+           "new": 20,
+           "text": "set interfaces fxp0 unit 0 family inet6 address 2001:db8::2/64"
+          },
+          {
+           "type": "context",
+           "old": 20,
+           "new": 21,
+           "text": "set interfaces lo0 unit 0 family inet address 192.0.2.121/32"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 22,
+           "text": "set policy-options prefix-list B04-B-ONLY 198.51.100.0/24"
+          },
+          {
+           "type": "context",
+           "old": 21,
+           "new": 23,
+           "text": "set routing-instances mgmt_junos routing-options rib mgmt_junos.inet6.0 static route ::/0 next-hop 2001:db8::1"
+          },
+          {
+           "type": "context",
+           "old": 22,
+           "new": 24,
+           "text": "set routing-instances mgmt_junos routing-options static route 0.0.0.0/0 next-hop 10.0.0.2"
+          },
+          {
+           "type": "del",
+           "old": 23,
+           "new": null,
+           "text": "set routing-options static route 192.0.2.200/32 discard"
+          },
+          {
+           "type": "add",
+           "old": null,
+           "new": 25,
+           "text": "set routing-options static route 198.51.100.0/24 discard"
+          }
+         ]
+        }
+       ],
+       "added": 9,
+       "removed": 7,
+       "truncated": false,
+       "identical": false,
+       "labels": {
+        "old": "Saved (backup 790b5d739a)",
+        "new": "Running now"
+       }
+      }
+     }
+    ],
+    "eligible_count": 1
+   }
+  },
+  "submit": {
+   "http": 200,
+   "body": {
+    "id": "ea4fd711798f4c2ba99c80c03b3da678"
+   }
+  },
+  "double_submit": {
+   "http": 200,
+   "same_job": true
+  },
+  "timeline": [
+   {
+    "utc": "02:56:24",
+    "job": "backing_up",
+    "targets": {
+     "vsrx": "backing_up"
+    }
+   },
+   {
+    "utc": "02:56:27",
+    "job": "applying",
+    "targets": {
+     "vsrx": "applying"
+    }
+   },
+   {
+    "utc": "02:56:33",
+    "job": "applying",
+    "targets": {
+     "vsrx": "confirming"
+    }
+   },
+   {
+    "utc": "02:56:34",
+    "job": "verifying",
+    "targets": {
+     "vsrx": "applied"
+    }
+   },
+   {
+    "utc": "02:56:36",
+    "job": "succeeded",
+    "targets": {
+     "vsrx": "verified"
+    }
+   }
+  ],
+  "job": {
+   "id": "ea4fd711798f4c2ba99c80c03b3da678",
+   "lab_id": "99bb84d5d39f4ba992b5f69eb1e3666e",
+   "lab_name": "camp-vsrx",
+   "created": "2026-10-27T02:56:24.745225+00:00",
+   "finished": "2026-10-27T02:56:36.543670+00:00",
+   "status": "succeeded",
+   "message": "All 1 node(s) restored and verified against the saved state.",
+   "source": {
+    "type": "backup",
+    "backup_job_id": "790b5d739a444d309b295db3183fbe68",
+    "captured_at": "2026-10-27T02:37:11.756684+00:00",
+    "lab_name": "camp-vsrx",
+    "restore_capable_nodes": 1,
+    "saved_nodes": [
+     "clab-camp-vsrx-vsrx"
+    ],
+    "capture_id": "790b5d739a444d309b295db3183fbe68",
+    "topology": {
+     "differs": null,
+     "saved_devices": 1,
+     "matching_devices": 1
+    }
+   },
+   "confirm_minutes": 5,
+   "pre_backup_job_id": "b2538aa99bb34900be59b2ca32efe11c",
+   "post_backup_job_id": "bc55fbe675364731b8076d44f950b748",
+   "targets": [
+    {
+     "name": "clab-camp-vsrx-vsrx",
+     "short_name": "vsrx",
+     "platform": "juniper_vsrx",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "stage": "replaced",
+     "timeline": {
+      "queued": 1793069784.7452357,
+      "backing_up": 1793069784.7569642,
+      "backed_up": 1793069786.9683974,
+      "connecting": 1793069786.9766335,
+      "applying": 1793069787.0400136,
+      "armed": 1793069793.7800207,
+      "verifying": 1793069793.7838678,
+      "confirming": 1793069793.8961294,
+      "replaced": 1793069794.3229473,
+      "settled": 1793069794.3229473,
+      "checking": 1793069794.3289757,
+      "checked": 1793069796.5404725
+     },
+     "attempts": 1,
+     "worker": "ThreadPoolExecutor-5_0",
+     "diff_sample": [
+      "[edit system login]",
+      "-   message \"B04-B configuration\";",
+      "+   message \"B04-A configuration\";",
+      "[edit security policies]",
+      "+    from-zone trust to-zone trust {",
+      "+        policy B04-A-allow {",
+      "+            match {",
+      "+                source-address any;",
+      "+                destination-address any;",
+      "+                application any;",
+      "+            }",
+      "+            then {",
+      "+                permit;",
+      "+            }",
+      "+        }",
+      "+    }",
+      "-    from-zone trust to-zone B04-B-ONLY {",
+      "-        policy B04-B-deny {",
+      "-            match {",
+      "-                source-address any;",
+      "-                destination-address any;",
+      "-                application any;",
+      "-            }",
+      "-            then {",
+      "-                deny;",
+      "-            }",
+      "-        }",
+      "-    }",
+      "[edit security zones]",
+      "-    security-zone B04-B-ONLY;",
+      "[edit interfaces ge-0/0/0]",
+      "-   description \"B04-B changed\";",
+      "+   description \"B04-A uplink\";",
+      "[edit]",
+      "-  policy-options {",
+      "-      prefix-list B04-B-ONLY {",
+      "-          198.51.100.0/24;",
+      "-      }",
+      "-  }",
+      "[edit routing-options static]"
+     ],
+     "no_op": false,
+     "root_authentication": "present",
+     "persistence": "saved",
+     "missing_statements": 0,
+     "extra_statements": 0
+    }
+   ],
+   "progress": {
+    "settled": 1,
+    "total": 1
+   },
+   "rechecking": false,
+   "server_time": 1793069796.8079698
+  },
+  "finished_utc": "02:56:36",
+  "device_judgement_before": {
+   "vsrx": {
+    "active": "B",
+    "a_markers": "0/4",
+    "b_markers": "6/6",
+    "statements": 24,
+    "pending_confirmation": false,
+    "newest_commit": "0 2026-10-27 02:55:05 UTC by root via other",
+    "boot": "System booted: 2026-10-27 02:47:23 UTC",
+    "vs_A_missing": 7,
+    "vs_A_extra": 9
+   }
+  },
+  "device_judgement_after": {
+   "vsrx": {
+    "active": "A",
+    "a_markers": "4/4",
+    "b_markers": "0/6",
+    "statements": 22,
+    "pending_confirmation": false,
+    "newest_commit": "0 2026-10-27 02:56:33 UTC by admin via cli commit confirmed, rollback in 5mins",
+    "boot": "System booted: 2026-10-27 02:47:23 UTC",
+    "vs_A_missing": 0,
+    "vs_A_extra": 0
+   }
+  },
+  "wall_seconds": 12.6,
+  "tool_exit": 0
+ },
+ "arming_seconds_from_manager_timeline": [
+  [
+   "camp-vsrx",
+   "c49dd700",
+   "vsrx",
+   "verified",
+   false,
+   6.7,
+   0.6,
+   4.3,
+   1
+  ],
+  [
+   "camp-vsrx",
+   "a1bc2344",
+   "vsrx",
+   "verified",
+   false,
+   6.6,
+   0.5,
+   2.2,
+   1
+  ],
+  [
+   "camp-vsrx",
+   "9dea698d",
+   "vsrx",
+   "verified",
+   true,
+   6.4,
+   0.5,
+   2.2,
+   1
+  ],
+  [
+   "camp-vsrx",
+   "0dd47c21",
+   "vsrx",
+   "verified",
+   false,
+   6.5,
+   0.5,
+   2.2,
+   1
+  ],
+  [
+   "camp-vsrx",
+   "1eef2479",
+   "vsrx",
+   "verified",
+   true,
+   6.5,
+   0.5,
+   2.2,
+   1
+  ],
+  [
+   "camp-vsrx",
+   "399c9383",
+   "vsrx",
+   "verified",
+   false,
+   6.7,
+   0.5,
+   2.2,
+   1
+  ],
+  [
+   "camp-vsrx",
+   "bfa4c013",
+   "vsrx",
+   "rolled_back",
+   false,
+   7.1,
+   170.6,
+   2.2,
+   11
+  ],
+  [
+   "camp-vsrx",
+   "ea4fd711",
+   "vsrx",
+   "verified",
+   false,
+   6.7,
+   0.5,
+   2.2,
+   1
+  ]
+ ]
+}
