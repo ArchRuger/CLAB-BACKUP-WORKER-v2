@@ -17,6 +17,9 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
 - **VM**: 72 GB RAM, 24 CPUs, KVM present; the five images are pulled; the `parity` lab (vsw, vrt, cjunos, xrv9k, ceos)
   runs; the manager and the capture stack run the release named in the last log entry.
 - **Chunk in progress**: see the last log entry.
+- **Campaign 2 (2026-10-27)**: the owner's four-objective extension; its chunk ledger, routing record and
+  decisions are [CAMPAIGN-2.md](CAMPAIGN-2.md); the acceptance matrix is [ACCEPTANCE.md](ACCEPTANCE.md) and the
+  per-image matrix [DEVICES.md](DEVICES.md) (both written during the campaign).
 
 ## How to continue after an interruption
 
@@ -174,3 +177,13 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   in each design's answers stand as open points. Pull request 73 (`claude/parity-campaign` → `main`) carries
   1.31.2 to 1.31.6; the owner merges it. The worktrees under `.claude/worktrees/` and the side branches are history
   after this release and may be removed.
+- 2026-10-27 01:20 UTC, **campaign 2 started** (D00): baseline recorded in `CAMPAIGN-2.md` (branch at `e709f3d` = 1.31.6,
+  `main` merged pull request 77, the VM rebooted at about 00:35 UTC and every lab container exited; manager and capture
+  stack back at 1.31.6). Routing verified from the agent transcripts (Haiku scout, Sonnet devops; Opus reviewers in
+  flight). Official kind defaults rechecked for the six images (table in `CAMPAIGN-2.md`); containerlab.dev states
+  vJunos-router "cannot be used in any deployments that launch it from within a VM", which makes the C00 blocker an
+  official host limitation. npm still lists only `@containerlab/clab-ui` 0.3.2: C11 stays blocked. Running: A01
+  (`ACCEPTANCE.md` by `docs-auditor`), A02 (the deferred C06/C08/C09 reviews by `risk-reviewer` and `clab-ui-reviewer`
+  on the 1.31.5→1.31.6 diff), B03a (`clab-devops-engineer`: vSRX pull and solo boot in `camp-vsrx`, the `parity` lab
+  redeployed). Next: the topology-editing design (T01) from the editor's integrator documentation, B02 (vSRX registry)
+  once B03a reports the image's console and interface facts.
