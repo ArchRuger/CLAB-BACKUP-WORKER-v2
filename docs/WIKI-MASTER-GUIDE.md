@@ -474,8 +474,9 @@ account**, without sudo:
 bash "$HOME/projects/clab-manager/deploy/install.sh"
 ```
 
-Choose **Install or update manager, then set up Git**. The menu combines missing
-prerequisites, approved APT media repair with backups, password/helpers, persistent
+Choose **Install or update manager, then set up Git**. It takes the documented
+defaults without further questions (add `--advanced` to the command to be asked every
+setup question) and combines missing prerequisites, approved APT media repair with backups, password/helpers, persistent
 storage, image build/start, the browser Wireshark stack and running-container/HTTP
 checks. It then opens Git
 setup as the same ordinary owner. Existing `.env` is retained; a new source
@@ -493,8 +494,10 @@ Menu **Git setup / repair only** reopens the Git wizard without rebuilding.
 **Check running installation** runs the separate full [health report](HEALTH-CHECK.md).
 The initial full installation keeps its shorter container/version/HTTP check;
 run the full report again after browser VM connection and Git setup in Part 21.
-The terminal interface
-uses numbered choices, works over SSH and needs no extra UI package. After a
+An interactive
+terminal opens the full-screen installer when it has been set up
+(`install.sh --setup-tui`); otherwise, or with `--plain`, the plain numbered menu runs,
+which works over SSH and needs no extra UI package. After a
 successful full run, the manual installation commands in Parts 7–10 do not need
 to be repeated. Continue with the browser VM connection and lab setup in Part 11.
 See [INSTALL.md](INSTALL.md) for the full shortcut, recovery and provider details.
@@ -880,21 +883,23 @@ The helper accepts regular files without symlink components, with limits of 1 Mi
 
 ## Devices
 
-Opening a lab from **My labs** shows its workspace on the **Topology** tab. The tabs are **Topology**, **Devices**, **Tools** and **Advanced**, in that order; **Credentials** and **Action logs** are sections of **Advanced**. The lab header shows the lab's state pill, *n of m devices ready*, the save chip (*Saved 21 min ago*, *1 save to upload*, *Can't save*, *Running <name>*), **Save**, **Load** and **Lab actions ▾**; the header is the same on every tab. Select **Devices** for one row per device with its state pill (Ready · Starting · Needs credentials · Needs attention · Unavailable), the reason sentence, **Open CLI ↗** and **Details**; the **Technical details** toggle shows the classic table (backup checkbox, address:port, network OS, credentials, last SSH check, last backup). **Details** opens the device panel with the state, **Open CLI ↗** / **Capture traffic…** / **Back up configuration**, the latest login check (**Test login now**, **Check credentials**), the backups of this device and, under **Advanced**, **Edit connection** for the endpoint, network OS, credentials and download device name. Test a device after its network OS completes booting. Choose the correct network OS for supported devices; generic SSH access does not imply configuration-backup support.
+Opening a lab from **My labs** shows its workspace on the **Topology** tab. The tabs are **Topology**, **Devices**, **Tools** and **Advanced**, in that order; **Credentials** and **Action logs** are sections of **Advanced**. The lab header shows the lab's state pill, *n of m devices ready*, the save chip (*Saved 21 min ago*, *1 save to upload*, *Can't save*, *Running <name>*), **Save**, **Load** and **Lab actions ▾**; the header is the same on every tab. Select **Devices** for one row per device with its state pill (Ready · Starting · Needs credentials · Needs attention · Unavailable), the reason sentence, **Open CLI ↗** and **Details**; the **Technical details** toggle shows the classic table (backup checkbox, address:port, network OS, credentials, last SSH check, last backup). **Details** opens the device panel with the state, **Open CLI ↗** / **Console ↗** (vJunos-switch, vJunos-router and XRv9k only) / **Capture traffic…** / **Back up configuration**, the container's *Interfaces*, *Logs* and *Impairments* sections (read through the VM; see [Lab operations](LAB-OPERATIONS.md#diagnostics-logs-interfaces-inspect-and-images)), the latest login check (**Test login now**, **Check credentials**), the backups of this device and, under **Advanced**, **Edit connection** for the endpoint, network OS, credentials and download device name. Test a device after its network OS completes booting. Choose the correct network OS for supported devices; generic SSH access does not imply configuration-backup support.
 
-The device list remains available even when a map is imported. The current MVP has no host CPU/memory utilization collector to configure.
+The device list remains available even when a map is imported. The manager has no host CPU or memory collector (the telemetry and Grafana stack was retired as of 1.30.39).
 
-## Juniper vQFX and vJunos-switch support
+## Juniper vQFX, vJunos-switch, vJunos-router and vSRX support
 
-The manager recognizes these kinds (since 1.18.0) during topology/inventory import
-and VM sync. Use the canonical Containerlab kind in new topology YAML:
+The manager recognizes these kinds during topology/inventory import
+and VM sync (vQFX and vJunos-switch since 1.18.0). Use the canonical Containerlab kind in new topology YAML:
 
 | Device / NOS profile | Canonical Containerlab kind | Manager import aliases |
 |---|---|---|
 | Juniper vQFX | `juniper_vqfx` | `vr-vqfx`, `vqfx` |
 | Juniper vJunos-switch | `juniper_vjunosswitch` | `vr-vjunosswitch`, `vjunosswitch` |
+| Juniper vJunos-router | `juniper_vjunosrouter` | `vr-vjunosrouter`, `vjunosrouter` |
+| Juniper vSRX | `juniper_vsrx` | `vr-vsrx`, `vsrx` |
 
-Both use the existing Junos SSH driver, as cJunosEvolved does. **Test login now**
+All use the existing Junos SSH driver, as cJunosEvolved does. **Test login now**
 (device panel) and the automatic login check run `show version`; **Test login now** reports
 *Login OK* only when the CLI answered, and *Starting* (with its own message) when the login
 was accepted but the CLI is still silent. In a lab linked to a VM deployment the readiness
@@ -902,7 +907,7 @@ monitor replaces it with a real answer; for an inventory import (no VM deploymen
 monitored) the result stays until the next *Test login*. A configuration backup captures
 `show configuration | display set | no-more`. Internal saved configurations use
 `.set`; Git manifests identify them as `junos-display-set`. Individual backup
-downloads use the device prefix `vQFX_*.cfg` or `vJunos-switch_*.cfg`; the `.cfg`
+downloads use the device prefix `vQFX_*.cfg`, `vJunos-switch_*.cfg`, `vJunos-router_*.cfg` or `vSRX_*.cfg`; the `.cfg`
 download extension does not convert display-set content into hierarchical Junos
 configuration.
 
@@ -926,14 +931,15 @@ capture. Manager support does not prove an image can boot on the chosen host;
 vJunos-switch's nested-virtualization requirement is explained in [Part 2](#part-2). Consult the
 [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/) and
 [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) kind guides
-for image and runtime requirements. Downloading a saved version downloads files; **Load** (the header) puts a saved state onto the running devices and is offered for cJunosEvolved and vJunos-switch, not for
-vQFX (see LAB-OPERATIONS.md for the full list of restorable platforms).
+for image and runtime requirements. Downloading a saved version downloads files; **Load** (the header) puts a saved state onto the running devices and is offered for cEOS, cJunosEvolved, vJunos-switch and XRv9k, not for
+vQFX, vJunos-router or vSRX, which are backed up, downloaded and saved only until Load is proven on them (see
+[Lab operations](LAB-OPERATIONS.md) and the [support matrix](multi-platform-restore/README.md)).
 
 ## Map and right-click actions
 
 Open **Topology**; if automatic import did not supply the annotations and topology, choose **More ▾ › Import map…** on the map. Pan by dragging the background; use **Fit**, zoom and **Expand**. Each device carries a state dot that matches its pill on the Devices tab.
 
-Right-click a matched device for **Open CLI ↗**, **Capture traffic…**, **Back up configuration** and **Device details**; click a link to capture traffic at either end. Keyboard users can focus a device and press <kbd>Shift</kbd>+<kbd>F10</kbd>. Use <kbd>Esc</kbd> to dismiss the menu.
+Right-click a matched device for **Open CLI ↗**, **Console ↗** (serial console, for the vrnetlab kinds), **Capture traffic…**, **Back up configuration**, **Restart device…**, **Stop device…**, **Start device…** and **Device details**; click a link to capture traffic at either end. A link that is down turns red and dashed once the lab runs. The map's **More ▾** menu also has **Download picture…** and **Arrange devices…**. Keyboard users can focus a device and press <kbd>Shift</kbd>+<kbd>F10</kbd>. Use <kbd>Esc</kbd> to dismiss the menu.
 
 Map actions use the same device connection as the Devices tab. Unknown or ambiguous device names cannot receive live actions; correct the short-name mapping or reimport the matching topology data. Links show imported wiring, not measured live connectivity. Custom artwork and unsupported annotation types may differ from VS Code.
 
@@ -941,7 +947,7 @@ For older stored maps, reimport the original files to recover metadata that earl
 
 ## Device CLI in the browser
 
-**Open CLI ↗** (device row, device panel or right-click menu) opens an SSH terminal in a new browser tab. **Open all CLIs ↗** (**Tools › More tools**, or **More ▾** on the map) opens a launcher page with one row per device and **Open all ready CLIs ↗**. Allow browser popups; the manager permits at most 32 concurrent terminals/checks. Closing the terminal or restarting the manager disconnects the session.
+**Open CLI ↗** (device row, device panel or right-click menu) opens an SSH terminal in a new browser tab, with a toolbar for text size, copy, clear and save as text. **Console ↗** opens the device's serial console in the same kind of page, with no credentials sent (see [Node features](../clab-backup-ui/NODE-FEATURES.md#serial-console)). **Open all CLIs ↗** (**Tools › More tools**, or **More ▾** on the map) opens a launcher page with one row per device and **Open all ready CLIs ↗**. Allow browser popups; the manager permits at most 32 concurrent terminals/checks. Closing the terminal or restarting the manager disconnects the session.
 
 The browser CLI is an SSH session from the manager to the device. Test the saved management address, port and credentials from that network perspective. **Advanced › Action logs** records session events, not a full transcript of typed commands and terminal output.
 
@@ -959,9 +965,9 @@ Review readiness, choose a backup, then inspect its outcome under **Tools › Co
 
 ## Wireshark in the browser
 
-Right-click a device and choose **Capture traffic…**, click a link on the map, or
+Right-click a device and choose **Capture traffic…**, click a link on the map (both ends are ticked: one Wireshark each), or
 open **Tools › Packet capture › Capture traffic…**; Wireshark runs in an isolated
-container on the VM and opens in a browser tab. See [CAPTURE.md](CAPTURE.md).
+container on the VM and opens in a browser tab. **End all my sessions** ends the sessions this browser started. See [CAPTURE.md](CAPTURE.md).
 
 ## Save lab work to Git
 
@@ -990,9 +996,9 @@ All lab operations…** for the complete list, or right-click a lab card on Home
 
 | Action | Behavior |
 |---|---|
-| Start lab / Redeploy lab… / Destroy lab… | Operates on the original VM topology. Destroy always runs `containerlab destroy --cleanup`, so the containers and the generated lab folder (`clab-<name>`) go together; the review names the folder. Redeploy keeps that folder unless you choose **Redeploy and clear the lab folder…**, and falls back to destroy then deploy when necessary. |
+| Start lab / Redeploy lab… / Destroy lab… | Operates on the original VM topology. Destroy runs `containerlab destroy --cleanup` (unless only chosen devices are destroyed, or the installed containerlab lacks the flag), so the containers and the generated lab folder (`clab-<name>`) go together; the review names the folder. Redeploy keeps that folder unless you choose **Redeploy and clear the lab folder…**, and falls back to destroy then deploy when necessary. |
 | Apply topology changes | Applies the original VM YAML when supported by installed Containerlab. |
-| Start stopped devices / Stop devices / Restart all devices | Applies to every device in the open lab. Stop retains containers; destroy removes them. |
+| Start stopped devices / Stop devices / Restart all devices | Applies to every device in the open lab. Stop retains containers; destroy removes them. A single device has **Restart device…**, **Stop device…** and **Start device…** in its right-click menu and panel. |
 | Show running devices / Running labs on the VM… | Readable table of topology, lab, device, kind/image, state/health and IPv4/IPv6. Failed or incomplete output remains visible for diagnosis. |
 | Save device configurations | Containerlab's kind-dependent save command. Manager backups are separate. |
 | Open all CLIs ↗ | Opens a launcher tab with one row per device and **Open all ready CLIs ↗**. Allow browser popups; at most 32 concurrent terminals/checks. |
@@ -1050,8 +1056,10 @@ device is ready; otherwise it lists the skipped devices first and asks for confi
 There is no sidebar. The top bar carries the product name, a breadcrumb **My labs /
 <lab>** that switches between labs, and the **Manager ▾** menu with **VM
 connection…**, **Refresh lab list**, **Deploy a new lab…**, **Import lab files…**,
-**Import an Ansible inventory…**, **Running labs on the VM…**, **Operation
-history…**, **Manager settings…** and **Diagnostics**. Deploy a new lab opens the
+**Import an Ansible inventory…**, **Labs found on the VM…**, **Running labs on the VM…**,
+**Images on this VM…**, **Operation history…**, **Manager settings…**, **Browser
+preferences…**, a **Help** group (**Keyboard shortcuts…** and links to the containerlab
+documentation) and **Diagnostics**. Deploy a new lab opens the
 topology browser **Lab folders on the VM**.
 
 **Running labs on the VM…** shows the inspection output as a readable table in a
@@ -1069,7 +1077,7 @@ a save location, and shows the exact containerlab command under **Technical
 details**. Review tokens expire after five minutes and bind the VM connection,
 original file digest and relevant deployment state. A change requires another
 preview. Lifecycle actions on the open lab report in the lab banner (**View
-output**); output and outcome persist in **Operation history…**; interrupted jobs
+output**, and **Stop this operation…** while one runs); output and outcome persist in **Operation history…**; interrupted jobs
 require inspection before retrying. Lifecycle commands can interrupt device CLI
 sessions. Manager backups/import changes are blocked during an active lab operation.
 
@@ -1590,7 +1598,7 @@ This guide follows the current release; the release history is in the
 build notes are retained from the original build log. Manager procedures reflect password-only VM authentication,
 persistent storage, the student-centred Home / lab workspace layout, map editing and
 registered Git repository saves. Downloading a saved version gives you files; **Load** puts a saved state
-onto running devices and is offered for Junos, EOS and IOS XR devices. Git-owner execution is not browser-user authentication.
+onto running devices and is offered for cEOS, cJunosEvolved, vJunos-switch and XRv9k devices. Git-owner execution is not browser-user authentication.
 The source includes automated checks for release consistency, helper preflight,
 the installer, Git onboarding/registrations and APT source handling, plus the
 separate VM installation report described in [HEALTH-CHECK.md](HEALTH-CHECK.md). Earlier
@@ -1902,13 +1910,13 @@ saves, so a separate timestamp folder is unnecessary for each **Save**. A lab st
 | Save settings (chip panel) | The devices every save includes, where the lab saves and the repository connection. |
 | Save as a lab state… | Write the lab's current state into another folder (default `<the lab's folder>/<name>`) without changing where the lab saves. |
 | Update from the repository | Fast-forward an eligible clean checkout when the online copy has changes this VM lacks and nothing waits to be uploaded; resolve diverged history outside the app. |
-| Load (lab header) | Junos, EOS and IOS XR: replaces the running configuration of the saved devices from your saves, a checkpoint or any lab state, without changing the save location or the topology; the current configuration is backed up first. |
+| Load (lab header) | cJunosEvolved and vJunos-switch (Junos), cEOS (EOS) and XRv9k (IOS XR): replaces the running configuration of the saved devices from your saves, a checkpoint or any lab state, without changing the save location or the topology; the current configuration is backed up first. |
 | Undo this load | Loads the backup taken before the load, through the same review. |
 
 **Download ZIP downloads files.** It does not apply commands to running
 devices, change the repository branch, rewrite the original topology or redeploy the
 lab. **Load** is the only action that changes running devices; it is
-offered for Junos, EOS and IOS XR devices and lists every device with what would change before the red **Load**
+offered for cEOS, cJunosEvolved, vJunos-switch and XRv9k devices and lists every device with what would change before the red **Load**
 confirms. Older captures can have unknown topology provenance; match the
 intended devices and configuration format before using downloaded files outside the
 tool.

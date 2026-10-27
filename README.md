@@ -19,21 +19,32 @@ Current release: **1.31.6** · [changelog](docs/CHANGELOG.md) · [all documentat
 - **Know when a lab is really up.** Containers run long before a network OS is
   usable, so the manager logs in to every node and asks for `show version` until it
   answers, then opens SSH and runs a login test by itself.
-- **Work on the nodes**: browser SSH terminals, a topology map with right-click
-  actions, a map editor (*Edit map*: the drawing only, never the topology) with draw.io
-  export, SuperPuTTY session export.
+- **Work on the nodes**: browser SSH terminals (with a toolbar for text size, copy and
+  clear) and, for the vrnetlab kinds, the serial console; a topology map with right-click
+  actions, link state colours, *Download picture…*, *Arrange devices…* and a map editor
+  (*Edit map*: the drawing only, never the topology) with draw.io export; SuperPuTTY
+  session export. A device's panel shows its container logs and interfaces and can set link
+  impairments; a single device can be stopped, started or restarted, and a running lab
+  operation can be stopped.
 - **Keep configurations**: on-demand and scheduled backups over Ansible for EOS,
   Junos and IOS-XR, per-device history and downloads, and **Save** in the lab header that
   commits on the VM and, when you click **Upload**, pushes to your Git repository with
   your existing login; **Load** puts a saved state back onto the running devices.
 - **See the packets**: Wireshark runs on the VM in an isolated container and streams
-  to your browser. Pick a node's port on the map and start.
+  to your browser. Pick a node's port, a whole device or both ends of a link on the map and
+  start; one Wireshark per interface or one for all of them.
 - **Stay in step with the VM**: read-only discovery every 30 seconds over a
   restricted SSH account, automatic node addresses, VM file sync, a health report and
   a Diagnostics page.
 
-Device kinds with backup and login-test drivers: Arista cEOS, Juniper cJunosEvolved,
-vJunos-switch and vQFX, Cisco XRv9k. Any node that speaks SSH gets a terminal.
+Device kinds with backup and login-test drivers: Arista cEOS; Juniper cJunosEvolved,
+vJunos-switch, vJunos-router, vQFX and vSRX; Cisco XRv9k. Any node that speaks SSH gets a
+terminal. **Load** (restoring a saved configuration onto the running device) is offered only
+for the kinds it was proven on: cEOS, cJunosEvolved, vJunos-switch and XRv9k. vQFX,
+vJunos-router and vSRX are backed up, downloaded and saved, but **Load** (and the experimental
+*Network design* apply) stay off for them until proven (see
+[Lab operations](docs/LAB-OPERATIONS.md) and
+[the multi-platform restore notes](docs/multi-platform-restore/README.md)).
 
 ## A quick look
 
@@ -66,12 +77,14 @@ command in this project works from any directory; the guides keep the source in
    bash "$HOME/projects/clab-manager/deploy/install.sh"
    ```
 
-2. Answer the prompts. `1` at *Setup menu*, *Manager bind/port settings*, *Lab
-   operation access* and *VS Code / Containerlab extension access* takes the
-   defaults; say `y` to the plan, enter your sudo password, and create a password for
-   `clab-discovery` when asked (write it down). Choose `2` at *Next step* to set up
-   Git later. The image build and the capture stack take a few minutes; the installer
-   ends with `Manager 1.31.6: running; HTTP and version checks passed.`
+2. Choose `1` (*Install or update manager, then set up Git*) at the *Setup menu*. The
+   standard path takes the documented defaults without further questions and starts at once;
+   enter your sudo password and create a password for `clab-discovery` when asked (write it
+   down), then follow the Git wizard (or leave it and set up Git later). The image build and
+   the capture stack take a few minutes; the installer ends with
+   `Manager 1.31.6: running; HTTP and version checks passed.` Add `--advanced` to the
+   installer command to be asked every setup question; [Guided installation](docs/INSTALL.md)
+   describes the full-screen and the plain menu.
 
 3. Open `http://VM_IP:8081`. The VM connection dialog opens on its own: enter the
    `clab-discovery` password and click **Save and test connection**.
@@ -147,6 +160,8 @@ and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | [Lab builder](docs/LAB-BUILDER.md) | Draw a new lab in the browser, save it to the VM and deploy it, or edit the topology of a lab that is not deployed |
 | [Git setup](docs/GIT-SETUP.md) and [Save and load](docs/GIT-PROGRESS.md) | Register a checkout, then use **Save**, **Upload**, checkpoints and **Load** from the lab header |
 | [Course states](docs/COURSE-STATES.md) | Make a course's Start, Broken and Final states with **Save as a lab state…** and know how students load them |
+| [Node features](clab-backup-ui/NODE-FEATURES.md) | Know what each device action does: terminals, the serial console, backups and their download names, deployment checks |
+| [Network design](docs/NETWORK-DESIGN.md) | Read about the experimental, opt-in network intent and generated configuration (Advanced › Experimental) |
 | [Browser Wireshark](docs/CAPTURE.md) | Run capture sessions, download captures, repair or remove the capture stack |
 | [Network telemetry](docs/TELEMETRY.md) | Read the retirement notice for the removed telemetry feature and Grafana dashboards |
 | [Health check](docs/HEALTH-CHECK.md) and [Diagnostics](docs/DEBUG-PANEL.md) | Read `check-install.sh` results and diagnose the VM connection from the browser |
@@ -170,6 +185,7 @@ setup and migration guide, the Wiki.js master guide, the release rules and the a
 ├── clab-backup-ui/          the manager: FastAPI app, static UI, Dockerfile, Compose file, tests
 │   ├── app/                 application modules; host_*.py are the helpers installed on the VM
 │   ├── app/static/          the UI (vanilla JavaScript, no build step)
+│   ├── lab-builder/         build project of the embedded topology editor (output committed under app/static/lab-builder/)
 │   ├── tests/               unittest and node:test suites
 │   └── VALIDATION.md        what was actually tested for each release
 └── agent instructions.md    handoff notes for coding agents, newest release first
@@ -184,7 +200,7 @@ itself:
 ```bash
 python3 -m venv "$HOME/projects/clab-manager/clab-backup-ui/.venv"
 "$HOME/projects/clab-manager/clab-backup-ui/.venv/bin/pip" install -r "$HOME/projects/clab-manager/clab-backup-ui/requirements.txt" httpx
-(cd "$HOME/projects/clab-manager/clab-backup-ui" && .venv/bin/python -m unittest discover -s tests -t tests && node --test tests/*.js)
+(cd "$HOME/projects/clab-manager/clab-backup-ui" && PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests && node --test tests/*.js)
 ```
 
 `python3 deploy/verify-release.py` checks that every file carrying the release

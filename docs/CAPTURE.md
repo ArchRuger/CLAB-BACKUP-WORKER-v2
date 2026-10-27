@@ -59,7 +59,8 @@ It pulls the pinned Wireshark image, builds the session service from this source
 starts the capture Compose project (Edgeshark on localhost 5001, the session service
 on localhost 5801), writes `CAPTURE_PROVIDER`, the two URLs and the service token into
 `clab-backup-ui/.env` while preserving unrelated settings and an existing token, and
-recreates the manager. It recreates the Edgeshark and session containers every time
+recreates the manager (`--no-recreate` leaves the manager container alone; `start-manager.sh` uses it
+and recreates the manager itself). It recreates the Edgeshark and session containers every time
 (an upgrade can rename the project network, and only a recreated container joins the
 new one), so discovery pauses for a few seconds and running browser sessions are
 removed: download saved captures before upgrading.
@@ -162,9 +163,10 @@ sessions. Either link end captures that side's traffic.
 
 NOS aliases can differ from Linux interface names. A link (its menu, or a click on it) resolves this automatically: containerlab wires each supported kind's own port
 names onto sequential `ethN` container veths in a fixed, documented order (never a "+1"
-guess), so `ge-0/0/0` preselects `eth1` on a vJunos-switch, `et-0/0/0` preselects `eth4` on
-cJunosEvolved (its own `eth1`-`eth3` are reserved), and `Gi0/0/0/0` preselects `eth1` on an
-XRv9k; EOS and Linux port names already are the container name. The mapping (`app/topology.py`
+guess), so `ge-0/0/0` preselects `eth1` on a vJunos-switch, vJunos-router or vSRX, `et-0/0/0` preselects
+`eth4` on cJunosEvolved (its own `eth1`-`eth3` are reserved), `xe-0/0/0` preselects `eth1` on a vQFX and
+`Gi0/0/0/0` preselects `eth1` on an XRv9k; Nokia SR Linux keeps its own `e1-N` veth names (`ethernet-1/N` is
+the same port's alias); EOS and Linux port names already are the container name. The mapping (`app/topology.py`
 `container_interface`, cited to each kind's page on containerlab.dev) is always confirmed
 against the live Edgeshark interface list before *Start capture* is enabled — a name that is
 not (yet) live keeps the manual list open with the reason instead of guessing. **The tap
@@ -308,6 +310,7 @@ survives token rotation. Do not remove unrelated containers or manager data.
 - Per-kind veth order behind the automatic mapping: [vr-vjunosswitch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/),
   [cjunosevolved](https://containerlab.dev/manual/kinds/cjunosevolved/),
   [vr-vqfx](https://containerlab.dev/manual/kinds/vr-vqfx/), [vr-xrv9k](https://containerlab.dev/manual/kinds/vr-xrv9k/),
+  [vr-vsrx](https://containerlab.dev/manual/kinds/vr-vsrx/),
   [ceos](https://containerlab.dev/manual/kinds/ceos/), [srl](https://containerlab.dev/manual/kinds/srl/)
 
 `deploy/capture/smoke.py` also starts a second desktop on the same namespace under another request id

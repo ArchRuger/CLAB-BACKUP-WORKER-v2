@@ -187,3 +187,13 @@ Evidence inconsistencies found while building this file:
   all; the shipped caption says so; R040–R042's "not run" gap is closed with live evidence.
 - 2026-10-27 B03a: vSRX exact image booted (DEVICES.md); vJunos-router's published image stays BLOCKED on this host
   (official limitation recorded in CAMPAIGN-2.md).
+- 2026-10-27 A05: capture with real device packets through the manager (C07-DESIGN §13): 40 ICMP packets of a
+  20-ping exchange seen in the viewer and in the saved pcap; R051–R054's "viewer only" gap is closed with live evidence.
+- 2026-10-27 A06/A07: the C06 items never run live (chip, Find, hover, Download picture) checked read-only on the
+  live `parity` lab (`evidence/a06-c06-live-browser-2026-10-27.md`); `verify_after.py` pins the real device-menu order
+  and passes 107/107 on the fixture at three viewports. Two facts for later: no `?` shortcut exists (the dialog opens
+  from Help only, as the code says), and Escape in Find clears the term but keeps the fitted view.
+- 2026-10-27 B06 (on the 1.31.6 manager, before the vSRX registry went live): an unknown kind imports as "Unmapped"
+  with "Choose NOS", takes its login from containerlab's inventory, is refused for backup ("Enable at least one
+  supported node"), has no Console row, and its terminal works; recorded as the "before" state in
+  `evidence/a05-b06-vsrx-2026-10-27.md`; the "after" pass runs on the rebuilt manager (B06, pending).
