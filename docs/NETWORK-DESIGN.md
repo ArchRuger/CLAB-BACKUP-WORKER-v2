@@ -9,7 +9,9 @@ are in [docs/netlab-integration/](netlab-integration/PICKUP.md).
 
 Network design adds *network intent* to a lab: the addressing pools, address families, routing
 protocols, services and per-device or per-link settings a student wants on the lab's devices. Students
-reach it through the lab's **Design** tab. The
+reach it under **Advanced › Experimental › Network design** (a section that starts closed, marked *Under
+construction* and *Under review*; the feature is not part of the supported lab workflow, and there is no
+Design tab). The
 manager calculates the addressing and adjacency plan and generates per-device configuration from
 that intent with [netlab](https://netlab.tools) (the PyPI distribution `networklab`, pinned in
 `clab-backup-ui/requirements.txt` and installed in the manager image; nothing has to be installed on
@@ -44,14 +46,16 @@ Every generation decides identities explicitly and records them:
 `manager node ↔ containerlab node, kind and image ↔ netlab device profile ↔ containerlab endpoint ↔ NOS interface`
 
 - The profile comes from the capability model's table (`design_capabilities.PROFILES`): cEOS →
-  `eos` (exact), vJunos-switch → `vjunos-switch` (exact), cJunosEvolved → `vptx` (a stand-in:
+  `eos` (exact), vJunos-switch → `vjunos-switch` (exact), vJunos-router → `vjunos-router` (exact), vSRX →
+  `vsrx` (exact; netlab rates its own vSRX support best-effort), cJunosEvolved → `vptx` (a stand-in:
   netlab targets vJunos Evolved; the Junos Evolved lineage, `et-0/0/N` ports and `re0:mgmt-0` are
   shared, the image and containerlab kind are not), XRv9k → `iosxr` (a stand-in: netlab targets XRd;
   IOS XR, `GigabitEthernet0/0/0/N` and `MgmtEth0/RP0/CPU0/0` are shared, the image is not), `linux`
   → `linux` (a support host: generated only, never applied). Any other kind is left out of the
   design with that reason.
 - Each link end is mapped from the kind's documented port rule (the same table the map uses:
-  cEOS `ethN = EthernetN`, vJunos-switch `eth1 = ge-0/0/0`, cJunosEvolved `eth4 = et-0/0/0`, XRv9k
+  cEOS `ethN = EthernetN`, vJunos-switch, vJunos-router and vSRX `eth1 = ge-0/0/0` (a vSRX port may also be
+  written `xe-` or `et-0/0/N`), cJunosEvolved `eth4 = et-0/0/0`, XRv9k
   `eth1 = Gi0/0/0/0`, spelled the way the NOS and netlab spell it), or from an explicit override in
   the intent (`interfaces`). An end that cannot be mapped is never guessed: its link is left out and
   both devices are marked *blocked* in the generation, so their files cannot be applied.
@@ -88,7 +92,10 @@ questions that are never flattened into one mark:
 3. **Validation level**: what this integration has proven, and how: `verified_on_image`,
    `generated_not_live_tested`, `unsupported`, `blocked_missing_prerequisite` (`VALIDATION`, each
    entry with its evidence file). A feature the engine supports with no evidence yet is
-   `generated_not_live_tested`.
+   `generated_not_live_tested`. The page words them *Verified on this image*, *Generated, not yet tested
+   live*, *Not supported* and *Needs a prerequisite module*; the fifth word, `retired`, is *No longer offered*
+   (next paragraph). `VALIDATION` is empty today: no feature of any kind reads `verified_on_image` yet. What was
+   applied live is recorded in the ledger and the evidence files, not in this table.
 
 The requested catalogue (`FEATURES`) covers IPv4/IPv6 addressing, OSPFv2/v3, EIGRP, IS-IS, RIPv2/RIPng,
 BGP, DHCP/DHCPv6, VLANs, VRFs, LLDP, BFD, static routes, LACP/LAG/MLAG, STP, VRRP, anycast gateways,
@@ -163,7 +170,7 @@ Every family the assignment names is in the schema and the capability model; the
 `docs/netlab-integration/LEDGER.md` says per family and per image what is upstream support, what generates, what
 was applied live, and what the limit is. As of this release, on the four acceptance images:
 
-- **Proven live through the product** (generated, applied with *Apply to devices…*, read back on the device and
+- **Proven live through the product**, on cEOS, cJunosEvolved, vJunos-switch and XRv9k (generated, applied with *Apply to devices…*, read back on the device and
   in its control plane; `docs/netlab-integration/evidence/live-apply-families.md`): IPv4/IPv6 addressing, OSPFv2/v3,
   BGP (iBGP, eBGP, default origination), IS-IS (adjacencies on every link), VRFs (a VRF on the host links with its
   loopback and VRF-scoped BGP), static routes (a discard route per router), route policies and prefix lists,
@@ -173,9 +180,18 @@ was applied live, and what the limit is. As of this release, on the four accepta
   segment with two routers and no second VTEP pair): link aggregation (`lag.members`), VRRP and anycast gateways,
   STP, BFD. They are offered with the capability level *generated, not yet tested live*.
 - **Retired from authoring** (see *Retired modules and the EVPN gate*): EIGRP, RIP, VXLAN; **unavailable (under review)**: EVPN.
-- **Refused by the capability model per image, before the engine runs**: DHCP (cEOS only), VLANs, BFD, LAG, anycast
-  (not on XRv9k), STP (cEOS only), SRv6 (XRv9k only); a plan that asks one of those of a device that cannot do it
-  names the device and generates nothing.
+- **Refused by the capability model per image, before the engine runs**: DHCP (cEOS only), VLANs, BFD (not on
+  XRv9k), LAG and LACP (not on XRv9k or vJunos-router; vSRX has them), anycast gateways (not on XRv9k or vSRX),
+  STP (cEOS only), SRv6 (XRv9k only), 6PE (cEOS and XRv9k only); a plan that asks one of those of a device that
+  cannot do it names the device and generates nothing.
+- **vJunos-router and vSRX** (static mapping; every feature `generated_not_live_tested`, none applied live):
+  generation was checked with the real engine on a cEOS, vJunos-router and vSRX triangle (OSPF, IS-IS, BGP and MPLS
+  with `ge-0/0/N.0` ports and `fxp0` management), nothing more. netlab's `vsrx` profile has no EVPN or VXLAN and
+  has LAG; `vjunos-router` has no LAG. The vSRX IS-IS and MPLS fragments carry netlab's `mode packet-based` line.
+  The engine writes no security zone for vSRX, and a flow-mode vSRX drops traffic on a data port that is in no
+  zone, so routing protocols over vSRX data ports are expected not to come up until a zone admits them (a
+  prediction, not a measured image limit). Evidence:
+  [b05-netlab-static-2026-10-27.md](parity-campaign/evidence/b05-netlab-static-2026-10-27.md).
 - **Not yet in the schema**: the GRE and WireGuard plugins (`tunnel.*`), and protocol authentication (the
   secret-reference model): `password` and key attributes stay refused by name.
 
@@ -217,14 +233,15 @@ stanza, `hostname`, AAA lines, MAC addresses, cEOS `normalize`, Junos `delete:` 
 removal through an ownership ledger; until that contract exists for a platform, its files are
 preview and download only.
 
-## The Design tab
+## The Network design page
 
-Every lab has a **Network design** section (under **Advanced**, in the *Experimental* panel). Top to bottom:
+Every lab has a **Network design** section (under **Advanced**, in the *Experimental* panel; it starts closed, and an
+old `#view=design` address opens Advanced with it). Top to bottom:
 
 - **State and actions.** One line says where the design stands: *No design yet*, *Design saved, no plan yet*,
   *Unsaved changes* (in red when the browser could not keep the draft in its storage: save now), *Advanced JSON
   is not valid*, *Generating the plan…*, *Plan progress unknown* (the progress check failed and five retries failed too; reload
-  or open the tab again), *The design has problems*, *Plan ready to review*, *Plan is older than the design*,
+  or open the section again), *The design has problems*, *Plan ready to review*, *Plan is older than the design*,
   *The last plan failed*, *The last plan was interrupted*, *No design saved (earlier plans kept)* after
   *Remove design*, *Design engine unavailable* (with the engine's diagnostic). These are the design's own words,
   never the devices' readiness or the saved-progress state. *Generate plan* (unsaved changes are saved first,
@@ -259,7 +276,7 @@ Every lab has a **Network design** section (under **Advanced**, in the *Experime
   under Advanced. See the next section.
 
 Unsaved edits are kept in the browser per lab and restored on reload while the saved design has not moved on; a
-page that is behind the saved design is refused when it saves. The tab reads the design through
+page that is behind the saved design is refused when it saves. The page reads the design through
 `GET /api/labs/{id}/design` and polls it while a plan is being generated.
 
 ## Applying a plan to devices
@@ -272,7 +289,13 @@ is `docs/netlab-integration/PROVISIONING.md`; the live proofs on the four-node a
 
 1. **Choose devices.** Every device the plan includes is offered; a support host, a blocked device or a kind
    without a driver is listed with the reason. Applying is available for cEOS, vJunos-switch, cJunosEvolved
-   and XRv9k, the kinds proven live.
+   and XRv9k, the kinds proven live, and the driver set also lists vJunos-router and vSRX, whose live apply and
+   read-back are still pending: the plan for them is generated and reviewable, but treat an apply to them as
+   untested and check the device yourself. The preparation step is the Junos one for all four Junos kinds; for
+   vSRX it also leaves out anything under `security` that names the management interface and any
+   `functional-zone management` block (the management path is outside the zone model), and the ownership ledger
+   treats a vSRX statement that binds an interface already bound to another zone by an unowned statement as a
+   conflict.
 2. **Review.** The review runs as a job: the page starts it and follows each device's real stage (connecting,
    checking for unconfirmed changes, preparing, reading, trying the change, done, failed with a reason, or
    unreachable); closing the dialog does not cancel it, and a second review of the same lab attaches to the running

@@ -447,7 +447,7 @@ is an explicit action, and the downloads under **Tools › Configuration backups
 
 ### Design exports
 
-*Export plan to Git…* on a lab's Design tab saves a generated network-design plan through the same
+*Export plan to Git…* on a lab's Network design page (Advanced › Experimental) saves a generated network-design plan through the same
 pipeline as a save of kind `design`: the design file, the plan, the netlab topology, the endpoint
 mapping and every generated device file, with a manifest of kind `network-design`. Such a save goes to
 its own checkpoint folder (`…/checkpoints/<name>`) and never to `latest` or `baseline`; a checkpoint
