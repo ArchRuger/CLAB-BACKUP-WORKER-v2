@@ -50,8 +50,8 @@ preview or the PDF itself, not in a normal browser tab.
 
 Reads `source/guide.md` with `python-markdown`, extensions `extra` (tables,
 attr_list, md_in_html, fenced_code), `toc` (`anchorlink=False`,
-`permalink=False`, `toc_depth="2-3"` — the `[TOC]` marker in the Markdown is
-replaced with a linked list built from the `##`/`###` headings only), and
+`permalink=False`, `toc_depth="2-2"` — the `[TOC]` marker in the Markdown is
+replaced with a linked list built from the `##` headings only: the four sections; the `###` Reference subsections stay in the PDF outline), and
 `sane_lists`. A Markdown paragraph holding only an image
 (an exclamation mark, the caption in square brackets, then the image path in parentheses) is turned into `<figure><img>` +
 `<figcaption>` from the alt text; a hand-written `<figure>…</figure>` block

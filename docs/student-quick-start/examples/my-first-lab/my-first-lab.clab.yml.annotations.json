@@ -1,11 +1,11 @@
 {
   "freeTextAnnotations": [
     {
-      "id": "freeText_1790102534822",
+      "id": "freeText_1793074204681",
       "text": "My first lab: r1 eth1 - r2 eth1",
       "position": {
-        "x": 568.5,
-        "y": 245.75
+        "x": 163.5,
+        "y": 356.8046875
       },
       "fontSize": 14,
       "fontColor": "#333333",
@@ -24,18 +24,20 @@
     {
       "id": "r1",
       "position": {
-        "x": 260,
-        "y": 120
+        "x": 40,
+        "y": 220
       },
-      "icon": "switch"
+      "icon": "switch",
+      "interfacePattern": "eth{n}"
     },
     {
       "id": "r2",
       "position": {
-        "x": 520,
-        "y": 120
+        "x": 260,
+        "y": 220
       },
-      "icon": "switch"
+      "icon": "switch",
+      "interfacePattern": "eth{n}"
     }
   ],
   "edgeAnnotations": [],

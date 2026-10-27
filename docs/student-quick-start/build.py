@@ -81,7 +81,7 @@ def render_markdown(markdown_text):
             "toc": {
                 "anchorlink": False,
                 "permalink": False,
-                "toc_depth": "2-3",
+                "toc_depth": "2-2",
             },
         },
         output_format="html5",

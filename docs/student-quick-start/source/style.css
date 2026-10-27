@@ -224,7 +224,7 @@ figure img {
      this is a fixed inch value rather than a page-relative one; width
      stays auto so the image's aspect ratio is preserved and the smaller of
      this and img{max-width:100%} above wins. */
-  max-height: 3.4in;
+  max-height: 3.1in;
   width: auto;
 }
 

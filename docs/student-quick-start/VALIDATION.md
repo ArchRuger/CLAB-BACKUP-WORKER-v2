@@ -3,6 +3,53 @@
 What was actually executed for the guide, by whom (an agent, never a human study), on which build, with the evidence
 paths. Newest chunk first. The final section names the exact PDF (SHA-256) that was inspected page by page.
 
+## Campaign 2, D10: the guide replayed on release 1.31.6 (2026-10-27)
+
+- **Tested build:** manager 1.31.6 (`/api/state` `version`), image built from commit `973668e` of the campaign branch
+  (`claude/parity-campaign`), running in the container on `127.0.0.1:8081` of the development VM `dev2`
+  (`192.168.132.134`); containerlab 0.79, devices `n24l/ceos:4.35.0F`. The next release number is the lead's.
+- **Evidence class:** real manager, real devices, real GitHub (live-device and live-repository replay of the steps; not a
+  fixture, not a human study). The manager is shared with other campaign workers (`parity`, `camp-vsrx`, `camp-topo*`,
+  `git-redesign*`), whose operations hold its one guard: the capture tools wait for it (`qs_lib.wait_idle()`); a page
+  answer "Wait for the current lab operation to finish." during the replay was that guard, not a defect.
+- **Repositories (private, owner `ArchRuger`, disposable):** `campaign2-netlab-course-student` (Scenario A; made from the public
+  template `pruger-dev/netlab-course`, whose `link-basics/reference/*` states are schema 2 and list in Load as Start, Solution,
+  Broken-01) and `campaign2-my-network-labs` (Scenario B, made with a README). Both connections were made through the page
+  (*Connect by URL…*); no Git connection was blocked.
+- **Scenario A, `tools/capture_scenario_a.py` (11/11 PASS, evidence `evidence/scenario-a.{json,md}`):** A1 Home (2 s); A2 deploy
+  review (15 s); A3 Ready after 47 s; A4 CLI show commands (15 s); A5 Connect by URL > Save here: first save on the VM in 8 s,
+  uploaded 16 s later, seven files on GitHub; A6 Load Start: Running Start in 9 s, ping 3/3; A7 loopback on r1; A8 Save, See
+  changes, Upload: "2 devices changed since your last save: r1 and r2. 12 lines added, 4 removed." and `latest/r1.cfg` holds
+  Loopback0; A9 name the save `loopback-added`, Keep as a checkpoint, Upload; r2 loopback, Save, Upload: `latest/r2.cfg` has
+  Loopback0, `checkpoints/loopback-added/r2.cfg` does not, no `latest/latest`; A10 Load Broken-01 (ping fails, `Et1`
+  `notconnect`), Undo this load (ping 3/3), Broken-01 again, Load the newest own save (ping 3/3, both loopbacks), See what's
+  different on the checkpoint; A11 Home card, chip and Load list after reopening, Lab actions menu, Destroy and Remove reviews
+  (both cancelled).
+- **Scenario B, `tools/capture_scenario_b.py` (9/9 PASS, evidence `evidence/scenario-b.{json,md}`):** B1 builder welcome, New lab,
+  blank canvas; B2 two cEOS dragged from the palette, link, Edit Node twice (image `n24l/ceos` 4.35.0F kept, management
+  addresses), Add Text, YAML shows both images and addresses; B3 Save to the VM, "Saved on the VM", Deploy now > Start lab
+  (Ready 30 s); B4 addresses and ping (3/3); B5 repository private with a README; B6 Connect by URL > Save here (7 s),
+  Upload: topology, map, configurations on GitHub; B7 All versions, Browse the repository; B8 r2 loopback, Save, Upload,
+  checkpoint `link-up`; B9 Destroy, Remove, `git clone` into the trusted root, deploy from
+  `projects/campaign2-my-network-labs/my-first-lab/latest/` (path asserted; Ready 36 s), Choose another place > repository >
+  "This folder holds the state" > Replace it, Not now, Load link-up (ping 3/3, r2 `Loopback0`), Save and Upload ("This upload
+  also sends 1 other save").
+- **PDF:** `Containerlab_Node_Manager_Student_Quick_Start.pdf`, 26 pages, US Letter, **SHA-256
+  `6202b1ccb240368f8dde9f05d36b4d64ee0bb0b6e26bd174fea56e3c320a32bf`**, built with `build.sh` (`tools/inspect_pdf.py`: fonts
+  embedded, every link resolves, no placeholder text or U+FFFD). Pages were looked at as `pdftoppm`
+  renders (`build/pages/`, not tracked) during the fix rounds; after the last look only a figure crop (the clone transcript, a
+  few pixels taller) and the B7 wording changed, so pages 21 to 23 of the delivered file were not looked at again.
+- **Layout changes made:** the table of contents lists the four sections only (`toc_depth` 2-2); figures are at most 3.1 in high;
+  figure crops follow the new UI (the chip panel, the drawers, the Load panel).
+- **Not replayed, and why:** the second browser engine and the 390 and 760 px viewports (the guide is read at desktop width,
+  captures are Chromium 1366x900); a human first-time student (an agent drove every step); **Save as a lab state…** and
+  **Use as starting point…** (the guide does not teach them, the course author's guide `docs/COURSE-STATES.md` does); the
+  old-format instructor states were reused from the public template, so the manifests there predate topology saves; a Windows
+  or macOS client; the Git connection with a repository that is empty (the guide creates one with a README);
+  `evidence/qa/` and `evidence/ui-index.md` are the 2026-09 records and describe the old Progress tab (not rerun).
+- **Not claimed:** that the figures show a first-time manager: this manager already lists other labs (Figure A.1 is cropped to
+  the Deploy and Build boxes), and its Load list is shared with the lab VM's other repositories.
+
 ## Chunk 3 — the delivered PDF, its inspection and the independent replays (release 1.30.35, 2026-09-22)
 
 - **Delivered file:** `Containerlab_Node_Manager_Student_Quick_Start.pdf`, 20 pages, US Letter,
