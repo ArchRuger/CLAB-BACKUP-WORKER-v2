@@ -24,14 +24,13 @@ PLATFORMS = {
     'juniper_cjunosevolved': {'label': 'Junos', **JUNOS_DRIVER},
     'juniper_vqfx': {'label': 'Junos (vQFX)', **JUNOS_DRIVER},
     'juniper_vjunosswitch': {'label': 'Junos (vJunos-switch)', **JUNOS_DRIVER},
-    # vJunos-router: backups, downloads and saves only. No restore keys until the restore driver is proven live
-    # on this kind (restore_drivers.py lists the supported kinds), so no restore-grade candidate is captured.
-    'juniper_vjunosrouter': {'label': 'Junos (vJunos-router)',
-                             **{k: v for k, v in JUNOS_DRIVER.items() if not k.startswith('restore')}},
-    # vSRX (https://containerlab.dev/manual/kinds/vr-vsrx/, checked 2026-10-27): the same rule as vJunos-router,
-    # backups, downloads and saves only until Load is proven live on the exact image (docs/parity-campaign/DEVICES.md).
-    'juniper_vsrx': {'label': 'Junos (vSRX)',
-                     **{k: v for k, v in JUNOS_DRIVER.items() if not k.startswith('restore')}},
+    # vJunos-router: the whole Junos contract, restore included: the Junos driver was proven live on it in campaign 2
+    # (B04, docs/parity-campaign/evidence/b04-*.md) on a nested derivative of the published image, which does not boot
+    # under nested virtualization on the development VM.
+    'juniper_vjunosrouter': {'label': 'Junos (vJunos-router)', **JUNOS_DRIVER},
+    # vSRX (https://containerlab.dev/manual/kinds/vr-vsrx/, checked 2026-10-27): the whole Junos contract, restore
+    # included, proven live on the exact image n24l/juniper_vsrx:23.2R2.21 in campaign 2 (B04).
+    'juniper_vsrx': {'label': 'Junos (vSRX)', **JUNOS_DRIVER},
     # IOS XR and EOS: the running-config itself is a complete, loadable candidate; the companion artifact
     # is the same capture kept under its own name and hash so a restore never relabels backup text.
     'cisco_xrv9k': {'label': 'IOS-XR', 'os': 'cisco.iosxr.iosxr', 'command': 'show running-config', 'suffix': 'cfg',

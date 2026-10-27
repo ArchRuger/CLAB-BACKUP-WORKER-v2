@@ -1,0 +1,129 @@
+{
+ "node": "vsrx",
+ "address": "172.20.20.121",
+ "phase": "reboot",
+ "version": [
+  "Model: vSRX",
+  "Junos: 23.2R2.21"
+ ],
+ "driver": "app/restore_junos.py",
+ "driver_source": {
+  "git_head": "79264133094e",
+  "uncommitted_changes_to_the_driver": false
+ },
+ "token_prefix": "clabmgr-6ae0046a",
+ "steps": [
+  {
+   "utc": "01:54:57",
+   "step": "PreRebootB: apply armed under its token",
+   "ok": true,
+   "seconds": 7.0,
+   "no_op": false,
+   "root_authentication": "present",
+   "diff_lines": 44,
+   "diff": "[edit system login]\n-   message \"B04-A configuration\";\n+   message \"B04-B configuration\";\n[edit security policies]\n+    from-zone trust to-zone B04-B-ONLY {\n+        policy B04-B-deny {\n+            match {\n+                source-address any;\n+                destination-address any;\n+                application any;\n+            }\n+            then {\n+                deny;\n+            }\n+        }\n+    }\n-    from-zone trust to-zone trust {\n-        policy B04-A-allow {\n-            match {\n-                source-address any;\n-                destination-address any;\n-                application any;\n-            }\n-            then {\n-                permit;\n-            }\n-        }\n-    }\n[edit security zones]\n     security-zone trust { ... }\n+    security-zone B04-B-ONLY;\n[edit interfaces ge-0/0/0]\n-   description \"B04-A uplink\";\n+   description \"B04-B changed\";\n[edit]\n+  policy-options {\n+      prefix-list B04-B-ONLY {\n+          198.51.100.0/24;\n+      }\n+  }\n[edit routing-options static]\n-    route 192.0.2.200/32 discard;\n+    route 198.51.100.0/24 discard;\n\n[edit]"
+  },
+  {
+   "utc": "01:54:57",
+   "step": "PreRebootB: device shows entry 0 with the token and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-10-27 01:54:57 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ae0046aprereb",
+    "rollback pending"
+   ]
+  },
+  {
+   "utc": "01:54:58",
+   "step": "PreRebootB: driver.pending() returns the token",
+   "ok": true
+  },
+  {
+   "utc": "01:54:58",
+   "step": "PreRebootB: confirm from a fresh connection",
+   "ok": true,
+   "seconds": 0.6
+  },
+  {
+   "utc": "01:54:58",
+   "step": "PreRebootB: nothing pending afterwards",
+   "ok": true
+  },
+  {
+   "utc": "01:55:05",
+   "step": "PreRebootA: apply armed under its token",
+   "ok": true,
+   "seconds": 7.0,
+   "no_op": false,
+   "root_authentication": "present",
+   "diff_lines": 43,
+   "diff": "[edit system login]\n-   message \"B04-B configuration\";\n+   message \"B04-A configuration\";\n[edit security policies]\n+    from-zone trust to-zone trust {\n+        policy B04-A-allow {\n+            match {\n+                source-address any;\n+                destination-address any;\n+                application any;\n+            }\n+            then {\n+                permit;\n+            }\n+        }\n+    }\n-    from-zone trust to-zone B04-B-ONLY {\n-        policy B04-B-deny {\n-            match {\n-                source-address any;\n-                destination-address any;\n-                application any;\n-            }\n-            then {\n-                deny;\n-            }\n-        }\n-    }\n[edit security zones]\n-    security-zone B04-B-ONLY;\n[edit interfaces ge-0/0/0]\n-   description \"B04-B changed\";\n+   description \"B04-A uplink\";\n[edit]\n-  policy-options {\n-      prefix-list B04-B-ONLY {\n-          198.51.100.0/24;\n-      }\n-  }\n[edit routing-options static]\n+    route 192.0.2.200/32 discard;\n-    route 198.51.100.0/24 discard;\n\n[edit]"
+  },
+  {
+   "utc": "01:55:05",
+   "step": "PreRebootA: device shows entry 0 with the token and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-10-27 01:55:05 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ae0046aprereb",
+    "rollback pending"
+   ]
+  },
+  {
+   "utc": "01:55:05",
+   "step": "PreRebootA: driver.pending() returns the token",
+   "ok": true
+  },
+  {
+   "utc": "01:55:06",
+   "step": "PreRebootA: confirm from a fresh connection",
+   "ok": true,
+   "seconds": 0.6
+  },
+  {
+   "utc": "01:55:06",
+   "step": "PreRebootA: nothing pending afterwards",
+   "ok": true
+  },
+  {
+   "utc": "01:55:06",
+   "step": "before reboot: configuration recorded independently",
+   "ok": true,
+   "boot": "2026-10-27 01:14:22 UTC",
+   "statements": 22
+  },
+  {
+   "utc": "01:55:06",
+   "step": "request system reboot accepted",
+   "ok": true,
+   "tail": "request system reboot Reboot the system ? [yes,no] (no) <yes>yes \u0007*** FINAL System shutdown message from admin@vsrx ***\u0007 System going down IMMEDIATELY "
+  },
+  {
+   "utc": "01:57:51",
+   "step": "the NOS rebooted (its own boot time changed) and answers SSH again",
+   "ok": true,
+   "went_down": true,
+   "boot_after": "2026-10-27 01:55:51 UTC",
+   "seconds": 165
+  },
+  {
+   "utc": "01:58:21",
+   "step": "after the reboot the restored configuration A is active (independent, exact)",
+   "ok": true,
+   "missing": 0,
+   "extra": 0,
+   "security": {
+    "zones": [
+     "junos-host",
+     "trust"
+    ],
+    "policies": [
+     "0",
+     "B04-A-allow"
+    ]
+   }
+  }
+ ],
+ "ok": true,
+ "finished_utc": "2026-10-27T01:58:21Z"
+}

@@ -1,0 +1,183 @@
+{
+ "node": "vsrx",
+ "address": "172.20.20.121",
+ "phase": "vsrx",
+ "version": [
+  "Model: vSRX",
+  "Junos: 23.2R2.21"
+ ],
+ "driver": "app/restore_junos.py",
+ "driver_source": {
+  "git_head": "e48fff294ff2",
+  "uncommitted_changes_to_the_driver": false
+ },
+ "token_prefix": "clabmgr-6ae003fc",
+ "steps": [
+  {
+   "utc": "01:53:00",
+   "step": "test candidate: A without the whole security hierarchy (zones, policies, host-inbound)",
+   "ok": true,
+   "removed_lines": 29
+  },
+  {
+   "utc": "01:53:07",
+   "step": "NoSec: apply armed under its token",
+   "ok": true,
+   "seconds": 7.0,
+   "no_op": false,
+   "root_authentication": "present",
+   "diff_lines": 31,
+   "diff": "[edit]\n-  security {\n-      policies {\n-          from-zone trust to-zone trust {\n-              policy B04-A-allow {\n-                  match {\n-                      source-address any;\n-                      destination-address any;\n-                      application any;\n-                  }\n-                  then {\n-                      permit;\n-                  }\n-              }\n-          }\n-      }\n-      zones {\n-          security-zone trust {\n-              interfaces {\n-                  ge-0/0/0.0 {\n-                      host-inbound-traffic {\n-                          system-services {\n-                              ping;\n-                          }\n-                      }\n-                  }\n-              }\n-          }\n-      }\n-  }\n\n[edit]"
+  },
+  {
+   "utc": "01:53:07",
+   "step": "NoSec: device shows entry 0 with the token and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-10-27 01:53:07 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ae003fcnosec",
+    "rollback pending"
+   ]
+  },
+  {
+   "utc": "01:53:07",
+   "step": "NoSec: driver.pending() returns the token",
+   "ok": true
+  },
+  {
+   "utc": "01:53:08",
+   "step": "NoSec: confirm from a fresh connection",
+   "ok": true,
+   "seconds": 0.6
+  },
+  {
+   "utc": "01:53:08",
+   "step": "NoSec: nothing pending afterwards",
+   "ok": true
+  },
+  {
+   "utc": "01:53:08",
+   "step": "management on fxp0 survived a replacement without zones: confirmed from a fresh connection; no security statements remain",
+   "ok": true,
+   "security": {
+    "zones": [
+     "junos-host"
+    ],
+    "policies": []
+   }
+  },
+  {
+   "utc": "01:53:15",
+   "step": "SecBack: apply armed under its token",
+   "ok": true,
+   "seconds": 7.0,
+   "no_op": false,
+   "root_authentication": "present",
+   "diff_lines": 31,
+   "diff": "[edit]\n+  security {\n+      policies {\n+          from-zone trust to-zone trust {\n+              policy B04-A-allow {\n+                  match {\n+                      source-address any;\n+                      destination-address any;\n+                      application any;\n+                  }\n+                  then {\n+                      permit;\n+                  }\n+              }\n+          }\n+      }\n+      zones {\n+          security-zone trust {\n+              interfaces {\n+                  ge-0/0/0.0 {\n+                      host-inbound-traffic {\n+                          system-services {\n+                              ping;\n+                          }\n+                      }\n+                  }\n+              }\n+          }\n+      }\n+  }\n\n[edit]"
+  },
+  {
+   "utc": "01:53:15",
+   "step": "SecBack: device shows entry 0 with the token and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-10-27 01:53:15 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ae003fcsecbac",
+    "rollback pending"
+   ]
+  },
+  {
+   "utc": "01:53:15",
+   "step": "SecBack: driver.pending() returns the token",
+   "ok": true
+  },
+  {
+   "utc": "01:53:16",
+   "step": "SecBack: confirm from a fresh connection",
+   "ok": true,
+   "seconds": 0.7
+  },
+  {
+   "utc": "01:53:16",
+   "step": "SecBack: nothing pending afterwards",
+   "ok": true
+  },
+  {
+   "utc": "01:53:16",
+   "step": "A (with zones and policies) restored; independent equality",
+   "ok": true,
+   "missing": 0,
+   "extra": 0,
+   "security": {
+    "zones": [
+     "junos-host",
+     "trust"
+    ],
+    "policies": [
+     "0",
+     "B04-A-allow"
+    ]
+   }
+  },
+  {
+   "utc": "01:53:16",
+   "step": "test candidate: A without system services (no SSH, no NETCONF)",
+   "ok": true,
+   "removed_lines": 8
+  },
+  {
+   "utc": "01:53:23",
+   "step": "candidate that breaks management armed with a 1-minute timer",
+   "ok": true,
+   "diff": "[edit system]\n-   services {\n-       ssh {\n-           root-login allow;\n-       }\n-       netconf {\n-           ssh;\n-       }\n-   }\n\n[edit]"
+  },
+  {
+   "utc": "01:54:28",
+   "step": "a fresh connection fails while the broken candidate is active (the manager would not confirm)",
+   "ok": true,
+   "first_failure_s": 7,
+   "back_s": 72,
+   "probes": [
+    [
+     7,
+     "SSHException"
+    ],
+    [
+     12,
+     "SSHException"
+    ],
+    [
+     17,
+     "SSHException"
+    ],
+    [
+     62,
+     "SSHException"
+    ],
+    [
+     67,
+     "SSHException"
+    ],
+    [
+     72,
+     "up"
+    ]
+   ],
+   "probe_count": 14
+  },
+  {
+   "utc": "01:54:39",
+   "step": "the node undid the change on its own timer; previous configuration A read back (independent), nothing pending",
+   "ok": true,
+   "missing": 0,
+   "extra": 0,
+   "commit_view": [
+    "0   2026-10-27 01:54:24 UTC by root via other",
+    "1   2026-10-27 01:53:23 UTC by admin via cli commit confirmed, rollback in 1mins",
+    "clabmgr-6ae003fcnossh"
+   ]
+  }
+ ],
+ "ok": true,
+ "finished_utc": "2026-10-27T01:54:39Z"
+}

@@ -2342,10 +2342,10 @@ class LoadBackendTests(unittest.TestCase):
     def test_the_states_list_and_the_preflight_give_the_same_verdict_for_each_no_device_reason(self):
         from app.restore import NO_ARTIFACT, NO_DRIVER, NO_NODE, OTHER_PLATFORM, public_state
         self.lab['nodes'].append(self.node('H1', 'linux'))
-        self.lab['nodes'].append(self.node('R1', 'juniper_vjunosrouter'))
+        self.lab['nodes'].append(self.node('R1', 'juniper_vqfx'))
         cases = (('GONE', 'juniper_cjunosevolved', True, NO_NODE),
                  ('H1', 'linux', True, NO_DRIVER),
-                 ('R1', 'juniper_vjunosrouter', True, NO_DRIVER),
+                 ('R1', 'juniper_vqfx', True, NO_DRIVER),
                  ('SW1', 'juniper_cjunosevolved', True, OTHER_PLATFORM),
                  ('PTX1', 'juniper_cjunosevolved', False, NO_ARTIFACT),
                  ('PTX1', 'juniper_cjunosevolved', True, ''))

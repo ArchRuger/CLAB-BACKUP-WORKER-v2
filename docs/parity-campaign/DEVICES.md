@@ -49,9 +49,9 @@ pin it; it is not a live result.
 | Serial console | PASS live (C04, derivative) | port 5000 answers live (B03a); gated in the manager until the C04 gate is adapted (Docker health never `healthy` on this image) | registered, NOT TESTED live (ACCEPTANCE R021) | NOT APPLICABLE (no qemu console) | NOT APPLICABLE | registered, NOT TESTED live |
 | Logs, interfaces, diagnostics drawer | PASS live (C03) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
 | Backup (display set / running-config), download name | PASS live (C01: `vJunos-router_vrt_…cfg`) | NOT TESTED | PASS live | PASS live | PASS live | PASS live |
-| Restore-grade artifact | gated (no `restore` keys) until B04 | gated until B04 | PASS | PASS | PASS | PASS |
+| Restore-grade artifact | PASS static (restore keys since B04; manager-path capture in phase 2) | PASS static (B04) | PASS | PASS | PASS | PASS |
 | Save to Git, manifest identity | PASS live (C01 save) | NOT TESTED | PASS | PASS | PASS | PASS |
-| Load (whole-configuration replacement, timed recovery, readback, persistence) | NOT TESTED (C10 / B04) | NOT TESTED (B04) | PASS live (1.30.27–29) | PASS live | PASS live | PASS live |
+| Load (whole-configuration replacement, timed recovery, readback, persistence) | PASS live, direct driver, on the nested derivative only (B04 phase 1: B→A, reboot 989 s, A onto A, back-to-back, failures); manager path phase 2 | PASS live, direct driver, exact image (B04 phase 1: B→A armed 7.8 s, reboot 165 s, A onto A, back-to-back, failures; a candidate without `system services` rolled back at its 1-minute timer); manager path phase 2 | PASS live (1.30.27–29) | PASS live | PASS live | PASS live |
 | Device start/stop/restart | PASS live (C05) | NOT TESTED | PASS live (known second-start limit) | PASS live | PASS live | PASS live |
 | Lab deploy/apply/redeploy/destroy | PASS live (C05) | deploy PASS live outside the manager (B03a); manager path B06 | PASS | PASS | PASS | PASS |
 | Capture | PASS live (C07, viewer) | NOT TESTED | PASS | PASS | PASS | PASS |

@@ -1,0 +1,120 @@
+{
+ "node": "vrt",
+ "address": "172.20.20.112",
+ "phase": "reboot",
+ "version": [
+  "Model: vmx",
+  "Junos: 26.2R1.7"
+ ],
+ "driver": "app/restore_junos.py",
+ "driver_source": {
+  "git_head": "9be324da0598",
+  "uncommitted_changes_to_the_driver": true
+ },
+ "token_prefix": "clabmgr-6ae0075f",
+ "steps": [
+  {
+   "utc": "02:07:57",
+   "step": "PreRebootB: apply armed under its token",
+   "ok": true,
+   "seconds": 28.9,
+   "no_op": false,
+   "root_authentication": "present",
+   "diff_lines": 16,
+   "diff": "[edit system login]\n-   message \"B04-A configuration\";\n+   message \"B04-B configuration\";\n[edit interfaces ge-0/0/0]\n-   description \"B04-A uplink\";\n+   description \"B04-B changed\";\n[edit]\n+  policy-options {\n+      prefix-list B04-B-ONLY {\n+          198.51.100.0/24;\n+      }\n+  }\n[edit routing-options static]\n-    route 192.0.2.200/32 discard;\n+    route 198.51.100.0/24 discard;\n\n[edit]"
+  },
+  {
+   "utc": "02:07:57",
+   "step": "PreRebootB: device shows entry 0 with the token and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-10-27 02:07:53 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ae0075fprereb",
+    "rollback pending"
+   ]
+  },
+  {
+   "utc": "02:07:58",
+   "step": "PreRebootB: driver.pending() returns the token",
+   "ok": true
+  },
+  {
+   "utc": "02:08:02",
+   "step": "PreRebootB: confirm from a fresh connection",
+   "ok": true,
+   "seconds": 5.4
+  },
+  {
+   "utc": "02:08:02",
+   "step": "PreRebootB: nothing pending afterwards",
+   "ok": true
+  },
+  {
+   "utc": "02:08:34",
+   "step": "PreRebootA: apply armed under its token",
+   "ok": true,
+   "seconds": 29.6,
+   "no_op": false,
+   "root_authentication": "present",
+   "diff_lines": 16,
+   "diff": "[edit system login]\n-   message \"B04-B configuration\";\n+   message \"B04-A configuration\";\n[edit interfaces ge-0/0/0]\n-   description \"B04-B changed\";\n+   description \"B04-A uplink\";\n[edit]\n-  policy-options {\n-      prefix-list B04-B-ONLY {\n-          198.51.100.0/24;\n-      }\n-  }\n[edit routing-options static]\n+    route 192.0.2.200/32 discard;\n-    route 198.51.100.0/24 discard;\n\n[edit]"
+  },
+  {
+   "utc": "02:08:34",
+   "step": "PreRebootA: device shows entry 0 with the token and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-10-27 02:08:29 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ae0075fprereb",
+    "rollback pending"
+   ]
+  },
+  {
+   "utc": "02:08:34",
+   "step": "PreRebootA: driver.pending() returns the token",
+   "ok": true
+  },
+  {
+   "utc": "02:08:38",
+   "step": "PreRebootA: confirm from a fresh connection",
+   "ok": true,
+   "seconds": 5.8
+  },
+  {
+   "utc": "02:08:38",
+   "step": "PreRebootA: nothing pending afterwards",
+   "ok": true
+  },
+  {
+   "utc": "02:08:40",
+   "step": "before reboot: configuration recorded independently",
+   "ok": true,
+   "boot": "2026-10-27 01:42:14 UTC",
+   "statements": 17
+  },
+  {
+   "utc": "02:08:42",
+   "step": "request system reboot accepted",
+   "ok": true,
+   "tail": "request system reboot Reboot the system ? [yes,no] (no) <yes>yes \u0007*** FINAL System shutdown message from admin@vrt ***\u0007 System going down IMMEDIATELY "
+  },
+  {
+   "utc": "02:25:12",
+   "step": "the NOS rebooted (its own boot time changed) and answers SSH again",
+   "ok": true,
+   "went_down": true,
+   "boot_after": "2026-10-27 02:10:37 UTC",
+   "seconds": 989
+  },
+  {
+   "utc": "02:25:43",
+   "step": "after the reboot the restored configuration A is active (independent, exact)",
+   "ok": true,
+   "missing": 0,
+   "extra": 0,
+   "security": {}
+  }
+ ],
+ "ok": true,
+ "finished_utc": "2026-10-27T02:25:46Z"
+}

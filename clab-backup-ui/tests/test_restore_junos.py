@@ -192,8 +192,28 @@ class RestoreJunosDriverTests(unittest.TestCase):
     def test_supported_platforms(self):
         self.assertTrue(supports_restore('juniper_cjunosevolved'))
         self.assertTrue(supports_restore('juniper_vjunosswitch'))
+        # Campaign 2, B04: proven live with this driver unchanged (docs/parity-campaign/evidence/b04-*.md).
+        self.assertTrue(supports_restore('juniper_vsrx'))
+        self.assertTrue(supports_restore('juniper_vjunosrouter'))
+        self.assertFalse(supports_restore('juniper_vqfx'))       # a restore-grade capture, never proven live
         self.assertFalse(supports_restore('arista_ceos'))
         self.assertFalse(supports_restore(None))
+
+    def test_vsrx_security_hierarchy_is_loaded_verbatim_and_no_zone_is_required(self):
+        # vSRX (B04): `load override` replaces the security hierarchy like any other; the driver neither filters,
+        # adds nor demands zones or policies, because management on fxp0 (mgmt_junos) is bound to no zone. Proven
+        # live: a candidate without zones stayed reachable and was confirmed; one without `system services ssh`
+        # lost management and the node undid it at its timer. The timer, not a candidate rule, is the protection.
+        with_zones = CANDIDATE_WITH_ROOT + ('security {\n    zones {\n        security-zone trust {\n'
+                                            '            interfaces {\n                ge-0/0/0.0;\n            }\n'
+                                            '        }\n    }\n}\n')
+        for candidate in (with_zones, CANDIDATE_WITH_ROOT):
+            device = FakeDevice()
+            result = apply_shell(shell_for(device), candidate, confirm_minutes=5, token='clabmgr-0b04f00d')
+            self.assertEqual(device.loaded, ''.join(line.strip() + '\n' for line in candidate.splitlines() if line.strip()))
+            self.assertIn('commit confirmed 5 comment clabmgr-0b04f00d', device.commands)
+            self.assertFalse([c for c in device.commands if c.startswith(('set security', 'delete security'))])
+            self.assertEqual(result['handle'], {'token': 'clabmgr-0b04f00d'})
 
     def test_apply_happy_path_with_present_root_auth(self):
         device = FakeDevice(has_rootauth=True)

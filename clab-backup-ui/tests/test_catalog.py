@@ -45,7 +45,9 @@ class CatalogTests(unittest.TestCase):
     def test_vsrx(self):
         e = self.by['juniper_vsrx']
         self.assertTrue(e['login_default'])
-        self.assertEqual(e['capabilities'], {'backup': True, 'restore': False, 'design': False, 'console': False})
+        # design True since B05 phase 1 (exact netlab `vsrx` profile, generated_not_live_tested); restore True since B04 phase 1 (the Junos
+        # driver proven live on the exact image, evidence/b04-vsrx-*); the console stays gated until its own proof through the manager.
+        self.assertEqual(e['capabilities'], {'backup': True, 'restore': True, 'design': True, 'console': False})
         self.assertEqual(e['aliases'], ['vr-vsrx', 'vsrx'])
         self.assertEqual(e['interfaces']['first_port'], 'ge-0/0/0')
         self.assertNotIn('(?i)', e['interfaces']['container_pattern'])

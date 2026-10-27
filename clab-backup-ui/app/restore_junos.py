@@ -9,7 +9,14 @@ removes stale statements — and activates it with a confirmed commit so the nod
 back on its own if management is lost.
 
 Sequence, proven live on ``juniper_cjunosevolved`` (26.2R1.7-EVO) and ``juniper_vjunosswitch``
-(23.2R1.14); the evidence is in docs/multi-platform-restore/:
+(23.2R1.14); the evidence is in docs/multi-platform-restore/. Campaign 2 (B04, 2026-10-27) proved the
+same sequence, unchanged, with the driver called directly, on ``juniper_vsrx`` (Junos 23.2R2.21, image
+``n24l/juniper_vsrx:23.2R2.21``) and ``juniper_vjunosrouter`` (Junos 26.2R1.7, a nested derivative
+``local/juniper_vjunos-router:26.2R1.7-nested``: the published image does not boot under nested
+virtualization on the development VM). Evidence: docs/parity-campaign/evidence/b04-*.md. On vSRX the
+``security`` hierarchy (zones, policies) is replaced like any other, and management stays on ``fxp0``
+in ``mgmt_junos``, which is bound to no security zone: a candidate without zones keeps the node
+reachable, one without ``system services ssh`` loses it and the node undoes the change at its timer.
 
 1. Refuse when a confirmation is already pending on the node, and when somebody's uncommitted
    edits sit in the shared candidate (looked at from a plain ``configure`` that is left again
@@ -55,7 +62,7 @@ TOKEN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$')
 
 LOAD_TIMEOUT = 90
 COMMIT_TIMEOUT = 180
-SUPPORTED_KINDS = ('juniper_cjunosevolved', 'juniper_vjunosswitch')
+SUPPORTED_KINDS = ('juniper_cjunosevolved', 'juniper_vjunosswitch', 'juniper_vsrx', 'juniper_vjunosrouter')
 RESTORE_FORMAT = 'junos-hierarchical'
 
 
