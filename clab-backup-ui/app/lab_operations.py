@@ -17,9 +17,9 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from .discovery import PinnedHostKey, vm_password, parse_definition, stamp, expected_container, lab_status, discovery_fresh
-from .host_operations import IMAGE_CHECK_LIMIT, LOCK_SENTENCE, NODE_ACTIONS, OPTION_ACTIONS, image_reference
-from .inventory import read_data
+from .discovery import PinnedHostKey, vm_password, parse_definition, register_definition, stamp, expected_container, lab_status, discovery_fresh
+from .host_operations import IMAGE_CHECK_LIMIT, LOCK_SENTENCE, NODE_ACTIONS, OPTION_ACTIONS, container_matches, image_reference
+from .inventory import ALIASES, read_data
 from .topology import parse_drawing
 from .drawio_export import drawio
 from .layout import MAX_DOCUMENT, annotations, decorations, keep_document, map_document, revision
@@ -226,7 +226,8 @@ STOP_KNOWN_LIMITS = {
                    'configuration and everything configured since the deploy is gone. Back up the configuration first.',
 }
 # The run options as a person names them, for the refusal of an option an action does not take.
-OPTION_LABELS = {'nodes': 'Choose devices', 'max_workers': 'Max workers', 'skip_post_deploy': 'Skip post-deploy', 'keep_mgmt_net': 'Keep the management network'}
+OPTION_LABELS = {'nodes': 'Choose devices', 'max_workers': 'Max workers', 'skip_post_deploy': 'Skip post-deploy', 'keep_mgmt_net': 'Keep the management network',
+                 'deployed': 'Save while deployed'}
 # The node actions and what a device shows while one of them is queued or running: (nos_login status, message).
 NODE_ACTION_STATUS = {
     'restart-node': ('restarting', 'Restarting on the VM (containerlab restart --node); its login is checked again afterwards.'),
@@ -431,6 +432,111 @@ def cptx_startup_warnings(text):
     return warnings
 
 
+# The vrnetlab kinds (a VM inside the container, its disk inside the container too) and cJunosEvolved: a recreate boots them
+# from their image again. A restart's effect is proven only where RESTART_KNOWN_LIMITS says so (TOPOLOGY-EDIT-DESIGN A10).
+VRNETLAB_KINDS = ('juniper_vjunosswitch', 'juniper_vjunosrouter', 'juniper_vsrx', 'juniper_vqfx', 'cisco_xrv9k')
+RECREATE_LOSES_CONFIGURATION = VRNETLAB_KINDS + (CPTX_KIND,)
+RECREATE_LIMIT = 'A recreated device boots from its image again: configuration not saved is lost.'
+RESTART_UNVERIFIED = "The effect of this restart on the device's configuration is not verified on this kind; back it up first."
+# What a changed definition is named by in the deployed-save review, in this order.
+DEFINITION_FIELDS = (('kind', 'kind'), ('image', 'image'), ('env', 'environment'), ('startup-config', 'startup configuration'))
+MAP_CHANGED_SENTENCE = 'The map changed in the manager since you opened Edit topology. Reopen it; your topology changes stay in this browser.'
+REGISTER_ACTIONS = ('apply', 'deploy', 'redeploy')
+
+
+def canonical_kind(kind):
+    return ALIASES.get(kind, kind) if isinstance(kind, str) else ''
+
+
+def plan_limits(text, plan):
+    """{device: sentence} for the plan's `restarted` and `recreated` devices whose kind (from the topology text the plan was
+    made from) has a known or unverified configuration effect; {} when the text cannot be read. Pure."""
+    if not isinstance(plan, dict): return {}
+    try: kinds = {n['definition_node']: canonical_kind(n.get('kind')) for n in parse_definition(text.encode() if isinstance(text, str) else text)['nodes']}
+    except (ValueError, TypeError, AttributeError, KeyError, RecursionError): return {}
+    limits = {}
+    for name in plan.get('recreated') or []:
+        if isinstance(name, str) and kinds.get(name) in RECREATE_LOSES_CONFIGURATION: limits[name] = RECREATE_LIMIT
+    for name in plan.get('restarted') or []:
+        if not isinstance(name, str) or name in limits: continue
+        kind = kinds.get(name, '')
+        sentence = RESTART_KNOWN_LIMITS.get(kind) or (RESTART_UNVERIFIED if kind in VRNETLAB_KINDS else '')
+        if sentence: limits[name] = sentence
+    return dict(sorted(limits.items()))
+
+
+def annotate_plan(text, plan):
+    """The plan with its `limits` (plan_limits) added, and the devices to back up first: every sentence in `limits` says the
+    device's configuration is lost or may be lost. Returns (plan, backup_first); the plan is a new dict."""
+    if not isinstance(plan, dict): return plan, []
+    limits = plan_limits(text, plan)
+    return {**plan, 'limits': limits}, sorted(limits)
+
+
+def definition_settings(text):
+    """{node: {kind, image, env, startup-config}} as containerlab resolves them (node, then its group, then its kind, then
+    the defaults; `env` merged across those levels), for the comparison of two versions of one topology. {} when unreadable."""
+    try: topology = read_data(text.encode() if isinstance(text, str) else text).get('topology') or {}
+    except (ValueError, TypeError, AttributeError, RecursionError): return {}
+    if not isinstance(topology, dict) or not isinstance(topology.get('nodes'), dict): return {}
+    def mapping(value): return value if isinstance(value, dict) else {}
+    defaults = mapping(topology.get('defaults')); kinds = mapping(topology.get('kinds')); groups = mapping(topology.get('groups'))
+    found = {}
+    for name, node in topology['nodes'].items():
+        if not isinstance(name, str): continue
+        node = mapping(node)
+        group = mapping(groups.get(node.get('group'))) if isinstance(node.get('group'), str) else {}
+        kind = node.get('kind', group.get('kind', defaults.get('kind')))
+        levels = (defaults, mapping(kinds.get(kind)) if isinstance(kind, str) else {}, group, node)
+        env = {}
+        for level in levels: env.update(mapping(level.get('env')))
+        found[name] = {'kind': kind, 'image': next((l['image'] for l in reversed(levels) if 'image' in l), None), 'env': env,
+                       'startup-config': next((l['startup-config'] for l in reversed(levels) if 'startup-config' in l), None)}
+    return found
+
+
+def deployed_save_warnings(old_text, new_text, affected, lab_names, dry_run):
+    """The manager's sentences of a deployed save (TOPOLOGY-EDIT-DESIGN A8, A13, R11), from digested inputs only: the helper's
+    `affected` containers, the VM file the review read and the text being saved; never from discovery. `lab_names` are the
+    names the containers may carry (the deployment, the topology). `dry_run` False adds that Apply cannot be planned."""
+    try:
+        old = parse_definition(old_text.encode() if isinstance(old_text, str) else old_text)
+        new = parse_definition(new_text.encode() if isinstance(new_text, str) else new_text)
+    except (ValueError, TypeError, AttributeError, KeyError, RecursionError): old = new = None
+    warnings = []
+    if old and new:
+        containers = [str(a.get('name') or '') for a in affected if isinstance(a, dict)]
+        names = [n for n in dict.fromkeys(lab_names) if n]
+        def on_vm(short): return any(container_matches(c, lab, short) for c in containers for lab in names)
+        old_names = [n['definition_node'] for n in old['nodes']]; new_names = {n['definition_node'] for n in new['nodes']}
+        removed = [n for n in old_names if n not in new_names and on_vm(n)]
+        before = definition_settings(old_text); after = definition_settings(new_text)
+        def key(short, settings): return json.dumps(settings.get(short) or {}, sort_keys=True, default=str)
+        # A rename is a device the new file no longer defines whose definition reappears, unchanged, under exactly one new
+        # name nobody else shares: applying removes the old device and creates the new one (a new device to its history).
+        added = [n['definition_node'] for n in new['nodes'] if n['definition_node'] not in set(old_names)]
+        renamed = {}
+        for short in removed:
+            twins = [a for a in added if key(a, after) == key(short, before)]
+            others = [r for r in removed if key(r, before) == key(short, before)]
+            if len(twins) == 1 and len(others) == 1: renamed[short] = twins[0]
+        changed = []
+        for short in old_names:
+            if short in renamed: changed.append(short + ' (renamed to ' + renamed[short] + ')'); continue
+            if short not in new_names or not on_vm(short): continue
+            fields = [label for field, label in DEFINITION_FIELDS if (before.get(short) or {}).get(field) != (after.get(short) or {}).get(field)]
+            if fields: changed.append(short + ' (' + ', '.join(fields) + ')')
+        gone = [n for n in removed if n not in renamed]
+        if gone:
+            warnings.append('Running devices the new file does not define: ' + ', '.join(gone) + '. They keep running until the changes are applied; '
+                            'applying removes them and their unsaved configuration.')
+        if changed:
+            warnings.append('Devices whose definition changed: ' + ', '.join(changed) + '. Applying recreates them; configuration not saved is lost then. '
+                            'Use Save in the lab header first to keep it.')
+    if dry_run is False: warnings.append('The installed containerlab cannot show what applying will change.')
+    return warnings
+
+
 class LabOperations:
     def __init__(self, store, discovery, readiness=None):
         # readiness: the ReadinessMonitor, so a Restart device job can drop the device's proven login
@@ -495,6 +601,14 @@ class LabOperations:
         with self.plan_lock:
             self.plan_cache.pop(lab_id, None); self.plan_gen[lab_id] = self.plan_gen.get(lab_id, 0) + 1
 
+    def capabilities(self):
+        """The helper's capabilities, kept for a minute per VM connection revision."""
+        host = self.host(); key = host.get('revision')
+        if self.cap_cache and self.cap_cache[0] == key and self.cap_cache[1] > time.monotonic(): return self.cap_cache[2]
+        result = self.invoke({'mode': 'capabilities'})
+        self.cap_cache = (key, time.monotonic() + 60, result)
+        return result
+
     def invoke(self, req):
         try: return remote(self.host(), req)
         except Exception as exc:
@@ -512,14 +626,12 @@ class LabOperations:
             # Restart device: the manager's own name of the device (its node record), never a command,
             # path or container id. The server resolves it to the topology node and its container.
             node: str = Field(default='', max_length=253)
+            # Save changes to the VM (`revise`) from Edit topology: the revision of the lab's map document the page opened
+            # (GET /api/labs/<id>/map-document). With lab_id, a map changed in the manager since then refuses the review.
+            map_revision: str | None = Field(default=None, max_length=64)
 
         @app.get('/api/operations/capabilities')
-        def capabilities():
-            host = self.host(); key = host.get('revision')
-            if self.cap_cache and self.cap_cache[0] == key and self.cap_cache[1] > time.monotonic(): return self.cap_cache[2]
-            result = self.invoke({'mode': 'capabilities'})
-            self.cap_cache = (key, time.monotonic() + 60, result)
-            return result
+        def capabilities(): return self.capabilities()
 
         # /api/operations/browse and /api/operations/images are owned by device_diagnostics.py (installed first):
         # browse gained a files mode and images its details there; the helper modes behind them are unchanged.
@@ -618,6 +730,11 @@ class LabOperations:
                 self.guard(data.lab_id)
                 lab = copy.deepcopy(self.store.lab(data.lab_id)) if data.lab_id else None
                 if data.lab_id and not lab: raise HTTPException(404, 'Lab not found.')
+                if data.map_revision is not None and data.action != 'revise': raise HTTPException(400, 'Only Save changes to the VM names a map revision.')
+                # Edit topology saves the lab's map document beside the file (TOPOLOGY-EDIT-DESIGN A2, R4): a map that changed in
+                # the manager since the page opened it is refused before the helper is asked, so the save never carries an old map.
+                if lab and data.map_revision is not None and data.map_revision != (revision(lab['drawing']) if lab.get('drawing') else ''):
+                    raise HTTPException(409, MAP_CHANGED_SENTENCE)
                 host_revision = self.store.state.get('host', {}).get('revision')
                 # The moment this review starts, taken while nothing else runs: any lifecycle job created at
                 # or after it (even one confirmed while the helper round trips below were in flight) makes a
@@ -625,7 +742,8 @@ class LabOperations:
                 review_stamp = stamp()
             if data.action in NODE_ACTIONS and data.path: raise HTTPException(400, STOP_LABELS[data.action] + " uses the lab's own topology file.")
             run_options = [k for k in OPTION_ACTIONS if k in data.options]
-            if run_options and not any(data.action in actions for actions in OPTION_ACTIONS.values()): raise HTTPException(400, 'This action takes no run options.')
+            # `deployed` is named by its label for every action but revise (the next line), never as "no run options".
+            if [k for k in run_options if k != 'deployed'] and not any(data.action in actions for actions in OPTION_ACTIONS.values()): raise HTTPException(400, 'This action takes no run options.')
             refused_options = [OPTION_LABELS[k] for k in run_options if data.action not in OPTION_ACTIONS[k]]
             if refused_options: raise HTTPException(400, 'This action does not take: ' + ', '.join(refused_options) + '.')
             path = data.path or (lab.get('vm_project_path') or lab.get('vm_source', {}).get('files', {}).get('definition', {}).get('path', '') if lab else '')
@@ -646,7 +764,7 @@ class LabOperations:
                 if 'max_workers' in options:
                     value = options['max_workers']
                     if type(value) is not int or not 1 <= value <= 64: raise HTTPException(400, 'Max workers must be a whole number from 1 to 64.')
-                for flag in ('skip_post_deploy', 'keep_mgmt_net'):
+                for flag in ('skip_post_deploy', 'keep_mgmt_net', 'deployed'):
                     if flag in options and type(options[flag]) is not bool: raise HTTPException(400, 'Invalid boolean option.')
                 if 'nodes' in options:
                     names = options['nodes']
@@ -711,7 +829,7 @@ class LabOperations:
             if data.action in ('publish', 'revise'):
                 # The lab builder's save. The manager checks what it will later have to read back: a
                 # topology parse_definition accepts, under the name the folder and the file will carry.
-                if set(options) - {'root', 'text', 'annotations', 'base'}: raise HTTPException(400, 'Unsupported save options.')
+                if set(options) - {'root', 'text', 'annotations', 'base'} - ({'deployed'} if data.action == 'revise' else set()): raise HTTPException(400, 'Unsupported save options.')
                 try: parsed = parse_definition(str(options.get('text', '')).encode())
                 except (ValueError, TypeError, AttributeError, RecursionError) as exc:
                     if 'topology.nodes' in str(exc): raise HTTPException(400, 'Add at least one device before saving: a lab without devices cannot be deployed.')
@@ -740,6 +858,21 @@ class LabOperations:
             if data.action in ('deploy', 'redeploy', 'publish', 'revise', 'create'):
                 # Manager-side only (the helper's plan and its digest are untouched): shown with the review's warnings.
                 notes.extend(cptx_startup_warnings(str(options.get('text', '')) if data.action in ('publish', 'revise', 'create') else (source or {}).get('text', '')))
+            if data.action == 'revise':
+                # A save of a lab with containers on the VM (the helper binds them into `affected` only with `deployed`): the
+                # manager's own sentences follow the helper's, built from the two texts and those containers (A13).
+                containers = [a for a in result.get('affected') or [] if isinstance(a, dict)]
+                result['deployed'] = bool(containers)
+                if containers:
+                    try: dry = ((self.capabilities().get('actions') or {}).get('deploy') or {}).get('dry_run')
+                    except HTTPException: dry = None   # not known: no sentence either way
+                    later = deployed_save_warnings(source['text'], str(options.get('text', '')), containers,
+                                                   [req['name'], source_name, (lab or {}).get('deployment_name') or ''], dry if isinstance(dry, bool) else None)
+                    result['warnings'] = list(result.get('warnings', [])) + later
+            if data.action == 'apply' and isinstance(result.get('plan'), dict):
+                # The device limits of the plan (A10), by the kind the VM file gives each device.
+                result['plan'], backup = annotate_plan((source or {}).get('text', ''), result['plan'])
+                if backup: result['backup_first'] = backup
             if notes: result['warnings'] = notes + list(result.get('warnings', []))
             if diff: result['diff'] = diff
             # The images the reviewed topology names, so the page can ask whether each is usable on this VM
@@ -1108,6 +1241,62 @@ class LabOperations:
             lab = self.store.lab(job['lab_id']) if job and job.get('action') in DEPLOY_ACTIONS and job.get('lab_id') else None
             if lab: lab['last_deployed'] = finished
 
+    def reregister(self, lab_id, host, path, name=''):
+        """After a successful apply, deploy or redeploy: register the lab's definition again from the topology file the job
+        ran and the map file beside it, read through the helper's read mode (TOPOLOGY-EDIT-DESIGN A1, R2, R12, R20). The nodes
+        follow the file; `deployment_name` (else `name`, the one the job deployed under), Hide from Home and the saved node settings are kept. The map: the VM's map file
+        when it has one, unless a person changed the map in the manager since the last sync (then the manager's own map
+        document is read against the new file, so positions placed here are kept and the file's devices still appear).
+        Returns '' or the job's note; never raises, never fails the job."""
+        from .runner import Runner
+        from .topology import unplaced
+        unread = ('The lab ran, but the manager could not read its topology file on the VM afterwards, so My labs still shows the '
+                  'previous definition. Use Sync from VM (Advanced › Deployment details) to refresh it.')
+        try:
+            text = remote(host, {'mode': 'read', 'path': path}, None, self.stopping, timeout=30)['text']
+            if not isinstance(text, str): raise ValueError('not text')
+        except Exception: return unread
+        note = ''; vm_map = None
+        try:
+            vm_map = remote(host, {'mode': 'read', 'path': path + '.annotations.json'}, None, self.stopping, timeout=30)['text']
+            if not isinstance(vm_map, str): raise ValueError('not text')
+        except ValueError as exc:
+            vm_map = None
+            if 'no longer exists' not in str(exc): note = 'The manager could not read the map file beside the topology on the VM; the map in the manager was kept.'
+        except Exception:
+            vm_map = None; note = 'The manager could not read the map file beside the topology on the VM; the map in the manager was kept.'
+        with self.store.lock:
+            lab = self.store.lab(lab_id)
+            if not lab: return ''
+            drawn = isinstance(lab.get('drawing'), dict) and bool(lab['drawing'].get('nodes'))
+            # The VM's map file wins unless a person changed the map here since the last sync; without either, the manager's
+            # own map is read against the new file, so the file's devices appear and every position stays where it was.
+            use_ours = drawn and (vm_map is None or Runner.map_changed_in_manager(lab))
+            document = map_document(lab) if use_ours else vm_map
+            was_unplaced = use_ours and unplaced(lab['drawing'])
+            deployment = lab.get('deployment_name') or name
+            before = copy.deepcopy(lab)
+            try:
+                try: register_definition(self.store.state, lab, text.encode(), document.encode() if document else None, deployment)
+                except (ValueError, TypeError, AttributeError, KeyError, RecursionError):
+                    if not document: raise
+                    # The map did not fit the new file: the nodes alone, the map kept as it was.
+                    register_definition(self.store.state, lab, text.encode(), None, deployment)
+                    note = 'The map could not be matched to the new topology file; the map in the manager was kept.'; was_unplaced = False
+            except (ValueError, TypeError, AttributeError, KeyError, RecursionError):
+                lab.clear(); lab.update(before)
+                return ('The lab ran, but My labs could not take its topology file from the VM (not a literal topology the manager '
+                        'reads, or its deployment belongs to another lab), so My labs still shows the previous definition. '
+                        'Use Sync from VM (Advanced › Deployment details) once that is corrected.')
+            if was_unplaced:
+                # Still on the default grid: discovery may place it from the VM's map file later (topology.unplaced).
+                lab['drawing']['placed'] = False; keep_document(lab, document)
+            try: self.store.save()
+            except OSError: pass   # the record is in memory; the job's own save writes it
+        self.forget_plan(lab_id)
+        self.store.event('topology.registered', 'Lab definition refreshed after apply', lab_id=lab_id)
+        return note
+
     def settled_after_restart(self, key, action='restart-node'):
         """After a successful node restart: '' when the container is running, else the reason the job failed.
 
@@ -1172,7 +1361,7 @@ class LabOperations:
     def execute(self, ident, host, req):
         with self.store.lock: self.active.add(ident); event = self.cancels.get(ident)
         stop = StopCondition(self.stopping, event)
-        window = OutputWindow(); last_save = 0; ran = False   # ran: the request was handed to the VM
+        window = OutputWindow(); last_save = 0; ran = False; note = ''   # ran: the request was handed to the VM; note: the re-registration's
         def update(**fields):
             with self.store.lock:
                 job = next(j for j in self.store.state['operations'] if j['id'] == ident)
@@ -1242,6 +1431,8 @@ class LabOperations:
                 if exited: succeeded = False; message = exited
             finished = stamp()
             if succeeded: self.record_deployment(ident, finished)
+            # The lab now runs what its file says: My labs follows the file (A1). A deployed save (revise) never does this.
+            if succeeded and action_of_job in REGISTER_ACTIONS and lab_of_job and req.get('path'): note = self.reregister(lab_of_job, host, req['path'], req.get('name') or '')
         except Exception as exc:
             stopped = isinstance(exc, OperationStopped)
             if stopped and self.stopping.is_set(): message = 'Operation connection interrupted. Inspect the lab before retrying.'
@@ -1259,7 +1450,7 @@ class LabOperations:
             self.forget_plan(lab_of_job)   # before the terminal write (see the except branch)
             try:
                 update(status='succeeded' if succeeded else 'failed', exit_code=result.get('exit_code'),
-                       finished=finished, output=clean, result=result, message=message)
+                       finished=finished, output=clean, result=result, message=message, **({'note': note} if note else {}))
             except OSError:
                 pass  # update retained the outcome in memory; restart reconciles disk.
         finally:

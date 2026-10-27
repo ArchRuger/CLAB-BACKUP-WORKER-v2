@@ -588,9 +588,10 @@ class HostOperationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'changed on the VM'): self.host.plan(revise(base={'yaml': 'stale', 'annotations': sha(self.LAYOUT.encode())}))
         with self.assertRaisesRegex(ValueError, 'changed on the VM'): self.host.plan(revise(base={'yaml': sha(self.BUILT), 'annotations': ''}))
         self.rows['built'] = [dict(name='clab-built-r1', lab_name='built', state='running', container_id='x', absLabPath=str(path))]
-        with self.assertRaisesRegex(ValueError, 'deployed'): self.host.plan(revise())
+        # Without the page's `deployed` flag a lab with containers is refused (T03: the sentence no longer says "destroy").
+        with self.assertRaisesRegex(ValueError, 'has running devices'): self.host.plan(revise())
         self.rows.pop('built'); self.rows['renamed'] = [dict(name='clab-renamed-r1', lab_name='renamed', state='running', container_id='x', absLabPath=str(path))]
-        with self.assertRaisesRegex(ValueError, 'deployed'): self.host.plan(revise())
+        with self.assertRaisesRegex(ValueError, 'has running devices'): self.host.plan(revise())
         self.rows.pop('renamed')
         request = revise(); review = self.host.plan(request); result = self.host.execute({**request, 'digest': review['digest']}, lambda _: None)
         self.assertEqual(path.read_text(), changed); self.assertEqual(side.read_text(), '{"nodeAnnotations":[]}')
@@ -1705,7 +1706,9 @@ class OperationStopTests(unittest.TestCase):
 
     def execute_over_fake_ssh(self, make_script, action='deploy', where='script'):
         """Run the real remote() (not the fixture's fake VM) over a scripted helper session; returns (record, ssh log)."""
-        with self.fixture(), patch.object(self.service, 'refresh'):
+        # The re-registration after a successful deploy (its own read of the file, TOPOLOGY-EDIT-DESIGN A1) is left out: these
+        # tests count the helper sessions of the run and its stop follow-up only (test_topology_edit.py covers it).
+        with self.fixture(), patch.object(self.service, 'refresh'), patch.object(self.app.state.operations, 'reregister', return_value=''):
             job, args = self.queued(action); self.job_id = job['id']; log = []
             self.script_hook = lambda: self.app.state.operations.cancels[self.job_id].set()
             with patch('app.lab_operations.remote', REAL_REMOTE), \

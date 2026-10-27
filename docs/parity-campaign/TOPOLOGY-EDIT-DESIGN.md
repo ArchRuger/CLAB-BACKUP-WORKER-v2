@@ -336,3 +336,18 @@ controls; editing a lab that has no file on the VM; per-kind vendor notes (R101)
 after Apply, `lab_id`, map revision, the fixture), T04b (catalog module, route, tests), T05 (adapter: undo/redo
 handle), T06 (pages and checks) run in parallel on disjoint files against the contracts above; T07 gathers the
 per-kind reconcile facts first, then runs the acceptance list.
+
+### 12.6 Build decisions recorded by the lead (T03, T04a)
+
+- **Re-registration map source (T04a).** After a successful apply, deploy or redeploy the manager re-registers the lab's
+  definition from the VM file; the VM's map file wins only when nobody changed the map in the manager since the last
+  sync (`Runner.map_changed_in_manager`); otherwise, or when the VM has no map file, the manager's own map is kept and
+  read against the new file, so placed and arranged positions survive a deploy (A1 as built).
+- **Rename detection (T04a).** A removed device whose definition reappears unchanged under exactly one new name is
+  reported as "renamed to" in the changed-devices sentence, not as removed.
+- **Plan limits on the pending-changes check (lead).** `GET /api/operations/apply-plan` annotates its plan from the
+  kinds the manager registered for the lab (`definition_yaml`); the apply review annotates from the VM file itself,
+  which is the one read before a confirm.
+- **The helper's "running" set (T03)** is the union of the containers under the lab's name and those found by topology
+  path, with duplicates removed; the digest of a `revise` binds container name and id, every other action keeps the
+  state as before (`test_revise_deployed.py`).
