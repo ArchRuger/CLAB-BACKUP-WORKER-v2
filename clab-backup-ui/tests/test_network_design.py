@@ -175,7 +175,8 @@ class DesignViewTests(unittest.TestCase):
 
     def test_view_of_a_lab_with_vjunos_router_and_vsrx(self):
         """Campaign 2 B05 phase 1: both kinds are design devices with their exact profiles; the matrix answers from the
-        capability data and claims nothing beyond generated_not_live_tested."""
+        capability data and claims nothing beyond generated_not_live_tested, except what phase 2 proved live
+        (design_capabilities.VALIDATION: vJunos-router ipv4, ospfv2, static routes; vSRX static routes)."""
         yaml_text = ('name: b05\nmgmt:\n  network: clab\n  ipv4-subnet: 172.20.20.0/24\ntopology:\n  nodes:\n'
                      '    vrt: {kind: juniper_vjunosrouter, image: n24l/juniper_vjunos-router:26.2R1.7, mgmt-ipv4: 172.20.20.102}\n'
                      '    vsrx: {kind: juniper_vsrx, image: n24l/juniper_vsrx:23.2R2.21, mgmt-ipv4: 172.20.20.103}\n'
@@ -188,10 +189,13 @@ class DesignViewTests(unittest.TestCase):
         endpoints = data['links'][0]['endpoints']
         self.assertEqual((endpoints['vrt']['nos'], endpoints['vsrx']['nos']), ('ge-0/0/1', 'ge-0/0/0'))
         rows = {(r['kind'], r['feature']): r['level'] for r in data['capabilities']}
+        proven = {('juniper_vjunosrouter', 'ipv4'), ('juniper_vjunosrouter', 'ospfv2'), ('juniper_vjunosrouter', 'static_routes'),
+                  ('juniper_vsrx', 'static_routes')}
         for kind in data['kinds']:
             self.assertEqual(rows[(kind, 'bgp')], 'generated_not_live_tested', kind)
-            self.assertEqual(rows[(kind, 'ospfv2')], 'generated_not_live_tested', kind)
-            self.assertNotIn('verified_on_image', {level for (k, _), level in rows.items() if k == kind}, kind)
+            self.assertEqual(rows[(kind, 'ospfv2')], 'verified_on_image' if (kind, 'ospfv2') in proven else 'generated_not_live_tested', kind)
+            self.assertEqual({key for key, level in rows.items() if key[0] == kind and level == 'verified_on_image'},
+                             {key for key in proven if key[0] == kind}, kind)
         self.assertEqual(rows[('juniper_vsrx', 'evpn')], 'retired', 'EVPN is under review on every kind')
         self.assertEqual(rows[('juniper_vjunosrouter', 'lag')], 'unsupported')
 

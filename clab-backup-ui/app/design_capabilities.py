@@ -19,8 +19,8 @@ Nothing in this module runs the engine: :func:`engine_data` only ever reads the 
 
 ``PROFILES`` is the kind -> netlab device profile table from D3.2, with its evidence per entry:
 ``arista_ceos``, ``juniper_vjunosswitch``, ``juniper_vjunosrouter`` and ``juniper_vsrx`` are exact profile
-matches (the last two since campaign 2 B05, a static mapping: nothing on them is ``verified_on_image`` until
-the live apply of B05 phase 2); ``juniper_cjunosevolved`` and
+matches (the last two since campaign 2 B05: ``verified_on_image`` only where ``VALIDATION`` records the live apply
+of B05 phase 2, the vJunos-router entries on a nested derivative of the image); ``juniper_cjunosevolved`` and
 ``cisco_xrv9k`` are stand-ins (Junos Evolved / IOS XR lineage, but a different image and containerlab
 kind than the netlab profile they borrow), so nothing on them is ``verified_on_image`` until proven
 live; ``linux`` is a support host only, never applied by this integration. Any other kind is
@@ -59,18 +59,18 @@ PROFILES = {
     },
     # Campaign 2 B05 phase 1: static mappings, read from netlab 26.09's own profiles (devices/vjunos-router.yml:
     # clab kind juniper_vjunosrouter, interface_name ge-0/0/{ifindex}, parent vmx; devices/vsrx.yml: vSRX 3.0, parent
-    # junos, interface naming inherited from junos). No VALIDATION entry exists for either kind: every feature the
-    # engine supports reads generated_not_live_tested until the live apply and read-back of phase 2.
+    # junos, interface naming inherited from junos). Phase 2 (live apply through the manager) wrote the VALIDATION
+    # entries below for what it proved; every other feature the engine supports reads generated_not_live_tested.
     'juniper_vjunosrouter': {
         'profile': 'vjunos-router', 'netlab_device': 'vjunos-router', 'exact': True,
         'evidence': ('exact profile match (netlab vjunos-router targets the vJunos-router image); '
-                     'static mapping, live apply pending (campaign 2 B05 phase 2)'),
+                     'exact netlab profile; applied live through the manager (campaign 2 B05 phase 2, see VALIDATION and docs/parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md)'),
         'mgmt_if': 'fxp0', 'interfaces': 'ge-0/0/N',
     },
     'juniper_vsrx': {
         'profile': 'vsrx', 'netlab_device': 'vsrx', 'exact': True,
         'evidence': ('exact profile match (netlab vsrx targets vSRX 3.0, the image of containerlab kind juniper_vsrx); '
-                     'static mapping, live apply pending (campaign 2 B05 phase 2)'),
+                     'exact netlab profile; applied live through the manager (campaign 2 B05 phase 2, see VALIDATION and docs/parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md)'),
         'mgmt_if': 'fxp0', 'interfaces': 'ge-0/0/N',
     },
     'juniper_cjunosevolved': {
@@ -99,13 +99,39 @@ PROFILES = {
 UNMAPPED_KIND_REASON = 'no netlab profile is mapped to this containerlab kind'
 
 # (kind, feature_id) -> reason. Image-specific refusals narrower than the engine/profile already
-# say. Start empty: no entry is proven yet. Shape: IMAGE_LIMITS[('arista_ceos', 'evpn')] = 'reason'.
-IMAGE_LIMITS = {}
+# say. Shape: IMAGE_LIMITS[('arista_ceos', 'evpn')] = 'reason'. Each entry is a live fact with its evidence.
+_VSRX_MPLS = ('refused on vSRX: netlab\'s MPLS configuration sets `security forwarding-options family mpls mode packet-based`, '
+              'which vSRX 23.2R2.21 rejects while security policies exist and, once they are removed, also switches IPv4 to '
+              'packet mode and turns the firewall off without a word in the review (campaign 2 B05 phase 2, '
+              'docs/parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md, jobs ba0cb6bb and b4e62a24)')
+# Every feature that needs netlab's `mpls` module on vSRX and that the engine would otherwise render: LDP, L3VPN, SR-MPLS.
+IMAGE_LIMITS = {('juniper_vsrx', feature): _VSRX_MPLS for feature in ('mpls_ldp', 'l3vpn', 'sr_mpls')}   # bgp_lu and sixpe: the profile has no mpls.bgp / mpls.6pe, the engine refuses them first
 
-# (kind, feature_id) -> {'level': ..., 'evidence': ...}. This integration's own evidence record.
-# Start empty: no live evidence exists yet. Shape:
+# (kind, feature_id) -> {'level': ..., 'evidence': ..., 'reason': ...}. This integration's own evidence record. Shape:
 # VALIDATION[('arista_ceos', 'bgp')] = {'level': 'verified_on_image', 'evidence': 'docs/netlab-integration/evidence/<file>'}
-VALIDATION = {}
+# An entry is written only for a (kind, feature) generated, applied with *Apply to devices* through the running manager,
+# read back by an independent SSH session and seen working in the control plane. One Junos kind never proves another,
+# and the vJunos-router entries were proven on a nested derivative of the image, which their reason says.
+B05_PHASE2 = 'docs/parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md'
+_VRT_DERIVATIVE = ('nested derivative image local/juniper_vjunos-router:26.2R1.7-nested (the published image does not '
+                   'boot on the development host), not the published image')
+VALIDATION = {
+    # Campaign 2 B05 phase 2: vSRX 23.2R2.21, the exact image n24l/juniper_vsrx:23.2R2.21.
+    ('juniper_vsrx', 'static_routes'): {
+        'level': 'verified_on_image', 'evidence': B05_PHASE2,
+        'reason': 'applied through the manager on vSRX 23.2R2.21: the discard route was read back in the configuration and active in inet.0'},
+    # Campaign 2 B05 phase 2: vJunos-router 26.2R1.7, labelled as a derivative.
+    ('juniper_vjunosrouter', 'ipv4'): {
+        'level': 'verified_on_image', 'evidence': B05_PHASE2,
+        'reason': 'applied through the manager on vJunos-router 26.2R1.7, ' + _VRT_DERIVATIVE + ': the point-to-point address was read back and carried OSPF'},
+    ('juniper_vjunosrouter', 'ospfv2'): {
+        'level': 'verified_on_image', 'evidence': B05_PHASE2,
+        'reason': 'applied through the manager on vJunos-router 26.2R1.7, ' + _VRT_DERIVATIVE + ': adjacency Full with a vJunos-switch, loopbacks exchanged'},
+    ('juniper_vjunosrouter', 'static_routes'): {
+        'level': 'verified_on_image', 'evidence': B05_PHASE2,
+        'reason': ('applied through the manager on vJunos-router 26.2R1.7, ' + _VRT_DERIVATIVE + ': the discard route was active, '
+                   'and dropping it from the design removed it while a manual static route stayed')},
+}
 
 # GRE/WireGuard are plugins, not netlab modules, so device support is never in module-support data
 # (confirmed live: `netlab show module-support --system -m tunnel` fails with "Unknown module").

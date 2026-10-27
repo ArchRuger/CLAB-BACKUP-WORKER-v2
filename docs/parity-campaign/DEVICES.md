@@ -55,7 +55,7 @@ pin it; it is not a live result.
 | Device start/stop/restart | PASS live (C05) | NOT TESTED | PASS live (known second-start limit) | PASS live | PASS live | PASS live |
 | Lab deploy/apply/redeploy/destroy | PASS live (C05) | deploy PASS live outside the manager (B03a); manager path B06 | PASS | PASS | PASS | PASS |
 | Capture | PASS live (C07, viewer) | PASS live from the host end with real packets (A05); a session on the vSRX end starts (B04 phase 2; the link is drawn as `eth1` because the lab was registered before the kind was known) | PASS | PASS | PASS | PASS |
-| Topology / map integration, link state | PASS live (C06) | NOT TESTED | PASS | PASS | PASS | PASS |
+| Topology / map integration, link state | PASS live (C06) | PASS live (T07 on `camp-topo`: added from the palette with its exact image, linked, applied; recreated by containerlab on a link change) | PASS | PASS | PASS | PASS |
 | Network Design (netlab mapping, generation, apply, readback) | unsupported by design (`dc.resolve` → unsupported) until B05 | unsupported until B05 | PASS | PASS | PASS (stand-in profile) | PASS |
 
 ## Open blockers

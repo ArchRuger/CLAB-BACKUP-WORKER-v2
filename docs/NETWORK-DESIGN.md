@@ -184,14 +184,22 @@ was applied live, and what the limit is. As of this release, on the four accepta
   XRv9k), LAG and LACP (not on XRv9k or vJunos-router; vSRX has them), anycast gateways (not on XRv9k or vSRX),
   STP (cEOS only), SRv6 (XRv9k only), 6PE (cEOS and XRv9k only); a plan that asks one of those of a device that
   cannot do it names the device and generates nothing.
-- **vJunos-router and vSRX** (static mapping; every feature `generated_not_live_tested`, none applied live):
-  generation was checked with the real engine on a cEOS, vJunos-router and vSRX triangle (OSPF, IS-IS, BGP and MPLS
-  with `ge-0/0/N.0` ports and `fxp0` management), nothing more. netlab's `vsrx` profile has no EVPN or VXLAN and
-  has LAG; `vjunos-router` has no LAG. The vSRX IS-IS and MPLS fragments carry netlab's `mode packet-based` line.
-  The engine writes no security zone for vSRX, and a flow-mode vSRX drops traffic on a data port that is in no
-  zone, so routing protocols over vSRX data ports are expected not to come up until a zone admits them (a
-  prediction, not a measured image limit). Evidence:
-  [b05-netlab-static-2026-10-27.md](parity-campaign/evidence/b05-netlab-static-2026-10-27.md).
+- **vJunos-router and vSRX** (applied live through the product on a two-device design each; one Junos kind never
+  proves the other): on **vJunos-router** (a nested derivative of the 26.2R1.7 image; the published image does not
+  boot on the development host) IPv4 addressing, OSPFv2 (adjacency Full with a vJunos-switch) and a static route,
+  with a no-op re-apply, the removal of the dropped static route while a manual one stayed, and a refused apply over
+  a manual second address on a port the plan renumbers; on **vSRX** 23.2R2.21 (exact image) a static route, with a
+  no-op re-apply and the removal of a dropped OSPF process. Those read *Verified on this image*; every other feature
+  of the two kinds stays `generated_not_live_tested`. Measured vSRX facts: the engine writes no security zone and the
+  apply leaves a person's zone bindings alone; a routing protocol on a vSRX data port does not come up unless a zone
+  that binds the port admits it (`host-inbound-traffic protocols …`; a port in no zone, or in a zone with only
+  `system-services`, drops it), and the design writes no such zone, so OSPF and IS-IS over vSRX data ports are applied
+  but not proven; the IS-IS fragment's `family iso mode packet-based` takes effect at commit with no reboot; the MPLS
+  fragment's `family mpls mode packet-based` is refused by the device while any security policy exists, and without
+  policies it switches IPv4 to packet mode as well (zones and policies stop applying to IPv4), at commit, with no
+  reboot. netlab's `vsrx` profile has no EVPN or VXLAN and has LAG; `vjunos-router` has no LAG. Evidence:
+  [b05-netlab-static-2026-10-27.md](parity-campaign/evidence/b05-netlab-static-2026-10-27.md) (generation),
+  [b05-phase2-live-apply-2026-10-27.md](parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md) (live apply).
 - **Not yet in the schema**: the GRE and WireGuard plugins (`tunnel.*`), and protocol authentication (the
   secret-reference model): `password` and key attributes stay refused by name.
 
@@ -289,9 +297,9 @@ is `docs/netlab-integration/PROVISIONING.md`; the live proofs on the four-node a
 
 1. **Choose devices.** Every device the plan includes is offered; a support host, a blocked device or a kind
    without a driver is listed with the reason. Applying is available for cEOS, vJunos-switch, cJunosEvolved
-   and XRv9k, the kinds proven live, and the driver set also lists vJunos-router and vSRX, whose live apply and
-   read-back are still pending: the plan for them is generated and reviewable, but treat an apply to them as
-   untested and check the device yourself. The preparation step is the Junos one for all four Junos kinds; for
+   and XRv9k, the kinds proven live, and for vJunos-router and vSRX, whose apply was proven live for the features
+   listed under *Feature families* (on vSRX a routing protocol over a data port also needs a security zone that
+   admits it, which the design does not write). The preparation step is the Junos one for all four Junos kinds; for
    vSRX it also leaves out anything under `security` that names the management interface and any
    `functional-zone management` block (the management path is outside the zone model), and the ownership ledger
    treats a vSRX statement that binds an interface already bound to another zone by an unowned statement as a

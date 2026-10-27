@@ -437,7 +437,15 @@ def cptx_startup_warnings(text):
 VRNETLAB_KINDS = ('juniper_vjunosswitch', 'juniper_vjunosrouter', 'juniper_vsrx', 'juniper_vqfx', 'cisco_xrv9k')
 RECREATE_LOSES_CONFIGURATION = VRNETLAB_KINDS + (CPTX_KIND,)
 RECREATE_LIMIT = 'A recreated device boots from its image again: configuration not saved is lost.'
-RESTART_UNVERIFIED = "The effect of this restart on the device's configuration is not verified on this kind; back it up first."
+# Live facts of the T07 acceptance (docs/parity-campaign/evidence/t07-live-topology-editing-2026-10-27.md, containerlab 0.79):
+# a link change restarts cEOS in place (same container, about 2 s; the running configuration that was not written to
+# startup is lost), and recreates a kind that declares no live link support (vSRX got a new container and lost its
+# committed configuration). RESTART_UNVERIFIED stays for the kinds the fact was not measured on.
+CEOS_LINK_RESTART = ('A link change restarts this cEOS in place: running configuration not written to startup (write memory, '
+                     'or Save in the lab header) is lost; the startup configuration is kept.')
+VRNETLAB_LINK_RECREATE = ('containerlab recreates this device to change its links (its kind declares no live link support): '
+                          'configuration not saved is lost. Proven on vSRX; expected on the other VM-based kinds.')
+RESTART_UNVERIFIED = VRNETLAB_LINK_RECREATE
 # What a changed definition is named by in the deployed-save review, in this order.
 DEFINITION_FIELDS = (('kind', 'kind'), ('image', 'image'), ('env', 'environment'), ('startup-config', 'startup configuration'))
 MAP_CHANGED_SENTENCE = 'The map changed in the manager since you opened Edit topology. Reopen it; your topology changes stay in this browser.'
@@ -460,7 +468,7 @@ def plan_limits(text, plan):
     for name in plan.get('restarted') or []:
         if not isinstance(name, str) or name in limits: continue
         kind = kinds.get(name, '')
-        sentence = RESTART_KNOWN_LIMITS.get(kind) or (RESTART_UNVERIFIED if kind in VRNETLAB_KINDS else '')
+        sentence = RESTART_KNOWN_LIMITS.get(kind) or (VRNETLAB_LINK_RECREATE if kind in VRNETLAB_KINDS else CEOS_LINK_RESTART if kind == 'arista_ceos' else '')
         if sentence: limits[name] = sentence
     return dict(sorted(limits.items()))
 

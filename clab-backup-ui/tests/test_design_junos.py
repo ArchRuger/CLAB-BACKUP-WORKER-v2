@@ -568,7 +568,7 @@ class KindTests(unittest.TestCase):
             self.assertIs(design_apply.DRIVERS[kind], design_junos, kind)
         self.assertEqual(set(design_junos.KIND_EVIDENCE), set(design_junos.SUPPORTED_KINDS))
         for kind in ('juniper_vjunosrouter', 'juniper_vsrx'):
-            self.assertEqual(design_junos.KIND_EVIDENCE[kind], 'static mapping; live apply pending (campaign 2 B05 phase 2)')
+            self.assertIn('applied live through the manager', design_junos.KIND_EVIDENCE[kind]); self.assertIn('b05-phase2-live-apply-2026-10-27.md', design_junos.KIND_EVIDENCE[kind])
         for kind in ('juniper_cjunosevolved', 'juniper_vjunosswitch'):
             self.assertTrue(design_junos.KIND_EVIDENCE[kind].startswith('live: '), kind)
 

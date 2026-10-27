@@ -217,3 +217,10 @@ Evidence inconsistencies found while building this file:
 | C09 §9 row 13: R101 and the README/PARITY note | R101 (per-kind vendor image notes) stays not pursued; noted in PARITY.md at the row and in README's C09 line |
 | C09 §10: `verify_after.py`'s device-menu order | **closed** by A07 (107/107) |
 | C09 §8 open question (2): persisting the folder chooser's open branches | belongs to the saving stream; unchanged |
+- 2026-10-27 B05 phase 2: Network Design applied live through the manager on vJunos-router (nested derivative:
+  OSPF Full with vJunos-switch, loopbacks, static route; no-op re-apply; stale statement removed; a manual conflict
+  refused with 409) and on vSRX (exact image: static route, passive OSPF and IS-IS; packet-mode lines need no reboot
+  on 23.2R2.21; MPLS is refused by the device while security policies exist and, with them removed, switches IPv4 to
+  packet mode and so turns the firewall off: refused by an image limit from this campaign). Open point found: after a
+  Load the design ownership ledger still claims statements no longer on the device until the next apply (pre-existing
+  behaviour, recorded for the saving/design streams).

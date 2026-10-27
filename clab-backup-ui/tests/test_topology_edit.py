@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 import app.lab_operations as lab_operations
 from app.host_operations import digest
 from app.lab_operations import (RECREATE_LIMIT, RESTART_KNOWN_LIMITS, RESTART_UNVERIFIED, MAP_CHANGED_SENTENCE,
-                                annotate_plan, deployed_save_warnings, plan_limits)
+                                CEOS_LINK_RESTART, VRNETLAB_LINK_RECREATE, annotate_plan, deployed_save_warnings, plan_limits)
 from app.layout import revision
 from app.main import create_app
 from app.runner import Runner
@@ -212,17 +212,21 @@ class TopologyEditTests(unittest.TestCase):
         self.plan = {'deploys_lab': False, 'added': [], 'removed': [], 'recreated': ['sw1', 'r2'], 'started': [], 'restarted': ['r1', 'r3'],
                      'links_added': ['r1:Gi0/0/0/1 -- r3:eth1'], 'endpoints_removed': [], 'reasons': {'sw1': 'config drift: Image'}}
         result = self.post(action='apply', lab_id=self.lab_id).json()
-        self.assertEqual(result['plan']['limits'], {'r1': RESTART_KNOWN_LIMITS['cisco_xrv9k'], 'sw1': RECREATE_LIMIT}, 'cEOS r2 and r3 have none')
-        self.assertEqual(result['backup_first'], ['r1', 'sw1'])
+        # T07 live facts: a link change restarts cEOS in place (unsaved running configuration lost), so restarted r3 carries the
+        # cEOS sentence; a recreated cEOS (r2, a config drift) keeps no limit sentence because a recreate of a container kind
+        # restores its startup configuration from the lab folder.
+        self.assertEqual(result['plan']['limits'], {'r1': RESTART_KNOWN_LIMITS['cisco_xrv9k'], 'r3': CEOS_LINK_RESTART, 'sw1': RECREATE_LIMIT}, 'recreated cEOS r2 has none')
+        self.assertEqual(result['backup_first'], ['r1', 'r3', 'sw1'])
         self.assertEqual(result['plan']['reasons'], self.plan['reasons'], 'the helper plan is otherwise unchanged')
-        self.plan = {**self.plan, 'recreated': ['r2'], 'restarted': ['r3']}
+        self.plan = {**self.plan, 'recreated': ['r2'], 'restarted': []}
         ceos = self.post(action='apply', lab_id=self.lab_id).json()
         self.assertEqual(ceos['plan']['limits'], {}); self.assertNotIn('backup_first', ceos)
 
     def test_plan_limits_by_kind_including_the_unverified_vrnetlab_restart(self):
         text = 'name: t\ntopology:\n  nodes:\n    vr: {kind: vr-vjunosrouter}\n    sw: {kind: juniper_vjunosswitch}\n    pe: {kind: juniper_cjunosevolved}\n    c: {kind: ceos}\n'
         limits = plan_limits(text, {'restarted': ['vr', 'sw', 'pe', 'c'], 'recreated': []})
-        self.assertEqual(limits, {'sw': RESTART_KNOWN_LIMITS['juniper_vjunosswitch'], 'vr': RESTART_UNVERIFIED})
+        self.assertEqual(limits, {'c': CEOS_LINK_RESTART, 'sw': RESTART_KNOWN_LIMITS['juniper_vjunosswitch'], 'vr': VRNETLAB_LINK_RECREATE})
+        self.assertIs(RESTART_UNVERIFIED, VRNETLAB_LINK_RECREATE, 'the old name stays an alias of the proven sentence')
         self.assertEqual(plan_limits(text, {'restarted': [], 'recreated': ['vr', 'pe', 'c']}), {'pe': RECREATE_LIMIT, 'vr': RECREATE_LIMIT})
         self.assertEqual(annotate_plan('not yaml: [', {'restarted': ['vr']}), ({'restarted': ['vr'], 'limits': {}}, []))
 
