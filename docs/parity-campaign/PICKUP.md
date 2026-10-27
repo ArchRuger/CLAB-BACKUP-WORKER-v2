@@ -213,3 +213,12 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   and T04a land (`sudo bash deploy/start-manager.sh` from the main checkout once the tree is clean, or a worktree
   build with the main checkout's `.env`). Next: commit T03+T04a, rewrite the two pins, run the suites; T06a/T06b →
   `/clab-slice-verify`; rebuild the live manager; B06 "after" and B04 phase 2 through the manager; T07.
+- 2026-10-27 04:50 UTC, **campaign 2 checkpoint 4** (`3c15dee` pushed): T03–T06 built and committed (helper
+  `revise` on a deployed lab, manager sentences and plan limits and re-registration after Apply, the catalog, the
+  adapter's undo/redo, the builder page as the Topology view's editor, Edit topology… on the lab page);
+  `/clab-slice-verify` ran (16 of 19 held, 9 breaks: TOPOLOGY-EDIT-DESIGN §12.7) and the fixes are in build (T06-fix on
+  the pages, T04-fix on the manager). B04 phase 1 passed on both Junos VMs (direct driver; `restore_junos.SUPPORTED_KINDS`
+  gained vJunos-router and vSRX), B05 phase 1 mapped both to netlab (static). The live manager runs `796892c`
+  (helpers reinstalled); B04 phase 2 + B06-after run against it now (`camp-vsrx`, `parity`). Next: commit the fixes,
+  rebuild the live manager from the fixed commit, T07 live acceptance on `parity`, B05 phase 2, D03/D04 docs, D10
+  student guide, release 1.31.7 (draft records in the session scratchpad: redraft from CHANGELOG style if lost).

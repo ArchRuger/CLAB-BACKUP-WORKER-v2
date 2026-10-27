@@ -197,3 +197,23 @@ Evidence inconsistencies found while building this file:
   with "Choose NOS", takes its login from containerlab's inventory, is refused for backup ("Enable at least one
   supported node"), has no Console row, and its terminal works; recorded as the "before" state in
   `evidence/a05-b06-vsrx-2026-10-27.md`; the "after" pass runs on the rebuilt manager (B06, pending).
+
+## A03: dispositions of the open rows and open points of C03–C09 (2026-10-27)
+
+| Item (design, section) | Disposition |
+|---|---|
+| C03 §10 optional: the helper's "Symlink paths are not supported" branch is unreachable because a symlinked parent returns ENOTDIR | stands as recorded: `self.path()` refuses the parent before the branch; the sentence is dead but harmless; not changed |
+| C03 §11 L6 (no image id in the Images dialog), L13 (the disabled Capture button's reason only in the caption) | no change, as answered in §11 |
+| C03 §11 live: the drawer's Image row shows the topology tag while `vrt` runs the local derivative | no change: C04's Container section shows the running image; DEVICES.md labels every derivative result |
+| C04 §8 residual risk: the console gate can miss a VM relaunch during the discovery lag | stands, recorded; the young-container floor covers the common case |
+| C05 §9 row 26, §12: impairments "can last" | **closed** by A04 (C05 §13): they do not survive the device's own restart, stop/start or a redeploy; the shipped caption says so |
+| C05 §12 live: Apply after a filtered destroy recreates neighbours whose kind cannot add links | stands (containerlab's behaviour); now printed as a per-kind limit under the plan's rows (TOPOLOGY-EDIT A10) |
+| C06 §10 low (3 MiB line, astral characters), §11 notes (two-call window, re-serialised document, Undo entries of removed labs, capabilities cache vs host revision), §12 not run live | §10 and §11: stand (re-examined by both A02 reviewers; the "not running" wording is **fixed**: a failed binding is a 409 and a stale discovery pauses the chip); §12: **closed** by A06 for the chip, Find, hover and Download picture (arrange/Undo live in T07) |
+| C07 §10/§11 cosmetic: `label: port` vs the NOS name; two sessions on one end share a row label | stands as a cosmetic open point (one naming rule); not changed in this campaign |
+| C07 §12 optional: an owner cookie minted on a request that raises is lost; the scripted capture fixture has no automated check | stand, recorded |
+| C07 §10 header "10 of 11 checks held" without naming the one | the §10 table rows are the record; the header count is history |
+| C08 §8 decisions (wait-for wording unless a live proof; the Juniper pair live pass needing 20 GB; R1 at every level; a `validate` helper mode not pursued) | the wait-for wording is **fixed** (A02 U2: no refusal claimed); the live stage pass and the `validate` mode stay not pursued; recorded in C08 §11 |
+| C09 §9 row 5 and §8 open question (1): the student guide's Help item hidden until the guide is revised | the owner reopened the guide on 2026-10-27: D10 regenerates it and restores the item |
+| C09 §9 row 13: R101 and the README/PARITY note | R101 (per-kind vendor image notes) stays not pursued; noted in PARITY.md at the row and in README's C09 line |
+| C09 §10: `verify_after.py`'s device-menu order | **closed** by A07 (107/107) |
+| C09 §8 open question (2): persisting the folder chooser's open branches | belongs to the saving stream; unchanged |
