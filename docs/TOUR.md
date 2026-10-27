@@ -61,8 +61,8 @@ confirm); see [Lab operations](LAB-OPERATIONS.md#diagnostics-logs-interfaces-ins
 file, the map and the configuration of every included device go into one folder of your
 repository as one save on the lab VM. The chip then reads *Saving…*, and when the save is made
 its panel opens by itself with the title *Not uploaded yet*, one sentence that says what
-changed (*12 devices changed since your last save: GTW-1, GTW-2, IXP-L2-Switch and 9 more. 12
-lines added, 12 removed.*), the line *To:* with the repository and folder, and four buttons:
+changed (*12 devices changed since your last save: GTW-1, GTW-2, IXP-L2-Switch and 9 more. 13
+lines added, 12 removed.*; the counts are the fixture's), the line *To:* with the repository and folder, and four buttons:
 **Upload** sends the save to the online repository, **Not now** leaves it on the VM (the chip
 then says *1 save to upload*), **See changes** opens what the upload would send and **Details**
 opens the technical record of the save. Nothing is uploaded without **Upload**. A save gets a
