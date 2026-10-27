@@ -1053,3 +1053,17 @@ now moot (lists are sorted before hashing, §2.6) and the second is carried into
 | Low: Escape in an open question closed the drawer; the busy sentence appeared three times; Retry dropped focus | Accepted: Escape closes the question only; one sentence; Retry keeps focus | §4.1 |
 | Low: no completion toast for Stop device and Start device | Accepted: "✔ <device> stopped" / "started" | §4.2 |
 | Live: Apply after a filtered destroy recreated the neighbours whose kind cannot add links live | Accepted as containerlab's behaviour: the review lists them; the Run with options help says so; recorded as an open point | §4.5, the handoff |
+
+## 13. Impairment persistence, live (campaign 2, A04, 2026-10-27)
+
+The open question of §9 row 26 and §12 (whether an impairment lasts across a device operation) was run live on
+`parity` through the 1.31.6 manager by `clab-devops-engineer` (`evidence/a04-impairments-persistence-2026-10-27.md`).
+Result: an impairment set on `clab-parity-ceos` eth1 (50 ms, 1 %) is gone from the VM and from the manager after
+Restart device, after Stop device plus Start device, and after Redeploy lab (which also removes the neighbours'
+impairments; every container is recreated). The peer end on a device that is not restarted survives (xrv9k eth2 kept
+its 30 ms across a ceos restart). cEOS came back with its three links after each operation; only the qdisc is lost.
+The manager read every empty state back correctly, with no 409 at any step. The shipped caption (`IMP_CAPTION` in
+`device-impairments.js`) already says that these operations *can remove* impairments, so the live result matches the
+text and row 26 is closed; the words "can last" exist nowhere in the shipped scripts. Two details for the next
+reader: the manager's node name in the requests is the container name (`clab-parity-ceos`), and `netem show` reports
+the XRv9k interface as `eth2(Gi0/0/0/1)`, which the manager splits into `eth2` and the port `Gi0/0/0/1`.

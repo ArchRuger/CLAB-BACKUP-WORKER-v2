@@ -177,3 +177,13 @@ Evidence inconsistencies found while building this file:
 | pre-campaign (not re-tested) | 22 |
 | unit only | 1 |
 | unverified | 1 |
+
+## Reconciliation log (campaign 2)
+
+- 2026-10-27 A02: the deferred full reviews of C06, C08, C09 ran (C06-DESIGN §13); no must-fix; every should-fix
+  and low finding fixed or recorded; commit `0752662`.
+- 2026-10-27 A04: impairment persistence across Restart, Stop/Start and Redeploy run live (C05-DESIGN §13): the
+  device's own impairment is removed by each operation, a peer end on an untouched device survives, a redeploy clears
+  all; the shipped caption says so; R040–R042's "not run" gap is closed with live evidence.
+- 2026-10-27 B03a: vSRX exact image booted (DEVICES.md); vJunos-router's published image stays BLOCKED on this host
+  (official limitation recorded in CAMPAIGN-2.md).
