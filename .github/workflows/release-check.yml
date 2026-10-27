@@ -122,6 +122,7 @@ jobs:
           python -m unittest discover -s tests -t tests -p test_remove_lab.py -v
           python -m unittest discover -s tests -t tests -p test_manager_reset.py -v
           python -m unittest discover -s tests -t tests -p test_vm_password.py -v
+          python -m unittest discover -s tests -t tests -p test_student_guide.py -v
       - name: Check network design (the pinned netlab engine on PATH)
         working-directory: clab-backup-ui
         run: |

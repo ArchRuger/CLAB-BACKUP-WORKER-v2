@@ -38,6 +38,15 @@ from .design_apply import DesignApply, public_job as public_design_job
 
 APP=Path(__file__).parent
 
+GUIDE_NAME = 'Containerlab_Node_Manager_Student_Quick_Start.pdf'
+
+
+def guide_path(root):
+    """The installed student quick start (`<data>/guide/<GUIDE_NAME>`), or None: a regular file only, never a symlink."""
+    path = Path(root) / 'guide' / GUIDE_NAME
+    return path if path.is_file() and not path.is_symlink() else None
+
+
 def create_app(data_dir=None):
     store=Store(data_dir or os.environ.get('DATA_DIR','/data'))
     migrate_download_metadata(store)
@@ -245,7 +254,7 @@ def create_app(data_dir=None):
             # off a protected entry the write-time trim deliberately kept in front of it.
             return {'labs':[public_lab(l) for l in store.state['labs']],
                     'jobs':[decorate_job(copy.deepcopy(j)) for j in store.state['jobs']],
-                    'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(),
+                    'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(), 'student_guide':guide_path(store.root) is not None,
                     'git_jobs':[git_progress.public(j) for j in store.state.get('git_jobs', [])],
                     'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])],
                     'design_jobs':[public_design_job(j) for j in store.state.get('design_jobs', [])],
@@ -491,6 +500,13 @@ def create_app(data_dir=None):
                             background=BackgroundTask(os.unlink,path))
     @app.get('/vm-connection-guide')
     def vm_guide(): return FileResponse(APP/'static/vm-connection.html')
+    # The student quick start (docs/student-quick-start, campaign 2 D10): `start-manager.sh` copies the PDF into the data
+    # directory's `guide/` folder; the Help group shows its entry only while the file is there (`student_guide` in the state).
+    @app.get('/student-guide')
+    def student_guide():
+        path = guide_path(store.root)
+        if path is None: raise HTTPException(404, 'The student quick start is not installed on this manager.')
+        return FileResponse(path, media_type='application/pdf', filename=GUIDE_NAME, content_disposition_type='inline')
     app.mount('/static',StaticFiles(directory=APP/'static'),name='static')
     @app.get('/')
     def index(): return FileResponse(APP/'static/index.html')
