@@ -18,7 +18,7 @@ window and read-back; two targets behind the same SSH address and port are alway
 There is no atomicity across nodes, and a mixed result is reported per node. The safety backup before and the
 check backup after stay one backup job each, covering every node.
 
-| | Junos (cJunosEvolved, vJunos-switch) | Arista cEOS | Cisco IOS XR (XRv9k) |
+| | Junos (cJunosEvolved, vJunos-switch, vSRX, vJunos-router) | Arista cEOS | Cisco IOS XR (XRv9k) |
 |---|---|---|---|
 | Restore artifact | `show configuration` (hierarchical), `.jcfg`, format `junos-hierarchical`: a second capture | `show running-config`, `.eoscfg`, format `eos-running-config`: the backup's own text, one capture | `show running-config`, `.xrcfg`, format `iosxr-running-config`: the backup's own text, one capture |
 | Replacement | `configure exclusive`, `load override terminal` | `configure session <token>`, `rollback clean-config`, `copy terminal: session-config` | `configure exclusive`, the saved configuration entered into the (empty) target configuration, then `commit replace …` |
@@ -31,11 +31,31 @@ check backup after stay one backup job each, covering every node.
 | What else blocks a restore | somebody's uncommitted edits in the shared candidate | nothing (sessions are isolated) | another open configuration session or an exclusive lock |
 | Base-configuration prerequisite | none | none on 4.35.0F (the stock containerlab startup configuration is enough) | none |
 
-**vJunos-router (`juniper_vjunosrouter`)** is not in this matrix: its backups, downloads and saves are
-supported (display-set backup, `vJunos-router_*.cfg`, default login `admin` / `admin@123`), but it has no
-restore artifact and no restore driver, so a lab that holds one still offers Load for its other devices and
-lists the router as view and download only ("Live restore is not supported for this platform yet.") until the
-Junos driver is proven live on it. Network design does not list it either.
+**vSRX (`juniper_vsrx`) and vJunos-router (`juniper_vjunosrouter`)** joined the Junos column in campaign 2
+(B04, 2026-10-27) with the driver unchanged, proven at the driver layer (the driver called directly against the
+node, judged by an independent read-back): replacement, confirmation from a fresh connection, back-to-back loads,
+A onto A, persistence across `request system reboot`, and the refusals (foreign uncommitted edit, foreign pending
+confirmation, empty, truncated, wrong-platform and display-set candidates, a candidate the node rejects, bad
+credentials, an unreachable address). Evidence:
+[vSRX](../parity-campaign/evidence/b04-vsrx-restore-driver-2026-10-27.md) on the exact image
+`n24l/juniper_vsrx:23.2R2.21` (Junos 23.2R2.21), and
+[vJunos-router](../parity-campaign/evidence/b04-vjunosrouter-restore-driver-2026-10-27.md) on
+`local/juniper_vjunos-router:26.2R1.7-nested` (Junos 26.2R1.7): **nested derivative; published image blocked on
+this host** (the published `n24l/juniper_vjunos-router:26.2R1.7` does not boot under nested virtualization).
+The manager path was proven in a [second record](../parity-campaign/evidence/b04-phase2-manager-load-2026-10-27.md)
+(B04 phase 2): backup with the restore artifact, Load B -> A verified with the manager's and an independent read-back,
+A onto A, back-to-back Loads, persistence over `request system reboot` after a manager Load, a selected-device job
+with its peers untouched and a mixed job with a controlled failure (vJunos-router), and the expired timer reported
+`rolled_back` only after the read-back (vSRX).
+Live facts of the two kinds:
+
+- vSRX: `load override` replaces the `security` hierarchy like any other (zones and policies read back exactly);
+  management is `fxp0` in `mgmt_junos`, bound to no security zone, so a candidate without zones stays reachable.
+  A candidate without `system services ssh` loses management: the node undid it at its 1-minute timer and the
+  previous configuration was read back. Arming takes about 7 s (6.4 to 7.1 s through the manager). Both images ship `system root-authentication`.
+- vJunos-router: arming takes 29 to 44 s on the nested derivative at the driver layer and 23 to 29 s through the
+  manager (within the driver's 180 s commit timeout); after `request system reboot` SSH answered again after about
+  15.5 to 16.5 minutes.
 
 Limits that are known and accepted:
 

@@ -50,7 +50,7 @@ GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.31.6 — guided setup
+Containerlab Node Manager 1.31.7 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -64,9 +64,17 @@ Setup menu
   6. Exit
 ```
 
-Enter a number and press Enter. The menus work over SSH and VM consoles without
-curses, a desktop browser or extra terminal UI packages. Commands that need
-passwords or GitHub device authorisation keep the terminal attached.
+Enter a number and press Enter. The plain menu works over SSH and VM consoles without
+curses, a desktop browser or extra terminal UI packages, and it is what a fresh VM
+opens. Commands that need passwords or GitHub device authorisation keep the terminal
+attached.
+
+A full-screen front end for the same steps is optional. `install.sh --setup-tui` installs
+its pinned packages once for your account (nothing else on the VM changes); after that a
+plain `install.sh` opens it on a capable terminal. `--tui` starts it (setting it up
+first if needed), `--plain` forces the numbered menu, and `--git` and `--advanced` work
+in both. Details: [installer-tui/README.md](installer-tui/README.md). The rest of this
+page describes the steps, which are the same in both.
 
 ## What the full installation does
 
@@ -108,13 +116,13 @@ does not set the clock or change time services, servers or timezone.
 
 ```mermaid
 flowchart TD
-    A[Run install.sh as ordinary VM user] --> B[Verify source and review plan]
+    A[Run install.sh as ordinary VM user] --> B[Verify source and show plan]
     B --> C[Prerequisites and optional APT media repair]
     C --> D[Password, helpers, storage, image, manager]
     D --> E[Browser Wireshark stack]
     E --> G[Container version and HTTP checks]
-    G --> H{Set up Git now?}
-    H -- Yes --> I[Git terminal wizard under original account]
+    G --> H{"Git now or later? (asked only with --advanced)"}
+    H -- Now --> I[Git terminal wizard under original account]
     H -- Later --> J[Manager ready; Git menu remains available]
     C -. Failure .-> K[Retry failed step or return to menu]
     D -. Failure .-> K
@@ -129,7 +137,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The installer ends with `Manager 1.31.6: running; HTTP and version checks passed.`
+The installer ends with `Manager 1.31.7: running; HTTP and version checks passed.`
 and the local address, then exits to the shell (exit code 0); it does not loop back
 to the Setup menu after a successful path. A failed or cancelled step keeps
 today's behaviour instead: completed work stays in place, the affected phase's
@@ -179,8 +187,8 @@ sudo bash "$HOME/projects/clab-manager/deploy/setup-capture.sh"
 Its setup writes the Edgeshark and session service addresses as localhost ports
 5001 and 5801 and the manager expects exactly those.
 
-To take the stack down deliberately, add `--remove`. It stops and
-`CAPTURE_PROVIDER=disabled` is written (the session token is kept). Later upgrades
+To take the stack down deliberately, add `--remove`. It stops the capture services
+and writes `CAPTURE_PROVIDER=disabled` (the session token is kept). Later upgrades
 respect the choice; running the script without `--remove` brings the stack back.
 Details: [Browser Wireshark](CAPTURE.md).
 
@@ -327,8 +335,10 @@ The final terminal checks verify the local manager. On your workstation:
 1. Open `http://VM_ADDRESS:8081` (or the configured port), using the VM's IP
    address; a DNS name works only as described in
    [Opening the manager by a name](#opening-the-manager-by-a-name). The VM connection
-   dialog opens on its own when no connection exists: use `clab-discovery` and the
-   password created during setup. After the first successful connection saves its
+   dialog opens on its own when no connection exists, already filled in by the
+   installer (*Prepared by VM setup*, with `clab-discovery` and the password created
+   during setup): press **Save and test connection** once. If setup could not hand the
+   password over, type `clab-discovery` and that password. After the first successful connection saves its
    fingerprint, reopen **Manager ▾ › VM connection…** and compare it with the VM
    console host key.
 2. On Home choose **Deploy › Choose a file on the lab VM…**, pick a topology on the VM and deploy it (a topology

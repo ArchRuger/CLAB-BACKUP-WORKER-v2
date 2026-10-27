@@ -103,11 +103,44 @@ same way a NOS kind gets its containerlab default. SSH readiness and **Open
 CLI ↗** work the same as for any other login; configuration backups stay
 unavailable, since this image has no backup driver.
 
+## Device kinds
+
+What the manager does for each containerlab kind (the code is `app/inventory.py`, `downloads.py`,
+`topology.py` and `restore_drivers.py`; `GET /api/catalog` returns the same facts as one read-only list for the
+lab builder and the Topology editor: kind, label, aliases, whether a default login exists, the interface rule
+and the backup, restore, design and console capabilities):
+
+| Kind (label) | Aliases | Default login | Backup | Download name | Data port in the topology | Restore | Console |
+|---|---|---|---|---|---|---|---|
+| `arista_ceos` (EOS) | `ceos`, `eos` | admin / admin | `show running-config` | `CEOS` `.conf` | `ethN` = `EthernetN` | yes | no |
+| `cisco_xrv9k` (IOS-XR) | `vr-xrv9k`, `iosxr` | clab / clab@123 | `show running-config` | `IOS-XR` `.txt` | `eth(N+1)` = `Gi0/0/0/N` | yes | yes |
+| `juniper_cjunosevolved` (Junos) | `cjunosevolved`, `junos` | admin / admin@123 | display set | `cjunosevo` `.cfg` | `eth(N+4)` = `et-0/0/N` | yes | no |
+| `juniper_vjunosswitch` (Junos (vJunos-switch)) | `vr-vjunosswitch`, `vjunosswitch` | admin / admin@123 | display set | `vJunos-switch` `.cfg` | `eth(N+1)` = `ge-0/0/N` | yes | yes |
+| `juniper_vjunosrouter` (Junos (vJunos-router)) | `vr-vjunosrouter`, `vjunosrouter` | admin / admin@123 | display set | `vJunos-router` `.cfg` | `eth(N+1)` = `ge-0/0/N` | yes (see below) | yes |
+| `juniper_vsrx` (Junos (vSRX)) | `vr-vsrx`, `vsrx` | admin / admin@123 | display set | `vSRX` `.cfg` | `eth(N+1)`; `ge-`, `xe-` and `et-0/0/N` all name it | yes | no |
+| `juniper_vqfx` (Junos (vQFX)) | `vr-vqfx`, `vqfx` | admin / admin@123 | display set | `vQFX` `.cfg` | `eth(N+1)` = `xe-0/0/N` | no | no |
+
+The Junos kinds back up as `show configuration | display set | no-more`, the human and diff form, and also keep the
+hierarchical configuration as the restore artifact (`.jcfg`) that the Junos restore driver replaces the whole
+configuration with. Login order is unchanged: credential profile, then the inventory login, then the kind default
+above, then (for `linux` nodes only) the documented image default. The vSRX default is the one containerlab.dev
+publishes for `vr-vsrx` (checked 2026-10-27). Notes on the two newest Junos kinds:
+
+- **vSRX** is a Junos firewall; the Load driver was proven live on the exact image
+  (Junos 23.2R2.21). The manager offers no serial console for it: a kind joins the console list only after the console has been verified
+  live through the manager's own console path, and that has not been done for vSRX.
+- **vJunos-router**: the Load driver was proven live on a nested derivative of the published image. The
+  published image does not boot on a VM host (an official containerlab limitation), so the kind needs a
+  bare-metal KVM host; on a virtual machine host its virtual router aborts at boot. See
+  [DEVICES.md](../docs/parity-campaign/DEVICES.md) and the supported-platform matrix in
+  [the restore guide](../docs/multi-platform-restore/README.md).
+- vQFX is backed up and downloaded but has no restore driver and no console yet.
+
 ## Backup download names
 
 A device's configuration downloads as `<type>_<device>_<YYYY-MM-DD>_<HH-mm>UTC.<ext>`,
 for example `cjunosevo_GTW-2_2026-09-10_01-04UTC.cfg`: the type and extension come from
-the platform (`cjunosevo`, `vJunos-switch`, `vJunos-router` and `vQFX` → `.cfg`, `IOS-XR` → `.txt`,
+the platform (`cjunosevo`, `vJunos-switch`, `vJunos-router`, `vSRX` and `vQFX` → `.cfg`, `IOS-XR` → `.txt`,
 `CEOS` → `.conf`; an unknown platform reads `Device` and keeps the stored extension), the
 device is the short name frozen with that backup, and the time is when the device was
 captured, in UTC, never the download time. **Download all (ZIP)** is
@@ -189,9 +222,11 @@ restricted to this origin; the dashboard retains its original CSP.
 ## Serial console
 
 **Which devices.** Three kinds offer a serial console: `juniper_vjunosswitch`, `juniper_vjunosrouter` and
-`cisco_xrv9k` (their vrnetlab-based images expose the emulator's serial port on TCP port 5000 of the container). The
+`cisco_xrv9k` (their vrnetlab-based images expose the emulator's serial port on TCP port 5000 of the container). A
+kind joins only when its image's own project documents the console and it was verified live; the Junos (vSRX) kind
+(`juniper_vsrx`) is therefore **not** offered one. The
 manager decides by the topology kind of the device, not by the network OS chosen under *Edit connection*. A device
-whose kind is not in that list (cEOS, cJunosEvolved, vQFX and the rest) shows no **Console** button, and the drawer's
+whose kind is not in that list (cEOS, cJunosEvolved, vQFX, vSRX and the rest) shows no **Console** button, and the drawer's
 Container section says *None for this kind*; a device the manager has no topology kind for (it came from an inventory
 file) says *Not known* there, and *Lab actions ▾ › Sync topology from VM* supplies the kind.
 
@@ -317,8 +352,9 @@ session names are rejected. Invalid filename characters are replaced with
 underscores; slashes in folder/session names become underscores. Sessions use saved
 SSH addresses/ports, which must be reachable from the workstation; container
 management addresses are not automatically translated to host-published ports.
-Saved profile/inventory usernames take precedence; fallback usernames are `clab` for
-IOS-XR and `admin` for cJunosEvolved and cEOS. Unknown kinds prompt for a username.
+Saved profile/inventory usernames take precedence; fallback usernames are the kind defaults above:
+`clab` for IOS-XR and `admin` for cEOS and every Junos kind (cJunosEvolved, vQFX, vJunos-switch,
+vJunos-router, vSRX). Unknown kinds prompt for a username.
 Custom lab credentials always take priority over vendor defaults.
 
 Passwords are omitted by default. Checking **Include saved passwords in the file (stored as plain text)**

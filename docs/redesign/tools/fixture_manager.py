@@ -516,10 +516,23 @@ def build(data_dir, port, classic=False, capture=False):
             if action == 'delete' and rows:
                 raise ValueError('Destroy the deployment before deleting its source YAML.')
             if action == 'revise':
-                if rows:
-                    raise ValueError('This lab is deployed. Destroy it before saving topology changes.')
+                # The deployed save (T03, TOPOLOGY-EDIT-DESIGN A3, A11): containers found by name or by path are refused without the
+                # page's `deployed` flag; with it each is bound by name and id and the counts sentence is the helper's warning.
+                running = rows + [r for other in {l.get('deployment_name') or l['name'] for l in store.state['labs']} - {name}
+                                  for r in ops_lab_rows(other) if r.get('labPath') == path]
+                if 'deployed' in options and type(options['deployed']) is not bool:
+                    raise ValueError('Invalid boolean option.')
+                if running and options.get('deployed') is not True:
+                    raise ValueError(ho.RUNNING_REVISE_SENTENCE)
+                if running:
+                    affected = sorted(({'name': r['name'], 'id': r['container_id'], 'state': r['state']} for r in running), key=lambda a: a['name'])
+                    up = sum(1 for a in affected if a['state'] == 'running'); down = len(affected) - up
+                    counts = ' and '.join(part for part in ((str(up) + ' running') if up else '', (str(down) + ' stopped') if down else '') if part)
+                    warnings.append('This lab has ' + counts + (' device' if len(affected) == 1 else ' devices') + '. Saving replaces the topology file and the map layout on the VM; '
+                                    'the devices are not changed. Applying the changes is a separate, reviewed step.')
                 opened = options.get('base') or {}
-                side = vm_files.get(path + '.annotations.json')
+                # The map file as `read` serves it: a saved one (vm_files) first, else the seeded one beside a deployed lab (vm_extra).
+                side = vm_files.get(path + '.annotations.json', vm_extra.get(path + '.annotations.json'))
                 current = hashlib.sha256(side.encode()).hexdigest() if side is not None else ''
                 if opened.get('yaml') != source_hash or (options.get('annotations') is not None and opened.get('annotations', '') != current):
                     raise ValueError('The topology changed on the VM after it was opened. Open it again before saving.')
@@ -583,7 +596,9 @@ def build(data_dir, port, classic=False, capture=False):
                     warnings.append('Cleanup removes generated lab artifacts. Expected lab directory: ' + path.rsplit('/', 1)[0] + '/clab-' + name + '. Check any custom lab directory configured on the VM.')
         base = {'action': action, 'name': name, 'source_name': req.get('source_name', name), 'path': path, 'options': options,
                 'source_hash': source_hash, 'affected': affected, 'argv': argv, 'steps': [], **extra}
-        return {**base, 'digest': hashlib.sha256(json.dumps(base, sort_keys=True).encode()).hexdigest(), 'warnings': warnings}
+        # As the helper: a save binds each container by name and id only, so a device that stops meanwhile does not refuse it.
+        bound = {**base, 'affected': [{'name': a['name'], 'id': a['id']} for a in affected]} if action == 'revise' else base
+        return {**base, 'digest': hashlib.sha256(json.dumps(bound, sort_keys=True).encode()).hexdigest(), 'warnings': warnings}
 
     # When a scripted run was last stopped: the helper's lock is held for a moment after that, as on a real VM while the command ends.
     stopped_at = {'t': None}
@@ -674,6 +689,7 @@ def build(data_dir, port, classic=False, capture=False):
                            'skip_post_deploy': a in ('deploy', 'redeploy'), 'keep_mgmt_net': a in ('redeploy', 'destroy'), 'dry_run': a in ('deploy', 'apply')} for a in
                        ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect', 'inspect-all', 'create', 'delete', 'publish', 'revise')}
             actions['clone'] = {'available': False}
+            actions['revise']['deployed'] = True   # T03: the helper takes `deployed` on revise (the page sends it only then)
             for a in ho.NODE_ACTIONS:
                 actions[a] = {'available': True}
             actions['impairments'] = {'available': True}

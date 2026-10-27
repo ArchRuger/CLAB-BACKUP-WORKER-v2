@@ -842,3 +842,16 @@ are binding and are marked.
 | Optional: the scripted capture fixture (`--capture`) and its `fail_next_start` switch are under no automated check; its id derivation is a third copy | Recorded as an open point: at the next fixture touch, a stdlib check that the fixture's derivation equals `BrowserSessions.session_id`; until then the fixture is verified by the browser passes only | `fixture_manager.py`; §6 |
 | Refuted: a C03 preset follows the student to another device chosen under Advanced | Unreachable: a preset opens the dialog in lab scope on that device, and `/api/capture/targets` with `node=` lists that device's container only; the only way to list another device is the scope change, which clears the preset and the hint first (verified in a harness copy); no change | §3 |
 | Refuted: after a full success Start stays disabled and focus is dropped | Start is disabled by design after a full success until the selection changes; the button is disabled at the start of every submit (as before this chunk) and the next Tab lands on the first Open Wireshark link (verified in Chromium and Firefox on the fixture); no change | §3.6 |
+
+## 13. Capture proof with real device packets (campaign 2, A05, 2026-10-27)
+
+The live pass of §11 proved the viewer opening and loopback traffic only. Campaign 2 ran a capture with device
+packets through the 1.31.6 manager on the campaign lab `camp-vsrx` (`clab-ui-qa`,
+`evidence/a05-b06-vsrx-2026-10-27.md`): vSRX `ge-0/0/0` 10.9.9.1/24 with a `trust` zone allowing ping, `host1`
+(network-multitool) 10.9.9.2/24 on `eth1`; a session started from the `host1` drawer on `eth1`, a `ping -c 20` during
+it, the viewer's packet list showing 10.9.9.2 ↔ 10.9.9.1 ICMP sequence 1–20 (filter `icmp` 40 rows, `icmp.type==8` 20,
+`icmp.type==0` 20, 43 frames with 2 ARP and 1 ICMPv6 router solicitation), the saved `camp-vsrx-icmp.pcapng` fetched
+through the manager's `wireshark-captures.tar` and counted again with `tcpdump -nn -r` (the same 43/40 split), then
+End all my sessions ("Ended 1 session", `/api/capture/sessions` empty). Two viewer facts for the guide: Save As is
+greyed out while the capture runs (stop first), and the filename field must be clicked before typing. The capture
+interface pair was the host end only; the vSRX end is a NOS port of a kind the 1.31.6 manager did not know yet.

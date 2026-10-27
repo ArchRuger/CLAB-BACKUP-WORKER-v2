@@ -227,6 +227,17 @@ class NosInterfaceTests(DesignAdapterTestCase):
     def test_breakout_child_is_unresolved(self):
         self.assertEqual(da.nos_interface('juniper_vjunosswitch', 'ge-0/0/1:0'), '')
 
+    def test_vjunos_router_and_vsrx_map_like_vjunos_switch(self):
+        # containerlab.dev: eth1 == ge-0/0/0 on both; the vSRX page also accepts the xe and et spellings of a port.
+        for kind in ('juniper_vjunosrouter', 'juniper_vsrx'):
+            self.assertEqual(da.nos_interface(kind, 'ge-0/0/0'), 'ge-0/0/0', kind)
+            self.assertEqual(da.nos_interface(kind, 'eth1'), 'ge-0/0/0', kind)
+            self.assertEqual(da.nos_interface(kind, 'eth3'), 'ge-0/0/2', kind)
+            for unresolved in ('fxp0', 'eth0', 'ge-0/0/1:0', 'ge-0/0/1.100'):
+                self.assertEqual(da.nos_interface(kind, unresolved), '', (kind, unresolved))
+        self.assertEqual(da.nos_interface('juniper_vsrx', 'xe-0/0/1'), 'ge-0/0/1', 'the NOS and netlab spell it ge')
+        self.assertEqual(da.nos_interface('juniper_vjunosrouter', 'xe-0/0/1'), '', 'vJunos-router documents only ge')
+
 
 class MapEndpointTests(DesignAdapterTestCase):
     def test_rule_source_when_no_override(self):
@@ -251,6 +262,16 @@ class MapEndpointTests(DesignAdapterTestCase):
         self.assertEqual(entry['nos'], '')
         self.assertIn('reason', entry)
         self.assertIn('eth1', entry['reason'])
+
+    def test_vjunos_router_and_vsrx_overrides_accept_junos_data_ports_only(self):
+        for kind in ('juniper_vjunosrouter', 'juniper_vsrx'):
+            for good in ('ge-0/0/5', 'xe-0/0/1', 'et-0/0/2'):
+                entry = da.map_endpoint(kind, 'eth1', override=good)
+                self.assertEqual((entry['nos'], entry['source']), (good, 'manual'), (kind, good))
+            for bad in ('fxp0', 'eth1', 'Ethernet1', 'ge-0/0/0.0', 'ge-0/0/1:0'):
+                entry = da.map_endpoint(kind, 'eth1', override=bad)
+                self.assertEqual(entry['nos'], '', (kind, bad))
+                self.assertIn(kind + ' data port', entry['reason'])
 
     def test_unknown_kind_carries_a_reason(self):
         entry = da.map_endpoint('', 'eth1')
@@ -336,6 +357,39 @@ class BuildBasicsTests(DesignAdapterTestCase):
         result = da.build(FIXTURE_YAML, self.nodes, base_intent(), profile_for)
         self.assertEqual(result['topology']['provider'], 'external')
         self.assertEqual(result['topology']['name'], da.TOPOLOGY_NAME)
+
+
+class BuildNewJunosKindsTests(DesignAdapterTestCase):
+    """Campaign 2 B05: vJunos-router and vSRX join a design through the real capability lookup."""
+    TOPO = """name: b05
+mgmt:
+  network: clab
+  ipv4-subnet: 172.20.20.0/24
+topology:
+  nodes:
+    ceos: {kind: arista_ceos, image: n24l/ceos:4.35.0F, mgmt-ipv4: 172.20.20.101}
+    vrt: {kind: juniper_vjunosrouter, image: n24l/juniper_vjunos-router:26.2R1.7, mgmt-ipv4: 172.20.20.102}
+    vsrx: {kind: juniper_vsrx, image: n24l/juniper_vsrx:23.2R2.21, mgmt-ipv4: 172.20.20.103}
+  links:
+    - endpoints: ["ceos:eth1", "vrt:ge-0/0/0"]
+    - endpoints: ["vrt:ge-0/0/1", "vsrx:ge-0/0/0"]
+    - endpoints: ["vsrx:eth2", "ceos:eth2"]
+"""
+
+    def test_both_kinds_are_included_with_their_profile_management_and_ge_ports(self):
+        from app import design_capabilities as caps
+        nodes = parse_definition(self.TOPO.encode())['nodes']
+        result = da.build(self.TOPO, nodes, base_intent(), caps.profile_for)
+        top = result['topology']['nodes']
+        self.assertEqual((top['vrt']['device'], top['vrt']['mgmt']), ('vjunos-router', {'ifname': 'fxp0', 'ipv4': '172.20.20.102'}))
+        self.assertEqual((top['vsrx']['device'], top['vsrx']['mgmt']), ('vsrx', {'ifname': 'fxp0', 'ipv4': '172.20.20.103'}))
+        for name in ('vrt', 'vsrx'):
+            self.assertTrue(result['nodes'][name]['included'], name)
+            self.assertFalse(result['nodes'][name].get('blocked'), name)
+        ports = sorted((node, ep['ifname']) for link in result['topology']['links'] for node, ep in link.items()
+                       if node in ('vrt', 'vsrx') and isinstance(ep, dict))
+        self.assertEqual(ports, [('vrt', 'ge-0/0/0'), ('vrt', 'ge-0/0/1'), ('vsrx', 'ge-0/0/0'), ('vsrx', 'ge-0/0/1')],
+                         'vsrx eth2 is ge-0/0/1, spelled the way netlab and the NOS spell it')
 
 
 class BuildFamiliesTests(DesignAdapterTestCase):

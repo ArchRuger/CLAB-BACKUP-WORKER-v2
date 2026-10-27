@@ -7,11 +7,12 @@
 const MAP_LINK_INTERVAL=10000, MAP_LINK_OFF='Link state off: ';
 const MAP_LINK_UNLINKED='This lab is not linked to a lab on the VM. Link it under Advanced › Link to a running lab… to see link state.';
 const MAP_LINK_NOT_RUNNING='Links are drawn from the topology file; the lab is not running.';
+const MAP_LINK_PAUSED='Link state paused: the lab VM cannot be reached right now.';
 const MAP_LINK_RUNNING=['Running','Partially running'];
 const MAP_PICTURE_PROPS=['fill','fill-opacity','stroke','stroke-width','stroke-dasharray','stroke-linecap','stroke-linejoin','opacity','font-family','font-size','font-weight','display','visibility','text-anchor'];
 const MAP_PICTURE_DEFAULTS={'fill':'rgb(0, 0, 0)','fill-opacity':'1','stroke':'none','stroke-width':'1px','stroke-dasharray':'none','stroke-linecap':'butt','stroke-linejoin':'miter','opacity':'1','display':'inline','visibility':'visible','text-anchor':'start'};
 const MAP_PICTURE_MAX=8192;
-let mapToolsLab='', mapToolsDrawing=null, mapToolsCaption='', mapToolsChipHtml=null;
+let mapToolsLab='', mapToolsDrawing=null, mapToolsCaption='', mapToolsChipHtml=null, mapToolsChipShape=null;
 let mapLinkCache={}, mapLinkPoll={timer:0,inFlight:false,plan:null,lastAt:0,epoch:0,fresh:true,stopped:'',off:'',status:'',message:'',mode:''};
 let mapArrangeBusy=false, mapArrangeUndo=null, mapHoverWire=null, mapPictureBusy=false;
 const mapToolsPlural=(n,word)=>typeof plural==='function'?plural(n,word):`${n} ${word}${Number(n)===1?'':'s'}`;
@@ -94,18 +95,28 @@ function mapLinkLegend(anyVm,impaired){
  return `<span class="map-legend"><svg viewBox="0 0 24 8" aria-hidden="true"><path class="legend-down" d="M0 4H24"/></svg>${esc(anyVm?'dotted red = down (container link)':'dotted red = down')}</span>`
   +(impaired?`<span class="map-legend"><svg viewBox="0 0 24 8" aria-hidden="true"><path class="legend-impaired" d="M0 4H24"/></svg>${esc('dashed amber = impaired')}</span>`:'');
 }
+// The chip is rebuilt only when its shape changes (a button appears or goes); a new sentence alone is written by textContent, so a
+// focused Retry, Resume, Undo arrange or Arrange devices… button keeps focus across the 10 s poll.
+function mapToolsChipBuild(poll,drawing,text){
+ let html='';
+ if(text!==null)html+=`<span class="map-links-state" data-map-message="1">${esc(text)}</span>`;
+ if(poll.stopped)html+=` <button type="button" class="button ghost small" data-map-link-retry="${esc(poll.stopped)}">${poll.stopped==='resume'?'Resume':'Retry'}</button>`;
+ if(poll.legend)html+=mapLinkLegend(poll.legend.anyVm,poll.legend.impaired);
+ if(mapArrangeUndo&&mapArrangeUndo.lab===activeId)html+=` <button type="button" class="button ghost small" data-map-arrange-undo="1">Undo arrange</button>`;
+ else if(drawing.placed===false&&(drawing.nodes||[]).length>=2)html+=`<span class="map-links-state">${poll.message?' · ':''}Devices sit on the default grid.</span> <button type="button" class="button ghost small" id="map-arrange-hint">Arrange devices…</button>`;
+ return html;
+}
 function mapToolsChip(){
  const el=mapToolsEl('map-links');if(!el)return;
- const poll=mapLinkPoll,drawing=mapToolsDrawing;let html='';
+ const poll=mapLinkPoll,drawing=mapToolsDrawing;let html='',shape='';
  if(drawing&&!(map&&map.hidden)){
-  html+=poll.message?`<span class="map-links-state">${esc(poll.message)}</span>`:'';
-  if(poll.stopped)html+=` <button type="button" class="button ghost small" data-map-link-retry="${esc(poll.stopped)}">${poll.stopped==='resume'?'Resume':'Retry'}</button>`;
-  if(poll.legend)html+=mapLinkLegend(poll.legend.anyVm,poll.legend.impaired);
-  if(mapArrangeUndo&&mapArrangeUndo.lab===activeId)html+=` <button type="button" class="button ghost small" data-map-arrange-undo="1">Undo arrange</button>`;
-  else if(drawing.placed===false&&(drawing.nodes||[]).length>=2)html+=`<span class="map-links-state">${poll.message?' · ':''}Devices sit on the default grid.</span> <button type="button" class="button ghost small" id="map-arrange-hint">Arrange devices…</button>`;
+  const text=poll.message?String(poll.message):null;
+  html=mapToolsChipBuild(poll,drawing,text);shape=mapToolsChipBuild(poll,drawing,text===null?null:'');
+  if(html===mapToolsChipHtml)return;
+  const span=shape===mapToolsChipShape&&text!==null&&typeof el.querySelector==='function'?el.querySelector('[data-map-message]'):null;
+  if(span){span.textContent=text;mapToolsChipHtml=html;return;}
  }
- if(html===mapToolsChipHtml)return;
- mapToolsChipHtml=html;el.innerHTML=html;
+ mapToolsChipHtml=html;mapToolsChipShape=shape;el.innerHTML=html;
 }
 function mapLinkSay(message,legend){
  const poll=mapLinkPoll;poll.message=message;poll.legend=legend||null;mapToolsChip();
@@ -120,6 +131,7 @@ function mapLinkConditions(){
  const status=lab.deployment&&lab.deployment.status;
  const linked=!!lab.deployment_name||(status&&status!=='Unlinked');
  if(!linked)return {kind:'off',key:'unlinked',text:MAP_LINK_OFF+MAP_LINK_UNLINKED};
+ if(status==='Unknown')return {kind:'paused',key:'unknown',text:MAP_LINK_PAUSED};
  if(!MAP_LINK_RUNNING.includes(status))return {kind:'off',key:'not running',text:MAP_LINK_NOT_RUNNING};
  const view=mapToolsEl('topology-view'),dialog=mapToolsEl('details-dialog');
  if(typeof tab==='string'&&tab!=='topology')return {kind:'idle'};
@@ -136,7 +148,7 @@ function mapToolsReset(){
  mapLinkCache={};mapArrangeUndo=null;mapHoverClear();mapToolsDrawing=null;
  const find=mapToolsEl('map-find');if(find)find.value='';
  const count=mapToolsEl('map-find-count');if(count){count.textContent='';count.hidden=true;}
- mapToolsChipHtml=null;
+ mapToolsChipHtml=null;mapToolsChipShape=null;
  const chip=mapToolsEl('map-links');if(chip)chip.innerHTML='';
  for(const group of mapToolsGroups())mapLinkSetWire(group,'','');
  for(const el of mapToolsDevices())el.classList.remove('dimmed');
@@ -150,7 +162,14 @@ function mapLinkSchedule(){
   if(poll.off!==c.key){mapLinkStopTimer();poll.off=c.key;poll.mode='';poll.fresh=true;poll.stopped='';poll.plan=null;delete mapLinkCache[activeId];mapLinkClear();mapLinkSay(c.text,null);}
   return;
  }
+ if(c.kind==='paused'){
+  // Discovery is stale (status Unknown): the last colours stay, no request, and the sentence says why.
+  mapLinkStopTimer();poll.fresh=true;
+  if(poll.message!==c.text){poll.off='';mapLinkSay(c.text,poll.legend);}
+  return;
+ }
  if(poll.off){poll.off='';poll.message='';}
+ if(poll.message===MAP_LINK_PAUSED)poll.message='';
  if(c.kind==='idle'){if(poll.timer){mapLinkStopTimer();poll.fresh=true;}return;}
  if(poll.timer||poll.stopped||poll.mode==='unavailable')return;
  const delay=poll.fresh||!mapLinkCache[activeId]||!poll.plan?0:poll.plan.interval;
@@ -161,7 +180,7 @@ async function mapLinkFetch(labId){return (await api('/operations/link-state?lab
 async function mapLinkRun(){
  const poll=mapLinkPoll;poll.timer=0;
  const c=mapLinkConditions();
- if(c.kind!=='run'){poll.fresh=true;if(c.kind==='off')mapLinkSchedule();return;}
+ if(c.kind!=='run'){poll.fresh=true;if(c.kind==='off'||c.kind==='paused')mapLinkSchedule();return;}
  const labId=activeId,epoch=poll.epoch;poll.inFlight=true;poll.fresh=false;
  let result;
  try{result={ok:true,data:await mapLinkFetch(labId)};}
@@ -450,7 +469,9 @@ async function mapArrangeRun(mode){
   if(typeof notify==='function')notify(MAP_ARRANGE_DONE[mode]);
  }catch(e){
   if(e&&e.status===412){mapArrangeUndo=null;if(activeId===labId)refreshMap(true);}
-  if(status)status.textContent=e&&e.message?e.message:'The devices could not be arranged.';
+  const said=e&&e.message?e.message:'The devices could not be arranged.',shown=mapToolsEl('map-arrange-dialog');
+  // The dialog may have been closed (Escape, Cancel) while Arranging…: the sentence then goes to the chip, not into a hidden dialog.
+  if(shown&&shown.open===false)mapToolsSay(said);else if(status)status.textContent=said;
   mapArrangeButtons(false);
  }finally{mapArrangeBusy=false;}
 }
@@ -460,13 +481,16 @@ async function mapArrangeUndoRun(){
  try{
   await json('/labs/'+labId+'/arrange','POST',{undo:true,revision:undo.revision});
   mapArrangeUndo=null;mapToolsChip();if(activeId===labId)await refreshMap(true);
+  mapArrangeFocusMore();
   if(typeof notify==='function')notify('Arrangement undone.');
  }catch(e){
-  if(e&&e.status===412){mapArrangeUndo=null;mapToolsChip();if(activeId===labId)await refreshMap(true);}
+  if(e&&e.status===412){mapArrangeUndo=null;mapToolsChip();if(activeId===labId)await refreshMap(true);mapArrangeFocusMore();}
   mapToolsSay(e&&e.message?e.message:'The arrangement could not be undone.');
   mapToolsChip();
  }finally{mapArrangeBusy=false;mapArrangeUndoButtons(false);}
 }
+// The Undo button is gone after an undo: focus goes to More ▾ (the menu that offers Arrange devices…), not to the page.
+function mapArrangeFocusMore(){const more=mapToolsEl('map-more-button');if(more&&typeof more.focus==='function')more.focus();}
 function mapArrangeUndoButtons(busy){const chip=mapToolsEl('map-links');if(chip&&typeof chip.querySelectorAll==='function')for(const b of chip.querySelectorAll('[data-map-arrange-undo]'))b.disabled=busy;}
 // ---- Wiring (element listeners only; window and document listeners live in shell.js) ----------------------------------------------
 function mapToolsWire(){

@@ -57,3 +57,14 @@ changes addressing or routing on a probed path interrupts it by as much as that 
 | C2 real browser against the deployed manager and the real nodes | PASS: fresh assets, device-type labels, selection, acknowledgement refused without the tick, Space and Enter by keyboard, progress, reopen from the banner while running, reload mid-job, result, both backups under Details; disabled rows with their reasons `18-*`; restore → backup from the page → restore again in one session at 390 px `55-*`; both source types; 1366, 768 and 390 px. A check that could not be exercised is "n/a", never a pass. At 390 px the Progress tab itself is 431 px wide before any dialog; the restore dialogs fit and add nothing |
 | C3 all four nodes from one saved state | PASS `50-all-four-browser-desktop.json`, and again on the released 1.30.29 build with no uncommitted file `61-all-four-browser-on-the-released-build.json`: all four drifted, restored from one folder save through the browser, 28 checks, the devices say B before and A after, 0 missing / 0 extra on all four by the independent comparator, no restart. Nodes are applied one after another |
 | C4 mixed selection with one controlled failure | PASS `51-mixed-four-one-controlled-failure.json`: a foreign timed change armed on XRv9k while the job worked on the first nodes → three `verified`, XRv9k `failed` "not changed" with the true reason, job `partial`, the foreign change left alone and rolled back by itself, recovery verified; what the page shows `52-*` ("Configuration replaced on 3 devices. 1 device was not changed."). The file notes that the readback tool's XR pending detection was wrong at the time of that run |
+
+## Campaign 2 (2026-10-27): vJunos-router and vSRX
+
+The Junos driver was proven on two more kinds with the direct-driver tools (A4–A7 of the matrix above: B→A whole
+replacement with the timed commit armed, confirmation from a fresh connection, independent read-back 0/0, a real
+`request system reboot` with A intact afterwards, A onto A, back-to-back loads, the failure checks and the foreign
+pending change refused): `juniper_vsrx` on the exact `n24l/juniper_vsrx:23.2R2.21` and `juniper_vjunosrouter` on the
+nested derivative of `n24l/juniper_vjunos-router:26.2R1.7` (the published image cannot boot on a VM host, an
+official limitation). Evidence: `docs/parity-campaign/evidence/b04-vsrx-restore-driver-2026-10-27.md`,
+`b04-vjunosrouter-restore-driver-2026-10-27.md` and their JSON files. The manager-path proof (A2's backup with the
+restore artifact, the Load review and confirmation, selected and mixed jobs, the expired-timer read-back) is phase 2.

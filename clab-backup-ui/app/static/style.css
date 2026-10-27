@@ -1805,8 +1805,8 @@ dialog.drawer, dialog.node-details {
 .map-tools button:not(.menu-list *):hover:not(:disabled), .map-tools .button:not(.menu-list *):hover:not(:disabled), .map-tools .menu > summary:hover { background: var(--surface-2); }
 .map-tools .button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .map-tools .button.primary:hover:not(:disabled) { background: var(--accent-strong); }
-.map-tools #map-edit { margin-left: auto; }
-.topology-stage .map-tools #map-edit { margin-left: 0; }
+.map-tools .map-edit-group { display: flex; gap: 6px; margin-left: auto; }   /* the two editors, one group: Edit map (the drawing) and Edit topology… (devices and links) */
+.topology-stage .map-tools .map-edit-group { margin-left: 0; }
 .map-tools .menu-list { right: 0; }
 
 /* SVG classes emitted by topology-render.js */
@@ -2473,7 +2473,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .topology-stage #map-find-count { left: 8px; bottom: 72px; max-width: calc(100% - 16px); }
   .topology-stage #map-link-hover { right: 8px; bottom: 104px; max-width: calc(100% - 16px); }
   .map-tools .map-find { width: 100%; flex: 1 1 100%; }
-  .map-tools #map-edit { margin-left: 0; }
+  .map-tools .map-edit-group { display: none; }   /* both editors are items of More ▾ on a narrow screen (map-more-edit, map-more-topology-edit) */
   .map-expanded { inset: 0; border-radius: 0; padding: 10px; }
 
   dialog:not(.drawer):not(.node-details) { width: calc(100vw - 16px); max-width: calc(100vw - 16px); padding: 18px; max-height: calc(100dvh - 16px); }

@@ -3296,6 +3296,177 @@
         "ospfv3": true
       }
     },
+    "vjunos-router": {
+      "bfd": {},
+      "bgp": {
+        "_default_locpref": false,
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "bundle": [
+          "vlan_aware"
+        ],
+        "irb": true,
+        "multi_rt": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "initial": {
+        "collect": true,
+        "ipv4": {
+          "unnumbered": true
+        },
+        "ipv6": {
+          "lla": true
+        },
+        "reload": true
+      },
+      "isis": {
+        "caveats": "caveats-junos",
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "tunnel": {
+        "gre": [
+          "vrf",
+          "ipv4"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "irb.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": {}
+    },
     "vjunos-switch": {
       "bfd": {},
       "bgp": {
@@ -3632,6 +3803,166 @@
         "requires": [
           "evpn"
         ]
+      }
+    },
+    "vsrx": {
+      "bfd": {},
+      "bgp": {
+        "_default_locpref": false,
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "initial": {
+        "collect": true,
+        "ipv4": {
+          "unnumbered": true
+        },
+        "ipv6": {
+          "lla": true
+        },
+        "reload": true
+      },
+      "isis": {
+        "caveats": "caveats-junos",
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "lag": {
+        "passive": true
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "tunnel": {
+        "gre": [
+          "vrf",
+          "ipv4"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": false,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
       }
     }
   },

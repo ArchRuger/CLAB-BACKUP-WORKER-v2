@@ -74,8 +74,10 @@ running before discovery is configured. No migration automatically resets schedu
 
 ## 3. Build and start the independent manager
 
-After configuring the discovery account in section 4, run the launcher. It also
-installs the browser Wireshark stack (skip it with `--manager-only`):
+Run the launcher. It prepares the storage of section 1 and the discovery account of
+section 4 itself when they are missing (sections 1 and 4 are the same steps run alone),
+verifies the helpers, installs the browser Wireshark stack (skip it with
+`--manager-only`) and builds and starts the manager:
 
 ```bash
 sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh"
@@ -119,8 +121,13 @@ On the VM, in an interactive administrator terminal, create the account password
 sudo bash "$HOME/projects/clab-manager/deploy/setup-discovery.sh"
 ```
 
-Setup prompts twice without echo. The Linux account hash persists in /etc/shadow;
-the manager saves an encrypted copy of the entered password in its persistent data.
+Setup prompts twice without echo (`New password:`, `Retype new password:`). The Linux
+account hash persists in /etc/shadow. The new password is also handed to the manager once
+through a short-lived seed file in its data directory, so **VM connection** opens
+prefilled (*Prepared by VM setup*) and you only choose **Save and test connection**; the
+manager then keeps an encrypted copy in its persistent data
+([how the seed works](VM-CONNECTION.md#the-prefilled-vm-connection)). The data directory
+must exist first (section 1); without it nothing is handed over and you type the password.
 The gateway restricts SSH to discovery and approved operations. See
 [VM connection setup and recovery](VM-CONNECTION.md) for migration and password reset.
 
@@ -135,7 +142,7 @@ only the original YAML, adjacent annotations, generated inventory and topology e
 It uses fixed binaries, a clean environment, and `/` as its working directory.
 The application cannot submit arbitrary shell commands through discovery.
 
-In **VM connection**:
+In **VM connection** (prefilled when setup could hand the connection over):
 
 - VM address: `127.0.0.1` (the manager shares this VM's networking).
 - SSH port: the VM's SSH port, normally 22.

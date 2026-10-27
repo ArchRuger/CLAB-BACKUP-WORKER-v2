@@ -27,6 +27,7 @@ KINDS = {
     'juniper_vqfx': ('juniper_vqfx', 'vr-vqfx', 'vqfx'),
     'juniper_vjunosswitch': ('juniper_vjunosswitch', 'vr-vjunosswitch', 'vjunosswitch'),
     'juniper_vjunosrouter': ('juniper_vjunosrouter', 'vr-vjunosrouter', 'vjunosrouter'),
+    'juniper_vsrx': ('juniper_vsrx', 'vr-vsrx', 'vsrx'),
 }
 GENERIC_JUNOS = ('junos', 'junipernetworks.junos.junos')
 
@@ -70,24 +71,99 @@ class VJunosRouterKindTests(unittest.TestCase):
         self.assertEqual(DOWNLOADS['juniper_vjunosrouter'], ('vJunos-router', 'cfg'))
         self.assertEqual(SAVE_FORMATS['juniper_vjunosrouter'], 'junos-display-set')
 
-    def test_router_has_no_restore_artifact_and_no_restore_driver_until_proven_live(self):
+    def test_router_has_the_junos_restore_artifact_and_driver_since_it_was_proven_live(self):
+        # Campaign 2, B04 (docs/parity-campaign/evidence/b04-*.md): the Junos driver proven live on a nested derivative
+        # of the published image. The earlier claim of this test (no artifact, no driver until proven live) is now met.
         from app import restore_drivers, restore_junos
-        from app.restore import NO_DRIVER, saved_device_reason
+        from app.inventory import JUNOS_DRIVER
+        from app.restore import OTHER_PLATFORM, saved_device_reason
         from app.runner import restore_filename
-        self.assertFalse(any(k.startswith('restore') for k in PLATFORMS['juniper_vjunosrouter']))
-        self.assertEqual(restore_filename({'name': 'r1', 'platform': 'juniper_vjunosrouter'}), '')
-        self.assertIsNone(restore_drivers.for_platform('juniper_vjunosrouter'))
-        self.assertFalse(restore_junos.supports_restore('juniper_vjunosrouter'))
+        restore_keys = {k: v for k, v in JUNOS_DRIVER.items() if k.startswith('restore')}
+        self.assertEqual({k: v for k, v in PLATFORMS['juniper_vjunosrouter'].items() if k.startswith('restore')}, restore_keys)
+        self.assertEqual(PLATFORMS['juniper_vjunosrouter']['restore_format'], restore_junos.RESTORE_FORMAT)
+        self.assertTrue(restore_filename({'name': 'r1', 'platform': 'juniper_vjunosrouter'}).endswith('.jcfg'))
+        self.assertIs(restore_drivers.for_platform('juniper_vjunosrouter'), restore_junos)
+        self.assertTrue(restore_junos.supports_restore('juniper_vjunosrouter'))
         lab = {'nodes': [{'name': 'r1', 'platform': 'juniper_vjunosrouter'}]}
-        self.assertEqual(saved_device_reason(lab, 'r1', 'juniper_vjunosrouter'), NO_DRIVER)
+        self.assertEqual(saved_device_reason(lab, 'r1', 'juniper_vjunosrouter'), '')
+        # The router is its own kind: a saved vJunos-switch is not loaded onto it.
+        self.assertEqual(saved_device_reason(lab, 'r1', 'juniper_vjunosswitch'), OTHER_PLATFORM)
 
-    def test_router_is_not_offered_to_network_design(self):
+    def test_router_is_offered_to_network_design_as_generated_not_live_tested(self):
+        # Campaign 2, B05 phase 1 (2026-10-27): the exact netlab profile `vjunos-router` is mapped; every feature stays
+        # `generated_not_live_tested` until the live apply (phase 2), and nothing reads `verified_on_image`.
         from app import design_junos, design_ownership, design_provision
         from app import design_capabilities as dc
-        self.assertNotIn('juniper_vjunosrouter', design_junos.SUPPORTED_KINDS)
-        self.assertNotIn('juniper_vjunosrouter', design_ownership.SET_KINDS)
-        self.assertNotIn('juniper_vjunosrouter', design_provision.PREPARERS)
-        self.assertEqual(dc.resolve('bgp', 'juniper_vjunosrouter')['level'], 'unsupported')
+        self.assertIn('juniper_vjunosrouter', design_junos.SUPPORTED_KINDS)
+        self.assertIn('juniper_vjunosrouter', design_ownership.SET_KINDS)
+        self.assertIn('juniper_vjunosrouter', design_provision.PREPARERS)
+        self.assertEqual(dc.PROFILES['juniper_vjunosrouter']['netlab_device'], 'vjunos-router')
+        self.assertEqual(dc.resolve('bgp', 'juniper_vjunosrouter')['level'], 'generated_not_live_tested')
+        self.assertEqual(dc.resolve('eigrp', 'juniper_vjunosrouter')['level'], 'unsupported')
+
+
+class VSRXKindTests(unittest.TestCase):
+    """vSRX (campaign 2, B02): the same contract as vJunos-router, its own identity, restore and design gated until proven live."""
+
+    def test_vsrx_is_a_junos_platform_with_its_own_label_default_login_and_download_name(self):
+        from app.downloads import FORMATS as DOWNLOADS
+        from app.git_progress import FORMATS as SAVE_FORMATS
+        from app.inventory import ALIASES, DEFAULT_CREDENTIALS, JUNOS_PLATFORMS, JUNOS_SWITCHES
+        self.assertIn('juniper_vsrx', JUNOS_PLATFORMS)
+        self.assertNotIn('juniper_vsrx', JUNOS_SWITCHES)
+        self.assertEqual(PLATFORMS['juniper_vsrx']['label'], 'Junos (vSRX)')
+        self.assertEqual(PLATFORMS['juniper_vsrx']['os'], PLATFORMS['juniper_vjunosrouter']['os'])
+        self.assertEqual(PLATFORMS['juniper_vsrx']['command'], PLATFORMS['juniper_vjunosrouter']['command'])
+        # The official default of https://containerlab.dev/manual/kinds/vr-vsrx/ (checked 2026-10-27).
+        self.assertEqual(DEFAULT_CREDENTIALS['juniper_vsrx'], ('admin', 'admin@123'))
+        self.assertEqual(DOWNLOADS['juniper_vsrx'], ('vSRX', 'cfg'))
+        self.assertEqual(SAVE_FORMATS['juniper_vsrx'], 'junos-display-set')
+        for alias in ('juniper_vsrx', 'vr-vsrx', 'vsrx'):
+            self.assertEqual(ALIASES[alias], 'juniper_vsrx')
+        # The concrete kinds never collapse into each other: vSRX is not cJunosEvolved, a switch or the router.
+        self.assertEqual(len({ALIASES[k] for k in ('vsrx', 'cjunosevolved', 'vjunosswitch', 'vjunosrouter')}), 4)
+
+    def test_vsrx_has_the_junos_restore_artifact_and_driver_since_it_was_proven_live_and_no_console_yet(self):
+        # Campaign 2, B04 (docs/parity-campaign/evidence/b04-*.md): the Junos driver proven live on the exact image
+        # n24l/juniper_vsrx:23.2R2.21. The console stays gated: that claim of this test is unchanged.
+        from app import restore_drivers, restore_junos
+        from app.inventory import JUNOS_DRIVER, console_port
+        from app.restore import OTHER_PLATFORM, saved_device_reason
+        from app.runner import restore_filename
+        restore_keys = {k: v for k, v in JUNOS_DRIVER.items() if k.startswith('restore')}
+        self.assertEqual({k: v for k, v in PLATFORMS['juniper_vsrx'].items() if k.startswith('restore')}, restore_keys)
+        self.assertEqual(PLATFORMS['juniper_vsrx']['restore_format'], restore_junos.RESTORE_FORMAT)
+        self.assertTrue(restore_filename({'name': 'fw1', 'platform': 'juniper_vsrx'}).endswith('.jcfg'))
+        self.assertIs(restore_drivers.for_platform('juniper_vsrx'), restore_junos)
+        self.assertTrue(restore_junos.supports_restore('juniper_vsrx'))
+        lab = {'nodes': [{'name': 'fw1', 'platform': 'juniper_vsrx'}]}
+        self.assertEqual(saved_device_reason(lab, 'fw1', 'juniper_vsrx'), '')
+        # vSRX is its own kind: a saved vJunos-router is not loaded onto it.
+        self.assertEqual(saved_device_reason(lab, 'fw1', 'juniper_vjunosrouter'), OTHER_PLATFORM)
+        self.assertIsNone(console_port('juniper_vsrx'))
+        self.assertIsNone(console_port('vr-vsrx'))
+
+    def test_vsrx_is_offered_to_network_design_as_generated_not_live_tested(self):
+        # Campaign 2, B05 phase 1: the exact netlab profile `vsrx` is mapped with its own preparer (the management
+        # interface and the functional management zone are never written); live apply pending (phase 2).
+        from app import design_junos, design_ownership, design_provision
+        from app import design_capabilities as dc
+        self.assertIn('juniper_vsrx', design_junos.SUPPORTED_KINDS)
+        self.assertIn('juniper_vsrx', design_ownership.SET_KINDS)
+        self.assertIn('juniper_vsrx', design_provision.PREPARERS)
+        self.assertEqual(dc.PROFILES['juniper_vsrx']['netlab_device'], 'vsrx')
+        self.assertEqual(dc.resolve('bgp', 'juniper_vsrx')['level'], 'generated_not_live_tested')
+        self.assertEqual(dc.resolve('evpn', 'juniper_vsrx')['level'], 'unsupported')
+
+    def test_vsrx_data_ports_map_like_the_router_and_accept_the_documented_spellings(self):
+        from app.device_diagnostics import VM_KINDS
+        from app.topology import container_interface
+        # containerlab.dev: eth1 is ge-0/0/0 (ge, xe and et are accepted spellings of the same port).
+        self.assertEqual(container_interface('juniper_vsrx', 'ge-0/0/0'), 'eth1')
+        self.assertEqual(container_interface('juniper_vsrx', 'xe-0/0/2'), 'eth3')
+        self.assertEqual(container_interface('juniper_vsrx', 'et-0/0/1'), 'eth2')
+        self.assertEqual(container_interface('juniper_vsrx', 'fxp0'), '')
+        self.assertIn('juniper_vsrx', VM_KINDS)
 
 
 class JunosKindImportTests(unittest.TestCase):
@@ -240,7 +316,8 @@ class JunosKindAppTests(unittest.TestCase):
         self.lab = {'id': 'junos-lab', 'name': 'Junos lab', 'profiles': [], 'defaults': {},
                     'interval': 0, 'nodes': [node(platform, name) for platform, name in
                         (('juniper_vqfx', 'qfx1'), ('juniper_vjunosswitch', 'switch1'),
-                         ('juniper_cjunosevolved', 'evo1'), ('juniper_vjunosrouter', 'router1'))]}
+                         ('juniper_cjunosevolved', 'evo1'), ('juniper_vjunosrouter', 'router1'),
+                         ('juniper_vsrx', 'fw1'))]}
         self.store.state['labs'].append(self.lab)
         self.store.save()
 
@@ -290,7 +367,7 @@ class JunosKindAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()['unsupported_nodes'], [])
         self.assertEqual({n['platform'] for n in response.json()['supported_nodes']},
-                         {'juniper_vqfx', 'juniper_vjunosswitch', 'juniper_cjunosevolved', 'juniper_vjunosrouter'})
+                         {'juniper_vqfx', 'juniper_vjunosswitch', 'juniper_cjunosevolved', 'juniper_vjunosrouter', 'juniper_vsrx'})
         remote.assert_not_called()
 
     def capture(self):

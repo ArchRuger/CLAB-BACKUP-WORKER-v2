@@ -12,17 +12,21 @@ Standardised starting point for a new lab in a single-tenant course. Read
 ## Build a lab's state library
 
 Run these on the build box after the lab's NOS has finished booting. The scaffold talks to the
-local manager API (default `http://127.0.0.1:8081`) and drives the same actions as the buttons.
+local manager API (default `http://127.0.0.1:8081`; `--manager URL` changes it, and `--lab NAME`
+picks the lab when the manager holds more than one) and drives the same actions as the buttons.
+To make a single state by hand instead, use **Save as a lab state…** in the lab header's Save
+panel ([GIT-PROGRESS.md](../../docs/GIT-PROGRESS.md#lab-states) describes it). The commands below
+work from any directory.
 
 ```bash
 # 1. Create the folder structure and bind the lab's saves to <slug>/work
-python3 deploy/scaffold-lab.py init bgp-core
+python3 "$HOME/projects/clab-manager/deploy/scaffold-lab.py" init bgp-core
 
 # 2. For each state: configure the running device to that state, then snapshot it.
 #    (Configure by hand in an SSH session, or load a config, then run:)
-python3 deploy/scaffold-lab.py snapshot bgp-core start
-python3 deploy/scaffold-lab.py snapshot bgp-core solution
-python3 deploy/scaffold-lab.py snapshot bgp-core broken-01
+python3 "$HOME/projects/clab-manager/deploy/scaffold-lab.py" snapshot bgp-core start
+python3 "$HOME/projects/clab-manager/deploy/scaffold-lab.py" snapshot bgp-core solution
+python3 "$HOME/projects/clab-manager/deploy/scaffold-lab.py" snapshot bgp-core broken-01
 ```
 
 `init` registers `reference/{start,solution,broken-01}` and `work` and points the lab at `work`.
@@ -47,5 +51,5 @@ state (listed as `Start`, `Solution` or `Broken-01`) under **Lab states**. They 
 Pass a comma-separated set to change the reference states:
 
 ```bash
-python3 deploy/scaffold-lab.py init ospf-areas --states start,solution,broken-01,broken-02
+python3 "$HOME/projects/clab-manager/deploy/scaffold-lab.py" init ospf-areas --states start,solution,broken-01,broken-02
 ```

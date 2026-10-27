@@ -1,0 +1,230 @@
+{
+ "node": "clab-camp-vsrx-vsrx",
+ "builds": {
+  "before_02:50:01": {
+   "image": "clab-backup:1.31.6 sha256:3ecaf01c48a3\u2026",
+   "container_started": "2026-10-27T02:29:57Z",
+   "built_from": "796892c (coordinator)"
+  },
+  "after_02:50:01": {
+   "image": "clab-backup:1.31.6 sha256:64b479fc16aa\u2026",
+   "container_started": "2026-10-27T02:50:01Z",
+   "built_from": "973668e (coordinator)"
+  },
+  "note": "manager_restore.build_identity() git_head is the checkout's moving HEAD, not the image source; the image digest identifies the build"
+ },
+ "step1_sync": {
+  "before": {
+   "platform": "",
+   "enabled": false,
+   "readiness": "Choose NOS",
+   "credential_source": "profile"
+  },
+  "after_sync": {
+   "kind": "juniper_vsrx",
+   "platform": "juniper_vsrx",
+   "enabled": false,
+   "readiness": "Ready",
+   "credential_source": "profile",
+   "profile_kept": true
+  },
+  "rule": "vm_files.prepare_lab: explicit sync may recognize a previously unsupported kind but must not enable it",
+  "then_enabled_by": "PUT /api/labs/<id>/node {platform: juniper_vsrx, enabled: true, profile kept} -> 200",
+  "platform_label": "Junos (vSRX) (from /api/state platforms)"
+ },
+ "step2_logins": [
+  {
+   "put_profile_removed": 200,
+   "profile_id": "",
+   "credential_source": "inventory",
+   "inventory_credentials": true,
+   "readiness": "Ready"
+  },
+  {
+   "step": "kind default",
+   "test_login": {
+    "http": 200,
+    "status": "reachable",
+    "message": "SSH login accepted and the CLI answered",
+    "seconds": 0.2
+   },
+   "test_logins": {
+    "http": 200,
+    "started": 2,
+    "skipped": []
+   },
+   "after": {
+    "credential_source": "inventory",
+    "nos_login": {
+     "status": "ready",
+     "message": "SSH login accepted and the CLI answered",
+     "at": "2026-10-27T02:36:34.111624+00:00"
+    },
+    "readiness": "Ready"
+   }
+  },
+  {
+   "put_profile_back": 200,
+   "profile_id": "71bbbbdf8b104038b5e246ffc198782b",
+   "credential_source": "profile",
+   "inventory_credentials": true,
+   "readiness": "Ready"
+  },
+  {
+   "step": "profile",
+   "test_login": {
+    "http": 200,
+    "status": "reachable",
+    "message": "SSH login accepted and the CLI answered",
+    "seconds": 0.2
+   },
+   "test_logins": {
+    "http": 200,
+    "started": 2,
+    "skipped": []
+   },
+   "after": {
+    "credential_source": "profile",
+    "nos_login": {
+     "status": "ready",
+     "message": "SSH login accepted and the CLI answered",
+     "at": "2026-10-27T02:36:36.317978+00:00"
+    },
+    "readiness": "Ready"
+   }
+  }
+ ],
+ "step2_inventory_login_vs_kind_default": "the containerlab ansible-inventory.yml for camp-vsrx carries ansible_user/ansible_password equal to the published kind default (compared, not printed); so without a profile the order stops at inventory",
+ "step3_backup": {
+  "id": "790b5d739a444d309b295db3183fbe68",
+  "lab_id": "99bb84d5d39f4ba992b5f69eb1e3666e",
+  "lab_name": "camp-vsrx",
+  "operation": "backup",
+  "source": "manual",
+  "created": "2026-10-27T02:37:09.723910+00:00",
+  "status": "succeeded",
+  "message": "1/1 NOS sessions completed successfully",
+  "nodes": [
+   {
+    "name": "clab-camp-vsrx-vsrx",
+    "status": "succeeded",
+    "file": "clab-camp-vsrx-vsrx-0145b03d.set",
+    "platform": "juniper_vsrx",
+    "sha256": "b5598825cc27ff641a67f7f39e8af1463bb9468733d49f04324203639d63dfd9",
+    "short_name": "vsrx",
+    "captured_at": "2026-10-27T02:37:11.030630+00:00",
+    "capture_time_source": "NOS command completed",
+    "download_metadata_version": 1,
+    "restore_file": "clab-camp-vsrx-vsrx-0145b03d.jcfg",
+    "restore_sha256": "6006a6b21332b1c989160fd4a7515abf958f01b1b4cd161a050986392cb7d9f7",
+    "restore_format": "junos-hierarchical",
+    "message": "Configuration saved",
+    "download_name": "vSRX_vsrx_2026-10-27_02-37UTC.cfg"
+   }
+  ],
+  "started": "2026-10-27T02:37:09.726177+00:00",
+  "finished": "2026-10-27T02:37:11.756684+00:00",
+  "topology": {
+   "file": "topology.clab.yml",
+   "size": 576,
+   "sha256": "73ca7638d667570ca9c86a7732e4b07cf90b0e53fce0a4b8126a1c0a71039841",
+   "source": "vm",
+   "path": "/srv/containerlab-node-manager/projects/camp-vsrx/camp-vsrx.clab.yaml",
+   "read_at": "2026-10-27T02:37:08.993214+00:00",
+   "annotations_file": "topology.clab.yml.annotations.json",
+   "annotations_size": 666,
+   "annotations_sha256": "4b00bf003591e4737b1403eec1752d66bdb6b52f180f61b4ae5f42e8df5b5ba8",
+   "annotations_source": "manager",
+   "download_name": "camp-vsrx.clab.yml",
+   "annotations_download_name": "camp-vsrx.clab.yml.annotations.json"
+  },
+  "archive_name": "camp-vsrx_2026-10-27_02-37.zip",
+  "download_timezone": "UTC",
+  "_seconds": 4.0
+ },
+ "step3_downloads": {
+  "device": "vSRX_vsrx_2026-10-27_02-37UTC.cfg (Content-Disposition, 1626 bytes)",
+  "zip": "camp-vsrx_2026-10-27_02-37.zip",
+  "zip_members": [
+   "vSRX_vsrx_2026-10-27_02-37UTC.cfg",
+   "camp-vsrx.clab.yml",
+   "camp-vsrx.clab.yml.annotations.json",
+   "manifest.json"
+  ]
+ },
+ "step3_console": {
+  "console": false,
+  "console_hold": {
+   "key": "none",
+   "text": "vsrx has no serial console: its kind (juniper_vsrx) does not expose one. Open CLI is the way in."
+  }
+ },
+ "step3_capture": {
+  "drawing_links": [
+   [
+    {
+     "node": "vsrx",
+     "interface": "eth1",
+     "capture_interface": "eth1"
+    },
+    {
+     "node": "host1",
+     "interface": "eth1",
+     "capture_interface": "eth1"
+    }
+   ]
+  ],
+  "drawing_nodes": [
+   [
+    "vsrx",
+    "clab-camp-vsrx-vsrx",
+    null
+   ],
+   [
+    "host1",
+    "clab-camp-vsrx-host1",
+    null
+   ]
+  ],
+  "vsrx_live_interfaces": [
+   "eth0",
+   "eth1",
+   "lo",
+   "tap1"
+  ],
+  "launch": {
+   "http": 200,
+   "seconds": 0.4,
+   "body": {
+    "id": "9eb33bf8d7fc1ca7bea1c271f5c986dcb22e2863418155a0297c9e2948961b39",
+    "url": "/static/capture-session.html#9eb33bf8d7fc1ca7bea1c271f5c986dcb22e2863418155a0297c9e2948961b39",
+    "message": "Wireshark session started on the VM. Open the browser viewer to inspect packets.",
+    "refused": []
+   }
+  },
+  "session_id_present": true,
+  "session": {
+   "http": 200,
+   "status": null,
+   "label": null,
+   "interfaces": [
+    "eth1"
+   ],
+   "name": "clab-camp-vsrx-vsrx",
+   "message": null
+  },
+  "end": 200
+ },
+ "step4_git": {
+  "GET /api/labs/<id>/git": {
+   "binding": null,
+   "supported_nodes": [
+    "clab-camp-vsrx-vsrx (juniper_vsrx)"
+   ],
+   "unsupported_nodes": [
+    "clab-camp-vsrx-host1"
+   ]
+  },
+  "result": "not bound, not tested"
+ }
+}

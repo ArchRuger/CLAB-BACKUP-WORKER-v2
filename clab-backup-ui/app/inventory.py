@@ -16,17 +16,21 @@ JUNOS_DRIVER = {'os': 'junipernetworks.junos.junos', 'command': 'show configurat
                 'suffix': 'set', 'snapshot_suffix': 'cfg',
                 'restore': 'show configuration | no-more', 'restore_format': 'junos-hierarchical', 'restore_suffix': 'jcfg'}
 JUNOS_SWITCHES = ('juniper_vqfx', 'juniper_vjunosswitch')
-JUNOS_ROUTERS = ('juniper_vjunosrouter',)
+# vSRX is a Junos firewall: the same NOS contract as the routers for backups, downloads and saves.
+JUNOS_ROUTERS = ('juniper_vjunosrouter', 'juniper_vsrx')
 JUNOS_PLATFORMS = ('juniper_cjunosevolved', *JUNOS_SWITCHES, *JUNOS_ROUTERS)
 GENERIC_JUNOS = ('junos', 'junipernetworks.junos.junos')
 PLATFORMS = {
     'juniper_cjunosevolved': {'label': 'Junos', **JUNOS_DRIVER},
     'juniper_vqfx': {'label': 'Junos (vQFX)', **JUNOS_DRIVER},
     'juniper_vjunosswitch': {'label': 'Junos (vJunos-switch)', **JUNOS_DRIVER},
-    # vJunos-router: backups, downloads and saves only. No restore keys until the restore driver is proven live
-    # on this kind (restore_drivers.py lists the supported kinds), so no restore-grade candidate is captured.
-    'juniper_vjunosrouter': {'label': 'Junos (vJunos-router)',
-                             **{k: v for k, v in JUNOS_DRIVER.items() if not k.startswith('restore')}},
+    # vJunos-router: the whole Junos contract, restore included: the Junos driver was proven live on it in campaign 2
+    # (B04, docs/parity-campaign/evidence/b04-*.md) on a nested derivative of the published image, which does not boot
+    # under nested virtualization on the development VM.
+    'juniper_vjunosrouter': {'label': 'Junos (vJunos-router)', **JUNOS_DRIVER},
+    # vSRX (https://containerlab.dev/manual/kinds/vr-vsrx/, checked 2026-10-27): the whole Junos contract, restore
+    # included, proven live on the exact image n24l/juniper_vsrx:23.2R2.21 in campaign 2 (B04).
+    'juniper_vsrx': {'label': 'Junos (vSRX)', **JUNOS_DRIVER},
     # IOS XR and EOS: the running-config itself is a complete, loadable candidate; the companion artifact
     # is the same capture kept under its own name and hash so a restore never relabels backup text.
     'cisco_xrv9k': {'label': 'IOS-XR', 'os': 'cisco.iosxr.iosxr', 'command': 'show running-config', 'suffix': 'cfg',
@@ -43,6 +47,7 @@ DEFAULT_CREDENTIALS = {
     'juniper_vqfx': ('admin', 'admin@123'),
     'juniper_vjunosswitch': ('admin', 'admin@123'),
     'juniper_vjunosrouter': ('admin', 'admin@123'),
+    'juniper_vsrx': ('admin', 'admin@123'),
     'cisco_xrv9k': ('clab', 'clab@123'),
     'arista_ceos': ('admin', 'admin'),
 }
@@ -81,6 +86,7 @@ ALIASES = {'junos': 'juniper_cjunosevolved', 'junipernetworks.junos.junos': 'jun
            'vr-vqfx': 'juniper_vqfx', 'vqfx': 'juniper_vqfx',
            'vr-vjunosswitch': 'juniper_vjunosswitch', 'vjunosswitch': 'juniper_vjunosswitch',
            'vr-vjunosrouter': 'juniper_vjunosrouter', 'vjunosrouter': 'juniper_vjunosrouter',
+           'vr-vsrx': 'juniper_vsrx', 'vsrx': 'juniper_vsrx',
            'iosxr': 'cisco_xrv9k', 'cisco.iosxr.iosxr': 'cisco_xrv9k',
            'ceos': 'arista_ceos', 'vr-xrv9k': 'cisco_xrv9k', 'cjunosevolved': 'juniper_cjunosevolved', 'eos': 'arista_ceos', 'arista.eos.eos': 'arista_ceos', **{k:k for k in PLATFORMS}}
 # The serial console port of the vrnetlab-based kinds: qemu's telnet chardev on TCP 5000, the one fixed pass-through

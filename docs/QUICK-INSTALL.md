@@ -59,34 +59,38 @@ date -u
 
 ## 4. Answer the installer
 
+The standard path takes every routine choice itself: all VM interfaces and port 8081
+(an existing `.env` is kept), reviewed lab operations on, VS Code access for your account,
+obsolete installation-media APT entries backed up and disabled, no plan confirmation. Only
+these prompts are left:
+
 | Prompt | Type |
 |---|---|
 | `Setup menu` | `1` |
-| `Manager bind/port settings` | `1` |
-| `Lab operation access` | `1` |
-| `VS Code / Containerlab extension access for archtop` | `1` |
-| `Back up and disable obsolete installation-media APT entries if present? (y/N)` | `y` |
-| `Proceed with this plan? (y/N)` | `y` |
 | `[sudo] password for archtop:` | Your Ubuntu password |
 | `New password:` then `Retype new password:` (after `Create the clab-discovery password`) | A new password for the manager's VM login. **Write it down**; step 9 needs it |
-| `Next step` | `1` if your GitHub repository already exists, otherwise `2` and skip step 5 |
 
-The browser Wireshark phase runs without questions. Wait for
-`Manager 1.31.6: running; HTTP and version checks passed.` The image build and the
-capture stack take several minutes. If a step fails, read the error, fix it in a second
-terminal, then type `1` to retry. A `not valid yet` APT error is the clock:
+Add `--advanced` to the `install.sh` command to be asked those other questions instead
+([INSTALL.md](INSTALL.md#what-the-full-installation-does)). The browser Wireshark phase runs
+without questions. Wait for
+`Manager 1.31.7: running; HTTP and version checks passed.` The image build and the
+capture stack take several minutes. The Git wizard of step 5 then starts by itself. If a step fails, read the error, fix it in a second
+terminal, then type `1` to retry (the default is `2`, return to the menu). A `not valid yet` APT error is the clock:
 redo step 2 in the second terminal, then retry.
 
 ## 5. Git wizard
 
-Create the GitHub repository first, with **Add a README** selected. Then:
+Create the GitHub repository first, with **Add a README** selected. The wizard follows the
+installer by itself. If the repository does not exist yet, press Ctrl+C at its first
+prompt (completed work is kept), skip this step and come back later with the command at
+the end of it. Then:
 
 | Prompt | Type |
 |---|---|
 | `Where are your lab configurations going?` | `1` |
 | `HTTPS clone URL (Code > HTTPS on GitHub)` | `GITHUB_URL` |
 | `Checkout directory [/home/archtop/labs/...]` | Enter |
-| One-time code, then `Press Enter to open ...` | Copy the code, press Enter. On **Windows** open https://github.com/login/device, paste the code, authorize |
+| The one-time code and the address `github.com/login/device` | Nothing to type; the VM has no browser and the terminal keeps waiting. Copy the code, then on **Windows** open https://github.com/login/device, paste the code, authorize |
 | `Commit author name` | Your name |
 | `Commit author email (GitHub noreply email is also valid)` | Your email |
 
@@ -131,8 +135,9 @@ under `/etc/containerlab`.
 
 ## 7. VS Code
 
-If you answered **1** to the installer's *VS Code / Containerlab extension
-access* question, skip the command. Otherwise paste in the VM:
+The standard install already ran this as its *Engineer access for VS Code* step, so skip
+the command. If you installed with `--advanced` and skipped it, or want to repeat it, paste
+in the VM:
 
 ```bash
 sudo bash "$HOME/projects/clab-manager/deploy/setup-engineer-access.sh" --owner "$(id -un)"
@@ -164,7 +169,9 @@ sudo docker load -i "$HOME/uploads/IMAGE.tar"
 ## 9. Connect the manager to the VM
 
 **Browser** on Windows: open `http://VM_IP:8081`. The **VM connection** dialog
-opens by itself the first time:
+opens by itself the first time, already filled in by the installer (*Prepared by VM
+setup*); check it against the table and only click **Save and test connection**. If a
+field is empty (setup could not hand the password over), type:
 
 | Field | Value |
 |---|---|

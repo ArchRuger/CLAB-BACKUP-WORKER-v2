@@ -1,5 +1,11 @@
 # VM-only material preserved before the 2026-10-02 snapshot rollback
 
+> **Historical record, not current guidance (notice added in campaign 2, 2026-10-27).** Everything under `vm-local/`
+> is the 2026-10-02 snapshot of a development VM. The agent configuration it preserves (`claude-memory/`, the old
+> `.claude/` copies, the `CLAB_*.md` prompts) was superseded on 2026-10-23 by the routing embedded in the repository:
+> `.claude/` is authoritative and `docs/AGENT-ROUTING.md` describes it. Nothing here is a setup instruction; the
+> folder stays on `main` as evidence of what the VM held. Current pickup files live under `docs/<stream>/PICKUP.md`.
+
 This branch (`claude/vm-local-preservation`) is a snapshot of every file that lived only on the
 development VM `clab-llm-dev2` and mattered to the project's development. It is **not for merging**:
 the files at repository paths (`.claude/…`, the three `CLAB_*.md` prompts) are on this branch so that

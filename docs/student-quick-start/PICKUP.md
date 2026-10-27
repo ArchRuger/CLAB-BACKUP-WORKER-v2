@@ -1,14 +1,49 @@
 # Student quick start: pickup file
 
-An illustrated PDF quick-start guide for a first-time student, produced by executing two workflows on the
-development VM: Scenario A (use an instructor's lab) and Scenario B (build a lab and keep it and its saved
-configurations in Git). Read this file first; keep it current before a compaction or a handoff.
+## Campaign 2, D10 (reopened 2026-10-27): done, waiting for the lead's commit
+
+The guide, screenshots, tools and PDF were redone against release 1.31.6 (commit 973668e of `claude/parity-campaign`); see
+the top section of `VALIDATION.md` for what was replayed, with timings, and what was not. The 2026-09 text further down is the
+record of the first pass (the old Progress tab) and is history.
+
+- **Repositories (private, owner ArchRuger, disposable; the VM's `gh` has no `delete_repo` scope, so the owner deletes them):**
+  `https://github.com/ArchRuger/campaign2-netlab-course-student` (Scenario A, made from the public template
+  `pruger-dev/netlab-course`) and `https://github.com/ArchRuger/campaign2-my-network-labs` (Scenario B, with a README). Their
+  checkouts on the VM are `~/labs/campaign2-netlab-course-student` and `~/labs/campaign2-my-network-labs`; the manager
+  registered both in the VM Git registry (not touched), and `/srv/containerlab-node-manager/projects/campaign2-my-network-labs/`
+  is the clone Scenario B step B9 makes. `/srv/containerlab-node-manager/projects/link-basics/` holds the staged instructor
+  package; `/srv/containerlab-node-manager/projects-aside-qs/` holds the old `my-first-lab` folders put aside by the reset tool.
+- **State left on the VM:** `link-basics` is deployed, Running, in My labs (2 cEOS, loaded to the Running state of the last
+  replay) and `my-first-lab` is rebuilt and running from the clone; the student repository holds `link-basics/work/`
+  (latest, checkpoint `loopback-added`) and the B repository holds `my-first-lab/` (latest, checkpoint `link-up`).
+  `bash tools/reset_scenario_a.sh` and `bash tools/reset_scenario_b.sh` return the manager and the repositories to the starting
+  states (they remove the lab from My labs, destroy its containers, restore the staged package and remove the saved folder from
+  the repository with one ordinary commit; they never touch the VM Git registry or other labs). They keep a waiting save out of
+  the way with the page's own *Keep snapshot only* call. Destroy the two labs before another campaign needs the memory.
+- **Names in the guide:** the text and the screenshots show `ArchRuger`, `campaign2-netlab-course-student`,
+  `campaign2-my-network-labs` and the manager address `http://192.168.132.134:8081`, because they are what was captured. To make
+  the guide for other names: replay with `QS_GH_ACCOUNT`, `QS_STUDENT_REPO`, `QS_B_REPO` set, then replace the names in
+  `source/guide.md` (a search for `ArchRuger` and `campaign2-` finds them all).
+- **Tooling:** `tools/qs_lib.py` (browser, API, waiting for the manager's guard), `tools/qs_ui.py` (the save chip, Save, Load
+  helpers shared by both scenarios), `tools/capture_scenario_a.py` and `tools/capture_scenario_b.py` (`--steps N-M` resumes,
+  state in `build/state-*.json`), `tools/compose_screenshots.py` with `screenshots/spec.json` (crops in raw pixels at device
+  scale 2). Run them with `/home/archtop/pw-venv/bin/python` (Playwright and paramiko). The shared manager makes the page
+  answer "Wait for the current lab operation to finish." while another worker's operation runs: the tools call
+  `wait_idle()` first. Do not poll with `pgrep -f "<pattern>"` inside a wait loop that carries the pattern itself.
+- **Stale records kept as history:** `evidence/qa/*` (the 2026-09 QA replay drivers) and `evidence/ui-index.md` describe the
+  Progress tab and its selectors; do not reuse them for the current UI.
+- **Open points for the lead:** (1) the course repository `pruger-dev/netlab-course` still holds schema 2 states (no topology,
+  no map) and its README says "Apply to running lab…"; the guide works with it because Load lists them as Start, Solution and
+  Broken-01, but the instructor may want to re-record them with *Save as a lab state…*; (2) after *Replace it* in step B9 the
+  manager makes a save of the fresh devices at once, which the guide sets aside with *Not now*; (3) the guide's first save
+  and the `link-basics/reference` folders live in different folders of one repository: a student sees them under Lab states only
+  after the repository is up to date (it was, because the repository was connected after the template copy).
 
 ## Deliverables (this directory)
 
 | Path | What |
 |---|---|
-| `Containerlab_Node_Manager_Student_Quick_Start.pdf` | The student guide (20 pages; inspected page by page; replayed twice by an independent QA agent; SHA-256 in `VALIDATION.md`). |
+| `Containerlab_Node_Manager_Student_Quick_Start.pdf` | The student guide (26 pages as of 2026-10-27; inspected page by page; replayed twice by an independent QA agent; SHA-256 in `VALIDATION.md`). |
 | `source/guide.md`, `source/style.css`, `build.py`, `build.sh`, `BUILD.md` | Editable source and the one-command build (Markdown → HTML → WeasyPrint). |
 | `screenshots/` (`raw/` captures, `spec.json` crops and callouts, composed PNGs) | Illustrations, all from the real manager and the exercised examples. |
 | `examples/` | The instructor package (`link-basics`) and the personal lab (`my-first-lab`) with a nonsecret preparation README. |

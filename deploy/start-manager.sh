@@ -83,10 +83,15 @@ print("yes" if any(m.get("Source", "").rstrip("/") == "/srv/containerlab-node-ma
   project=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$container")
   service=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' "$container")
   if [[ "$project" != containerlab-node-manager || "$service" != backup-ui ]]; then
-    echo 'Another running container uses the manager data. Follow the Docker-run migration in docs/FRESH-VM-GUIDE-V2.md before starting Compose.' >&2
+    echo 'Another running container uses the manager data. Follow the Docker-run migration in docs/STANDALONE-SETUP.md (section 2) before starting Compose.' >&2
     exit 1
   fi
 done
+# The student quick start: the Help group's entry shows while the PDF is in the data directory (GET /student-guide).
+guide_dir=/srv/containerlab-node-manager/data/guide
+install -d -m 755 "$guide_dir"
+if ls "$repo_dir"/docs/student-quick-start/*.pdf >/dev/null 2>&1; then install -m 644 "$repo_dir"/docs/student-quick-start/*.pdf "$guide_dir"/
+else echo 'No student quick start PDF under docs/student-quick-start: the Help entry stays hidden.'; fi
 docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
 # The old manager's own telemetry loop can recreate its data folder every few seconds while it
 # runs; repeat the retirement now that the new manager (which has no such loop) is up, so nothing

@@ -256,6 +256,14 @@ test('C06: map-tools.js loads with the page after topology.js and device-diagnos
  for(const name of ['mapLinkSchedule','mapToolsRendered','mapLinkVisibility','mapLinkDrawerClosed','mapWireText','mapFindApply','mapPictureSvg'])assert.equal(typeof get(page.context,name),'function',name);
  assert.match(html,/<p class="caption">Edit map also downloads the map file\. Download picture… and Export to draw\.io… are in the Topology tab's More ▾ menu\.<\/p>/);
  assert.doesNotMatch(html,/export it to draw\.io from the editor/);
+ // T06b: Edit topology… is one owner button with mirrors in Lab actions, More ▾ and the Tools › Map card, each naming what it changes; no inline style.
+ assert.equal((html.match(/id="topology-edit"/g)||[]).length,1,'one owner');
+ assert.deepEqual([...html.matchAll(/id="([\w-]+)" data-proxy="topology-edit"/g)].map(m=>m[1]).sort(),['map-more-topology-edit','menu-topology-edit','tools-topology-edit']);
+ assert.match(html,/<p class="caption">Edit topology… changes the devices and links in the lab's file on the VM; applying them to the running lab is a separate, reviewed step\.<\/p>/);
+ assert.match(html,/title="Positions and drawing, kept in the manager" id="map-edit"/);assert.match(html,/title="Devices and links, saved to the lab file on the VM; applying is a separate step" id="topology-edit"/);
+ assert.doesNotMatch(html,/style=/,'no inline styles on /');
+ assert.match(fs.readFileSync(path.join(dir,'map-editor.html'),'utf8'),/To add or remove devices and links, use Edit topology… in the lab's Topology tab\./);
+ assert.match(fs.readFileSync(path.join(dir,'style.css'),'utf8'),/@media[^{]*\{[^]*\.map-tools \.map-edit-group \{ display: none; \}/,'the toolbar group hides on a narrow screen, where More ▾ carries both editors');
  for(const file of fs.readdirSync(dir).filter(n=>n.endsWith('.html')&&n!=='index.html'))assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/map-tools\.js/,file);
 });
 test('device-impairments.js (C05) is listed once after operations.js and device-diagnostics.js, defines the two hooks app.js and shell.js call, and no standalone page loads it',()=>{

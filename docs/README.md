@@ -39,6 +39,7 @@ Three conventions hold across every guide:
 | [Naming and structure for lab courses](NAMING.md) | You are an instructor building a course: the names the manager depends on, the recommended repository layout for reference states, and the scaffold tool. |
 | [Browser Wireshark](CAPTURE.md) | You start capture sessions, download captures, repair or remove the capture stack, or need the security boundary of the capture services. |
 | [Network telemetry](TELEMETRY.md) | The feature is retired: read the notice for what was removed, what an upgrade does, and the device-configuration migration. |
+| [Network design](NETWORK-DESIGN.md) | You want to know what the experimental, opt-in *Network design* section (Advanced › Experimental) does: network intent, generated configuration and the reviewed apply to devices. |
 | [Health check](HEALTH-CHECK.md) | You read `deploy/check-install.sh` output and fix FAIL or WARN lines. |
 | [Diagnostics](DEBUG-PANEL.md) | You use the Diagnostics page (Manager ▾) to check the VM connection and find out why a folder does not open. |
 
@@ -46,14 +47,14 @@ Three conventions hold across every guide:
 
 | Document | Contents |
 |---|---|
-| [Tour](TOUR.md) | Screenshots of the UI: the deploy-to-ready sequence, node actions, SSH, backups, Git and Wireshark in the browser. |
-| [Architecture](ARCHITECTURE.md) | Diagrams of the system, the VM access boundary, the deploy-to-ready sequence, the capture stack and persistence, plus a module map and the VM paths. |
+| [Tour](TOUR.md) | Screenshots of the UI: My labs, the lab workspace with its Save and Load header, the four tabs, reviewed lab operations, the CLI launcher and an SSH terminal. |
+| [Architecture](ARCHITECTURE.md) | Diagrams of the system, the VM access boundary, the deploy-to-ready sequence, the capture stack and persistence, plus a module map (every module under `clab-backup-ui/app/` and the UI scripts) and the VM paths. |
 | [Changelog](CHANGELOG.md) | Release notes for every version since 1.10, newest first. |
 | [Maintenance audit](maintenance-audit/AUDIT.md) | The documentation audit record: what each document is for and what was decided about it, the map from each workflow to its code, guide and evidence, the remaining debt, and the [pickup file](maintenance-audit/PICKUP.md). |
 | [Repository maintenance](REPOSITORY-MAINTENANCE.md) | The release rules: the lockstep version set, the documentation conventions, the bump procedure, packaging limits and the CI workflow. |
 | [Agent routing](AGENT-ROUTING.md) | The Claude Code configuration that ships in `.claude/`: the agents and their models, the skills, the three review workflows, the guard hook, how a development VM is set up from the repository and how the configuration is changed and tested. |
 | [Wiki master guide](WIKI-MASTER-GUIDE.md) | The long-form build and operations guide formatted for Wiki.js. |
-| [Node features](../clab-backup-ui/NODE-FEATURES.md) | Node-level behaviour: SSH terminals, backups, the map and exports. |
+| [Node features](../clab-backup-ui/NODE-FEATURES.md) | Node-level behaviour: node actions, backup download names, the browser terminal and the serial console, deployment checks, the map and exports. |
 | [Validation evidence](../clab-backup-ui/VALIDATION.md) | What was actually tested for each release, on the dev VM and locally. |
 | [Agent instructions](../agent%20instructions.md) | Handoff notes for coding agents, newest release first. |
 | [Capture third-party notices](../deploy/CAPTURE-THIRD-PARTY-NOTICES.md) | Licences of the Edgeshark and Wireshark components. |

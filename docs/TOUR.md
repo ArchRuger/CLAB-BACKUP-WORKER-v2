@@ -17,8 +17,8 @@ VM but are not in the manager yet are listed under *Manager ▾ › Labs found o
 where one click adds them. A card's ⋯ menu has *Hide from Home*: the card goes, the lab
 and everything it has stays, and the same dialog (or adding the topology again from
 *Choose a file on the lab VM…*) brings it back. The **Manager ▾** menu holds everything that is not about one lab: the VM
-connection, importing lab files, deploying a new lab, the labs running on the VM,
-operation history, manager settings, browser preferences, a **Help** group (keyboard shortcuts and links to the containerlab documentation) and Diagnostics. With two or more labs, a **Find a lab** field above the cards narrows them by part of a lab or device name or by a state word such as *Running*; it is kept only while the page is open. See [Help, keyboard shortcuts and browser preferences](LAB-OPERATIONS.md#help-keyboard-shortcuts-and-browser-preferences).
+connection, importing lab files, deploying a new lab, the labs found on and running on the VM,
+the images on the VM, operation history, manager settings, browser preferences, a **Help** group (keyboard shortcuts and links to the containerlab documentation) and Diagnostics. With two or more labs, a **Find a lab** field above the cards narrows them by part of a lab or device name or by a state word such as *Running*; it is kept only while the page is open. See [Help, keyboard shortcuts and browser preferences](LAB-OPERATIONS.md#help-keyboard-shortcuts-and-browser-preferences).
 
 ![My labs](images/ui/00-home.png)
 
@@ -34,9 +34,12 @@ banner under the header says so in one sentence with the button that fixes it. F
 **Topology · Devices · Tools · Advanced**.
 
 **Topology.** Every device on the map carries its state; right-click one (or press
-Shift+F10) for *Open CLI ↗*, *Capture traffic…*, *Back up configuration* and *Device
-details*, with the reason underneath when an action is not available yet. Click a link
-to capture either end.
+Shift+F10) for *Open CLI ↗*, *Console ↗* (the serial console, offered for the vrnetlab
+kinds), *Capture traffic…*, *Back up configuration*, *Restart device…*, *Stop device…*,
+*Start device…* and *Device details*, with the reason underneath when an action is not
+available yet. Click a link to capture either end; link colours show which links are up or
+down once the lab runs. The map's **More ▾** menu has *Import map…*, *Download picture…*,
+*Export to draw.io…*, *Arrange devices…*, *Open all CLIs* and *Back up all configurations*.
 
 ![Topology](images/ui/10-topology.png)
 
@@ -45,7 +48,10 @@ to capture either end.
 **Devices.** One row per device with its state and what to do about it; **Technical
 view** switches to the classic table with addresses, network OS, credentials and the last
 checks. The device panel shows the same state, the actions, the backups of that device
-and, under *Advanced*, the connection and credential settings.
+and, under *Advanced*, the connection and credential settings. Its *Interfaces*, *Logs* and
+*Impairments* sections read the device's container through the VM (read-only, except that
+*Impairments* sets delay, jitter, loss, rate and corruption on a running link after you
+confirm); see [Lab operations](LAB-OPERATIONS.md#diagnostics-logs-interfaces-inspect-and-images).
 
 ![Devices](images/ui/20-devices.png)
 
@@ -55,8 +61,8 @@ and, under *Advanced*, the connection and credential settings.
 file, the map and the configuration of every included device go into one folder of your
 repository as one save on the lab VM. The chip then reads *Saving…*, and when the save is made
 its panel opens by itself with the title *Not uploaded yet*, one sentence that says what
-changed (*12 devices changed since your last save: GTW-1, GTW-2, IXP-L2-Switch and 9 more. 12
-lines added, 12 removed.*), the line *To:* with the repository and folder, and four buttons:
+changed (*12 devices changed since your last save: GTW-1, GTW-2, IXP-L2-Switch and 9 more. 13
+lines added, 12 removed.*; the counts are the fixture's), the line *To:* with the repository and folder, and four buttons:
 **Upload** sends the save to the online repository, **Not now** leaves it on the VM (the chip
 then says *1 save to upload*), **See changes** opens what the upload would send and **Details**
 opens the technical record of the save. Nothing is uploaded without **Upload**. A save gets a
@@ -87,26 +93,31 @@ this load** puts the backup from before the load back. Load never changes the to
 ![The Load confirmation for the state Solution: a tick box for each device with 1 line differs, Already matches, Not reachable and why, or Not in this state, then Load, Cancel and See what’s different](images/ui/36-load-confirmation.png)
 
 **Tools.** Packet capture and the manager's own configuration backups, with *Open all
-CLIs* and *Edit map* (where the map file download and the draw.io export are) under *More tools*.
+CLIs*, *Edit map* (positions and drawing; it also downloads the map file) and *Edit topology…* (devices and links, saved to the lab file on the VM; applying them is a separate, reviewed step) under *More tools*. The Topology
+tab's **More ▾** menu has *Download picture…* and *Export to draw.io…*. See
+[Browser Wireshark](CAPTURE.md) for capturing one interface, a whole device or both ends of a link.
 
 ![Tools](images/ui/40-tools.png)
 
 ![Capture traffic](images/ui/41-capture-dialog.png)
 
 **Advanced.** Deployment details, the lab's source, credentials, action logs, the full
-list of lab operations and the danger zone.
+list of lab operations, technical details, the danger zone and the *Experimental* panel
+(*Network design*, [opt-in and under review](NETWORK-DESIGN.md)).
 
 ![Advanced](images/ui/51-advanced.png)
 
 ## Every lab operation is reviewed before it runs
 
 **Lab actions ▾** starts, stops, restarts, redeploys and destroys the lab; its *Advanced
-options* group holds *Import map…*, *Edit map* and *Operation history…*. The review
+options* group holds *Import map…*, *Edit map*, *Edit topology…* and *Operation history…*. The review
 names the action, says what happens to the devices, warns that unsaved configuration
 changes are lost, shows when the lab was last saved (*Last saved 3 min ago.*, or in red *Never saved.*) and
 offers **Save first**; the exact containerlab command sits under *Technical
 details*. Confirming closes the review; the banner reports the running operation with
-*View output*.
+*View output* and, while it runs, *Stop this operation…*. Run options (for example a
+chosen set of devices) and the pending changes of an *Apply topology changes* review are
+described in [Lab operations](LAB-OPERATIONS.md#every-operation-is-reviewed-first).
 
 ![Destroy review](images/ui/44-destroy-review.png)
 
@@ -115,7 +126,9 @@ details*. Confirming closes the review; the banner reports the running operation
 ## CLIs in the browser
 
 **Open CLI** opens the device's own CLI in a new tab with the credentials the manager
-holds; **Open all CLIs** opens a launcher with one row per device.
+holds; **Open all CLIs** opens a launcher with one row per device. The terminal page has a
+toolbar for text size, copy, clear and save-as-text (and the keyboard shortcuts listed under
+*Manager ▾ › Help › Keyboard shortcuts…*).
 
 ![CLI launcher](images/ui/55-cli-launcher.png)
 

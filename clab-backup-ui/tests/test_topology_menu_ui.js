@@ -130,6 +130,7 @@ test('the map stage shows the loading skeleton, then the empty state or the map 
  assert.equal($('map-status').textContent,'2 devices · 1 link');
  assert.equal($('topology-hint').textContent,'Click a device to open it. Click a link to capture its traffic. Right-click for more actions.','a normal drawing (schema 3, no skipped links) carries no extra notes');
  assert.equal($('map-edit').disabled,false);assert.equal($('map-fit').disabled,false);
+ assert.equal($('map-edit').title,'Positions and drawing, kept in the manager','the editor group says what Edit map changes (T06b); Edit topology… is owned by operations.js, not by the map stage');
  assert.equal($('topology-map').innerHTML,'<g data-nodes="2"></g>');assert.equal($('topology-map').attrs.viewBox,'0 0 100 50');
  assert.deepEqual(nodes.map(n=>n.classList.list()),[['state-ready'],['state-starting']],'state is applied right after the render');
  assert.equal(h.calls.api.length,1);await h.context.refreshMap();assert.equal(h.calls.api.length,2);

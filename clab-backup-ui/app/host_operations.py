@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.31.6'
+VERSION = '1.31.7'
 LIMIT = 1024 * 1024
 # `containerlab inspect --all` runs a Docker inspection per container: several labs or a busy daemon take
 # well over the short bound of the other commands. The same bounds as discovery's copy of this command
@@ -64,6 +64,7 @@ INTERFACE_LIMIT = 256
 # The `all` option of `interfaces` (C06 link state): at most this many containers of one lab are answered.
 LINK_CONTAINER_LIMIT = 512
 TRUSTED_ROOTS_SENTENCE = 'This lab was deployed from outside the trusted lab roots. Add its project root during operations setup.'
+BINDING_FAILED_SENTENCE = 'Containerlab on the VM did not list this lab.'
 # lab_links: a containerlab before 0.64 has no `inspect interfaces`; it answers the plain `inspect` JSON (an object), not a list.
 INTERFACES_LISTING_SENTENCE = 'Containerlab on the VM cannot list interfaces (0.64 or later is needed).'
 # The text files the lab browser lists beside the topologies (`files` option) and the viewer reads:
@@ -76,8 +77,11 @@ LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart
 NODE_ACTIONS = ('restart-node', 'start-node', 'stop-node')
 # Run options beyond cleanup and graceful, each allowed only for the actions named here (C05 design section 2.8) and
 # appended only when the installed command's help lists its flag. A partial deploy is only for a lab that is not deployed.
+# `deployed` (T03, the deployed save) is not a containerlab flag: it is the page's statement that it shows the deployed-save
+# review, and `revise` with containers on the VM runs only with it (TOPOLOGY-EDIT-DESIGN amendments A3, A11, A14).
 OPTION_ACTIONS = {'nodes': ('deploy', 'destroy', 'save'), 'max_workers': ('deploy', 'redeploy', 'destroy'),
-                  'skip_post_deploy': ('deploy', 'redeploy'), 'keep_mgmt_net': ('redeploy', 'destroy')}
+                  'skip_post_deploy': ('deploy', 'redeploy'), 'keep_mgmt_net': ('redeploy', 'destroy'), 'deployed': ('revise',)}
+RUNNING_REVISE_SENTENCE = 'This lab has running devices. Reopen the lab in the manager and save again.'
 NODE_NAME = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}')
 NODE_FILTER_LIMIT = 64
 MAX_WORKERS_LIMIT = 64
@@ -587,8 +591,16 @@ class HostOperations:
         `present: False`, not an error. Then the same lab-wide listing the per-device form reads, kept to the
         containers the binding listed and reduced by link_rows. No Docker command, no counters, no facts; binding
         a container to a manager device is the manager's job."""
-        code, out = self.run([self.clab, 'inspect', '--name', lab, '-f', 'json'], timeout=INSPECT_TIMEOUT, limit=INSPECT_LIMIT)
-        try: listing = json.loads(out) if code == 0 else None
+        # The binding keeps stderr (probe): containerlab 0.79 answers a lab with no container with exit 1 and
+        # "Lab 'x' not found - no running containers." (checked live 2026-10-27), the one failure that means
+        # "not running". Every other failure (Docker unreachable, a killed command) is an error, so the manager
+        # answers 409 and the browser keeps its colours and retries, instead of showing a running lab as stopped
+        # for good (the independent risk review of 1.31.6, docs/parity-campaign/C06-DESIGN.md section 13).
+        code, out, err = self.probe([self.clab, 'inspect', '--name', lab, '-f', 'json'], INSPECT_TIMEOUT)
+        if code:
+            if 'not found' in (err or '').lower(): return {'nodes': [], 'present': False}
+            raise ValueError(BINDING_FAILED_SENTENCE)
+        try: listing = json.loads(out)
         except ValueError: listing = None
         if isinstance(listing, dict): rows = [row for group in listing.values() for row in (group if isinstance(group, list) else [group])]
         else: rows = listing if isinstance(listing, list) else []
@@ -835,7 +847,7 @@ class HostOperations:
             actions['redeploy'] = {**actions['destroy'], 'node_filter': False, 'skip_post_deploy': actions['deploy']['skip_post_deploy'], 'dry_run': False, 'fallback': True}
         actions['impairments'] = {'available': bool(self.help('tools', 'netem', 'set'))}
         actions['clone'] = {'available': bool(self.config.get('network')) and os.access(self.config.get('git', '/usr/bin/git'), os.X_OK)}
-        actions['publish'] = {'available': True}; actions['revise'] = {'available': True}
+        actions['publish'] = {'available': True}; actions['revise'] = {'available': True, 'deployed': True}
         # `link_state`: `interfaces` with {'all': true} (C06) needs containerlab's own `inspect interfaces` (0.64 or later).
         # A containerlab without it prints the help of `inspect` itself for this argv, so its usage line must name it.
         result = {'protocol': PROTOCOL, 'version': VERSION, 'actions': actions, 'roots': [str(p) for p in self.roots],
@@ -920,7 +932,7 @@ class HostOperations:
         else: allowed = {'cleanup', 'graceful', 'url', 'project', 'text', 'annotations', 'root', 'base'} | {k for k, actions in OPTION_ACTIONS.items() if action in actions}
         if not isinstance(options, dict) or set(options) - allowed:
             raise ValueError('Unsupported operation options.')
-        for key in ('cleanup', 'graceful', 'skip_post_deploy', 'keep_mgmt_net'):
+        for key in ('cleanup', 'graceful', 'skip_post_deploy', 'keep_mgmt_net', 'deployed'):
             if key in options and type(options[key]) is not bool: raise ValueError('Invalid boolean option.')
         if 'max_workers' in options and (type(options['max_workers']) is not int or not 1 <= options['max_workers'] <= MAX_WORKERS_LIMIT):
             raise ValueError('Max workers must be a whole number from 1 to %d.' % MAX_WORKERS_LIMIT)
@@ -1014,10 +1026,19 @@ class HostOperations:
                 if side.is_file() and not side.is_symlink():
                     extra = {'layout': str(side)}; warnings.append('The map layout file beside it is deleted as well. A recovery copy of both is kept.')
             elif action == 'revise':
-                # Saving again is only for a lab that is not running: the running lab was built from the
-                # file on disk, and the request must come from exactly the versions it names.
-                running = rows or [r for g in groups.values() for r in g if (r.get('absLabPath') or r.get('labPath')) == str(path)]
-                if running: raise ValueError('This lab is deployed. Destroy it before saving topology changes.')
+                # The request must come from exactly the versions it names. A lab with containers on the VM (found
+                # by its name or by its topology path, so a `--name` deployment counts) is saved only when the page
+                # says it shows the deployed-save review (`deployed: true`); then every such container is bound into
+                # the digest by name and id (a container recreated or removed between review and run refuses the
+                # run), and nothing but the two files is touched: argv and steps stay empty, no containerlab command.
+                running = rows + [r for g in groups.values() for r in g if (r.get('absLabPath') or r.get('labPath')) == str(path) and not any(r is x for x in rows)]
+                if running and options.get('deployed') is not True: raise ValueError(RUNNING_REVISE_SENTENCE)
+                if running:
+                    affected = sorted(({'name': r.get('name'), 'id': r.get('container_id'), 'state': r.get('state')} for r in running), key=lambda a: str(a['name'] or ''))
+                    up = sum(1 for a in affected if a['state'] == 'running'); down = len(affected) - up
+                    counts = ' and '.join(part for part in ((str(up) + ' running') if up else '', (str(down) + ' stopped') if down else '') if part)
+                    warnings.append('This lab has ' + counts + (' device' if len(affected) == 1 else ' devices') + '. Saving replaces the topology file and the map layout on the VM; '
+                                    'the devices are not changed. Applying the changes is a separate, reviewed step.')
                 text, annotations = self.builder_texts(options)
                 opened = options.get('base') or {}
                 if not isinstance(opened, dict) or set(opened) - {'yaml', 'annotations'}: raise ValueError('Invalid saved-version reference.')
@@ -1139,7 +1160,11 @@ class HostOperations:
                 extra['annotations_hash'] = current
         base = {'action': action, 'name': name, 'source_name': req.get('source_name', name), 'path': str(path) if path else '', 'options': options,
                 'source_hash': source_hash, 'affected': affected, 'argv': argv, 'steps': steps, **extra}
-        return {**base, 'digest': digest(base), 'warnings': warnings}
+        # A save changes no device, so `revise` binds each container by name and id only: a device that stops, starts
+        # or crash-loops between review and run does not refuse a file-only save (risk review R16). Every other action
+        # digests the state as well. The plan still reports the state, for the review.
+        bound = {**base, 'affected': [{'name': a['name'], 'id': a['id']} for a in affected]} if action == 'revise' else base
+        return {**base, 'digest': digest(bound), 'warnings': warnings}
 
     def place(self, folder_fd, name, data, mode, replace=False):
         """Write one file inside an open folder: private temporary, flushed to disk, then published

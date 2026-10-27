@@ -121,7 +121,10 @@ def topology(r):
     menu = r.js('''() => { const m = document.getElementById('node-context-menu');
       return {items: [...m.querySelectorAll('[role=menuitem]')].map(b => ({text: b.textContent.trim().slice(0, 80), disabled: b.disabled, reason: b.querySelector('small')?.textContent})),
               header: m.querySelector('.context-node-name')?.textContent, focused: document.activeElement?.closest('#node-context-menu') !== null}; }''')
-    r.check('menu: order CLI, capture, backup, restart, details', [i['text'].split(' ')[0] for i in menu['items']] == ['Open', 'Capture', 'Back', 'Restart', 'Device'], menu)
+    # The menu is built in topology.js openNodeMenu (lines 154-160): Open CLI, Console only when the kind offers a serial
+    # console (consoleState(n).offered: PE1 is a cisco_xrv9k vrnetlab node, so it has one), Capture traffic, Back up
+    # configuration, Restart device, Stop device and Start device (C05, always both, one disabled with its reason), Device details.
+    r.check('menu: order CLI, [console], capture, backup, restart, stop, start, details', [i['text'].split(' ')[0] for i in menu['items']] == ['Open', 'Console', 'Capture', 'Back', 'Restart', 'Stop', 'Start', 'Device'], menu)
     r.check('menu: a starting device explains why the CLI is unavailable', menu['items'][0]['disabled'] and 'still starting' in (menu['items'][0]['reason'] or ''), menu['items'][0])
     r.check('menu: header shows the state, not the address', 'Starting' in (menu['header'] or '') and '172.' not in (menu['header'] or ''), menu['header'])
     r.check('menu: focus moves into the menu', menu['focused'])
@@ -132,6 +135,12 @@ def topology(r):
     r.check('menu: Escape closes it and focus returns to the device', r.js('() => document.getElementById("node-context-menu").hidden && document.activeElement?.dataset.mapNode?.endsWith("-PE1") === true'))
     p.keyboard.press('Shift+F10')
     r.check('menu: Shift+F10 opens it from the keyboard', not r.js('() => document.getElementById("node-context-menu").hidden'))
+    p.keyboard.press('Escape')
+    # A device whose kind offers no console (an Arista cEOS node) has the same menu without the Console item.
+    p.locator('#topology-map [data-map-node$="-RTR5"]').first.click(button='right')
+    p.wait_for_selector('#node-context-menu:not([hidden])')
+    plain = r.js('() => [...document.getElementById("node-context-menu").querySelectorAll("[role=menuitem]")].map(b => b.textContent.trim().split(" ")[0])')
+    r.check('menu: a device without a console has the same order minus Console', plain == ['Open', 'Capture', 'Back', 'Restart', 'Stop', 'Start', 'Device'], plain)
     p.keyboard.press('Escape')
     # Expand / collapse
     p.click('#map-expand')
@@ -578,7 +587,7 @@ def pages(r):
     r.shot('57-topology-browser')
     p.locator('#op-file-tree .op-tree-file').first.click(); p.wait_for_selector('#op-editor[open]', timeout=15000); p.wait_for_timeout(300)
     editor = r.js('() => [...document.querySelectorAll("#op-editor .actions button")].map(b => b.textContent)')
-    r.check('topology file dialog: Preview topology / Open in Lab Builder / Add to My labs / Deploy lab', editor == ['Preview topology', 'Open in Lab Builder…', 'Add to My labs without starting', 'Deploy lab'], editor)
+    r.check('topology file dialog: Preview topology / Edit topology / Add to My labs / Deploy lab', editor == ['Preview topology', 'Edit topology…', 'Add to My labs without starting', 'Deploy lab'], editor)   # Edit topology… was Open in Lab Builder… before campaign 2
     p.click('#op-validate'); p.wait_for_selector('#op-map-preview[open]', timeout=15000); p.wait_for_timeout(300)
     r.shot('58-topology-preview')
     p.click('#op-map-preview [data-op-close]'); p.click('#op-editor [data-op-close]'); p.click('#op-browser [data-op-close]')

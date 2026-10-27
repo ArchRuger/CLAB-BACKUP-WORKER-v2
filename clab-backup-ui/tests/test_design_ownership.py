@@ -290,5 +290,82 @@ class RemovalPlanTests(unittest.TestCase):
         self.assertEqual(remaining, [], 'what the design put back under a removed container is not a leftover')
 
 
+
+# The state campaign 2 A05 left on the camp-vsrx vSRX (docs/parity-campaign/evidence/a05-b06-vsrx-2026-10-27.md, step 8):
+# a person's own `trust` zone holding ge-0/0/0.0 with ping admitted. Junos stored the binding as `ge-0/0/0.0`.
+VSRX_MANUAL = {
+    'set system host-name vsrx',
+    'set interfaces ge-0/0/0 unit 0 family inet address 10.9.9.1/24',
+    'set security zones security-zone trust interfaces ge-0/0/0.0 host-inbound-traffic system-services ping',
+}
+
+
+class NewJunosKindsTests(unittest.TestCase):
+    """Campaign 2 B05: vJunos-router and vSRX use the Junos set-form algebra of vJunos-switch; vSRX adds the zone rule."""
+
+    def test_both_kinds_are_set_form_kinds_with_the_junos_exclusive_rules(self):
+        for kind in ('juniper_vjunosrouter', 'juniper_vsrx'):
+            self.assertIn(kind, do.SET_KINDS)
+            self.assertNotIn(kind, do.INDENTED_KINDS)
+            got = do.statements(kind, '[edit]\nset version 23.2R2.21\nset protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p\n')
+            self.assertEqual(got, {'set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p'}, kind)
+            self.assertEqual([p.pattern for p in do.EXCLUSIVE[kind]], [p.pattern for p in do.EXCLUSIVE['juniper_vjunosswitch']], kind)
+            self.assertEqual(do.ancestors(kind, 'set protocols bgp group ibgp type internal'),
+                             do.ancestors('juniper_vjunosswitch', 'set protocols bgp group ibgp type internal'))
+            self.assertEqual(do.render_removals(kind, {'leaves': ['set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p'], 'remove': ['set protocols bgp']}),
+                             ['delete protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p', 'delete protocols bgp'])
+
+    def test_a_second_junos_address_is_a_conflict_on_vjunos_router(self):
+        before = {'set interfaces ge-0/0/1 unit 0 family inet address 10.9.0.1/30'}
+        added = {'set interfaces ge-0/0/1 unit 0 family inet address 10.1.0.1/30'}
+        result = do.diff('juniper_vjunosrouter', before, before | added, owned=set(), desired=added)
+        self.assertEqual(result['conflicts'], before, 'Junos would keep both addresses side by side')
+
+    def test_vsrx_design_lines_next_to_a_manual_zone_leave_the_zone_alone(self):
+        # The design addresses ge-0/0/0 and runs IS-IS (netlab's vsrx IS-IS fragment carries the iso packet mode).
+        desired = {'set interfaces ge-0/0/0 unit 0 family iso',
+                   'set security forwarding-options family iso mode packet-based',
+                   'set protocols isis interface ge-0/0/0.0 point-to-point'}
+        would_be = VSRX_MANUAL | desired
+        result = do.diff('juniper_vsrx', VSRX_MANUAL, would_be, owned=set(), desired=desired)
+        self.assertEqual(result['added'], desired)
+        self.assertEqual(result['conflicts'], set(), 'a zone binding the design never touches is no conflict')
+        self.assertEqual(result['removed'], set())
+        anc = do.created_ancestors('juniper_vsrx', result['added'], VSRX_MANUAL)
+        self.assertNotIn('set security', anc, 'the security container existed (the manual zone): not the design\'s')
+        self.assertIn('set security forwarding-options', anc)
+        # Later the design drops IS-IS: only its own lines go, the manual zone stays.
+        plan = do.plan_removals('juniper_vsrx', would_be, owned=desired, anc=anc, desired=set())
+        lines = do.render_removals('juniper_vsrx', plan)
+        self.assertIn('delete security forwarding-options', lines)
+        self.assertFalse(any('zones' in line for line in lines), lines)
+        self.assertFalse(any(line in ('delete security', 'delete interfaces ge-0/0/0') for line in lines), lines)
+
+    def test_vsrx_binding_an_interface_another_zone_holds_is_a_conflict(self):
+        manual = 'set security zones security-zone trust interfaces ge-0/0/0.0 host-inbound-traffic system-services ping'
+        clash = {'set security zones security-zone design interfaces ge-0/0/0.0 host-inbound-traffic protocols ospf'}
+        result = do.diff('juniper_vsrx', VSRX_MANUAL, VSRX_MANUAL | clash, owned=set(), desired=clash)
+        self.assertEqual(result['conflicts'], {manual}, 'an interface belongs to one zone only')
+        same_zone = {'set security zones security-zone trust interfaces ge-0/0/0.0 host-inbound-traffic protocols ospf'}
+        result = do.diff('juniper_vsrx', VSRX_MANUAL, VSRX_MANUAL | same_zone, owned=set(), desired=same_zone)
+        self.assertEqual(result['conflicts'], set(), 'more services in the same zone is a supplement, not a clash')
+        other_port = {'set security zones security-zone design interfaces ge-0/0/1.0'}
+        result = do.diff('juniper_vsrx', VSRX_MANUAL, VSRX_MANUAL | other_port, owned=set(), desired=other_port)
+        self.assertEqual(result['conflicts'], set())
+        mine = do.diff('juniper_vsrx', VSRX_MANUAL, VSRX_MANUAL | clash, owned={manual}, desired=clash)
+        self.assertEqual(mine['conflicts'], set(), 'a binding the manager owns is its own to move')
+        self.assertEqual(do.diff('juniper_vjunosrouter', VSRX_MANUAL, VSRX_MANUAL | clash, owned=set(), desired=clash)['conflicts'], set(),
+                         'the zone rule is vSRX only')
+        self.assertEqual(do.ZONE_BINDING.match('set security zones security-zone a interfaces ge-0/0/0').group(2), 'ge-0/0/0', 'unit 0 and the bare port are one binding')
+        self.assertEqual(do.ZONE_BINDING.match('set security zones security-zone a interfaces ge-0/0/0.10 host-inbound-traffic').group(2), 'ge-0/0/0.10')
+
+    def test_vsrx_never_removes_an_unowned_zone_statement(self):
+        stale_owned = {'set protocols ospf area 0.0.0.0 interface ge-0/0/0.0'}
+        before = VSRX_MANUAL | stale_owned
+        plan = do.plan_removals('juniper_vsrx', before, owned=stale_owned, anc=set(), desired=set())
+        self.assertEqual(plan['leaves'], sorted(stale_owned))
+        self.assertEqual(plan['remove'], [])
+
+
 if __name__ == '__main__':
     unittest.main()

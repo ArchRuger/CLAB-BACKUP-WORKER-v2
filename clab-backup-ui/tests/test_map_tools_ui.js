@@ -162,7 +162,8 @@ test('no request while the drawer is open, the page hidden, the tab elsewhere, t
  h.context.visible=true;h.context.tab='devices';h.context.mapLinkSchedule();assert.equal(h.live().length,0,'another tab');
  h.context.tab='topology';h.svg.hidden=true;h.context.mapLinkSchedule();assert.equal(h.live().length,0,'stage not map');
  assert.equal(h.requests.length,0);
- for(const status of ['Not deployed','Stopped','Unknown']){const x=harness({status});x.render();assert.equal(x.live().length,0,status);assert.equal(x.requests.length,0);assert.equal(x.$('map-links').innerHTML.includes('the lab is not running'),true,status);}
+ for(const status of ['Not deployed','Stopped']){const x=harness({status});x.render();assert.equal(x.live().length,0,status);assert.equal(x.requests.length,0);assert.equal(x.$('map-links').innerHTML.includes('the lab is not running'),true,status);}
+ { const x=harness({status:'Unknown'});x.render();assert.equal(x.live().length,0,'Unknown');assert.equal(x.requests.length,0);assert.equal(x.$('map-links').innerHTML.includes('the lab is not running'),false,'stale discovery is not "not running"');assert.match(x.$('map-links').innerHTML,/Link state paused: the lab VM cannot be reached right now\./); }
  const u=harness({deployment_name:'',status:'Unlinked'});u.render();assert.equal(u.live().length,0);assert.match(u.$('map-links').innerHTML,/Link state off: This lab is not linked to a lab on the VM\./);
  for(const status of ['Running','Partially running']){const x=harness({status});x.render();assert.equal(x.live().length,1,status+' is polled');}
 });
@@ -424,4 +425,40 @@ test('Undo arrange: two immediate clicks send one request; the button is disable
 test('script-load race: a map drawn before map-tools.js ran has its key cleared and is drawn once more, forced, so whichever request ends last redraws; a page with no map drawn yet is left to the first refresh',()=>{
  const late=harness({drawnBefore:true});assert.equal(late.get('refreshes'),1);assert.equal(late.get('refreshForce'),true);assert.equal(late.get('mapKey'),'','the key is cleared so a following plain refresh cannot hit the unchanged-key return');
  const early=harness();assert.equal(early.get('refreshes'),0);
+});
+
+test('stale discovery (status Unknown) keeps the last colours and says the VM cannot be reached; no request; Running again polls at once',async()=>{
+ const h=harness();h.on('/operations/link-state',async()=>({json:async()=>answer()}));
+ const wires=h.render();await h.fire();assert.ok(wires[0].classList.contains('link-down')||wires[0].classList.contains('link-up'));
+ const before=classes(wires[0]),requests=h.requests.length;
+ h.labs[0].deployment.status='Unknown';h.context.mapLinkSchedule();
+ assert.equal(h.live().length,0);assert.equal(h.requests.length,requests);assert.equal(classes(wires[0]),before,'colours kept');
+ assert.match(h.$('map-links').innerHTML,/Link state paused: the lab VM cannot be reached right now\./);assert.doesNotMatch(h.$('map-links').innerHTML,/not running/);
+ h.labs[0].deployment.status='Running';h.context.mapLinkSchedule();assert.equal(h.live().length,1);await h.fire();assert.equal(h.requests.length,requests+1);
+ assert.doesNotMatch(h.$('map-links').innerHTML,/cannot be reached/);
+});
+
+test('the chip keeps its buttons across a word change: the sentence is written by textContent, the markup is rebuilt only when its shape changes',async()=>{
+ const h=harness({dw:drawing({placed:false})});h.on('/operations/link-state',async()=>({json:async()=>answer()}));
+ h.render();const chip=h.$('map-links');let writes=0;const store={html:''};
+ Object.defineProperty(chip,'innerHTML',{get:()=>store.html,set:v=>{writes++;store.html=String(v);}});
+ const span=new El('span',{'data-map-message':'1'});chip.querySelector=sel=>sel==='[data-map-message]'&&/data-map-message/.test(store.html)?span:null;
+ h.context.mapLinkSay('Link state paused, retrying…',null);const first=writes;assert.ok(first>=1,'shape changed: rebuilt');
+ h.context.mapLinkSay('Links: 1 up',null);assert.equal(writes,first,'same shape: no rebuild');assert.equal(span.textContent,'Links: 1 up');
+ h.context.mapLinkSay('',null);assert.ok(writes>first,'the sentence went away: shape changed');
+});
+
+test('Undo arrange puts focus on More after a successful undo (the button is gone)',async()=>{
+ const h=harness(),c=h.context;h.on('/labs/',async(p,d)=>d&&d.undo?{ok:true}:{undo:true,revision:'r2',ok:true});
+ h.render();await c.mapArrangeRun('columns');h.render(drawing({revision:'r2'}));
+ const more=h.$('map-more-button');const n=more.focused;await c.mapArrangeUndoRun();assert.equal(more.focused,n+1);
+});
+
+test('Arrange: a failure after the dialog was closed goes to the chip line, not into the closed dialog',async()=>{
+ const h=harness(),c=h.context;h.on('/labs/',async()=>{throw Object.assign(new Error('The VM is busy.'),{status:409});});
+ h.render();c.mapArrangeOpen();const dialog=h.$('map-arrange-dialog');
+ const run=c.mapArrangeRun('rows');dialog.open=false;await run;
+ assert.equal(h.$('map-status').textContent,'The VM is busy.');assert.equal(h.$('map-arrange-status').textContent,'');
+ const open=harness(),oc=open.context;open.on('/labs/',async()=>{throw Object.assign(new Error('The VM is busy.'),{status:409});});
+ open.render();oc.mapArrangeOpen();await oc.mapArrangeRun('rows');assert.equal(open.$('map-arrange-status').textContent,'The VM is busy.');
 });

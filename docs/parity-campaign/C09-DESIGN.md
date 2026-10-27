@@ -723,3 +723,20 @@ on each are binding and are the dispositions below.
 | Low: "1 of 1 labs"; a long term overflowing at 390; stale cards after Reset; the dialogs' columns cramped at 390 and misaligned across sections | Accepted: pluralised, `overflow-wrap: anywhere`, `render()` after a reset, one shared label column and one column at 420 px and narrower | §4.3, §5.2; `style.css` |
 | Review: the visible Reset confirmation no longer said that closed warnings come back and their labs read *Needs attention* (both clauses were only in the collapsed details), nor that some items change in this tab only | Accepted: §1.9 holds again; the short paragraph adds one sentence for the closed warnings and one for the tab-scoped items, only when they apply (exact strings pinned) | `preferences.js`, `test_preferences_ui.js` |
 | `verify_after.py` fails one pre-existing device-menu order check (Console, Stop and Start device were added by C04 and C05) | Not a C09 defect: the tool's expectation is refreshed by the lead with the next release that touches it | `docs/redesign/tools/verify_after.py` |
+
+## 11. The deferred full branch review (campaign 2, A02, 2026-10-27)
+
+The two full reviewer passes on the 1.31.5 → 1.31.6 diff (C06-DESIGN §13 has the method and the whole table). C09
+rows: **U3** (should-fix, fixed): Find's Enter and Escape get their "Topology map" rows in the shortcuts dialog, and
+the reverse pin in `test_shell_ui.js` now also catches `'keydown'` passed as an argument (the `on(…)` helper form).
+**R7** (low, amended here): §9 rows 0–1 say a `/student-guide` route, a `student_guide` state flag, `guide_path()`,
+`test_student_guide.py` and an installer `rm -f …/guide/*.pdf` shipped. They did not: outside `docs/` only
+`index.html` and `app.js` carry the hidden Help item and the shell and readiness tests pin it hidden. The backend half
+of S0 was deferred; campaign 2's D10 regenerates the guide from its sources and restores the Help entry with the route
+and its test in the same release. **A07** (the stale device-menu order in `verify_after.py`, §10) is a campaign 2
+chunk. The reviewer answers VALIDATION cites as "C09-DESIGN §11" are the §9/§10 sections above (the cite was off by
+one; this section is the campaign 2 review).
+
+Update (1.31.7): the backend half of S0 shipped with campaign 2's D10: `GET /student-guide` serves the PDF from the data
+directory's `guide/` folder (copied by `start-manager.sh`), `student_guide` in the state shows the Help entry, and the
+guide itself was replayed and regenerated (`docs/student-quick-start/VALIDATION.md`).

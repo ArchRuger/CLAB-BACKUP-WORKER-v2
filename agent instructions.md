@@ -1,3 +1,40 @@
+# Campaign 2: topology editing, vSRX, Load and Network Design on the Junos VMs, the documentation audit — 1.31.7
+
+Read `docs/parity-campaign/CAMPAIGN-2.md` (ledger, routing record, official defaults) and `PICKUP.md`'s last entry
+first; `TOPOLOGY-EDIT-DESIGN.md` §12 binds over its earlier sections. Preserve:
+
+1. **The deployed save.** `revise` writes only the topology and map files, bound to the opened versions' hashes; on
+   a lab with containers it runs only with `deployed: true` and binds every container found by name or path into the
+   digest (name and id); it never runs a containerlab command; its refusal never says "destroy". The manager builds the
+   deployed-save sentences from digested inputs only (the helper's `affected` and `parse_definition` of the two texts),
+   checks `map_revision` at preview and at confirm, and marks the job `deployed`. A deployed save never re-registers
+   the lab; `LabOperations.reregister` runs after a successful apply, deploy or redeploy and merges the VM map by device
+   (the manager's entries win, new devices take their VM position); a file-placed map drops `map_written_at`.
+2. **One catalog.** `catalog.py` composes `GET /api/catalog` from the registries; `BUILDER_TEMPLATES` is its offline copy
+   and `test_catalog.py` keeps them equal (one object literal per line). The YAML check reads the served interface
+   rules (`flags` separate, no inline `(?i)`); the capability note is informational and never for `linux`.
+3. **The plan's `limits` and `backup_first`** come from `plan_limits()` (cEOS restart in place, vrnetlab recreate,
+   `RESTART_KNOWN_LIMITS`) and never change the plan's identity; the pending-changes check annotates from the
+   registered definition, the apply review from the VM file.
+4. **Edit map stays drawing-only** (`MAP_COMMANDS` unchanged); the builder's Undo/Redo go through the adapter handle
+   (`main.tsx`: `undo`, `redo`, `history`, the listener's third argument); a bundle change rides a release.
+5. **The pages.** `review=apply` is queued until the lab is rendered and the operations functions exist; the old-draft
+   dialog focuses *Continue my draft*; the dirty baseline is what was opened; `#lab` survives Drafts… › Open; the
+   shortcuts dialog's cites (`main.tsx:302/303`, `operations.js`, `lab-builder-page.js`) move with the lines.
+6. **Kinds.** `juniper_vsrx` and `juniper_vjunosrouter` are restore kinds (`restore_junos.SUPPORTED_KINDS`) and netlab
+   profiles (`vsrx`, `vjunos-router`); vSRX's console stays off (`CONSOLE_PORTS`) because its Docker health never reports
+   healthy; the MPLS family is refused on vSRX by `IMAGE_LIMITS`; `VALIDATION` entries name the live evidence and the
+   derivative. The published vJunos-router image is BLOCKED on a VM host (official limitation): never present a
+   derivative result as the exact image's.
+7. **Link state.** The binding runs through `probe`: containerlab's "not found" is `present: False`, anything else is
+   `BINDING_FAILED_SENTENCE` (a retried 409); a stale discovery pauses the chip.
+8. **The student guide** is served from `<data>/guide/` (`GUIDE_NAME`, a regular file only); `start-manager.sh` copies it;
+   the Help entry follows `state.student_guide`. The guide's sources, tools and PDF are regenerated together
+   (`docs/student-quick-start/BUILD.md`); its private replay repositories are the owner's to delete.
+9. **Open points** (ACCEPTANCE.md "Reconciliation log", DEVICES.md "Open blockers"): the design ownership ledger keeps
+   claims after a Load until the next apply; a vrnetlab restart's effect is proven for vSRX only; the C07 naming rule;
+   the capture mapping of a lab registered before its kind was known shows `eth1`.
+
 # Parity campaign, chunks C06, C08 and C09: Topology tab, builder checks, Help and preferences — 1.31.6
 
 Preserve (C06-DESIGN §1, §2, §9):

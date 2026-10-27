@@ -17,6 +17,9 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
 - **VM**: 72 GB RAM, 24 CPUs, KVM present; the five images are pulled; the `parity` lab (vsw, vrt, cjunos, xrv9k, ceos)
   runs; the manager and the capture stack run the release named in the last log entry.
 - **Chunk in progress**: see the last log entry.
+- **Campaign 2 (2026-10-27)**: the owner's four-objective extension; its chunk ledger, routing record and
+  decisions are [CAMPAIGN-2.md](CAMPAIGN-2.md); the acceptance matrix is [ACCEPTANCE.md](ACCEPTANCE.md) and the
+  per-image matrix [DEVICES.md](DEVICES.md) (both written during the campaign).
 
 ## How to continue after an interruption
 
@@ -174,3 +177,74 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   in each design's answers stand as open points. Pull request 73 (`claude/parity-campaign` → `main`) carries
   1.31.2 to 1.31.6; the owner merges it. The worktrees under `.claude/worktrees/` and the side branches are history
   after this release and may be removed.
+- 2026-10-27 01:20 UTC, **campaign 2 started** (D00): baseline recorded in `CAMPAIGN-2.md` (branch at `e709f3d` = 1.31.6,
+  `main` merged pull request 77, the VM rebooted at about 00:35 UTC and every lab container exited; manager and capture
+  stack back at 1.31.6). Routing verified from the agent transcripts (Haiku scout, Sonnet devops; Opus reviewers in
+  flight). Official kind defaults rechecked for the six images (table in `CAMPAIGN-2.md`); containerlab.dev states
+  vJunos-router "cannot be used in any deployments that launch it from within a VM", which makes the C00 blocker an
+  official host limitation. npm still lists only `@containerlab/clab-ui` 0.3.2: C11 stays blocked. Running: A01
+  (`ACCEPTANCE.md` by `docs-auditor`), A02 (the deferred C06/C08/C09 reviews by `risk-reviewer` and `clab-ui-reviewer`
+  on the 1.31.5→1.31.6 diff), B03a (`clab-devops-engineer`: vSRX pull and solo boot in `camp-vsrx`, the `parity` lab
+  redeployed). Next: the topology-editing design (T01) from the editor's integrator documentation, B02 (vSRX registry)
+  once B03a reports the image's console and interface facts.
+- 2026-10-27 01:50 UTC, **campaign 2 checkpoint 2** (`1400fbc` pushed, the A02 fixes committed next): A01 done
+  (`ACCEPTANCE.md`: 98 rows; 38 shipped, 22 at parity before, 4 partial, 9 not started, 25 not pursued); A02 done
+  (the two full reviewer passes on `fcdde64..4067aa9`: no must-fix; 1 + 3 should-fix and 6 + 5 low, every one fixed
+  or recorded in C06-DESIGN §13, C08 §11, C09 §11; the helper's link-state binding now tells "not found" from a
+  failed Docker call); B02 done (vSRX in every registry site, 25 unit tests); B03a done (`camp-vsrx` boots the exact
+  image in 2.5 min with a console on 5000 and a permanently unhealthy Docker health; `parity` back up after the reboot
+  with `--reconfigure`; `evidence/b03-vsrx-boot-2026-10-27.md`); T01 written (`TOPOLOGY-EDIT-DESIGN.md`). On the way
+  the test engineer found four tests of `test_lab_operations.py` nested inside a stray module-level `def` and never
+  run; they run now. Labs on the VM: `parity` (5 nodes, Running), `camp-vsrx` (vsrx .121, host1 .122). Running next:
+  T02 (design review), A04 (impairment persistence, live), A05 + B06-vsrx (capture with real packets and the vSRX
+  kind through the manager on `camp-vsrx`), A06/A07 (fixture and live browser checks, `verify_after.py`).
+- 2026-10-27 02:15 UTC, **campaign 2 checkpoint 3** (`3a990c3` pushed; CI red at 1400fbc for a test pin fixed in
+  0752662, the later runs pending): A04 (impairments do not survive the device's own operations; C05 §13), A05 (40
+  ICMP packets through the manager's capture; C07 §13), A06/A07 (C06 live read-only items; `verify_after.py`
+  107/107), D02a/b/c (install, Git, overview, architecture and capture guides matched to the code; reports under
+  `docs/maintenance-audit/reports/`), T02 (both design reviews answered: 14 must-fix among 45 findings; the amendments
+  in TOPOLOGY-EDIT-DESIGN §12 bind), T04b (`app/catalog.py`, `GET /api/catalog`), T05 (adapter undo/redo handle,
+  bundle rebuilt). In the tree, uncommitted: T03 (the helper's deployed `revise`, 14 tests in `test_revise_deployed.py`;
+  two pins to rewrite: `test_lab_operations.py:591,593`), with T04a (manager: sentences, plan limits, re-registration
+  after Apply, fixture), T06a (builder page), T06b (lab page), B04 phase 1 (restore proof on `vrt` and `vsrx`, direct
+  driver) and B05 phase 1 (netlab profiles) still running. Live: `parity` five nodes Running (redeployed 01:40),
+  `camp-vsrx` running and imported into the manager (lab id `99bb84d5d39f4ba992b5f69eb1e3666e`, profile "vsrx
+  published default" on `vsrx`); the live manager is still the 1.31.6 image: rebuild from a committed tree after T03
+  and T04a land (`sudo bash deploy/start-manager.sh` from the main checkout once the tree is clean, or a worktree
+  build with the main checkout's `.env`). Next: commit T03+T04a, rewrite the two pins, run the suites; T06a/T06b →
+  `/clab-slice-verify`; rebuild the live manager; B06 "after" and B04 phase 2 through the manager; T07.
+- 2026-10-27 02:40 UTC, **campaign 2 checkpoint 4** (`3c15dee` pushed): T03–T06 built and committed (helper
+  `revise` on a deployed lab, manager sentences and plan limits and re-registration after Apply, the catalog, the
+  adapter's undo/redo, the builder page as the Topology view's editor, Edit topology… on the lab page);
+  `/clab-slice-verify` ran (16 of 19 held, 9 breaks: TOPOLOGY-EDIT-DESIGN §12.7) and the fixes are in build (T06-fix on
+  the pages, T04-fix on the manager). B04 phase 1 passed on both Junos VMs (direct driver; `restore_junos.SUPPORTED_KINDS`
+  gained vJunos-router and vSRX), B05 phase 1 mapped both to netlab (static). The live manager runs `796892c`
+  (helpers reinstalled); B04 phase 2 + B06-after run against it now (`camp-vsrx`, `parity`). Next: commit the fixes,
+  rebuild the live manager from the fixed commit, T07 live acceptance on `parity`, B05 phase 2, D03/D04 docs, D10
+  student guide, release 1.31.7 (draft records in the session scratchpad: redraft from CHANGELOG style if lost).
+- 2026-10-27 03:05 UTC, **campaign 2 checkpoint 5** (`36d9235` pushed): the slice verification's fixes landed
+  (T04-fix `a5b9792`: merge of the VM map by device at the re-registration, the map revision checked again at
+  confirm, the catalog's first port; T06-fix `973668e`: review=apply on a cold load, the deployed save's output
+  dialog, the old-draft focus, the map baseline and revision, VM-only positions, pristine open, Undo focus;
+  LAB-BUILDER.md and student_workflow.py 45/45), D03 (`1671f64`), CLAUDE.md carries the new invariants. The live
+  manager runs `973668e`. Running: B04 phase 2 + B06-after (manager-path Load on vsrx and vrt; told about the
+  manager restart at 02:50 UTC; its jobs were untouched), T07 (live topology editing on a new lab `camp-topo`: two cEOS, adds a linux host and a
+  vSRX, link edits, stale/invalid/failure cases, `camp-topo-2` undeployed), D10 (the student guide replayed on the
+  live manager; private repositories `campaign2-*` under ArchRuger, recorded in its PICKUP). Next: their records, the
+  release 1.31.7 (set-release, CHANGELOG, VALIDATION, handoff: draft in the scratchpad), the agent-docs pass, B05
+  phase 2, T08 docs, D11 (external links: `check_external_links.py` and `EXTERNAL-LINKS.md`).
+- 2026-10-27 03:20 UTC: the times of checkpoints 2 to 5 above were corrected from estimates to the clock (`date -u`); B04
+  phase 2 landed (`437e7e4`); B05 phase 2 (live netlab apply on `vrt` and `vsrx`) started; T07 and D10 still running.
+- 2026-10-27 04:05 UTC, **release 1.31.7** (`1673a49` pushed; pull request 78 `claude/parity-campaign` → `main` opened
+  for the owner): the full Python suite (2988 OK, 2 skipped) and the browser suite green on the release tree;
+  `verify-release.py`, `check_links.py` (346 files), `check_external_links.py`, the bundle check all pass; the live
+  manager rebuilt from `1673a49` (the student guide copied into `<data>/guide/`, `/student-guide` served). What the
+  release carries and what stayed BLOCKED or NOT TESTED is in `CAMPAIGN-2.md` (ledger), `DEVICES.md`, `ACCEPTANCE.md`
+  and `clab-backup-ui/VALIDATION.md`. Open for a next session: T09 (a reviewed "put back the previous file" after a
+  deployed save), the vrnetlab-restart fact on kinds other than vSRX, the design ownership ledger after a Load, the C07
+  naming rule, C11 (editor 0.4.0, still not on npm), the exact vJunos-router image on a bare-metal host. Campaign labs
+  on the VM: `parity`, `camp-vsrx`, `camp-topo` (five devices), `camp-topo-2` (undeployed), `link-basics` and
+  `my-first-lab` (the guide's); the private repositories `campaign2-netlab-course-student` and
+  `campaign2-my-network-labs` under ArchRuger are the owner's to delete.
+- 2026-10-27 04:20 UTC: CI green on the release commit `1673a49` and on `48fdeda`; the live manager runs 1.31.7 with
+  `/student-guide` served and capture ready. Pull request 78 is ready for the owner to merge.

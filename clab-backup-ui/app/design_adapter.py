@@ -9,7 +9,7 @@ topology :mod:`design_engine` compiles, and it is the one place that decides ide
 * The profile comes from the capability model (:func:`design_capabilities.profile_for`), never from a
   guess; a kind without a profile is left out of the design with that reason.
 * Every link endpoint is mapped explicitly, from the kinds' documented port rules the map already uses
-  (:mod:`topology`: cEOS ``ethN = EthernetN``, vJunos-switch ``eth1 = ge-0/0/0``, cJunosEvolved
+  (:mod:`topology`: cEOS ``ethN = EthernetN``, vJunos-switch, vJunos-router and vSRX ``eth1 = ge-0/0/0``, cJunosEvolved
   ``eth4 = et-0/0/0``, XRv9k ``eth1 = Gi0/0/0/0``), spelled the way the NOS and netlab spell it, or from
   a student's explicit override. An endpoint that cannot be mapped is never guessed: its link is left out
   and both devices are marked *blocked*, so their generated files are not applied.
@@ -39,6 +39,8 @@ LONG_NAMES = {'cisco_xrv9k': (re.compile(r'(?i)^gi(?:gabitethernet)?(0/0/0/\d+)$
 OVERRIDE_PATTERNS = {'arista_ceos': re.compile(r'^Ethernet\d+(?:/\d+)*$'),
                      'juniper_vjunosswitch': re.compile(r'^(?:ge|xe|et)-\d+/\d+/\d+$'),
                      'juniper_cjunosevolved': re.compile(r'^(?:ge|xe|et)-\d+/\d+/\d+$'),
+                     'juniper_vjunosrouter': re.compile(r'^(?:ge|xe|et)-\d+/\d+/\d+$'),
+                     'juniper_vsrx': re.compile(r'^(?:ge|xe|et)-\d+/\d+/\d+$'),
                      'cisco_xrv9k': re.compile(r'^(?:GigabitEthernet|TenGigE|HundredGigE)\d+/\d+/\d+/\d+$'),
                      'linux': re.compile(r'^(?:eth|ens|enp)[0-9a-z]+$')}
 TOPOLOGY_NAME = 'netdesign'

@@ -1,0 +1,1620 @@
+{
+ "manager": {
+  "url": "http://127.0.0.1:8081",
+  "version": "1.31.6",
+  "image": "clab-backup:1.31.6 sha256:64b479fc16aa (built from 973668e)",
+  "container_started": "2026-10-27T02:50:01Z (no restart during this pass)"
+ },
+ "nodes": {
+  "vrt": "local/juniper_vjunos-router:26.2R1.7-nested (NESTED DERIVATIVE; the published image crash-loops on this host)",
+  "vsw": "n24l/vjunos-switch:23.2R1.14",
+  "vsrx": "n24l/juniper_vsrx:23.2R2.21 (exact image)"
+ },
+ "fresh_backups_before_step_1": {
+  "parity (vrt, vsw)": "589451484db7421ea904034393bc8a0c",
+  "camp-vsrx (vsrx)": "7efe6727799a4eefabb104d63be5cade"
+ },
+ "intents": {
+  "intent-parity-1.json": {
+   "schema": 1,
+   "label": "B05 phase 2 vrt-vsw OSPF",
+   "families": {
+    "ipv4": true,
+    "ipv6": false
+   },
+   "addressing": {
+    "loopback": {
+     "ipv4": "10.255.0.0/24"
+    },
+    "p2p": {
+     "ipv4": "10.1.0.0/16",
+     "prefix": 31
+    },
+    "lan": {
+     "ipv4": "172.16.0.0/16",
+     "prefix": 24
+    }
+   },
+   "modules": [
+    "ospf",
+    "routing"
+   ],
+   "ospf": {
+    "area": "0.0.0.0"
+   },
+   "targets": null,
+   "nodes": {
+    "cjunos": {
+     "role": "exclude"
+    },
+    "xrv9k": {
+     "role": "exclude"
+    },
+    "ceos": {
+     "role": "exclude"
+    },
+    "vrt": {
+     "loopback": {
+      "ipv4": "192.0.2.112/32"
+     },
+     "routing": {
+      "static": [
+       {
+        "ipv4": "198.51.100.0/24",
+        "nexthop": {
+         "discard": true
+        }
+       }
+      ]
+     }
+    }
+   },
+   "links": {},
+   "vlans": {},
+   "vrfs": {},
+   "interfaces": {},
+   "allocations": {}
+  },
+  "intent-parity-2.json": {
+   "schema": 1,
+   "label": "B05 phase 2 vrt-vsw OSPF, static dropped",
+   "families": {
+    "ipv4": true,
+    "ipv6": false
+   },
+   "addressing": {
+    "loopback": {
+     "ipv4": "10.255.0.0/24"
+    },
+    "p2p": {
+     "ipv4": "10.1.0.0/16",
+     "prefix": 31
+    },
+    "lan": {
+     "ipv4": "172.16.0.0/16",
+     "prefix": 24
+    }
+   },
+   "modules": [
+    "ospf"
+   ],
+   "ospf": {
+    "area": "0.0.0.0"
+   },
+   "targets": null,
+   "nodes": {
+    "cjunos": {
+     "role": "exclude"
+    },
+    "xrv9k": {
+     "role": "exclude"
+    },
+    "ceos": {
+     "role": "exclude"
+    },
+    "vrt": {
+     "loopback": {
+      "ipv4": "192.0.2.112/32"
+     }
+    }
+   },
+   "links": {},
+   "vlans": {},
+   "vrfs": {},
+   "interfaces": {},
+   "allocations": {}
+  },
+  "intent-parity-3.json": {
+   "schema": 1,
+   "label": "B05 phase 2 conflict: link renumbered",
+   "families": {
+    "ipv4": true,
+    "ipv6": false
+   },
+   "addressing": {
+    "loopback": {
+     "ipv4": "10.255.0.0/24"
+    },
+    "p2p": {
+     "ipv4": "10.1.0.0/16",
+     "prefix": 31
+    },
+    "lan": {
+     "ipv4": "172.16.0.0/16",
+     "prefix": 24
+    }
+   },
+   "modules": [
+    "ospf"
+   ],
+   "ospf": {
+    "area": "0.0.0.0"
+   },
+   "targets": null,
+   "nodes": {
+    "cjunos": {
+     "role": "exclude"
+    },
+    "xrv9k": {
+     "role": "exclude"
+    },
+    "ceos": {
+     "role": "exclude"
+    },
+    "vrt": {
+     "loopback": {
+      "ipv4": "192.0.2.112/32"
+     }
+    }
+   },
+   "links": {
+    "vrt:ge-0/0/0--vsw:ge-0/0/0": {
+     "prefix": {
+      "ipv4": "10.2.0.0/31"
+     }
+    }
+   },
+   "vlans": {},
+   "vrfs": {},
+   "interfaces": {},
+   "allocations": {}
+  },
+  "intent-vsrx-1.json": {
+   "schema": 1,
+   "label": "B05 phase 2 vsrx OSPF toward host1, static",
+   "families": {
+    "ipv4": true,
+    "ipv6": false
+   },
+   "addressing": {
+    "loopback": {
+     "ipv4": "10.255.0.0/24"
+    },
+    "p2p": {
+     "ipv4": "10.1.0.0/16",
+     "prefix": 31
+    },
+    "lan": {
+     "ipv4": "172.16.0.0/16",
+     "prefix": 24
+    }
+   },
+   "modules": [
+    "ospf",
+    "routing"
+   ],
+   "ospf": {
+    "area": "0.0.0.0"
+   },
+   "targets": null,
+   "nodes": {
+    "vsrx": {
+     "loopback": {
+      "ipv4": "192.0.2.121/32"
+     },
+     "routing": {
+      "static": [
+       {
+        "ipv4": "198.51.100.0/24",
+        "nexthop": {
+         "discard": true
+        }
+       }
+      ]
+     }
+    }
+   },
+   "links": {
+    "host1:eth1--vsrx:eth1": {
+     "prefix": {
+      "ipv4": "10.9.9.0/24"
+     }
+    }
+   },
+   "vlans": {},
+   "vrfs": {},
+   "interfaces": {},
+   "allocations": {}
+  },
+  "intent-vsrx-2.json": {
+   "schema": 1,
+   "label": "B05 phase 2 vsrx IS-IS (packet mode), static",
+   "families": {
+    "ipv4": true,
+    "ipv6": false
+   },
+   "addressing": {
+    "loopback": {
+     "ipv4": "10.255.0.0/24"
+    },
+    "p2p": {
+     "ipv4": "10.1.0.0/16",
+     "prefix": 31
+    },
+    "lan": {
+     "ipv4": "172.16.0.0/16",
+     "prefix": 24
+    }
+   },
+   "modules": [
+    "isis",
+    "routing"
+   ],
+   "targets": null,
+   "nodes": {
+    "vsrx": {
+     "loopback": {
+      "ipv4": "192.0.2.121/32"
+     },
+     "routing": {
+      "static": [
+       {
+        "ipv4": "198.51.100.0/24",
+        "nexthop": {
+         "discard": true
+        }
+       }
+      ]
+     }
+    }
+   },
+   "links": {
+    "host1:eth1--vsrx:eth1": {
+     "prefix": {
+      "ipv4": "10.9.9.0/24"
+     }
+    }
+   },
+   "vlans": {},
+   "vrfs": {},
+   "interfaces": {},
+   "allocations": {},
+   "isis": {
+    "area": "49.0001",
+    "type": "level-2"
+   }
+  },
+  "intent-vsrx-3.json": {
+   "schema": 1,
+   "label": "B05 phase 2 vsrx IS-IS + MPLS (packet modes), static",
+   "families": {
+    "ipv4": true,
+    "ipv6": false
+   },
+   "addressing": {
+    "loopback": {
+     "ipv4": "10.255.0.0/24"
+    },
+    "p2p": {
+     "ipv4": "10.1.0.0/16",
+     "prefix": 31
+    },
+    "lan": {
+     "ipv4": "172.16.0.0/16",
+     "prefix": 24
+    }
+   },
+   "modules": [
+    "isis",
+    "mpls",
+    "routing"
+   ],
+   "targets": null,
+   "nodes": {
+    "vsrx": {
+     "loopback": {
+      "ipv4": "192.0.2.121/32"
+     },
+     "routing": {
+      "static": [
+       {
+        "ipv4": "198.51.100.0/24",
+        "nexthop": {
+         "discard": true
+        }
+       }
+      ]
+     }
+    }
+   },
+   "links": {
+    "host1:eth1--vsrx:eth1": {
+     "prefix": {
+      "ipv4": "10.9.9.0/24"
+     }
+    }
+   },
+   "vlans": {},
+   "vrfs": {},
+   "interfaces": {},
+   "allocations": {},
+   "isis": {
+    "area": "49.0001",
+    "type": "level-2"
+   }
+  }
+ },
+ "parity": {
+  "P1_generate": {
+   "generation_id": "6d17f192232d4f14be46fcef6fd9c57f",
+   "status": "succeeded",
+   "engine_version": "26.09",
+   "errors": [],
+   "warnings": [],
+   "artifacts": {
+    "vrt": [
+     "initial",
+     "routing",
+     "ospf"
+    ],
+    "vsw": [
+     "initial",
+     "routing",
+     "ospf"
+    ]
+   }
+  },
+  "P1_review": {
+   "review_job_id": "83a05ab34de343c29542676527853743",
+   "status": "done",
+   "applicable": [
+    "vrt",
+    "vsw"
+   ],
+   "targets": [
+    {
+     "name": "vrt",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": false,
+     "counts": {
+      "added": 8,
+      "removed": 0,
+      "stale": 0,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 0,
+      "kept_manual": 0
+     },
+     "added": [
+      "set interfaces ge-0/0/0 unit 0 description \"vrt -> vsw\"",
+      "set interfaces ge-0/0/0 unit 0 family inet address 10.1.0.0/31",
+      "set protocols lldp interface all",
+      "set protocols lldp interface fxp0 disable",
+      "set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p",
+      "set protocols ospf area 0.0.0.0 interface lo0.0",
+      "set routing-options router-id 192.0.2.112",
+      "set routing-options static route 198.51.100.0/24 discard"
+     ],
+     "removed": [],
+     "stale": [],
+     "conflicts": [],
+     "removals": [],
+     "kept_manual": [],
+     "diff": [
+      "[edit interfaces ge-0/0/0]",
+      "+    unit 0 {",
+      "+        description \"vrt -> vsw\";",
+      "+        family inet {",
+      "+            address 10.1.0.0/31;",
+      "+        }",
+      "+    }",
+      "[edit routing-options]",
+      "+  router-id 192.0.2.112;",
+      "[edit routing-options static]",
+      "+    route 198.51.100.0/24 discard;",
+      "[edit]",
+      "+  protocols {",
+      "+      ospf {",
+      "+          area 0.0.0.0 {",
+      "+              interface lo0.0;",
+      "+              interface ge-0/0/0.0 {",
+      "+                  interface-type p2p;",
+      "+              }",
+      "+          }",
+      "+      }",
+      "+      lldp {",
+      "+          interface fxp0 {",
+      "+              disable;",
+      "+          }",
+      "+          interface all;",
+      "+      }",
+      "+  }",
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    },
+    {
+     "name": "vsw",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": false,
+     "counts": {
+      "added": 8,
+      "removed": 0,
+      "stale": 0,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 0,
+      "kept_manual": 0
+     },
+     "added": [
+      "set interfaces ge-0/0/0 unit 0 description \"vsw -> vrt\"",
+      "set interfaces ge-0/0/0 unit 0 family inet address 10.1.0.1/31",
+      "set interfaces lo0 unit 0 family inet address 10.255.0.2/32",
+      "set protocols lldp interface all",
+      "set protocols lldp interface fxp0 disable",
+      "set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p",
+      "set protocols ospf area 0.0.0.0 interface lo0.0",
+      "set routing-options router-id 10.255.0.2"
+     ],
+     "removed": [],
+     "stale": [],
+     "conflicts": [],
+     "removals": [],
+     "kept_manual": [],
+     "diff": [
+      "[edit interfaces]",
+      "+   ge-0/0/0 {",
+      "+       unit 0 {",
+      "+           description \"vsw -> vrt\";",
+      "+           family inet {",
+      "+               address 10.1.0.1/31;",
+      "+           }",
+      "+       }",
+      "+   }",
+      "+   lo0 {",
+      "+       unit 0 {",
+      "+           family inet {",
+      "+               address 10.255.0.2/32;",
+      "+           }",
+      "+       }",
+      "+   }",
+      "[edit]",
+      "+  routing-options {",
+      "+      router-id 10.255.0.2;",
+      "+  }",
+      "+  protocols {",
+      "+      ospf {",
+      "+          area 0.0.0.0 {",
+      "+              interface lo0.0;",
+      "+              interface ge-0/0/0.0 {",
+      "+                  interface-type p2p;",
+      "+              }",
+      "+          }",
+      "+      }",
+      "+      lldp {",
+      "+          interface fxp0 {",
+      "+              disable;",
+      "+          }",
+      "+          interface all;",
+      "+      }",
+      "+  }",
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    }
+   ]
+  },
+  "P1_apply": {
+   "apply_job_id": "a80b400c7f1b45338d2f75278ed13a02",
+   "status": "succeeded",
+   "message": "The plan was applied and every device read back as planned.",
+   "pre_backup_job_id": "a5eef7ea021c41f594309a3e04c2348b",
+   "post_backup_job_id": "91b3319712b544509ee6e64c4f8b3d11",
+   "double_submit_returned_same_job": true,
+   "targets": [
+    {
+     "name": "vrt",
+     "kind": "juniper_vjunosrouter",
+     "status": "verified",
+     "stage": "applied",
+     "message": "Applied, confirmed and read back.",
+     "attempts": 1,
+     "persistence": "saved",
+     "verify": {
+      "missing": [],
+      "remaining": []
+     },
+     "kept_manual": [],
+     "timeline": {
+      "queued": 1793071218.766958,
+      "backing_up": 1793071218.7828774,
+      "connecting": 1793071222.413862,
+      "applying": 1793071223.231361,
+      "armed": 1793071253.3649478,
+      "verifying": 1793071253.3706734,
+      "confirming": 1793071254.3132558,
+      "applied": 1793071258.7307303,
+      "settled": 1793071258.730731
+     }
+    },
+    {
+     "name": "vsw",
+     "kind": "juniper_vjunosswitch",
+     "status": "verified",
+     "stage": "applied",
+     "message": "Applied, confirmed and read back.",
+     "attempts": 1,
+     "persistence": "saved",
+     "verify": {
+      "missing": [],
+      "remaining": []
+     },
+     "kept_manual": [],
+     "timeline": {
+      "queued": 1793071218.7669702,
+      "backing_up": 1793071218.7877,
+      "connecting": 1793071222.419029,
+      "applying": 1793071223.8941495,
+      "armed": 1793071251.7033052,
+      "verifying": 1793071251.7096438,
+      "confirming": 1793071252.750604,
+      "applied": 1793071256.8803704,
+      "settled": 1793071256.8803718
+     }
+    }
+   ]
+  },
+  "P2_noop_review": {
+   "review_job_id": "de24a6c004ff416995efd2a8f296580c",
+   "status": "done",
+   "applicable": [
+    "vrt",
+    "vsw"
+   ],
+   "targets": [
+    {
+     "name": "vrt",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": true,
+     "counts": {
+      "added": 0,
+      "removed": 0,
+      "stale": 0,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 0,
+      "kept_manual": 0
+     },
+     "added": [],
+     "removed": [],
+     "stale": [],
+     "conflicts": [],
+     "removals": [],
+     "kept_manual": [],
+     "diff": [
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    },
+    {
+     "name": "vsw",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": true,
+     "counts": {
+      "added": 0,
+      "removed": 0,
+      "stale": 0,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 0,
+      "kept_manual": 0
+     },
+     "added": [],
+     "removed": [],
+     "stale": [],
+     "conflicts": [],
+     "removals": [],
+     "kept_manual": [],
+     "diff": [
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    }
+   ]
+  },
+  "P2_noop_first_submit": {
+   "http": 409,
+   "detail": "Wait for the active backup, Git save, restore, lab operation or design apply to finish.",
+   "cause": "another worker's backup of lab link-basics (job 4a4f4c3c, 03:22:07) under the global guard; the token was not consumed"
+  },
+  "P2_noop_apply": {
+   "apply_job_id": "1028cee392a84101b264e38d85807c3e",
+   "status": "succeeded",
+   "message": "Every selected device already matched the plan; nothing was changed.",
+   "pre_backup_job_id": null,
+   "post_backup_job_id": null,
+   "double_submit_returned_same_job": true,
+   "targets": [
+    {
+     "name": "vrt",
+     "kind": "juniper_vjunosrouter",
+     "status": "no_op",
+     "stage": "no_op",
+     "message": "Already matches the plan; nothing to change.",
+     "attempts": null,
+     "persistence": null,
+     "verify": null,
+     "kept_manual": null,
+     "timeline": {
+      "queued": 1793071358.9574237,
+      "settled": 1793071358.9574237
+     }
+    },
+    {
+     "name": "vsw",
+     "kind": "juniper_vjunosswitch",
+     "status": "no_op",
+     "stage": "no_op",
+     "message": "Already matches the plan; nothing to change.",
+     "attempts": null,
+     "persistence": null,
+     "verify": null,
+     "kept_manual": null,
+     "timeline": {
+      "queued": 1793071358.9574246,
+      "settled": 1793071358.9574249
+     }
+    }
+   ]
+  },
+  "P3_stale_generate": {
+   "generation_id": "778f7de167474c1caee85de9f378cd7f",
+   "status": "succeeded",
+   "engine_version": "26.09",
+   "errors": [],
+   "warnings": [],
+   "artifacts": {
+    "vrt": [
+     "initial",
+     "ospf"
+    ],
+    "vsw": [
+     "initial",
+     "ospf"
+    ]
+   }
+  },
+  "P3_stale_review": {
+   "review_job_id": "d7e0e092bcb140a4b2db1adba144bdc6",
+   "status": "done",
+   "applicable": [
+    "vrt",
+    "vsw"
+   ],
+   "targets": [
+    {
+     "name": "vrt",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": false,
+     "counts": {
+      "added": 0,
+      "removed": 1,
+      "stale": 1,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 1,
+      "kept_manual": 0
+     },
+     "added": [],
+     "removed": [
+      "set routing-options static route 198.51.100.0/24 discard"
+     ],
+     "stale": [
+      "set routing-options static route 198.51.100.0/24 discard"
+     ],
+     "conflicts": [],
+     "removals": [
+      "delete routing-options static route 198.51.100.0/24 discard"
+     ],
+     "kept_manual": [],
+     "diff": [
+      "[edit routing-options static]",
+      "-    route 198.51.100.0/24 discard;",
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    },
+    {
+     "name": "vsw",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": true,
+     "counts": {
+      "added": 0,
+      "removed": 0,
+      "stale": 0,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 0,
+      "kept_manual": 0
+     },
+     "added": [],
+     "removed": [],
+     "stale": [],
+     "conflicts": [],
+     "removals": [],
+     "kept_manual": [],
+     "diff": [
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    }
+   ]
+  },
+  "P3_stale_apply": {
+   "apply_job_id": "519702d7cce34720af227011fed0ced6",
+   "status": "succeeded",
+   "message": "The plan was applied and every device read back as planned.",
+   "pre_backup_job_id": "c9df846a1f29496dbcb6093c421bdff5",
+   "post_backup_job_id": "a1cf8f1be1aa450b9d193a67594f6321",
+   "double_submit_returned_same_job": true,
+   "targets": [
+    {
+     "name": "vrt",
+     "kind": "juniper_vjunosrouter",
+     "status": "verified",
+     "stage": "applied",
+     "message": "Applied, confirmed and read back.",
+     "attempts": 1,
+     "persistence": "saved",
+     "verify": {
+      "missing": [],
+      "remaining": []
+     },
+     "kept_manual": [],
+     "timeline": {
+      "queued": 1793071419.5104933,
+      "backing_up": 1793071419.5313437,
+      "connecting": 1793071422.1669676,
+      "applying": 1793071422.7287507,
+      "armed": 1793071431.574734,
+      "verifying": 1793071431.5816119,
+      "confirming": 1793071431.8955405,
+      "applied": 1793071434.6266763,
+      "settled": 1793071434.626677
+     }
+    },
+    {
+     "name": "vsw",
+     "kind": "juniper_vjunosswitch",
+     "status": "no_op",
+     "stage": "no_op",
+     "message": "Already matches the plan; nothing to change.",
+     "attempts": null,
+     "persistence": null,
+     "verify": null,
+     "kept_manual": null,
+     "timeline": {
+      "queued": 1793071419.5105047,
+      "settled": 1793071419.5105047
+     }
+    }
+   ]
+  },
+  "P4a_manual_address_review_same_plan": {
+   "review_job_id": "922dcba1756f439c91a4a1d07ec87a28",
+   "status": "done",
+   "applicable": [
+    "vrt"
+   ],
+   "targets": [
+    {
+     "name": "vrt",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": true,
+     "counts": {
+      "added": 0,
+      "removed": 0,
+      "stale": 0,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 0,
+      "kept_manual": 0
+     },
+     "added": [],
+     "removed": [],
+     "stale": [],
+     "conflicts": [],
+     "removals": [],
+     "kept_manual": [],
+     "diff": [
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    }
+   ]
+  },
+  "P4b_renumbered_generate": {
+   "generation_id": "67747a3da17447b3a004b6ea28c938fd",
+   "status": "succeeded",
+   "engine_version": "26.09",
+   "errors": [],
+   "warnings": [],
+   "artifacts": {
+    "vrt": [
+     "initial",
+     "ospf"
+    ],
+    "vsw": [
+     "initial",
+     "ospf"
+    ]
+   }
+  },
+  "P4b_conflict_review": {
+   "review_job_id": "08f1e0dda7ee46adae40c422f21962d8",
+   "status": "done",
+   "applicable": [
+    "vsw"
+   ],
+   "targets": [
+    {
+     "name": "vrt",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": false,
+     "counts": {
+      "added": 1,
+      "removed": 1,
+      "stale": 1,
+      "conflicts": 1,
+      "expected": 0,
+      "removals": 1,
+      "kept_manual": 0
+     },
+     "added": [
+      "set interfaces ge-0/0/0 unit 0 family inet address 10.2.0.0/31"
+     ],
+     "removed": [
+      "set interfaces ge-0/0/0 unit 0 family inet address 10.1.0.0/31"
+     ],
+     "stale": [
+      "set interfaces ge-0/0/0 unit 0 family inet address 10.1.0.0/31"
+     ],
+     "conflicts": [
+      "set interfaces ge-0/0/0 unit 0 family inet address 10.77.0.1/30"
+     ],
+     "removals": [
+      "delete interfaces ge-0/0/0 unit 0 family inet address 10.1.0.0/31"
+     ],
+     "kept_manual": [],
+     "diff": [
+      "[edit interfaces ge-0/0/0 unit 0 family inet]",
+      "        address 10.77.0.1/30 { ... }",
+      "+       address 10.2.0.0/31;",
+      "-       address 10.1.0.0/31;",
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    },
+    {
+     "name": "vsw",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": false,
+     "counts": {
+      "added": 1,
+      "removed": 1,
+      "stale": 1,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 1,
+      "kept_manual": 0
+     },
+     "added": [
+      "set interfaces ge-0/0/0 unit 0 family inet address 10.2.0.1/31"
+     ],
+     "removed": [
+      "set interfaces ge-0/0/0 unit 0 family inet address 10.1.0.1/31"
+     ],
+     "stale": [
+      "set interfaces ge-0/0/0 unit 0 family inet address 10.1.0.1/31"
+     ],
+     "conflicts": [],
+     "removals": [
+      "delete interfaces ge-0/0/0 unit 0 family inet"
+     ],
+     "kept_manual": [],
+     "diff": [
+      "[edit interfaces ge-0/0/0 unit 0 family inet]",
+      "+       address 10.2.0.1/31;",
+      "-       address 10.1.0.1/31;",
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    }
+   ]
+  },
+  "P4b_conflict_apply": {
+   "http": 409,
+   "body": {
+    "detail": "Conflicts with manual configuration on vrt. Resolve them or take the settings over in the review."
+   }
+  }
+ },
+ "camp-vsrx": {
+  "V1_generate": {
+   "generation_id": "284bea19fc38433ab588bcf70790c567",
+   "status": "succeeded",
+   "engine_version": "26.09",
+   "errors": [],
+   "warnings": [],
+   "artifacts": {
+    "host1": [
+     "initial",
+     "routing"
+    ],
+    "vsrx": [
+     "initial",
+     "routing",
+     "ospf"
+    ]
+   }
+  },
+  "V1_review": {
+   "review_job_id": "4ffd44a683ae4d64947238e8b48284f5",
+   "status": "done",
+   "applicable": [
+    "vsrx"
+   ],
+   "targets": [
+    {
+     "name": "vsrx",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": false,
+     "counts": {
+      "added": 8,
+      "removed": 0,
+      "stale": 0,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 0,
+      "kept_manual": 0
+     },
+     "added": [
+      "set interfaces ge-0/0/0 unit 0 description \"vsrx -> host1 [stub]\"",
+      "set protocols lldp interface all",
+      "set protocols lldp interface fxp0 disable",
+      "set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p",
+      "set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 passive",
+      "set protocols ospf area 0.0.0.0 interface lo0.0",
+      "set routing-options router-id 192.0.2.121",
+      "set routing-options static route 198.51.100.0/24 discard"
+     ],
+     "removed": [],
+     "stale": [],
+     "conflicts": [],
+     "removals": [],
+     "kept_manual": [],
+     "diff": [
+      "[edit interfaces ge-0/0/0 unit 0]",
+      "+    description \"vsrx -> host1 [stub]\";",
+      "[edit]",
+      "+  protocols {",
+      "+      ospf {",
+      "+          area 0.0.0.0 {",
+      "+              interface lo0.0;",
+      "+              interface ge-0/0/0.0 {",
+      "+                  interface-type p2p;",
+      "+                  passive;",
+      "+              }",
+      "+          }",
+      "+      }",
+      "+      lldp {",
+      "+          interface fxp0 {",
+      "+              disable;",
+      "+          }",
+      "+          interface all;",
+      "+      }",
+      "+  }",
+      "[edit routing-options]",
+      "+  router-id 192.0.2.121;",
+      "[edit routing-options static]",
+      "+    route 198.51.100.0/24 discard;",
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    },
+    {
+     "name": "host1",
+     "eligible": false,
+     "reason": "A support host is generated only, never applied.",
+     "ready": null,
+     "no_op": null,
+     "counts": null,
+     "added": null,
+     "removed": null,
+     "stale": null,
+     "conflicts": null,
+     "removals": null,
+     "kept_manual": null,
+     "diff": null,
+     "protected": []
+    }
+   ]
+  },
+  "V1_apply": {
+   "apply_job_id": "10f5552a48884ef6abc232b26e2a16e3",
+   "status": "succeeded",
+   "message": "The plan was applied and every device read back as planned.",
+   "pre_backup_job_id": "55cd2de9e26e4ac1b2241ecf3f5276e6",
+   "post_backup_job_id": "282b9372d78d406abc605b0c546aa8e2",
+   "double_submit_returned_same_job": true,
+   "targets": [
+    {
+     "name": "vsrx",
+     "kind": "juniper_vsrx",
+     "status": "verified",
+     "stage": "applied",
+     "message": "Applied, confirmed and read back.",
+     "attempts": 1,
+     "persistence": "saved",
+     "verify": {
+      "missing": [],
+      "remaining": []
+     },
+     "kept_manual": [],
+     "timeline": {
+      "queued": 1793071597.3643923,
+      "backing_up": 1793071597.3868213,
+      "connecting": 1793071600.0107496,
+      "applying": 1793071600.1403403,
+      "armed": 1793071605.1743865,
+      "verifying": 1793071605.1797204,
+      "confirming": 1793071605.2954965,
+      "applied": 1793071605.7757328,
+      "settled": 1793071605.7757332
+     }
+    }
+   ]
+  },
+  "V2_noop_review": {
+   "review_job_id": "c4968017305d4f9faf44e85fe038db0b",
+   "status": "done",
+   "applicable": [
+    "vsrx"
+   ],
+   "targets": [
+    {
+     "name": "vsrx",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": true,
+     "counts": {
+      "added": 0,
+      "removed": 0,
+      "stale": 0,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 0,
+      "kept_manual": 0
+     },
+     "added": [],
+     "removed": [],
+     "stale": [],
+     "conflicts": [],
+     "removals": [],
+     "kept_manual": [],
+     "diff": [
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    }
+   ]
+  },
+  "V2_noop_apply": {
+   "apply_job_id": "ea61782bb9ed4ade888005740bd6c990",
+   "status": "succeeded",
+   "message": "Every selected device already matched the plan; nothing was changed.",
+   "pre_backup_job_id": null,
+   "post_backup_job_id": null,
+   "double_submit_returned_same_job": true,
+   "targets": [
+    {
+     "name": "vsrx",
+     "kind": "juniper_vsrx",
+     "status": "no_op",
+     "stage": "no_op",
+     "message": "Already matches the plan; nothing to change.",
+     "attempts": null,
+     "persistence": null,
+     "verify": null,
+     "kept_manual": null,
+     "timeline": {
+      "queued": 1793071631.586203,
+      "settled": 1793071631.586203
+     }
+    }
+   ]
+  },
+  "V3_isis_generate": {
+   "generation_id": "5d52988402c64b41b8b274dbaf641b2a",
+   "status": "succeeded",
+   "engine_version": "26.09",
+   "errors": [],
+   "warnings": [],
+   "artifacts": {
+    "host1": [
+     "initial",
+     "routing"
+    ],
+    "vsrx": [
+     "initial",
+     "routing",
+     "isis"
+    ]
+   }
+  },
+  "V3_isis_review": {
+   "review_job_id": "e0c7eae5bfd344f38a3a11629b3e41d0",
+   "status": "done",
+   "applicable": [
+    "vsrx"
+   ],
+   "targets": [
+    {
+     "name": "vsrx",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": false,
+     "counts": {
+      "added": 9,
+      "removed": 4,
+      "stale": 4,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 2,
+      "kept_manual": 0
+     },
+     "added": [
+      "set interfaces ge-0/0/0 unit 0 family iso",
+      "set interfaces lo0 unit 0 family iso address 49.0001.0000.0000.0001.00",
+      "set protocols isis interface ge-0/0/0.0 passive",
+      "set protocols isis interface ge-0/0/0.0 point-to-point",
+      "set protocols isis interface lo0.0",
+      "set protocols isis level 1 disable",
+      "set protocols isis level 1 wide-metrics-only",
+      "set protocols isis level 2 wide-metrics-only",
+      "set security forwarding-options family iso mode packet-based"
+     ],
+     "removed": [
+      "set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p",
+      "set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 passive",
+      "set protocols ospf area 0.0.0.0 interface lo0.0",
+      "set routing-options router-id 192.0.2.121"
+     ],
+     "stale": [
+      "set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p",
+      "set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 passive",
+      "set protocols ospf area 0.0.0.0 interface lo0.0",
+      "set routing-options router-id 192.0.2.121"
+     ],
+     "conflicts": [],
+     "removals": [
+      "delete routing-options router-id 192.0.2.121",
+      "delete protocols ospf"
+     ],
+     "kept_manual": [],
+     "diff": [
+      "[edit security]",
+      "+   forwarding-options {",
+      "+       family {",
+      "+           iso {",
+      "+               mode packet-based;",
+      "+           }",
+      "+       }",
+      "+   }",
+      "[edit interfaces ge-0/0/0 unit 0]",
+      "+      family iso;",
+      "[edit interfaces lo0 unit 0]",
+      "+      family iso {",
+      "+          address 49.0001.0000.0000.0001.00;",
+      "+      }",
+      "[edit protocols]",
+      "-   ospf {",
+      "-       area 0.0.0.0 {",
+      "-           interface lo0.0;",
+      "-           interface ge-0/0/0.0 {",
+      "-               interface-type p2p;",
+      "-               passive;",
+      "-           }",
+      "-       }",
+      "-   }",
+      "+   isis {",
+      "+       interface ge-0/0/0.0 {",
+      "+           point-to-point;",
+      "+           passive;",
+      "+       }",
+      "+       interface lo0.0;",
+      "+       level 1 {",
+      "+           disable;",
+      "+           wide-metrics-only;",
+      "+       }",
+      "+       level 2 wide-metrics-only;",
+      "+   }",
+      "[edit routing-options]",
+      "-  router-id 192.0.2.121;",
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    }
+   ]
+  },
+  "V3_isis_apply": {
+   "apply_job_id": "03033ede783f470899e57ea5ac5854a7",
+   "status": "succeeded",
+   "message": "The plan was applied and every device read back as planned.",
+   "pre_backup_job_id": "6569e1fccc6947239d79271850d9304a",
+   "post_backup_job_id": "1a0204ee1c194015881a43fa9a1cc37a",
+   "double_submit_returned_same_job": true,
+   "targets": [
+    {
+     "name": "vsrx",
+     "kind": "juniper_vsrx",
+     "status": "verified",
+     "stage": "applied",
+     "message": "Applied, confirmed and read back.",
+     "attempts": 1,
+     "persistence": "saved",
+     "verify": {
+      "missing": [],
+      "remaining": []
+     },
+     "kept_manual": [],
+     "timeline": {
+      "queued": 1793071672.4766922,
+      "backing_up": 1793071672.4950178,
+      "connecting": 1793071674.7142253,
+      "applying": 1793071674.8358738,
+      "armed": 1793071678.9262092,
+      "verifying": 1793071678.9298496,
+      "confirming": 1793071679.0364616,
+      "applied": 1793071679.4747467,
+      "settled": 1793071679.4747474
+     }
+    }
+   ]
+  },
+  "V4_mpls_generate": {
+   "generation_id": "4838daf6644649f7b4e2a3206bed2023",
+   "status": "succeeded",
+   "engine_version": "26.09",
+   "errors": [],
+   "warnings": [],
+   "artifacts": {
+    "host1": [
+     "initial",
+     "routing"
+    ],
+    "vsrx": [
+     "initial",
+     "routing",
+     "isis",
+     "mpls"
+    ]
+   }
+  },
+  "V4_mpls_review": {
+   "review_job_id": "e844d43125214256a63af47f5f6c96b5",
+   "status": "done",
+   "applicable": [
+    "vsrx"
+   ],
+   "targets": [
+    {
+     "name": "vsrx",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": false,
+     "counts": {
+      "added": 1,
+      "removed": 0,
+      "stale": 0,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 0,
+      "kept_manual": 0
+     },
+     "added": [
+      "set security forwarding-options family mpls mode packet-based"
+     ],
+     "removed": [],
+     "stale": [],
+     "conflicts": [],
+     "removals": [],
+     "kept_manual": [],
+     "diff": [
+      "[edit security forwarding-options family]",
+      "+     mpls {",
+      "+         mode packet-based;",
+      "+     }",
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    }
+   ]
+  },
+  "V4_mpls_apply": {
+   "apply_job_id": "ba0cb6bbd3f54a2f8949fb7e829896d6",
+   "status": "failed",
+   "message": "The plan was not applied to any device.",
+   "pre_backup_job_id": "d27725c6c19540d4a0af8c70c58988c9",
+   "post_backup_job_id": null,
+   "double_submit_returned_same_job": true,
+   "targets": [
+    {
+     "name": "vsrx",
+     "kind": "juniper_vsrx",
+     "status": "failed",
+     "stage": "failed",
+     "message": "Configuration was not changed: The node failed the configuration check for the generated configuration; nothing was applied. The device said, in the manager's words: the device refused it on semantic grounds.",
+     "attempts": null,
+     "persistence": null,
+     "verify": null,
+     "kept_manual": null,
+     "timeline": {
+      "queued": 1793071739.5523624,
+      "backing_up": 1793071739.5653782,
+      "connecting": 1793071741.7828355,
+      "applying": 1793071741.9028156,
+      "failed": 1793071743.737877,
+      "settled": 1793071743.7378795
+     }
+    }
+   ]
+  },
+  "V5_mpls_after_manual_policy_removal_review": {
+   "review_job_id": "8cbd30ad494e4492ad2b3a8888241eae",
+   "status": "done",
+   "applicable": [
+    "vsrx"
+   ],
+   "targets": [
+    {
+     "name": "vsrx",
+     "eligible": true,
+     "reason": null,
+     "ready": true,
+     "no_op": false,
+     "counts": {
+      "added": 1,
+      "removed": 0,
+      "stale": 0,
+      "conflicts": 0,
+      "expected": 0,
+      "removals": 0,
+      "kept_manual": 0
+     },
+     "added": [
+      "set security forwarding-options family mpls mode packet-based"
+     ],
+     "removed": [],
+     "stale": [],
+     "conflicts": [],
+     "removals": [],
+     "kept_manual": [],
+     "diff": [
+      "[edit security forwarding-options family]",
+      "+     mpls {",
+      "+         mode packet-based;",
+      "+     }",
+      "[edit]"
+     ],
+     "protected": [
+      "device identity, access or management",
+      "management, access or static host mapping",
+      "a delete tag wipes a whole stanza; removal is the ledger's"
+     ]
+    }
+   ]
+  },
+  "V5_mpls_apply": {
+   "apply_job_id": "b4e62a2408504c1fb7f2397133f6cac7",
+   "status": "succeeded",
+   "message": "The plan was applied and every device read back as planned.",
+   "pre_backup_job_id": "38247bf720514995870e4a4ba45f2192",
+   "post_backup_job_id": "0b8eef3df9a343a49701a76a8489a14e",
+   "double_submit_returned_same_job": true,
+   "targets": [
+    {
+     "name": "vsrx",
+     "kind": "juniper_vsrx",
+     "status": "verified",
+     "stage": "applied",
+     "message": "Applied, confirmed and read back.",
+     "attempts": 1,
+     "persistence": "saved",
+     "verify": {
+      "missing": [],
+      "remaining": []
+     },
+     "kept_manual": [],
+     "timeline": {
+      "queued": 1793071772.0828297,
+      "backing_up": 1793071772.0959523,
+      "connecting": 1793071774.3241057,
+      "applying": 1793071774.4335816,
+      "armed": 1793071777.765626,
+      "verifying": 1793071777.768943,
+      "confirming": 1793071777.8929799,
+      "applied": 1793071778.4002197,
+      "settled": 1793071778.4002206
+     }
+    }
+   ]
+  },
+  "V6_load_A": {
+   "preflight": [
+    {
+     "name": "clab-camp-vsrx-vsrx",
+     "eligible": true,
+     "pending_changes": 18,
+     "reason": ""
+    }
+   ],
+   "restore_job_id": "a5539b6472794be29b65c5aeb24121b5",
+   "status": "succeeded",
+   "message": "All 1 node(s) restored and verified against the saved state.",
+   "targets": [
+    {
+     "name": "clab-camp-vsrx-vsrx",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "no_op": false,
+     "persistence": "saved"
+    }
+   ]
+  }
+ },
+ "final_loads": {
+  "camp-vsrx": {
+   "preflight": [
+    {
+     "name": "clab-camp-vsrx-vsrx",
+     "eligible": true,
+     "pending_changes": 3,
+     "reason": ""
+    }
+   ],
+   "restore_job_id": "ce1f3d65ae3c4d51ab17d4c866cabc9a",
+   "status": "succeeded",
+   "message": "All 1 node(s) restored and verified against the saved state.",
+   "targets": [
+    {
+     "name": "clab-camp-vsrx-vsrx",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "no_op": false,
+     "persistence": "saved"
+    }
+   ]
+  },
+  "parity": {
+   "preflight": [
+    {
+     "name": "clab-parity-vrt",
+     "eligible": true,
+     "pending_changes": 8,
+     "reason": ""
+    },
+    {
+     "name": "clab-parity-vsw",
+     "eligible": true,
+     "pending_changes": 8,
+     "reason": ""
+    }
+   ],
+   "restore_job_id": "19953f6b07ad4892b4026249af6d9fbb",
+   "status": "succeeded",
+   "message": "All 2 node(s) restored and verified against the saved state.",
+   "targets": [
+    {
+     "name": "clab-parity-vrt",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "no_op": false,
+     "persistence": "saved"
+    },
+    {
+     "name": "clab-parity-vsw",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "no_op": false,
+     "persistence": "saved"
+    }
+   ]
+  }
+ }
+}

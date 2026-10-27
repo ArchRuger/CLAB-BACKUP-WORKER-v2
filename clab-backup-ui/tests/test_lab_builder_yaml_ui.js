@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const read=name=>fs.readFileSync(path.join(__dirname,'../app/static',name),'utf8');
 const IDS=['builder-yaml-panel','builder-yaml-apply','builder-yaml-revert','builder-yaml-close','builder-yaml-editor','builder-yaml-gutter','builder-yaml-status',
- 'builder-yaml-count','builder-yaml-list','builder-yaml-schema','builder-yaml-keyhelp','builder-yaml-schema-failed','builder-yaml-schema-retry','builder-yaml-more'];
+ 'builder-yaml-count','builder-yaml-announce','builder-yaml-list','builder-yaml-schema','builder-yaml-keyhelp','builder-yaml-schema-failed','builder-yaml-schema-retry','builder-yaml-more'];
 // Just enough of an element: the panel sets properties and handler properties, and builds list items, gutter spans and the key help with
 // createElement/append/replaceChildren (textContent of a container reads its children, like the DOM's).
 function element(id){const el={id,value:'',hidden:id==='builder-yaml-panel'||id==='builder-yaml-schema-failed',disabled:false,readOnly:false,className:'',scrollTop:0,scrollHeight:0,clientHeight:0,open:true,attrs:{},focused:0,selection:null,children:[],_text:'',selectionStart:0,
@@ -210,8 +210,8 @@ function openWith(c,yaml,editorOpts={}){
 test('the markup adds the Problems section: one status count, the fixed note, the example as a sibling of the help outside every describedby target',()=>{
  const c=load(),html=c.builderYamlPanelMarkup();
  for(const id of ['builder-yaml-problems','builder-yaml-problems-title','builder-yaml-count','builder-yaml-problems-note','builder-yaml-list','builder-yaml-schema','builder-yaml-keyhelp','builder-yaml-more','builder-yaml-schema-retry'])assert.match(html,new RegExp(`id="${id}"`),id);
- assert.match(html,/id="builder-yaml-count" role="status" aria-live="polite"/);
- assert.equal((html.match(/role="status"/g)||[]).length,2,'the status line and the count only');
+ assert.match(html,/id="builder-yaml-count" role="status" aria-live="off"/);assert.match(html,/id="builder-yaml-announce" class="sr-only" role="status" aria-live="polite"/);
+ assert.equal((html.match(/role="status"/g)||[]).length,3,'the status line, the count (aria-live off) and the one announcer');
  assert.match(html,/<p[^>]*id="builder-yaml-problems-note">These do not stop Apply or Save; containerlab refuses errors when the lab is deployed\.<\/p>/);
  assert.match(html,/id="builder-yaml-keyhelp"[^>]*aria-live="off"/);
  const help=html.indexOf('id="builder-yaml-help"'),helpEnd=html.indexOf('</p>',help),example=html.indexOf('<details class="builder-yaml-example"');
@@ -447,4 +447,20 @@ test('the gutter title follows a new message of the same length on the same line
  c.builderYamlMarks([{line:3,severity:'error',message:'aaaa'}]);const sig=()=>vm.runInContext('builderYaml.markSig',c),first=sig();
  c.builderYamlMarks([{line:3,severity:'error',message:'bbbb'}]);
  assert.notEqual(sig(),first);
+});
+
+test('the count is not a live region: typing pauses rewrite it silently; Apply, Revert and opening the panel speak it once through the announcer',async()=>{
+ const c=loadCheck(),e=openWith(c,GOOD);const say=c.els['builder-yaml-announce'];
+ assert.match(say.textContent,/^No problems found/,'opening speaks the count');
+ say.textContent='';c.els['builder-yaml-editor'].value=GOOD+'# typed\n';c.els['builder-yaml-editor'].oninput();c.runTimers();
+ assert.equal(say.textContent,'','a typing pause does not announce');
+ await c.builderYamlApply();assert.match(say.textContent,/^No problems found/,'Apply speaks the count');
+ say.textContent='';c.builderYamlRevert();assert.match(say.textContent,/^No problems found/,'Revert speaks the count');
+});
+test('closing the panel with focus inside it returns focus to the page toggle (the page gets hadFocus); a close from elsewhere does not',()=>{
+ const c=load(),e=fakeEditor(START),seen=[];c.builderYamlPanelInit({editor:e,onToggle:(open,had)=>seen.push([open,had])});
+ const panel=c.els['builder-yaml-panel'];panel.contains=n=>n===c.els['builder-yaml-editor'];
+ c.builderYamlPanelToggle(true);c.document.activeElement=c.els['builder-yaml-editor'];key(panel,{key:'Escape'});
+ c.builderYamlPanelToggle(true);c.document.activeElement=null;c.els['builder-yaml-close'].onclick();
+ assert.deepEqual(seen,[[true,false],[false,true],[true,false],[false,false]]);
 });

@@ -237,7 +237,9 @@ One line each; the handoff section named in the routing table has the reasoning 
   keys); the VM host key is pinned after explicit first-use trust.
 - Helpers take structured stdin, fixed argv, trusted roots, review digests bound to the whole request
   and one host lock. The removed `write` mode stays removed; `publish` derives every path itself;
-  `revise` needs an undeployed lab and the opened versions' hashes.
+  `revise` writes only the topology and map files, bound to the opened versions' hashes; on a lab with containers
+  it runs only with `deployed: true` and binds every container found by name or path into the digest; it never
+  runs a containerlab command (`argv` and `steps` empty). Its refusal never says "destroy".
 - The manager never collects Git tokens or accepts Git command text; Git runs as the registered owner
   in that owner's `HOME`; no force push, stash, merge, rebase or destructive reset of a checkout (a save may fast-forward the VM copy
   with the helper's `update` when nothing waits there); the child in `deploy/setup-git.sh` calls `register()` of
@@ -315,6 +317,11 @@ One line each; the handoff section named in the routing table has the reasoning 
 
 *Maps and the editor*
 - The editor is embedded, not forked; never flush drafts on a timer; never show as kept what is not.
+- *Edit topology…* is the lab builder on the lab's own file (`#path` and `#lab`): one catalog (`catalog.py`,
+  `GET /api/catalog`; `BUILDER_TEMPLATES` is its offline copy, kept equal by `test_catalog.py`) feeds the builder,
+  the YAML check and the manager; a deployed save never re-registers the lab, never deploys and shows "Saved on the
+  VM · not applied"; the manager re-registers after a successful apply, deploy or redeploy, merging the VM map by
+  device (the manager's entries win); the plan's `limits` and `backup_first` never change the plan's identity.
 - *Edit map* is the builder's editor in map mode behind the `MAP_COMMANDS` whitelist: never add a
   topology command or the engine's `undo`/`redo`; the page owns undo history. `map-editor.html` loads
   neither `operations.js` nor `lab-builder-page.js`.

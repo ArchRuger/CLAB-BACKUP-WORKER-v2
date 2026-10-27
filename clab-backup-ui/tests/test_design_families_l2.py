@@ -255,6 +255,18 @@ topology:
                 self.assertTrue(result['engine'], (kind, feature, result))
                 self.assertEqual(result['level'], 'generated_not_live_tested', (kind, feature, result))
 
+    def test_lag_and_lacp_on_the_new_junos_kinds_follow_their_profiles(self):
+        # Campaign 2 B05: netlab's vsrx profile has a lag block (passive LACP); vjunos-router has none.
+        for feature in ('lag', 'lacp'):
+            result = dc.resolve(feature, 'juniper_vsrx')
+            self.assertTrue(result['engine'], result)
+            self.assertEqual(result['level'], 'generated_not_live_tested', result)
+            result = dc.resolve(feature, 'juniper_vjunosrouter')
+            self.assertFalse(result['engine'], result)
+            self.assertEqual(result['level'], 'unsupported', result)
+            self.assertIn('vjunos-router', result['reason'])
+        self.assertTrue(dc.engine_data()['device_features']['vsrx']['lag']['passive'])
+
     def test_lag_and_lacp_unsupported_on_xrv9k(self):
         for feature in ('lag', 'lacp'):
             result = dc.resolve(feature, 'cisco_xrv9k')
@@ -447,7 +459,7 @@ class StpFamilyTests(FamilyTestCase):
         self.assertIn('spanning-tree mode rstp', ceos['stp'])
 
     def test_stp_unsupported_on_junos_and_iosxr(self):
-        for kind in ('juniper_vjunosswitch', 'juniper_cjunosevolved', 'cisco_xrv9k'):
+        for kind in ('juniper_vjunosswitch', 'juniper_cjunosevolved', 'cisco_xrv9k', 'juniper_vjunosrouter', 'juniper_vsrx'):
             result = dc.resolve('stp', kind)
             self.assertFalse(result['engine'], (kind, result))
             self.assertEqual(result['level'], 'unsupported', (kind, result))
@@ -459,6 +471,20 @@ class StpFamilyTests(FamilyTestCase):
         _, blocking = self.compatibility(intent, built['nodes'])
         for kind_name in ('cjunosevolved', 'vjunos-switch', 'xrv9k'):
             self.assertTrue(any(b.startswith(kind_name + ': stp is not supported') for b in blocking), blocking)
+
+
+class NewJunosVlanCapabilityTests(unittest.TestCase):
+    """Campaign 2 B05: the VLAN model the engine uses on vJunos-router and vSRX (router: sub-interfaces, not bridging)."""
+
+    def test_vlan_is_generated_not_live_tested_with_the_router_model(self):
+        for kind, profile in (('juniper_vjunosrouter', 'vjunos-router'), ('juniper_vsrx', 'vsrx')):
+            self.assertEqual(dc.resolve('vlan', kind)['level'], 'generated_not_live_tested', kind)
+            vlan = dc.engine_data()['device_features'][profile]['vlan']
+            self.assertEqual(vlan['model'], 'router', profile)
+            self.assertEqual(vlan['subif_name'], '{ifname}.{vlan.access_id}', profile)
+        self.assertTrue(dc.engine_data()['device_features']['vjunos-router']['vlan']['mixed_trunk'])
+        self.assertFalse(dc.engine_data()['device_features']['vsrx']['vlan']['mixed_trunk'])
+        self.assertEqual(dc.resolve('mlag', 'juniper_vsrx')['level'], 'unsupported')
 
 
 if __name__ == '__main__':

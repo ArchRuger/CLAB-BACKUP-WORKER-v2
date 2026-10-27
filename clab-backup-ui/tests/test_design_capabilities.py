@@ -48,6 +48,17 @@ class TestProfiles(unittest.TestCase):
         self.assertEqual(dc.profile_for('juniper_cjunosevolved')['profile'], 'vptx')
         self.assertEqual(dc.profile_for('cisco_xrv9k')['profile'], 'iosxr')
 
+    def test_vjunos_router_and_vsrx_map_to_their_exact_netlab_profiles(self):
+        # Campaign 2 B05 phase 1: netlab 26.09 ships devices/vjunos-router.yml (clab kind juniper_vjunosrouter) and
+        # devices/vsrx.yml (vSRX 3.0); both put management on fxp0 and data ports on ge-0/0/N.
+        for kind, profile in (('juniper_vjunosrouter', 'vjunos-router'), ('juniper_vsrx', 'vsrx')):
+            entry = dc.profile_for(kind)
+            self.assertEqual((entry['profile'], entry['netlab_device'], entry['exact']), (profile, profile, True), kind)
+            self.assertEqual((entry['mgmt_if'], entry['interfaces']), ('fxp0', 'ge-0/0/N'), kind)
+            self.assertIn('exact profile match', entry['evidence'])
+            self.assertIn('applied live through the manager (campaign 2 B05 phase 2', entry['evidence'], 'the evidence names the live apply and its record')
+            self.assertNotIn('role', entry, 'a router or firewall, not a support host')
+
     def test_unmapped_kind_is_none(self):
         self.assertIsNone(dc.profile_for('juniper_crpd'))
         self.assertIsNone(dc.profile_for('not_a_real_kind'))
@@ -58,7 +69,8 @@ class TestProfiles(unittest.TestCase):
         self.assertEqual(dc.profile_for('arista_ceos')['profile'], 'eos')
 
 
-ALL_KINDS = ['arista_ceos', 'juniper_vjunosswitch', 'juniper_cjunosevolved', 'cisco_xrv9k']
+ALL_KINDS = ['arista_ceos', 'juniper_vjunosswitch', 'juniper_cjunosevolved', 'cisco_xrv9k', 'juniper_vjunosrouter', 'juniper_vsrx']
+NEW_JUNOS = ('juniper_vjunosrouter', 'juniper_vsrx')
 
 
 class TestResolve(unittest.TestCase):
@@ -94,8 +106,9 @@ class TestResolve(unittest.TestCase):
             self.assertFalse(r['engine'], kind)
 
     def test_gre_follows_the_engines_tunnel_flag_eos_only(self):
-        # The resolved device features carry tunnel.gre for eos only; the Junos profiles declare no tunnel
-        # flag, so GRE stays unsupported there until the engine says otherwise (fail closed).
+        # Of the original four profiles the resolved device features carry tunnel.gre for eos only; vjunos-switch
+        # and vptx declare no tunnel flag, so GRE stays unsupported there until the engine says otherwise (fail
+        # closed). vjunos-router and vsrx do declare it (test_gre_follows_the_tunnel_flag_on_vjunos_router_and_vsrx).
         r = dc.resolve('gre', 'arista_ceos')
         self.assertTrue(r['engine'])
         self.assertNotEqual(r['level'], 'unsupported')
@@ -104,6 +117,78 @@ class TestResolve(unittest.TestCase):
             r = dc.resolve('gre', kind)
             self.assertFalse(r['engine'], kind)
             self.assertEqual(r['level'], 'unsupported', kind)
+
+    def test_gre_follows_the_tunnel_flag_on_vjunos_router_and_vsrx(self):
+        for kind, profile in (('juniper_vjunosrouter', 'vjunos-router'), ('juniper_vsrx', 'vsrx')):
+            self.assertIn('gre', dc.engine_data()['device_features'][profile].get('tunnel', {}), profile)
+            r = dc.resolve('gre', kind)
+            self.assertTrue(r['engine'], kind)
+            self.assertEqual(r['level'], 'generated_not_live_tested', kind)
+
+    def test_vjunos_router_and_vsrx_answer_from_the_capability_data_and_nothing_unproven_is_verified(self):
+        # Outside the B05 phase 2 VALIDATION entries (test_b05_phase2_live_entries) every feature the engine renders on
+        # either kind is generated_not_live_tested, with no evidence pointer.
+        proven = {key for key in dc.VALIDATION if key[0] in NEW_JUNOS}
+        for kind in NEW_JUNOS:
+            for feature_id in dc.FEATURES:
+                if (kind, feature_id) in proven: continue
+                r = dc.resolve(feature_id, kind)
+                self.assertIn(r['level'], ('generated_not_live_tested', 'unsupported'), (kind, feature_id))
+                # unsupported means the engine does not render it, or an image limit refuses it (vSRX MPLS, B05 phase 2).
+                self.assertEqual(r['level'] == 'unsupported', not r['engine'] or bool(r['image_limit']), (kind, feature_id))
+                self.assertEqual(r['evidence'], '', (kind, feature_id))
+            for feature_id in ('ipv4', 'ipv6', 'ospfv2', 'ospfv3', 'isis', 'bgp', 'bfd', 'static_routes', 'vrf', 'vlan',
+                               'route_policy', 'prefix_list', 'aspath_filter', 'default_originate', 'mpls_ldp', 'l3vpn',
+                               'sr_mpls', 'vrrp', 'lldp'):
+                if (kind, feature_id) in proven or (kind, feature_id) in dc.IMAGE_LIMITS: continue
+                self.assertEqual(dc.resolve(feature_id, kind)['level'], 'generated_not_live_tested', (kind, feature_id))
+            for feature_id in ('eigrp', 'ripv2', 'ripng', 'stp', 'srv6', 'dhcp', 'dhcpv6', 'mlag', 'bgp_lu', 'sixpe', 'wireguard'):
+                self.assertEqual(dc.resolve(feature_id, kind)['level'], 'unsupported', (kind, feature_id))
+
+    def test_b05_phase2_live_entries(self):
+        # Campaign 2 B05 phase 2 (2026-10-27): applied through the running manager, read back by an independent SSH
+        # session, seen working. vSRX on its exact image; vJunos-router on a nested derivative, which the reason says.
+        evidence = 'docs/parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md'
+        self.assertTrue((Path(__file__).resolve().parents[2] / evidence).is_file(), evidence)
+        expected = {('juniper_vsrx', 'static_routes'), ('juniper_vjunosrouter', 'ipv4'),
+                    ('juniper_vjunosrouter', 'ospfv2'), ('juniper_vjunosrouter', 'static_routes')}
+        self.assertEqual({key for key in dc.VALIDATION if key[0] in NEW_JUNOS}, expected)
+        for kind, feature_id in expected:
+            r = dc.resolve(feature_id, kind)
+            self.assertEqual((r['level'], r['evidence']), ('verified_on_image', evidence), (kind, feature_id))
+            self.assertTrue(r['engine'], (kind, feature_id))
+            self.assertEqual(('derivative' in r['reason']), kind == 'juniper_vjunosrouter', (kind, feature_id))
+        # Applied live but not proven working, or not applied: they stay generated_not_live_tested. vSRX OSPF and IS-IS
+        # were applied passive on a host link (no Junos neighbour), the vSRX addresses already existed, MPLS was refused
+        # while security policies exist and switched IPv4 to packet mode without them.
+        for kind, feature_id in (('juniper_vsrx', 'ospfv2'), ('juniper_vsrx', 'isis'), ('juniper_vsrx', 'ipv4'),
+                                 ('juniper_vsrx', 'lldp'), ('juniper_vjunosrouter', 'isis'),
+                                 ('juniper_vjunosrouter', 'bgp'), ('juniper_vjunosrouter', 'lldp'), ('juniper_vjunosrouter', 'ipv6')):
+            self.assertEqual(dc.resolve(feature_id, kind)['level'], 'generated_not_live_tested', (kind, feature_id))
+        # MPLS on vSRX is refused by the image limit (VsrxImageLimitTests), never generated.
+        self.assertEqual(dc.resolve('mpls_ldp', 'juniper_vsrx')['level'], 'unsupported')
+        # The public matrix carries the level and the pointer through the product policy unchanged.
+        rows = {(r['kind'], r['feature']): r for r in dc.public_matrix(list(NEW_JUNOS))}
+        self.assertEqual(rows[('juniper_vjunosrouter', 'ospfv2')]['level'], 'verified_on_image')
+        self.assertEqual(rows[('juniper_vsrx', 'static_routes')]['evidence'], evidence)
+
+    def test_the_two_profiles_differ_where_the_engine_says(self):
+        # vjunos-router: no lag module (devices/vjunos-router.yml has no lag block); evpn/vxlan and anycast present.
+        for feature_id in ('lag', 'lacp'):
+            self.assertEqual(dc.resolve(feature_id, 'juniper_vjunosrouter')['level'], 'unsupported', feature_id)
+            self.assertEqual(dc.resolve(feature_id, 'juniper_vsrx')['level'], 'generated_not_live_tested', feature_id)
+        for feature_id in ('evpn', 'vxlan', 'anycast_gateway'):
+            self.assertEqual(dc.resolve(feature_id, 'juniper_vjunosrouter')['level'], 'generated_not_live_tested', feature_id)
+            r = dc.resolve(feature_id, 'juniper_vsrx')
+            self.assertEqual(r['level'], 'unsupported', feature_id)
+            self.assertIn('vsrx', r['reason'])
+        self.assertEqual(dc.engine_data()['device_features']['vsrx']['gateway']['protocol'], ['vrrp'])
+
+    def test_the_retired_policy_covers_the_new_kinds_too(self):
+        rows = {(r['kind'], r['feature']): r for r in dc.public_matrix(list(NEW_JUNOS))}
+        self.assertEqual(rows[('juniper_vjunosrouter', 'vxlan')]['level'], 'retired')
+        self.assertEqual(rows[('juniper_vjunosrouter', 'vxlan')]['engine_level'], 'generated_not_live_tested')
+        self.assertEqual(rows[('juniper_vsrx', 'bgp')]['level'], 'generated_not_live_tested')
 
     def test_unknown_kind_unsupported_with_mapping_reason(self):
         r = dc.resolve('bgp', 'not_a_real_kind')
@@ -193,3 +278,20 @@ class TestPublicCatalogue(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class VsrxImageLimitTests(unittest.TestCase):
+    """Campaign 2 B05 phase 2: MPLS on vSRX is refused by an image limit, with its live reason, never generated."""
+
+    def test_mpls_and_segment_routing_are_refused_on_vsrx_with_the_firewall_reason(self):
+        from app import design_capabilities as dc
+        for feature in ('mpls_ldp', 'l3vpn', 'sr_mpls'):
+            with self.subTest(feature=feature):
+                answer = dc.resolve(feature, 'juniper_vsrx')
+                self.assertEqual(answer['level'], 'unsupported')
+                self.assertIn('turns the firewall off', answer['image_limit'])
+                self.assertEqual(answer['reason'], answer['image_limit'])
+        self.assertEqual(dc.resolve('mpls_ldp', 'juniper_vjunosrouter')['image_limit'], '', 'the router has no image limit')
+        for feature in ('bgp_lu', 'sixpe'):
+            self.assertEqual(dc.resolve(feature, 'juniper_vsrx')['level'], 'unsupported', 'the engine refuses these first: no mpls.bgp / mpls.6pe on the profile')
+        self.assertEqual(dc.resolve('static_routes', 'juniper_vsrx')['level'], 'verified_on_image')

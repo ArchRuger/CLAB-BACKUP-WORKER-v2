@@ -52,9 +52,10 @@ The map you drew is what the manager's own Topology tab shows: the builder write
 The Topology tab draws a little less than the editor stores: line arrows, rounded text backgrounds
 and nested group levels are kept in the file and shown by the editor, but not drawn there.
 
-The builder changes a topology only while the lab is **not deployed**. To rearrange or annotate the
-map of a lab in My labs, deployed or not, use **Edit map** in the lab instead: it is this same editor
-restricted to the drawing, and it never writes the topology or anything on the VM (see
+A lab in My labs opens in this editor with **Edit topology…** (the address carries `#lab=<id>`), deployed or
+not: saving changes the file on the VM and the map, never the running devices. To rearrange or annotate only
+the map of a lab, use **Edit map** in the lab instead: it is this same editor restricted to the drawing, and it
+never writes the topology or anything on the VM (see
 [Lab operations](LAB-OPERATIONS.md#the-map-and-its-editor)).
 
 ## Edit the topology as YAML
@@ -94,8 +95,8 @@ shows the editor's text again.
 
 Under the text the panel lists **Problems** found in the topology, so a misspelt setting or a boot-order
 mistake shows up before the deploy and not as containerlab's message afterwards. The list is a check of
-the text, not a gate: **these do not stop Apply or Save**; containerlab refuses errors when the lab is
-deployed, and the review and the deploy keep their own refusals (containerlab's own message names the line).
+the text, not a gate: **these do not stop Apply or Save**; containerlab refuses most errors when the lab is
+deployed (a wait loop, a device waiting for itself and a `wait-for` target that does not exist are accepted by `containerlab validate` and `deploy --dry-run`, and the deploy then cannot finish), and the review and the deploy keep their own refusals (containerlab's own message names the line).
 The panel says so in one sentence above the list.
 
 - **When it runs.** About 0.4 seconds after you stop typing, and also when the canvas changes the text,
@@ -123,7 +124,7 @@ The panel says so in one sentence above the list.
     through `topology.defaults`, `kinds` or `groups`), devices that wait for each other in a loop, a `wait-for`
     entry without a valid `stage`, a wait for `healthy` on a device that has no health check (warning), and stage
     commands (`exec`) written as `on-enter:` / `on-exit:` sections instead of a list of `- command:` entries.
-- **Error and Warning.** *Error* means containerlab is expected to refuse the deploy, *Warning* means the text
+- **Error and Warning.** *Error* means containerlab is expected to refuse the deploy (for the three `wait-for` errors, a loop, a device waiting for itself and a target that does not exist, containerlab accepts the file and the deploy cannot finish, so those messages say that instead), *Warning* means the text
   may work but probably is not what you meant, or the manager cannot be sure. A missing kind, an endpoint or
   a `wait-for` target that does not exist, a wait loop and the stage-command form are errors on any VM. A
   kind the schema does not list is an error only when the VM's containerlab is exactly the release the manager
@@ -146,7 +147,7 @@ The panel says so in one sentence above the list.
   from the schema and a link *More about `<setting>`* to its page on containerlab.dev (only links to that site
   are offered). It is not announced as you move, and it is shown only when the schema has loaded.
 - **The same errors without the panel.** A line under the bar (*1 error containerlab will refuse when deploying:
-  line 7, … Open YAML to see it.*, *2 errors …: the first is line 7, …*) appears a moment after a stored change, even when
+  line 7, … Open YAML to see it.*, *2 errors …: the first is line 7, …*; when every error is one of the three `wait-for` ones it reads *1 error that keeps the deploy from finishing: …*) appears a moment after a stored change, even when
   the YAML panel was never opened. **Show in YAML** opens the panel (on the line when the panel holds no unapplied
   edits, at its own list when it does) and **Dismiss** hides it for that text. It lists errors only and never
   turns *Save to the VM…* off.
@@ -214,14 +215,31 @@ reason, and the draft takes the lab name its topology carries.
 
 ## Saving again
 
-**Save changes to the VM…** replaces the topology and the layout of a lab that is **not deployed**.
-The review shows the difference against the file on the VM, a copy of the previous version is kept
-in `.clab-manager-history` in the lab folder, and the save is refused when the file changed on the
-VM after you opened it. For a running lab, use *Lab actions › Destroy lab* first. When the lab is
-already in My labs, its device list and map follow the saved topology.
+**Save changes to the VM…** replaces the topology and the layout of the lab's file on the VM, also while the
+lab is running. The review shows the difference against the file on the VM, a copy of the previous version
+is kept in `.clab-manager-history` in the lab folder, and the save is refused when the file changed on the VM
+after you opened it. When the lab has devices on the VM, the review adds the manager's own sentences: which
+devices are running and which are stopped, the devices the file no longer defines, and the devices whose
+definition changed. Nothing runs on the lab: the save is "Saved to the VM. The running lab is unchanged
+until you apply the changes", and the status pill reads **Saved on the VM · not applied** while the running
+lab differs from the file.
 
-One lab is one draft: opening the file a draft was saved to continues that draft. When the lab is
-deployed, the page says so as soon as the draft opens, so the destroy is not a surprise after the work.
+Applying is a separate, reviewed step: **Back to lab and review changes…** (in the line under the bar, and in the
+save's output dialog) opens the lab with its apply review, and *Lab actions ▾ › Apply topology changes…* does
+the same later. Back up the devices first if you may need the old configuration; the apply review says so.
+The save's recovery copy (`.clab-manager-history`) is named in the output dialog.
+
+For a lab in My labs the map comes from the manager's kept map document, not from the file on the VM, so
+work done with **Edit map** survives an **Edit topology…** session. A device added in the editor keeps its
+position even though the manager's document does not change on a deployed save: reopening completes the
+document from the VM file's map (the manager's entries win for devices it has). Each open starts the next
+save from the manager's current map revision; if the map changed in the manager while the page was open, the
+save is refused with the reason, nothing on the VM changes, and **Reopen** or **Download my draft** are offered.
+
+One lab is one draft: opening the file a draft was saved to continues that draft. When the VM file changed
+since a draft with unsaved changes was made, a dialog lets you choose: **Continue my draft** (the focused,
+non-destructive choice), **Start from the VM version**, or **Download my draft** first. The page says
+what state the lab is in as soon as the draft opens (running, stopped, not deployed).
 
 ### When a save does not go through
 
@@ -231,7 +249,7 @@ VM holds a different version than the one the draft started from (an earlier sav
 reached the page, an edit made on the VM, another computer), the dialog offers **Open the VM version**
 (the draft stays in *Drafts…*) and **Review the differences…**, which turns the next save into a
 revision of the version that is on the VM now: the review shows every difference, the previous file
-is kept in `.clab-manager-history`, and a deployed lab is still refused. A folder that carries another
+is kept in `.clab-manager-history`, and a deployed lab saves the same way as above (nothing is applied). A folder that carries another
 lab's name is never offered this way; the dialog then says whose it is. A save that did reach the VM
 while the page never heard of it (a closed tab, a lost connection) is recognised the next time the
 draft opens and the VM can be asked, also when the draft was edited in between (it then shows as

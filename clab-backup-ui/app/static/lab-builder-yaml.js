@@ -44,7 +44,8 @@ function builderYamlPanelMarkup(){
   +`<textarea id="builder-yaml-editor" class="builder-yaml-editor" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" aria-label="Topology YAML" aria-describedby="builder-yaml-status builder-yaml-help builder-yaml-count"></textarea></div>`
   +`<p id="builder-yaml-status" class="builder-yaml-status" role="status" aria-live="polite"></p>`
   +`<section class="builder-yaml-problems" id="builder-yaml-problems" aria-labelledby="builder-yaml-problems-title">`
-  +`<h3 id="builder-yaml-problems-title" class="builder-yaml-problems-title">Problems <span id="builder-yaml-count" role="status" aria-live="polite"></span></h3>`
+  +`<h3 id="builder-yaml-problems-title" class="builder-yaml-problems-title">Problems <span id="builder-yaml-count" role="status" aria-live="off"></span></h3>`
+  +`<p id="builder-yaml-announce" class="sr-only" role="status" aria-live="polite"></p>`
   +`<p class="form-help builder-yaml-problems-note" id="builder-yaml-problems-note">${builderYamlEscape(BUILDER_YAML_TEXT.problemsNote)}</p>`
   +`<p class="builder-yaml-schema-failed" id="builder-yaml-schema-failed" hidden>${builderYamlEscape(BUILDER_YAML_TEXT.schemaFailed)} <button type="button" class="button secondary" id="builder-yaml-schema-retry">Try again</button></p>`
   +`<ol id="builder-yaml-list" class="builder-yaml-list"></ol>`
@@ -209,6 +210,12 @@ function builderYamlCheckContext(choice){return {version:builderYaml.vmVersion,s
 // and the findings for a tree with whatever schema has arrived.
 function builderYamlLocate(text){const e=builderYaml.editor;if(!e||typeof e.locateYaml!=='function')return null;return e.locateYaml(String(text??''))||null;}
 function builderYamlRun(tree){const choice=builderYamlChoice();return builderCheck(tree,builderYamlSchemaNow(),builderYamlCheckContext(choice));}
+// The count is rewritten after every typing pause, so it is not a live region; the same sentence is spoken once here after Apply,
+// Revert and when the panel opens.
+function builderYamlAnnounce(){
+ const el=builderYamlEl('builder-yaml-announce');if(!el)return;
+ el.textContent='';el.textContent=builderYaml.countText||'';
+}
 function builderYamlCount(text,warn){
  const tone=warn?'builder-yaml-status is-warn':'';
  if(text===builderYaml.countText&&tone===builderYaml.countTone)return;builderYaml.countText=text;builderYaml.countTone=tone;
@@ -232,7 +239,7 @@ function builderYamlRenderList(list){
   if(f.line>0){
    const b=builderYamlMake('button','builder-yaml-problem');b.setAttribute('type','button');b.setAttribute('data-line',String(f.line));b.setAttribute('data-code',String(f.code||''));
    if(had&&!had.list&&!again&&String(f.line)===had.line&&String(f.code||'')===had.code)again=b;
-   b.append(builderYamlMake('span','builder-yaml-sev',f.severity==='error'?'Error':'Warning'),' Line '+f.line+': '+f.message);li.append(b);
+   b.append(builderYamlMake('span','builder-yaml-sev',f.severity==='error'?'Error':f.severity==='info'?'Note':'Warning'),' Line '+f.line+': '+f.message);li.append(b);
   }else li.append(f.message);
   ol.append(li);
  }
@@ -318,7 +325,7 @@ function builderYamlApply(){
   if(builderYaml.dirty)builderYamlShow(BUILDER_YAML_TEXT.appliedNewer,'ok');
   else if(errors>0)builderYamlShow('Applied · '+errors+' error'+(errors===1?' remains':'s remain')+' (see Problems)','warn');
   else builderYamlShow(BUILDER_YAML_TEXT.applied,'ok');
-  builderYamlGutter();builderYamlButtons();
+  builderYamlGutter();builderYamlButtons();builderYamlAnnounce();
   if(typeof builderYaml.onApplied==='function')builderYaml.onApplied(text);
   return true;
  },err=>{
@@ -328,7 +335,7 @@ function builderYamlApply(){
   return false;
  });
 }
-function builderYamlRevert(){if(builderYaml.applying)return;builderYamlSet(builderYamlCurrent());builderYamlShow(BUILDER_YAML_TEXT.reverted,'');builderYamlCheckList();}
+function builderYamlRevert(){if(builderYaml.applying)return;builderYamlSet(builderYamlCurrent());builderYamlShow(BUILDER_YAML_TEXT.reverted,'');builderYamlCheckList();builderYamlAnnounce();}
 function builderYamlKey(event){
  if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();builderYamlApply();}
 }
@@ -343,9 +350,12 @@ function builderYamlPanelToggle(open){
  const panel=builderYamlEl('builder-yaml-panel');if(!panel)return false;
  const next=open===undefined?!!panel.hidden:!!open;
  if(next&&!builderYaml.dirty&&!builderYaml.applying)builderYamlSet(builderYamlCurrent());
+ // Whether focus sits inside the panel is read before it is hidden: a hidden element may already have lost it.
+ const active=typeof document!=='undefined'&&document?document.activeElement:null;
+ const hadFocus=!next&&!!active&&typeof panel.contains==='function'&&panel.contains(active);
  panel.hidden=!next;builderYaml.open=next;
- if(next){const box=builderYamlEl('builder-yaml-editor');if(box&&typeof box.focus==='function')box.focus();builderYamlCheckList();}
- if(typeof builderYaml.onToggle==='function')builderYaml.onToggle(next);
+ if(next){const box=builderYamlEl('builder-yaml-editor');if(box&&typeof box.focus==='function')box.focus();builderYamlCheckList();builderYamlAnnounce();}
+ if(typeof builderYaml.onToggle==='function')builderYaml.onToggle(next,hadFocus);
  return next;
 }
 // options: editor (the adapter's handle, or null until the editor is attached), getDraftYaml (the page's

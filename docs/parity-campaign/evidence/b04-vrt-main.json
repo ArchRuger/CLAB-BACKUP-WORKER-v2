@@ -1,0 +1,305 @@
+{
+ "node": "vrt",
+ "address": "172.20.20.112",
+ "phase": "main",
+ "version": [
+  "Model: vmx",
+  "Junos: 26.2R1.7"
+ ],
+ "driver": "app/restore_junos.py",
+ "driver_source": {
+  "git_head": "4d63057e4f58",
+  "uncommitted_changes_to_the_driver": false
+ },
+ "token_prefix": "clabmgr-6ae00597",
+ "steps": [
+  {
+   "utc": "01:59:52",
+   "step": "SSH, version and readiness: an ordinary CLI session answers show version",
+   "ok": true,
+   "boot": "2026-10-27 01:42:14 UTC",
+   "pending_before": [
+    "0   2026-10-27 01:55:23 UTC by root via other"
+   ]
+  },
+  {
+   "utc": "02:01:17",
+   "step": "configuration A committed (plain session) and captured independently in both forms",
+   "ok": true,
+   "errors": 0,
+   "marks": "A",
+   "hierarchical_lines": 75,
+   "set_statements": 17,
+   "security": {}
+  },
+  {
+   "utc": "02:01:32",
+   "step": "configuration B committed: changed values, a deleted statement and additions",
+   "ok": true,
+   "errors": 0,
+   "marks": "B",
+   "missing_vs_A": 3,
+   "extra_vs_A": 4,
+   "security": {}
+  },
+  {
+   "utc": "02:02:17",
+   "step": "BtoA: apply armed under its token",
+   "ok": true,
+   "seconds": 44.2,
+   "no_op": false,
+   "root_authentication": "present",
+   "diff_lines": 16,
+   "diff": "[edit system login]\n-   message \"B04-B configuration\";\n+   message \"B04-A configuration\";\n[edit interfaces ge-0/0/0]\n-   description \"B04-B changed\";\n+   description \"B04-A uplink\";\n[edit]\n-  policy-options {\n-      prefix-list B04-B-ONLY {\n-          198.51.100.0/24;\n-      }\n-  }\n[edit routing-options static]\n+    route 192.0.2.200/32 discard;\n-    route 198.51.100.0/24 discard;\n\n[edit]"
+  },
+  {
+   "utc": "02:02:17",
+   "step": "BtoA: device shows entry 0 with the token and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-10-27 02:02:13 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ae00597btoa",
+    "rollback pending"
+   ]
+  },
+  {
+   "utc": "02:02:17",
+   "step": "BtoA: driver.pending() returns the token",
+   "ok": true
+  },
+  {
+   "utc": "02:02:20",
+   "step": "BtoA: confirm from a fresh connection",
+   "ok": true,
+   "seconds": 3.6
+  },
+  {
+   "utc": "02:02:21",
+   "step": "BtoA: nothing pending afterwards",
+   "ok": true
+  },
+  {
+   "utc": "02:02:22",
+   "step": "B -> A: active configuration equals A by the independent comparator, every B-only statement gone",
+   "ok": true,
+   "missing": 0,
+   "extra": 0,
+   "marks": "A",
+   "security": {}
+  },
+  {
+   "utc": "02:02:23",
+   "step": "the product's own capture and comparator agree",
+   "ok": true,
+   "missing": 0,
+   "extra": 0
+  },
+  {
+   "utc": "02:02:24",
+   "step": "confirm with another token on a quiet node is refused",
+   "ok": true,
+   "message": "Nothing is waiting for confirmation on this node: the change was already undone or never armed."
+  },
+  {
+   "utc": "02:02:53",
+   "step": "AtoB: apply armed under its token",
+   "ok": true,
+   "seconds": 29.0,
+   "no_op": false,
+   "root_authentication": "present",
+   "diff_lines": 16,
+   "diff": "[edit system login]\n-   message \"B04-A configuration\";\n+   message \"B04-B configuration\";\n[edit interfaces ge-0/0/0]\n-   description \"B04-A uplink\";\n+   description \"B04-B changed\";\n[edit]\n+  policy-options {\n+      prefix-list B04-B-ONLY {\n+          198.51.100.0/24;\n+      }\n+  }\n[edit routing-options static]\n-    route 192.0.2.200/32 discard;\n+    route 198.51.100.0/24 discard;\n\n[edit]"
+  },
+  {
+   "utc": "02:02:53",
+   "step": "AtoB: device shows entry 0 with the token and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-10-27 02:02:50 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ae00597atob",
+    "rollback pending"
+   ]
+  },
+  {
+   "utc": "02:02:54",
+   "step": "AtoB: driver.pending() returns the token",
+   "ok": true
+  },
+  {
+   "utc": "02:02:56",
+   "step": "AtoB: confirm from a fresh connection",
+   "ok": true,
+   "seconds": 3.7
+  },
+  {
+   "utc": "02:02:57",
+   "step": "AtoB: nothing pending afterwards",
+   "ok": true
+  },
+  {
+   "utc": "02:02:59",
+   "step": "back to back 1/2: A -> B equals B (independent)",
+   "ok": true,
+   "missing": 0,
+   "extra": 0,
+   "security": {}
+  },
+  {
+   "utc": "02:03:29",
+   "step": "BtoA2: apply armed under its token",
+   "ok": true,
+   "seconds": 29.0,
+   "no_op": false,
+   "root_authentication": "present",
+   "diff_lines": 16,
+   "diff": "[edit system login]\n-   message \"B04-B configuration\";\n+   message \"B04-A configuration\";\n[edit interfaces ge-0/0/0]\n-   description \"B04-B changed\";\n+   description \"B04-A uplink\";\n[edit]\n-  policy-options {\n-      prefix-list B04-B-ONLY {\n-          198.51.100.0/24;\n-      }\n-  }\n[edit routing-options static]\n+    route 192.0.2.200/32 discard;\n-    route 198.51.100.0/24 discard;\n\n[edit]"
+  },
+  {
+   "utc": "02:03:29",
+   "step": "BtoA2: device shows entry 0 with the token and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-10-27 02:03:25 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ae00597btoa2",
+    "rollback pending"
+   ]
+  },
+  {
+   "utc": "02:03:29",
+   "step": "BtoA2: driver.pending() returns the token",
+   "ok": true
+  },
+  {
+   "utc": "02:03:31",
+   "step": "BtoA2: confirm from a fresh connection",
+   "ok": true,
+   "seconds": 3.4
+  },
+  {
+   "utc": "02:03:32",
+   "step": "BtoA2: nothing pending afterwards",
+   "ok": true
+  },
+  {
+   "utc": "02:03:33",
+   "step": "back to back 2/2: B -> A equals A (independent)",
+   "ok": true,
+   "missing": 0,
+   "extra": 0,
+   "seconds_for_both": 69.5,
+   "security": {}
+  },
+  {
+   "utc": "02:04:04",
+   "step": "AtoA: apply armed under its token",
+   "ok": true,
+   "seconds": 29.9,
+   "no_op": true,
+   "root_authentication": "present",
+   "diff_lines": 1,
+   "diff": "\n[edit]"
+  },
+  {
+   "utc": "02:04:04",
+   "step": "AtoA: device shows entry 0 with the token and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-10-27 02:04:00 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ae00597atoa",
+    "rollback pending"
+   ]
+  },
+  {
+   "utc": "02:04:04",
+   "step": "AtoA: driver.pending() returns the token",
+   "ok": true
+  },
+  {
+   "utc": "02:04:07",
+   "step": "AtoA: confirm from a fresh connection",
+   "ok": true,
+   "seconds": 4.2
+  },
+  {
+   "utc": "02:04:08",
+   "step": "AtoA: nothing pending afterwards",
+   "ok": true
+  },
+  {
+   "utc": "02:04:09",
+   "step": "A onto A: the device reported no change; still A",
+   "ok": true,
+   "missing": 0,
+   "extra": 0
+  },
+  {
+   "utc": "02:04:19",
+   "step": "a dropped exclusive session leaves nothing in the shared candidate",
+   "ok": true
+  },
+  {
+   "utc": "02:04:19",
+   "step": "... and nothing of it became active",
+   "ok": true
+  },
+  {
+   "utc": "02:04:26",
+   "step": "driver.blocked() names the foreign uncommitted edit",
+   "ok": true
+  },
+  {
+   "utc": "02:04:27",
+   "step": "apply refuses while a foreign uncommitted edit exists",
+   "ok": true,
+   "message": "Someone has uncommitted configuration changes open on this node. The restore was not started, so their work is not lost."
+  },
+  {
+   "utc": "02:04:28",
+   "step": "the bystander's edit is still in the candidate, uncommitted",
+   "ok": true
+  },
+  {
+   "utc": "02:04:31",
+   "step": "... and was never activated",
+   "ok": true
+  },
+  {
+   "utc": "02:04:40",
+   "step": "driver.pending() reports a foreign pending change without an identity",
+   "ok": true
+  },
+  {
+   "utc": "02:04:40",
+   "step": "apply refuses while a foreign confirmation is pending",
+   "ok": true,
+   "message": "Another change is waiting for confirmation on this node; this restore was not started."
+  },
+  {
+   "utc": "02:04:41",
+   "step": "confirm refuses while a foreign confirmation is pending",
+   "ok": true,
+   "message": "A different change is waiting for confirmation on this node; it was left alone."
+  },
+  {
+   "utc": "02:04:42",
+   "step": "the foreign change is still pending, untouched",
+   "ok": true
+  },
+  {
+   "utc": "02:06:54",
+   "step": "the foreign 2-minute timer rolled back by itself; node on A (independent), nothing pending",
+   "ok": true,
+   "missing": 0,
+   "extra": 0,
+   "waited_s": 132
+  },
+  {
+   "utc": "02:06:55",
+   "step": "the NOS never rebooted during the phase",
+   "ok": true,
+   "boot_before": "2026-10-27 01:42:14 UTC"
+  }
+ ],
+ "ok": true,
+ "finished_utc": "2026-10-27T02:06:58Z"
+}

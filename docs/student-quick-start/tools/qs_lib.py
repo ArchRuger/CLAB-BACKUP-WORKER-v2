@@ -1,20 +1,20 @@
-"""Shared Playwright/API helpers for the student quick-start scenario captures.
+"""Shared Playwright/API helpers for the student quick-start scenario captures (current UI, release 1.31.6).
 
-Thin, reusable layer over the real page flows (modelled on
-docs/save-location-fix/tools/qa_lib.py) so each scenario script stays short and every screenshot
-and evidence record is produced the same way. Nothing here talks to the Store directly; every call
-either drives the real page or issues the same same-origin request the page itself issues.
+Thin layer over the real page flows so each scenario script stays short and every screenshot and evidence
+record is produced the same way. Nothing here talks to the Store directly; every call either drives the real
+page or issues the same same-origin request the page itself issues (read only).
+
+Run with the Playwright interpreter:  /home/archtop/pw-venv/bin/python docs/student-quick-start/tools/capture_scenario_a.py
+Waits are explicit UI conditions (a selector, a visible text), never network-idle: the page polls.
 """
 import json
 import pathlib
+import re
 import time
 
 BASE = 'http://127.0.0.1:8081'
 VIEWPORT = {'width': 1366, 'height': 900}
 DEVICE_SCALE_FACTOR = 2
-FINAL_GIT_JOB_STATES = ('synced', 'unchanged', 'committed', 'review_pending', 'push_pending',
-                        'export_pending', 'failed', 'capture_incomplete', 'dismissed', 'interrupted')
-ACTIVE_RESTORE_STATES = ('queued', 'preflight', 'backing_up', 'applying', 'confirming', 'verifying')
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent  # docs/student-quick-start
@@ -34,12 +34,8 @@ def new_context(playwright, headless=True):
 
 
 def settle(page, extra_ms=600):
-    """Wait for the page to go quiet before a screenshot: network idle, then a fixed pause so a
-    just-opened dialog has finished animating and any poll-driven re-render has landed."""
-    try:
-        page.wait_for_load_state('networkidle', timeout=15000)
-    except Exception:
-        pass
+    """A short fixed pause so a just-opened dialog has finished animating and a poll-driven re-render has
+    landed. Always call it after waiting for the real condition; it is not a substitute for one."""
     page.wait_for_timeout(extra_ms)
 
 
@@ -53,38 +49,60 @@ def api(page, method, path, body=None):
     return page.evaluate(script, {'path': path, 'method': method, 'body': body})
 
 
-def poll_git_job(page, job_id, timeout=180):
-    deadline = time.time() + timeout
-    job = None
-    while time.time() < deadline:
-        job = api(page, 'GET', f'/api/git/jobs/{job_id}')['body']
-        if job and job.get('status') in FINAL_GIT_JOB_STATES:
-            break
+def manager_busy():
+    """Names what other work holds the manager's shared guard (`operation_busy`), or [] when it is idle.
+    Other campaign workers share this manager: a restore, a save or a lab operation of theirs makes every
+    deploy, save and load of ours wait ("Wait for the current lab operation to finish.")."""
+    import urllib.request
+    with urllib.request.urlopen(BASE + '/api/state', timeout=20) as resp:
+        d = json.load(resp)
+    busy = []
+    for o in d.get('operations', []):
+        if o.get('status') in ('queued', 'running', 'stopping'):
+            busy.append(f"operation {o.get('action')} {o.get('name')}")
+    for j in d.get('restore_jobs', []):
+        if j.get('status') in ('queued', 'preflight', 'backing_up', 'applying', 'confirming', 'verifying', 'rechecking'):
+            busy.append(f"load {j.get('id', '')[:6]}")
+    for j in d.get('git_jobs', []):
+        if j.get('status') in ('queued', 'capturing', 'exporting', 'pushing', 'updating', 'moving'):
+            busy.append(f"save {j.get('id', '')[:6]} ({j.get('status')})")
+    for j in d.get('design_jobs', []):
+        if j.get('status') in ('queued', 'applying', 'running'):
+            busy.append('design apply')
+    return busy
+
+
+def wait_idle(timeout=900, quiet=6):
+    """Wait until the manager has been idle for `quiet` seconds (see manager_busy). Returns the seconds waited."""
+    t0 = time.time()
+    idle_since = None
+    while time.time() - t0 < timeout:
+        if manager_busy():
+            idle_since = None
+        elif idle_since is None:
+            idle_since = time.time()
+        elif time.time() - idle_since >= quiet:
+            return round(time.time() - t0 - quiet, 1)
         time.sleep(2)
-    return job
+    raise TimeoutError('the manager stayed busy: ' + ', '.join(manager_busy()))
 
 
-def poll_restore_job(page, job_id, timeout=900):
+def wait_text(page, selector, pattern, timeout=60, interval=1.0):
+    """Poll an element's text until it matches the regex; returns the text or raises TimeoutError.
+    (page.wait_for_function cannot be used: the page's CSP forbids unsafe-eval.)"""
     deadline = time.time() + timeout
-    job = None
+    last = ''
     while time.time() < deadline:
-        job = api(page, 'GET', f'/api/restore/jobs/{job_id}')['body']
-        if job and job.get('status') not in ACTIVE_RESTORE_STATES:
-            break
-        time.sleep(4)
-    return job
-
-
-def upload_review(page, timeout=30000):
-    """Click "Upload these changes" in an open review dialog; returns (job_id, retry_response)."""
-    import re
-    with page.expect_response(
-        lambda r: r.request.method == 'POST' and re.search(r'/api/git/jobs/[0-9a-f]+/retry$', r.url),
-        timeout=timeout,
-    ) as resp_info:
-        page.click('#git-review-push')
-    retry_resp = resp_info.value.json()
-    return retry_resp.get('id'), retry_resp
+        loc = page.locator(selector)
+        if loc.count():
+            try:
+                last = loc.first.inner_text(timeout=2000)
+            except Exception:
+                last = ''
+            if re.search(pattern, last):
+                return last
+        page.wait_for_timeout(int(interval * 1000))
+    raise TimeoutError(f'{selector!r} never matched {pattern!r}; last text {last!r}')
 
 
 class StepRecorder:
@@ -172,6 +190,17 @@ class StepRecorder:
         self.write()
         raise RuntimeError(f"Step {record['step']} ({record['title']}) FAILED: {message}")
 
+    @staticmethod
+    def scrub(value):
+        """Evidence keeps controlled text only: a device's password hash (shown by the save review's diff) is cut."""
+        if isinstance(value, str):
+            return re.sub(r'(secret|password) (sha512|5|7|0) \S+', r'\1 \2 <hash>', re.sub(r'\$6\$\S+', '<hash>', value))
+        if isinstance(value, list):
+            return [StepRecorder.scrub(v) for v in value]
+        if isinstance(value, dict):
+            return {k: StepRecorder.scrub(v) for k, v in value.items()}
+        return value
+
     def write(self):
         finished_utc = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         payload = {
@@ -179,7 +208,7 @@ class StepRecorder:
             'manager_base': BASE,
             'started_utc': self.started_utc,
             'finished_utc': finished_utc,
-            'steps': self.steps,
+            'steps': self.scrub(self.steps),
         }
         with open(self.evidence_json, 'w') as fh:
             json.dump(payload, fh, indent=1)
@@ -222,5 +251,7 @@ class StepRecorder:
                 for n in step['notes']:
                     lines.append(f"- {n}")
             lines.append('')
+        text = '\n'.join(lines).replace('\r', '')
+        text = '\n'.join(line.rstrip() for line in text.split('\n'))
         with open(self.evidence_md, 'w') as fh:
-            fh.write('\n'.join(lines) + '\n')
+            fh.write(text + '\n')

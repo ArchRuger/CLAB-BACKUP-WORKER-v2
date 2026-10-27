@@ -1,217 +1,690 @@
 [
-  {
-    "out": "a01-home.png",
-    "src": "raw/a1-home-full.png",
-    "crop": [0, 0, 2732, 1190],
-    "callouts": [
-      {"n": 1, "x": 70, "y": 505, "label": "Choose a file on the lab VM…", "anchor": "top-left"},
-      {"n": 2, "x": 1430, "y": 505, "label": "Open the lab builder", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "a02-topology-file.png",
-    "src": "raw/a2-topology-file-dialog.png",
-    "crop": [[0, 0, 2240, 230], [0, 1120, 2240, 220]],
-    "callouts": [
-      {"n": 1, "x": 1138, "y": 1195, "label": "Deploy lab", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "a02-start-review.png",
-    "src": "raw/a2-start-review-dialog.png",
-    "crop": [0, 14, 2240, 742],
-    "callouts": [
-      {"n": 1, "x": 1995, "y": 580, "label": "Start lab", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "a03-devices-starting.png",
-    "src": "raw/a3-devices-starting-full.png",
-    "crop": [0, 525, 2732, 475],
-    "scale": 0.55
-  },
-  {
-    "out": "a03-devices-ready.png",
-    "src": "raw/a3-devices-ready-full.png",
-    "crop": [0, 385, 2732, 375],
-    "scale": 0.55,
-    "callouts": [
-      {"n": 1, "x": 2280, "y": 555, "label": "Open CLI (r1)", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "a04-terminal-show.png",
-    "src": "raw/a4-r1-terminal-el.png",
-    "crop": [[0, 0, 1500, 90], [0, 665, 1500, 170]]
-  },
-  {
-    "out": "a05-connect-dialog.png",
-    "src": "raw/a5-connect-dialog-filled-el.png",
-    "callouts": [
-      {"n": 1, "x": 44, "y": 227, "label": "Repository URL", "anchor": "top-left"},
-      {"n": 2, "x": 44, "y": 365, "label": "Folder for this lab", "anchor": "top-left"},
-      {"n": 3, "x": 45, "y": 578, "label": "Acknowledgement", "anchor": "top-left"},
-      {"n": 4, "x": 1845, "y": 733, "label": "Connect repository", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "a05-progress-connected.png",
-    "src": "raw/a5-progress-connected-full.png",
-    "crop": [0, 400, 2732, 1150],
-    "scale": 0.55,
-    "callouts": [
-      {"n": 1, "x": 60, "y": 442, "label": "Destination line", "anchor": "top-left"},
-      {"n": 2, "x": 2325, "y": 1425, "label": "Apply to running lab… (Starting state)", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "a06-apply-review.png",
-    "src": "raw/a6-apply-start-review-el.png",
-    "crop": [[0, 0, 2240, 895], [0, 920, 2240, 128]],
-    "callouts": [
-      {"n": 1, "x": 44, "y": 212, "label": "Source line", "anchor": "top-left"},
-      {"n": 2, "x": 44, "y": 853, "label": "Acknowledgement", "anchor": "top-left"},
-      {"n": 3, "x": 1785, "y": 938, "label": "Replace configurations", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "a06-apply-result.png",
-    "src": "raw/a6-apply-start-result-el.png"
-  },
-  {
-    "out": "a07-terminal-loopback.png",
-    "src": "raw/a7-r1-loopback-terminal-el.png",
-    "crop": [0, 0, 1500, 590]
-  },
-  {
-    "out": "a08-review-before-upload.png",
-    "src": "raw/a8-save-review-el.png",
-    "callouts": [
-      {"n": 1, "x": 38, "y": 355, "label": "Change list", "anchor": "top-left"},
-      {"n": 2, "x": 1637, "y": 836, "label": "Not now — keep it on the VM", "anchor": "top-left"},
-      {"n": 3, "x": 2103, "y": 830, "label": "Upload these changes", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "a08-saved-to-git.png",
-    "src": "raw/a8-progress-after-save-full.png",
-    "crop": [0, 380, 2732, 640],
-    "scale": 0.55
-  },
-  {
-    "out": "a09-checkpoint-dialog.png",
-    "src": "raw/a9-checkpoint-dialog-el.png"
-  },
-  {
-    "out": "a09-saved-versions.png",
-    "src": "raw/a9-saved-versions-with-checkpoint-el.png",
-    "scale": 0.55
-  },
-  {
-    "out": "a10-broken-apply-result.png",
-    "src": "raw/a10-apply-broken-result-el.png"
-  },
-  {
-    "out": "a10-latest-apply-result.png",
-    "src": "raw/a10-apply-latest-result-el.png",
-    "crop": [0, 14, 2240, 666]
-  },
-  {
-    "out": "a11-home-card.png",
-    "src": "raw/a11-home-fresh-lab-card-el.png"
-  },
-  {
-    "out": "a11-lab-actions.png",
-    "src": "raw/a11-lab-actions-menu-el.png",
-    "callouts": [
-      {"n": 1, "x": 240, "y": 175, "label": "Stop devices", "anchor": "center"},
-      {"n": 2, "x": 235, "y": 838, "label": "Destroy lab…", "anchor": "center"},
-      {"n": 3, "x": 440, "y": 912, "label": "Remove from this manager…", "anchor": "center"}
-    ]
-  },
-  {
-    "out": "b01-builder-new-lab.png",
-    "src": "raw/b1-new-lab-dialog-el.png",
-    "callouts": [
-      {"n": 1, "x": 44, "y": 150, "label": "Lab name", "anchor": "top-left"},
-      {"n": 2, "x": 44, "y": 355, "label": "Start from", "anchor": "top-left"},
-      {"n": 3, "x": 44, "y": 503, "label": "Device type for the starter", "anchor": "top-left"},
-      {"n": 4, "x": 1930, "y": 850, "label": "Create draft", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "b02-node-editor.png",
-    "src": "raw/b2-node-editor-r1-el.png",
-    "callouts": [
-      {"n": 1, "x": 30, "y": 330, "label": "Node Name", "anchor": "top-left"},
-      {"n": 2, "x": 30, "y": 590, "label": "Image", "anchor": "top-left"},
-      {"n": 3, "x": 510, "y": 590, "label": "Version", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "b02-builder-topology.png",
-    "src": "raw/b2-canvas-finished-el.png",
-    "crop": [200, 740, 1300, 320]
-  },
-  {
-    "out": "b03-save-review.png",
-    "src": "raw/b3-save-review-el.png",
-    "crop": [[0, 0, 2240, 230], [0, 1130, 2240, 210]],
-    "callouts": [
-      {"n": 1, "x": 1990, "y": 1195, "label": "Save lab", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "b04-devices-ready.png",
-    "src": "raw/b4-r1-ping-terminal-el.png",
-    "crop": [0, 0, 1300, 430]
-  },
-  {
-    "out": "b06-connect-dialog.png",
-    "src": "raw/b6-connect-dialog-filled-el.png",
-    "callouts": [
-      {"n": 1, "x": 44, "y": 227, "label": "Repository URL", "anchor": "top-left"},
-      {"n": 2, "x": 44, "y": 365, "label": "Folder for this lab", "anchor": "top-left"},
-      {"n": 3, "x": 45, "y": 578, "label": "Acknowledgement", "anchor": "top-left"},
-      {"n": 4, "x": 1845, "y": 733, "label": "Connect repository", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "b06-saved-to-git.png",
-    "src": "raw/b6-progress-after-save-full.png",
-    "crop": [0, 380, 2732, 600],
-    "scale": 0.55
-  },
-  {
-    "out": "b07-terminal-git-push.png",
-    "src": "raw/b7-terminal-git-push.png",
-    "crop": [0, 0, 2064, 720]
-  },
-  {
-    "out": "b08-remote-tree.png",
-    "src": "raw/b8-browse-repository-el.png",
-    "crop": [0, 195, 2468, 860],
-    "scale": 0.6,
-    "callouts": [
-      {"n": 1, "x": 468, "y": 712, "label": "my-first-lab.clab.yml (topology file)", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "b09-checkpoint.png",
-    "src": "raw/b9-saved-versions-with-checkpoint-el.png",
-    "scale": 0.55
-  },
-  {
-    "out": "b10-fresh-deploy.png",
-    "src": "raw/b10-redeploy-topology-file-el.png",
-    "crop": [[0, 0, 2240, 230], [0, 1120, 2240, 220]],
-    "callouts": [
-      {"n": 1, "x": 44, "y": 150, "label": "File location on the VM", "anchor": "top-left"},
-      {"n": 2, "x": 1290, "y": 1200, "label": "Deploy lab", "anchor": "top-left"}
-    ]
-  },
-  {
-    "out": "b10-apply-result.png",
-    "src": "raw/b10-apply-latest-result-el.png"
-  }
+ {
+  "out": "a01-home.png",
+  "src": "raw/a1-home-full.png",
+  "crop": [
+   0,
+   0,
+   2732,
+   717
+  ],
+  "scale": 0.6,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 94,
+    "y": 507,
+    "label": "Choose a file on the lab VM\u2026"
+   },
+   {
+    "n": 2,
+    "x": 1429,
+    "y": 507,
+    "label": "Open the lab builder"
+   }
+  ]
+ },
+ {
+  "out": "a02-topology-file.png",
+  "src": "raw/a2-topology-file.png",
+  "crop": [
+   [
+    0,
+    0,
+    2240,
+    260
+   ],
+   [
+    0,
+    1196,
+    2240,
+    92
+   ]
+  ],
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1294,
+    "y": 1200,
+    "label": "Deploy lab"
+   }
+  ]
+ },
+ {
+  "out": "a02-start-review.png",
+  "src": "raw/a2-start-review.png",
+  "crop": [
+   0,
+   0,
+   2240,
+   896
+  ],
+  "scale": 0.8,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1992,
+    "y": 734,
+    "label": "Start lab"
+   }
+  ]
+ },
+ {
+  "out": "a03-devices-ready.png",
+  "src": "raw/a3-devices-ready-full.png",
+  "crop": [
+   0,
+   123,
+   2732,
+   655
+  ],
+  "scale": 0.55,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 2282,
+    "y": 552,
+    "label": "Open CLI (r1)"
+   }
+  ]
+ },
+ {
+  "out": "a04-terminal-show.png",
+  "src": "raw/a4-r1-terminal.png",
+  "crop": [
+   0,
+   660,
+   1700,
+   420
+  ]
+ },
+ {
+  "out": "a05-connect-drawer.png",
+  "src": "raw/a5-connect-drawer.png",
+  "crop": [
+   0,
+   0,
+   1200,
+   1030
+  ],
+  "scale": 0.8,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 50,
+    "y": 298,
+    "label": "Repository address"
+   },
+   {
+    "n": 2,
+    "x": 50,
+    "y": 597,
+    "label": "Folder"
+   },
+   {
+    "n": 3,
+    "x": 934,
+    "y": 872,
+    "label": "Save here"
+   }
+  ]
+ },
+ {
+  "out": "a05-first-save.png",
+  "src": "raw/a5-first-save-panel-full.png",
+  "crop": [
+   956,
+   123,
+   1776,
+   930
+  ],
+  "scale": 0.7,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1184,
+    "y": 516,
+    "label": "Upload"
+   },
+   {
+    "n": 2,
+    "x": 1621,
+    "y": 535,
+    "label": "See changes"
+   }
+  ]
+ },
+ {
+  "out": "a06-load-confirm.png",
+  "src": "raw/a6-start-confirm-full.png",
+  "crop": [
+   956,
+   123,
+   1776,
+   800
+  ],
+  "scale": 0.7,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1370,
+    "y": 492,
+    "label": "device rows"
+   },
+   {
+    "n": 2,
+    "x": 1370,
+    "y": 779,
+    "label": "red Load"
+   }
+  ]
+ },
+ {
+  "out": "a06-start-loaded.png",
+  "src": "raw/a6-start-loaded-full.png",
+  "crop": [
+   956,
+   123,
+   1776,
+   800
+  ],
+  "scale": 0.7
+ },
+ {
+  "out": "a07-terminal-loopback.png",
+  "src": "raw/a7-r1-loopback.png",
+  "crop": [
+   0,
+   0,
+   1500,
+   600
+  ]
+ },
+ {
+  "out": "a08-save-panel.png",
+  "src": "raw/a8-save2-panel-full.png",
+  "crop": [
+   956,
+   123,
+   1776,
+   930
+  ],
+  "scale": 0.7,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1184,
+    "y": 516,
+    "label": "Upload"
+   },
+   {
+    "n": 2,
+    "x": 1621,
+    "y": 535,
+    "label": "See changes"
+   }
+  ]
+ },
+ {
+  "out": "a08-see-changes.png",
+  "src": "raw/a8-see-changes.png",
+  "crop": [
+   0,
+   0,
+   1520,
+   600
+  ],
+  "scale": 0.7
+ },
+ {
+  "out": "a09-name-and-keep.png",
+  "src": "raw/a9-name-and-keep-full.png",
+  "crop": [
+   956,
+   123,
+   1776,
+   800
+  ],
+  "scale": 0.7,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1160,
+    "y": 322,
+    "label": "Name of this save"
+   },
+   {
+    "n": 2,
+    "x": 1164,
+    "y": 425,
+    "label": "Keep as a checkpoint"
+   }
+  ]
+ },
+ {
+  "out": "a09-all-versions.png",
+  "src": "raw/a9-all-versions.png",
+  "crop": [
+   0,
+   0,
+   1520,
+   1000
+  ],
+  "scale": 0.65
+ },
+ {
+  "out": "a10-broken-loaded.png",
+  "src": "raw/a10-broken-loaded-full.png",
+  "crop": [
+   0,
+   123,
+   2732,
+   1290
+  ],
+  "scale": 0.55,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1220,
+    "y": 530,
+    "label": "Undo this load"
+   }
+  ]
+ },
+ {
+  "out": "a10-recovered.png",
+  "src": "raw/a10-recovered-full.png",
+  "crop": [
+   956,
+   123,
+   1776,
+   800
+  ],
+  "scale": 0.7
+ },
+ {
+  "out": "a11-home-card.png",
+  "src": "raw/a11-home-card.png",
+  "scale": 0.5
+ },
+ {
+  "out": "a11-lab-actions.png",
+  "src": "raw/a11-lab-actions.png",
+  "scale": 1.0,
+  "crop": [
+   0,
+   0,
+   482,
+   1010
+  ]
+ },
+ {
+  "out": "a11-destroy-review.png",
+  "src": "raw/a11-destroy-review.png",
+  "scale": 0.75
+ },
+ {
+  "out": "b01-new-lab.png",
+  "src": "raw/b1-new-lab-dialog.png",
+  "scale": 0.8,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 50,
+    "y": 168,
+    "label": "Lab name"
+   },
+   {
+    "n": 2,
+    "x": 50,
+    "y": 400,
+    "label": "Lab folder on the VM"
+   },
+   {
+    "n": 3,
+    "x": 1938,
+    "y": 510,
+    "label": "Create draft"
+   }
+  ]
+ },
+ {
+  "out": "b01-blank-canvas.png",
+  "src": "raw/b1-blank-canvas-full.png",
+  "scale": 0.5,
+  "crop": [
+   0,
+   0,
+   2732,
+   1250
+  ]
+ },
+ {
+  "out": "b02-node-editor.png",
+  "src": "raw/b2-node-editor-r1.png",
+  "scale": 0.6,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 32,
+    "y": 372,
+    "label": "Node Name",
+    "anchor": "center"
+   },
+   {
+    "n": 2,
+    "x": 686,
+    "y": 268,
+    "label": "Network tab",
+    "anchor": "center"
+   },
+   {
+    "n": 3,
+    "x": 848,
+    "y": 1419,
+    "label": "Apply",
+    "anchor": "top-left"
+   }
+  ],
+  "crop": [
+   [
+    0,
+    0,
+    1000,
+    740
+   ],
+   [
+    0,
+    1398,
+    1000,
+    92
+   ]
+  ]
+ },
+ {
+  "out": "b02-canvas.png",
+  "src": "raw/b2-canvas-finished.png",
+  "crop": [
+   0,
+   400,
+   1735,
+   730
+  ],
+  "scale": 0.55
+ },
+ {
+  "out": "b02-yaml.png",
+  "src": "raw/b2-yaml-full.png",
+  "crop": [
+   1612,
+   185,
+   1120,
+   860
+  ],
+  "scale": 0.6
+ },
+ {
+  "out": "b03-save-review.png",
+  "src": "raw/b3-save-review.png",
+  "crop": [
+   [
+    0,
+    0,
+    2240,
+    760
+   ],
+   [
+    0,
+    1110,
+    2240,
+    110
+   ]
+  ],
+  "scale": 0.8,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1996,
+    "y": 1137,
+    "label": "Save lab"
+   }
+  ]
+ },
+ {
+  "out": "b03-save-result.png",
+  "src": "raw/b3-save-result.png",
+  "scale": 0.8,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 630,
+    "y": 690,
+    "label": "Deploy now",
+    "anchor": "top-left"
+   }
+  ]
+ },
+ {
+  "out": "b04-ping.png",
+  "src": "raw/b4-ping.png",
+  "crop": [
+   0,
+   0,
+   1700,
+   420
+  ]
+ },
+ {
+  "out": "b06-connect-drawer.png",
+  "src": "raw/b6-connect-drawer.png",
+  "crop": [
+   0,
+   0,
+   1200,
+   1030
+  ],
+  "scale": 0.8,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 50,
+    "y": 298,
+    "label": "Repository address"
+   },
+   {
+    "n": 2,
+    "x": 50,
+    "y": 597,
+    "label": "Folder"
+   },
+   {
+    "n": 3,
+    "x": 934,
+    "y": 872,
+    "label": "Save here"
+   }
+  ]
+ },
+ {
+  "out": "b06-first-save.png",
+  "src": "raw/b6-first-save-panel-full.png",
+  "crop": [
+   956,
+   123,
+   1776,
+   930
+  ],
+  "scale": 0.7,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1184,
+    "y": 516,
+    "label": "Upload"
+   },
+   {
+    "n": 2,
+    "x": 1621,
+    "y": 535,
+    "label": "See changes"
+   }
+  ]
+ },
+ {
+  "out": "b07-remote-tree.png",
+  "src": "raw/b7-remote-tree.png",
+  "crop": [
+   0,
+   0,
+   1200,
+   900
+  ],
+  "scale": 0.7
+ },
+ {
+  "out": "b08-name-and-keep.png",
+  "src": "raw/b8-name-and-keep-full.png",
+  "crop": [
+   956,
+   123,
+   1776,
+   800
+  ],
+  "scale": 0.7,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1160,
+    "y": 322,
+    "label": "Name of this save"
+   },
+   {
+    "n": 2,
+    "x": 1164,
+    "y": 425,
+    "label": "Keep as a checkpoint"
+   }
+  ]
+ },
+ {
+  "out": "b08-all-versions.png",
+  "src": "raw/b8-all-versions.png",
+  "crop": [
+   0,
+   0,
+   1520,
+   760
+  ],
+  "scale": 0.65
+ },
+ {
+  "out": "b09-terminal-clone.png",
+  "src": "raw/b9-terminal-clone.png",
+  "crop": [
+   0,
+   0,
+   2064,
+   228
+  ],
+  "scale": 0.8
+ },
+ {
+  "out": "b09-redeploy-topology-file.png",
+  "src": "raw/b9-redeploy-topology-file.png",
+  "crop": [
+   [
+    0,
+    0,
+    2240,
+    260
+   ],
+   [
+    0,
+    1180,
+    2240,
+    110
+   ]
+  ],
+  "scale": 0.8
+ },
+ {
+  "out": "b09-rebuilt-topology.png",
+  "src": "raw/b9-rebuilt-topology-full.png",
+  "crop": [
+   0,
+   123,
+   2732,
+   1495
+  ],
+  "scale": 0.5
+ },
+ {
+  "out": "b09-reconnect-question.png",
+  "src": "raw/b9-reconnect-question.png",
+  "crop": [
+   0,
+   0,
+   1200,
+   1400
+  ],
+  "scale": 0.75,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 50,
+    "y": 298,
+    "label": "Repository"
+   },
+   {
+    "n": 2,
+    "x": 934,
+    "y": 1248,
+    "label": "Replace it"
+   }
+  ]
+ },
+ {
+  "out": "b09-load-confirm.png",
+  "src": "raw/b9-loadcp-confirm-full.png",
+  "crop": [
+   956,
+   123,
+   1776,
+   800
+  ],
+  "scale": 0.7,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1369,
+    "y": 492,
+    "label": "device rows"
+   },
+   {
+    "n": 2,
+    "x": 1369,
+    "y": 779,
+    "label": "red Load"
+   }
+  ]
+ },
+ {
+  "out": "b09-final-panel.png",
+  "src": "raw/b9-final-panel-full.png",
+  "crop": [
+   956,
+   123,
+   1776,
+   930
+  ],
+  "scale": 0.7,
+  "callouts": [
+   {
+    "n": 1,
+    "x": 1198,
+    "y": 515,
+    "label": "Upload"
+   }
+  ]
+ }
 ]

@@ -58,6 +58,8 @@ def bounded(value, default, minimum, maximum):
 # page on containerlab.dev:
 #  - juniper_vjunosswitch / vjunosevolved / vjunosrouter: https://containerlab.dev/manual/kinds/vr-vjunosswitch/
 #    (and the vjunosevolved/vjunosrouter pages next to it) — the first data interface is eth1 == ge-0/0/0.
+#  - juniper_vsrx: https://containerlab.dev/manual/kinds/vr-vsrx/ — eth1 == ge-0/0/0 (the page accepts ge, xe and et
+#    spellings for the same port).
 #  - juniper_cjunosevolved: https://containerlab.dev/manual/kinds/cjunosevolved/ — eth1-eth3 are the
 #    image's own re0-mgmt/fabric/internal interfaces; the first data port et-0/0/0 is eth4 (confirmed
 #    against a live `restore-square` deploy log).
@@ -72,6 +74,7 @@ PORT_RULES={
     'juniper_vjunosswitch':('ge-0/0/',re.compile(r'(?i)^ge-0/0/(\d+)$'),1),
     'juniper_vjunosevolved':('ge-0/0/',re.compile(r'(?i)^ge-0/0/(\d+)$'),1),
     'juniper_vjunosrouter':('ge-0/0/',re.compile(r'(?i)^ge-0/0/(\d+)$'),1),
+    'juniper_vsrx':('ge-0/0/',re.compile(r'(?i)^(?:ge|xe|et)-0/0/(\d+)$'),1),
     'juniper_cjunosevolved':('et-0/0/',re.compile(r'(?i)^et-0/0/(\d+)$'),4),
     'juniper_vqfx':('xe-0/0/',re.compile(r'(?i)^xe-0/0/(\d+)$'),1),
     'cisco_xrv9k':('Gi0/0/0/',re.compile(r'(?i)^(?:gi|gigabitethernet)0/0/0/(\d+)$'),1),

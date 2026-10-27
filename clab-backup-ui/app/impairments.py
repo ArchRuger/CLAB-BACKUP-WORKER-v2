@@ -317,6 +317,7 @@ class Impairments:
                 deployment = lab.get('deployment_name') or ''
                 source = lab.get('vm_source') if isinstance(lab.get('vm_source'), dict) else {}
                 path = lab.get('vm_project_path') or ((source.get('files') or {}).get('definition') or {}).get('path', '')
+                definition_text = lab.get('definition_yaml') or ''
             if not deployment: raise HTTPException(409, UNLINKED_SENTENCE)
             if not isinstance(path, str) or not path.startswith('/'): raise HTTPException(409, NO_FOLDER_SENTENCE)
             operations = self.operations
@@ -327,6 +328,12 @@ class Impairments:
             result = self.diagnostics.diagnose({'mode': 'apply-plan', 'name': deployment, 'path': path}, READ_TIMEOUT)
             failed = result.get('failed') if result.get('failed') in ('unsupported', 'error') else ''
             plan = public_plan(result.get('plan')) if isinstance(result.get('plan'), dict) and not failed else None
+            if plan:
+                # The per-kind limits under the restarted and recreated rows (TOPOLOGY-EDIT-DESIGN A10), from the kinds the
+                # manager registered for the lab; between a deployed save and Apply a changed kind is read at the apply
+                # review itself, which annotates from the VM file. Imported here: lab_operations is installed after this module.
+                from .lab_operations import annotate_plan
+                plan, _ = annotate_plan(definition_text, plan)
             answer = {'changed': bool(plan) and plan_changes(plan), 'plan': plan, 'failed': failed,
                       'error': strip_escapes(text_value(result.get('error'), 2000))[:300] if failed == 'error' else '', 'checked_at': time.time()}
             with operations.plan_lock:

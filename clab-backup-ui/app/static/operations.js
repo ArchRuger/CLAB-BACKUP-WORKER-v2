@@ -170,7 +170,7 @@ const opReviewCopy={
  delete:{title:n=>`Delete ${n}'s topology file from the VM?`,body:v=>`${v.path||'The topology file'} is deleted after a recovery copy is kept. The lab stays in My labs and your saves are untouched. Only possible while the lab is not running.`,confirm:'Delete file',danger:true},
  create:{title:()=>'Create this topology file on the VM?',body:v=>`Writes ${v.path||'the file'} on the VM. No devices are started until you deploy it.`,confirm:'Create file'},
  publish:{title:n=>`Save ${n} to the VM?`,body:v=>`Creates the lab folder ${v.folder||''} on the VM with the topology file and the map layout. Nothing on the VM is overwritten and no devices are started until you deploy it.`,confirm:'Save lab',quiet:true},
- revise:{title:n=>`Save the changes to ${n}?`,body:()=>'Replaces the topology file and the map layout on the VM. A copy of the previous version is kept in the lab folder. Only possible while the lab is not deployed.',confirm:'Save changes',quiet:true},
+ revise:{title:n=>`Save the changes to ${n}?`,body:()=>'Replaces the topology file and the map layout on the VM. A copy of the previous version is kept in the lab folder.',confirm:'Save changes',quiet:true},
  clone:{title:(n,v)=>`Download ${v?.options?.project||'this lab'}?`,body:v=>`Downloads ${v.options?.url||'the repository'} into the VM's lab folder as ${v.options?.project||'a new folder'}. Existing folders are never overwritten.`,confirm:'Download',hideName:true},
 };
 // The last-save line of a disruptive confirmation: when the lab was last saved (the newest save that read the devices), in red when
@@ -228,14 +228,19 @@ function opPlanChanges(plan){return !!plan&&(plan.deploys_lab===true||OP_PLAN_SE
 function opPlanMarkup(plan,failed){
  if(failed==='unsupported')return '<p class="op-notice">The installed containerlab cannot show what Apply will change; the command runs without a plan.</p>';
  if(failed||!plan||typeof plan!=='object')return '';
- const reasons=plan.reasons&&typeof plan.reasons==='object'?plan.reasons:{};
+ const reasons=plan.reasons&&typeof plan.reasons==='object'?plan.reasons:{},limits=plan.limits&&typeof plan.limits==='object'?plan.limits:{};
  const lines=plan.deploys_lab===true?'<p>The lab is not running: Apply deploys the whole topology.</p>':'';
  if(!opPlanChanges(plan))return '<p class="op-plan-empty">Nothing to apply: the running lab already matches its topology file.</p>';
  return `<div class="op-plan" id="op-plan">${lines}${OP_PLAN_SECTIONS.map(([key,heading,note])=>{
   const names=opPlanList(plan,key);if(!names.length)return '';
   const withReason=key==='restarted'||key==='recreated';
-  return `<h4>${esc(heading)} (${names.length})</h4>${note?`<p class="form-help">${esc(note)}</p>`:''}<ul>${names.map(n=>`<li>${esc(n)}${withReason&&reasons[n]?` <small class="op-plan-reason">· ${esc(reasons[n])}</small>`:''}</li>`).join('')}</ul>`;
+  return `<h4>${esc(heading)} (${names.length})</h4>${note?`<p class="form-help">${esc(note)}</p>`:''}<ul>${names.map(n=>`<li>${esc(n)}${withReason&&reasons[n]?` <small class="op-plan-reason">· ${esc(reasons[n])}</small>`:''}${withReason&&limits[n]?`<br><small class="op-plan-reason">${esc(limits[n])}</small>`:''}</li>`).join('')}</ul>`;
  }).join('')}</div>`;
+}
+// The devices whose configuration a restart or a recreation loses (the manager lists them in `backup_first`): said above the plan.
+function opBackupFirstMarkup(names){
+ const list=Array.isArray(names)?names.map(String).filter(Boolean):[];
+ return list.length?`<p class="op-notice" id="op-backup-first">Back up these devices first: ${esc(list.join(', '))} — their configuration is lost when they restart or are recreated. Save (lab header) or Back up configuration keeps it.</p>`:'';
 }
 // "r3 to create · r2 to recreate · 1 link to connect": the banner's detail line and the Deployment details line.
 function opPlanSummary(plan){
@@ -375,7 +380,7 @@ async function opReview(request,opener,extra={}){
  const generic=disruptive&&!planEmpty;
  const dialog=opDialog('operation-review',title,`${copy.hideName?'':`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All labs on the VM')}</p>`}
  ${warnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}
- ${value.action==='apply'?opPlanMarkup(value.plan,value.plan_failed):''}
+ ${value.action==='apply'?opBackupFirstMarkup(value.backup_first)+opPlanMarkup(value.plan,value.plan_failed):''}
  <p>${esc(body)}</p>
  ${fold}
  ${graceful?`<p class="op-notice" id="op-graceful-notice">${esc(graceful)}</p>`:''}
@@ -497,7 +502,7 @@ function opInspectionBind(root,rows,view){
 function opJobHint(job){
  if(!['failed','interrupted'].includes(job.status))return '';
  const images=[...new Set([...String(job.output||'').matchAll(/Failed to pull image\s+image=(\S+)/g)].map(m=>m[1].replace(/^docker\.io\/(library\/)?/,'')))];
- if(images.length)return 'The VM does not have '+(images.length>1?'these images':'this image')+' and could not download '+(images.length>1?'them':'it')+': '+images.join(', ')+'. Check the image name on the devices that use '+(images.length>1?'them':'it')+' (open the topology file and choose Open in Lab Builder…, then the device\'s Image field), or ask for the image to be installed on the VM.';
+ if(images.length)return 'The VM does not have '+(images.length>1?'these images':'this image')+' and could not download '+(images.length>1?'them':'it')+': '+images.join(', ')+'. Check the image name on the devices that use '+(images.length>1?'them':'it')+' (open the topology file and choose Edit topology…, then the device\'s Image field), or ask for the image to be installed on the VM.';
  return '';
 }
 // The imperative name of a job, wherever a job record is at hand: Start/Stop name their one device ("Stop ceos", never the bare
@@ -611,10 +616,10 @@ async function opShowJob(id,{auto=false,stop=false}={}){
    const emptyInspection=inspectAction&&job.status==='succeeded'&&/(^|\n)\s*(?:\[\s*\]|\{\s*\})\s*(?=\n|$)/.test(job.output||'');
    pre.hidden=!!inspected||emptyInspection;
    const inspectView=dialog._inspectView||(dialog._inspectView={key:'',dir:'',filter:''});
-   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows,inspectView):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p>${opOnBuilder()?'<div id="op-published-block"></div>':'<button class="button primary" id="op-open-published">Deploy or add this lab…</button>'}`:'');
+   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows,inspectView):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?(opDeployedSave(job)?opDeployedSaveMarkup(job):`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p>${opOnBuilder()?'<div id="op-published-block"></div>':'<button class="button primary" id="op-open-published">Deploy or add this lab…</button>'}`):'');
    if(inspected)opInspectionBind($('op-job-result'),rows,inspectView);
-   if(opPublishedPath(job)&&opOnBuilder())opRenderPublished(dialog,opPublishedPath(job));
-   $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(opPublishedPath(job))));
+   if(opPublishedPath(job)&&opOnBuilder()&&!opDeployedSave(job))opRenderPublished(dialog,opPublishedPath(job));
+   $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(opPublishedPath(job))));$('op-back-review')?.addEventListener('click',()=>opBackToReview(job));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(typeof opJobDone==='function')opJobDone(job);}
   }catch(e){if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);else if(typeof opJobLost==='function')opJobLost(id);}
@@ -711,7 +716,7 @@ function opBuilderOpen(values){if(location.pathname==='/static/lab-builder.html'
 // the builder's "← My labs" link and the browser Back button — both a normal navigation back to this
 // page — land on that dialog again, not only Home. A direct visit to the builder (the Build card's
 // "Open the lab builder") sets no marker, so it still returns to My labs exactly as before. Only a VM
-// file opens "Open in Lab Builder…" today (an upload has no such button, since it has no VM path yet
+// file opens "Edit topology…" today (an upload has no such button, since it has no VM path yet
 // to hand the builder); the marker is 'vm'-only until an upload gains that handoff. Consumed once, by
 // this page's own load-time wiring below.
 const OP_RETURN_KEY='op-return';
@@ -806,11 +811,11 @@ async function opEdit(path,labId='',newPath='',upload=null){
  const value=path?await json('/operations/read','POST',{path}):{text:upload?upload.text:'name: new-lab\ntopology:\n  nodes:\n    r1:\n      kind: linux\n      image: alpine:latest\n',path:newPath};
  const isYaml=/\.ya?ml$/i.test(value.path);
  opEditorContext={path:value.path,labId,isNew:!path};
- const dialog=opDialog('op-editor',path?'Topology file':upload?'Uploaded lab file':'New topology file',`${upload?`<p class="op-notice">Read from <strong>${esc(upload.file)}</strong> on this computer. Nothing is on the lab VM yet: <em>Create file on the VM…</em> shows what will be written and asks you to confirm; afterwards you can deploy it.</p>`:''}${upload&&upload.mapNotice?`<p class="op-notice">${esc(upload.mapNotice)}</p>`:''}<label>File location on the VM<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology (YAML)':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Deploy lab adds this lab to My labs and starts its devices on the VM. Add without starting keeps it in My labs only. Existing files can't be edited as text here — use Open in Lab Builder…, or edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Create file on the VM…</button>':''}${path&&isYaml?'<button class="button secondary" id="op-build-edit">Open in Lab Builder…</button><button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Add to My labs without starting')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
+ const dialog=opDialog('op-editor',path?'Topology file':upload?'Uploaded lab file':'New topology file',`${upload?`<p class="op-notice">Read from <strong>${esc(upload.file)}</strong> on this computer. Nothing is on the lab VM yet: <em>Create file on the VM…</em> shows what will be written and asks you to confirm; afterwards you can deploy it.</p>`:''}${upload&&upload.mapNotice?`<p class="op-notice">${esc(upload.mapNotice)}</p>`:''}<label>File location on the VM<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology (YAML)':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Deploy lab adds this lab to My labs and starts its devices on the VM. Add without starting keeps it in My labs only. Existing files can't be edited as text here — use Edit topology…, or edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Create file on the VM…</button>':''}${path&&isYaml?'<button class="button secondary" id="op-build-edit" title="Devices and links, saved to the lab file on the VM; applying is a separate step">Edit topology…</button><button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Add to My labs without starting')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
  $('op-edit-path').value=value.path;$('op-edit-text').value=value.text;
  // Leaving for the builder from a known VM file: remembered so the way back (its "← My labs" link,
  // or the browser Back button) reopens this same dialog with a fresh read, showing any saved edit.
- $('op-build-edit')?.addEventListener('click',()=>{opRemember('vm',{path,name:value.path.split('/').pop()});opBuilderOpen({path});});
+ $('op-build-edit')?.addEventListener('click',()=>{opRemember('vm',{path,name:value.path.split('/').pop()});opBuilderOpen({path,lab:labId});});
  $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await opParse(path,$('op-edit-text').value,upload?upload.annotations||'':undefined);opMapPreview(parsed.drawing,parsed.name,parsed.annotations_used);}));
  $('op-save-yaml')?.addEventListener('click',()=>opTask(dialog,()=>opReview({action:'create',lab_id:labId,path:$('op-edit-path').value,options:{text:$('op-edit-text').value,...(upload&&upload.annotations?{annotations:upload.annotations}:{})}})));
  $('op-add-project')?.addEventListener('click',()=>opTask(dialog,async()=>{
@@ -923,6 +928,21 @@ function opMapPreview(drawing,name,positioned=false){
 // without one (imported from an inventory) keeps the simple dialog.
 function opMapEditorUrl(id){return '/static/map-editor.html#lab='+encodeURIComponent(id);}
 async function opLayout(id){const lab=(state.labs||[]).find(l=>l.id===id);if(lab&&lab.map_editor){location.assign(opMapEditorUrl(id));return;}return editDiagram(id);}
+// The Edit topology… entry (owner #topology-edit; the menu items and the Tools card mirror it): '' when the lab's file can be opened in the
+// lab builder, else the reason in student words. The first four answer before the capabilities load; a missing capability answer never blocks.
+function opTopologyEditReason(lab,discovery,isBusy=false,caps=opCaps){
+ if(!lab)return '';
+ const path=opPath(lab),status=lab.deployment?.status,revise=caps?.actions?.revise,roots=Array.isArray(caps?.roots)?caps.roots.filter(r=>typeof r==='string'&&r):[];
+ if(!path)return 'This lab has no topology file on the VM (Advanced › Deployment details)';
+ if(!discovery?.connected)return 'Connect the VM first';
+ if(revise&&revise.available===false)return typeof revise.reason==='string'&&revise.reason?revise.reason:'The VM helpers are older than the manager: refresh them (see Diagnostics)';
+ if(isBusy)return 'Wait for the current operation to finish';
+ if(!['Not deployed','Running','Stopped','Partially running'].includes(status))return 'Lab status is unknown — refresh the lab list';
+ if(roots.length&&!roots.some(r=>path===r||path.startsWith(r.replace(/\/+$/,'')+'/')))return 'The topology file is outside the folders the manager may edit';
+ return '';
+}
+// Edit topology…: the lab's own file in the lab builder, which brings the lab back to its Topology tab (#lab=<id>).
+function opTopologyEdit(id){const lab=(state.labs||[]).find(l=>l.id===id);if(!lab||!opPath(lab))return false;opBuilderOpen({path:opPath(lab),lab:lab.id});return true;}
 // reason / destroyReason say, in student words, why Start or Destroy is unavailable right now.
 function opQuickActions(lab,discovery,isBusy=false){
  const status=lab?.deployment?.status, known=['Not deployed','Running','Stopped','Partially running'].includes(status);
@@ -1201,6 +1221,7 @@ function renderLabOperations(){
   const ok=!unavailable&&quick.available&&(b.dataset.opAction==='redeploy'?status!=='Not deployed':running);
   opMenuState(b,!ok,unavailable?'Not available on this VM — see Diagnostics':quick.available?'The lab is not running':quick.reason);
  }
+if($('topology-edit')){const reason=opTopologyEditReason(lab,state.discovery,busy());$('topology-edit').disabled=!!reason||!lab;$('topology-edit').title=reason||'Devices and links, saved to the lab file on the VM; applying is a separate step';}
  if($('vm-projects')){const connected=!!state.discovery?.connected;opMenuState($('vm-projects'),!connected,'Connect the VM to browse its lab topologies');}
  if($('manager-images')){const connected=!!state.discovery?.connected;opMenuState($('manager-images'),!connected,'Connect the VM to see its images');}
  // The banner (app.js) is the lowest-priority notice and a student can hide it for the session, so
@@ -1215,6 +1236,7 @@ if($('import-top')){
  if(!$('lab-actions'))$('import-top').insertAdjacentHTML('beforebegin','<button class="button secondary" id="lab-actions" hidden>All lab operations…</button>');
 
  $('map-edit').onclick=()=>opTask(null,()=>opLayout(activeId));
+ if($('topology-edit'))$('topology-edit').onclick=()=>{if(typeof closeMenus==='function')closeMenus();opTopologyEdit(activeId);};
  if($('lab-operations-all'))$('lab-operations-all').onclick=()=>openLabOperations();
  // Operation history for THIS lab from its menu and its Advanced tab; Manager ▾ keeps the history of every lab.
  for(const id of ['menu-operation-history','advanced-operation-history'])if($(id))$(id).onclick=()=>{if(typeof closeMenus==='function')closeMenus();opTask(null,()=>opHistory(activeId));};
@@ -1240,3 +1262,19 @@ if($('import-top')){
  // normal navigation to this page, so the dialog the student left is reopened once, here, on load.
  opTask(null,()=>opReopenReturn(opConsumeReturn()));
 }
+
+// A deployed save (revise with deployed:true) leaves the running lab unchanged: its output dialog says so and offers
+// the one next step, the apply review, instead of Deploy now / Go to My labs (which would claim "not running").
+// The job record does not say it (no `options`, and the helper's result carries no `deployed`): the builder page remembers that the review it
+// confirmed was a deployed save (builderPending.deployed), and the dialog keeps that for the job while it is open and when it is shown again.
+const opDeployedJobs=new Set();
+function opDeployedSave(job){
+ if(!job||job.action!=='revise')return false;
+ if(job.deployed===true||job.options?.deployed===true||job.result?.deployed===true)return true;
+ if(typeof builderPending!=='undefined'&&builderPending&&builderPending.deployed===true&&builderPending.job&&builderPending.job===job.id)opDeployedJobs.add(job.id);
+ return opDeployedJobs.has(job.id);
+}
+function opBackToReviewLab(job){return (job&&job.lab_id)||opLabAtPath(opPublishedPath(job))?.id||'';}
+function opBackToReviewHash(job){const id=opBackToReviewLab(job);return id?'/#lab='+encodeURIComponent(id)+'&view=topology&review=apply':'/';}
+function opDeployedSaveMarkup(job){return `<p class="op-notice ok" id="op-published-status" tabindex="-1">Saved to the VM. The running lab is unchanged until you apply the changes.</p><div class="actions"><button class="button primary" id="op-back-review">Back to lab and review changes…</button></div>`;}
+function opBackToReview(job){location.assign(opBackToReviewHash(job));}

@@ -41,8 +41,10 @@ test('the script loads in a bare context and exposes the four functions of the c
 test('the script reaches no browser or network API and builds no code: student text is only ever the subject of RegExp.test',()=>{
  const code=SOURCE.split('\n').filter(line=>!/^\s*\/\//.test(line)).join('\n');
  for(const word of [/\bfetch\s*\(/,/\bdocument\b/,/\bwindow\b/,/\blocalStorage\b/,/\bXMLHttpRequest\b/,/\beval\s*\(/,/\bnew Function\b/,/\bFunction\s*\(/,/innerHTML/,/\bsetTimeout\b/,/\bimport\s*\(/])assert.doesNotMatch(code,word,String(word));
- // Every RegExp built at run time is built from a schema pattern (builderCheckRegex), never from a tree value.
- assert.deepEqual([...code.matchAll(/new RegExp\(([^,]*),/g)].map(m=>m[1]),['src']);
+ // Every RegExp built at run time is built from a schema pattern (builderCheckRegex) or from an interface rule of the manager's own catalog
+ // (builderCheckCatalogRegex, data like the schema, never typed by the student), never from a tree value.
+ assert.deepEqual([...code.matchAll(/new RegExp\(([^,]*),/g)].map(m=>m[1]),['src','source']);
+ const catalogRegex=SOURCE.slice(SOURCE.indexOf('function builderCheckCatalogRegex('),SOURCE.indexOf('// "cJunosEvolved" for the template'));assert.match(catalogRegex,/new RegExp\(source,/);assert.equal(catalogRegex.split('new RegExp(').length,2);
  const regex=SOURCE.slice(SOURCE.indexOf('function builderCheckRegex('),SOURCE.indexOf('function builderCheckMatch('));assert.match(regex,/new RegExp\(src,src\.includes\('\\\\p\{'\)\?'u':''\)/);
 });
 test('the script declares no top-level name another lab builder script declares, and keeps its own prefixes',()=>{
@@ -317,29 +319,29 @@ test('R7d: the same device:interface twice is a warning naming the first link',(
 const waitFor=(node,stage='create',on='create')=>({stages:{[on]:{'wait-for':[{node,stage}]}}});
 test('R8a: a wait for a device that does not exist (with a suggestion), on any VM',()=>{
  const doc=JSON.parse(JSON.stringify(EXAMPLE));doc.topology.nodes.vrt.stages.create['wait-for'][0].node='vws';
- assert.deepEqual(check(doc,LOOSE).map(brief),[[13,'error','wait-node','There is no device named `vws`. Did you mean `vsw`?']]);
- assert.deepEqual(check(doc,EXACT,null).map(brief),[[13,'error','wait-node','There is no device named `vws`. Did you mean `vsw`?']]);
+ assert.deepEqual(check(doc,LOOSE).map(brief),[[13,'error','wait-node','There is no device named `vws`. Did you mean `vsw`? The deploy cannot finish: the wait has nothing to wait for.']]);
+ assert.deepEqual(check(doc,EXACT,null).map(brief),[[13,'error','wait-node','There is no device named `vws`. Did you mean `vsw`? The deploy cannot finish: the wait has nothing to wait for.']]);
  assert.deepEqual(brief(only(lab({stages:{create:{'wait-for':[{stage:'create'}]}}}))),[10,'warning','wait-node','this wait-for entry names no device (`node:`), so it waits for nothing.']);
 });
 test('R8b: a device waiting for itself, directly or through the defaults, a kind section or a group',()=>{
- assert.deepEqual(brief(only(lab(waitFor('a')))),[10,'error','wait-self','A device cannot wait for itself (`a` waits for `a`).']);
+ assert.deepEqual(brief(only(lab(waitFor('a')))),[10,'error','wait-self','A device cannot wait for itself (`a` waits for `a`). The deploy cannot finish.']);
  const viaDefaults=check({name:'x',topology:{defaults:Object.assign({kind:'linux',image:'i'},waitFor('a')),nodes:{a:{},b:{}}}});
- assert.deepEqual(viaDefaults.map(brief),[[9,'error','wait-self','A device cannot wait for itself (`a` waits for `a` through topology.defaults).']]);
- assert.equal(check({name:'x',topology:{kinds:{linux:waitFor('a')},nodes:{a:{kind:'linux',image:'i'}}}})[0].message,'A device cannot wait for itself (`a` waits for `a` through topology.kinds.linux).');
- assert.equal(check({name:'x',topology:{groups:{g:waitFor('a')},nodes:{a:{kind:'linux',image:'i',group:'g'}}}})[0].message,'A device cannot wait for itself (`a` waits for `a` through topology.groups.g).');
+ assert.deepEqual(viaDefaults.map(brief),[[9,'error','wait-self','A device cannot wait for itself (`a` waits for `a` through topology.defaults). The deploy cannot finish.']]);
+ assert.equal(check({name:'x',topology:{kinds:{linux:waitFor('a')},nodes:{a:{kind:'linux',image:'i'}}}})[0].message,'A device cannot wait for itself (`a` waits for `a` through topology.kinds.linux). The deploy cannot finish.');
+ assert.equal(check({name:'x',topology:{groups:{g:waitFor('a')},nodes:{a:{kind:'linux',image:'i',group:'g'}}}})[0].message,'A device cannot wait for itself (`a` waits for `a` through topology.groups.g). The deploy cannot finish.');
 });
 test('R8c: a loop of two, a loop of three reported once at its first entry, a chain is no loop, whatever the stages',()=>{
  const n=(wait)=>Object.assign({kind:'linux',image:'i'},wait);
  assert.deepEqual(check({name:'x',topology:{nodes:{vsw:n(waitFor('vrt')),vrt:n(waitFor('vsw','configure','healthy'))}}}).map(brief),
-  [[10,'error','wait-loop','Devices wait for each other in a loop (vsw → vrt → vsw). containerlab will not deploy the lab.']]);
+  [[10,'error','wait-loop','Devices wait for each other in a loop (vsw → vrt → vsw). The deploy cannot finish.']]);
  const three=check({name:'x',topology:{nodes:{a:n(waitFor('b')),b:n(waitFor('c')),c:n(waitFor('a'))}}},LOOSE,null);
- assert.deepEqual(three.map(brief),[[10,'error','wait-loop','Devices wait for each other in a loop (a → b → c → a). containerlab will not deploy the lab.']]);
+ assert.deepEqual(three.map(brief),[[10,'error','wait-loop','Devices wait for each other in a loop (a → b → c → a). The deploy cannot finish.']]);
  assert.deepEqual(check({name:'x',topology:{nodes:{a:n(waitFor('b')),b:n(waitFor('c')),c:n({})}}}),[]);
  // Two separate loops: two findings.
  assert.equal(check({name:'x',topology:{nodes:{a:n(waitFor('b')),b:n(waitFor('a')),c:n(waitFor('d')),d:n(waitFor('c'))}}}).filter(f=>f.code==='wait-loop').length,2);
  // A loop made through the defaults: every device waits for a, and a waits for b.
  const viaDefaults=check({name:'x',topology:{defaults:Object.assign({kind:'linux',image:'i'},waitFor('a')),nodes:{a:waitFor('b','create','configure'),b:{}}}}).filter(f=>f.code==='wait-loop');
- assert.deepEqual(viaDefaults.map(f=>f.message),['Devices wait for each other in a loop (b → a → b). containerlab will not deploy the lab.']);
+ assert.deepEqual(viaDefaults.map(f=>f.message),['Devices wait for each other in a loop (b → a → b). The deploy cannot finish.']);
 });
 test('R8d: waiting for healthy on a device with no health check, own or inherited; the linux wording',()=>{
  const doc=(target,extra={})=>({name:'x',topology:Object.assign({nodes:{c1:Object.assign({kind:'arista_ceos',image:'ceos'},target),r1:Object.assign({kind:'linux',image:'i'},waitFor('c1','healthy'))}},extra)});
@@ -534,7 +536,7 @@ test('a wait loop names at most eight devices and counts the rest',()=>{
  for(let i=0;i<n;i++)nodes['n'+i]={kind:'linux',image:'i',stages:{create:{'wait-for':[{node:'n'+((i+1)%n),stage:'create'}]}}};
  const f=check({name:'x',topology:{nodes}}).filter(x=>x.code==='wait-loop');
  assert.equal(f.length,1);
- assert.match(f[0].message,/^Devices wait for each other in a loop \((n\d+ → ){8}… \(5 more\)\)\. containerlab will not deploy the lab\.$/);
+ assert.match(f[0].message,/^Devices wait for each other in a loop \((n\d+ → ){8}… \(5 more\)\)\. The deploy cannot finish\.$/);
  const small=check({name:'x',topology:{nodes:{a:{kind:'linux',image:'i',stages:{create:{'wait-for':[{node:'b',stage:'create'}]}}},b:{kind:'linux',image:'i',stages:{create:{'wait-for':[{node:'a',stage:'create'}]}}}}}}).filter(x=>x.code==='wait-loop');
  assert.match(small[0].message,/\(a → b → a\)/);
 });
@@ -561,4 +563,98 @@ test('YAML merge keys: the anchor’s keys apply, the map’s own keys win, and 
  assert.deepEqual(plain(two.items.map(i=>[i.key,i.value.value])),[['image','one'],['kind','linux']]);
  assert.deepEqual(plain(C.builderCheckMerged({kind:'map',line:1,items:[entry('<<',1,sc('x',1))]},0).items),[]);
  const untouched={kind:'map',line:1,items:[entry('a',1,sc('1',1))]};assert.equal(C.builderCheckMerged(untouched,0),untouched,'no `<<`: the same tree');
+});
+
+// ---- the manager's catalog in the check (T06a; docs/parity-campaign/TOPOLOGY-EDIT-DESIGN.md 12.1 #17 to #19, R13) ----
+// The page leaves GET /api/catalog's answer in window.builderCatalog (null when it did not load); the script reads it as a global. The interface rules below are what
+// app/catalog.py serves for the seven kinds (tests/test_catalog.py pins the Python side); the pattern has no inline flags, `flags` is "i".
+const NOS_BOX='^e(?:th)?(\\d+)$';
+const rule=(pattern,prefix,reserved=[])=>({pattern,flags:'i',prefix,first_port:prefix+'0',reserved,container_pattern:NOS_BOX});
+const CATALOG={entries:[
+ {kind:'arista_ceos',aliases:['ceos','eos'],template:{name:'Arista cEOS'},interfaces:rule('^(?:ethernet|et)(\\d+)$','Ethernet')},
+ {kind:'juniper_cjunosevolved',aliases:['cjunosevolved','junos'],template:{name:'Juniper cJunosEvolved'},interfaces:rule('^et-0/0/(\\d+)$','et-0/0/',['eth1','eth2','eth3'])},
+ {kind:'juniper_vjunosswitch',aliases:['vr-vjunosswitch'],template:{name:'Juniper vJunos-switch'},interfaces:rule('^ge-0/0/(\\d+)$','ge-0/0/')},
+ {kind:'juniper_vjunosrouter',aliases:['vr-vjunosrouter'],template:{name:'Juniper vJunos-router'},interfaces:rule('^ge-0/0/(\\d+)$','ge-0/0/')},
+ {kind:'juniper_vsrx',aliases:['vr-vsrx','vsrx'],template:{name:'Juniper vSRX'},interfaces:rule('^(?:ge|xe|et)-0/0/(\\d+)$','ge-0/0/')},
+ {kind:'cisco_xrv9k',aliases:['vr-xrv9k','iosxr'],template:{name:'Cisco XRv9k'},interfaces:rule('^(?:gi|gigabitethernet)0/0/0/(\\d+)$','Gi0/0/0/')},
+ {kind:'linux',aliases:[],template:{name:'Linux host'},interfaces:null},
+],kinds:[]};
+function loadWith(catalog){const context=vm.createContext(catalog===undefined?{}:{builderCatalog:catalog});vm.runInContext(SOURCE,context,{filename:'lab-builder-check.js'});return context;}
+const checkWith=(catalog,doc,ctx=EXACT)=>plain(loadWith(catalog).builderCheck(located(doc),SCHEMA,ctx));
+const IMAGES={arista_ceos:'n24l/ceos:4.35.0F',juniper_cjunosevolved:'n24l/cjunosevolved:26.2R1.7-EVO',juniper_vjunosswitch:'n24l/vjunos-switch:23.2R1.14',juniper_vjunosrouter:'n24l/juniper_vjunos-router:26.2R1.7',juniper_vsrx:'n24l/juniper_vsrx:23.2R2.21',cisco_xrv9k:'n24l/cisco_xrv9k:24.3.1',linux:'ghcr.io/srl-labs/network-multitool:latest'};
+// kind of `a`, the interface on `a` and the interface on a Linux host `b`
+function linked(kind,a,b='eth1',extra={}){return {name:'lab',topology:Object.assign({nodes:{a:{kind,image:IMAGES[kind]||'x:1'},b:{kind:'linux',image:IMAGES.linux}},links:[{endpoints:['a:'+a,'b:'+b]}]},extra)};}
+const iface=list=>list.filter(f=>/^iface-/.test(f.code));
+test('a reserved interface of a cJunosEvolved device is a warning that names the reserved range and the first data port',()=>{
+ for(const name of ['eth1','eth2','eth3','ETH2']){
+  const found=iface(checkWith(CATALOG,linked('juniper_cjunosevolved',name)));
+  assert.equal(found.length,1,name);assert.equal(found[0].code,'iface-reserved');assert.equal(found[0].severity,'warning');
+  assert.equal(found[0].message,'`'+name+'` on a cJunosEvolved device is reserved by the image (eth1 to eth3); the first data port is et-0/0/0 (eth4).');
+ }
+ assert.deepEqual(iface(checkWith(CATALOG,linked('juniper_cjunosevolved','eth4'))),[],'eth4 is the first data port');
+ assert.deepEqual(iface(checkWith(CATALOG,linked('juniper_cjunosevolved','et-0/0/0'))),[]);
+ assert.deepEqual(iface(checkWith(CATALOG,linked('cjunosevolved','eth2'))).map(f=>f.code),['iface-reserved'],'an alias of the kind has the same rules');
+ // either end: the Linux host's eth1 is not reserved, the other end is checked on its own device
+ assert.deepEqual(iface(checkWith(CATALOG,linked('juniper_cjunosevolved','eth5','eth2'))),[]);
+});
+test('a name outside the kind\'s scheme is a warning; the NOS name (any case, flags applied) and the container name both pass',()=>{
+ const one=(kind,name)=>iface(checkWith(CATALOG,linked(kind,name)));
+ assert.equal(one('juniper_vjunosswitch','xe-0/0/0')[0].message,'`xe-0/0/0` is not a ge-0/0/N port name of this kind, nor a container interface name like eth1.');
+ assert.equal(one('juniper_vjunosswitch','xe-0/0/0')[0].code,'iface-scheme');assert.equal(one('juniper_vjunosswitch','xe-0/0/0')[0].severity,'warning');
+ for(const name of ['ge-0/0/0','GE-0/0/12','eth1','eth7','e3'])assert.deepEqual(one('juniper_vjunosswitch',name),[],name);
+ assert.deepEqual(one('arista_ceos','swp1').map(f=>f.message),['`swp1` is not a EthernetN port name of this kind, nor a container interface name like eth1.']);
+ for(const name of ['Ethernet1','et1','eth1','eth0'])assert.deepEqual(one('arista_ceos',name),[],name);
+ for(const name of ['Gi0/0/0/1','GigabitEthernet0/0/0/0','eth2'])assert.deepEqual(one('cisco_xrv9k',name),[],name);
+ assert.equal(one('cisco_xrv9k','ge-0/0/0').length,1);
+ for(const name of ['ge-0/0/0','xe-0/0/1','et-0/0/2','eth3'])assert.deepEqual(one('juniper_vsrx',name),[],name);
+ assert.equal(one('juniper_vjunosrouter','et-0/0/0').length,1);
+ // a kind with no rule, a special endpoint and a device that is not there raise no interface warning at all
+ assert.deepEqual(iface(checkWith(CATALOG,linked('linux','anything','whatever'))),[]);
+ assert.deepEqual(iface(checkWith(CATALOG,{name:'lab',topology:{nodes:{a:{kind:'juniper_vjunosswitch',image:IMAGES.juniper_vjunosswitch}},links:[{endpoints:['a:ge-0/0/0','host:eth9']},{endpoints:['ghost:xe-9','a:ge-0/0/1']}]}})),[]);
+ // a rule that does not compile here is ignored, never thrown
+ const broken={entries:[{kind:'juniper_vjunosswitch',aliases:[],template:{name:'Juniper vJunos-switch'},interfaces:{pattern:'(',flags:'i',prefix:'ge-0/0/',first_port:'ge-0/0/0',reserved:[],container_pattern:'('}}]};
+ assert.deepEqual(iface(checkWith(broken,linked('juniper_vjunosswitch','xe-0/0/0'))),[]);
+});
+test('every interface the templates themselves generate passes the catalog\'s rules without a warning (R13, #19)',()=>{
+ const page=vm.createContext({console,crypto:require('node:crypto').webcrypto,TextEncoder,URLSearchParams,document:{getElementById:()=>null}});
+ vm.runInContext(fs.readFileSync(path.join(STATIC,'lab-builder-page.js'),'utf8'),page);
+ const templates=plain(vm.runInContext('BUILDER_TEMPLATES',page));assert.equal(templates.length,7);
+ for(const t of templates){
+  const names=[...[1,2,3,4,8].map(n=>t.interfacePattern.replace(/\{n\}/,String(n)).replace(/\{n:0\}/,String(n-1)))];
+  for(const name of names){
+   assert.deepEqual(iface(checkWith(CATALOG,linked(t.kind,name,'eth9'))).filter(f=>f.code==='iface-scheme'),[],t.kind+' '+name);
+  }
+ }
+ // the one template pattern that lands on a reserved name is the container-style cEOS name on cJunosEvolved: not a template of that kind
+ assert.equal(templates.find(t=>t.kind==='juniper_cjunosevolved').interfacePattern,'et-0/0/{n:0}');
+});
+test('without the catalog the interface rules are skipped, and the caption says so only when it did not load',()=>{
+ for(const missing of [undefined,null,{},{entries:'x'}])assert.deepEqual(iface(checkWith(missing,linked('juniper_cjunosevolved','eth2'))),[]);
+ const caption=c=>plain(c.builderSchemaChoice('0.79.0',['0.79.0'])).caption;
+ assert.equal(caption(loadWith(undefined)),'Checked against containerlab 0.79.0, the version on this VM.','not asked yet (a bare context): the caption is unchanged');
+ assert.equal(caption(loadWith(CATALOG)),'Checked against containerlab 0.79.0, the version on this VM.');
+ assert.equal(caption(loadWith(null)),'Checked against containerlab 0.79.0, the version on this VM. Interface names were not checked: the manager\'s catalog did not load.');
+ const none=plain(loadWith(null).builderSchemaChoice('',[]));assert.match(none.caption,/links and boot order still are\. Interface names were not checked: the manager's catalog did not load\.$/);
+ assert.equal(plain(C.builderSchemaChoice('0.80.0',['0.79.0'])).caption.includes('Interface names'),false);
+});
+test('a kind the manager has no catalog entry for gets one informational note per kind; never linux, never a catalog kind, never an unknown kind',()=>{
+ const doc=(kinds)=>({name:'lab',topology:{nodes:Object.fromEntries(kinds.map(([n,k])=>[n,{kind:k,image:'x:1'}]))}});
+ const notes=(catalog,kinds)=>checkWith(catalog,doc(kinds)).filter(f=>f.code==='kind-capability');
+ const two=notes(CATALOG,[['a','nokia_srlinux'],['b','nokia_srlinux'],['c','linux'],['d','juniper_vsrx'],['e','arista_ceos']]);
+ assert.equal(two.length,1,'once for the kind, none for linux or the catalog\'s kinds');
+ assert.equal(two[0].message,'Devices of kind `nokia_srlinux`: containerlab deploys them; the manager has no backup, restore or design support for this kind.');
+ assert.equal(two[0].severity,'info');assert.equal(two[0].line,5,'at the kind line of the first device of that kind');
+ assert.equal(notes(CATALOG,[['a','nokia_srlinux'],['b','arista_srl']]).length,1);
+ assert.equal(notes(CATALOG,[['a','ceos'],['b','vr-xrv9k']]).length,0,'an alias of a catalog kind is that kind');
+ assert.equal(notes(CATALOG,[['a','nosuchkind']]).length,0,'an unknown kind is an error elsewhere, not a capability note');
+ assert.equal(notes(undefined,[['a','nokia_srlinux']]).length,0);assert.equal(notes(null,[['a','nokia_srlinux']]).length,0);
+ // informational: neither a warning nor an error in the summary, and it sorts after them on its line
+ const list=checkWith(CATALOG,doc([['a','nokia_srlinux']]));
+ assert.deepEqual(plain(C.builderCheckSummary(list)),{errors:0,warnings:0,text:'No problems found'});
+ const at=(severity)=>({severity,line:3,code:severity,message:severity,path:[]});
+ assert.deepEqual(plain(C.builderCheckFinish({out:[at('info'),at('warning'),at('error')]})).map(f=>f.severity),['error','warning','info'],'errors first, the note last on its line');
+});
+test('the YAML panel names an informational finding a Note, and the page gives it no colour of an error',()=>{
+ const panel=fs.readFileSync(path.join(STATIC,'lab-builder-yaml.js'),'utf8'),css=fs.readFileSync(path.join(STATIC,'lab-builder.css'),'utf8');
+ assert.match(panel,/f\.severity==='error'\?'Error':f\.severity==='info'\?'Note':'Warning'/);assert.match(css,/\.builder-yaml-list li\.is-info \.builder-yaml-sev\{color:var\(--muted\)\}/);
 });

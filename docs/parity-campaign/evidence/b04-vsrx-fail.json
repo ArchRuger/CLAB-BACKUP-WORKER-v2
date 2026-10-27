@@ -1,0 +1,75 @@
+{
+ "node": "vsrx",
+ "address": "172.20.20.121",
+ "phase": "fail",
+ "version": [
+  "Model: vSRX",
+  "Junos: 23.2R2.21"
+ ],
+ "driver": "app/restore_junos.py",
+ "driver_source": {
+  "git_head": "3a990c35859e",
+  "uncommitted_changes_to_the_driver": false
+ },
+ "token_prefix": "clabmgr-6ae003f0",
+ "steps": [
+  {
+   "utc": "01:52:48",
+   "step": "empty candidate: refused before the device is touched",
+   "ok": true,
+   "message": "The saved configuration is empty."
+  },
+  {
+   "utc": "01:52:48",
+   "step": "truncated candidate (first half of A): refused before the device is touched",
+   "ok": true,
+   "message": "The saved configuration looks truncated; its braces do not balance."
+  },
+  {
+   "utc": "01:52:48",
+   "step": "wrong platform candidate (EOS running-config): refused before the device is touched",
+   "ok": true,
+   "message": "The saved configuration is not in the hierarchical form a Junos device loads."
+  },
+  {
+   "utc": "01:52:48",
+   "step": "display-set text instead of hierarchical: refused before the device is touched",
+   "ok": true,
+   "message": "The saved configuration is not in the hierarchical form a Junos device loads."
+  },
+  {
+   "utc": "01:52:50",
+   "step": "balanced but invalid candidate: the node rejects the load and the candidate is discarded",
+   "ok": true,
+   "message": "The node rejected the saved configuration while loading it."
+  },
+  {
+   "utc": "01:52:50",
+   "step": "... nothing left in the shared candidate",
+   "ok": true
+  },
+  {
+   "utc": "01:52:50",
+   "step": "no failure case committed anything; still A (independent), nothing pending",
+   "ok": true,
+   "commits_before": 10,
+   "missing": 0,
+   "extra": 0
+  },
+  {
+   "utc": "01:52:51",
+   "step": "bad credentials: refused at login, before any command",
+   "ok": true,
+   "error": "AuthenticationException"
+  },
+  {
+   "utc": "01:52:54",
+   "step": "unreachable address: the connection fails within its timeout",
+   "ok": true,
+   "error": "NoValidConnectionsError",
+   "seconds": 3.1
+  }
+ ],
+ "ok": true,
+ "finished_utc": "2026-10-27T01:52:54Z"
+}
