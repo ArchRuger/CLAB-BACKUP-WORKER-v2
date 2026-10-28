@@ -20,7 +20,8 @@ Nothing in this module runs the engine: :func:`engine_data` only ever reads the 
 ``PROFILES`` is the kind -> netlab device profile table from D3.2, with its evidence per entry:
 ``arista_ceos``, ``juniper_vjunosswitch``, ``juniper_vjunosrouter`` and ``juniper_vsrx`` are exact profile
 matches (the last two since campaign 2 B05: ``verified_on_image`` only where ``VALIDATION`` records the live apply
-of B05 phase 2, the vJunos-router entries on a nested derivative of the image); ``juniper_cjunosevolved`` and
+of B05 phase 2; the vJunos-router entries on the 26.2R1.7 image rebuilt with the vJunos-switch CPU model, which
+their reason says); ``juniper_cjunosevolved`` and
 ``cisco_xrv9k`` are stand-ins (Junos Evolved / IOS XR lineage, but a different image and containerlab
 kind than the netlab profile they borrow), so nothing on them is ``verified_on_image`` until proven
 live; ``linux`` is a support host only, never applied by this integration. Any other kind is
@@ -111,16 +112,17 @@ IMAGE_LIMITS = {('juniper_vsrx', feature): _VSRX_MPLS for feature in ('mpls_ldp'
 # VALIDATION[('arista_ceos', 'bgp')] = {'level': 'verified_on_image', 'evidence': 'docs/netlab-integration/evidence/<file>'}
 # An entry is written only for a (kind, feature) generated, applied with *Apply to devices* through the running manager,
 # read back by an independent SSH session and seen working in the control plane. One Junos kind never proves another,
-# and the vJunos-router entries were proven on a nested derivative of the image, which their reason says.
+# and the vJunos-router entries were proven on the image rebuilt with the vJunos-switch CPU model (the published
+# launcher's ``-cpu host`` aborts on the VMware-hosted development VM; same Junos 26.2R1.7), which their reason says.
 B05_PHASE2 = 'docs/parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md'
-_VRT_DERIVATIVE = ('nested derivative image local/juniper_vjunos-router:26.2R1.7-nested (the published image does not '
-                   'boot on the development host), not the published image')
+_VRT_DERIVATIVE = ('on the image rebuilt with the vJunos-switch CPU model (local/juniper_vjunos-router:26.2R1.7-nested, '
+                   'needed on the VMware-hosted development VM; same Junos; forwarding checked in evidence B08)')
 VALIDATION = {
     # Campaign 2 B05 phase 2: vSRX 23.2R2.21, the exact image n24l/juniper_vsrx:23.2R2.21.
     ('juniper_vsrx', 'static_routes'): {
         'level': 'verified_on_image', 'evidence': B05_PHASE2,
         'reason': 'applied through the manager on vSRX 23.2R2.21: the discard route was read back in the configuration and active in inet.0'},
-    # Campaign 2 B05 phase 2: vJunos-router 26.2R1.7, labelled as a derivative.
+    # Campaign 2 B05 phase 2: vJunos-router 26.2R1.7, on the CPU-model rebuild (the reason says so).
     ('juniper_vjunosrouter', 'ipv4'): {
         'level': 'verified_on_image', 'evidence': B05_PHASE2,
         'reason': 'applied through the manager on vJunos-router 26.2R1.7, ' + _VRT_DERIVATIVE + ': the point-to-point address was read back and carried OSPF'},

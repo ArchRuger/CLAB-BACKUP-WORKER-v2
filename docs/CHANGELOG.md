@@ -1,3 +1,21 @@
+## Changes in 1.31.8
+
+- **vJunos-router is a supported kind.** The "blocked on a VM host, derivative only" caveats are gone from the
+  capability reasons (`design_capabilities.VALIDATION`, `design_junos.py`), the restore docstring, NODE-FEATURES, the
+  Network Design guide, the restore guide and `docs/parity-campaign/DEVICES.md`. The host fact is corrected: the
+  published image's launcher starts its router with `-cpu host`, which aborts on a VMware guest (the development VM,
+  where the inner qemu fails its `kvm_put_msrs` assertion and relaunches every 5 s) and boots on a KVM host whose guest
+  CPU is passed through (the owner's Proxmox lab). On the development VM every live proof ran on the same image rebuilt
+  with the vJunos-switch CPU model (one line of `/launch.py`); a forwarding-plane check
+  (`docs/parity-campaign/evidence/b08-vjunos-router-traffic-2026-10-27.md`) found no functional difference: OSPF, eBGP,
+  LLDP, IPv4 and IPv6 transit, fragmentation, reassembly, DF handling, a transit firewall counter, floods without PFE
+  drops, zero interface errors.
+- Two image facts recorded for lab authors: throughput is capped near 100 Mbit/s without a `VMX-BANDWIDTH` license, and
+  the `ge-` interfaces run at MTU 1514, so a `linux` neighbour on containerlab's default 9500-byte link loses frames over
+  1500 bytes until the link's `mtu` is pinned to 1500.
+- No functional code change; `test_design_capabilities.py` pins the new reason wording ("CPU model" on the
+  vJunos-router entries only). The catalog keeps the published tag; the rebuild is never pushed.
+
 # Changelog
 
 Release notes for every published version, newest first. Links point to the

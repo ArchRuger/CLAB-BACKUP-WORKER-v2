@@ -40,8 +40,11 @@ credentials, an unreachable address). Evidence:
 [vSRX](../parity-campaign/evidence/b04-vsrx-restore-driver-2026-10-27.md) on the exact image
 `n24l/juniper_vsrx:23.2R2.21` (Junos 23.2R2.21), and
 [vJunos-router](../parity-campaign/evidence/b04-vjunosrouter-restore-driver-2026-10-27.md) on
-`local/juniper_vjunos-router:26.2R1.7-nested` (Junos 26.2R1.7): **nested derivative; published image blocked on
-this host** (the published `n24l/juniper_vjunos-router:26.2R1.7` does not boot under nested virtualization).
+`local/juniper_vjunos-router:26.2R1.7-nested` (Junos 26.2R1.7: the published image rebuilt with the vJunos-switch CPU
+model, because the published launcher's `-cpu host` aborts on the VMware-hosted development VM; the published
+`n24l/juniper_vjunos-router:26.2R1.7` boots on a KVM host with the `host` CPU type, as on the owner's Proxmox lab, and
+the rebuilt image's forwarding plane was checked in
+[B08](../parity-campaign/evidence/b08-vjunos-router-traffic-2026-10-27.md)).
 The manager path was proven in a [second record](../parity-campaign/evidence/b04-phase2-manager-load-2026-10-27.md)
 (B04 phase 2): backup with the restore artifact, Load B -> A verified with the manager's and an independent read-back,
 A onto A, back-to-back Loads, persistence over `request system reboot` after a manager Load, a selected-device job
@@ -53,7 +56,7 @@ Live facts of the two kinds:
   management is `fxp0` in `mgmt_junos`, bound to no security zone, so a candidate without zones stays reachable.
   A candidate without `system services ssh` loses management: the node undid it at its 1-minute timer and the
   previous configuration was read back. Arming takes about 7 s (6.4 to 7.1 s through the manager). Both images ship `system root-authentication`.
-- vJunos-router: arming takes 29 to 44 s on the nested derivative at the driver layer and 23 to 29 s through the
+- vJunos-router: arming takes 29 to 44 s at the driver layer and 23 to 29 s through the
   manager (within the driver's 180 s commit timeout); after `request system reboot` SSH answered again after about
   15.5 to 16.5 minutes.
 

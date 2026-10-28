@@ -185,8 +185,8 @@ was applied live, and what the limit is. As of this release, on the four accepta
   STP (cEOS only), SRv6 (XRv9k only), 6PE (cEOS and XRv9k only); a plan that asks one of those of a device that
   cannot do it names the device and generates nothing.
 - **vJunos-router and vSRX** (applied live through the product on a two-device design each; one Junos kind never
-  proves the other): on **vJunos-router** (a nested derivative of the 26.2R1.7 image; the published image does not
-  boot on the development host) IPv4 addressing, OSPFv2 (adjacency Full with a vJunos-switch) and a static route,
+  proves the other): on **vJunos-router** (26.2R1.7, on the image rebuilt with the vJunos-switch CPU model because the
+  VMware-hosted development VM cannot boot the published launcher's `-cpu host`) IPv4 addressing, OSPFv2 (adjacency Full with a vJunos-switch) and a static route,
   with a no-op re-apply, the removal of the dropped static route while a manual one stayed, and a refused apply over
   a manual second address on a port the plan renumbers; on **vSRX** 23.2R2.21 (exact image) a static route, with a
   no-op re-apply and the removal of a dropped OSPF process. Those read *Verified on this image*; every other feature

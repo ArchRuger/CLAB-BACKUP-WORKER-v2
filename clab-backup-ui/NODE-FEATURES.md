@@ -129,11 +129,16 @@ publishes for `vr-vsrx` (checked 2026-10-27). Notes on the two newest Junos kind
 - **vSRX** is a Junos firewall; the Load driver was proven live on the exact image
   (Junos 23.2R2.21). The manager offers no serial console for it: a kind joins the console list only after the console has been verified
   live through the manager's own console path, and that has not been done for vSRX.
-- **vJunos-router**: the Load driver was proven live on a nested derivative of the published image. The
-  published image does not boot on a VM host (an official containerlab limitation), so the kind needs a
-  bare-metal KVM host; on a virtual machine host its virtual router aborts at boot. See
-  [DEVICES.md](../docs/parity-campaign/DEVICES.md) and the supported-platform matrix in
-  [the restore guide](../docs/multi-platform-restore/README.md).
+- **vJunos-router** is a supported kind: backups, Load (the Junos driver, proven live on 26.2R1.7) and Network
+  Design. The published image `n24l/juniper_vjunos-router:26.2R1.7` starts its router with `-cpu host`, which boots
+  on a KVM host whose guest CPU is passed through (bare metal, or a Proxmox guest with the `host` CPU type) and aborts
+  on a VMware guest; the development VM is one, so its proofs ran on the same image rebuilt with the vJunos-switch CPU
+  model, whose forwarding plane (OSPF, eBGP, LLDP, IPv4 and IPv6 transit, fragmentation, reassembly, DF handling)
+  behaved as a vMX should ([B08](../docs/parity-campaign/evidence/b08-vjunos-router-traffic-2026-10-27.md)). Two facts
+  of the image, not of the manager: throughput is capped near 100 Mbit/s without a `VMX-BANDWIDTH` license, and the
+  `ge-` interfaces run at MTU 1514, so a `linux` neighbour on containerlab's default 9500-byte link loses frames over
+  1500 bytes until the link's `mtu` is pinned to 1500. See [DEVICES.md](../docs/parity-campaign/DEVICES.md) and the
+  supported-platform matrix in [the restore guide](../docs/multi-platform-restore/README.md).
 - vQFX is backed up and downloaded but has no restore driver and no console yet.
 
 ## Backup download names

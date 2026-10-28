@@ -65,6 +65,8 @@ replacement with the timed commit armed, confirmation from a fresh connection, i
 `request system reboot` with A intact afterwards, A onto A, back-to-back loads, the failure checks and the foreign
 pending change refused): `juniper_vsrx` on the exact `n24l/juniper_vsrx:23.2R2.21` and `juniper_vjunosrouter` on the
 nested derivative of `n24l/juniper_vjunos-router:26.2R1.7` (the published image cannot boot on a VM host, an
-official limitation). Evidence: `docs/parity-campaign/evidence/b04-vsrx-restore-driver-2026-10-27.md`,
+official limitation; 2026-10-28: the limitation is the VMware virtual CPU, the published image boots on a KVM host
+with the `host` CPU type, and `docs/parity-campaign/evidence/b08-vjunos-router-traffic-2026-10-27.md` checked the
+rebuilt image's forwarding plane). Evidence: `docs/parity-campaign/evidence/b04-vsrx-restore-driver-2026-10-27.md`,
 `b04-vjunosrouter-restore-driver-2026-10-27.md` and their JSON files. The manager-path proof (A2's backup with the
 restore artifact, the Load review and confirmation, selected and mixed jobs, the expired-timer read-back) is phase 2.

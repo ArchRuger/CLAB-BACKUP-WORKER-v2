@@ -147,7 +147,7 @@ class TestResolve(unittest.TestCase):
 
     def test_b05_phase2_live_entries(self):
         # Campaign 2 B05 phase 2 (2026-10-27): applied through the running manager, read back by an independent SSH
-        # session, seen working. vSRX on its exact image; vJunos-router on a nested derivative, which the reason says.
+        # session, seen working. vSRX on its exact image; vJunos-router on the CPU-model rebuild of its image, which the reason says.
         evidence = 'docs/parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md'
         self.assertTrue((Path(__file__).resolve().parents[2] / evidence).is_file(), evidence)
         expected = {('juniper_vsrx', 'static_routes'), ('juniper_vjunosrouter', 'ipv4'),
@@ -157,7 +157,7 @@ class TestResolve(unittest.TestCase):
             r = dc.resolve(feature_id, kind)
             self.assertEqual((r['level'], r['evidence']), ('verified_on_image', evidence), (kind, feature_id))
             self.assertTrue(r['engine'], (kind, feature_id))
-            self.assertEqual(('derivative' in r['reason']), kind == 'juniper_vjunosrouter', (kind, feature_id))
+            self.assertEqual(('CPU model' in r['reason']), kind == 'juniper_vjunosrouter', (kind, feature_id))
         # Applied live but not proven working, or not applied: they stay generated_not_live_tested. vSRX OSPF and IS-IS
         # were applied passive on a host link (no Junos neighbour), the vSRX addresses already existed, MPLS was refused
         # while security policies exist and switched IPv4 to packet mode without them.

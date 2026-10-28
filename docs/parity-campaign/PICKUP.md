@@ -248,3 +248,11 @@ this branch, each a release of its own with its CHANGELOG, VALIDATION and handof
   `campaign2-my-network-labs` under ArchRuger are the owner's to delete.
 - 2026-10-27 04:20 UTC: CI green on the release commit `1673a49` and on `48fdeda`; the live manager runs 1.31.7 with
   `/student-guide` served and capture ready. Pull request 78 is ready for the owner to merge.
+- 2026-10-28 (after the owner merged pull request 78): the owner's lab `vjunous-router-test` showed the published
+  vJunos-router image relaunching every 5 s (`kvm_put_msrs`) beside the CPU-model rebuild booting normally; the owner
+  reports the published image boots on their Proxmox host, so the limitation is the VMware virtual CPU of this
+  development VM. B08: lab `camp-vrt-traffic` (rebuild + cEOS + two hosts) passed forwarding, OSPF, eBGP, LLDP,
+  fragmentation, reassembly, DF and IPv6; the two findings are image facts (about 98 Mbit/s without a VMX-BANDWIDTH
+  license; containerlab's 9500-byte veth MTU against the `ge-` MTU 1514: pin `mtu: 1500`). The owner then declared
+  vJunos-router a supported kind: release 1.31.8 on `claude/vjunos-router-supported` rewrites the caveats. Labs left
+  running on the VM: `camp-vrt-traffic` (campaign-owned, disposable), the owner's `vjunous-router-test`.
