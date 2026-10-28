@@ -1,3 +1,20 @@
+# vJunos-router as a supported kind — 1.31.8
+
+Read `docs/parity-campaign/PICKUP.md`'s last entry and `DEVICES.md`. Preserve:
+
+1. **The host fact.** The published vJunos-router image fails on a VMware guest (its launcher's `-cpu host` makes the
+   inner qemu 2.7 abort in `kvm_put_msrs`), not "in a VM": it boots on a KVM host with the guest CPU passed through
+   (the owner's Proxmox lab). Never revert the guides to "needs a bare-metal host".
+2. **What the rebuild is.** `local/juniper_vjunos-router:26.2R1.7-nested` differs from the published image by one line
+   of `/launch.py` (the vJunos-switch CPU model); it is the development VM's instrument, never pushed, never the
+   catalog's image. Every live result taken on it says so: the `VALIDATION` reasons in `design_capabilities.py` carry
+   "CPU model" on the vJunos-router entries only, pinned by `test_design_capabilities.py`; the exact-image rule of
+   the campaign (no substitute counts as exact-image proof) still holds for anything new.
+3. **Image facts, not manager defects.** The ~100 Mbit/s cap (no `VMX-BANDWIDTH` license) and the 1514-byte `ge-`
+   MTU against containerlab's 9500-byte Linux veths (pin `mtu: 1500` on such links). A future catalog change that
+   sets link MTUs belongs to the builder's link model, not to the kind entry.
+4. Everything the 1.31.7 section below preserves.
+
 # Campaign 2: topology editing, vSRX, Load and Network Design on the Junos VMs, the documentation audit — 1.31.7
 
 Read `docs/parity-campaign/CAMPAIGN-2.md` (ledger, routing record, official defaults) and `PICKUP.md`'s last entry

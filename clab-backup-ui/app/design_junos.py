@@ -35,7 +35,7 @@ SUPPORTED_KINDS = ('juniper_cjunosevolved', 'juniper_vjunosswitch', 'juniper_vju
 KIND_EVIDENCE = {
     'juniper_cjunosevolved': 'live: docs/netlab-integration/evidence/junos-transaction-facts.md',
     'juniper_vjunosswitch': 'live: docs/netlab-integration/evidence/junos-transaction-facts.md',
-    'juniper_vjunosrouter': 'exact netlab profile; applied live through the manager on the nested derivative of 26.2R1.7 (OSPF, loopbacks, static route; docs/parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md)',
+    'juniper_vjunosrouter': 'exact netlab profile; applied live through the manager on 26.2R1.7 (the image rebuilt with the vJunos-switch CPU model for the VMware-hosted development VM; OSPF, loopbacks, static route; docs/parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md)',
     'juniper_vsrx': 'exact netlab profile; applied live through the manager on the exact 23.2R2.21 image (static route, passive OSPF and IS-IS; the design writes no security zone; docs/parity-campaign/evidence/b05-phase2-live-apply-2026-10-27.md)',
 }
 NAME = re.compile(r'^clabdsg-[0-9a-f]{8}$')

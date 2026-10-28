@@ -1,3 +1,30 @@
+# vJunos-router as a supported kind — 1.31.8
+
+Branch `claude/vjunos-router-supported` from the merged `main` (pull request 78). Evidence by kind:
+
+**Static.** `python3 deploy/verify-release.py`, `python3 docs/maintenance-audit/tools/check_links.py`, `git diff --check`.
+
+**Unit.** `test_design_capabilities.py`, `test_junos_kinds.py`, `test_restore.py`, `test_design_junos.py`,
+`test_release_consistency.py` individually; the full Python suite (`unittest discover`) and the browser suite
+(`node --test tests/*.js`) on the release tree: 2988 tests OK (2 skipped, the opt-in SSH fixtures) and 1185 of 1185.
+
+**Live, on the development VM (a VMware guest with nested KVM; containerlab 0.79.0), 2026-10-27 10:53–11:30 UTC.**
+- The owner's lab `vjunous-router-test`: `rtr1` on the published `n24l/juniper_vjunos-router:26.2R1.7` logged
+  `kvm_put_msrs: Assertion ... failed` from the inner qemu 2.7 at 10:53:58 and relaunched every 5 s from 10:59; `rtr2`
+  on the CPU-model rebuild booted normally. Neither lab was changed.
+- Lab `camp-vrt-traffic` (the rebuild as `rtr`, cEOS 4.35.0F, two `network-multitool` hosts; OSPF, eBGP, LLDP, IPv4 and
+  IPv6): boot 12 min 25 s, FPC online at 11:14; the 16-section script in
+  `docs/parity-campaign/evidence/b08-vjunos-router-traffic-2026-10-27.md` passed every forwarding, adjacency,
+  fragmentation, reassembly, DF, IPv6 and counter check, with zero PFE drops and zero interface errors after UDP floods.
+  Findings: about 98 Mbit/s received at any offered load (`show system license`: VMX-BANDWIDTH not installed), and
+  frames over 1500 bytes lost between the hosts' 9500-byte veths, cEOS's 1500 and the router's 1514 until the hosts'
+  MTU was set to 1500 (then 0 % loss at 2000 and 8000 bytes both ways, and with the router fragmenting at a 9014 ingress).
+
+**Reported, not observed.** The published image booting on the owner's Proxmox host is the owner's statement
+(2026-10-27); this session did not run the exact image on a KVM host.
+
+**Not run.** The manager's Load and Network Design on the published image; a Git save of the B08 lab; the browser.
+
 # Campaign 2: topology editing, vSRX, Load and Network Design on the Junos VMs, the documentation audit — 1.31.7
 
 Evidence is named by kind. Branch `claude/parity-campaign`; the ledger is `docs/parity-campaign/CAMPAIGN-2.md`, the

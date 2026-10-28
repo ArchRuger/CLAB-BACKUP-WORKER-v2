@@ -72,8 +72,8 @@ class VJunosRouterKindTests(unittest.TestCase):
         self.assertEqual(SAVE_FORMATS['juniper_vjunosrouter'], 'junos-display-set')
 
     def test_router_has_the_junos_restore_artifact_and_driver_since_it_was_proven_live(self):
-        # Campaign 2, B04 (docs/parity-campaign/evidence/b04-*.md): the Junos driver proven live on a nested derivative
-        # of the published image. The earlier claim of this test (no artifact, no driver until proven live) is now met.
+        # Campaign 2, B04 (docs/parity-campaign/evidence/b04-*.md): the Junos driver proven live on 26.2R1.7 (the image
+        # rebuilt with the vJunos-switch CPU model for the VMware-hosted development VM; B08 checked its forwarding plane). The earlier claim of this test (no artifact, no driver until proven live) is now met.
         from app import restore_drivers, restore_junos
         from app.inventory import JUNOS_DRIVER
         from app.restore import OTHER_PLATFORM, saved_device_reason
