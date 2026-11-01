@@ -50,9 +50,11 @@ function busyReason(labId=activeId){
 const busy=()=>!!busyReason();
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
 async function api(path,options={}){
+ if(typeof sessionEnded==='function'&&sessionEnded())throw sessionEndedError();   // no request leaves a page that is marked signed out (session.js)
  const headers={...(options.headers||{})};
  const response=await fetch('/api'+path,{...options,headers});
  if(!response.ok){let data;try{data=await response.json();}catch{data={detail:'The manager did not respond. Try again.'};}
+ if(response.status===401&&typeof sessionLost==='function'&&sessionLost(401,data)&&typeof signedOut==='function')signedOut();   // the error below is still thrown, so every catch runs as before
  // A structured detail ({message, problems:[{path,message}]}) keeps its problem list on the error for the design summary.
  const detail=data.detail,shaped=detail&&typeof detail==='object'&&!Array.isArray(detail)?detail:null;
  const error=new Error(typeof detail==='string'?detail:shaped&&typeof shaped.message==='string'?shaped.message:'Check the form fields and try again.');
@@ -88,7 +90,7 @@ function menuReason(el,text){if(!el||typeof el.querySelector!=='function')return
 function logsVisible(){if(tab!=='advanced')return false;const view=$('logs-view');if(!view||typeof view.getBoundingClientRect!=='function'||typeof innerHeight==='undefined')return true;const box=view.getBoundingClientRect();return box.bottom>0&&box.top<innerHeight;}
 // Responses are applied in request order: a slow older poll must not overwrite the state a newer refresh() already applied (it would drop a just-added lab and send the student Home).
 let refreshRequest=0, refreshApplied=0;
-async function refresh(){const request=++refreshRequest;const response=await api('/state');const data=await response.json();if(request<refreshApplied)return;refreshApplied=request;state=data;state.loaded=true;if(activeId&&!current())activeId='';if(!routeApplied){routeApplied=true;if(typeof applyRoute==='function')applyRoute();}render();if(logsVisible())await refreshLogs();}
+async function refresh(){if(typeof sessionEnded==='function'&&sessionEnded())return;const request=++refreshRequest;const response=await api('/state');const data=await response.json();if(request<refreshApplied)return;refreshApplied=request;state=data;state.loaded=true;if(activeId&&!current())activeId='';if(!routeApplied){routeApplied=true;if(typeof applyRoute==='function')applyRoute();}render();if(logsVisible())await refreshLogs();}
 function setTab(value){if(SAVE_ROUTES[value]){saveRoutePending={lab:activeId,open:SAVE_ROUTES[value]};value=TAB_ALIAS[value]||'topology';}const legacy=TAB_ALIAS[value];if(legacy){if(value==='inventory')devicesTechnical=true;else scrollTarget=SUBVIEW[value]||'';subview=value;value=legacy;}else subview='';tab=PANELS.includes(value)?value:'topology';}
 // An old address of the Progress tab, once the lab it names is rendered and the header's scripts are loaded: the chip panel, Save
 // settings or All versions opens once (never again on a poll). The address itself was already rewritten to the lab's default tab.
@@ -141,10 +143,24 @@ function renderLabHeader(lab){
  if($('lab-ready'))$('lab-ready').textContent=readyLine(lab,ls);
 }
 function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=value||'—';};set('tech-lab-id',lab.id);set('tech-source',lab.source);set('tech-path',lab.vm_project_path||lab.vm_source?.files?.definition?.path);set('tech-prefix',lab.container_prefix??'clab');set('tech-deployment',lab.deployment_name);set('tech-binding',lab.git_binding?[lab.git_binding.binding_id,lab.git_binding.revision].filter(Boolean).join(' · '):'');}
+function roleLabel(role){return role==='admin'?'Administrator':role==='operator'?'Operator':'';}
+// The account in the header (UI.md 4): text and hidden/disabled only, the markup is static. The administrator-only items of the Manager menu stay
+// visible for an Operator and are disabled with their reason as visible text; People and Diagnostics are hidden for an Operator.
+function renderAccount(){
+ const user=state.user||null,name=user&&typeof user.name==='string'?user.name:'',operator=!!user&&user.role==='operator';
+ if($('account-chip')){$('account-chip').textContent=name;$('account-chip').hidden=!name;}
+ if($('account-name'))$('account-name').textContent=name;
+ if($('account-role'))$('account-role').textContent=roleLabel(user&&user.role);
+ if($('account-users'))$('account-users').hidden=!(user&&user.role==='admin');
+ if($('manager-diagnostics'))$('manager-diagnostics').hidden=!(user&&user.role==='admin');
+ if($('account-signout-note'))$('account-signout-note').hidden=typeof captureEnabled!=='undefined'&&captureEnabled===false;
+ for(const id of ['vm-settings','manager-settings']){const el=$(id);if(!el)continue;el.disabled=operator;el.title=operator?'Administrators only':'';menuReason(el,operator?'Administrators only':'');}
+}
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
  const version=state.version||'1.31.8';$('app-version').textContent='v'+version;
+ if($('account-name'))renderAccount();
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  if($('help-student-guide'))$('help-student-guide').hidden=!state.student_guide;
@@ -284,7 +300,7 @@ function renderLabBanner(){
  else if(ls.key==='starting')spec={tone:'info',icon:'clock',running:true,text:'Lab is starting — '+ls.detail};
  else if(typeof opPendingBannerSpec==='function'&&opPendingBannerSpec(lab))spec=opPendingBannerSpec(lab);
  else if(ls.key==='stopped')spec={tone:'info',icon:'info',text:'This lab is not running.',actions:start()};
- else if(ls.key==='unknown')spec={tone:'warn',icon:'alert',text:ls.detail||'The lab VM cannot be reached. Status may be out of date.',actions:{'banner-vm':{label:'VM connection…',run:()=>{if(typeof openVmDialog==='function')openVmDialog();}}}};
+ else if(ls.key==='unknown')spec={tone:'warn',icon:'alert',text:ls.detail||'The lab VM cannot be reached. Status may be out of date.',actions:state.user&&state.user.role==='operator'?undefined:{'banner-vm':{label:'VM connection…',run:()=>{if(typeof openVmDialog==='function')openVmDialog();}}}};
  else if(ls.key==='unlinked')spec={tone:'info',icon:'info',text:ls.detail,actions:{'banner-link':{label:'Match to a running lab…',run:()=>{const b=$('link-deployment');if(b&&typeof b.onclick==='function')b.onclick();}}}};
  else if(lab.telemetry_retired)spec={tone:'info',icon:'info',text:retiredBannerText(lab.telemetry_retired),actions:{'banner-retired-review':{label:'Review and remove…',run:()=>{if(typeof openTelemetryRetired==='function'&&typeof opTask==='function')opTask(null,()=>openTelemetryRetired(lab.id));}}}};
  setBanner('lab-banner',spec);

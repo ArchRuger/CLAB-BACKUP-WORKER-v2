@@ -188,7 +188,7 @@ function shellEscape(e){
  const nodeMenu=shellEl('node-context-menu');if(nodeMenu&&!nodeMenu.hidden)return;
  // The wire menu (capture.js) owns its Escape too: its own keydown closes it and returns focus to the wire.
  const linkMenu=shellEl('link-context-menu');if(linkMenu&&!linkMenu.hidden)return;
- if(target&&target.closest('.menu-list, [data-panel]'))return;
+ if(target&&target.closest('.menu-list, [data-panel], #session-banner, #session-banner-dialog'))return;
  const details=target?target.closest('details#lab-switcher, details.menu'):null;
  if(details&&details.open){details.open=false;const summary=typeof details.querySelector==='function'?details.querySelector('summary'):null;if(summary&&typeof summary.focus==='function')summary.focus();e.stopPropagation();return;}
  if(closeMenus())e.stopPropagation();
@@ -197,6 +197,7 @@ function shellEscape(e){
 // `except` so it survives until the item's click; a pointerdown anywhere else closes it.
 function shellPointerDown(e){
  const target=e.target&&typeof e.target.closest==='function'?e.target:null;
+ if(target&&target.closest('#session-banner, #session-banner-dialog'))return;   // the session banner closes nothing: a panel with a typed save name survives Try again
  const menu=target?target.closest('.menu, details#lab-switcher, #link-context-menu'):null;
  closeMenus(menu||undefined);
  if(!(menu&&menu.id==='link-context-menu')&&typeof closeLinkMenu==='function')closeLinkMenu();
@@ -382,3 +383,71 @@ function queueRouteReview(labId){
  const again=()=>{shellReviewTimer=null;if(tryRouteReview()||!shellPendingReview)return;if(++shellReviewTries>=100){shellPendingReview='';return;}shellReviewTimer=setTimeout(again,100);};
  shellReviewTimer=setTimeout(again,100);
 }
+// Signed out while the page runs (docs/sign-on/UI.md 3.3): api() calls signedOut() on a 401 signed_out. Nothing typed is lost: a page with
+// nothing to keep leaves for the sign-in page; a page with an open dialog, a draft the browser could not store or a save panel holding typed
+// text shows the banner instead (inside the dialog when one is open, because a modal dialog makes the page behind it inert).
+// The panel is checked BEFORE closeMenus(): closing the chip panel would clear the typed save name.
+function sessionDirtyPanel(){
+ if(typeof document==='undefined'||typeof document.querySelectorAll!=='function')return null;
+ for(const panel of document.querySelectorAll('[data-panel]')){
+  if(panel.hidden)continue;
+  const name=panel.querySelector('#save-name[data-dirty]');if(name)return name;
+  const url=panel.querySelector('#save-url');if(url&&url.value)return url;
+ }
+ return null;
+}
+const SESSION_BANNER_TEXT={
+ dialog:['Your session ended. What you typed in the open dialog is still here.','Sign in in a new tab, come back and choose Try again. Or sign in here and lose the open dialog.'],
+ draft:['Your session ended. Your design draft is still on this page.','Sign in in a new tab, come back and choose Try again. Or sign in here and lose the draft.'],
+ panel:['Your session ended. What you typed in the save panel is still here.','Sign in in a new tab, come back and choose Try again. Or sign in here and lose what you typed.'],
+ closed:['Your session ended.','Sign in in a new tab, come back and choose Try again. Or sign in here.']};
+function sessionBannerClone(){return typeof document!=='undefined'&&typeof document.querySelector==='function'?document.querySelector('#session-banner-dialog'):null;}
+function sessionBannerClick(e){
+ const button=e.target&&typeof e.target.closest==='function'?e.target.closest('[data-session-action]'):null;if(!button)return;
+ const action=button.getAttribute('data-session-action');
+ if(action==='retry'&&typeof sessionRetry==='function')sessionRetry();
+ else if(action==='here'&&typeof sessionGo==='function')sessionGo('ended');
+}
+function renderSessionBanner(cause){
+ const banner=shellEl('session-banner');if(!banner)return false;
+ const words=SESSION_BANNER_TEXT[cause]||SESSION_BANNER_TEXT.closed;
+ const text=shellEl('session-banner-text'),caption=shellEl('session-banner-caption');
+ if(text)text.textContent=words[0];if(caption)caption.textContent=words[1];
+ const dialog=cause==='dialog'&&typeof document.querySelector==='function'?document.querySelector('dialog[open]'):null;
+ const old=sessionBannerClone();if(old)old.remove();
+ if(!dialog){
+  banner.hidden=false;
+  const retry=shellEl('session-retry');if(retry&&typeof retry.focus==='function')retry.focus();
+  return true;
+ }
+ const clone=banner.cloneNode(true);
+ for(const node of [clone,...clone.querySelectorAll('[id]')])node.id=node.id+'-dialog';
+ clone.hidden=false;clone.addEventListener('click',sessionBannerClick);
+ dialog.prepend(clone);
+ // The person pressed Escape or Cancel while signed out: the clone goes with the dialog, the page-level banner stays for the way back.
+ dialog.addEventListener('close',()=>{
+  const mine=sessionBannerClone();if(!mine)return;
+  mine.remove();
+  if(typeof sessionEnded==='function'&&sessionEnded()){const panel=sessionDirtyPanel();renderSessionBanner(panel?'panel':typeof designLeaveGuard==='function'&&designLeaveGuard()?'draft':'closed');}
+ },{once:true});
+ const retry=clone.querySelector('#session-retry-dialog');if(retry&&typeof retry.focus==='function')retry.focus();
+ return true;
+}
+function signedOut(){
+ if(typeof sessionMark!=='function'||!sessionMark())return false;
+ const panel=sessionDirtyPanel();
+ if(!panel)closeMenus();
+ const dialog=typeof document!=='undefined'&&typeof document.querySelector==='function'?document.querySelector('dialog[open]'):null;
+ const draft=typeof designLeaveGuard==='function'&&!!designLeaveGuard();
+ if(!dialog&&!draft&&!panel){if(typeof sessionGo==='function')sessionGo('ended');return true;}
+ renderSessionBanner(dialog?'dialog':panel?'panel':'draft');
+ return true;
+}
+// Try again succeeded: the page-level banner and any clone go.
+function sessionRestored(){
+ const banner=shellEl('session-banner');if(banner)banner.hidden=true;
+ const clone=sessionBannerClone();if(clone)clone.remove();
+}
+// Sign-out landing (UI.md 6.4): a clean sign-in page, no next, no reason.
+function goSignIn(){if(typeof location!=='undefined')location.replace('/login');}
+{const banner=shellEl('session-banner');if(banner)banner.addEventListener('click',sessionBannerClick);}

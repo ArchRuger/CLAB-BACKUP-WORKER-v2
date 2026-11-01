@@ -639,6 +639,11 @@ footer {
 .menu-danger button:hover:not(:disabled), .menu-list button.danger:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger-strong); }
 .menu-danger button:disabled, .menu-list button.danger:disabled { color: var(--muted); }
 .menu-reason { display: block; flex-basis: 100%; font-size: 12px; font-weight: 400; color: var(--muted); }
+.menu-account { padding: 8px 12px 4px; }
+.menu-list .menu-account p { margin: 0; padding: 0; border-top: 0; font-size: 13px; color: var(--ink); font-weight: 600; }
+.menu-list .menu-account .caption { font-weight: 400; margin-top: 2px; color: var(--muted); }
+.account-chip { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; margin-right: 12px; }
+@media (max-width: 900px) { .account-chip { display: none; } }
 .menu-list p, .menu-list .menu-foot, .menu-list .side-hint { margin: 6px 0 0; padding: 8px 12px 4px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .menu-list p + p { margin-top: 0; padding-top: 0; border-top: 0; }
 .menu-list small { display: block; padding: 0 12px 6px; font-size: 12px; color: var(--muted); }

@@ -453,3 +453,6 @@ function saveChangeSentence(summary,also,job){
 // The one text matcher of the Devices search (app.js) and the Home filter (home.js): a trimmed, case-insensitive
 // substring of the joined non-empty parts. An empty term matches everything. No wildcards (C03 §1.9).
 function textMatch(term,parts){const t=String(term||'').trim().toLowerCase();if(!t)return true;return (parts||[]).filter(p=>p!==undefined&&p!==null&&p!=='').map(String).join(' ').toLowerCase().includes(t);}
+// A sentence that sends a person to Diagnostics must not send an Operator to a page the manager refuses them (administrators only):
+// the caller passes state.user.role ('' when unknown, which reads as the administrator wording).
+function diagnosticsAdvice(role){return role==='operator'?'ask an administrator to check Diagnostics':'see Diagnostics';}
