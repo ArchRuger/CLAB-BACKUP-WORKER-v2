@@ -1348,3 +1348,26 @@ test('S10a: the operation output poll sends nothing after a session end, spends 
  assert.equal(sent,3,'sessionRetry() resumes the poll and it asks again');assert.equal(timers.length,1,'the job is polled on, as before');
  assert.equal(errorBox.textContent,'');
 });
+test('S10a: a poll kept for a closed output dialog is not revived into the dialog reopened for another job',async()=>{
+ const jobs={current:stopJob({status:'running'})},h=stopHarness(jobs),sess=signonSession();
+ Object.assign(h.c,{sessionEnded:sess.sessionEnded,sessionOnResume:sess.sessionOnResume,sessionEndedError:sess.sessionEndedError});
+ const timers=[];h.c.setTimeout=fn=>{timers.push(fn);return timers.length;};
+ h.dialog.querySelector=sel=>sel==='.form-error'?{textContent:''}:{textContent:''};
+ const asked=[];let answer='ok';
+ h.c.api=async url=>{
+  if(sess.sessionEnded())throw sess.sessionEndedError();
+  asked.push(url);
+  if(answer==='401'){sess.end();throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+  return {json:async()=>({...jobs.current,id:url.split('/').pop()})};
+ };
+ await h.c.opShowJob('A');
+ answer='401';await timers.shift()();
+ assert.equal(sess.resume.size,1,'poll A is kept for the resume');
+ h.dialog.open=false;if(typeof h.dialog.onclose==='function')h.dialog.onclose();
+ h.dialog.open=true;
+ await h.c.opShowJob('B');
+ assert.equal(sess.resume.size,2,'a second closure for the second call');
+ asked.length=0;answer='ok';await sess.retry();
+ assert.deepEqual(asked,['/operations/B'],'only the job the dialog shows is polled');
+ assert.equal(timers.length,1,'one chain drives the dialog');
+});

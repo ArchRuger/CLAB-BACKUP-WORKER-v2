@@ -10,13 +10,23 @@ function workspaceMessage(value){
  if(detail&&typeof detail==='object'&&typeof detail.message==='string'&&detail.message)return detail.message;
  return 'Request failed.';
 }
-// No request leaves a signed-out page (REVIEW U8); a 401 signed_out marks the page and leaves for the sign-in page at once: this page holds nothing typed (UI 3.5).
+// A dialog of this page that holds something the person typed (the new topology file, the download address): the page must not leave under it.
+function workspaceTyped(){
+ if(typeof document.querySelector!=='function')return false;
+ const dialog=document.querySelector('dialog[open]');if(!dialog||typeof dialog.querySelectorAll!=='function')return false;
+ return [...dialog.querySelectorAll('textarea,input')].some(f=>!f.readOnly&&!f.disabled&&!['checkbox','radio','hidden','button','submit'].includes(f.type)&&String(f.value||'').trim()!=='');
+}
+// No request leaves a signed-out page (REVIEW U8); a 401 signed_out marks the page and leaves for the sign-in page at once, unless an open dialog holds typed text: then the page stays, the dialog's own error says the session ended and the page leaves on the next request after the dialog holds nothing typed.
+let workspaceHeld=false;
 async function api(path,options={}){
- if(typeof sessionEnded==='function'&&sessionEnded())throw sessionEndedError();
+ if(typeof sessionEnded==='function'&&sessionEnded()){
+  if(workspaceHeld&&!workspaceTyped()&&typeof sessionGo==='function'){workspaceHeld=false;sessionGo('ended');}
+  throw sessionEndedError();
+ }
  const response=await fetch('/api'+path,options);
  if(!response.ok){
   let value=null;try{value=await response.json();}catch{value=null;}
-  if(typeof sessionLost==='function'&&sessionLost(response.status,value)&&typeof sessionMark==='function'&&sessionMark()&&typeof sessionGo==='function')sessionGo('ended');
+  if(typeof sessionLost==='function'&&sessionLost(response.status,value)&&typeof sessionMark==='function'&&sessionMark()){if(workspaceTyped())workspaceHeld=true;else if(typeof sessionGo==='function')sessionGo('ended');}
   throw Object.assign(new Error(workspaceMessage(value)),{status:response.status});
  }
  return response;

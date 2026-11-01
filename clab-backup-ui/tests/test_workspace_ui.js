@@ -7,13 +7,13 @@ const source=fs.readFileSync(path.join(STATIC,'workspace.js'),'utf8');
 const html=fs.readFileSync(path.join(STATIC,'workspace.html'),'utf8');
 const VERSION=fs.readFileSync(path.join(__dirname,'../VERSION'),'utf8').trim();
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-function page({hash='',session=true,answers=[]}={}){
+function page({hash='',session=true,answers=[],dialog=null}={}){
  const els=new Map(),fetches=[],handlers={},gone=[];
  const get=id=>{if(!els.has(id))els.set(id,{id,hidden:false,textContent:'',innerHTML:'',onclick:null});return els.get(id);};
  let ended=false;
  const queue=[...answers];
  const context=vm.createContext({URLSearchParams,decodeURIComponent,console,
-  location:{hash},document:{getElementById:get,title:'',addEventListener:(type,fn)=>{handlers[type]=fn;}},
+  location:{hash},document:{getElementById:get,querySelector:sel=>sel==='dialog[open]'?dialog:null,title:'',addEventListener:(type,fn)=>{handlers[type]=fn;}},
   window:{open:()=>({})},setTimeout:()=>1,clearTimeout:()=>{},
   fetch:async(url,options)=>{
    fetches.push(url);
@@ -88,4 +88,23 @@ test('the CLI launcher mode still lists the devices and opens the history from a
  assert.equal(p.get('workspace-title').textContent,'Open CLIs · BGP');
  assert.match(p.get('workspace-message').textContent,/^1 of 2 devices ready\./);
  assert.match(p.get('workspace-content').innerHTML,/Open CLI <span/);assert.match(p.get('workspace-content').innerHTML,/id="ssh-launch-all" >/);
+});
+
+const dialogWith=fields=>({querySelectorAll:()=>fields});
+test('a 401 signed_out while a dialog holds typed text keeps the page; it leaves once, on the next request, when nothing typed remains',async()=>{
+ const fields=[{type:'textarea',value:'name: lab\ntopology: {}'}];
+ const p=page({answers:[SIGNED_OUT],dialog:dialogWith(fields)});
+ await p.start();
+ assert.deepEqual(p.gone,[],'the typed topology is not thrown away');assert.ok(p.ended(),'the page is marked signed out');
+ const before=p.fetches.length;
+ await assert.rejects(p.context.json('/operations/create','POST',{}),e=>e.sessionEnded===true&&e.message==='Your session ended. Sign in again.');
+ assert.deepEqual(p.gone,[],'still typed: still no navigation');assert.equal(p.fetches.length,before,'and no request');
+ fields[0].value='';
+ await assert.rejects(p.context.api('/state'),e=>e.sessionEnded===true);
+ assert.deepEqual(p.gone,['ended']);
+ await assert.rejects(p.context.api('/state'));assert.deepEqual(p.gone,['ended'],'once');
+});
+test('a read-only or empty field in an open dialog does not hold the page',async()=>{
+ const p=page({answers:[SIGNED_OUT],dialog:dialogWith([{type:'textarea',value:'x',readOnly:true},{type:'text',value:'  '}])});
+ await p.start();assert.deepEqual(p.gone,['ended']);
 });

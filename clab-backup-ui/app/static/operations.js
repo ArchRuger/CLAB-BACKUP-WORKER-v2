@@ -564,10 +564,10 @@ function opBindCopyOutput(getOutput,id='op-copy-output'){
 // shows it, however it was closed; a fresh launch is a different job id, so an older closed one never
 // holds it back. Moving to another lab closes an auto-opened dialog instead of leaving it open over a lab
 // it is not about, and — being closed the same way — it does not come back there on its own either.
-const opClosedOutputs=new Set();
+const opClosedOutputs=new Set();let opShowSeq=0;/* one sequence for the shared dialog: a poll kept for the resume by an earlier call is stale once another call opened it */
 async function opShowJob(id,{auto=false,stop=false}={}){
  if(auto&&opClosedOutputs.has(id))return;
- clearTimeout(opOutputTimer);
+ clearTimeout(opOutputTimer);const seq=++opShowSeq,resume=()=>seq===opShowSeq?poll():undefined;
  const dialog=opDialog('operation-output','Lab operation','<div id="op-job-banner" class="op-banner" tabindex="-1" hidden></div><div id="op-job-stop" class="op-stop" hidden></div>'+(typeof copyText==='function'?'<div class="op-output-tools"><button type="button" id="op-copy-output" class="button ghost small" data-label="Copy output" aria-label="Copy the command output" data-copy-target="op-job-output" disabled>Copy output</button><span class="copy-status" role="status"></span></div>':'')+'<pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
  // The sort and filter of a previous inspect run live on the reused dialog: every run starts with a clean view.
  dialog._inspectView={key:'',dir:'',filter:''};
@@ -600,7 +600,7 @@ async function opShowJob(id,{auto=false,stop=false}={}){
  // while the job ran; a poll that fails is repeated, because one lost answer must not hide how the job ended.
  let fails=0;const follows=typeof opJobDone==='function';
  const poll=async()=>{
-  if(!dialog.open&&!follows)return;
+  if(seq!==opShowSeq||(!dialog.open&&!follows))return;
   try{
    const job=await(await api('/operations/'+id)).json();fails=0;
    if(auto&&dialog.open&&job.lab_id&&typeof activeId==='string'&&activeId&&job.lab_id!==activeId)dialog.close();
@@ -622,7 +622,7 @@ async function opShowJob(id,{auto=false,stop=false}={}){
    $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(opPublishedPath(job))));$('op-back-review')?.addEventListener('click',()=>opBackToReview(job));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(typeof opJobDone==='function')opJobDone(job);}
-  }catch(e){if(typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(poll);return;}/* signed out (UI 3.3): nothing was sent, no retry, no sentence; sessionRetry() runs poll again */ if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);else if(typeof opJobLost==='function')opJobLost(id);}
+  }catch(e){if(typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(resume);return;}/* signed out (UI 3.3): nothing was sent, no retry, no sentence; sessionRetry() runs poll again */ if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);else if(typeof opJobLost==='function')opJobLost(id);}
  };dialog.onclose=()=>{opClosedOutputs.add(id);if(!follows)clearTimeout(opOutputTimer);};await poll();
 }
 // The topology file a finished job left on the VM, to continue with "Deploy or add this lab…": the builder's

@@ -1690,3 +1690,25 @@ test('S10a: the design apply watch stops at the first 401 without writing a prob
  h.ok();await h.retry();
  assert.ok(h.sent()>=2,'sessionRetry() polls again (a finished job also reads the ownership)');assert.equal(vm.runInContext('designApplyWatch',h.c),null,'a finished job ends the watch as before');
 });
+
+test('S10a: closing the apply dialog while signed out leaves one live review loop after the resume (a stale closure for the same job ends itself)',async()=>{
+ const h=signonWatchHarness(()=>({id:'job1',status:'running'}));
+ h.c.designReviewStartWatch('lab-a','job1',false);
+ await h.fire();
+ assert.equal(h.resume.size,1);
+ h.c.designReviewStartWatch('lab-a','job1',true);   // what closing the dialog does: stop, then follow quietly
+ await h.fire();
+ assert.equal(h.resume.size,2,'two closures were registered');
+ h.ok();const before=h.sent();await h.retry();
+ assert.equal(h.sent()-before,1,'only the current watch sends');assert.equal(h.timers.length,1,'one timer is armed');
+});
+test('S10a: reopening the same apply job while signed out leaves one live loop after the resume',async()=>{
+ const h=signonWatchHarness(()=>({id:'j1',lab_id:'lab-a',status:'applying',targets:[]}));
+ vm.runInContext("designApplyState.labId='lab-a';designApplyState.jobId='j1';designApplyState.step='progress';designApplyState.job={id:'j1',lab_id:'lab-a',status:'applying',targets:[]}",h.c);
+ h.c.designApplyStartWatch('j1');await h.fire();
+ vm.runInContext('designApplyStopWatch()',h.c);
+ h.c.designApplyStartWatch('j1');await h.fire();
+ assert.equal(h.resume.size,2);
+ h.ok();const before=h.sent();await h.retry();
+ assert.equal(h.sent()-before,1,'only the current watch sends');assert.equal(h.timers.length,1);
+});
