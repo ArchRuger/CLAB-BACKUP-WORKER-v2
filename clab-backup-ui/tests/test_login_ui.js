@@ -348,7 +348,44 @@ test('Sign out in the change view clears the held password and shows a clean for
  assert.equal(f.get('signin-form').hidden,false);assert.equal(f.get('signin-change').hidden,true);
  assert.equal(f.get('change-new').value,'');assert.equal(f.get('change-confirm').value,'');assert.equal(f.get('signin-reason').textContent,'');
  f.get('change-new').value=GOOD;f.get('change-confirm').value=GOOD;f.get('change-current-field').hidden=true;
- await changeSubmit(f);assert.equal(f.requests.at(-1).body.current,'');
+ const before=f.requests.length;await changeSubmit(f);assert.equal(f.requests.length,before);
+});
+
+test('Sign out resets Show/Hide so the next person types in a hidden field',async()=>{
+ const f=await changeView(async()=>reply(200,{}));
+ f.get('signin-show').onclick();f.get('change-show').onclick();
+ assert.equal(f.get('signin-password').type,'text');assert.equal(f.get('change-new').type,'text');
+ await f.context.changeSignOut();
+ for(const id of ['signin-password','change-new','change-confirm'])assert.equal(f.get(id).type,'password',id);
+ for(const id of ['signin-show','change-show']){assert.equal(f.get(id).attrs['aria-pressed'],'false',id);assert.equal(f.get(id).textContent,'Show',id);}
+});
+
+test('opening the change view resets Show/Hide',async()=>{
+ const f=fixture({fetch:async(u,o,n)=>n===1?done:restricted});await tick();
+ f.get('signin-show').onclick();f.get('signin-password').value='x';
+ f.get('signin-user').value='sam';f.get('signin-password').value='temporary-pass';await submit(f);
+ for(const id of ['signin-password','change-new','change-confirm'])assert.equal(f.get(id).type,'password',id);
+ assert.equal(f.get('signin-show').attrs['aria-pressed'],'false');assert.equal(f.get('signin-show').textContent,'Show');
+});
+
+test('while Sign out is in flight the change view is inert and cannot submit or navigate',async()=>{
+ let release;const pending=new Promise(r=>{release=r;});
+ const f=await changeView(async(u,o)=>{if(o&&o.method==='DELETE'){await pending;return reply(200,{});}return reply(200,{user:{must_change_password:false}});});
+ f.get('change-new').value=GOOD;f.get('change-confirm').value=GOOD;f.get('change-current-field').hidden=false;f.get('change-current').value='old';
+ const out=f.context.changeSignOut();await tick();
+ assert.equal(f.get('change-submit').disabled,true);assert.equal(f.get('change-signout').disabled,true);
+ const before=f.requests.length;await changeSubmit(f);
+ assert.equal(f.requests.length,before);assert.deepEqual(f.replaced,[]);
+ release();await out;
+ assert.equal(f.get('change-submit').disabled,false);assert.equal(f.get('change-signout').disabled,false);
+ assert.equal(f.get('signin-form').hidden,false);
+});
+
+test('the change form sends nothing when no current password is held and the field is hidden',async()=>{
+ const f=fixture({fetch:async(u,o,n)=>n===1?restricted:reply(200,{user:{must_change_password:false}})});await tick();
+ f.get('change-current-field').hidden=true;f.get('change-new').value=GOOD;f.get('change-confirm').value=GOOD;
+ await changeSubmit(f);
+ assert.equal(f.requests.filter(r=>r.url==='/api/session/password').length,0);assert.deepEqual(f.replaced,[]);
 });
 
 test('Sign out from the change view forgets the previous username',async()=>{
