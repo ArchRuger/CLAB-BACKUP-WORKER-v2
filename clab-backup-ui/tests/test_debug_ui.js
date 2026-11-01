@@ -111,7 +111,7 @@ test('debug.html loads session.js with the release number before its own script'
  const session=tags.find(t=>t[1]==='/static/session.js');assert.ok(session,'session.js is loaded with ?v=');
  assert.ok(tags.every(t=>t[2]===session[2]),'one release number on every script');
  assert.ok(html.indexOf('session.js')<html.indexOf('debug.js'));
- assert.doesNotMatch(html,/\\sstyle=|<style/,'no inline style on this page');
+ assert.doesNotMatch(html,/\sstyle=|<style/,'no inline style on this page');
 });
 test('vm-connection.html names Diagnostics in a role-neutral sentence and loads no script',()=>{
  const html=pageHtml('vm-connection.html'),text=html.replace(/<[^>]+>/g,'').replace(/\s+/g,' ');

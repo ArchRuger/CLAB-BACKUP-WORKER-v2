@@ -927,6 +927,30 @@ test('a drawing the browser could not store: the overlay pauses, says why, offer
  assert.equal(p.el('builder-problem-signin').hidden,false);assert.equal(p.el('builder-problem-again').hidden,false);assert.equal(p.el('builder-problem-retry').hidden,true,'the storage retry is not offered');
  assert.equal(p.el('root').inert,true);assert.equal(p.run('builderPaused.code'),'signed_out');
 });
+test('a storage pause that is up when the session ends is replaced by the signed-out overlay, which keeps the storage retry',async()=>{
+ let signedIn=false;const p=signedPage(()=>signedIn?{labs:[],jobs:[],operations:[]}:LOST);
+ p.run(`builderDraft={id:'new:lab1',name:'lab1',yaml:'name: lab1\\n',annotations:''};builderUnstored={yaml:'name: lab1\\n# newer\\n',annotations:''};builderProblem('This browser could not store the drawing.','storage')`);
+ assert.equal(p.run('builderPaused.code'),'storage');
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401);
+ assert.equal(p.moves.length,0,'no redirect: the drawing is held by the page');
+ assert.equal(p.run('builderPaused.code'),'signed_out','the session sentence replaces the storage pause');
+ assert.equal(p.el('builder-problem-text').textContent,BUILDER_SESSION_TEXT);
+ assert.equal(p.el('builder-problem-signin').hidden,false);assert.equal(p.el('builder-problem-again').hidden,false);
+ assert.equal(p.el('builder-problem-retry').hidden,false,'Try to store it again stays: the drawing is still unstored');
+ assert.equal(p.el('root').inert,true);
+ signedIn=true;await p.c.builderTryAgain();
+ assert.equal(p.run('builderPaused'),null);assert.equal(p.run('builderUnstored'),null);assert.ok(p.calls.includes('reload'));
+});
+test('typed YAML that is not applied is held by the page: a lost session shows the overlay instead of leaving',async()=>{
+ const p=signedPage(()=>LOST);
+ p.run(`builderUnstored=null;builderYamlPanelState=()=>({dirty:true,applying:false})`);
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401);
+ assert.equal(p.moves.length,0,'no redirect: the typed text would be lost');
+ assert.equal(p.el('builder-problem').hidden,false);assert.equal(p.run('builderPaused.code'),'signed_out');
+ assert.match(p.el('builder-problem-text').textContent,/YAML/);assert.equal(p.el('builder-problem-signin').hidden,false);assert.equal(p.el('builder-problem-again').hidden,false);
+ const clean=signedPage(()=>LOST);clean.run(`builderUnstored=null;builderYamlPanelState=()=>({dirty:false,applying:false})`);
+ await assert.rejects(()=>clean.c.api('/state'),e=>e.status===401);assert.equal(clean.moves.length,1,'a clean panel loses nothing: redirect');
+});
 test('Try again runs sessionRetry; the overlay stays until a request succeeded, then the unstored drawing is stored again',async()=>{
  let signedIn=false;const p=signedPage(url=>signedIn?{labs:[],jobs:[],operations:[]}:LOST);
  p.run(`builderDraft={id:'new:lab1',name:'lab1',yaml:'name: lab1\\n',annotations:''};builderUnstored={yaml:'name: lab1\\n# newer\\n',annotations:''}`);

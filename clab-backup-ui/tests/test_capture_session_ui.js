@@ -195,5 +195,5 @@ test('capture-setup.html loads session.js with the release number before its own
  const session=tags.find(t=>t[1]==='/static/session.js');assert.ok(session,'session.js is loaded with ?v=');
  assert.ok(tags.every(t=>t[2]===session[2]),'one release number on every script');
 
- assert.doesNotMatch(html,/\\sstyle=|<style/,'no inline style on this page');
+ assert.doesNotMatch(html,/\sstyle=|<style/,'no inline style on this page');
 });

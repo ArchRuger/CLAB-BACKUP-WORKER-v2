@@ -37,6 +37,8 @@ test('pure rules: the lab comes from the hash, the way back is the lab\'s Topolo
  assert.equal(c.mapIsDirty(null,'x'),false,'nothing is unsaved before the editor has read the document');assert.equal(c.mapIsDirty('a','a'),false);assert.equal(c.mapIsDirty('a','b'),true);
  assert.equal(c.mapFileName('Week 4: BGP/final'),'Week 4_ BGP_final.clab.yaml.annotations.json');
  assert.deepEqual(JSON.parse(JSON.stringify([c.mapStatusView({dirty:true}),c.mapStatusView({}),c.mapStatusView({saving:true,dirty:true}),c.mapStatusView({paused:true})].map(v=>v.text))),['Unsaved changes','Saved in the manager','Saving…','Editing paused']);
+ assert.deepEqual(JSON.parse(JSON.stringify(c.mapStatusView({sessionLost:true,dirty:true}))),{text:'Not saved · signed out',pill:'bad'},'a lost session is not an editing pause: the editor still works');
+ assert.equal(c.mapStatusView({paused:true,sessionLost:true}).text,'Editing paused','a real pause wins');
  assert.match(c.mapImportProblem('notes.txt','{}'),/ends in \.annotations\.json/);assert.equal(c.mapImportProblem('a.json','  '),'This file is empty.');assert.match(c.mapImportProblem('a.json','{oops'),/not valid JSON/);
  assert.match(c.mapImportProblem('a.json','[1]'),/not a containerlab map file/);assert.match(c.mapImportProblem('a.json','{"name":"x"}'),/not a containerlab map file/);assert.match(c.mapImportProblem('a.json','x'.repeat(1024*1024+1)),/larger than 1 MiB/);
  assert.equal(c.mapImportProblem('lab.annotations.json','{"nodeAnnotations":[]}'),'');
@@ -165,7 +167,7 @@ test('unsaved changes: the page pauses, says so with the new-tab link, keeps the
  c.labBuilderPage.persist('name: bgp\n','a');c.labBuilderPage.persist('name: bgp\n','b');
  await h.el('map-save').onclick();await h.flush();
  assert.equal(h.moves.length,0,'no redirect: the drawing would be lost');
- assert.equal(h.el('map-status').textContent,'Editing paused');assert.equal(h.el('toast').textContent,SESSION_TOAST);
+ assert.equal(h.el('map-status').textContent,'Not saved · signed out');assert.equal(h.el('map-status').className,'pill bad');assert.equal(h.el('toast').textContent,SESSION_TOAST);
  assert.equal(h.el('map-session').hidden,false,'the new-tab link is shown');assert.equal(vm.runInContext('mapCurrent',c),'b','the changes are kept');
  assert.equal(h.el('map-save').disabled,false,'Save stays available: it is the way back');assert.equal(vm.runInContext('mapPaused',c),false,'beforeunload keeps asking while changes are unsaved');
  h.el('map-back').onclick({preventDefault(){}});assert.equal(h.el('map-leave').open,true);
@@ -173,14 +175,41 @@ test('unsaved changes: the page pauses, says so with the new-tab link, keeps the
 test('the next Save calls sessionRetry first, then saves; a second 401 pauses again',async()=>{
  let signedIn=false;const h=harness({session:true,put:()=>signedIn?{ok:true,json:async()=>({saved:true,revision:'r2'})}:lostAnswer}),c=h.context;await h.flush();
  c.labBuilderPage.ready(async()=>{});await h.flush();c.labBuilderPage.persist('name: bgp\n','a');c.labBuilderPage.persist('name: bgp\n','b');
- await h.el('map-save').onclick();await h.flush();assert.equal(h.el('map-status').textContent,'Editing paused');
+ await h.el('map-save').onclick();await h.flush();assert.equal(h.el('map-status').textContent,'Not saved · signed out');
  const putsBefore=h.calls.filter(x=>x.method==='PUT').length,order=[];
  const real=c.sessionRetry;c.sessionRetry=async()=>{order.push('retry:'+h.calls.filter(x=>x.method==='PUT').length);return real();};
  await h.el('map-save').onclick();await h.flush();
  assert.deepEqual(order,['retry:'+putsBefore],'sessionRetry ran before the PUT');assert.equal(h.calls.filter(x=>x.method==='PUT').length,putsBefore+1);
- assert.equal(h.el('map-status').textContent,'Editing paused','still signed out: paused again');assert.equal(h.el('toast').textContent,SESSION_TOAST);
+ assert.equal(h.el('map-status').textContent,'Not saved · signed out','still signed out: the same state again');assert.equal(h.el('toast').textContent,SESSION_TOAST);
  signedIn=true;await h.el('map-save').onclick();await h.flush();
  assert.equal(h.el('map-status').textContent,'Saved in the manager');assert.equal(h.el('map-session').hidden,true);assert.match(h.el('toast').textContent,/Map saved/);
+});
+async function lostWithChanges(extra={}){
+ let signedIn=false;const h=harness({session:true,put:()=>signedIn?{ok:true,json:async()=>({saved:true,revision:'r2'})}:lostAnswer,get:url=>url.endsWith('/topology')?(signedIn?{ok:true,json:async()=>({links:[]})}:lostAnswer):null,...extra}),c=h.context;await h.flush();
+ c.labBuilderPage.ready(async()=>{});await h.flush();c.labBuilderPage.persist('name: bgp\n','a');c.labBuilderPage.persist('name: bgp\n','b');
+ await h.el('map-save').onclick();await h.flush();
+ return {h,c,signIn:()=>{signedIn=true;}};
+}
+test('while signed out the editor is not claimed to be paused: Save, Undo and Link labels stay available',async()=>{
+ const {h,c}=await lostWithChanges();
+ assert.equal(vm.runInContext('mapPaused',c),false);assert.equal(h.el('map-save').disabled,false);assert.equal(h.el('map-import').disabled,false);assert.equal(h.el('root').inert,false);
+});
+test('after signing in elsewhere, Link labels and Import map file clear the signed-out flag and send their request (not only Save)',async()=>{
+ const {h,c,signIn}=await lostWithChanges();signIn();
+ const before=h.calls.length;await c.mapLinkOpen();
+ assert.ok(h.calls.slice(before).some(x=>x.method==='GET'&&x.url.endsWith('/topology')),'Link labels sent its request instead of answering from the guard');
+ assert.equal(vm.runInContext('mapSessionLost',c),false);assert.equal(h.el('map-session').hidden,true);
+ const second=await lostWithChanges();second.signIn();
+ second.h.el('map-import-file').files=[{name:'m.annotations.json',text:async()=>'{"nodeAnnotations":[]}'}];
+ const putsBefore=second.h.calls.filter(x=>x.method==='PUT').length;await second.c.mapImport();
+ assert.equal(second.h.calls.filter(x=>x.method==='PUT').length,putsBefore+1,'Import sent its request');assert.equal(second.h.el('map-import-error').textContent,'');
+});
+test('signed out, then undone back to the saved map: nothing is left to keep, so the page leaves for the sign-in page',async()=>{
+ const {h,c}=await lostWithChanges();
+ assert.equal(h.moves.length,0);
+ c.labBuilderPage.persist('name: bgp\n','a');
+ assert.equal(h.moves.length,1);assert.match(h.moves[0],/^replace:\/login\?next=.*&reason=ended$/);
+ assert.equal(vm.runInContext('mapSessionLost',c),false);
 });
 test('a lost session is not reported as a failed save, and other refusals keep their sentence (REVIEW U11)',async()=>{
  const h=harness({session:true,put:()=>({ok:false,status:403,json:async()=>({detail:{code:'forbidden',message:'Not allowed here.'}})})}),c=h.context;await h.flush();

@@ -36,7 +36,7 @@ function mapLabFromHash(hash){const id=new URLSearchParams(String(hash||'').repl
 function mapBackUrl(id){return id?'/#lab='+encodeURIComponent(id)+'&view=topology':'/';}
 function mapIsDirty(baseline,current){return baseline!==null&&current!==baseline;}
 function mapFileName(name){return (String(name||'lab').replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').replace(/^[ .]+|[ .]+$/g,'')||'lab').slice(0,150)+'.clab.yaml.annotations.json';}
-function mapStatusView(state){return state.paused?{text:'Editing paused',pill:'bad'}:state.saving?{text:'Saving…',pill:'busy'}:state.dirty?{text:'Unsaved changes',pill:'warn'}:{text:'Saved in the manager',pill:'ok'};}
+function mapStatusView(state){return state.paused?{text:'Editing paused',pill:'bad'}:state.sessionLost?{text:'Not saved · signed out',pill:'bad'}:state.saving?{text:'Saving…',pill:'busy'}:state.dirty?{text:'Unsaved changes',pill:'warn'}:{text:'Saved in the manager',pill:'ok'};}
 // What a map file must be before it may replace the map: one JSON object of at most 1 MiB with an annotations key.
 function mapImportProblem(name,text){
  if(!/\.json$/i.test(name||''))return 'Choose a map file. Its name ends in .annotations.json.';
@@ -121,7 +121,7 @@ async function mapTravel(delta){
  finally{mapApplying=false;mapRenderBar();}
 }
 function mapRenderBar(){
- const ready=mapMounted&&!mapPaused,view=mapStatusView({paused:mapPaused||mapSessionLost,saving:mapSaving,dirty:mapDirty()});
+ const ready=mapMounted&&!mapPaused,view=mapStatusView({paused:mapPaused,sessionLost:mapSessionLost,saving:mapSaving,dirty:mapDirty()});
  $('map-status').textContent=mapDoc?view.text:'';$('map-status').className='pill '+view.pill;$('map-status').hidden=!mapDoc;
  $('map-save').disabled=!ready||mapSaving||!mapDirty();$('map-save').title=!ready?'':mapDirty()?'':'There is nothing to save.';
  $('map-download').disabled=!mapDoc;$('map-import').disabled=!ready||mapSaving;
@@ -129,14 +129,18 @@ function mapRenderBar(){
  $('map-link').disabled=!steady;
  $('map-undo').disabled=!steady||mapHistory.index<=0;$('map-redo').disabled=!steady||mapHistory.index>=mapHistory.entries.length-1;
  if($('map-session'))$('map-session').hidden=!mapSessionLost;
+ // Undone back to the saved map: nothing is left to keep, so the session sentence has no work to protect.
+ if(mapSessionLost&&mapDoc&&!mapDirty()){mapSessionLost=false;$('map-session').hidden=true;if(typeof sessionGo==='function')sessionGo('ended');}
  $('map-drawio').disabled=!ready;$('map-drawio').title=mapDirty()?'The export is made from the saved map: save first.':'';
 }
 function mapProblem(message){mapPaused=true;$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem').hidden=false;$('map-problem-download').focus();mapRenderBar();}
 function mapDownload(){const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([mapCurrent||mapDoc.annotations],{type:'application/json'}));link.download=mapFileName(mapDoc.name);document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
+// Every request-sending control clears a lost session the same way (the guard in api() would otherwise answer for it without sending anything).
+async function mapResume(){if(mapSessionLost){mapSessionLost=false;mapRenderBar();if(typeof sessionRetry==='function')await sessionRetry();}}
 async function mapSave(){
  if(!mapDoc||mapSaving||mapPaused||!mapDirty())return false;
  // After a lost session the person signs in in a new tab and presses Save: clear the flag first, then this save is the request that decides.
- if(mapSessionLost){mapSessionLost=false;if(typeof sessionRetry==='function')await sessionRetry();}
+ await mapResume();
  mapSaving=true;mapRenderBar();const sent=mapCurrent;
  try{
   const result=await(await api('/labs/'+encodeURIComponent(mapLab)+'/map-document',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({annotations:sent,revision:mapDoc.revision})})).json();
@@ -152,6 +156,7 @@ async function mapImport(){
  const file=$('map-import-file').files&&$('map-import-file').files[0],error=$('map-import-error');error.textContent='';
  if(!file){error.textContent='Choose a file first.';return;}
  const text=await file.text(),problem=mapImportProblem(file.name,text);if(problem){error.textContent=problem;return;}
+ await mapResume();
  try{await api('/labs/'+encodeURIComponent(mapLab)+'/map-document',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({annotations:text,revision:mapDoc.revision})});}
  catch(e){error.textContent='The map was not replaced: '+e.message;return;}
  mapBaseline=mapCurrent;location.reload();
@@ -159,6 +164,7 @@ async function mapImport(){
 let mapLinkList=[];
 function mapLinkFill(){const link=mapLinkList[Number($('map-link-select').value)]||mapLinkList[0];if(!link)return;$('map-link-own').checked=link.own;$('map-link-offset').value=link.offset;$('map-link-offset').disabled=!link.own;$('map-link-error').textContent='';}
 async function mapLinkOpen(){
+ await mapResume();
  let drawing;try{drawing=await(await api('/labs/'+encodeURIComponent(mapLab)+'/topology')).json();}catch(error){notify('The links could not be read: '+error.message);return;}
  mapLinkList=mapLinks(drawing&&drawing.links,mapCurrent);if(!mapLinkList.length){notify('This lab has no links.');return;}
  const select=$('map-link-select');select.replaceChildren(...mapLinkList.map((link,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=mapLinkLabel(link)+(link.own?'  ·  own distance '+link.offset:'');return o;}));

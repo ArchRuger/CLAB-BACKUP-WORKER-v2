@@ -17,13 +17,19 @@ function notify(message){$('toast').textContent=message;$('toast').hidden=false;
 // A refusal's own sentence: the sign-on answers carry {detail:{code,message}} (REVIEW U11), older routes a plain string.
 function builderDetail(value){const d=value&&value.detail;return typeof d==='string'?d:d&&typeof d==='object'&&typeof d.message==='string'?d.message:'';}
 const BUILDER_SESSION_TEXT='Your session ended. Your drawing is still on this page, not stored in this browser. Sign in in a new tab, then continue.';
+const BUILDER_SESSION_YAML_TEXT='Your session ended. The YAML you typed is still on this page, not applied. Sign in in a new tab, then continue.';
 // The reaction to a lost session (UI 3.5). A drawing that is stored in this browser loses nothing by a redirect; one the browser could not
 // store is held by the page (builderUnstored), so the problem overlay pauses editing until a request succeeds again. Marks the page once.
 function builderSignedOut(){
  if(typeof sessionMark==='function'&&!sessionMark())return;
- if(builderUnstored===null){if(typeof sessionGo==='function')sessionGo('ended');return;}
- if(builderPaused&&builderPaused.code!=='signed_out')return;
- builderProblem(BUILDER_SESSION_TEXT,'signed_out');
+ // What only this page holds: a drawing the browser could not store, or YAML typed in the panel and not applied. A redirect would lose both.
+ const panel=typeof builderYamlPanelState==='function'?builderYamlPanelState():null,typed=!!panel&&(panel.dirty||panel.applying);
+ if(builderUnstored===null&&!typed){if(typeof sessionGo==='function')sessionGo('ended');return;}
+ if(builderPaused&&builderPaused.code==='signed_out')return;
+ // A storage pause that is already up gives way to the session sentence; Download and the storage retry stay on the overlay.
+ const wasStorage=!!builderPaused&&builderPaused.code==='storage';builderPaused=null;
+ builderProblem(builderUnstored!==null?BUILDER_SESSION_TEXT:BUILDER_SESSION_YAML_TEXT,'signed_out');
+ $('builder-problem-retry').hidden=!wasStorage;
  if(typeof sessionOnResume==='function')sessionOnResume(builderResume);
 }
 // Registered with sessionRetry(): the retry's own request (the page's refresh()) succeeded, so lift the pause. The drawing the browser could
