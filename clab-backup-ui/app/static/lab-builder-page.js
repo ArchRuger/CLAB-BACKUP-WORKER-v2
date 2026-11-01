@@ -20,6 +20,7 @@ const BUILDER_SESSION_TEXT='Your session ended. Your drawing is still on this pa
 const BUILDER_SESSION_YAML_TEXT='Your session ended. The YAML you typed is still in the YAML panel, not applied; Download this version holds the drawing, not that text. Sign in in a new tab, then choose Try again.';
 // The reaction to a lost session (UI 3.5). A drawing that is stored in this browser loses nothing by a redirect; one the browser could not
 // store is held by the page (builderUnstored), so the problem overlay pauses editing until a request succeeds again. Marks the page once.
+function builderYamlHeld(){const panel=typeof builderYamlPanelState==='function'?builderYamlPanelState():null;return !!panel&&(panel.dirty||panel.applying);}
 function builderSignedOut(){
  if(typeof sessionMark==='function'&&!sessionMark())return;
  // What only this page holds: a drawing the browser could not store, or YAML typed in the panel and not applied. A redirect would lose both.
@@ -37,7 +38,8 @@ function builderSignedOut(){
 function builderResume(){
  if(!builderPaused||builderPaused.code!=='signed_out')return;
  builderPaused=null;$('root').inert=false;$('builder-problem').hidden=true;builderRenderBar();
- if(builderUnstored)builderStoreAgain();
+ // Typed YAML that is not applied lives only in the panel: the drawing is stored without the reload that would lose it.
+ if(builderUnstored)builderStoreAgain(builderYamlHeld());
 }
 // Try again: sessionRetry() clears the flag, repeats the state request and, unless that was refused again, runs builderResume().
 async function builderTryAgain(){
@@ -360,7 +362,7 @@ function builderProblem(message,code){
  const retry=$('builder-problem-retry'),retryShown=!retry.hidden;
  builderPaused=builderPaused||Object.assign(new Error(message),{code});
  const active=builderPaused.code,out=active==='signed_out',first=builderPaused.message;
- const text=out&&code==='storage'&&message&&!first.includes(message)?first+' '+message:out?first:message;
+ const text=out&&code!=='signed_out'&&message&&!first.includes(message)?first+' '+message:out?first:message;
  $('root').inert=true;$('builder-problem-text').textContent=text;
  retry.hidden=!(active==='storage'||(out&&(code==='storage'||retryShown)));
  $('builder-problem-signin').hidden=$('builder-problem-again').hidden=!out;
@@ -646,7 +648,7 @@ function builderYamlOptions(editor){return {editor,getDraftYaml:builderYamlDraft
 function builderDownload(){if(builderDraft)builderDownloadDraft({...builderDraft,...(builderUnstored||{})});}
 function builderDownloadDraft(draft){const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([draftExport(draft)],{type:'application/json'}));link.download=draft.name+'.lab-draft.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
 // Storing again what the editor holds; the editor itself restarts from the stored draft.
-function builderStoreAgain(){if(!builderDraft)return;try{builderDraft=draftWrite(builderStore,builderNamed({...builderDraft,...(builderUnstored||{})}),builderDraft.revision);builderUnstored=null;location.reload();}catch(e){builderProblem(e.message,e.code);}}
+function builderStoreAgain(keep){if(!builderDraft)return;try{builderDraft=draftWrite(builderStore,builderNamed({...builderDraft,...(builderUnstored||{})}),builderDraft.revision);builderUnstored=null;if(keep)builderRenderBar();else location.reload();}catch(e){builderProblem(e.message,e.code);}}
 function builderSame(a,b){return !!a&&!!b&&a.yaml===b.yaml&&(a.annotations||'')===(b.annotations||'');}
 // The manager answers a missing file and an unreachable VM with the same status; the helper's wording for
 // a missing path is the difference (tests/test_lab_operations.py pins it).

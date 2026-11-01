@@ -955,10 +955,37 @@ test('a failed storage retry under a signed-out overlay keeps saying the session
  p.c.builderStoreAgain();
  assert.equal(p.el('builder-problem-text').textContent.split('could not store the drawing').length,2);
 });
-test('a storage pause that later meets problem(...,signed_out) keeps the storage retry',()=>{
+test('a storage pause that later meets a signed_out answer keeps the storage retry and every way back',async()=>{
  const p=signedPage(()=>LOST);
- p.run(`builderDraft={id:'new:lab1',name:'lab1',yaml:'y',annotations:''};builderUnstored={yaml:'z',annotations:''};builderProblem('This browser could not store the drawing.','storage');builderProblem('Your session ended.','signed_out')`);
- assert.equal(p.el('builder-problem-retry').hidden,false);
+ p.run(`builderDraft={id:'new:lab1',name:'lab1',yaml:'y',annotations:''};builderUnstored={yaml:'z',annotations:''};`);
+ p.run(`builderProblem('This browser could not store the drawing.','storage')`);
+ assert.equal(p.run('builderPaused.code'),'storage');
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401);
+ p.run("draftWrite=()=>{throw Object.assign(new Error('This browser could not store the drawing.'),{code:'storage'})}");
+ p.run("try{builderPage.persist('y2','')}catch(e){builderPage.problem(e.message,e.code)}");
+ assert.equal(p.run('builderPaused.code'),'signed_out');
+ assert.equal(p.el('builder-problem-text').textContent.startsWith(BUILDER_SESSION_TEXT),true);
+ assert.equal(p.el('builder-problem-signin').hidden,false);assert.equal(p.el('builder-problem-again').hidden,false);assert.equal(p.el('builder-problem-retry').hidden,false);
+});
+test('a conflict from Try to store it again under a signed-out pause is added to the session sentence, not dropped',async()=>{
+ const p=signedPage(()=>LOST);
+ p.run(`builderDraft={id:'new:lab1',name:'lab1',yaml:'y',annotations:''};builderUnstored={yaml:'z',annotations:''};builderProblem('This browser could not store the drawing.','storage')`);
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401);
+ p.run("draftWrite=()=>{throw Object.assign(new Error('This draft was changed in another tab.'),{code:'conflict'})}");
+ p.c.builderStoreAgain();
+ assert.equal(p.run('builderPaused.code'),'signed_out');
+ assert.ok(p.el('builder-problem-text').textContent.startsWith(BUILDER_SESSION_TEXT));
+ assert.match(p.el('builder-problem-text').textContent,/changed in another tab/);
+ assert.equal(p.el('builder-problem-signin').hidden,false);assert.equal(p.el('builder-problem-again').hidden,false);
+});
+test('Try again keeps the page when YAML is typed and not applied: the drawing is stored without a reload',async()=>{
+ let signedIn=false;const p=signedPage(()=>signedIn?{labs:[],jobs:[],operations:[]}:LOST);
+ p.run(`builderDraft={id:'new:lab1',name:'lab1',yaml:'name: lab1\\n',annotations:''};builderUnstored={yaml:'name: lab1\\n# newer\\n',annotations:''};builderYamlPanelState=()=>({dirty:true,applying:false})`);
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401);
+ signedIn=true;await p.c.builderTryAgain();
+ assert.equal(p.run('builderPaused'),null);assert.equal(p.el('builder-problem').hidden,true);
+ assert.ok(!p.calls.includes('reload'),'a reload would lose the typed YAML');
+ assert.equal(p.run('builderUnstored'),null,'the drawing was stored');assert.match(p.store.getItem(p.run('BUILDER_PREFIX')+'draft:new:lab1')??'',/newer/);
 });
 test('the typed-YAML overlay says where the text is and that Download does not hold it',async()=>{
  const p=signedPage(()=>LOST);p.run(`builderUnstored=null;builderYamlPanelState=()=>({dirty:true,applying:false})`);

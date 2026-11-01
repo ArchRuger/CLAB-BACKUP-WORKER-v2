@@ -116,8 +116,10 @@ function mapDirty(){return mapIsDirty(mapBaseline,mapCurrent);}
 async function mapTravel(delta){
  const next=mapHistoryStep(mapHistory,delta);if(!next||!mapEditor||mapApplying||mapSaving||mapPaused)return false;
  mapApplying=true;mapRenderBar();
- try{await mapEditor.applyAnnotations(next.entries[next.index]);mapHistory=next;return true;}
- catch(error){notify((delta<0?'Undo':'Redo')+' did not work: '+error.message);return false;}
+ // The step is taken before the editor reports its state, so the bar already sees where the history stands; a refusal puts it back.
+ const was=mapHistory;mapHistory=next;
+ try{await mapEditor.applyAnnotations(next.entries[next.index]);return true;}
+ catch(error){mapHistory=was;notify((delta<0?'Undo':'Redo')+' did not work: '+error.message);return false;}
  finally{mapApplying=false;mapRenderBar();}
 }
 function mapRenderBar(){
@@ -129,8 +131,8 @@ function mapRenderBar(){
  $('map-link').disabled=!steady;
  $('map-undo').disabled=!steady||mapHistory.index<=0;$('map-redo').disabled=!steady||mapHistory.index>=mapHistory.entries.length-1;
  if($('map-session'))$('map-session').hidden=!mapSessionLost;
- // Undone back to the saved map: nothing is left to keep, so the session sentence has no work to protect.
- if(mapSessionLost&&mapDoc&&!mapDirty()){mapSessionLost=false;$('map-session').hidden=true;if(typeof sessionGo==='function')sessionGo('ended');}
+ // Undone back to the saved map with nothing to redo: nothing is left to keep, so the session sentence has no work to protect.
+ if(mapSessionLost&&mapDoc&&!mapDirty()&&mapHistory.index>=mapHistory.entries.length-1){mapSessionLost=false;$('map-session').hidden=true;if(typeof sessionGo==='function')sessionGo('ended');}
  $('map-drawio').disabled=!ready;$('map-drawio').title=mapDirty()?'The export is made from the saved map: save first.':'';
 }
 function mapProblem(message){mapPaused=true;$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem').hidden=false;$('map-problem-download').focus();mapRenderBar();}

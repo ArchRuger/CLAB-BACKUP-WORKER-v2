@@ -211,6 +211,19 @@ test('signed out, then undone back to the saved map: nothing is left to keep, so
  assert.equal(h.moves.length,1);assert.match(h.moves[0],/^replace:\/login\?next=.*&reason=ended$/);
  assert.equal(vm.runInContext('mapSessionLost',c),false);
 });
+test('signed out, Undo back to the saved map with a redo left: no redirect, the sentence stays, then Redo, Save and sign-in work',async()=>{
+ const {h,c,signIn}=await lostWithChanges();
+ c.labBuilderPage.attach({applyAnnotations:async text=>{c.labBuilderPage.persist('name: bgp\n',text);}});
+ assert.equal(vm.runInContext('mapHistory.index',c),1);
+ await h.el('map-undo').onclick();
+ assert.equal(vm.runInContext('mapHistory.index',c),0);assert.equal(vm.runInContext('mapDirty()',c),false);
+ assert.equal(h.moves.length,0,'a redo entry is left: leaving would lose it');
+ assert.equal(h.el('map-session').hidden,false);assert.equal(vm.runInContext('mapSessionLost',c),true);assert.equal(h.el('map-redo').disabled,false);
+ await h.el('map-redo').onclick();
+ assert.equal(vm.runInContext('mapCurrent',c),'b');assert.equal(h.el('map-save').disabled,false);assert.equal(h.moves.length,0);
+ signIn();await h.el('map-save').onclick();await h.flush();
+ assert.equal(h.el('map-status').textContent,'Saved in the manager');assert.equal(h.el('map-session').hidden,true);assert.equal(h.moves.length,0);
+});
 test('a lost session is not reported as a failed save, and other refusals keep their sentence (REVIEW U11)',async()=>{
  const h=harness({session:true,put:()=>({ok:false,status:403,json:async()=>({detail:{code:'forbidden',message:'Not allowed here.'}})})}),c=h.context;await h.flush();
  c.labBuilderPage.ready(async()=>{});await h.flush();c.labBuilderPage.persist('name: bgp\n','a');c.labBuilderPage.persist('name: bgp\n','b');
