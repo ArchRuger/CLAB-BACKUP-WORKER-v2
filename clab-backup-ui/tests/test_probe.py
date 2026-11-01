@@ -12,6 +12,7 @@ import logging
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -298,6 +299,34 @@ class Browse(ProbeCase):
             with self.subTest(error=repr(error)[:60]), mock.patch('app.lab_operations.remote', side_effect=error):
                 self.assertEqual(self.answer('browse', '/srv/labs', code=1), {'error': sentence})
 
+    def helper_error(self, text):
+        failure = ValueError(text); failure.from_helper = True   # as lab_operations.remote marks the helper's own line
+        return failure
+
+    def test_managers_fixed_sentences_reach_the_check_verbatim(self):
+        # scrub()'s line rule would replace any sentence that says "password " with "[sensitive output omitted]"; the
+        # manager's own sentences hold no secret, and the password-setup one is the only way forward for the operator.
+        from app.discovery import vm_password
+        with self.assertRaises(ValueError) as setup: vm_password({})
+        sentence = str(setup.exception)
+        self.assertIn('password ', sentence)
+        state = sample_state(); state['host'].pop('password')
+        self.write_state(state)
+        self.assertEqual(self.answer('browse', '', code=1), {'error': sentence})   # the real client raises it
+        self.write_state()
+        for text in (sentence, 'This does not indicate a wrong password; discovery uses the same account.'):
+            with self.subTest(text=text), mock.patch('app.lab_operations.remote', side_effect=ValueError(text)):
+                self.assertEqual(self.answer('browse', '/srv/labs', code=1), {'error': text})
+
+    def test_helper_lines_are_scrubbed_whole(self):
+        cases = {'enable password: hunter2 rejected': '[sensitive output omitted]',
+                 'failed for ' + PASSWORD: 'failed for [redacted]',
+                 '\x1b[31mPath is outside trusted roots.\x1b[0m': 'Path is outside trusted roots.',
+                 'Unknown request mode.': "This VM's manager tools need an update; ask your instructor or administrator."}
+        for text, sentence in cases.items():
+            with self.subTest(text=text), mock.patch('app.lab_operations.remote', side_effect=self.helper_error(text)):
+                self.assertEqual(self.answer('browse', '/srv/labs', code=1), {'error': sentence})
+
     def test_unusable_answers(self):
         for result in (None, [], 'x', {'path': '/srv'}, {'path': '/srv', 'entries': {}}):
             with self.subTest(result=result), mock.patch('app.lab_operations.remote', return_value=result):
@@ -363,9 +392,19 @@ class GitRegistry(ProbeCase):
 
     def test_errors(self):
         from app import git_progress
+        from app.discovery import vm_password
+        from app.lab_operations import scrub
         fixed = next(iter(git_progress.PROBLEM_CODES))
+        # The exemption matters only for a sentence scrub() would change: every such PROBLEM_CODES sentence (the push
+        # preflight one says "password ") must still be printed verbatim, or the exemption is not proved.
+        scrubbed = [sentence for sentence in git_progress.PROBLEM_CODES if scrub(sentence, {'labs': []}) != sentence]
+        self.assertTrue(any(s.startswith('Git push preflight failed.') for s in scrubbed), scrubbed)
+        with self.assertRaises(ValueError) as setup: vm_password({})
         cases = {ValueError('Install or refresh the matching Git helper on the VM.'): 'Install or refresh the matching Git helper on the VM.',
                  ValueError(fixed): fixed,
+                 **{ValueError(sentence): sentence for sentence in scrubbed},
+                 ValueError(str(setup.exception)): str(setup.exception),
+                 ValueError('fatal: password: hunter2'): '[sensitive output omitted]',
                  ValueError('bad ' + PASSWORD): 'bad [redacted]',
                  ValueError('y' * 900): 'y' * 600,
                  OSError(PASSWORD): git_progress.VM_UNREACHABLE,
@@ -378,6 +417,13 @@ class GitRegistry(ProbeCase):
         state = sample_state(); state['host'] = {}
         self.write_state(state)
         self.assertEqual(self.answer('git-registry', code=1), {'error': 'Connect the VM and verify its SSH host fingerprint first.'})
+
+    def test_password_setup_sentence_from_the_real_client(self):
+        from app.discovery import vm_password
+        with self.assertRaises(ValueError) as setup: vm_password({})
+        state = sample_state(); state['host']['auth'] = 'key'
+        self.write_state(state)
+        self.assertEqual(self.answer('git-registry', code=1), {'error': str(setup.exception)})
 
 
 class Capture(ProbeCase):
@@ -491,6 +537,125 @@ class Capture(ProbeCase):
         servers[1].server_close()
         value = self.answer('capture')
         self.assertEqual((value['targets'], value['ready']), (1, None))
+
+
+class Deadline(ProbeCase):
+    """One overall deadline below the health check's 30 s exec timeout (EXPOSURE.md 6.1 rule 2): a probe whose VM or
+    capture service accepts and never answers ends with its own error line instead of being killed (and, inside the
+    container, outliving the killed `docker exec` client with an open SSH session)."""
+    SLOW = 6
+
+    def setUp(self):
+        super().setUp()
+        self.write_state()
+        for name, value in (('DEADLINE', 0.5), ('GRACE', 0.5)):
+            patch = mock.patch.object(self.probe, name, value); patch.start(); self.addCleanup(patch.stop)
+
+    def slow(self, *args, **kwargs):
+        time.sleep(self.SLOW)
+        return {}
+
+    def assert_deadline(self, *argv):
+        started = time.monotonic()
+        value = self.answer(*argv, code=1)
+        elapsed = time.monotonic() - started
+        self.assertEqual(value, {'error': self.probe.DEADLINE_SENTENCE})
+        self.assertLess(elapsed, 2.5)
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0), 'the probe left its timer armed')
+        self.assertIs(signal.getsignal(signal.SIGALRM), signal.SIG_DFL, 'the probe left its handler installed')
+
+    def test_sentence(self):
+        self.assertEqual(self.probe.DEADLINE_SENTENCE, 'The probe did not finish within 25 seconds.')
+
+    def test_constants_leave_room_under_the_exec_timeout(self):
+        # DEADLINE + GRACE, plus the interpreter's start inside `docker exec`, stays under check_install's timeout=30.
+        source = (ROOT / 'app' / 'probe.py').read_text()
+        self.assertIn('\nDEADLINE = 25\n', source)
+        self.assertIn('\nGRACE = 3\n', source)
+
+    def test_browse_ends_at_the_deadline(self):
+        with mock.patch('app.lab_operations.remote', side_effect=self.slow):
+            self.assert_deadline('browse', '')
+
+    def test_git_registry_ends_at_the_deadline(self):
+        with mock.patch('app.git_progress.remote_git', side_effect=self.slow):
+            self.assert_deadline('git-registry')
+
+    def test_capture_ends_at_the_deadline_though_its_calls_swallow_errors(self):
+        # Both capture calls sit under `except …Exception`: the deadline is not an Exception, so it is never taken for
+        # a failed call (which would print a partial answer and keep waiting on the next call).
+        patch = mock.patch.dict(os.environ, {'CAPTURE_PROVIDER': 'edgeshark', 'CAPTURE_EDGESHARK_URL': 'http://127.0.0.1:5001',
+                                             'CAPTURE_SESSION_URL': 'http://127.0.0.1:5801', 'CAPTURE_SESSION_TOKEN': TOKEN})
+        patch.start(); self.addCleanup(patch.stop)
+        with mock.patch('app.capture.read_discovery', return_value={'containers': []}), \
+                mock.patch('app.capture_sessions.BrowserSessions.request', side_effect=self.slow):
+            self.assert_deadline('capture')
+        with mock.patch('app.capture.read_discovery', side_effect=self.slow), \
+                mock.patch('app.capture_sessions.BrowserSessions.request', return_value={'ready': True}) as health:
+            self.assert_deadline('capture')
+        health.assert_not_called()
+
+    def test_a_fast_probe_is_untouched_and_leaves_no_timer(self):
+        with mock.patch('app.git_progress.remote_git', return_value={'protocol': 'p', 'version': 'v', 'repositories': []}):
+            self.assertEqual(self.answer('git-registry')['repositories'], 0)
+        time.sleep(0.8)   # past DEADLINE + GRACE: a timer left armed would end this process
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
+
+    def test_previous_alarm_handler_is_restored(self):
+        def mine(*args): pass
+        previous = signal.signal(signal.SIGALRM, mine)
+        self.addCleanup(signal.signal, signal.SIGALRM, previous)
+        with mock.patch('app.lab_operations.remote', side_effect=self.slow):
+            self.assertEqual(self.answer('browse', '', code=1), {'error': self.probe.DEADLINE_SENTENCE})
+        self.assertIs(signal.getsignal(signal.SIGALRM), mine)
+
+    def test_real_client_against_a_vm_that_never_answers(self):
+        """paramiko's own connect (banner_timeout 8 s) against a port that accepts and stays silent."""
+        import socket
+        quiet = mock.patch.object(logging.getLogger('paramiko'), 'disabled', True)   # the test process's own log
+        quiet.start(); self.addCleanup(quiet.stop)
+        server = socket.socket(); server.bind(('127.0.0.1', 0)); server.listen(8)
+        self.addCleanup(server.close)
+        state = sample_state(); state['host'].update(address='127.0.0.1', port=server.getsockname()[1])
+        self.write_state(state)
+        self.assert_deadline('browse', '')
+        self.assert_deadline('git-registry')
+        # As a program: the cut-short transport thread logs its own end after main() returned; nothing reaches stderr.
+        code = ('import sys, time\n'
+                'from app import probe\n'
+                'probe.DEADLINE = 0.5\n'
+                'status = probe.program(sys.argv[1:])\n'
+                'time.sleep(1)\n'
+                'sys.exit(status)\n')
+        env = dict(os.environ, DATA_DIR=str(self.data), PYTHONPATH=str(ROOT))
+        for argv in (['browse', ''], ['git-registry']):
+            with self.subTest(argv=argv):
+                result = subprocess.run([sys.executable, '-c', code, *argv], cwd=ROOT, capture_output=True, text=True,
+                                        env=env, timeout=30)
+                self.assertEqual((result.returncode, result.stdout, result.stderr),
+                                 (1, json.dumps({'error': self.probe.DEADLINE_SENTENCE}) + '\n', ''))
+        source = (ROOT / 'app' / 'probe.py').read_text()
+        self.assertTrue(source.rstrip().endswith("if __name__ == '__main__':\n    sys.exit(program())"))
+
+    def test_a_probe_that_ignores_the_deadline_is_ended_after_the_grace(self):
+        """A client that swallows even the deadline (a bare `except:`) is ended by the second firing: the same one line,
+        exit 1, nothing on stderr."""
+        code = ('import sys, time\n'
+                'from unittest import mock\n'
+                'from app import probe\n'
+                'probe.DEADLINE = 0.5; probe.GRACE = 0.5\n'
+                'def stubborn(*a, **k):\n'
+                '    while True:\n'
+                '        try: time.sleep(5)\n'
+                '        except BaseException: pass\n'
+                'with mock.patch("app.lab_operations.remote", side_effect=stubborn):\n'
+                '    sys.exit(probe.main(["browse", ""]))\n')
+        env = dict(os.environ, DATA_DIR=str(self.data), PYTHONPATH=str(ROOT))
+        started = time.monotonic()
+        result = subprocess.run([sys.executable, '-c', code], cwd=ROOT, capture_output=True, text=True, env=env, timeout=30)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (1, json.dumps({'error': self.probe.DEADLINE_SENTENCE}) + '\n', ''))
 
 
 class Isolation(ProbeCase):

@@ -20,6 +20,7 @@ import signal
 import socket
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 import threading
 import time
 import types
@@ -51,6 +52,19 @@ def security_headers(scope, *, status=200, refusal=False):
 '''
 
 
+class OneModule:
+    def __init__(self, name, module):
+        self.name, self.module = name, module
+
+    def start(self):
+        self.had, self.previous = self.name in sys.modules, sys.modules.get(self.name)
+        sys.modules[self.name] = self.module
+
+    def stop(self):
+        if self.had: sys.modules[self.name] = self.previous
+        else: sys.modules.pop(self.name, None)
+
+
 class HeadersModule:
     """Installs the stand-in `app.headers` while the real one is absent, and records every call either way."""
     def __enter__(self):
@@ -62,7 +76,9 @@ class HeadersModule:
             module = types.ModuleType('app.headers')
             module.security_headers = stand_in_security_headers
             import app
-            self.patches.append(mock.patch.dict(sys.modules, {'app.headers': module}))
+            # Only this one key: patch.dict(sys.modules) would also drop every module first imported meanwhile
+            # (uvicorn's protocol classes among them), and a later import would build a second copy of each.
+            self.patches.append(OneModule('app.headers', module))
             self.patches.append(mock.patch.object(app, 'headers', module, create=True))
         original = module.security_headers
         def recording(scope, *, status=200, refusal=False):
@@ -279,15 +295,34 @@ class RedirectAnswers(unittest.TestCase):
         asyncio.run(self.app(scope(method='POST', raw_path=b'/x'), receive, send))
         self.assertEqual(answer(sent)[0], 405)
 
-    def test_headers_module_is_imported_lazily(self):
+    def test_headers_module_is_resolved_when_the_listener_is_built(self):
+        # Rewritten (was test_headers_module_is_imported_lazily): the module still imports without S1b's
+        # app/headers.py (no top-level import of it) and never uses allowed_hosts.HEADERS, but security_headers is now
+        # looked up once, when the listener is built, never per request: a missing or broken module stops the start
+        # with one error instead of answering every request 500 with a logged traceback.
         source = (ROOT / 'app' / 'redirect.py').read_text()
         top = [line for line in source.splitlines() if line.startswith(('import ', 'from '))]
         self.assertFalse([line for line in top if 'headers' in line], top)
         self.assertFalse([line for line in source.splitlines() if 'allowed_hosts.HEADERS' in line or 'import HEADERS' in line])
+        import inspect
+        self.assertNotIn('import', inspect.getsource(self.redirect.Redirect.answer))
+        self.assertNotIn('import', inspect.getsource(self.redirect.Redirect.__call__))
+
+    def test_a_missing_headers_module_stops_the_start_not_each_request(self):
+        missing = OneModule('app.headers', None)   # import of a None entry raises ImportError
+        missing.start(); self.addCleanup(missing.stop)
+        with mock.patch('uvicorn.run') as run:
+            with self.assertRaises(ImportError):
+                self.redirect.main({'UI_HTTP_PORT': '8081'})
+            with self.assertRaises(ImportError):
+                self.redirect.Redirect(8443)
+        run.assert_not_called()
 
 
 class RedirectSettings(unittest.TestCase):
     def setUp(self):
+        self.headers = HeadersModule().__enter__()   # main() builds the listener, which needs security_headers
+        self.addCleanup(self.headers.__exit__)
         from app import redirect
         self.redirect = redirect
 
@@ -310,7 +345,10 @@ class RedirectSettings(unittest.TestCase):
         self.assertIs(kwargs['proxy_headers'], False)
         self.assertIs(kwargs['access_log'], False)
         self.assertEqual(kwargs['workers'], 1)
-        self.assertEqual(kwargs['http'], 'h11')
+        # Rewritten (was `== 'h11'`): still uvicorn's h11 parser, as a subclass that adds the connection deadline.
+        from uvicorn.protocols.http.h11_impl import H11Protocol
+        self.assertTrue(isinstance(kwargs['http'], type) and issubclass(kwargs['http'], H11Protocol), kwargs['http'])
+        self.assertEqual(kwargs['http'].deadline, self.redirect.CONNECTION_DEADLINE)
         self.assertEqual(kwargs['log_level'], 'error')   # no per-request warning line either (rule 4)
         self.assertNotIn('forwarded_allow_ips', kwargs)
 
@@ -344,8 +382,9 @@ class RedirectProcess(unittest.TestCase):
         return env
 
     def test_disabled_waits_without_binding_and_stops_on_sigterm(self):
-        process = subprocess.Popen([sys.executable, '-m', 'app.redirect'], cwd=ROOT, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, env=self.environment(UI_HTTP_PORT='0'))
+        # stdin from /dev/null: an inherited stdin can itself be a socket (a harness's), which is not the listener's.
+        process = subprocess.Popen([sys.executable, '-m', 'app.redirect'], cwd=ROOT, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=self.environment(UI_HTTP_PORT='0'))
         try:
             line = process.stdout.readline()
             self.assertEqual(line, b'HTTP redirect disabled\n')
@@ -382,6 +421,143 @@ class RedirectProcess(unittest.TestCase):
         self.assertLessEqual(modules, {'app', 'app.redirect', 'app.allowed_hosts', 'app.headers', 'app.origin'}, modules)
         for forbidden in ('fastapi', 'starlette', 'paramiko', 'cryptography'):
             self.assertNotIn(forbidden, result.stdout)
+
+
+class RedirectUnderPressure(unittest.TestCase):
+    """The exposed port against a client that holds sockets open (EXPOSURE.md 4.1 item 4: an exposed port must not fill
+    the disk and must keep redirecting). The listener runs as a process of its own, under a descriptor limit, with the
+    connection deadline shortened to one second."""
+
+    LAUNCH = ('import sys, types\n'
+              'try:\n'
+              '    import app.headers\n'
+              'except ImportError:\n'
+              '    stand_in = types.ModuleType("app.headers")\n'
+              '    exec(' + repr(STAND_IN_SOURCE) + ', stand_in.__dict__)\n'
+              '    sys.modules["app.headers"] = stand_in\n'
+              'import app.redirect as r\n'
+              'r.CONNECTION_DEADLINE = 1.0\n'
+              'r.main()\n')
+
+    def start(self, limit):
+        import resource
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0)); port = probe.getsockname()[1]
+        log = open(Path(self.enterContext(TemporaryDirectory())) / 'stderr', 'w+b')
+        self.addCleanup(log.close)
+        env = {k: v for k, v in os.environ.items() if not k.startswith('UI_')}
+        env.update(PYTHONPATH=str(ROOT), UI_BIND='127.0.0.1', UI_HTTP_PORT=str(port), UI_PORT='8443')
+        process = subprocess.Popen([sys.executable, '-c', self.LAUNCH], cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+                                   stdout=log, stderr=log,
+                                   preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_NOFILE, limit))
+        def stop():
+            if process.poll() is None: process.kill()
+            process.wait()
+        self.addCleanup(stop)
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            try:
+                if self.get(port, timeout=1) == 301: break
+            except OSError:
+                time.sleep(0.05)
+        else:
+            self.fail('the listener did not start: ' + log.read().decode(errors='replace'))
+        return process, port, log
+
+    def get(self, port, timeout=5):
+        with socket.create_connection(('127.0.0.1', port), timeout=timeout) as conn:
+            conn.sendall(b'GET /x HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n')
+            reply = conn.recv(4096)
+        return int(reply.split()[1]) if reply.startswith(b'HTTP/') else None
+
+    def idle(self, port, count):
+        sockets = []
+        for _ in range(count):
+            conn = socket.socket(); conn.setblocking(False)
+            conn.connect_ex(('127.0.0.1', port))
+            sockets.append(conn)
+        def close():
+            for conn in sockets: conn.close()
+        self.addCleanup(close)
+        return sockets
+
+    def closed_by_server(self, conn):
+        conn.settimeout(0.05)
+        try:
+            return conn.recv(1) == b''
+        except ConnectionResetError:
+            return True
+        except (socket.timeout, BlockingIOError):
+            return False
+
+    def test_silent_and_trickling_connections_end_at_the_deadline(self):
+        process, port, log = self.start((1024, 1024))
+        silent = self.idle(port, 5)
+        trickle = socket.create_connection(('127.0.0.1', port), timeout=5)
+        self.addCleanup(trickle.close)
+        trickle.sendall(b'GET / HTTP/1.1\r\n')
+        started = time.monotonic()
+        while time.monotonic() - started < 3:
+            try: trickle.sendall(b'X-A: b\r\n')
+            except OSError: break
+            time.sleep(0.2)
+        time.sleep(0.3)
+        self.assertTrue(all(self.closed_by_server(conn) for conn in silent), 'a silent connection outlived the deadline')
+        self.assertTrue(self.closed_by_server(trickle), 'a trickling header outlived the deadline')
+        self.assertEqual(self.get(port), 301)
+        self.assertIsNone(process.poll())
+        log.seek(0)
+        self.assertEqual(log.read(), b'')
+
+    def test_descriptor_exhaustion_neither_floods_the_log_nor_stops_the_redirect(self):
+        process, port, log = self.start((48, 48))   # soft = hard: the listener cannot raise it
+        held = self.idle(port, 120)
+        time.sleep(2.5)   # several accept retries while every descriptor is taken
+        log.seek(0); output = log.read()
+        self.assertLess(len(output), 2048, output[:2048])
+        self.assertLessEqual(output.count(b'out of system resource'), 1, output[:2048])
+        self.assertNotIn(b'Traceback', output)
+        # Still holding all 120: the deadline frees descriptors and a fresh request is redirected.
+        self.assertEqual(self.get(port, timeout=10), 301)
+        self.assertIsNone(process.poll())
+        self.assertEqual(len(held), 120)
+
+    def test_soft_descriptor_limit_is_raised_to_the_hard_limit(self):
+        process, port, log = self.start((64, 4096))
+        limits = Path(f'/proc/{process.pid}/limits').read_text()
+        row = next(line for line in limits.splitlines() if line.startswith('Max open files'))
+        self.assertEqual(row.split()[3:5], ['4096', '4096'], row)
+
+
+class AsyncioThrottle(unittest.TestCase):
+    def test_one_line_a_minute_without_a_traceback(self):
+        from app import redirect
+        throttle = redirect.Throttle(every=60)
+        def record(message):
+            try: raise OSError(24, 'Too many open files')
+            except OSError: exc_info = sys.exc_info()
+            return logging.LogRecord('asyncio', logging.ERROR, __file__, 1, message, (), exc_info)
+        first = record('socket.accept() out of system resource\nsocket: <x>')
+        with mock.patch('time.monotonic', return_value=1000.0):
+            self.assertTrue(throttle.filter(first))
+            self.assertFalse(throttle.filter(record('socket.accept() out of system resource')))
+        self.assertIsNone(first.exc_info)
+        self.assertEqual(first.getMessage(), 'socket.accept() out of system resource ([Errno 24] Too many open files)')
+        with mock.patch('time.monotonic', return_value=1059.0):
+            self.assertFalse(throttle.filter(record('again')))
+        with mock.patch('time.monotonic', return_value=1061.0):
+            self.assertTrue(throttle.filter(record('again')))
+
+    def test_main_installs_it_on_the_asyncio_logger(self):
+        from app import redirect
+        with HeadersModule(), mock.patch('uvicorn.run'):
+            before = list(logging.getLogger('asyncio').filters)
+            self.addCleanup(setattr, logging.getLogger('asyncio'), 'filters', before)
+            redirect.main({'UI_HTTP_PORT': '8081'})
+            redirect.main({'UI_HTTP_PORT': '8081'})
+        added = [f for f in logging.getLogger('asyncio').filters if f not in before]
+        self.assertEqual(len(added), 1, added)
+        self.assertIsInstance(added[0], redirect.Throttle)
 
 
 class RedirectOverRealUvicorn(unittest.TestCase):

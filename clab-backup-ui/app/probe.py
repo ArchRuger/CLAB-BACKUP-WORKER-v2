@@ -17,7 +17,9 @@ import json
 import logging
 import os
 from pathlib import Path
+import signal
 import sys
+import threading
 import warnings
 
 sys.dont_write_bytecode = True   # the probe's imports leave no files behind either
@@ -27,6 +29,12 @@ MAX_KEY = 4096
 MAX_TEXT = 600
 MAX_ENTRIES = 500
 BROWSE_TIMEOUT = 25
+# The whole probe, connect and banner included, ends within DEADLINE seconds, and a client that swallowed the deadline
+# within GRACE more: check_install.py gives `docker exec` 30 s and a killed exec client leaves its process running in the
+# container, holding an SSH session to the VM (git_progress.remote_git alone may read for 600 s).
+DEADLINE = 25
+GRACE = 3
+DEADLINE_SENTENCE = 'The probe did not finish within 25 seconds.'
 STATE_UNREADABLE = 'state unreadable'
 RESET_PENDING = 'reset pending'
 UNEXPECTED = 'The probe failed unexpectedly.'
@@ -42,6 +50,44 @@ class ProbeError(Exception):
 
 class Usage(Exception):
     pass
+
+
+class Expired(BaseException):
+    """The overall deadline. Not an Exception: the clients' and the capture probe's `except Exception` must not take
+    it for a failed call and carry on; their `finally: client.close()` still runs."""
+
+
+class Timer:
+    """SIGALRM after DEADLINE raises Expired in the probe; a second firing GRACE later, if the probe is still running
+    (a bare `except:` swallowed the first), prints the same error line and ends the process at once."""
+    def __init__(self):
+        self.active = self.fired = False
+        self.previous = None
+
+    def start(self):
+        if threading.current_thread() is not threading.main_thread():
+            return   # signals reach the main thread only; the module is run as a program, where this never happens
+        self.previous = signal.signal(signal.SIGALRM, self.expire)
+        self.active, self.fired = True, False
+        signal.setitimer(signal.ITIMER_REAL, DEADLINE)
+
+    def expire(self, signum, frame):
+        if not self.active:
+            return
+        if self.fired:
+            os.write(1, (json.dumps({'error': DEADLINE_SENTENCE}) + '\n').encode())
+            os._exit(1)
+        self.fired = True
+        signal.setitimer(signal.ITIMER_REAL, GRACE)
+        raise Expired()
+
+    def stop(self):
+        """Idempotent: called on every way out, so an Expired raised while stopping still leaves no timer armed."""
+        if not self.active:
+            return
+        self.active = False
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, self.previous if self.previous is not None else signal.SIG_DFL)
 
 
 def data_dir():
@@ -152,6 +198,17 @@ def valid_path(path):
                           and not any(ord(c) < 32 or ord(c) == 127 for c in path))
 
 
+def password_setup_sentence():
+    """The sentence discovery.vm_password raises for a connection without a saved password, read from the function
+    itself so the two never drift apart."""
+    from .discovery import vm_password
+    try:
+        vm_password({})
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
 def browse(args):
     """The operations helper's `browse` mode, as POST /api/operations/browse sends it without `files`."""
     from . import lab_operations
@@ -163,7 +220,13 @@ def browse(args):
     except Exception as exc:   # DeviceDiagnostics.ask: a ValueError is the manager's sentence, anything else is fixed
         message = str(exc) if type(exc) is ValueError else UNREACHABLE_SENTENCE
         if message == 'Unknown request mode.': message = OLD_HELPER_SENTENCE
-        raise ProbeError(lab_operations.scrub(message, state))
+        if getattr(exc, 'from_helper', False) and message != OLD_HELPER_SENTENCE:
+            message = lab_operations.scrub(message, state)   # the helper's own line: the whole rule set
+        else:
+            # The manager's fixed sentences: scrub()'s line rule would turn "VM password setup required. …" into
+            # "[sensitive output omitted]", so only the stored secrets themselves are replaced.
+            for secret in lab_operations.secret_values(state): message = message.replace(secret, '[redacted]')
+        raise ProbeError(message)
     if not isinstance(result, dict) or not isinstance(result.get('entries'), list):
         raise ProbeError(UNUSABLE_SENTENCE)
     entries = []
@@ -185,7 +248,8 @@ def git_registry(args):
         result = git_progress.remote_git(saved_host(state), {'mode': 'list'})
     except ValueError as exc:   # GitProgress.invoke: the helper's fixed sentences pass, anything else is scrubbed
         message = str(exc)
-        raise ProbeError(message if message in git_progress.PROBLEM_CODES else scrub(message, state))
+        fixed = message in git_progress.PROBLEM_CODES or message == password_setup_sentence()
+        raise ProbeError(message if fixed else scrub(message, state))
     except Exception:
         raise ProbeError(git_progress.VM_UNREACHABLE)
     if not isinstance(result, dict) or not isinstance(result.get('repositories'), list):
@@ -207,7 +271,7 @@ def limited(value):
     return value
 
 
-def run(argv):
+def run(argv, timer=None):
     """(exit code, the printed object) or Usage."""
     if not argv or argv[0] not in PROBES:
         raise Usage()
@@ -215,8 +279,16 @@ def run(argv):
     args = argv[1:]
     if len(args) != count or (argv[0] == 'browse' and not valid_path(args[0])):
         raise Usage()
+    timer = timer or Timer()
     try:
-        return 0, probe(args)
+        try:
+            timer.start()
+            return 0, probe(args)
+        finally:
+            timer.stop()
+    except Expired:
+        timer.stop()
+        return 1, {'error': DEADLINE_SENTENCE}
     except ProbeError as exc:
         return 1, {'error': str(exc)}
     except Exception:
@@ -241,5 +313,12 @@ def main(argv=None):
     return code
 
 
+def program(argv=None):
+    """`python -m app.probe`: logging stays off for the life of the process, because a paramiko transport thread that
+    a deadline cut short logs its own end (\"Error reading SSH protocol banner\") after main() has returned."""
+    logging.disable(logging.CRITICAL)
+    return main(argv)
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(program())
