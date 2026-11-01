@@ -6,7 +6,8 @@ for any method but GET and HEAD, closes a socket 1008, and nothing else.
 
 On an exposed port it must also stay up and quiet against a client that holds sockets open: every connection is
 closed CONNECTION_DEADLINE seconds after it was accepted, whatever it sent (uvicorn has no request-header timeout),
-the soft descriptor limit is raised to the hard one at start, and asyncio's own errors (an accept that ran out of
+the soft descriptor limit is set to NOFILE_CEILING at start (raised from 1024, lowered from a container's higher
+value, so held sockets cost bounded memory), and asyncio's own errors (an accept that ran out of
 descriptors is logged once per backlog slot, every second) reach the log at most once a minute, without a traceback.
 `security_headers` is looked up when the listener is built, so a missing `app.headers` stops the start instead of
 answering every request 500 with a logged traceback.
@@ -32,7 +33,7 @@ METHODS = ('GET', 'HEAD')
 DEFAULT_PORT = 8443
 DEFAULT_HTTP_PORT = 8081
 CONNECTION_DEADLINE = 10       # seconds from accept to close; a redirect is answered in milliseconds
-NOFILE_CEILING = 1048576       # the soft limit asked for when the hard one is unlimited
+NOFILE_CEILING = 4096          # the listener's soft descriptor limit: about 14 kB of memory per held socket
 
 
 def printable(value):
@@ -148,11 +149,15 @@ def quiet_asyncio():
 
 
 def raise_open_files():
-    """Soft RLIMIT_NOFILE up to the hard limit (no capability needed), so idle sockets need many more descriptors."""
+    """Soft RLIMIT_NOFILE set to NOFILE_CEILING, or to the hard limit when that is lower (no capability needed).
+
+    Raised from a default of 1024, so idle sockets need four times the descriptors; never above the ceiling, and
+    lowered to it when a container starts with a higher soft limit, because every held connection costs the listener
+    memory and a container's hard limit (524288 or more) would let one client hold VM memory without bound."""
     try:
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        target = NOFILE_CEILING if hard == resource.RLIM_INFINITY else hard
-        if soft != resource.RLIM_INFINITY and soft < target:
+        target = NOFILE_CEILING if hard == resource.RLIM_INFINITY else min(hard, NOFILE_CEILING)
+        if soft != target:
             resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
     except (ValueError, OSError):
         pass   # the limit stays as it was; the deadline still bounds how long a descriptor is held

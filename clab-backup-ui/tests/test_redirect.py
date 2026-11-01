@@ -522,11 +522,74 @@ class RedirectUnderPressure(unittest.TestCase):
         self.assertIsNone(process.poll())
         self.assertEqual(len(held), 120)
 
-    def test_soft_descriptor_limit_is_raised_to_the_hard_limit(self):
-        process, port, log = self.start((64, 4096))
+    def open_files(self, process):
         limits = Path(f'/proc/{process.pid}/limits').read_text()
         row = next(line for line in limits.splitlines() if line.startswith('Max open files'))
-        self.assertEqual(row.split()[3:5], ['4096', '4096'], row)
+        return row.split()[3:5]
+
+    def test_soft_descriptor_limit_is_raised_to_the_hard_limit(self):
+        # The hard limit here is the ceiling itself, so "raised to the hard limit" still holds exactly.
+        process, port, log = self.start((64, 4096))
+        self.assertEqual(self.open_files(process), ['4096', '4096'])
+
+    def test_soft_descriptor_limit_never_exceeds_the_ceiling(self):
+        # Each held connection costs the listener about 14 kB: a soft limit lifted to a container's hard limit
+        # (524288 or more) would let a client hold VM memory without bound. The hard limit is left as it was.
+        import resource
+        hard = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+        if hard != resource.RLIM_INFINITY and hard <= 4096:
+            self.skipTest(f'this process may not set a hard descriptor limit above 4096 (it is {hard})')
+        hard = 20000 if hard == resource.RLIM_INFINITY else hard
+        process, port, log = self.start((64, hard))
+        self.assertEqual(self.open_files(process), ['4096', str(hard)])
+
+    def test_a_soft_limit_already_above_the_ceiling_is_lowered_to_it(self):
+        # A container started with soft = hard = 1048576 would otherwise hold memory without bound as well.
+        import resource
+        hard = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+        if hard != resource.RLIM_INFINITY and hard <= 4096:
+            self.skipTest(f'this process may not set a hard descriptor limit above 4096 (it is {hard})')
+        hard = 20000 if hard == resource.RLIM_INFINITY else hard
+        process, port, log = self.start((hard, hard))
+        self.assertEqual(self.open_files(process), ['4096', str(hard)])
+
+    def test_held_connections_stay_under_the_ceiling(self):
+        # The attack itself: more idle connections than the ceiling; the listener never holds more descriptors.
+        import resource
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if hard != resource.RLIM_INFINITY and hard <= 4400:
+            self.skipTest(f'this test process needs more than 4400 descriptors (its hard limit is {hard})')
+        if soft != resource.RLIM_INFINITY and soft <= 4400:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard if hard != resource.RLIM_INFINITY else 8192, hard))
+            self.addCleanup(resource.setrlimit, resource.RLIMIT_NOFILE, (soft, hard))
+        process, port, log = self.start((64, hard if hard != resource.RLIM_INFINITY else 20000))
+        held = self.idle(port, 4300)
+        most = 0
+        stop = time.monotonic() + 0.8   # inside the shortened one-second deadline
+        while time.monotonic() < stop:
+            most = max(most, len(os.listdir(f'/proc/{process.pid}/fd')))
+            time.sleep(0.05)
+        self.assertGreater(most, 1000, 'the listener did not accept the held connections at all')
+        self.assertLessEqual(most, 4096)
+        self.assertEqual(self.get(port, timeout=10), 301)
+        self.assertIsNone(process.poll())
+        self.assertEqual(len(held), 4300)
+
+    def test_an_unlimited_hard_limit_gives_the_ceiling(self):
+        from app import redirect
+        import resource
+        calls = []
+        with mock.patch.object(redirect.resource, 'getrlimit', return_value=(1024, resource.RLIM_INFINITY)), \
+                mock.patch.object(redirect.resource, 'setrlimit', side_effect=lambda *a: calls.append(a)):
+            redirect.raise_open_files()
+        self.assertEqual(calls, [(resource.RLIMIT_NOFILE, (4096, resource.RLIM_INFINITY))])
+        calls.clear()
+        with mock.patch.object(redirect.resource, 'getrlimit',
+                               return_value=(resource.RLIM_INFINITY, resource.RLIM_INFINITY)), \
+                mock.patch.object(redirect.resource, 'setrlimit', side_effect=lambda *a: calls.append(a)):
+            redirect.raise_open_files()
+        self.assertEqual(calls, [(resource.RLIMIT_NOFILE, (4096, resource.RLIM_INFINITY))])
+        self.assertEqual(redirect.NOFILE_CEILING, 4096)
 
 
 class AsyncioThrottle(unittest.TestCase):
@@ -550,11 +613,13 @@ class AsyncioThrottle(unittest.TestCase):
 
     def test_main_installs_it_on_the_asyncio_logger(self):
         from app import redirect
-        with HeadersModule(), mock.patch('uvicorn.run'):
+        # raise_open_files is patched: run in this process it would set the test runner's own descriptor limit.
+        with HeadersModule(), mock.patch('uvicorn.run'), mock.patch.object(redirect, 'raise_open_files') as limit:
             before = list(logging.getLogger('asyncio').filters)
             self.addCleanup(setattr, logging.getLogger('asyncio'), 'filters', before)
             redirect.main({'UI_HTTP_PORT': '8081'})
             redirect.main({'UI_HTTP_PORT': '8081'})
+        self.assertEqual(limit.call_count, 2)
         added = [f for f in logging.getLogger('asyncio').filters if f not in before]
         self.assertEqual(len(added), 1, added)
         self.assertIsInstance(added[0], redirect.Throttle)
