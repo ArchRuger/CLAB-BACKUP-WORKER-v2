@@ -22,6 +22,7 @@ DEFAULT_UI_PORT = 8443
 DEFAULT_HTTP_PORT = 8081
 HSTS_VALUE = 'max-age=15552000'
 RECOVERY_SECONDS = 15 * 60
+BROAD_RANGE = 1000  # a tcp range wider than this many ports, open to anywhere, is a blanket allow
 CAPTURE_PORTS = (5001, 5801)
 DOCKER_FIX = 'Check sudo systemctl status docker; rerun the installer if Docker is missing.'
 SECURITY_GROUP = ' A cloud security group is an accepted reason to ignore this warning.'
@@ -241,7 +242,12 @@ def check_names(ctx, hosts, listed):
         addresses = []
     addresses = addresses if isinstance(addresses, list) else []
     required = []
-    for address in ctx.module('setup_tls').certificate_addresses(routes, addresses):
+    try:
+        wanted = ctx.module('setup_tls').certificate_addresses(routes, addresses)
+    except Exception:  # the rule lives in a sibling script; a missing or damaged one must not hide the other checks
+        ctx.add('tls.names', 'SKIP', title, 'The certificate rule of setup-tls.sh could not be loaded, so the names were not compared.', fix)
+        return
+    for address in wanted:
         key = san_key(address)
         if key and key[0] == 'ip':
             ip = ipaddress.ip_address(key[1])
@@ -353,19 +359,30 @@ def port_allowed(rules, port):
 
 
 def ufw_rules(text):
-    rules = []
+    """(rules, broad): the tcp port ranges that ufw allows in, and the descriptions of the blanket allows among
+    them. A blanket allow is a rule from anywhere (the source is not limited) to every port or to a tcp range wider
+    than BROAD_RANGE ports. A rule limited to a source address does not count as blanket."""
+    rules, broad = [], []
     for line in text.splitlines():
-        match = re.match(r'^(\S+)(?: \(v6\))?\s+(?:ALLOW|LIMIT)(?: IN)?\s', line + ' ')
-        if not match or match[1].lower() == 'anywhere':
+        match = re.match(r'^(\S+)(?: \(v6\))?\s+(?:ALLOW|LIMIT)(?: IN)?(?:\s+(.*))?$', line.rstrip())
+        if not match:
             continue
         spec, _, proto = match[1].partition('/')
         if proto == 'udp':
+            continue
+        everywhere = (match[2] or '').strip().lower().startswith('anywhere')
+        if spec.lower() == 'anywhere':
+            rules.append((1, 65535))
+            if everywhere:
+                broad.append('every port')
             continue
         for part in spec.split(','):
             low, _, high = part.partition(':')
             if low.isdigit() and (not high or high.isdigit()):
                 rules.append((int(low), int(high or low)))
-    return rules
+                if everywhere and high and int(high) - int(low) + 1 > BROAD_RANGE:
+                    broad.append(f'tcp {low}-{high}')
+    return rules, list(dict.fromkeys(broad))
 
 
 def check_firewall(ctx, ui_port, http_port, ssh_ports):
@@ -380,7 +397,7 @@ def check_firewall(ctx, ui_port, http_port, ssh_ports):
         return
     text = result.stdout
     needed = [(f'SSH ({port})' if port in ssh_ports else str(port), port) for port in [*ssh_ports, ui_port, *([http_port] if http_port else [])]]
-    rules = ufw_rules(text)
+    rules, broad = ufw_rules(text)
     if not re.search(r'^Status:\s*active', text, re.MULTILINE):
         ctx.add('firewall', 'WARN', title, 'ufw is inactive.' + SECURITY_GROUP, fix)
         return
@@ -391,6 +408,8 @@ def check_firewall(ctx, ui_port, http_port, ssh_ports):
     blocked = [label for label, port in needed if not port_allowed(rules, port)]
     if blocked:
         problems.append('not allowed: ' + ', '.join(blocked))
+    if broad:
+        problems.append('a rule allows ' + ' and '.join(broad) + ' from anywhere, which opens more than the ports above')
     if problems:
         ctx.add('firewall', 'WARN', title, 'ufw is active but ' + '; '.join(problems) + '.' + SECURITY_GROUP, fix)
     else:
@@ -467,8 +486,15 @@ def check_ports(ctx):
 
 def check_bootstrap(ctx, ui_port):
     title = 'Sign-on setup code'
-    if not ctx.run(['test', '-e', SETUP_CODE], privileged=True).ok:
-        ctx.add('signon.bootstrap', 'PASS', title, 'No setup or recovery code is waiting.')
+    exists = ctx.run(['test', '-e', SETUP_CODE], privileged=True, capture_stderr=True)
+    if exists.code == 1 and not exists.reason and not exists.stderr.strip():
+        ctx.add('signon.bootstrap', 'PASS', title, 'No setup or recovery code is waiting.')  # test -e answered "absent"
+        return
+    if not exists.ok:
+        # No answer is not "absent": the deadline, sudo, the root timeout or a missing command also end here, and a
+        # sudo refusal exits 1 like a missing file does, which is why its stderr has to be empty too.
+        ctx.add('signon.bootstrap', 'SKIP', title, 'The setup-code file could not be checked, so whether a setup or recovery code is waiting is unknown.',
+                'Rerun ' + ctx.repair('check-install.sh', '--owner', ctx.owner or 'YOUR_VM_USER') + ' with administrator access.')
         return
     head = ctx.run(['head', '-c', '16', SETUP_CODE], privileged=True, limit=64)
     mode = head.stdout.splitlines()[0].strip() if head.ok and head.stdout.splitlines() else ''
@@ -519,18 +545,37 @@ def check_ssh(ctx, facts):
                 'fail2ban is not active or not installed; recommended on an Internet-facing VM; see INSTALL.md.', 'sudo apt-get install -y fail2ban')
 
 
+def attempt(ctx, idents, title, function, *args, fallback=None):
+    """Run one sub-check on its own. An exception becomes a FAIL row for each id the check had not yet recorded (the
+    exception class only: its text may carry command output), so one broken check never erases the others."""
+    before = len(ctx.checks)
+    try:
+        return function(*args)
+    except Exception as error:
+        recorded = {row['id'] for row in ctx.checks[before:]}
+        for ident in idents:
+            if ident not in recorded:
+                ctx.add(ident, 'FAIL', title, f'The check stopped before it could answer ({type(error).__name__}); the other checks of the group still ran. No successful result is assumed.',
+                        'Verify a complete source checkout and rerun the report.')
+        return fallback
+
+
 def check_exposure(ctx):
-    ui_port, http_port, listed = settings(ctx)
-    mode, names = check_files(ctx)
-    check_certificate(ctx, mode)
-    check_names(ctx, names, listed)
-    check_bind(ctx)
-    listener = check_listener(ctx)
-    check_redirect(ctx, local_host(ctx), ui_port, http_port)
-    check_hsts(ctx, listener)
-    facts, ssh_ports = sshd_facts(ctx)
-    check_firewall(ctx, ui_port, http_port, ssh_ports)
-    check_listeners(ctx, ui_port, http_port, ssh_ports)
-    check_ports(ctx)
-    check_bootstrap(ctx, ui_port)
-    check_ssh(ctx, facts)
+    ui_port, http_port, listed = attempt(ctx, ('exposure.settings',), 'Manager ports and host names', settings, ctx,
+                                         fallback=(DEFAULT_UI_PORT, DEFAULT_HTTP_PORT, []))
+    mode, names = attempt(ctx, ('tls.files',), 'TLS certificate files', check_files, ctx, fallback=('', []))
+    attempt(ctx, ('tls.cert',), 'TLS certificate', check_certificate, ctx, mode)
+    attempt(ctx, ('tls.names',), 'TLS certificate names', check_names, ctx, names, listed)
+    attempt(ctx, ('tls.bind',), 'TLS listener configuration', check_bind, ctx)
+    listener = attempt(ctx, ('tls.listener',), 'TLS listener', check_listener, ctx)
+    attempt(ctx, ('http.redirect',), 'HTTP redirect', lambda: check_redirect(ctx, local_host(ctx), ui_port, http_port))
+    attempt(ctx, ('http.hsts',), 'HSTS header', check_hsts, ctx, listener)
+    try:
+        facts, ssh_ports = sshd_facts(ctx)
+    except Exception:  # check_ssh then answers SKIP: the effective configuration could not be read
+        facts, ssh_ports = None, [22]
+    attempt(ctx, ('firewall',), 'Host firewall', check_firewall, ctx, ui_port, http_port, ssh_ports)
+    attempt(ctx, ('exposure.listeners',), 'Listening TCP ports', check_listeners, ctx, ui_port, http_port, ssh_ports)
+    attempt(ctx, ('exposure.ports',), 'Container published ports', check_ports, ctx)
+    attempt(ctx, ('signon.bootstrap',), 'Sign-on setup code', check_bootstrap, ctx, ui_port)
+    attempt(ctx, ('ssh.hardening', 'ssh.bruteforce'), 'SSH hardening', check_ssh, ctx, facts)

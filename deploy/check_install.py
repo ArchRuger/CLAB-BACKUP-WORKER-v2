@@ -80,6 +80,8 @@ class Context:
         self.deadline = time.monotonic() + args.deadline
         self.base_url = ''
         self.container = ''
+        self.manager_running = False
+        self.probe_blocked = None
         self.host = {}
         self.tls_context = None
         self.manager_command = None
@@ -179,11 +181,19 @@ class Context:
     def pin_certificate(self, path=None):
         """Trust exactly the installed certificate for the one HTTPS request. The name check is off on purpose: a PASS
         proves the listener serves that file, and whether its names fit is the separate tls.names finding.
+        A provided certificate is installed with its chain, leaf first: only that first certificate becomes the trust
+        anchor (the partial-chain flag lets a leaf be one), never an intermediate behind it, so another leaf of the
+        same issuer, such as the old one after a renewal that was not followed by recreate-manager.sh, is refused.
         Without a readable certificate tls_context stays None and nothing is sent over HTTPS."""
+        self.tls_context = None
         try:
-            value = ssl.create_default_context(cafile=str(path or TLS_DIR / 'cert.pem'))
+            with open(path or TLS_DIR / 'cert.pem', encoding='ascii', errors='ignore') as handle:
+                text = handle.read(1024 * 1024)
+            block = re.search(r'-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\s]+?-----END CERTIFICATE-----', text)
+            if block is None:
+                return
+            value = ssl.create_default_context(cadata=ssl.PEM_cert_to_DER_cert(block[0]))
             value.check_hostname = False
-            # A provided certificate is installed with its chain, leaf first; the leaf in the file is the pin.
             value.verify_flags |= getattr(ssl, 'VERIFY_X509_PARTIAL_CHAIN', 0)
             self.tls_context = value
         except (OSError, ssl.SSLError, ValueError):
@@ -321,6 +331,10 @@ def check_docker(ctx):
 
 
 def inspect_manager(ctx):
+    # The installed certificate is read from its file, whether or not the manager runs or has an address: the
+    # listener checks then name the real cause (a stopped manager, a plain-HTTP start) instead of blaming the file.
+    ctx.pin_certificate()
+    ctx.manager_running = False  # true only once the Running state was read below: the probes run inside the container
     docker = ['docker', '--host', 'unix:///var/run/docker.sock']
     result = ctx.run([*docker, 'info', '--format', '{{json .ServerVersion}}'], privileged=True)
     if not result.ok:
@@ -353,6 +367,7 @@ def inspect_manager(ctx):
         ctx.add('manager', 'FAIL', 'Manager container', 'The manager container is not running.',
                 'Inspect sudo docker compose -f clab-backup-ui/compose.yml logs --tail=80 backup-ui locally.')
         return
+    ctx.manager_running = True
     ctx.add('manager', 'PASS', 'Manager container', 'The backup-ui container is running.')
     ctx.add('restart', 'PASS' if details.get('restart') in ('unless-stopped', 'always') else 'WARN',
             'Restart policy', 'Automatic restart configured.' if details.get('restart') in ('unless-stopped', 'always')
@@ -373,7 +388,6 @@ def inspect_manager(ctx):
         ctx.add('http', 'FAIL', 'Manager HTTP', 'Could not determine its actual configured bind address and port.')
         return
     # The one HTTP question of the health check: GET /api/health over TLS with the installed certificate pinned.
-    ctx.pin_certificate()
     if ctx.tls_context is None:
         ctx.add('http', 'SKIP', 'Manager HTTP', 'The installed certificate could not be read, so the manager was not asked over HTTPS.',
                 ctx.repair('setup-tls.sh'))
@@ -408,7 +422,7 @@ print(json.dumps(r))
 def check_design_engine(ctx):
     """The pinned network design engine inside the running image: available, and the version the manager expects."""
     title = 'Network design engine'
-    if not ctx.container:
+    if not ctx.manager_running:
         ctx.add('design-engine', 'SKIP', title, 'Manager container unavailable; the design engine could not be queried.')
         return
     engine, missing = ctx.probe('design-engine')
@@ -610,15 +624,17 @@ def check_helpers(ctx):
 
 def check_manager_routes(ctx):
     """The saved VM connection and the topology browser, read through the manager's own probes (EXPOSURE 6.1)."""
-    if not ctx.container:
+    if not ctx.manager_running:
         ctx.add('vm-connection', 'SKIP', 'Saved VM connection', 'Manager container unavailable; saved-connection tests could not run.')
         return
     discovery, missing = ctx.probe('vm-connection')
     if missing:
+        ctx.probe_blocked = 'missing'  # check_git_route says the same thing, with the same fix, instead of a generic guard
         skip_old_image(ctx, 'vm-connection', 'Saved VM connection')
         skip_old_image(ctx, 'http-browse', 'Topology browser over saved SSH connection')
         return
     if state_error(discovery):
+        ctx.probe_blocked = discovery
         skip_state(ctx, 'vm-connection', 'Saved VM connection', discovery, "the manager's own page runs this check")
         skip_state(ctx, 'http-browse', 'Topology browser over saved SSH connection', discovery, "the manager's own page runs this check")
         return
@@ -720,7 +736,13 @@ def check_manager_routes(ctx):
 
 def check_git_route(ctx):
     title = 'Git registry through saved SSH connection'
-    if not ctx.container or not ctx.host.get('enabled') or not ctx.host.get('fingerprint_saved'):
+    if ctx.probe_blocked == 'missing':
+        skip_old_image(ctx, 'git-http', title)
+        return
+    if state_error(ctx.probe_blocked):
+        skip_state(ctx, 'git-http', title, ctx.probe_blocked, 'a lab\'s save drawer lists the registry')
+        return
+    if not ctx.manager_running or not ctx.host.get('enabled') or not ctx.host.get('fingerprint_saved'):
         ctx.add('git-http', 'SKIP', title, 'A working manager and saved VM connection are required.')
         return
     if ctx.trusted_helpers.get('git') is not True:
@@ -751,7 +773,7 @@ def check_git_route(ctx):
 def check_capture(ctx):
     """Read-only Edgeshark discovery and browser-session/image readiness, from one probe inside the manager container."""
     title = 'Browser Wireshark capture'
-    if not ctx.container:
+    if not ctx.manager_running:
         ctx.add('capture', 'SKIP', title, 'Manager container unavailable; the capture provider could not be queried.')
         return
     status, missing = ctx.probe('capture')

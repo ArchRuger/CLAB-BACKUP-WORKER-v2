@@ -12,6 +12,7 @@ import sys
 from types import SimpleNamespace
 import time
 import unittest
+import unittest.mock
 from unittest.mock import Mock
 
 
@@ -156,6 +157,7 @@ class Fixture:
         self.redirect_running = True
         self.setup_code = None            # None: absent; else (first line, age in seconds)
         self.setup_body = 'code=' + PRIVATE
+        self.setup_test = None            # a Result that replaces the answer of `test -e` (a question that did not run)
         self.__dict__.update(overrides)
 
     def source_text(self, path):
@@ -192,6 +194,8 @@ class Fixture:
             if args[1:] == ['-x', '/usr/sbin/ufw']:
                 return check.Result(0 if self.ufw_installed else 1)
             if args[1:] == ['-e', SETUP_CODE]:
+                if self.setup_test is not None:
+                    return self.setup_test
                 return check.Result(0 if self.setup_code else 1)
         if head == '/usr/sbin/ufw' or head == 'ufw':
             return check.Result(0, self.ufw)
@@ -202,8 +206,10 @@ class Fixture:
         if head == 'systemctl':
             return check.Result(0 if self.fail2ban else 3, 'active\n' if self.fail2ban else 'inactive\n')
         if head == 'head' and args[-1] == SETUP_CODE:
-            # head -c 16: the first line and the start of the second; the check must keep neither the code nor anything past the mode.
-            return check.Result(0, (self.setup_code[0] + '\n' + self.setup_body)[:16])
+            whole = self.setup_code[0] + '\n' + self.setup_body
+            # Only the exact bounded read is honoured: any other argv gets the whole file back, so a wider read is
+            # visible to the tests that assert the argv and to the ones that look for the code in the report.
+            return check.Result(0, whole[:16] if args == ['head', '-c', '16', SETUP_CODE] else whole)
         if head == 'stat' and args[-1] == SETUP_CODE:
             return check.Result(0, str(int(time.time()) - self.setup_code[1]) + '\n')
         if head == 'docker':
@@ -289,15 +295,20 @@ class HealthyVmTests(unittest.TestCase):
         self.assertFalse(any(row['status'] in ('FAIL', 'WARN', 'SKIP') for row in ctx.checks))
 
     def test_no_check_changes_anything_or_reads_a_key(self):
-        ctx = run_group()
-        for call in ctx.run.call_args_list:
-            argv = call.args[0]
-            self.assertNotIn(TLS + '/key.pem', argv[:3] if argv[0] != '/usr/bin/python3' else [], 'only the inspection script is given the key path')
-            self.assertNotIn(argv[0], ('rm', 'mv', 'cp', 'chmod', 'chown', 'tee', 'sed'))
-            if argv[0] == 'ufw' or argv[0].endswith('/ufw'):
-                self.assertEqual(argv[1:], ['status', 'verbose'])
-            if argv[0] == 'head':
-                self.assertEqual(argv[:3], ['head', '-c', '16'])
+        # A recovery is open, so the setup-code reads run too: every command of the group is in this list.
+        for fixture in (Fixture(), Fixture(setup_code=('mode=recover', 5), mode='provided\n')):
+            ctx = run_group(fixture=fixture)
+            for call in ctx.run.call_args_list:
+                argv = call.args[0]
+                if argv[0] == '/usr/bin/python3':
+                    self.assertEqual(argv[1:3], ['-I', '-c'], 'the one inspection script is the only command given the key path')
+                    continue
+                self.assertFalse([item for item in argv if 'key.pem' in item], 'no command but the inspection script names the key: ' + ' '.join(argv)[:80])
+                self.assertNotIn(argv[0], ('rm', 'mv', 'cp', 'chmod', 'chown', 'tee', 'sed'))
+                if argv[0] == 'ufw' or argv[0].endswith('/ufw'):
+                    self.assertEqual(argv[1:], ['status', 'verbose'])
+                if argv[0] == 'openssl':
+                    self.assertEqual(argv[argv.index('-in') + 1], TLS + '/cert.pem', 'openssl is only ever given the certificate')
 
     def test_the_report_carries_no_private_value_of_the_environment_file(self):
         self.assertNotIn(PRIVATE, report(run_group()))
@@ -517,6 +528,31 @@ class FirewallAndListenerTests(unittest.TestCase):
         no_redirect = Fixture(env={'clab-backup-ui/.env': 'UI_HTTP_PORT=0\n'}, ufw=UFW_ACTIVE.replace('8081/tcp                   ALLOW IN    Anywhere\n', ''))
         self.assertEqual(by_id(run_group(fixture=no_redirect), 'firewall')['status'], 'PASS')
 
+    def test_a_blanket_allow_is_not_a_closed_door(self):
+        blanket = {'every port from anywhere': 'Anywhere                   ALLOW IN    Anywhere\n',
+                   'every port from anywhere, IPv6': 'Anywhere (v6)              ALLOW IN    Anywhere (v6)\n',
+                   'every port, tcp only': 'Anywhere/tcp               ALLOW IN    Anywhere\n',
+                   'the whole tcp range': '1:65535/tcp                ALLOW IN    Anywhere\n',
+                   'a very wide tcp range': '2000:9000/tcp              ALLOW IN    Anywhere\n'}
+        for name, rule in blanket.items():
+            with self.subTest(name):
+                row = by_id(run_group(fixture=Fixture(ufw=UFW_ACTIVE + rule)), 'firewall')
+                self.assertEqual(row['status'], 'WARN', row)
+                self.assertIn('from anywhere', row['detail'])
+                self.assertIn('setup-firewall.sh', row['fix'])
+                self.assertIn('security group', row['detail'])
+        only_blanket = UFW_ACTIVE.split('To ')[0] + 'To                         Action      From\n--                         ------      ----\nAnywhere                   ALLOW IN    Anywhere\n'
+        row = by_id(run_group(fixture=Fixture(ufw=only_blanket)), 'firewall')
+        self.assertEqual(row['status'], 'WARN')
+        self.assertNotIn('not allowed', row['detail'], 'a blanket rule does cover the needed ports; the finding is the blanket')
+
+    def test_rules_limited_to_a_source_or_to_other_single_ports_do_not_warn(self):
+        quiet = ('5432/tcp                   ALLOW IN    Anywhere\n'
+                 'Anywhere                   ALLOW IN    10.0.0.0/8\n'
+                 '1:65535/tcp                ALLOW IN    203.0.113.0/24\n'
+                 '1:65535/udp                ALLOW IN    Anywhere\n')
+        self.assertEqual(by_id(run_group(fixture=Fixture(ufw=UFW_ACTIVE + quiet)), 'firewall')['status'], 'PASS')
+
     def test_ufw_not_installed_fails(self):
         row = by_id(run_group(fixture=Fixture(ufw_installed=False)), 'firewall')
         self.assertEqual(row['status'], 'FAIL')
@@ -599,11 +635,39 @@ class BootstrapTests(unittest.TestCase):
 
     def test_only_the_first_sixteen_bytes_and_the_mtime_are_read(self):
         ctx = run_group(fixture=Fixture(setup_code=('mode=recover', 5)))
-        reads = [call.args[0] for call in ctx.run.call_args_list if call.args[0][0] in ('head', 'stat', 'cat') and SETUP_CODE in call.args[0]]
-        self.assertTrue(reads)
-        for argv in reads:
-            self.assertIn(argv[0], ('head', 'stat'))
+        reads = [call.args[0] for call in ctx.run.call_args_list if SETUP_CODE in call.args[0]]
+        self.assertEqual(reads, [['test', '-e', SETUP_CODE], ['head', '-c', '16', SETUP_CODE], ['stat', '-c', '%Y', SETUP_CODE]],
+                         'the existence test, exactly sixteen bytes and the modification time: nothing else touches the file')
         self.assertTrue(all(call.kwargs.get('privileged') for call in ctx.run.call_args_list if SETUP_CODE in call.args[0]))
+
+    def test_a_wider_read_would_put_the_code_in_the_report_which_the_fixture_makes_visible(self):
+        # The guard of the test above: the fixture hands the whole file to any head argv but the exact one.
+        fixture = Fixture(setup_code=('mode=recover', 5))
+        whole = fixture(['head', '-n', '2', SETUP_CODE]).stdout
+        self.assertIn(PRIVATE, whole)
+        self.assertNotIn(PRIVATE, fixture(['head', '-c', '16', SETUP_CODE]).stdout)
+
+    def test_a_question_that_did_not_run_is_a_skip_never_a_pass(self):
+        cases = {'the report deadline expired in the group': check.Result(reason='report time limit reached'),
+                 'sudo refused or timed out': check.Result(1, '', stderr='sudo: a password is required'),
+                 'the root timeout killed it': check.Result(124),
+                 'administrator access was unavailable': check.Result(reason='administrator access unavailable'),
+                 'the command could not run': check.Result(reason='command unavailable or could not run')}
+        for name, answer in cases.items():
+            with self.subTest(name):
+                ctx = run_group(fixture=Fixture(setup_code=('mode=setup', 5), setup_test=answer))
+                row = by_id(ctx, 'signon.bootstrap')
+                self.assertEqual(row['status'], 'SKIP', row)
+                self.assertNotIn('No setup or recovery code is waiting', row['detail'])
+                self.assertIn('could not be checked', row['detail'])
+                self.assertIn('check-install.sh', row['fix'])
+                self.assertNotIn(PRIVATE, report(ctx))
+
+    def test_only_a_real_exit_one_with_nothing_on_stderr_means_absent(self):
+        ctx = run_group(fixture=Fixture(setup_test=check.Result(1, '', stderr='')))
+        self.assertEqual(by_id(ctx, 'signon.bootstrap')['status'], 'PASS')
+        question = next(call for call in ctx.run.call_args_list if call.args[0] == ['test', '-e', SETUP_CODE])
+        self.assertTrue(question.kwargs.get('capture_stderr'), 'stderr is how a sudo refusal is told from a missing file')
 
 
 class SshTests(unittest.TestCase):
@@ -651,9 +715,17 @@ class DockerAndCertificateSkipTests(unittest.TestCase):
         self.assertNotIn(('/api/health', None), head_pairs(ctx))
 
     def test_a_stopped_manager_without_an_address_skips_the_listener_checks(self):
-        ctx = run_group(base_url='')
-        self.assertEqual(by_id(ctx, 'tls.listener')['status'], 'SKIP')
-        self.assertEqual(by_id(ctx, 'http.hsts')['status'], 'SKIP')
+        # As production leaves the context: the certificate is pinned (inspect_manager does it first), the container
+        # exists but does not run, and no address was built. The cause named is the missing address, not the certificate.
+        ctx = run_group(base_url='', manager_running=False)
+        self.assertIsNotNone(ctx.tls_context)
+        for ident in ('tls.listener', 'http.hsts'):
+            row = by_id(ctx, ident)
+            self.assertEqual(row['status'], 'SKIP')
+            self.assertNotIn('certificate could not be read', row['detail'])
+            self.assertIn('start-manager.sh', row['fix'])
+        self.assertIn('no usable HTTPS address', by_id(ctx, 'tls.listener')['detail'])
+        self.assertNotIn(('/api/health', None), head_pairs(ctx))
 
 
 class FormatTests(unittest.TestCase):
@@ -664,11 +736,68 @@ class FormatTests(unittest.TestCase):
             self.assertTrue(row['title'])
             self.assertIn(row['status'], check.STATUSES)
 
-    def test_a_check_that_raises_is_not_hidden_here_main_reports_it(self):
+    def test_a_check_that_raises_is_not_hidden_it_becomes_that_checks_own_fail(self):
+        # Rewritten from "the exception escapes to main": the claim that a crash is never hidden stays, but it
+        # now costs only the crashing check, and the exception text (which may carry a command's output) is not shown.
         ctx = context()
         ctx.run = Mock(side_effect=RuntimeError(PRIVATE))
-        with self.assertRaises(RuntimeError):
-            exposure.check_exposure(ctx)
+        exposure.check_exposure(ctx)
+        self.assertEqual(ids(ctx), ['exposure.settings'] + ALL)
+        for ident in ('exposure.settings', 'tls.files', 'tls.cert', 'firewall', 'exposure.listeners', 'signon.bootstrap', 'ssh.bruteforce'):
+            with self.subTest(ident=ident):
+                self.assertEqual(by_id(ctx, ident)['status'], 'FAIL')
+                self.assertIn('RuntimeError', by_id(ctx, ident)['detail'])
+        self.assertEqual(by_id(ctx, 'ssh.hardening')['status'], 'SKIP', 'sshd -T raising is the same as sshd -T not answering')
+        self.assertNotIn(PRIVATE, report(ctx))
+        self.assertNotIn(PRIVATE, json.dumps(check.summarize(ctx)))
+
+    def test_one_failing_sub_check_leaves_every_other_check_in_the_report(self):
+        for crashing in ('check_files', 'check_certificate', 'check_bind', 'check_listener', 'check_redirect', 'check_hsts',
+                         'check_firewall', 'check_listeners', 'check_ports', 'check_bootstrap', 'check_ssh'):
+            with self.subTest(crashing=crashing), unittest.mock.patch.object(exposure, crashing, Mock(side_effect=RuntimeError(PRIVATE))):
+                ctx = run_group()
+                self.assertEqual(sorted(ids(ctx)), sorted(ALL), 'every check of the group is in the report')
+                failed = [row for row in ctx.checks if row['status'] == 'FAIL']
+                self.assertEqual(len(failed), 1 if crashing != 'check_ssh' else 2, failed)
+                self.assertTrue(all('RuntimeError' in row['detail'] for row in failed))
+                self.assertNotIn(PRIVATE, report(ctx))
+
+    def test_unreadable_settings_fall_back_to_the_defaults_and_say_so(self):
+        with unittest.mock.patch.object(exposure, 'settings', Mock(side_effect=RuntimeError(PRIVATE))):
+            ctx = run_group()
+        self.assertEqual(by_id(ctx, 'exposure.settings')['status'], 'FAIL')
+        self.assertEqual(sorted(i for i in ids(ctx) if i != 'exposure.settings'), sorted(ALL))
+        self.assertNotIn(PRIVATE, report(ctx))
+
+    def test_an_sshd_query_that_raises_is_a_skip_of_the_hardening_check(self):
+        with unittest.mock.patch.object(exposure, 'sshd_facts', Mock(side_effect=RuntimeError(PRIVATE))):
+            ctx = run_group()
+        self.assertEqual(sorted(ids(ctx)), sorted(ALL))
+        self.assertEqual(by_id(ctx, 'ssh.hardening')['status'], 'SKIP')
+        self.assertEqual(by_id(ctx, 'firewall')['status'], 'PASS', 'port 22 is assumed, as when sshd -T cannot run')
+
+    def test_the_real_module_loader_failing_costs_only_the_names_check(self):
+        # deploy/setup_tls.py does not exist before S4 is integrated; its import can also fail on a damaged checkout.
+        for failure in (FileNotFoundError('setup_tls.py'), ImportError('allowed_hosts'), SyntaxError('bad')):
+            with self.subTest(failure=type(failure).__name__):
+                ctx = context(module=Mock(side_effect=failure))
+                exposure.check_exposure(ctx)
+                self.assertEqual(ids(ctx), ALL)
+                row = by_id(ctx, 'tls.names')
+                self.assertEqual(row['status'], 'SKIP')
+                self.assertIn('could not be loaded', row['detail'])
+                self.assertIn('setup-tls.sh', row['fix'])
+                for ident in ALL:
+                    if ident != 'tls.names':
+                        self.assertEqual(by_id(ctx, ident)['status'], 'PASS', ident)
+
+    def test_the_real_checkout_loader_is_isolated_too(self):
+        ctx = context(module=check.module)  # the production loader: it fails here until S4 adds deploy/setup_tls.py
+        exposure.check_exposure(ctx)
+        self.assertEqual(ids(ctx), ALL)
+        self.assertIn(by_id(ctx, 'tls.names')['status'], ('PASS', 'WARN', 'SKIP'))
+        self.assertEqual(by_id(ctx, 'tls.listener')['status'], 'PASS')
+        self.assertEqual(by_id(ctx, 'ssh.bruteforce')['status'], 'PASS')
 
 
 if __name__ == '__main__':

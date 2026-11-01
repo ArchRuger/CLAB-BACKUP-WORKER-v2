@@ -35,6 +35,7 @@ def context(**overrides):
     ctx = check.Context(args, owner='archtop', privileged=True)
     ctx.version = VERSION
     ctx.container = 'a' * 64
+    ctx.manager_running = True
     ctx.base_url = 'https://127.0.0.1:8443'
     ctx.tls_context = object()  # a stand-in for the pinned context: the opener is mocked
     ctx.trusted_helpers = {'inspect': True, 'operate': True, 'git': True}
@@ -271,7 +272,7 @@ class InstallationCheckTests(unittest.TestCase):
             self.assertEqual(by_id(ctx, 'capture')['status'], 'FAIL', 'discovery works but the session service is not ready')
             self.assertIn('setup-capture.sh', by_id(ctx, 'capture')['fix'])
         ctx = context()
-        ctx.container = ''
+        ctx.manager_running = False  # the guard is the running manager, not the container's existence
         ctx.probe = Mock()
         check.check_capture(ctx)
         self.assertEqual(by_id(ctx, 'capture')['status'], 'SKIP')
@@ -376,7 +377,7 @@ class InstallationCheckTests(unittest.TestCase):
 
     def test_manager_unavailable_does_not_report_connection_success(self):
         ctx = context()
-        ctx.container = ''  # the guard moved from the HTTP address to the container: the probes run inside it
+        ctx.manager_running = False  # the probes run inside the container, so they need it running
         ctx.http = Mock()
         ctx.probe = Mock()
         check.check_manager_routes(ctx)
@@ -491,6 +492,8 @@ class InstallationCheckTests(unittest.TestCase):
                     self.assertEqual(by_id(ctx, 'http')['status'], 'PASS')
                 if condition == 'stopped':
                     self.assertEqual(ctx.manager_command, metadata['command'], 'tls.bind reads the command of a stopped manager too')
+                    self.assertIsNotNone(ctx.tls_context, 'the certificate is pinned from its file even when the manager is down')
+                    self.assertFalse(ctx.manager_running)
                 self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
 
     def test_daemon_failure_prevents_http_or_container_claims(self):
@@ -798,9 +801,9 @@ class ProbeFailureTests(unittest.TestCase):
               ('git-http', check.check_git_route), ('capture', check.check_capture))
 
     def trusted(self):
-        ctx = context(require_git=True)
-        ctx.host = discovery()['host']
-        return ctx
+        # No ctx.host is preset: check_manager_routes sets it only when it got that far, exactly as on a real run, so
+        # the git-http sentences below are the ones a person sees.
+        return context(require_git=True)
 
     def test_a_manager_that_predates_the_probes_skips_every_probe_check_with_the_rebuild_fix(self):
         ctx = self.trusted()
@@ -917,6 +920,89 @@ class ProbeFailureTests(unittest.TestCase):
         installer = SimpleNamespace(health_url=lambda command: 'https://127.0.0.1:8443/api/health')
         with patch.object(check, 'check_storage'), patch.object(check, 'module', return_value=installer):
             check.check_docker(ctx)
+
+
+class StoppedManagerTests(unittest.TestCase):
+    """A manager that is not running, or whose URL cannot be built, as a real run sees it: a fresh context, the
+    certificate pinned before anything else, and no probe sent into a container that is not running."""
+
+    def inspect(self, running=True, health_url=None, command=None):
+        ctx = check.Context(check.arguments([]), owner='archtop', privileged=True)
+        ctx.version = VERSION
+        ctx.trusted_helpers = {'inspect': True, 'operate': True, 'git': True}
+        metadata = {'state': {'Running': running}, 'mounts': [], 'network': 'host', 'restart': 'unless-stopped',
+                    'command': command or ['uvicorn', 'app.main:create_app', '--host', '0.0.0.0', '--port', '8443',
+                                           '--ssl-certfile', '/tls/cert.pem', '--ssl-keyfile', '/tls/key.pem', '--no-proxy-headers']}
+
+        def answer(args, **kwargs):
+            if 'info' in args or args[-1] == 'version':
+                return check.Result(0)
+            if 'ps' in args:
+                return check.Result(0, 'a' * 64)
+            if 'inspect' in args:
+                return encoded(metadata)
+            if 'exec' in args:
+                return check.Result(0, VERSION)
+            return check.Result(reason='unexpected read command')
+        ctx.run = Mock(side_effect=answer)
+        ctx.http = Mock(side_effect=AssertionError('no HTTP question without an address'))
+        ctx.head = Mock(side_effect=AssertionError('no head question without an address'))
+        ctx.probe = Mock(side_effect=probe_router())
+        ctx.pin_certificate = lambda: setattr(ctx, 'tls_context', object())  # the certificate file is readable
+        if health_url is None:
+            health_url = Mock(return_value='https://127.0.0.1:8443/api/health')
+        installer = SimpleNamespace(health_url=health_url)
+        exposure = check.module('check_exposure')
+        with patch.object(check, 'check_storage'), patch.object(check, 'module', return_value=installer):
+            check.check_docker(ctx)
+        check.check_manager_routes(ctx)
+        check.check_git_route(ctx)
+        check.check_capture(ctx)
+        listener = exposure.check_listener(ctx)
+        exposure.check_hsts(ctx, listener)
+        return ctx
+
+    def test_a_stopped_manager_blames_the_address_not_the_certificate_and_sends_no_probe(self):
+        ctx = self.inspect(running=False)
+        self.assertIsNotNone(ctx.tls_context, 'the certificate is read from its file whether or not the manager runs')
+        self.assertFalse(ctx.manager_running)
+        self.assertEqual(by_id(ctx, 'tls.listener')['status'], 'SKIP')
+        self.assertIn('no usable HTTPS address', by_id(ctx, 'tls.listener')['detail'])
+        self.assertNotIn('certificate could not be read', by_id(ctx, 'tls.listener')['detail'])
+        self.assertIn('start-manager.sh', by_id(ctx, 'tls.listener')['fix'])
+        self.assertEqual(by_id(ctx, 'http.hsts')['status'], 'SKIP')
+        self.assertNotIn('certificate could not be read', by_id(ctx, 'http.hsts')['detail'] + by_id(ctx, 'http.hsts')['fix'])
+        self.assertIn('start-manager.sh', by_id(ctx, 'http.hsts')['fix'])
+        for ident in ('design-engine', 'vm-connection', 'git-http', 'capture'):
+            with self.subTest(ident=ident):
+                self.assertEqual(by_id(ctx, ident)['status'], 'SKIP')
+        self.assertIn('Manager container unavailable', by_id(ctx, 'vm-connection')['detail'])
+        self.assertIn('Manager container unavailable', by_id(ctx, 'capture')['detail'])
+        self.assertIn('Manager container unavailable', by_id(ctx, 'design-engine')['detail'])
+        ctx.probe.assert_not_called()
+        self.assertFalse([call for call in ctx.run.call_args_list if 'exec' in call.args[0] and 'app.probe' in call.args[0]])
+        self.assertEqual(by_id(ctx, 'manager')['status'], 'FAIL')
+
+    def test_a_manager_whose_url_cannot_be_built_still_has_its_certificate_pinned(self):
+        # After the TLS change a manager started without --ssl-certfile is exactly this case (EXPOSURE 7.1).
+        ctx = self.inspect(health_url=Mock(side_effect=ValueError('no address')),
+                           command=['uvicorn', 'app.main:create_app', '--host', '0.0.0.0', '--port', '8081'])
+        self.assertIsNotNone(ctx.tls_context)
+        self.assertTrue(ctx.manager_running)
+        self.assertEqual(by_id(ctx, 'http')['status'], 'FAIL')
+        row = by_id(ctx, 'tls.listener')
+        self.assertEqual(row['status'], 'SKIP')
+        self.assertNotIn('certificate could not be read', row['detail'])
+        self.assertIn('start-manager.sh', row['fix'])
+        self.assertIn(by_id(ctx, 'design-engine')['status'], ('PASS', 'WARN'), 'the manager is running, so its probes are asked')
+
+    def test_the_certificate_is_pinned_before_the_docker_questions(self):
+        order = []
+        ctx = check.Context(check.arguments([]), owner='archtop', privileged=True)
+        ctx.run = Mock(side_effect=lambda args, **kwargs: order.append('run') or check.Result(1))
+        ctx.pin_certificate = lambda: order.append('pin')
+        check.inspect_manager(ctx)
+        self.assertEqual(order[0], 'pin', 'the first thing inspect_manager does is read the certificate file')
 
 
 class ContextHelperTests(unittest.TestCase):
@@ -1044,6 +1130,61 @@ class PinnedTlsTests(unittest.TestCase):
             result, body = ctx.http('/api/health')
             self.assertFalse(result.ok)
             self.assertEqual(ctx.head('/api/health'), (None, {}))
+
+    def sign(self, directory, name, issuer, extensions, subject=None):
+        """A key and a certificate called `name`, signed by `issuer` (a (cert, key) pair)."""
+        path = Path(directory)
+        key, csr, cert, ext = path / (name + '.key'), path / (name + '.csr'), path / (name + '.pem'), path / (name + '.ext')
+        ext.write_text(extensions)
+        subprocess.run(['openssl', 'req', '-new', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes',
+                        '-subj', subject or '/CN=' + name, '-keyout', str(key), '-out', str(csr)], check=True, capture_output=True)
+        subprocess.run(['openssl', 'x509', '-req', '-in', str(csr), '-CA', str(issuer[0]), '-CAkey', str(issuer[1]), '-CAcreateserial',
+                        '-days', '2', '-sha256', '-extfile', str(ext), '-out', str(cert)], check=True, capture_output=True)
+        return cert, key
+
+    def test_a_provided_chain_pins_the_installed_leaf_not_every_leaf_of_its_intermediate(self):
+        # setup-tls.sh --cert installs the chain, leaf first. Renewing the certificate without recreating the manager
+        # leaves the OLD leaf of the same intermediate on the listener: that must be a FAIL, not a PASS.
+        leaf_ext = 'subjectAltName=DNS:localhost,IP:127.0.0.1\nbasicConstraints=critical,CA:FALSE\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\n'
+        with tempfile.TemporaryDirectory() as directory:
+            root_cert, root_key = Path(directory) / 'root.pem', Path(directory) / 'root.key'
+            subprocess.run(['openssl', 'req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes', '-sha256', '-days', '2',
+                            '-subj', '/CN=root', '-addext', 'basicConstraints=critical,CA:TRUE', '-keyout', str(root_key), '-out', str(root_cert)],
+                           check=True, capture_output=True)
+            inter = self.sign(directory, 'inter', (root_cert, root_key), 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign\n')
+            installed, installed_key = self.sign(directory, 'installed', inter, leaf_ext, subject='/CN=localhost')
+            renewed, renewed_key = self.sign(directory, 'renewed', inter, leaf_ext, subject='/CN=localhost')
+            inter_pem = inter[0].read_text()
+            chain = Path(directory) / 'cert.pem'  # what setup-tls.sh --cert installs: leaf first, then the intermediate
+            chain.write_text(installed.read_text() + inter_pem)
+            old_served, new_served = Path(directory) / 'served-old.pem', Path(directory) / 'served-new.pem'
+            old_served.write_text(installed.read_text() + inter_pem)
+            new_served.write_text(renewed.read_text() + inter_pem)
+            ctx = check.Context(check.arguments([]), owner='archtop', privileged=True)
+            ctx.pin_certificate(chain)
+            self.assertIsNotNone(ctx.tls_context)
+            ctx.base_url = self.serve(old_served, installed_key)
+            result, body = ctx.http('/api/health')
+            self.assertTrue(result.ok, result.reason)
+            self.assertEqual(ctx.head('/api/health')[0], 200)
+            ctx.base_url = self.serve(new_served, renewed_key)
+            result, body = ctx.http('/api/health')
+            self.assertFalse(result.ok, 'another leaf of the same intermediate is not the installed certificate')
+            self.assertEqual(ctx.head('/api/health'), (None, {}))
+
+    def test_text_around_the_first_block_does_not_change_the_pin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cert, key = self.make_certificate(directory, 'installed')
+            other_cert, other_key = self.make_certificate(directory, 'other')
+            decorated = Path(directory) / 'decorated.pem'
+            decorated.write_bytes(b'# issued for the lab \xe2\x80\x93 renewed\r\n' + cert.read_text().replace('\n', '\r\n').encode() + other_cert.read_bytes())
+            ctx = check.Context(check.arguments([]), owner='archtop', privileged=True)
+            ctx.pin_certificate(decorated)
+            self.assertIsNotNone(ctx.tls_context)
+            ctx.base_url = self.serve(cert, key)
+            self.assertTrue(ctx.http('/api/health')[0].ok)
+            ctx.base_url = self.serve(other_cert, other_key)
+            self.assertFalse(ctx.http('/api/health')[0].ok, 'only the first certificate of the file is the pin')
 
     def test_an_unreadable_or_garbage_certificate_leaves_no_context(self):
         with tempfile.TemporaryDirectory() as directory:
