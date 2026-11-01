@@ -10,12 +10,12 @@ const reply=(status,body)=>({ok:status>=200&&status<300,status,json:async()=>{if
 
 // A DOM that keeps what the page does: elements by id, children, attributes, focus, dialogs.
 function fixture(routes,{ended=false}={}){
- const elements=new Map(),calls=[],focused=[],sessionCalls=[];let isEnded=ended;
+ const elements=new Map(),calls=[],focused=[],focusedNodes=[],sessionCalls=[],toasts=[];let isEnded=ended;
  const element=(tag,id='')=>{
   const node={tag,id,children:[],attributes:{},className:'',textContent:'',disabled:false,hidden:false,value:'',open:false,
    append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},
    setAttribute(name,value){this.attributes[name]=String(value);},getAttribute(name){return this.attributes[name];},
-   focus(){focused.push(this.id||this.tag);},showModal(){this.open=true;},close(){this.open=false;}};
+   focus(){focused.push(this.id||this.tag);focusedNodes.push(this);},showModal(){this.open=true;},close(){this.open=false;}};
   Object.defineProperty(node,'innerHTML',{get(){return '';},set(value){if(value)throw new Error('innerHTML is not used for untrusted text');}});
   return node;
  };
@@ -34,7 +34,7 @@ function fixture(routes,{ended=false}={}){
   sessionEndedError:()=>Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true})});
  vm.runInContext(statusSource,context);
  vm.runInContext(source,context);
- return {context,read:name=>vm.runInContext(name,context),get,calls,focused,sessionCalls,rows:()=>get('users-rows').children,auditRows:()=>get('audit-rows').children};
+ return {context,read:name=>vm.runInContext(name,context),get,calls,focused,focusedNodes,sessionCalls,rows:()=>get('users-rows').children,auditRows:()=>get('audit-rows').children};
 }
 const sessionOf=(name,role='admin')=>reply(200,{user:{name,role,must_change_password:false},expires:'2026-11-01T18:00:00Z'});
 const auditOf=(entries=[],total=entries.length)=>reply(200,{entries,total});
@@ -224,6 +224,24 @@ test('empty audit result, audit failure and network failure each say so; none le
  assert.equal(f.get('audit-status').textContent,'The list could not be loaded: The audit log could not be read.');assert.equal(f.get('audit-apply').disabled,false);
  f=fixture(routesFor([person('sam','admin')],{'GET /api/users':async()=>{throw new Error('offline');}}));await settle();
  assert.equal(f.get('users-status').textContent,'The list could not be loaded: The manager did not answer. Try again.');
+ assert.notEqual(f.get('audit-status').textContent,'Loading…','the audit card leaves its loading state too');
+ assert.equal(f.get('audit-apply').disabled,false);
+});
+
+test('when the people list fails, the audit still loads and a Try again button reloads the list',async()=>{
+ let fail=true;
+ const f=fixture(routesFor([person('sam','admin')],{'GET /api/users':async()=>fail?reply(500,{detail:{code:'x',message:'The list is down.'}}):reply(200,{users:[person('sam','admin')]})}));await settle();
+ assert.equal(f.get('users-status').textContent,'The list could not be loaded: The list is down.');
+ assert.equal(f.get('users-retry').hidden,false,'a retry path is offered');
+ assert.ok(f.calls.some(c=>c.url.startsWith('/api/audit')),'the audit was requested');
+ assert.match(f.get('audit-status').textContent,/events? shown/);
+ fail=false;await f.get('users-retry').onclick();await settle();
+ assert.equal(f.get('users-retry').hidden,true);assert.equal(f.get('users-add').disabled,false);assert.equal(f.rows().length,1);
+});
+
+test('a 403 on the people list shows the forbidden sentence and requests no audit',async()=>{
+ const f=fixture(routesFor([person('sam','admin')],{'GET /api/users':reply(403,{detail:{code:'admin_required',message:'Only administrators.'}})}));await settle();
+ assert.equal(f.get('users-forbidden').hidden,false);assert.ok(!f.calls.some(c=>c.url.startsWith('/api/audit')));
 });
 
 test('Add person disabled until the list is known',async()=>{
@@ -332,10 +350,34 @@ test('a forged request past a disabled button: the manager 409 is shown as given
 });
 
 test('after a change the same button gets the focus again; the dialog closes',async()=>{
- const f=fixture(routesFor([person('sam','admin'),person('jo')],{'PATCH /api/users/jo':reply(200,{user:person('jo')})}));await settle();
+ let off=false;
+ const f=fixture(routesFor([person('sam','admin'),person('jo')],{'PATCH /api/users/jo':async()=>{off=true;return reply(200,{user:person('jo','operator',{disabled:true})});},'GET /api/users':async()=>reply(200,{users:[person('sam','admin'),person('jo','operator',{disabled:off})]})}));await settle();
  buttonsOf(f,'jo')['Deactivate'].onclick();f.focused.length=0;
  await f.get('active-form').onsubmit({preventDefault(){}});await settle();
- assert.equal(f.get('active-dialog').open,false);assert.ok(f.focused.length>0,'focus returns somewhere on the page');
+ assert.equal(f.get('active-dialog').open,false);
+ const last=f.focusedNodes[f.focusedNodes.length-1];
+ assert.ok(last,'focus returned');assert.notEqual(last.id,'users-add','not the fallback');
+ assert.equal(last.attributes['data-user'],'jo');assert.equal(last.attributes['data-action'],'active');assert.equal(last.textContent,'Reactivate');
+ assert.ok(walk(f.rows().find(r=>flat(r.children[0])==='jo')).includes(last),'it is the button of the new row');
+});
+
+test('Escape and Close while a request is in flight are held; a refusal after the dialog closed is toasted',async()=>{
+ let release;
+ const refusal='The last administrator stays.';
+ const f=fixture(routesFor([person('sam','admin'),person('jo')],{'PATCH /api/users/jo':()=>new Promise(resolve=>{release=()=>resolve(reply(409,{detail:{code:'last_admin',message:refusal}}));})}));await settle();
+ buttonsOf(f,'jo')['Deactivate'].onclick();f.get('active-dialog').open=true;
+ const pending=f.get('active-form').onsubmit({preventDefault(){}});
+ let prevented=false;f.get('active-dialog').oncancel({preventDefault(){prevented=true;}});
+ assert.equal(prevented,true,'Escape is cancelled while busy');
+ f.get('active-close').onclick();f.get('active-cancel').onclick();assert.equal(f.get('active-dialog').open,true,'Close and Cancel are held while busy');
+ release();await pending;
+ assert.equal(f.get('active-error').textContent,refusal);
+ let idle=false;f.get('active-dialog').oncancel({preventDefault(){idle=true;}});assert.equal(idle,false,'Escape works again when idle');
+ // the dialog was closed some other way before the answer: the refusal is toasted
+ const g=fixture(routesFor([person('sam','admin'),person('jo')],{'PATCH /api/users/jo':()=>new Promise(resolve=>{release=()=>resolve(reply(409,{detail:{code:'last_admin',message:refusal}}));})}));await settle();
+ buttonsOf(g,'jo')['Deactivate'].onclick();const p2=g.get('active-form').onsubmit({preventDefault(){}});
+ g.get('active-dialog').open=false;release();await p2;
+ assert.equal(g.get('toast').textContent,refusal);
 });
 
 test('every dialog has a Close button and a Cancel that close it',async()=>{

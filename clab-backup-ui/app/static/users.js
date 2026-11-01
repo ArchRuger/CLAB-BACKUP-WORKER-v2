@@ -57,7 +57,7 @@ const USERS_NAME_RULE='Use lowercase letters, digits, dot, dash or underscore, 2
 const AUDIT_WINDOWS={hour:3600000,day:86400000,week:604800000};
 // var, not let: the tests read the list through the context.
 var usersList=[];
-let usersMe='',usersSeq=0,auditSeq=0,usersToastTimer,usersButtons=new Map(),usersTarget='',usersDisable=true;
+let usersMe='',usersSeq=0,auditSeq=0,usersToastTimer,usersButtons=new Map(),usersTarget='',usersDisable=true,usersFailed=false,usersBusy=false;
 
 function usersRoleLabel(role){return USERS_ROLES[role]||String(role||'');}
 function auditEventLabel(event,detail){
@@ -178,7 +178,7 @@ function usersRender(){
 }
 async function usersLoad(){
  const seq=++usersSeq,status=usersEl('users-status');
- status.textContent='Loading…';usersEl('users-add').disabled=true;
+ status.textContent='Loading…';usersEl('users-add').disabled=true;usersEl('users-retry').hidden=true;usersFailed=false;
  try{
   if(!usersMe){
    const session=await usersApi('/session');
@@ -194,13 +194,13 @@ async function usersLoad(){
  }catch(error){
   if(seq!==usersSeq||usersEnded())return false;
   if(usersForbiddenError(error))return false;
-  status.textContent='The list could not be loaded: '+error.message;return false;
+  status.textContent='The list could not be loaded: '+error.message;usersEl('users-retry').hidden=false;usersFailed=true;return false;
  }
 }
 
 // Dialogs
 function usersOpen(id,first){const dialog=usersEl(id);if(typeof dialog.showModal==='function')dialog.showModal();else dialog.open=true;if(first)usersFocus(first);}
-function usersClose(id){const dialog=usersEl(id);if(typeof dialog.close==='function')dialog.close();else dialog.open=false;}
+function usersClose(id){if(usersBusy)return;const dialog=usersEl(id);if(typeof dialog.close==='function')dialog.close();else dialog.open=false;}
 function usersOpenAdd(){
  for(const id of ['user-name','user-password','user-confirm'])usersEl(id).value='';
  usersEl('user-role').value='operator';usersEl('user-error').textContent='';usersOpen('user-dialog','user-name');
@@ -223,15 +223,20 @@ function usersOpenActive(user,disable){
 async function usersSend(submitId,errorId,work,focusFor){
  const button=usersEl(submitId);
  if(button.disabled)return false;
- usersEl(errorId).textContent='';button.disabled=true;
+ usersEl(errorId).textContent='';button.disabled=true;usersBusy=true;
  try{await work();return true;}
  catch(error){
-  if(!usersForbiddenError(error)){usersEl(errorId).textContent=error.message;const target=focusFor?.(error);if(target)usersFocus(target);}
+  if(!usersForbiddenError(error)){
+   usersBusy=false;usersEl(errorId).textContent=error.message;
+   // The dialog was closed some other way meanwhile: the refusal must still be seen.
+   if(!usersEl(errorId.replace(/-error$/,'-dialog')).open)usersToast(error.message);
+   const target=focusFor?.(error);if(target)usersFocus(target);
+  }
   return false;
- }finally{button.disabled=false;}
+ }finally{usersBusy=false;button.disabled=false;}
 }
 async function usersDone(dialogId,message,focusKey){
- usersClose(dialogId);usersToast(message);
+ usersBusy=false;usersClose(dialogId);usersToast(message);
  await usersRefresh();
  const button=usersButtons.get(focusKey);
  if(button)button.focus();else usersFocus('users-add');
@@ -314,7 +319,9 @@ async function auditLoad(){
   status.textContent='The list could not be loaded: '+error.message;return false;
  }finally{if(seq===auditSeq)apply.disabled=false;}
 }
-async function usersRefresh(){if(await usersLoad())await auditLoad();}
+async function usersRefresh(){
+ if(await usersLoad()||usersFailed)await auditLoad();
+}
 
 // One option per label; its value carries every code of that label (Sign-in attempt sends both).
 function auditFillEvents(){
@@ -325,11 +332,12 @@ function auditFillEvents(){
 }
 function usersInit(){
  auditFillEvents();
- usersEl('users-add').onclick=usersOpenAdd;
+ usersEl('users-add').onclick=usersOpenAdd;usersEl('users-retry').onclick=()=>usersRefresh();
  usersEl('user-form').onsubmit=usersSubmitAdd;usersEl('role-form').onsubmit=usersSubmitRole;usersEl('reset-form').onsubmit=usersSubmitReset;usersEl('active-form').onsubmit=usersSubmitActive;
  usersEl('audit-form').onsubmit=event=>{event.preventDefault();return auditLoad();};
  for(const [close,cancel,dialog] of [['user-close','user-cancel','user-dialog'],['role-close','role-cancel','role-dialog'],['reset-close','reset-cancel','reset-dialog'],['active-close','active-cancel','active-dialog']]){
   usersEl(close).onclick=()=>usersClose(dialog);usersEl(cancel).onclick=()=>usersClose(dialog);
+  usersEl(dialog).oncancel=event=>{if(usersBusy)event.preventDefault();};
  }
  return usersRefresh();
 }
