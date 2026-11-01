@@ -1,11 +1,17 @@
 import contextlib
 import hashlib
+import http.server
 import importlib.util
 import io
 import json
 import os
 from pathlib import Path
+import shutil
+import ssl
+import subprocess
 import sys
+import tempfile
+import threading
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -29,10 +35,19 @@ def context(**overrides):
     ctx = check.Context(args, owner='archtop', privileged=True)
     ctx.version = VERSION
     ctx.container = 'a' * 64
-    ctx.base_url = 'http://127.0.0.1:8081'
+    ctx.base_url = 'https://127.0.0.1:8443'
+    ctx.tls_context = object()  # a stand-in for the pinned context: the opener is mocked
     ctx.trusted_helpers = {'inspect': True, 'operate': True, 'git': True}
     ctx.run = Mock(return_value=check.Result(reason='unexpected command'))
     return ctx
+
+
+def guarded_http():
+    """The one HTTP question of the health check (EXPOSURE 6.1 rule 1): GET /api/health, nothing else."""
+    def request(path, payload=None, **kwargs):
+        assert path == '/api/health' and payload is None, 'the health check asked the manager ' + path
+        return check.Result(0), {'ready': True}
+    return Mock(side_effect=request)
 
 
 def encoded(value):
@@ -47,29 +62,48 @@ def capabilities():
 
 def discovery():
     return {'configured': True, 'connected': True,
-            'host': {'enabled': True, 'fingerprint': 'public-host-fingerprint', 'address': '127.0.0.1',
-                     'auth': 'password', 'command_mode': 'helper', 'username': 'clab-discovery'}}
+            'host': {'enabled': True, 'fingerprint_saved': True, 'address': '127.0.0.1', 'port': 22,
+                     'auth': 'password', 'command_mode': 'helper', 'username': 'clab-discovery'},
+            'checked_at': '2026-11-01T10:00:00+00:00'}
 
 
-def browse_router(folders=None, discovery_value=None, engine_value=None):
+def git_registry(**changes):
+    return dict({'protocol': 'clab-manager-git-v1', 'version': VERSION, 'repositories': 0, 'bound_labs': 0}, **changes)
+
+
+def engine(**changes):
+    return dict({'available': True, 'version': '26.9', 'path': '/usr/local/bin/netlab', 'diagnostic': ''}, **changes)
+
+
+def probe_router(folders=None, discovery_value=None, engine_value=None, git_value=None, capture_value=None):
+    """ctx.probe routed on the probe name, the way the tests used to route ctx.http on the path (EXPOSURE 6.3, case 10)."""
     folders = folders or {ROOT: []}
 
-    def request(path, payload=None, **kwargs):
-        if path == '/api/discovery':
-            return check.Result(0), discovery() if discovery_value is None else discovery_value
-        if path == '/api/operations/browse':
-            target = payload['path']
+    def probe(name, *args):
+        if name == 'vm-connection':
+            assert not args
+            return (discovery() if discovery_value is None else discovery_value), False
+        if name == 'browse':
+            assert len(args) == 1, 'a browse probe carries exactly one path'
+            target = args[0]
             if target == '':
-                return check.Result(0), {'path': '', 'entries': [{'path': ROOT, 'directory': True}]}
+                return {'path': '', 'entries': [{'name': 'containerlab', 'path': ROOT, 'directory': True}]}, False
             if target not in folders:
-                return check.Result(503, reason='HTTP 503'), None
-            return check.Result(0), {'path': target, 'entries': folders[target]}
-        if path == '/api/git/repositories':
-            return check.Result(0), {'repositories': [], 'protocol': 'clab-manager-git-v1', 'version': VERSION}
-        if path == '/api/design/engine':
-            return check.Result(0), engine_value if engine_value is not None else {'available': True, 'version': '26.9', 'path': '/usr/local/bin/netlab', 'diagnostic': ''}
-        return check.Result(reason='unexpected route'), None
-    return request
+                return {'error': 'The folder could not be listed.'}, False
+            return {'path': target, 'entries': folders[target]}, False
+        if name == 'git-registry':
+            assert not args
+            return (git_registry() if git_value is None else git_value), False
+        if name == 'design-engine':
+            return (engine() if engine_value is None else engine_value), False
+        if name == 'capture':
+            return capture_value, False
+        raise AssertionError('unexpected probe ' + name)
+    return probe
+
+
+def browsed(ctx):
+    return [call.args[1] for call in ctx.probe.call_args_list if call.args[0] == 'browse']
 
 
 def by_id(ctx, ident):
@@ -79,20 +113,23 @@ def by_id(ctx, ident):
 class DesignEngineCheckTests(unittest.TestCase):
     def test_an_available_engine_passes_with_its_version(self):
         ctx = context()
-        ctx.http = Mock(side_effect=browse_router())
+        ctx.probe = Mock(side_effect=probe_router())
         check.check_design_engine(ctx)
         row = by_id(ctx, 'design-engine')
         self.assertEqual(row['status'], 'PASS'); self.assertIn('netlab 26.9', row['detail'])
+        ctx.probe.assert_called_once_with('design-engine')
 
     def test_a_missing_engine_warns_with_the_managers_diagnostic_and_keeps_the_rest(self):
         ctx = context()
-        ctx.http = Mock(side_effect=browse_router(engine_value={'available': False, 'version': '', 'path': '', 'diagnostic': 'netlab is not installed in the image'}))
+        ctx.probe = Mock(side_effect=probe_router(engine_value=engine(available=False, version='', path='', diagnostic='netlab is not installed in the image')))
         check.check_design_engine(ctx)
         row = by_id(ctx, 'design-engine')
         self.assertEqual(row['status'], 'WARN'); self.assertIn('not installed', row['detail']); self.assertIn('Every other feature keeps working', str(row))
-        ctx.http = Mock(side_effect=lambda *a, **k: (check.Result(reason='manager HTTP unavailable'), None))
+        ctx.checks.clear()
+        ctx.probe = Mock(return_value=({'error': 'the engine could not be queried'}, False))
         check.check_design_engine(ctx)
         self.assertEqual(by_id(ctx, 'design-engine')['status'], 'WARN')
+        self.assertIn('Every other feature keeps working', str(by_id(ctx, 'design-engine')))
 
 
 class InstallationCheckTests(unittest.TestCase):
@@ -146,7 +183,7 @@ class InstallationCheckTests(unittest.TestCase):
     def test_successful_root_browse_does_not_mask_failed_child_folder(self):
         ctx = context()
         child = ROOT + '/vJunOS-SW'
-        ctx.http = Mock(side_effect=browse_router({ROOT: [{'path': child, 'directory': True}]}))
+        ctx.probe = Mock(side_effect=probe_router({ROOT: [{'path': child, 'directory': True}]}))
         check.check_manager_routes(ctx)
         self.assertEqual(by_id(ctx, 'http-browse')['status'], 'PASS')
         failure = next(row for row in ctx.checks if row['title'] == 'Browse folder: ' + child)
@@ -154,89 +191,92 @@ class InstallationCheckTests(unittest.TestCase):
         self.assertIn('setup-operations.sh', failure['fix'])
         self.assertEqual(check.summarize(ctx)['exit_code'], 1)
 
-    def test_empty_trusted_folder_is_healthy_and_only_read_routes_are_called(self):
+    def test_empty_trusted_folder_is_healthy_and_only_read_probes_are_run(self):
         ctx = context()
-        ctx.http = Mock(side_effect=browse_router())
+        ctx.probe = Mock(side_effect=probe_router())
+        ctx.http = guarded_http()
         check.check_manager_routes(ctx)
+        check.check_git_route(ctx)
         self.assertEqual(by_id(ctx, 'folder-1')['status'], 'PASS')
         self.assertIn('empty folders are valid', by_id(ctx, 'folder-1')['detail'])
-        allowed = {'/api/discovery', '/api/operations/browse', '/api/git/repositories'}
-        for call in ctx.http.call_args_list:
+        allowed = {'vm-connection', 'browse', 'git-registry'}
+        for call in ctx.probe.call_args_list:
             self.assertIn(call.args[0], allowed)
-            if call.args[0] == '/api/operations/browse':
-                self.assertEqual(set(call.args[1]), {'path'})
-            else:
-                self.assertEqual(len(call.args), 1)
+            self.assertEqual(len(call.args), 2 if call.args[0] == 'browse' else 1, 'a browse carries exactly one path, the others none')
+        # The one HTTP question (EXPOSURE 6.1 rule 1): no check asks the manager anything but /api/health.
+        for call in ctx.http.call_args_list:
+            self.assertEqual(call.args[0], '/api/health')
+        ctx.http.assert_not_called()
         self.assertFalse(any(row['status'] == 'FAIL' for row in ctx.checks))
 
     def test_missing_vm_setup_warns_and_skips_live_operations(self):
         for host in (None, {}):
             ctx = context()
-            ctx.http = Mock(side_effect=browse_router(discovery_value={'configured': False, 'host': host}))
+            ctx.probe = Mock(side_effect=probe_router(discovery_value={'configured': False, 'connected': False, 'host': host, 'checked_at': None}))
             check.check_manager_routes(ctx)
             self.assertEqual(by_id(ctx, 'vm-connection')['status'], 'WARN')
             self.assertEqual(by_id(ctx, 'http-browse')['status'], 'SKIP')
-            self.assertEqual(len(ctx.http.call_args_list), 1)
+            self.assertEqual([call.args for call in ctx.probe.call_args_list], [('vm-connection',)])
 
     def test_git_route_is_checked_even_when_operations_are_unavailable(self):
         ctx = context()
         ctx.trusted_helpers['operate'] = False
-        ctx.http = Mock(side_effect=browse_router())
+        ctx.probe = Mock(side_effect=probe_router())
         check.check_manager_routes(ctx)
         check.check_git_route(ctx)
         self.assertEqual(by_id(ctx, 'http-browse')['status'], 'SKIP')
         self.assertEqual(by_id(ctx, 'git-http')['status'], 'PASS')
-        self.assertEqual([call.args[0] for call in ctx.http.call_args_list], ['/api/discovery', '/api/git/repositories'])
+        self.assertEqual([call.args[0] for call in ctx.probe.call_args_list], ['vm-connection', 'git-registry'])
 
     def test_git_route_protocol_and_version_are_required(self):
-        for payload in ({'repositories': []},
-                        {'repositories': [], 'protocol': 'clab-manager-git-v1', 'version': '0.0.0'},
-                        {'repositories': PRIVATE, 'protocol': 'clab-manager-git-v1', 'version': VERSION}):
+        for payload in ({'repositories': 0, 'bound_labs': 0},
+                        git_registry(version='0.0.0'),
+                        git_registry(repositories=PRIVATE)):
             ctx = context(require_git=True)
             ctx.host = discovery()['host']
-            ctx.http = Mock(return_value=(check.Result(0), payload))
+            ctx.probe = Mock(return_value=(payload, False))
             check.check_git_route(ctx)
             self.assertEqual(by_id(ctx, 'git-http')['status'], 'FAIL')
-            ctx.http.assert_called_once_with('/api/git/repositories')
+            ctx.probe.assert_called_once_with('git-registry')
             self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
 
     def test_capture_check_reports_disabled_enabled_and_failed_provider(self):
-        def router(enabled, discovery):
-            def request(path, payload=None, **kwargs):
-                if path == '/api/capture/status':
-                    return check.Result(0), {'enabled': enabled, 'provider': 'edgeshark' if enabled else 'disabled',
-                                             'message': PRIVATE if enabled else 'Packet capture is optional.'}
-                if path == '/api/capture/targets':
-                    return discovery
-                if path == '/api/capture/health':
-                    return check.Result(0), {'ready': True}
-                return check.Result(reason='unexpected route'), None
-            return request
-        ctx = context()
-        ctx.http = Mock(side_effect=router(False, (check.Result(0), {'targets': []})))
-        check.check_capture(ctx)
+        def answer(enabled=True, targets=0, ready=True, diagnostic='', message='Packet capture is optional.'):
+            return {'enabled': enabled, 'provider': 'edgeshark' if enabled else 'disabled', 'message': message,
+                    'targets': targets if enabled else None, 'ready': ready if enabled else None, 'diagnostic': diagnostic}
+
+        def run(value):
+            ctx = context()
+            ctx.probe = Mock(side_effect=probe_router(capture_value=value))
+            ctx.http = guarded_http()
+            check.check_capture(ctx)
+            ctx.http.assert_not_called()
+            self.assertEqual([call.args for call in ctx.probe.call_args_list], [('capture',)], 'one probe answers all three routes')
+            return ctx
+        ctx = run(answer(enabled=False))
         self.assertEqual(by_id(ctx, 'capture')['status'], 'WARN', 'browser Wireshark is part of every installation')
         self.assertIn('CAPTURE_PROVIDER', by_id(ctx, 'capture')['fix'])
         self.assertIn(str(ctx.source / 'deploy/setup-capture.sh'), by_id(ctx, 'capture')['fix'], 'advice works from any directory')
-        self.assertEqual([call.args[0] for call in ctx.http.call_args_list], ['/api/capture/status'])
-        ctx = context()
-        ctx.http = Mock(side_effect=router(True, (check.Result(0), {'targets': [{'id': 'a' * 64}, {'id': 'b' * 64}], 'message': PRIVATE})))
-        check.check_capture(ctx)
+        ctx = run(answer(targets=2, message=PRIVATE))
         self.assertEqual(by_id(ctx, 'capture')['status'], 'PASS')
         self.assertIn('2 capture target(s)', by_id(ctx, 'capture')['detail'])
         self.assertTrue(any('browser capture' in item for item in ctx.manual))
         self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
-        ctx = context()
-        ctx.http = Mock(side_effect=router(True, (check.Result(502, reason='HTTP 502'), None)))
-        check.check_capture(ctx)
+        ctx = run(answer(targets=None, ready=None, diagnostic='Edgeshark discovery is unavailable.'))
         self.assertEqual(by_id(ctx, 'capture')['status'], 'FAIL')
         self.assertIn('compose.capture.yml', by_id(ctx, 'capture')['fix'])
+        self.assertIn('Edgeshark discovery is unavailable.', by_id(ctx, 'capture')['detail'])
+        for ready in (False, None):
+            ctx = run(answer(targets=3, ready=ready))
+            self.assertEqual(by_id(ctx, 'capture')['status'], 'FAIL', 'discovery works but the session service is not ready')
+            self.assertIn('setup-capture.sh', by_id(ctx, 'capture')['fix'])
         ctx = context()
-        ctx.base_url = ''
-        ctx.http = Mock()
+        ctx.container = ''
+        ctx.probe = Mock()
         check.check_capture(ctx)
         self.assertEqual(by_id(ctx, 'capture')['status'], 'SKIP')
-        ctx.http.assert_not_called()
+        self.assertIn('Manager container unavailable', by_id(ctx, 'capture')['detail'])
+        ctx.probe.assert_not_called()
 
     def test_retired_telemetry_check_passes_when_nothing_remains(self):
         def command(args, **kwargs):
@@ -299,8 +339,10 @@ class InstallationCheckTests(unittest.TestCase):
         ctx.run.assert_not_called()
         ctx.host = discovery()['host']
         ctx.http = Mock()
+        ctx.probe = Mock()
         check.check_git_route(ctx)
         ctx.http.assert_not_called()
+        ctx.probe.assert_not_called()
         self.assertEqual(by_id(ctx, 'git-http')['status'], 'SKIP')
 
     def test_installed_helper_paths_match_setup_scripts_and_stale_code_blocks_execution(self):
@@ -334,19 +376,21 @@ class InstallationCheckTests(unittest.TestCase):
 
     def test_manager_unavailable_does_not_report_connection_success(self):
         ctx = context()
-        ctx.base_url = ''
+        ctx.container = ''  # the guard moved from the HTTP address to the container: the probes run inside it
         ctx.http = Mock()
+        ctx.probe = Mock()
         check.check_manager_routes(ctx)
         self.assertEqual(by_id(ctx, 'vm-connection')['status'], 'SKIP')
+        self.assertIn('Manager container unavailable', by_id(ctx, 'vm-connection')['detail'])
         ctx.http.assert_not_called()
+        ctx.probe.assert_not_called()
 
     def test_folder_budget_prioritizes_explicit_problem_path_and_reports_remaining(self):
         problem = ROOT + '/vJunOS-SW'
         ctx = context(lab_path=[problem], max_folders=1)
-        ctx.http = Mock(side_effect=browse_router({problem: [], ROOT: []}))
+        ctx.probe = Mock(side_effect=probe_router({problem: [], ROOT: []}))
         check.check_manager_routes(ctx)
-        paths = [call.args[1]['path'] for call in ctx.http.call_args_list if call.args[0] == '/api/operations/browse']
-        self.assertEqual(paths, ['', problem])
+        self.assertEqual(browsed(ctx), ['', problem])
         self.assertEqual(by_id(ctx, 'folder-budget')['status'], 'WARN')
 
     def test_folder_traversal_does_not_follow_malformed_or_nonchild_paths(self):
@@ -355,18 +399,17 @@ class InstallationCheckTests(unittest.TestCase):
                    {'path': ROOT + '/\x00bad', 'directory': True},
                    {'path': ROOT + '/lab.clab.yml', 'directory': False}]
         ctx = context()
-        ctx.http = Mock(side_effect=browse_router({ROOT: entries}))
+        ctx.probe = Mock(side_effect=probe_router({ROOT: entries}))
         check.check_manager_routes(ctx)
-        paths = [call.args[1]['path'] for call in ctx.http.call_args_list if call.args[0] == '/api/operations/browse']
-        self.assertEqual(paths, ['', ROOT])
+        self.assertEqual(browsed(ctx), ['', ROOT])
 
     def test_wrong_folder_response_path_fails_instead_of_claiming_listed(self):
         ctx = context()
-        responses = [(check.Result(0), discovery()),
-                     (check.Result(0), {'entries': [{'directory': True, 'path': ROOT}]}),
-                     (check.Result(0), {'path': '/different', 'entries': []}),
-                     (check.Result(0), {'repositories': []})]
-        ctx.http = Mock(side_effect=responses)
+        responses = [(discovery(), False),
+                     ({'entries': [{'directory': True, 'path': ROOT}]}, False),
+                     ({'path': '/different', 'entries': []}, False),
+                     (git_registry(), False)]
+        ctx.probe = Mock(side_effect=responses)
         check.check_manager_routes(ctx)
         self.assertEqual(by_id(ctx, 'folder-1')['status'], 'FAIL')
 
@@ -432,23 +475,35 @@ class InstallationCheckTests(unittest.TestCase):
                     return check.Result(reason='unexpected read command')
 
                 ctx.run = Mock(side_effect=command)
-                ctx.http = Mock(return_value=(check.Result(0), {'version': VERSION, 'private': PRIVATE}))
-                with patch.object(check, 'check_storage'):
+                ctx.pin_certificate = lambda: setattr(ctx, 'tls_context', object())
+                ctx.http = Mock(return_value=(check.Result(0), {'ready': True, 'private': PRIVATE}))
+                ctx.probe = Mock(side_effect=probe_router())
+                installer = SimpleNamespace(health_url=lambda command: 'https://127.0.0.1:8443/api/health')
+                with patch.object(check, 'check_storage'), patch.object(check, 'module', return_value=installer):
                     check.check_docker(ctx)
                 ident = 'manager-version' if condition == 'old-version' else 'manager'
                 self.assertEqual(by_id(ctx, ident)['status'], 'PASS' if condition == 'healthy' else 'FAIL')
                 if condition in ('missing', 'stopped', 'invalid-metadata'):
                     ctx.http.assert_not_called()
+                else:
+                    ctx.http.assert_called_once_with('/api/health')
+                    self.assertEqual(ctx.base_url, 'https://127.0.0.1:8443')
+                    self.assertEqual(by_id(ctx, 'http')['status'], 'PASS')
+                if condition == 'stopped':
+                    self.assertEqual(ctx.manager_command, metadata['command'], 'tls.bind reads the command of a stopped manager too')
                 self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
 
     def test_daemon_failure_prevents_http_or_container_claims(self):
         ctx = context()
+        ctx.container = ''  # nothing was found: the daemon could not be asked
         ctx.run = Mock(return_value=check.Result(1, PRIVATE))
         ctx.http = Mock()
+        ctx.probe = Mock()
         check.check_docker(ctx)
         self.assertEqual(by_id(ctx, 'docker')['status'], 'FAIL')
         self.assertEqual(by_id(ctx, 'manager')['status'], 'SKIP')
         ctx.http.assert_not_called()
+        ctx.probe.assert_not_called()
 
     def test_mixed_source_release_is_failure_without_raw_exception_output(self):
         ctx = context()
@@ -522,11 +577,12 @@ class InstallationCheckTests(unittest.TestCase):
     def test_main_keeps_reporting_after_failed_group_without_printing_exception(self):
         output = io.StringIO()
         modules = SimpleNamespace(check_host=Mock(side_effect=RuntimeError(PRIVATE)),
+                                  check_exposure=Mock(),
                                   check_git=Mock(side_effect=lambda ctx: ctx.add('last', 'PASS', 'Last group', 'Completed')))
         account = SimpleNamespace(pw_uid=1000, pw_name='archtop')
         fake_pwd = SimpleNamespace(getpwnam=lambda _: account)
         functions = ('check_source', 'check_docker', 'check_containerlab', 'check_helper_files',
-                     'check_helpers', 'check_manager_routes', 'check_git_route')
+                     'check_helpers', 'check_manager_routes', 'check_git_route', 'check_capture', 'check_retired_telemetry')
         with contextlib.ExitStack() as stack:
             stack.enter_context(patch.object(check.sys, 'platform', 'linux'))
             stack.enter_context(patch.object(check.os, 'geteuid', create=True, return_value=0))
@@ -608,7 +664,7 @@ class InstallationCheckTests(unittest.TestCase):
 
     def test_initial_sudo_timeout_is_reported_without_aborting_remaining_checks(self):
         output = io.StringIO()
-        modules = SimpleNamespace(check_host=Mock(), check_git=Mock())
+        modules = SimpleNamespace(check_host=Mock(), check_exposure=Mock(), check_git=Mock())
         account = SimpleNamespace(pw_uid=1000, pw_name='archtop')
         functions = ('check_source', 'check_docker', 'check_containerlab', 'check_helper_files',
                      'check_helpers', 'check_manager_routes', 'check_git_route')
@@ -629,13 +685,15 @@ class InstallationCheckTests(unittest.TestCase):
         self.assertEqual(next(row for row in report['checks'] if row['id'] == 'privileges')['status'], 'FAIL')
         self.assertEqual(sudo.call_args.kwargs['timeout'], 15)
         modules.check_git.assert_not_called()
+        modules.check_exposure.assert_not_called()
+        self.assertTrue(any(row['status'] == 'SKIP' and row['title'] == 'TLS, firewall and exposure' for row in report['checks']))
         self.assertTrue(any(row['status'] == 'SKIP' and row['title'] == 'Registered Git checkouts'
                             for row in report['checks']))
 
     def test_initial_sudo_success_cannot_mask_failed_query_runner(self):
         output = io.StringIO()
         account = SimpleNamespace(pw_uid=1000, pw_name='archtop')
-        modules = SimpleNamespace(check_host=Mock(), check_git=Mock())
+        modules = SimpleNamespace(check_host=Mock(), check_exposure=Mock(), check_git=Mock())
         with contextlib.ExitStack() as stack:
             stack.enter_context(patch.object(check.sys, 'platform', 'linux'))
             stack.enter_context(patch.object(check.os, 'geteuid', create=True, return_value=1000))
@@ -657,6 +715,7 @@ class InstallationCheckTests(unittest.TestCase):
         runner.assert_called_once_with(['/usr/bin/true'], privileged=True, timeout=5)
         docker.assert_not_called()
         modules.check_git.assert_not_called()
+        modules.check_exposure.assert_not_called()
         self.assertNotIn(PRIVATE, output.getvalue())
 
     @unittest.skipUnless(sys.platform == 'linux', 'Requires a real Linux controlling terminal and process groups')
@@ -729,6 +788,272 @@ class InstallationCheckTests(unittest.TestCase):
         self.assertEqual(result.reason, 'HTTP request time limit reached')
         sock.settimeout.assert_called_once_with(1)
         self.assertEqual(response.read1.call_count, 1)
+
+
+class ProbeFailureTests(unittest.TestCase):
+    """EXPOSURE 6.3 case 11 and the SKIP table of 6.1: a probe that cannot answer is a SKIP with its reason, a probe
+    whose helper refused is a FAIL with the helper's sentence, and neither is ever a PASS."""
+
+    CHECKS = (('design-engine', check.check_design_engine), ('vm-connection', check.check_manager_routes),
+              ('git-http', check.check_git_route), ('capture', check.check_capture))
+
+    def trusted(self):
+        ctx = context(require_git=True)
+        ctx.host = discovery()['host']
+        return ctx
+
+    def test_a_manager_that_predates_the_probes_skips_every_probe_check_with_the_rebuild_fix(self):
+        ctx = self.trusted()
+        ctx.probe = Mock(return_value=(None, True))
+        for _, function in self.CHECKS:
+            function(ctx)
+        for ident in ('design-engine', 'vm-connection', 'http-browse', 'git-http', 'capture'):
+            with self.subTest(ident=ident):
+                row = by_id(ctx, ident)
+                self.assertEqual(row['status'], 'SKIP')
+                self.assertIn('predates this check', row['detail'])
+                self.assertIn('start-manager.sh', row['fix'])
+        self.assertFalse(any(row['status'] in ('PASS', 'FAIL') for row in ctx.checks if row['id'] in ('design-engine', 'vm-connection', 'http-browse', 'git-http', 'capture')))
+
+    def test_unreadable_saved_state_skips_and_names_the_page_that_runs_the_same_check(self):
+        for sentence in ('state unreadable', 'reset pending'):
+            with self.subTest(sentence=sentence):
+                ctx = self.trusted()
+                ctx.probe = Mock(return_value=({'error': sentence}, False))
+                check.check_manager_routes(ctx)
+                check.check_git_route(ctx)
+                for ident in ('vm-connection', 'http-browse'):
+                    self.assertEqual(by_id(ctx, ident)['status'], 'SKIP')
+                    self.assertIn(sentence, by_id(ctx, ident)['detail'])
+                    self.assertIn('Diagnostics', by_id(ctx, ident)['fix'])
+                self.assertEqual(by_id(ctx, 'git-http')['status'], 'SKIP')
+                self.assertIn('Save', by_id(ctx, 'git-http')['fix'])
+                self.assertNotIn('Diagnostics', by_id(ctx, 'git-http')['fix'], 'Diagnostics never lists the Git registry')
+
+    def test_a_helper_sentence_is_a_failure_with_that_sentence(self):
+        sentence = 'The operations helper refused the request.'
+        ctx = self.trusted()
+        ctx.probe = Mock(side_effect=lambda name, *args: (discovery(), False) if name == 'vm-connection' else ({'error': sentence}, False))
+        check.check_manager_routes(ctx)
+        check.check_git_route(ctx)
+        self.assertEqual(by_id(ctx, 'http-browse')['status'], 'FAIL')
+        self.assertIn(sentence, by_id(ctx, 'http-browse')['detail'])
+        self.assertEqual(by_id(ctx, 'git-http')['status'], 'FAIL')
+        self.assertIn(sentence, by_id(ctx, 'git-http')['detail'])
+        optional = context()
+        optional.host = discovery()['host']
+        optional.probe = Mock(return_value=({'error': sentence}, False))
+        check.check_git_route(optional)
+        self.assertEqual(by_id(optional, 'git-http')['status'], 'WARN', 'Git is optional unless --require-git')
+
+    def test_a_probe_that_prints_nothing_is_not_a_pass(self):
+        ctx = self.trusted()
+        ctx.probe = Mock(return_value=(None, False))
+        for _, function in self.CHECKS:
+            function(ctx)
+        self.assertEqual(by_id(ctx, 'vm-connection')['status'], 'FAIL')
+        self.assertEqual(by_id(ctx, 'design-engine')['status'], 'WARN')
+        self.assertEqual(by_id(ctx, 'capture')['status'], 'WARN')
+
+    def test_a_connection_without_a_saved_fingerprint_warns_and_skips_the_live_checks(self):
+        value = discovery()
+        del value['host']['fingerprint_saved']
+        ctx = context()
+        ctx.probe = Mock(side_effect=probe_router(discovery_value=value))
+        check.check_manager_routes(ctx)
+        check.check_git_route(ctx)
+        self.assertEqual(by_id(ctx, 'vm-connection')['status'], 'WARN')
+        self.assertEqual(by_id(ctx, 'http-browse')['status'], 'SKIP')
+        self.assertEqual(by_id(ctx, 'git-http')['status'], 'SKIP')
+        self.assertEqual([call.args[0] for call in ctx.probe.call_args_list], ['vm-connection'])
+
+    def test_the_fingerprint_value_is_never_asked_for_or_printed(self):
+        ctx = context()
+        ctx.probe = Mock(side_effect=probe_router())
+        check.check_manager_routes(ctx)
+        self.assertIn('fingerprint', by_id(ctx, 'vm-connection')['detail'])
+        self.assertEqual(by_id(ctx, 'vm-connection')['status'], 'PASS')
+
+    def test_health_must_say_ready_and_a_version_alone_fails(self):
+        for body in ({'version': VERSION}, {'ready': False}, {'ready': 'true'}, ['ready']):
+            with self.subTest(body=body):
+                ctx = context()
+                self.run_docker(ctx, Mock(return_value=(check.Result(0), body)))
+                self.assertEqual(by_id(ctx, 'http')['status'], 'FAIL')
+                self.assertEqual(ctx.base_url, 'https://127.0.0.1:8443', 'tls.listener still reports the TLS fact')
+
+    def test_an_unreadable_certificate_skips_http_without_sending_a_request(self):
+        ctx = context()
+        http = Mock()
+        self.run_docker(ctx, http, pinned=False)
+        http.assert_not_called()
+        row = by_id(ctx, 'http')
+        self.assertEqual(row['status'], 'SKIP')
+        self.assertIn('The installed certificate could not be read, so the manager was not asked over HTTPS.', row['detail'])
+        self.assertIn('setup-tls.sh', row['fix'])
+        self.assertEqual(ctx.base_url, '')
+        self.assertEqual(by_id(ctx, 'manager-version')['status'], 'PASS', 'proved by docker exec, unaffected')
+        self.assertIn(by_id(ctx, 'design-engine')['status'], ('PASS', 'WARN'), 'the probe checks run regardless')
+
+    def run_docker(self, ctx, http, pinned=True):
+        metadata = {'state': {'Running': True}, 'mounts': [], 'network': 'host', 'restart': 'unless-stopped',
+                    'command': ['uvicorn', 'app.main:create_app', '--host', '0.0.0.0', '--port', '8443', '--ssl-certfile', '/tls/cert.pem']}
+
+        def command(args, **kwargs):
+            if 'info' in args or args[-1] == 'version':
+                return check.Result(0)
+            if 'ps' in args:
+                return check.Result(0, 'a' * 64)
+            if 'inspect' in args:
+                return encoded(metadata)
+            if 'exec' in args:
+                return check.Result(0, VERSION)
+            return check.Result(reason='unexpected read command')
+        ctx.run = Mock(side_effect=command)
+        ctx.http = http
+        ctx.probe = Mock(side_effect=probe_router())
+        ctx.tls_context = None
+        ctx.pin_certificate = (lambda: setattr(ctx, 'tls_context', object())) if pinned else (lambda: None)
+        installer = SimpleNamespace(health_url=lambda command: 'https://127.0.0.1:8443/api/health')
+        with patch.object(check, 'check_storage'), patch.object(check, 'module', return_value=installer):
+            check.check_docker(ctx)
+
+
+class ContextHelperTests(unittest.TestCase):
+    def test_probe_runs_the_module_privileged_through_docker_exec_and_parses_the_one_line(self):
+        ctx = context()
+        ctx.run = Mock(return_value=check.Result(0, json.dumps({'available': True}) + '\n'))
+        self.assertEqual(ctx.probe('browse', '/etc/containerlab'), ({'available': True}, False))
+        argv = ctx.run.call_args.args[0]
+        self.assertEqual(argv[-5:], ['python', '-m', 'app.probe', 'browse', '/etc/containerlab'])
+        self.assertEqual(argv[argv.index('exec') + 1], ctx.container)
+        self.assertTrue(ctx.run.call_args.kwargs['privileged'])
+        self.assertEqual(ctx.run.call_args.kwargs['timeout'], 30)
+
+    def test_probe_reads_an_error_line_from_a_nonzero_exit_and_reports_a_missing_module(self):
+        ctx = context()
+        ctx.run = Mock(return_value=check.Result(1, '{"error": "state unreadable"}\n'))
+        self.assertEqual(ctx.probe('vm-connection'), ({'error': 'state unreadable'}, False))
+        ctx.run = Mock(return_value=check.Result(1, '', stderr='/usr/local/bin/python: No module named app.probe\n'))
+        self.assertEqual(ctx.probe('capture'), (None, True))
+        for result in (check.Result(2, ''), check.Result(0, PRIVATE), check.Result(0, '[1]'), check.Result(reason='command timed out')):
+            ctx.run = Mock(return_value=result)
+            self.assertEqual(ctx.probe('capture'), (None, False))
+
+    def test_run_captures_stderr_only_when_asked(self):
+        ctx = check.Context(check.arguments([]), owner='archtop', privileged=False)
+        script = 'import sys; print("out"); print("No module named app.probe", file=sys.stderr)'
+        quiet = ctx.run([sys.executable, '-c', script])
+        self.assertEqual((quiet.stdout.strip(), quiet.stderr), ('out', ''))
+        loud = ctx.run([sys.executable, '-c', script], capture_stderr=True)
+        self.assertIn('No module named app.probe', loud.stderr)
+
+    def test_head_returns_status_and_lowercase_headers_without_following_a_redirect(self):
+        ctx = context()
+        redirect = HTTPError('http://127.0.0.1:8081/', 301, 'Moved', {'Location': 'https://127.0.0.1:8443/'}, io.BytesIO(b''))
+        with patch.object(check, 'build_opener', return_value=SimpleNamespace(open=Mock(side_effect=redirect))):
+            self.assertEqual(ctx.head('/', base='http://127.0.0.1:8081'), (301, {'location': 'https://127.0.0.1:8443/'}))
+        response = Mock(status=200, headers={'Strict-Transport-Security': 'max-age=15552000'})
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        with patch.object(check, 'build_opener', return_value=SimpleNamespace(open=Mock(return_value=response))):
+            self.assertEqual(ctx.head('/api/health'), (200, {'strict-transport-security': 'max-age=15552000'}))
+        for failure in (OSError('refused'), check.http.client.BadStatusLine('x'), ValueError('bad')):
+            with patch.object(check, 'build_opener', return_value=SimpleNamespace(open=Mock(side_effect=failure))):
+                self.assertEqual(ctx.head('/', base='http://127.0.0.1:8443'), (None, {}))
+
+    def test_https_without_a_pinned_certificate_sends_nothing(self):
+        ctx = context()
+        ctx.tls_context = None
+        with patch.object(check, 'build_opener') as network:
+            result, value = ctx.http('/api/health')
+            status, headers = ctx.head('/api/health')
+        network.assert_not_called()
+        self.assertFalse(result.ok)
+        self.assertIsNone(value)
+        self.assertEqual((status, headers), (None, {}))
+
+    def test_the_report_deadline_bounds_head(self):
+        ctx = context()
+        ctx.deadline = 0
+        with patch.object(check, 'build_opener') as network:
+            self.assertEqual(ctx.head('/', base='http://127.0.0.1:8081'), (None, {}))
+        network.assert_not_called()
+
+    def test_module_and_manual_text(self):
+        ctx = context()
+        self.assertIn('https://<VM address>:8443', ctx.manual[0])
+        self.assertIn('fingerprint', ctx.manual[0])
+        self.assertEqual(ctx.module('check_exposure').__name__, 'check_exposure')
+
+
+@unittest.skipUnless(sys.platform == 'linux' and shutil.which('openssl'), 'needs openssl to make a real certificate')
+class PinnedTlsTests(unittest.TestCase):
+    """The pinned opener against a real TLS server and a certificate made the way setup-tls.sh makes one
+    (EC P-256, CA:FALSE, digitalSignature, serverAuth, IP and DNS names): a PASS proves the listener serves
+    exactly that file, and another certificate is refused."""
+
+    def make_certificate(self, directory, name):
+        cert, key = Path(directory) / (name + '.pem'), Path(directory) / (name + '.key')
+        subprocess.run(['openssl', 'req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes', '-sha256',
+                        '-days', '2', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1',
+                        '-addext', 'basicConstraints=critical,CA:FALSE', '-addext', 'keyUsage=digitalSignature',
+                        '-addext', 'extendedKeyUsage=serverAuth', '-keyout', str(key), '-out', str(cert)],
+                       check=True, capture_output=True)
+        return cert, key
+
+    def serve(self, cert, key):
+        context_ = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context_.load_cert_chain(str(cert), str(key))
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = b'{"ready": true}'
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Strict-Transport-Security', 'max-age=15552000')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+        server.socket = context_.wrap_socket(server.socket, server_side=True)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return 'https://127.0.0.1:%d' % server.server_address[1]
+
+    def test_only_the_installed_certificate_is_trusted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cert, key = self.make_certificate(directory, 'installed')
+            other_cert, other_key = self.make_certificate(directory, 'other')
+            ctx = check.Context(check.arguments([]), owner='archtop', privileged=True)
+            ctx.pin_certificate(cert)
+            self.assertIsNotNone(ctx.tls_context)
+            ctx.base_url = self.serve(cert, key)
+            result, body = ctx.http('/api/health')
+            self.assertTrue(result.ok, result.reason)
+            self.assertEqual(body, {'ready': True})
+            status, headers = ctx.head('/api/health')
+            self.assertEqual(status, 200)
+            self.assertEqual(headers['strict-transport-security'], 'max-age=15552000')
+            ctx.base_url = self.serve(other_cert, other_key)
+            result, body = ctx.http('/api/health')
+            self.assertFalse(result.ok)
+            self.assertEqual(ctx.head('/api/health'), (None, {}))
+
+    def test_an_unreadable_or_garbage_certificate_leaves_no_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ctx = check.Context(check.arguments([]), owner='archtop', privileged=True)
+            ctx.pin_certificate(Path(directory) / 'missing.pem')
+            self.assertIsNone(ctx.tls_context)
+            garbage = Path(directory) / 'garbage.pem'
+            garbage.write_text('not a certificate')
+            ctx.pin_certificate(garbage)
+            self.assertIsNone(ctx.tls_context)
 
 
 if __name__ == '__main__':
