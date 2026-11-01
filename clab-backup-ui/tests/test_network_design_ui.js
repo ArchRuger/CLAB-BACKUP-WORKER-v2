@@ -1669,6 +1669,18 @@ test('S10a: the design generation watch stops at the first 401 without spending 
  h.ok();await h.retry();
  assert.ok(h.sent()>=2,'sessionRetry() polls again (and the finished job loads its plan)');assert.equal(stateOf(h.c).view.generations[0].status,'succeeded');
 });
+test('S10a: stopping and restarting the generation watch while signed out leaves one live loop after the resume (a stale closure ends itself)',async()=>{
+ const h=signonWatchHarness(()=>({intent:{schema:1},generations:[{id:'g',status:'running'}],problems:[],nodes:{}}));
+ stateOf(h.c).labId='lab-a';stateOf(h.c).view={intent:{schema:1},generations:[{id:'g',status:'running'}],problems:[],nodes:{}};
+ h.c.designMaybeStartWatch();await h.fire();
+ assert.equal(h.resume.size,1);
+ h.c.designStopWatch();            // leaving the tab while signed out
+ h.c.designMaybeStartWatch();      // coming back: a new watch starts
+ assert.equal(h.timers.length,1);await h.fire();
+ assert.equal(h.resume.size,2,'the old and the new poll are both registered');
+ h.ok();const before=h.sent();await h.retry();
+ assert.equal(h.sent()-before,1,'only the live loop requests after the resume');assert.equal(h.timers.length,1,'and arms one timer');
+});
 test('S10a: the design review watch stops at the first 401 before the retry count and the 404 branch, and the resume polls again',async()=>{
  const h=signonWatchHarness(()=>({id:'job1',status:'done'}));
  h.c.designReviewStartWatch('lab-a','job1',true);

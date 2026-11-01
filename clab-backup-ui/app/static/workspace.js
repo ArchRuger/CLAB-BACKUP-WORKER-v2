@@ -10,25 +10,32 @@ function workspaceMessage(value){
  if(detail&&typeof detail==='object'&&typeof detail.message==='string'&&detail.message)return detail.message;
  return 'Request failed.';
 }
-// A dialog of this page that holds something the person typed (the new topology file, the download address): the page must not leave under it.
+// A dialog of this page that holds something the person typed (the new topology file, the download address): the page must not leave under it. Every open dialog counts: the topology browser stays open under the editor.
 function workspaceTyped(){
- if(typeof document.querySelector!=='function')return false;
- const dialog=document.querySelector('dialog[open]');if(!dialog||typeof dialog.querySelectorAll!=='function')return false;
- return [...dialog.querySelectorAll('textarea,input')].some(f=>!f.readOnly&&!f.disabled&&!['checkbox','radio','hidden','button','submit'].includes(f.type)&&String(f.value||'').trim()!=='');
+ if(typeof document.querySelectorAll!=='function')return false;
+ return [...document.querySelectorAll('dialog[open]')].some(dialog=>dialog&&typeof dialog.querySelectorAll==='function'&&[...dialog.querySelectorAll('textarea,input')].some(f=>!f.readOnly&&!f.disabled&&!['checkbox','radio','hidden','button','submit'].includes(f.type)&&String(f.value||'').trim()!==''));
 }
-// No request leaves a signed-out page (REVIEW U8); a 401 signed_out marks the page and leaves for the sign-in page at once, unless an open dialog holds typed text: then the page stays, the dialog's own error says the session ended and the page leaves on the next request after the dialog holds nothing typed.
+// The sentence of a held page: it says how to get back and that the text is kept.
+const WORKSPACE_HELD='Your session ended. Sign in again in a new tab, then press this button again; what you typed is still here.';
+function workspaceHeldError(){return Object.assign(new Error(WORKSPACE_HELD),{status:401,sessionEnded:true});}
+// No request leaves a signed-out page (REVIEW U8); a 401 signed_out marks the page and leaves for the sign-in page at once, unless an open dialog holds typed text: then the page stays and the dialog's error says what to do. The person's own act (a non-GET) clears the mark once, as Reconnect does on the terminal page, so it is sent after signing in elsewhere and the answer decides; a read never is. The page leaves on the next request after no dialog holds typed text.
 let workspaceHeld=false;
 async function api(path,options={}){
+ if(workspaceHeld&&options.method&&options.method!=='GET'&&typeof sessionEnded==='function'&&sessionEnded()&&workspaceTyped()&&typeof sessionClear==='function')sessionClear();
  if(typeof sessionEnded==='function'&&sessionEnded()){
   if(workspaceHeld&&!workspaceTyped()&&typeof sessionGo==='function'){workspaceHeld=false;sessionGo('ended');}
-  throw sessionEndedError();
+  throw workspaceHeld?workspaceHeldError():sessionEndedError();
  }
  const response=await fetch('/api'+path,options);
  if(!response.ok){
   let value=null;try{value=await response.json();}catch{value=null;}
-  if(typeof sessionLost==='function'&&sessionLost(response.status,value)&&typeof sessionMark==='function'&&sessionMark()){if(workspaceTyped())workspaceHeld=true;else if(typeof sessionGo==='function')sessionGo('ended');}
+  if(typeof sessionLost==='function'&&sessionLost(response.status,value)&&typeof sessionMark==='function'&&sessionMark()){
+   if(workspaceTyped()){workspaceHeld=true;throw workspaceHeldError();}
+   if(typeof sessionGo==='function')sessionGo('ended');
+  }
   throw Object.assign(new Error(workspaceMessage(value)),{status:response.status});
  }
+ if(workspaceHeld)workspaceHeld=false;
  return response;
 }
 async function json(path,method,data){return(await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}

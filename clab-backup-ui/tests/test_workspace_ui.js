@@ -13,7 +13,7 @@ function page({hash='',session=true,answers=[],dialog=null}={}){
  let ended=false;
  const queue=[...answers];
  const context=vm.createContext({URLSearchParams,decodeURIComponent,console,
-  location:{hash},document:{getElementById:get,querySelector:sel=>sel==='dialog[open]'?dialog:null,title:'',addEventListener:(type,fn)=>{handlers[type]=fn;}},
+  location:{hash},document:{getElementById:get,querySelectorAll:sel=>sel==='dialog[open]'?(Array.isArray(dialog)?dialog:dialog?[dialog]:[]):[],title:'',addEventListener:(type,fn)=>{handlers[type]=fn;}},
   window:{open:()=>({})},setTimeout:()=>1,clearTimeout:()=>{},
   fetch:async(url,options)=>{
    fetches.push(url);
@@ -23,7 +23,7 @@ function page({hash='',session=true,answers=[],dialog=null}={}){
   opTask:async(d,fn)=>fn(),opBrowse(){},opHistory(){}});
  if(session)Object.assign(context,{
   sessionLost:(status,data)=>status===401&&!!data&&typeof data==='object'&&!!data.detail&&data.detail.code==='signed_out',
-  sessionMark:()=>{if(ended)return false;ended=true;return true;},
+  sessionMark:()=>{if(ended)return false;ended=true;return true;},sessionClear:()=>{ended=false;},
   sessionEnded:()=>ended,
   sessionEndedError:()=>Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true}),
   sessionGo:reason=>gone.push(reason)});
@@ -97,8 +97,8 @@ test('a 401 signed_out while a dialog holds typed text keeps the page; it leaves
  await p.start();
  assert.deepEqual(p.gone,[],'the typed topology is not thrown away');assert.ok(p.ended(),'the page is marked signed out');
  const before=p.fetches.length;
- await assert.rejects(p.context.json('/operations/create','POST',{}),e=>e.sessionEnded===true&&e.message==='Your session ended. Sign in again.');
- assert.deepEqual(p.gone,[],'still typed: still no navigation');assert.equal(p.fetches.length,before,'and no request');
+ await assert.rejects(p.context.api('/state'),e=>e.sessionEnded===true&&/Sign in again/.test(e.message));
+ assert.deepEqual(p.gone,[],'still typed: still no navigation');assert.equal(p.fetches.length,before,'and a read sends no request (only the person\'s own act is let through, see the held-page tests)');
  fields[0].value='';
  await assert.rejects(p.context.api('/state'),e=>e.sessionEnded===true);
  assert.deepEqual(p.gone,['ended']);
@@ -107,4 +107,27 @@ test('a 401 signed_out while a dialog holds typed text keeps the page; it leaves
 test('a read-only or empty field in an open dialog does not hold the page',async()=>{
  const p=page({answers:[SIGNED_OUT],dialog:dialogWith([{type:'textarea',value:'x',readOnly:true},{type:'text',value:'  '}])});
  await p.start();assert.deepEqual(p.gone,['ended']);
+});
+
+test('stacked dialogs: typed text in a lower or upper dialog holds the page, whichever is first in the document',async()=>{
+ const browser=dialogWith([{type:'text',value:'',readOnly:false}]),editor=dialogWith([{type:'textarea',value:'name: lab'}]);
+ const p=page({answers:[SIGNED_OUT],dialog:[browser,editor]});
+ await p.start();
+ assert.deepEqual(p.gone,[],'the topology typed in the second open dialog is kept');assert.ok(p.ended());
+});
+test('a held page: the error says what to do (sign in in a new tab, press the button again, the text is kept)',async()=>{
+ const p=page({answers:[SIGNED_OUT],dialog:dialogWith([{type:'textarea',value:'name: lab'}])});
+ await p.start();
+ await assert.rejects(p.context.api('/state'),e=>e.sessionEnded===true&&/new tab/.test(e.message)&&/still here/.test(e.message));
+});
+test('a held page: after signing in elsewhere the next Create is sent; a 401 again holds the page again',async()=>{
+ const fields=[{type:'textarea',value:'name: lab'}];
+ const p=page({answers:[SIGNED_OUT,SIGNED_OUT,{status:200,body:{ok:1}}],dialog:dialogWith(fields)});
+ await p.start();
+ const before=p.fetches.length;
+ await assert.rejects(p.context.json('/operations/preview','POST',{}),e=>e.status===401&&/new tab/.test(e.message));
+ assert.equal(p.fetches.length,before+1,'the held page lets one act of the person through');
+ assert.ok(p.ended(),'the 401 marked the page again');assert.deepEqual(p.gone,[],'and it is still held');
+ const result=await p.context.json('/operations/preview','POST',{});
+ assert.deepEqual(result,{ok:1});assert.equal(p.fetches.length,before+2);assert.equal(p.ended(),false,'a success leaves the page signed in');
 });

@@ -926,12 +926,12 @@ function designViewedGeneration(view){
  if(designState.viewing){const found=generations.find(g=>g.id===designState.viewing);if(found)return found;}
  return generations.length?generations[generations.length-1]:null;
 }
-let designWatch=null,designWatchTimer=null;
+let designWatch=null,designWatchTimer=null,designWatchGen=0;
 function designCurrentIntent(view){
  if(designState.draft&&designState.draft.intent)return designState.draft.intent;
  return (view&&view.intent)||designEmptyIntent();
 }
-function designStopWatch(){clearTimeout(designWatchTimer);designWatch=null;}
+function designStopWatch(){clearTimeout(designWatchTimer);designWatch=null;designWatchGen++;}
 function designNewestGeneration(view){const g=(view&&view.generations)||[];return g.length?g[g.length-1]:null;}
 function designApplyDraft(labId,view){
  designState.draftDiscarded=false;
@@ -1005,14 +1005,14 @@ function designMaybeStartWatch(){
  // deliberate step: Generate plan again, or opening the tab again, both of which load the design afresh.
  if(designState.pollGaveUp){designStopWatch();return;}
  if(designWatch===designState.labId)return;
- designStopWatch();designWatch=designState.labId;
+ designStopWatch();designWatch=designState.labId;const gen=designWatchGen;
  const labId=designState.labId;let failures=0;
  const poll=async()=>{
-  if(designWatch!==labId)return;
+  if(designWatch!==labId||designWatchGen!==gen)return;
   const seq=designViewRequest();
   try{
    const view=await(await api('/labs/'+encodeURIComponent(labId)+'/design')).json();
-   if(designWatch!==labId||designState.labId!==labId)return;
+   if(designWatch!==labId||designWatchGen!==gen||designState.labId!==labId)return;
    if(!view||typeof view!=='object'||!Array.isArray(view.generations))throw new Error('The manager answered with something that is not a design.');
    if(!designViewFresh(labId,seq)){designWatchTimer=setTimeout(poll,2000);return;}
    designState.view=view;failures=0;designState.pollProblem='';
@@ -1027,7 +1027,7 @@ function designMaybeStartWatch(){
   }catch(error){
    // A failed poll (a lost connection, a 500, a bad answer) is retried a bounded number of times with the
    // student told so; after that the watch stops and the state says the progress is unknown, with a way out.
-   if(designWatch!==labId||designState.labId!==labId)return;
+   if(designWatch!==labId||designWatchGen!==gen||designState.labId!==labId)return;
    // A session end (UI 3.3): nothing was sent. No retry is spent and nothing is said; designWatch stays set, so a render does not start a second watch.
    if(typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(poll);return;}
    failures++;
