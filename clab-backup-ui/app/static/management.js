@@ -44,7 +44,7 @@ document.body.insertAdjacentHTML('beforeend', `
  <button type="button" class="button secondary" id="legacy-import">Import an Ansible inventory instead</button>
  <p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Cancel</button><button type="submit" class="button primary" id="setup-submit">Add lab</button></div>
 </form></dialog>
-<dialog id="vm-dialog"><form id="vm-form">
+<dialog id="vm-dialog"><div id="vm-operator" hidden><div class="dialog-head"><h2>VM connection</h2><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div><p>Ask an administrator to set up the VM connection.</p><div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Close</button></div></div><form id="vm-form">
  <div class="dialog-head"><h2>VM connection</h2><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
  <p>This is the machine that runs your labs. The manager signs in to it over SSH to find running labs, start them and open device CLIs. Usually set up once by the instructor.</p>
  <p><a href="/vm-connection-guide" target="_blank" rel="noopener">VM setup and troubleshooting guide <span aria-hidden="true">↗</span></a></p>
@@ -89,12 +89,15 @@ function vmFilesStatus(lab,discovery){
  const words={'Up to date':'Topology files on the VM: up to date','Updates available':'Topology files on the VM: newer than this workspace — use Lab actions ▾ › Sync topology from VM','Imported with warnings':'Topology files on the VM: imported with warnings (see Details)','Files unavailable':'Topology files on the VM: not found','VM unavailable':'Topology files on the VM: cannot check, the VM is not reachable'}[source.status]||('Topology files on the VM: '+source.status);
  return words+(source.synced_at?' · Last synced '+new Date(source.synced_at).toLocaleString():'')+(source.message?' · '+source.message:'');
 }
+// The VM connection is administrators-only (REVIEW R13): an Operator is never sent into the form, whose Save the manager refuses.
+function mgmtOperator(){return typeof state==='object'&&!!state&&!!state.user&&state.user.role==='operator';}
+function mgmtRole(){return typeof state==='object'&&state&&state.user&&state.user.role?state.user.role:'';}
 function renderManagement(){
  const discovery=state.discovery||{}, lab=current();
  mgmtMarkup($('vm-summary'),vmSummaryMarkup(discovery));
  mgmtMarkup($('discovered-labs'),(discovery.discovered||[]).filter(l=>!l.imported&&!l.excluded).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Running on the VM':'Last seen on the VM'} · ${l.running} of ${l.nodes} devices running · ${esc(discovery.file_errors?.[l.name]||(discovery.pending_imports?.[l.name]?'Ready to import — confirm to add it to My labs':'Add to My labs'))}</small></button>`).join(''));
  const reports=discovery.file_reports||{};
- const fileMarkup=Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file checks yet. Use Manager ▾ › Refresh lab list. If it stays empty the VM helper may need an update (Manager ▾ › Diagnostics).</p>';
+ const fileMarkup=Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file checks yet. Use Manager ▾ › Refresh lab list. If it stays empty the VM helper may need an update ('+(typeof diagnosticsAdvice==='function'?diagnosticsAdvice(mgmtRole()):'see Diagnostics')+').</p>';
  mgmtMarkup($('discovery-file-list'),fileMarkup);
  // The same reports (every lab on the VM, imported ones included) stay reachable under Advanced › Deployment details.
  mgmtMarkup($('advanced-file-list'),fileMarkup);
@@ -104,7 +107,7 @@ function renderManagement(){
  mgmtMarkup($('hidden-labs'),hiddenLabs.length?'<p class="side-hint">Hidden from Home</p>'+hiddenLabs.map(l=>`<div class="empty-lab"><button class="side-button" data-open-hidden="${esc(l.id)}">${esc(l.name)}<small>Still in My labs with its devices, backups and saves · open it, or put its card back</small></button><button type="button" class="button secondary small" data-show-lab="${esc(l.id)}">Show on Home</button></div>`).join(''):'');
  const found=typeof homeVmLabs==='function'?homeVmLabs(discovery,state.labs):{waiting:0,hidden:0,note:''};
  if($('manager-vm-labs-note')){$('manager-vm-labs-note').textContent=found.note;$('manager-vm-labs-note').hidden=!found.note;}
- if($('vm-labs-empty')){$('vm-labs-empty').hidden=!!(found.waiting||found.hidden);$('vm-labs-empty').textContent=!discovery.configured?'Connect the VM first (Manager ▾ › VM connection…).':discovery.connected?'Every lab the VM reports is already in My labs.':'The VM does not answer, so its labs cannot be listed right now.';}
+ if($('vm-labs-empty')){$('vm-labs-empty').hidden=!!(found.waiting||found.hidden);$('vm-labs-empty').textContent=!discovery.configured?(mgmtOperator()?'Ask an administrator to connect the VM first.':'Connect the VM first (Manager ▾ › VM connection…).'):discovery.connected?'Every lab the VM reports is already in My labs.':'The VM does not answer, so its labs cannot be listed right now.';}
  maybePromptVmConnection();
  renderLanding(discovery,lab);
  if(!lab)return;
@@ -132,15 +135,16 @@ function renderNosReadiness(lab){
 function renderLanding(discovery,lab){
  if(lab||!$('home-deploy'))return;
  const configured=!!discovery.configured,connected=!!discovery.connected;
- $('vm-connect-empty').hidden=configured;
+ const operator=mgmtOperator();
+ $('vm-connect-empty').hidden=configured||operator;
  // Both ways of deploying end on the lab VM (browsing its folders, or copying the uploaded file there), so
  // both wait for the connection and say so in words; the builder keeps its drawing in the browser and does not.
- const reason=connected?'':!configured?'Connect the lab VM first: deploying needs it. Building a lab works without it.':'Waiting for the lab VM to answer: deploying needs it. Building a lab works meanwhile.';
+ const reason=connected?'':!configured?(operator?'Ask an administrator to connect the lab VM first: deploying needs it. Building a lab works without it.':'Connect the lab VM first: deploying needs it. Building a lab works without it.'):'Waiting for the lab VM to answer: deploying needs it. Building a lab works meanwhile.';
  for(const id of ['home-deploy','home-upload'])if($(id)){$(id).disabled=!connected;$(id).title=reason;}
  if($('home-deploy-reason')){$('home-deploy-reason').textContent=reason;$('home-deploy-reason').hidden=connected;}
  // Home keeps a VM prompt even when labs exist: cards read "Status unknown" without one.
- if($('home-vm-banner')){const note=!configured?'Connect this manager to your lab VM first. Starting labs, finding running labs and opening device CLIs all use that connection.':!connected?(discovery.error||'Waiting for the lab VM to answer. Deploy becomes available as soon as it does.'):'';$('home-vm-banner').hidden=!note;if($('home-vm-banner-text'))$('home-vm-banner-text').textContent=note;if($('home-vm-connect'))$('home-vm-connect').textContent=configured?'VM connection…':'Connect the VM';}
- $('empty-vm-note').textContent=!configured?'Connect this manager to your lab VM first. Starting labs, finding running labs and opening device CLIs all use that connection.':!connected?(discovery.error||'Waiting for the lab VM to answer. Deploy becomes available as soon as it does.'):'';
+ if($('home-vm-banner')){const note=!configured?(operator?'The lab VM is not connected yet. Ask an administrator to connect it.':'Connect this manager to your lab VM first. Starting labs, finding running labs and opening device CLIs all use that connection.'):!connected?(discovery.error||'Waiting for the lab VM to answer. Deploy becomes available as soon as it does.'):'';$('home-vm-banner').hidden=!note;if($('home-vm-banner-text'))$('home-vm-banner-text').textContent=note;if($('home-vm-connect')){$('home-vm-connect').textContent=configured?'VM connection…':'Connect the VM';$('home-vm-connect').hidden=operator;}}
+ $('empty-vm-note').textContent=!configured?(operator?'The lab VM is not connected yet. Ask an administrator to connect it.':'Connect this manager to your lab VM first. Starting labs, finding running labs and opening device CLIs all use that connection.'):!connected?(discovery.error||'Waiting for the lab VM to answer. Deploy becomes available as soon as it does.'):'';
  const running=(discovery.discovered||[]).filter(l=>!l.imported);
  $('empty-discovered').hidden=!running.length;
  mgmtMarkup($('empty-discovered-list'),running.map(l=>`<div class="empty-lab"><div><strong>${esc(l.name)}</strong><small>${l.running} of ${l.nodes} devices running${l.excluded?' · removed from this manager earlier':''}</small></div><button type="button" class="button secondary" data-setup-name="${esc(l.name)}">Import</button></div>`).join(''));
@@ -180,6 +184,11 @@ function vmBootstrapText(h){
  return '';
 }
 function openVmDialog(){
+ // An Operator gets the sentence and no form (REVIEW R13); this one function covers every entry point, the save drawers and the chip panel included.
+ const operator=mgmtOperator();
+ if($('vm-operator'))$('vm-operator').hidden=!operator;
+ $('vm-form').hidden=operator;
+ if(operator){$('vm-dialog').showModal();return;}
  const h=state.discovery?.host||{};$('vm-form').reset();$('vm-form').querySelector('.form-error').textContent='';
  $('vm-address').value=h.address||'127.0.0.1';$('vm-port').value=h.port||22;$('vm-user').value=h.username||'clab-discovery';$('vm-command').value=h.command_mode||'helper';$('vm-enabled').checked=h.enabled!==false;
  // Lab VMs get rebuilt and re-keyed; trusting the replacement key on the next
@@ -204,6 +213,7 @@ function maybePromptVmConnection(){
  if(vmPromptShown)return;
  const discovery=state.discovery;
  if(!discovery||(discovery.configured&&!discovery.host?.bootstrap_pending))return;
+ if(mgmtOperator())return;   // the automatic first-load prompt is an administrator's (REVIEW R13)
  vmPromptShown=true;
  if(!$('vm-dialog').open&&!(typeof document.querySelector==='function'&&document.querySelector('dialog[open]')))openVmDialog();
 }

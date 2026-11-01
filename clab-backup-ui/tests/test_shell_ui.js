@@ -24,6 +24,9 @@ function dom(){
    contains(other){return all(this).includes(other);},closest(sel){let n=this;while(n){if(matches(n,sel))return n;n=n.parentElement;}return null;},
    focus(){doc.activeElement=this;},click(){this.dispatch('click');},dispatchEvent(e){return this.dispatch(e.type,e);},
    append(...nodes){for(const c of nodes){c.parentElement=this;this.children.push(c);}},
+   prepend(...nodes){for(const c of nodes){c.parentElement=this;}this.children.unshift(...nodes);},
+   remove(){if(this.parentElement){this.parentElement.children=this.parentElement.children.filter(c=>c!==this);this.parentElement=null;}},
+   cloneNode(){const copy=el(tag,{},this.children.map(c=>c.cloneNode()));Object.assign(copy.attrs,this.attrs);copy.hidden=this.hidden;copy.disabled=this.disabled;copy.className=this.className;copy.textContent=this.textContent;return copy;},
    dispatch(type,init={}){
     const event={type,target:this,key:init.key,detail:init.detail,relatedTarget:init.relatedTarget||null,stopped:false,prevented:false,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},stopImmediatePropagation(){this.stopped=true;}};
     const chain=[];for(let n=this;n;n=n.parentElement)chain.unshift(n);
@@ -67,20 +70,23 @@ function harness({hash='',session={},local={},throwStorage=false,labs=[{id:'a',n
  const nodeMenu=el('div',{id:'node-context-menu',hidden:true});
  const linkMenu=el('div',{id:'link-context-menu',hidden:true}),linkItem=el('button',{id:'link-item',text:'Capture both ends…'});linkMenu.append(linkItem);
  const banner=el('div',{id:'lab-banner',hidden:true});
+ const sessionBanner=el('div',{id:'session-banner',class:'banner danger',role:'alert',hidden:true},[el('p',{id:'session-banner-text',text:'Your session ended. What you typed in the open dialog is still here.'}),el('p',{id:'session-banner-caption',text:'Sign in in a new tab, come back and choose Try again. Or sign in here and lose the open dialog.'}),
+  el('a',{id:'session-signin-tab',href:'/login','data-session-action':'tab',text:'Sign in in a new tab'}),el('button',{id:'session-retry','data-session-action':'retry',text:'Try again'}),el('button',{id:'session-signin-here','data-session-action':'here',text:'Sign in here'})]);
  const skeleton=el('div',{id:'home-skeleton',hidden:true});
  const navHome=el('a',{id:'nav-home',href:'/'});const crumbHome=el('button',{id:'crumb-home'});
  const outside=el('main',{id:'outside'});
- doc.body.append(navHome,crumbHome,switcher,manager,saveControl,labActions,dialog,saveDrawer,nodeMenu,linkMenu,banner,skeleton,outside);
+ doc.body.append(navHome,crumbHome,switcher,manager,saveControl,labActions,dialog,saveDrawer,nodeMenu,linkMenu,banner,sessionBanner,skeleton,outside);
  const storage=map=>{const m=new Map(Object.entries(map));return throwStorage?{getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');},removeItem(){throw new Error('blocked');}}:{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),get length(){return m.size;},key:i=>[...m.keys()][i]??null,map:m};};
- const history=[],location={hash,pathname:'/',search:''};
+ const history=[],replaced=[],location={hash,pathname:'/',search:'',replace(url){replaced.push(url);}};
  const setUrl=url=>{location.hash=url.includes('#')?url.slice(url.indexOf('#')):'';};
  const calls={selectLab:[],showTab:[],openDetails:[],render:0,renderLabBanner:0,notify:[]};
  const context=vm.createContext({document:doc,location,history:{pushState(s,t,url){history.push(['push',url]);setUrl(url);},replaceState(s,t,url){history.push(['replace',url]);setUrl(url);}},localStorage:storage(local),sessionStorage:storage(session),URLSearchParams,CustomEvent:class{constructor(type,init={}){this.type=type;this.detail=init.detail;}},setTimeout:fn=>{context.timers.push(fn);return 0;},console,
   state:{labs,loaded},activeId:'',tab:'topology',detailName:'',
   selectLab(id,view='topology'){calls.selectLab.push([id,view]);context.activeId=id;context.tab=view;},showTab(view){calls.showTab.push(view);context.tab=view;},openDetails(name){calls.openDetails.push(name);context.detailName=name;dialog.open=true;},render(){calls.render++;},renderLabBanner(){calls.renderLabBanner++;},notify(m){calls.notify.push(m);}});
  context.window=context;context.timers=[];context.windowListeners={};context.addEventListener=(name,fn)=>{context.windowListeners[name]=fn;};
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/session.js'),'utf8'),context);
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/shell.js'),'utf8'),context);
- return {context,doc,el,history,location,calls,managerButton,managerList,labButton,labList,saveChip,savePanel,saveTitle,saveInside,saveButton,loadButton,loadPanel,saveDrawer,panelEvents,switcher,switcherSummary,dialog,nodeMenu,linkMenu,linkItem,outside,skeleton};
+ return {context,doc,el,history,location,replaced,sessionBanner,calls,managerButton,managerList,labButton,labList,saveChip,savePanel,saveTitle,saveInside,saveButton,loadButton,loadPanel,saveDrawer,panelEvents,switcher,switcherSummary,dialog,nodeMenu,linkMenu,linkItem,outside,skeleton};
 }
 
 test('route precedence: the hash wins, sessionStorage is consumed once, unknown ids fall back to Home',()=>{
@@ -843,10 +849,10 @@ test('wire menu exception 3: resize, blur and a capture-phase scroll call only c
 const STATIC=path.join(__dirname,'../app/static'),INDEX=fs.readFileSync(path.join(STATIC,'index.html'),'utf8');
 const pageScripts=()=>fs.readdirSync(STATIC).filter(f=>f.endsWith('.js')).map(f=>[f,fs.readFileSync(path.join(STATIC,f),'utf8')]);
 const idsIn=html=>[...html.matchAll(/id="([\w-]+)"/g)].map(m=>m[1]);
-test('index.html: the Manager menu keeps Browser preferences after Manager settings, then a separator, the collapsed Help group, and Diagnostics last',()=>{
+test('index.html: the Manager menu keeps Browser preferences after Manager settings, then a separator, the collapsed Help group, Diagnostics outside it, and the account group last',()=>{
  const start=INDEX.indexOf('id="manager-menu-list"'),end=INDEX.indexOf('<div class="menu-foot"',start),menu=INDEX.slice(start,end);
  const order=[...menu.matchAll(/<(?:button|a|hr)[^>]*?(?:id="([\w-]+)"|href="(\/static\/debug\.html)"|class="(menu-sep)")/g)].map(m=>m[1]||m[2]||m[3]);
- assert.deepEqual(order.slice(order.indexOf('manager-settings')),['manager-settings','manager-preferences','menu-sep','manager-help-toggle','manager-shortcuts','help-student-guide','help-containerlab','help-lab-examples','help-kinds','help-srl-labs','/static/debug.html'],'Diagnostics is the last item, outside the group');
+ assert.deepEqual(order.slice(order.indexOf('manager-settings')),['manager-settings','manager-preferences','menu-sep','manager-help-toggle','manager-shortcuts','help-student-guide','help-containerlab','help-lab-examples','help-kinds','help-srl-labs','manager-diagnostics','menu-sep','account-users','account-password','account-signout'],'Diagnostics follows the Help group and stays outside it; the account group (docs/sign-on/UI.md 4.1) now closes the menu after a separator');   // was: Diagnostics last; the account block sits between Diagnostics and the footer
  assert.match(menu,/<button type="button" role="menuitem" class="menu-group-toggle" id="manager-help-toggle" data-menu-group="manager-help" aria-expanded="false" aria-controls="manager-help"><span>Help<\/span>/);
  const panel=menu.slice(menu.indexOf('id="manager-help" data-menu-panel'),menu.indexOf('</div>',menu.indexOf('id="manager-help" data-menu-panel')));
  assert.match(panel,/^id="manager-help" data-menu-panel role="group" aria-labelledby="manager-help-toggle" hidden>/);
@@ -1053,4 +1059,129 @@ test('review=apply on a cold load: it waits for operations.js, opens the review 
  // a same-page hashchange still works
  const warm=harness({hash:'#lab=b&view=topology'}),w=[];warm.context.opReviewChanges=id=>{w.push(id);return Promise.resolve();};warm.context.opTask=(d,fn)=>fn();warm.context.applyRoute();
  warm.location.hash='#lab=b&view=topology&review=apply';warm.context.applyRoute();assert.deepEqual(w,['b']);
+});
+
+// Signed out while the page runs (docs/sign-on/UI.md 3.3 items 4 and 5, REVIEW U9): the page leaves for the sign-in page, or, when something
+// typed would be lost, shows the banner (inside an open dialog, so it is reachable) and keeps everything.
+const typedSaveName=h=>{const field=h.el('input',{id:'save-name','data-dirty':''});h.saveInside.parentElement.append(field);return field;};
+test('signedOut with nothing to keep closes the menus and leaves for the sign-in page with reason=ended, once',()=>{
+ const h=harness({hash:'#lab=a&view=devices'});h.managerButton.click();assert.equal(h.managerList.hidden,false);
+ assert.equal(h.context.signedOut(),true);
+ assert.equal(h.managerList.hidden,true,'menus close');
+ assert.deepEqual(h.replaced,['/login?next='+encodeURIComponent('/#lab=a&view=devices')+'&reason=ended']);
+ assert.equal(h.sessionBanner.hidden,true);
+ assert.equal(h.context.signedOut(),false,'already marked: nothing happens twice');assert.equal(h.replaced.length,1);
+});
+test('signedOut with an open dialog puts a banner clone inside the dialog, focuses Try again, navigates nowhere and renames the ids',()=>{
+ const h=harness();h.dialog.open=true;
+ assert.equal(h.context.signedOut(),true);
+ assert.deepEqual(h.replaced,[]);
+ const clone=h.dialog.querySelector('#session-banner-dialog');assert.ok(clone,'the clone is inside the dialog');
+ assert.equal(clone.parentElement,h.dialog);assert.equal(h.dialog.children[0],clone,'first child');
+ assert.equal(clone.hidden,false);
+ assert.match(clone.querySelector('#session-banner-text-dialog').textContent,/What you typed in the open dialog is still here\./);
+ assert.match(clone.querySelector('#session-banner-caption-dialog').textContent,/lose the open dialog\./);
+ const retry=clone.querySelector('#session-retry-dialog');assert.ok(retry);assert.equal(h.doc.activeElement,retry);
+ const ids=h.doc.querySelectorAll('[id]').map(n=>n.id);assert.equal(new Set(ids).size,ids.length,'no id exists twice');
+ assert.equal(h.sessionBanner.hidden,true,'the page-level banner stays hidden while the dialog carries it');
+});
+test('signedOut does not move focus off a field being edited in the open dialog or a panel (a blur would fire change while signed out); with nothing edited the focus move stays',()=>{
+ const h=harness();h.dialog.open=true;const field=h.el('input',{id:'dialog-field'});h.dialog.append(field);field.focus();
+ h.context.signedOut();
+ assert.equal(h.doc.activeElement,field,'the dialog field keeps focus');
+ assert.ok(h.dialog.querySelector('#session-banner-dialog'),'the banner is still shown');
+ const p=harness();const typed=typedSaveName(p);typed.value='x';p.saveChip.click();typed.focus();p.context.signedOut();
+ assert.equal(p.doc.activeElement,typed,'the panel field keeps focus');assert.equal(p.sessionBanner.hidden,false);
+ const q=harness();q.dialog.open=true;q.outside.focus();q.context.signedOut();
+ assert.equal(q.doc.activeElement.id,'session-retry-dialog','a focus that is not in a field moves to Try again');
+});
+test('the clone dispatches on data-session-action: Try again calls sessionRetry, Sign in here calls sessionGo, the tab link does nothing in script',async()=>{
+ const h=harness();h.dialog.open=true;h.context.signedOut();
+ const clone=h.dialog.querySelector('#session-banner-dialog');let retried=0;
+ h.context.sessionRetry=async()=>{retried++;return true;};
+ clone.querySelector('#session-retry-dialog').click();assert.equal(retried,1);
+ clone.querySelector('#session-signin-tab-dialog').click();assert.equal(retried,1);assert.deepEqual(h.replaced,[]);
+ clone.querySelector('#session-signin-here-dialog').click();
+ assert.equal(h.replaced.length,1);assert.match(h.replaced[0],/^\/login\?next=.*&reason=ended$/);
+});
+test('closing the dialog while signed out removes the clone and shows the page banner instead; sessionRestored hides everything',()=>{
+ const h=harness();h.dialog.open=true;h.context.signedOut();
+ h.dialog.close();
+ assert.equal(h.dialog.querySelector('#session-banner-dialog'),null,'clone removed');
+ assert.equal(h.sessionBanner.hidden,false,'the page-level banner takes over');assert.deepEqual(h.replaced,[]);
+ h.context.sessionRestored();assert.equal(h.sessionBanner.hidden,true);
+ const again=harness();again.dialog.open=true;again.context.signedOut();again.context.sessionClear();again.context.sessionRestored();
+ assert.equal(again.dialog.querySelector('#session-banner-dialog'),null,'restored: the clone is removed');
+ again.dialog.close();assert.equal(again.sessionBanner.hidden,true,'a dialog closed after the restore does not bring the banner back');
+});
+test('a dialog rebuilt while signed out loses its clone; closing it still shows the page banner and the page is not stuck',()=>{
+ const h=harness();h.dialog.open=true;h.context.signedOut();
+ assert.ok(h.dialog.querySelector('#session-banner-dialog'),'the clone is there first');
+ h.dialog.children=[];
+ assert.equal(h.dialog.querySelector('#session-banner-dialog'),null,'the rebuild wiped the clone');
+ h.dialog.close();
+ assert.equal(h.sessionBanner.hidden,false,'the page-level banner takes over although no clone was left');assert.deepEqual(h.replaced,[]);
+ const ok=harness();ok.dialog.open=true;ok.context.signedOut();ok.dialog.children=[];ok.context.sessionClear();ok.context.sessionRestored();ok.dialog.close();
+ assert.equal(ok.sessionBanner.hidden,true,'restored before the close: no banner comes back');
+});
+test('signedOut with a design draft the browser could not store takes the banner path (draft text), not a redirect',()=>{
+ const h=harness();h.context.designLeaveGuard=()=>true;
+ assert.equal(h.context.signedOut(),true);assert.deepEqual(h.replaced,[]);
+ assert.equal(h.sessionBanner.hidden,false);
+ assert.match(h.sessionBanner.querySelector('#session-banner-text').textContent,/Your design draft is still on this page\./);
+ assert.match(h.sessionBanner.querySelector('#session-banner-caption').textContent,/lose the draft\./);
+});
+test('REVIEW U9: a dirty save panel keeps its menus open (closeMenus is not called), shows the page banner with the save-panel text and does not navigate',()=>{
+ const h=harness();const field=typedSaveName(h);field.value='My first save';
+ h.saveChip.click();assert.equal(h.savePanel.hidden,false);
+ let closed=0;const real=h.context.closeMenus;h.context.closeMenus=function(...a){closed++;return real.apply(this,a);};
+ assert.equal(h.context.signedOut(),true);
+ assert.equal(closed,0,'closeMenus() is not called before the panel was checked');
+ assert.equal(h.savePanel.hidden,false,'the panel stays open');assert.deepEqual(h.replaced,[]);
+ assert.equal(h.sessionBanner.hidden,false);
+ assert.match(h.sessionBanner.querySelector('#session-banner-text').textContent,/What you typed in the save panel is still here\./);
+ assert.match(h.sessionBanner.querySelector('#session-banner-caption').textContent,/lose what you typed\./);
+ assert.equal(field.value,'My first save');
+});
+test('REVIEW U9: a #save-url with a value is dirty too, an empty one is not',()=>{
+ const withUrl=harness();const url=withUrl.el('input',{id:'save-url'});withUrl.saveInside.parentElement.append(url);url.value='https://example.org/r.git';
+ withUrl.saveChip.click();withUrl.context.signedOut();assert.deepEqual(withUrl.replaced,[]);assert.equal(withUrl.sessionBanner.hidden,false);
+ const empty=harness();const none=empty.el('input',{id:'save-url'});empty.saveInside.parentElement.append(none);none.value='';
+ empty.saveChip.click();empty.context.signedOut();assert.equal(empty.replaced.length,1,'nothing typed: the page leaves');
+ const closedPanel=harness();const f=typedSaveName(closedPanel);f.value='x';closedPanel.context.signedOut();
+ assert.equal(closedPanel.replaced.length,1,'a typed name in a panel that is not open is not on screen, so nothing is lost by leaving');
+});
+test('REVIEW U9: a pointerdown on the banner closes no panel and leaves the typed name; one outside still closes it',()=>{
+ const h=harness();const field=typedSaveName(h);field.value='My first save';
+ h.saveChip.click();h.context.signedOut();
+ h.sessionBanner.querySelector('#session-retry').dispatch('pointerdown');
+ assert.equal(h.savePanel.hidden,false,'a press on Try again closes nothing');assert.equal(field.value,'My first save');
+ h.sessionBanner.querySelector('#session-signin-tab').dispatch('pointerdown');assert.equal(h.savePanel.hidden,false);
+ h.outside.dispatch('pointerdown');assert.equal(h.savePanel.hidden,true,'a press outside still closes the panel');
+});
+test('REVIEW U9: focus moving from the typed save name to the banner (focusout with relatedTarget inside it) closes no panel and loses no text; focus to a control outside still closes',()=>{
+ const h=harness();const field=typedSaveName(h);field.value='My first save';
+ h.saveChip.click();h.context.signedOut();
+ for(const id of ['session-retry','session-signin-tab']){
+  field.dispatch('focusout',{relatedTarget:h.sessionBanner.querySelector('#'+id)});
+  assert.equal(h.savePanel.hidden,false,id+': the panel stays open');assert.equal(field.value,'My first save');
+ }
+ assert.equal(h.panelEvents.some(e=>/panelclose/.test(e)),false,'no panelclose, so the typed name is not dropped');
+ field.dispatch('focusout',{relatedTarget:h.outside});assert.equal(h.savePanel.hidden,true,'focus to a control outside still closes the panel');
+});
+test('REVIEW U9: Escape with focus on a banner button closes nothing',()=>{
+ const h=harness();const field=typedSaveName(h);field.value='My first save';
+ h.saveChip.click();h.context.signedOut();
+ const retry=h.sessionBanner.querySelector('#session-retry');retry.focus();
+ const event=retry.dispatch('keydown',{key:'Escape'});
+ assert.equal(h.savePanel.hidden,false);assert.equal(event.stopped,false);
+});
+test('goSignIn replaces the location with /login, without next or reason',()=>{
+ const h=harness({hash:'#lab=a'});h.context.goSignIn();assert.deepEqual(h.replaced,['/login']);
+});
+test('the session banner adds no document or window listener: its buttons are bound on the banner element',()=>{
+ const h=harness();
+ assert.ok((h.sessionBanner.listeners.click||[]).length>=1,'one click listener on the banner element');
+ const src=fs.readFileSync(path.join(__dirname,'../app/static/shell.js'),'utf8');
+ assert.equal((src.match(/(?:document|window)\.addEventListener\('/g)||[]).length,9,'the nine document and window listeners are unchanged');
 });
