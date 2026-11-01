@@ -4,12 +4,16 @@ Standard library only: CI runs this file with the system python3 before any virt
 exists. `openssl` is real (Ubuntu ships it); `ip`, `docker` and the manager's recreate script are
 fakes. The shell suite drives a copy of the actual script with only its root guard neutralised and
 `/usr/bin/python3` replaced by a wrapper on PATH that points setup_tls.py at a temporary tls
-directory, so the option parsing and the recreate decision under test are the shipped ones.
+directory, so the option parsing and the recreate decision under test are the shipped ones. The wrapper
+runs the real setup_tls.py through a driver that turns `os.chown` into a no-op: the suite runs as an
+ordinary account (CI's runner) that cannot give files to root or to gid 10001; the modes, the moves and
+the rollback are real. The unit suites inject their own `chown` double for the same reason.
 
 The `ip -j` fixture below (IP_ADDRESS, IP_ROUTE4, IP_ROUTE6) is shared with test_check_exposure.py
 (EXPOSURE.md 6.3 case 3): the default-route interface's global addresses are certificate addresses;
 docker0, br-*, veth*, virbr*, cni*, clab*, loopback and link-local addresses never are.
 """
+import contextlib
 import importlib.util
 import ipaddress
 import json
@@ -22,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'deploy/setup-tls.sh'
@@ -467,6 +472,175 @@ class SelfSignedTests(unittest.TestCase):
         service.renew()
         self.assertNotEqual(service.certificate_facts()['fingerprint'], first)
 
+    def test_an_interrupted_first_generation_leaves_no_orphan_file(self):
+        # A fresh directory has nothing to back up, so an interrupt after cert.pem was moved used to leave a
+        # certificate without key or mode, and every later start-manager.sh refused the tool's own leftovers.
+        service = tls(self.tmp)
+        service.out = lambda line: None
+
+        def interrupted(source, target):
+            if Path(target).name == 'key.pem':
+                raise KeyboardInterrupt()
+            return os.replace(source, target)
+        service.replace = interrupted
+        with self.assertRaises(KeyboardInterrupt):
+            service.ensure()
+        self.assertEqual(sorted(p.name for p in (self.tmp / 'tls').iterdir()), [], 'a target that did not exist before is removed again')
+        service.replace = os.replace
+        self.assertIn('no certificate', service.ensure())
+        self.assertTrue(pair_matches(self.tmp / 'tls'))
+        self.assertEqual(service.read_mode(), 'self-signed')
+
+    def test_a_failed_mode_write_rolls_the_whole_replacement_back(self):
+        # The mode file belongs to the pair it describes: a full disk at the last write must not leave a new pair
+        # registered as nothing (fresh install) or an old mode naming a pair it does not describe (renew).
+        service = tls(self.tmp)
+        service.out = lambda line: None
+
+        def no_space(source, target):
+            if Path(target).name == 'mode':
+                raise OSError(28, 'No space left on device')
+            return os.replace(source, target)
+        service.replace = no_space
+        with self.assertRaises(OSError):
+            service.ensure()
+        self.assertEqual(sorted(p.name for p in (self.tmp / 'tls').iterdir()), [], 'no pair without its mode')
+        service.replace = os.replace
+        service.ensure()
+        first = service.certificate_facts()['fingerprint']
+        key_before = (self.tmp / 'tls/key.pem').read_bytes()
+        service.replace = no_space
+        with self.assertRaises(OSError):
+            service.renew()
+        self.assertEqual(service.certificate_facts()['fingerprint'], first)
+        self.assertEqual((self.tmp / 'tls/key.pem').read_bytes(), key_before)
+        self.assertEqual(service.read_mode(), 'self-signed')
+        self.assertTrue(pair_matches(self.tmp / 'tls'))
+        self.assertEqual(sorted(p.name for p in (self.tmp / 'tls').iterdir()), ['cert.pem', 'key.pem', 'mode'])
+
+    def test_an_unregistered_certificate_reports_its_expiry_like_a_provided_one(self):
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        service.ensure()
+        before = service.certificate_facts()['fingerprint']
+        (self.tmp / 'tls/mode').unlink()
+
+        def expiring(argv):
+            if '-checkend' in argv and argv[argv.index('-checkend') + 1] != '0':
+                return completed(argv, 1, stdout='Certificate will expire\n')
+            return None
+
+        def expired(argv):
+            if '-checkend' in argv:
+                return completed(argv, 1, stdout='Certificate will expire\n')
+            return None
+        for hook, expected in ((expiring, 'within 30 days'), (expired, 'EXPIRED')):
+            with self.subTest(expected=expected):
+                service.run = Runner(openssl_hook=hook)
+                lines = []
+                service.out = lines.append
+                self.assertIsNone(service.ensure())
+                text = '\n'.join(lines)
+                self.assertIn(expected, text)
+                self.assertIn('--cert PATH --key PATH', text)
+                self.assertEqual(service.certificate_facts()['fingerprint'], before, 'kept: the tool did not make it')
+        self.assertFalse((self.tmp / 'tls/mode').exists())
+
+    def test_an_unregistered_combined_certificate_file_is_refused_and_never_made_world_readable(self):
+        # install_provided refuses a cert.pem that carries a private key, but an operator may copy such a file
+        # into the directory by hand. The mode repair must not widen it to 0644, and ensure must not keep it.
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        cert, key = make_pair(self.tmp, 'combined')
+        tls_dir = self.tmp / 'tls'
+        tls_dir.mkdir()
+        (tls_dir / 'cert.pem').write_bytes(cert.read_bytes() + key.read_bytes())
+        (tls_dir / 'cert.pem').chmod(0o600)
+        shutil.copyfile(key, tls_dir / 'key.pem')
+        for step in (service.ensure, service.prepare):
+            with self.subTest(step=step.__name__):
+                with self.assertRaisesRegex(ValueError, 'private key') as error:
+                    step()
+                self.assertNotIn('BEGIN', str(error.exception))
+                self.assertEqual(stat.S_IMODE((tls_dir / 'cert.pem').stat().st_mode), 0o600, 'never widened')
+        lines = []
+        service.out = lines.append
+        service.show()
+        self.assertEqual(stat.S_IMODE((tls_dir / 'cert.pem').stat().st_mode), 0o600)
+        # Registered as self-signed, the same file is a pair that cannot serve: it is replaced, never widened.
+        service.write_mode('self-signed')
+        self.assertIn('private key', service.ensure())
+        self.assertNotIn(b'PRIVATE KEY', (tls_dir / 'cert.pem').read_bytes())
+        self.assertEqual(stat.S_IMODE((tls_dir / 'cert.pem').stat().st_mode), 0o644)
+        self.assertTrue(pair_matches(tls_dir))
+
+    def test_hand_edited_names_entries_are_validated_and_normalised(self):
+        # EXPOSURE.md 3.3 documents tls/names as one entry per line, so people edit it by hand. An entry the
+        # certificate cannot carry as written must not regenerate it on every start (REVIEW R18).
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        notes = []
+        service.err = notes.append
+        service.ensure()
+        (self.tmp / 'tls/names').write_text('Manager.Example.EDU\n')
+        self.assertIn('DNS:manager.example.edu', service.ensure())
+        fingerprint = service.certificate_facts()['fingerprint']
+        for _ in range(3):
+            self.assertIsNone(service.ensure())
+        self.assertEqual(service.certificate_facts()['fingerprint'], fingerprint, 'a mixed-case entry converges')
+        self.assertEqual(notes, [])
+        (self.tmp / 'tls/names').write_text('x.example,IP:203.0.113.99\n\n lab.example.edu \nnot a name\n')
+        reason = service.ensure()
+        self.assertEqual(reason, 'missing names: DNS:lab.example.edu')
+        sans = service.certificate_facts()['sans']
+        self.assertIn('DNS:lab.example.edu', sans)
+        self.assertFalse({'DNS:x.example', 'IP:203.0.113.99', 'DNS:x.example,ip:203.0.113.99'} & sans, sans)
+        self.assertEqual(len(notes), 2)
+        self.assertIn("'x.example,IP:203.0.113.99'", notes[0])
+        self.assertIn('line 1', notes[0])
+        self.assertIn("'not a name'", notes[1])
+        self.assertIn('line 4', notes[1])
+        self.assertIn('--name', notes[1])
+        self.assertIsNone(service.ensure())
+        self.assertIsNone(service.ensure(), 'an ignored entry never regenerates')
+        lines = []
+        service.out = lines.append
+        service.show()
+        self.assertIn('required: IP:192.0.2.10, IP:2001:db8::10, IP:127.0.0.1, IP:::1, DNS:localhost, DNS:archtop, DNS:lab.example.edu', lines)
+        self.assertEqual(service.primary(), 'lab.example.edu', 'the first valid name entry is the primary name; the ignored line is not')
+
+    def test_the_read_only_modes_treat_an_env_file_this_account_cannot_read_as_absent(self):
+        # setup_capture.write_env writes .env as 0600, so an ordinary account that runs --primary or --show
+        # (EXPOSURE.md 3.1: no root) may not read it: the facts it holds are left out, with a note on stderr.
+        service = tls(self.tmp, allowed='manager.example.edu')
+        service.out = lambda line: None
+        service.ensure()
+        notes = []
+        service.err = notes.append
+        env = service.repo / 'clab-backup-ui/.env'
+        if os.geteuid() == 0:
+            # root reads a 0000 file, so the refusal is injected at the one read the env files go through.
+            original = Path.read_text
+
+            def read_text(path, *args, **kwargs):
+                if path.name in ('.env', 'image.env'):
+                    raise PermissionError(13, 'Permission denied', str(path))
+                return original(path, *args, **kwargs)
+            unreadable = unittest.mock.patch.object(Path, 'read_text', read_text)
+        else:
+            env.chmod(0o000)
+            unreadable = contextlib.nullcontext()
+        with unreadable:
+            self.assertEqual(service.primary(), '192.0.2.10')
+            lines = []
+            service.out = lines.append
+            service.show()
+        self.assertIn('primary: 192.0.2.10', lines)
+        self.assertTrue(any('.env' in note and 'cannot be read' in note for note in notes), notes)
+        self.assertNotIn('DNS:manager.example.edu', next(line for line in lines if line.startswith('required: ')))
+        env.chmod(0o600)
+        self.assertEqual(service.primary(), 'manager.example.edu')
+
     def test_a_certificate_without_a_mode_file_is_never_overwritten_by_ensure_or_renew(self):
         # An operator who moved a CA-issued pair into the directory, or a provided install that stopped before
         # its mode write: the files are not the tool's, so ensure keeps them and says how to register them.
@@ -619,9 +793,69 @@ class ProvidedTests(unittest.TestCase):
             service.install_provided(cert, key)
         self.assertFalse((self.tmp / 'tls').exists() and (self.tmp / 'tls/cert.pem').exists())
 
+    def test_a_failed_mode_write_after_the_pair_puts_the_old_pair_and_its_mode_back(self):
+        # Moving the pair first and writing the mode afterwards left mode=self-signed beside the provided pair when
+        # the mode write failed, and the next ensure regenerated the provided certificate away (its names are not
+        # the VM's). The mode is part of the replacement set now.
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        service.ensure()
+        before = service.certificate_facts()['fingerprint']
+        cert, key = make_pair(self.source, 'ca-issued', cn='manager.example.edu')
+
+        def no_space(source, target):
+            if Path(target).name == 'mode':
+                raise OSError(28, 'No space left on device')
+            return os.replace(source, target)
+        service.replace = no_space
+        with self.assertRaises(OSError):
+            service.install_provided(cert, key)
+        self.assertEqual(service.read_mode(), 'self-signed')
+        self.assertEqual(service.certificate_facts()['fingerprint'], before, 'the self-signed pair is back with its mode')
+        self.assertTrue(pair_matches(self.tmp / 'tls'))
+        self.assertEqual(sorted(p.name for p in (self.tmp / 'tls').iterdir()), ['cert.pem', 'key.pem', 'mode'])
+        self.assertIsNone(service.ensure())
+        service.replace = os.replace
+        service.install_provided(cert, key)
+        self.assertEqual(service.read_mode(), 'provided')
+        self.assertIsNone(service.ensure(), 'the provided certificate is kept although it names none of the VM addresses')
+        self.assertEqual(service.certificate_facts()['sans'], {'DNS:manager.example.edu'})
+
+    def test_a_symlink_is_followed_only_from_a_root_owned_link_in_a_directory_root_alone_writes(self):
+        # Someone with write access to /tmp or a home directory can plant `k.pem -> /etc/ssh/ssh_host_ecdsa_key`
+        # (root-owned, regular) beside a certificate made for that public key; the documented
+        # `sudo setup-tls.sh --cert c.pem --key k.pem` would copy the host key where the container reads it.
+        # certbot's live/ links are root-owned links in a root-owned 0755 directory, and those are followed.
+        cert, key = make_pair(self.source, 'planted')
+        drop = self.source / 'drop'
+        drop.mkdir()
+        (drop / 'c.pem').symlink_to(cert)
+        (drop / 'k.pem').symlink_to(key)
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        service.file_owner = lambda path: 0
+        cases = {'the link belongs to an ordinary account': (1000, (0, 0o755)),
+                 'the directory belongs to an ordinary account': (0, (1000, 0o755)),
+                 'the directory is world-writable (sticky /tmp)': (0, (0, 0o1777)),
+                 'the directory is group-writable': (0, (0, 0o775))}
+        for label, (link_uid, directory) in cases.items():
+            with self.subTest(label=label):
+                service.link_owner = lambda path, uid=link_uid: uid
+                service.directory_state = lambda path, state=directory: state
+                with self.assertRaisesRegex(ValueError, 'symlink') as error:
+                    service.install_provided(drop / 'c.pem', drop / 'k.pem')
+                self.assertIn('root', str(error.exception))
+                self.assertFalse((self.tmp / 'tls/cert.pem').exists())
+                self.assertFalse((self.tmp / 'tls/key.pem').exists())
+        service.link_owner = lambda path: 0
+        service.directory_state = lambda path: (0, 0o755)
+        service.install_provided(drop / 'c.pem', drop / 'k.pem')
+        self.assertTrue(pair_matches(self.tmp / 'tls'))
+
     def test_a_symlink_whose_target_is_a_root_owned_regular_file_is_followed(self):
-        # certbot's /etc/letsencrypt/live/NAME/*.pem are symlinks into archive/ (root-owned regular files); the
-        # documented deploy hook passes them. A link to anything else is still refused.
+        # certbot's /etc/letsencrypt/live/NAME/*.pem are root-owned symlinks in a root-owned directory, pointing
+        # into archive/ (root-owned regular files); the documented deploy hook passes them. A link to anything
+        # else is still refused.
         cert, key = make_pair(self.source, 'acme')
         live = self.source / 'live'
         live.mkdir()
@@ -630,6 +864,8 @@ class ProvidedTests(unittest.TestCase):
         service = tls(self.tmp)
         service.out = lambda line: None
         service.file_owner = lambda path: 0
+        service.link_owner = lambda path: 0
+        service.directory_state = lambda path: (0, 0o755)
         service.install_provided(live / 'fullchain.pem', live / 'privkey.pem')
         self.assertEqual((self.tmp / 'tls/mode').read_text(), 'provided\n')
         self.assertFalse((self.tmp / 'tls/cert.pem').is_symlink())
@@ -837,8 +1073,18 @@ esac
 """
 FAKE_PYTHON = """#!/usr/bin/env bash
 script="$1"; shift
-exec "$REAL_PYTHON" "$script" --tls-dir "$TLS_DIR" "$@"
+exec "$REAL_PYTHON" -B "$DRIVER" "$script" --tls-dir "$TLS_DIR" "$@"
 """
+# Loads the copied setup_tls.py with os.chown neutralised and runs its main(): see the module docstring.
+DRIVER = '''import importlib.util
+import os
+import sys
+os.chown = lambda path, uid, gid, *args, **kwargs: None
+spec = importlib.util.spec_from_file_location('setup_tls', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.main(sys.argv[2:])
+'''
 FAKE_RECREATE = """#!/usr/bin/env bash
 echo recreate >> "$RECREATE_LOG"
 """
@@ -866,13 +1112,15 @@ class ShellScriptTests(unittest.TestCase):
             path = bin_dir / name
             path.write_text(body)
             path.chmod(0o755)
+        driver = bin_dir / 'driver.py'
+        driver.write_text(DRIVER)
         recreate = self.base / 'deploy/recreate-manager.sh'
         recreate.write_text(FAKE_RECREATE)
         recreate.chmod(0o755)
         self.tls_dir = self.base / 'tls'
         self.recreate_log = self.base / 'recreate.log'
         self.env = {**os.environ, 'PATH': str(bin_dir) + os.pathsep + os.environ.get('PATH', ''),
-                    'REAL_PYTHON': sys.executable, 'TLS_DIR': str(self.tls_dir), 'RECREATE_LOG': str(self.recreate_log),
+                    'REAL_PYTHON': sys.executable, 'DRIVER': str(driver), 'TLS_DIR': str(self.tls_dir), 'RECREATE_LOG': str(self.recreate_log),
                     'IP_ROUTE4': json.dumps(IP_ROUTE4), 'IP_ROUTE6': json.dumps(IP_ROUTE6), 'IP_ADDRESS': json.dumps(IP_ADDRESS)}
 
     def run_script(self, *args):

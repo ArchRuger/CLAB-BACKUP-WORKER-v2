@@ -30,9 +30,13 @@ deprecated, tentative or failed address (REVIEW R18), so neither a lab deploy no
 rotation changes the certificate. The pure rule is ``certificate_addresses(routes, addresses)``; the
 health check loads it from here so both sides apply the same one.
 
-A replacement of the pair keeps the old files until both new ones are in place and puts them back on
-any failure, so the directory never holds a certificate without its key. Nothing here prints a key:
-errors quote file names, never contents.
+A replacement is one set, cert.pem, key.pem and mode (the mode moved last): the old files stay until
+every new one is in place and are put back on any failure, and a file that did not exist before is
+removed again, so the directory never holds a certificate without its key, a pair without its mode, or
+a mode that describes another pair. A cert.pem that carries a PRIVATE KEY block is never widened to
+0644 and never kept. Nothing here prints a key: errors quote file names, never contents. Notes that
+are not the result (an ignored tls/names line, an env file this account cannot read) go to stderr, so
+``primary`` and ``fingerprint`` stay one clean line on stdout.
 """
 import importlib.util
 import ipaddress
@@ -282,15 +286,20 @@ def _port(values, key, default):
 
 # ---- the tool -------------------------------------------------------------------------------
 
+def note(text):
+    print(text, file=sys.stderr)
+
+
 class Tls:
     def __init__(self, tls_dir=TLS_DIR, repo=REPO, run=subprocess.run, chown=os.chown, hostname=socket.gethostname, out=print,
-                 replace=os.replace):
+                 replace=os.replace, err=note):
         self.tls_dir = Path(tls_dir)
         self.repo = Path(repo)
         self.run = run
         self.chown = chown
         self.hostname = hostname
         self.out = out
+        self.err = err
         self.replace = replace
 
     # -- processes
@@ -315,6 +324,15 @@ class Tls:
 
     def file_owner(self, path):
         return os.stat(path).st_uid
+
+    def link_owner(self, path):
+        """The owner of a symlink itself (not of its target)."""
+        return os.lstat(path).st_uid
+
+    def directory_state(self, path):
+        """(owner, permission bits) of a directory."""
+        found = os.stat(path)
+        return found.st_uid, stat.S_IMODE(found.st_mode)
 
     def check_directory(self):
         if self.tls_dir.is_symlink():
@@ -356,35 +374,54 @@ class Tls:
             if os.path.exists(temporary):
                 os.unlink(temporary)
 
-    def install_pair(self, cert, key, staging):
-        """Move a staged cert.pem and key.pem into place. The old files stay reachable through hard
-        links in the staging directory until both moves succeeded; on any failure (a full disk, an
-        interrupt) they are put back, so the directory never holds a certificate without its key."""
-        backups = []
-        for name in ('cert.pem', 'key.pem'):
+    def install_files(self, staged, staging):
+        """Move staged files (name -> staged path, in the order given; the mode last) into place as one
+        replacement. Every existing target stays reachable through a hard link in the staging directory
+        until every move succeeded; on any failure (a full disk, an interrupt) the old files are put back
+        and a target that did not exist before is removed, so the directory never holds a certificate
+        without its key, a pair without its mode, or a mode that describes another pair."""
+        backups, created = [], []
+        for name in staged:
             target = self.path(name)
             try:
                 existing = os.lstat(target)
             except FileNotFoundError:
+                created.append(target)
                 continue
             if stat.S_ISREG(existing.st_mode):
                 backup = Path(staging) / (name + '.old')
                 os.link(target, backup)
                 backups.append((target, backup))
         try:
-            self.replace(cert, self.path('cert.pem'))
-            self.replace(key, self.path('key.pem'))
+            for name, source in staged.items():
+                self.replace(source, self.path(name))
         except BaseException:
             for target, backup in backups:
                 try:
                     os.replace(backup, target)
                 except OSError:
                     pass
+            for target in created:
+                try:
+                    os.unlink(target)
+                except OSError:
+                    pass
             raise
+
+    def certificate_holds_a_key(self):
+        """True when cert.pem carries a PRIVATE KEY block (a combined file copied in by hand): such a file
+        is never widened to 0644, because every VM account can read cert.pem."""
+        try:
+            with open(self.path('cert.pem'), 'rb') as stream:
+                head = stream.read(MAX_FILE + 1)
+        except OSError:
+            return False
+        return re.search(rb'-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----', head) is not None
 
     def repair_modes(self):
         """Give every file of the directory its owner and mode of EXPOSURE.md 3.3 again; returns the
-        names that needed it. Content is never touched: a wrong mode is no reason for a new fingerprint."""
+        names that needed it. Content is never touched: a wrong mode is no reason for a new fingerprint.
+        A cert.pem that holds a private key is left as it is (pair_problem refuses it)."""
         repaired = []
         for name, (mode, gid) in FILES.items():
             path = self.path(name)
@@ -393,6 +430,8 @@ class Tls:
             except OSError:
                 continue
             if not stat.S_ISREG(existing.st_mode):
+                continue
+            if name == 'cert.pem' and self.certificate_holds_a_key():
                 continue
             if stat.S_IMODE(existing.st_mode) != mode or existing.st_uid != 0 or existing.st_gid != gid:
                 self.set_owner(path, mode, gid)
@@ -415,11 +454,25 @@ class Tls:
         self.install_bytes('mode', (value + '\n').encode(), 0o644)
 
     def names(self):
+        """The entries of tls/names, each passed through validate_name (the file is documented as one entry
+        per line and gets edited by hand): a line the certificate cannot carry as written is ignored with a
+        note that quotes it, never fed to openssl and never a reason to regenerate on every start."""
         try:
             lines = self.path('names').read_text(encoding='utf-8').splitlines()
         except OSError:
             return []
-        return [line.strip() for line in lines if line.strip()]
+        names = []
+        for number, line in enumerate(lines, 1):
+            if not line.strip():
+                continue
+            try:
+                name = validate_name(line)
+            except ValueError as error:
+                self.err(f'tls/names line {number} ignored: {error} Rewrite the file with setup-tls.sh --name NAME (repeatable).')
+                continue
+            if name not in names:
+                names.append(name)
+        return names
 
     def set_names(self, values):
         names = [validate_name(value) for value in values if (value or '').strip()]
@@ -443,12 +496,22 @@ class Tls:
     def env_files(self):
         return [self.env_file(route) for route in ROUTES]
 
+    def env_of(self, path):
+        """The values of an env file; one this account cannot read (write_env makes .env 0600, and the
+        read-only modes run as any account) counts as absent, with a note on stderr."""
+        try:
+            return env_values(path)
+        except OSError as error:
+            self.err(f'Note: {path} cannot be read by this account ({error.strerror or error}); '
+                     'its UI_ALLOWED_HOSTS and port settings are not considered.')
+            return {}
+
     def allowed_names(self):
         """Every UI_ALLOWED_HOSTS name of both env files, in the order written (the first is the primary
         name); an IP literal is returned bare and compressed."""
         names = []
         for path in self.env_files():
-            text = env_values(path).get('UI_ALLOWED_HOSTS', '')
+            text = self.env_of(path).get('UI_ALLOWED_HOSTS', '')
             accepted = allowed_hosts.configured_hosts(text)
             for entry in text.split(','):
                 name = allowed_hosts.host_name(entry.strip()) if entry.strip() else None
@@ -518,6 +581,8 @@ class Tls:
         """None, or why cert.pem and key.pem cannot serve (what uvicorn would hit at start)."""
         if not self.path('cert.pem').exists():
             return 'no certificate: cert.pem is missing'
+        if self.certificate_holds_a_key():
+            return 'cert.pem contains a private key (every VM account can read cert.pem; it must hold the certificate chain alone)'
         if self.certificate_facts() is None:
             return 'cert.pem cannot be read'
         key = self.path('key.pem')
@@ -550,16 +615,26 @@ class Tls:
             self.command(openssl_argv(common_name(plan), plan['sans'], key, cert), check=True)
             self.set_owner(key, *FILES['key.pem'])
             self.set_owner(cert, *FILES['cert.pem'])
-            self.install_pair(cert, key, staging)
+            mode = self.stage(staging, 'mode', b'self-signed\n', *FILES['mode'])
+            self.install_files({'cert.pem': cert, 'key.pem': key, 'mode': mode}, staging)
         finally:
             shutil.rmtree(staging, ignore_errors=True)
-        self.write_mode('self-signed')
 
     def report(self, prefix='Certificate fingerprint (SHA-256): '):
         facts = self.certificate_facts()
         if facts:
             self.out(prefix + facts['fingerprint'])
         return facts
+
+    def report_kept(self, label, renewal):
+        """The one line of a certificate ensure keeps (provided or unregistered) with its expiry."""
+        facts = self.certificate_facts()
+        if not self.valid_for(0):
+            self.out(f'{label} certificate kept; it EXPIRED on {facts["not_after"]}. {renewal}')
+        elif not self.valid_for(RENEW_WITHIN):
+            self.out(f'{label} certificate kept; it expires on {facts["not_after"]} (within 30 days). {renewal}')
+        else:
+            self.out(f'{label} certificate kept; expires {facts["not_after"]}.')
 
     def ensure(self, route='source'):
         """Returns the reason a certificate was made, or None when the existing one was kept. Raises when
@@ -574,13 +649,7 @@ class Tls:
             if problem:
                 raise ValueError(f'Provided certificate: {problem} in {self.tls_dir}; the manager cannot start with it. '
                                  'Install it again with setup-tls.sh --cert PATH --key PATH, or switch to a self-signed one with setup-tls.sh --self-signed.')
-            facts = self.certificate_facts()
-            if not self.valid_for(0):
-                self.out(f'Provided certificate kept; it EXPIRED on {facts["not_after"]}. Install a new one with setup-tls.sh --cert PATH --key PATH.')
-            elif not self.valid_for(RENEW_WITHIN):
-                self.out(f'Provided certificate kept; it expires on {facts["not_after"]} (within 30 days).')
-            else:
-                self.out(f'Provided certificate kept; expires {facts["not_after"]}.')
+            self.report_kept('Provided', 'Install a new one with setup-tls.sh --cert PATH --key PATH.')
             self.report()
             return None
         if mode is None and self.path('cert.pem').exists():
@@ -589,6 +658,7 @@ class Tls:
                 raise ValueError(f'Unregistered certificate: {problem} in {self.tls_dir} (tls/mode is absent, so setup-tls.sh did not make these files); '
                                  'the manager cannot start with it. ' + REGISTER_HINT)
             self.out('cert.pem exists but tls/mode is absent: setup-tls.sh did not make this certificate and leaves it alone. ' + REGISTER_HINT)
+            self.report_kept('Unregistered', REGISTER_HINT)
             self.report()
             return None
         reason = self.regeneration_reason(plan)
@@ -634,8 +704,11 @@ class Tls:
         self.renew(force=True)
 
     def _regular_file(self, path, what):
-        """(path, bytes) of a given certificate or key file. A symlink is followed only to a regular file
-        owned by root (certbot's live/ links into archive/); anything else must be given as the file itself."""
+        """(path, bytes) of a given certificate or key file. A symlink is followed only when the link itself
+        and its directory are root's, the directory is writable by root alone, and the target is a regular
+        file owned by root (certbot's live/NAME links into archive/). A link anyone else could have planted
+        (in /tmp, in a home directory) would otherwise carry any root-owned key on the host, such as an
+        SSH host key, into tls/key.pem where the container reads it."""
         path = Path(path)
         if path.is_symlink():
             target = Path(os.path.realpath(path))
@@ -643,8 +716,13 @@ class Tls:
                 resolved = os.stat(target)
             except OSError:
                 raise ValueError(f'The {what} {path} is a symlink to {target}, which does not exist; give the file itself.') from None
-            if not stat.S_ISREG(resolved.st_mode) or self.file_owner(target) != 0:
-                raise ValueError(f'The {what} {path} is a symlink; a link is followed only to a regular file owned by root. Give the file itself.')
+            directory_owner, directory_mode = self.directory_state(path.absolute().parent)
+            trusted = (self.link_owner(path) == 0 and directory_owner == 0 and not directory_mode & 0o022
+                       and stat.S_ISREG(resolved.st_mode) and self.file_owner(target) == 0)
+            if not trusted:
+                raise ValueError(f'The {what} {path} is a symlink; a link is followed only when the link, its directory and its target '
+                                 'are owned by root and the directory is writable by root alone (certbot\'s /etc/letsencrypt/live). '
+                                 'Give the file itself.')
             path = target
         if not path.is_file():
             raise ValueError(f'The {what} {path} is not a regular file.')
@@ -681,10 +759,10 @@ class Tls:
         try:
             cert = self.stage(staging, 'cert.pem', cert_bytes, *FILES['cert.pem'])
             key = self.stage(staging, 'key.pem', key_bytes, *FILES['key.pem'])
-            self.install_pair(cert, key, staging)
+            mode = self.stage(staging, 'mode', b'provided\n', *FILES['mode'])
+            self.install_files({'cert.pem': cert, 'key.pem': key, 'mode': mode}, staging)
         finally:
             shutil.rmtree(staging, ignore_errors=True)
-        self.write_mode('provided')
         self.out('Provided certificate installed; it names ' + ', '.join(sorted(names)) + '.')
         self.report()
 
@@ -710,7 +788,7 @@ class Tls:
         UI_HTTP_PORT=0 when an explicit UI_PORT collides with the default redirect port (the standard
         upgrade path). Returns the line written, or None."""
         path = self.env_file(route)
-        values = env_values(path)
+        values = self.env_of(path)
         tls_port, tls_explicit = _port(values, 'UI_PORT', DEFAULT_TLS_PORT)
         http_port, http_explicit = _port(values, 'UI_HTTP_PORT', DEFAULT_HTTP_PORT)
         if http_port == 0 or tls_port != http_port:
