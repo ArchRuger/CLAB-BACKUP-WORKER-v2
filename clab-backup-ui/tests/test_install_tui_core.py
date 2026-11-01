@@ -432,6 +432,11 @@ class InstallerLockTests(IsolatedCase):
 
     def test_root_takes_over_a_lock_file_owned_by_another_account(self):
         self.path.write_text('')
+        if os.geteuid() == 0:
+            # Run as root (a cloud session, a container), the file just written is root's own: give it to an
+            # unprivileged account (nobody) so the condition under test holds whatever account runs the suite.
+            os.chown(self.path, 65534, 65534)
+        self.assertNotEqual(self.path.stat().st_uid, 0, 'the lock file must belong to a non-root account')
         before = self.path.stat().st_ino
         # The file belongs to an unprivileged account (anything but uid 0): root swaps in a file it owns, so
         # that account can neither remove it nor squat the name again.
