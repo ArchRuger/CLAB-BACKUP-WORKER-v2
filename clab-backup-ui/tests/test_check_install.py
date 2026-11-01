@@ -996,6 +996,45 @@ class StoppedManagerTests(unittest.TestCase):
         self.assertIn('start-manager.sh', row['fix'])
         self.assertIn(by_id(ctx, 'design-engine')['status'], ('PASS', 'WARN'), 'the manager is running, so its probes are asked')
 
+    PLAIN = ['uvicorn', 'app.main:create_app', '--host', '0.0.0.0', '--port', '8081']
+
+    def test_a_plain_http_start_is_never_reported_as_tls_when_the_url_builder_still_says_http(self):
+        # Before the installer slice lands, health_url answers http:// for a manager started without TLS.
+        ctx = self.inspect(health_url=Mock(return_value='http://127.0.0.1:8081/api/health'), command=self.PLAIN)
+        row = by_id(ctx, 'http')
+        self.assertEqual(row['status'], 'FAIL')
+        self.assertIn('plain HTTP', row['detail'])
+        self.assertIn('start-manager.sh', row['fix'])
+        self.assertNotIn('over TLS', row['detail'])
+        self.assertEqual(ctx.base_url, '', 'no later check may reuse a plain address as a TLS claim')
+        ctx.http.assert_not_called()
+        ctx.head.assert_not_called()
+        for ident in ('tls.listener', 'http.hsts'):
+            self.assertEqual(by_id(ctx, ident)['status'], 'SKIP', ident)
+
+    def test_a_url_builder_that_refuses_a_plain_start_still_names_the_plain_http_start(self):
+        ctx = self.inspect(health_url=Mock(side_effect=ValueError('The manager is configured without TLS; rebuild it.')), command=self.PLAIN)
+        row = by_id(ctx, 'http')
+        self.assertEqual(row['status'], 'FAIL')
+        self.assertIn('plain HTTP', row['detail'])
+        self.assertNotIn('Could not determine', row['detail'])
+        self.assertIn('start-manager.sh', row['fix'])
+        unreadable = self.inspect(health_url=Mock(side_effect=ValueError('no address')))
+        self.assertIn('Could not determine', by_id(unreadable, 'http')['detail'], 'a TLS command that cannot be read keeps its own sentence')
+
+    def test_head_and_http_refuse_a_plain_base_url_but_still_take_an_explicit_base(self):
+        ctx = context()
+        ctx.base_url = 'http://127.0.0.1:8081'
+        with patch.object(check, 'build_opener') as network:
+            self.assertEqual(ctx.head('/api/health'), (None, {}))
+            result, value = ctx.http('/api/health')
+        network.assert_not_called()
+        self.assertFalse(result.ok)
+        self.assertIsNone(value)
+        with patch.object(check, 'build_opener', return_value=SimpleNamespace(open=Mock(side_effect=OSError('refused')))) as network:
+            self.assertEqual(ctx.head('/', base='http://127.0.0.1:8081'), (None, {}))
+        network.assert_called_once()
+
     def test_the_certificate_is_pinned_before_the_docker_questions(self):
         order = []
         ctx = check.Context(check.arguments([]), owner='archtop', privileged=True)

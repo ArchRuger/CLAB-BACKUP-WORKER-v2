@@ -157,7 +157,7 @@ class Fixture:
         self.redirect_running = True
         self.setup_code = None            # None: absent; else (first line, age in seconds)
         self.setup_body = 'code=' + PRIVATE
-        self.setup_test = None            # a Result that replaces the answer of `test -e` (a question that did not run)
+        self.setup_test = None            # a Result that replaces the answer of the existence question (one that did not run)
         self.__dict__.update(overrides)
 
     def source_text(self, path):
@@ -168,6 +168,10 @@ class Fixture:
 
     def __call__(self, args, **kwargs):
         head = args[0]
+        if head == '/usr/bin/python3' and args[1:3] == ['-I', '-c'] and args[3] == exposure.SETUP_PROBE:
+            if self.setup_test is not None:
+                return self.setup_test
+            return check.Result(0, 'present\n' if self.setup_code else 'absent\n')
         if head == '/usr/bin/python3':
             return check.Result(0, json.dumps([dict(path=path, **self.files[path]) if path in self.files
                                                else dict(path=path, kind='missing') for path in args[4:]]))
@@ -193,10 +197,6 @@ class Fixture:
         if head == 'test':
             if args[1:] == ['-x', '/usr/sbin/ufw']:
                 return check.Result(0 if self.ufw_installed else 1)
-            if args[1:] == ['-e', SETUP_CODE]:
-                if self.setup_test is not None:
-                    return self.setup_test
-                return check.Result(0 if self.setup_code else 1)
         if head == '/usr/sbin/ufw' or head == 'ufw':
             return check.Result(0, self.ufw)
         if head == 'ss':
@@ -474,6 +474,25 @@ class BindListenerAndRedirectTests(unittest.TestCase):
         self.assertEqual(by_id(ctx, 'http.redirect')['status'], 'FAIL')
         self.assertIn(str(8443), by_id(ctx, 'http.redirect')['detail'])
 
+    def test_a_gated_manager_on_plain_http_fails_whatever_status_it_answers(self):
+        # The sign-on gate answers `/` with 302 /login, so a 200 never comes back from a manager that has it; the sign-in form
+        # and the passwords typed into it would still travel in cleartext.
+        for status in (302, 303, 307, 401, 403, 404, 500):
+            with self.subTest(status=status, port='TLS'):
+                row = by_id(run_group(head=head_router(plain=(status, {'location': '/login'}))), 'http.redirect')
+                self.assertEqual(row['status'], 'FAIL', row)
+                self.assertIn('plain HTTP', row['detail'])
+                self.assertIn('8443', row['detail'])
+                self.assertIn('start-manager.sh', row['fix'])
+        for answer in ((302, {'location': '/login'}), (302, {'location': '/login?next=/'}), (301, {'location': 'http://127.0.0.1:8081/'}),
+                       (307, {'location': 'http://manager.example/'})):
+            with self.subTest(answer=answer, port='redirect'):
+                row = by_id(run_group(head=head_router(redirect=answer)), 'http.redirect')
+                self.assertEqual(row['status'], 'FAIL', row)
+                self.assertIn('plain HTTP', row['detail'])
+                self.assertIn('8081', row['detail'])
+                self.assertNotIn('/login', row['detail'], 'the Location value is not echoed')
+
     def test_a_missing_redirect_container_or_a_wrong_answer_warns(self):
         stopped = Fixture(redirect_running=False)
         ctx = run_group(fixture=stopped, head=head_router(redirect=(None, {})))
@@ -533,7 +552,12 @@ class FirewallAndListenerTests(unittest.TestCase):
                    'every port from anywhere, IPv6': 'Anywhere (v6)              ALLOW IN    Anywhere (v6)\n',
                    'every port, tcp only': 'Anywhere/tcp               ALLOW IN    Anywhere\n',
                    'the whole tcp range': '1:65535/tcp                ALLOW IN    Anywhere\n',
-                   'a very wide tcp range': '2000:9000/tcp              ALLOW IN    Anywhere\n'}
+                   'a very wide tcp range': '2000:9000/tcp              ALLOW IN    Anywhere\n',
+                   'every port on the uplink (ufw allow in on eth0)': 'Anywhere on eth0           ALLOW IN    Anywhere\n',
+                   'every port on the uplink, IPv6': 'Anywhere (v6) on eth0      ALLOW IN    Anywhere (v6)\n',
+                   'every port on the uplink, LIMIT': 'Anywhere on eth0           LIMIT IN    Anywhere\n',
+                   'the whole tcp range on the uplink': '1:65535/tcp on eth0        ALLOW IN    Anywhere\n',
+                   'a very wide tcp range on the uplink': '2000:9000/tcp on eth0      ALLOW IN    Anywhere\n'}
         for name, rule in blanket.items():
             with self.subTest(name):
                 row = by_id(run_group(fixture=Fixture(ufw=UFW_ACTIVE + rule)), 'firewall')
@@ -545,6 +569,35 @@ class FirewallAndListenerTests(unittest.TestCase):
         row = by_id(run_group(fixture=Fixture(ufw=only_blanket)), 'firewall')
         self.assertEqual(row['status'], 'WARN')
         self.assertNotIn('not allowed', row['detail'], 'a blanket rule does cover the needed ports; the finding is the blanket')
+
+    def test_a_blanket_allow_on_the_uplink_names_the_interface(self):
+        row = by_id(run_group(fixture=Fixture(ufw=UFW_ACTIVE + 'Anywhere on eth0           ALLOW IN    Anywhere\n')), 'firewall')
+        self.assertIn('every port on eth0', row['detail'])
+
+    def test_a_blanket_allow_on_loopback_is_not_an_opening(self):
+        self.assertEqual(by_id(run_group(fixture=Fixture(ufw=UFW_ACTIVE + 'Anywhere on lo             ALLOW IN    Anywhere\n')), 'firewall')['status'], 'PASS')
+
+    def test_a_needed_port_allowed_on_an_interface_or_through_an_app_profile_is_allowed(self):
+        bound = (UFW_ACTIVE.split('22/tcp ')[0] +
+                 '22/tcp (OpenSSH)           ALLOW IN    Anywhere\n'
+                 '22/tcp (OpenSSH (v6))      ALLOW IN    Anywhere (v6)\n'
+                 '8443/tcp on eth0           ALLOW IN    Anywhere\n'
+                 '8081/tcp (v6) on eth0      ALLOW IN    Anywhere (v6)\n')
+        row = by_id(run_group(fixture=Fixture(ufw=bound)), 'firewall')
+        self.assertEqual(row['status'], 'PASS', row)
+        self.assertNotIn('not allowed', row['detail'])
+
+    def test_an_outbound_or_routed_rule_is_not_an_inbound_allow(self):
+        header = UFW_ACTIVE.split('22/tcp ')[0]
+        for direction in ('OUT', 'FWD'):
+            with self.subTest(direction):
+                only_out = header + (f'22/tcp                     ALLOW IN    Anywhere\n8443/tcp                   ALLOW IN    Anywhere\n'
+                                     f'8081/tcp                   ALLOW {direction.ljust(4)}  Anywhere\n')
+                row = by_id(run_group(fixture=Fixture(ufw=only_out)), 'firewall')
+                self.assertEqual(row['status'], 'WARN', row)
+                self.assertIn('not allowed: 8081', row['detail'])
+                wide = by_id(run_group(fixture=Fixture(ufw=UFW_ACTIVE + f'Anywhere                   ALLOW {direction.ljust(4)}  Anywhere\n')), 'firewall')
+                self.assertEqual(wide['status'], 'PASS', wide)
 
     def test_rules_limited_to_a_source_or_to_other_single_ports_do_not_warn(self):
         quiet = ('5432/tcp                   ALLOW IN    Anywhere\n'
@@ -636,8 +689,8 @@ class BootstrapTests(unittest.TestCase):
     def test_only_the_first_sixteen_bytes_and_the_mtime_are_read(self):
         ctx = run_group(fixture=Fixture(setup_code=('mode=recover', 5)))
         reads = [call.args[0] for call in ctx.run.call_args_list if SETUP_CODE in call.args[0]]
-        self.assertEqual(reads, [['test', '-e', SETUP_CODE], ['head', '-c', '16', SETUP_CODE], ['stat', '-c', '%Y', SETUP_CODE]],
-                         'the existence test, exactly sixteen bytes and the modification time: nothing else touches the file')
+        self.assertEqual(reads, [['/usr/bin/python3', '-I', '-c', exposure.SETUP_PROBE, SETUP_CODE], ['head', '-c', '16', SETUP_CODE], ['stat', '-c', '%Y', SETUP_CODE]],
+                         'the existence probe (lstat only), exactly sixteen bytes and the modification time: nothing else touches the file')
         self.assertTrue(all(call.kwargs.get('privileged') for call in ctx.run.call_args_list if SETUP_CODE in call.args[0]))
 
     def test_a_wider_read_would_put_the_code_in_the_report_which_the_fixture_makes_visible(self):
@@ -663,11 +716,37 @@ class BootstrapTests(unittest.TestCase):
                 self.assertIn('check-install.sh', row['fix'])
                 self.assertNotIn(PRIVATE, report(ctx))
 
-    def test_only_a_real_exit_one_with_nothing_on_stderr_means_absent(self):
-        ctx = run_group(fixture=Fixture(setup_test=check.Result(1, '', stderr='')))
+    def test_the_answer_is_on_stdout_so_a_sudo_warning_on_stderr_does_not_hide_it(self):
+        # `sudo: unable to resolve host NAME` is printed on every call of a renamed cloud VM; `test -e` could not tell it from a refusal.
+        noisy = 'sudo: unable to resolve host vm1: Name or service not known\n'
+        ctx = run_group(fixture=Fixture(setup_test=check.Result(0, 'absent\n', stderr=noisy)))
         self.assertEqual(by_id(ctx, 'signon.bootstrap')['status'], 'PASS')
-        question = next(call for call in ctx.run.call_args_list if call.args[0] == ['test', '-e', SETUP_CODE])
-        self.assertTrue(question.kwargs.get('capture_stderr'), 'stderr is how a sudo refusal is told from a missing file')
+        question = next(call for call in ctx.run.call_args_list if SETUP_CODE in call.args[0])
+        self.assertEqual(question.args[0][:3], ['/usr/bin/python3', '-I', '-c'], 'no `test -e`: its exit status is shared with a sudo refusal')
+        self.assertTrue(question.kwargs.get('privileged'))
+        waiting = run_group(fixture=Fixture(setup_code=('mode=setup', 5), setup_test=check.Result(0, 'present\n', stderr=noisy)))
+        self.assertEqual(by_id(waiting, 'signon.bootstrap')['status'], 'WARN')
+
+    def test_only_the_exact_word_absent_from_a_successful_probe_means_absent(self):
+        for name, answer in {'empty output': check.Result(0, ''), 'another word': check.Result(0, 'maybe\n'),
+                             'absent with a failing exit': check.Result(1, 'absent\n'), 'a sudo refusal': check.Result(1, '', stderr='sudo: a password is required\n'),
+                             'absent plus noise': check.Result(0, 'absent\nextra\n')}.items():
+            with self.subTest(name):
+                row = by_id(run_group(fixture=Fixture(setup_code=('mode=setup', 5), setup_test=answer)), 'signon.bootstrap')
+                self.assertEqual(row['status'], 'SKIP', row)
+
+    def test_the_probe_reports_absent_only_for_a_missing_file(self):
+        import tempfile
+        import subprocess
+        with tempfile.TemporaryDirectory() as directory:
+            target = str(Path(directory) / 'setup-code')
+            def ask(path):
+                return subprocess.run([sys.executable, '-I', '-c', exposure.SETUP_PROBE, path], capture_output=True, text=True)
+            self.assertEqual((ask(target).returncode, ask(target).stdout), (0, 'absent\n'))
+            Path(target).write_text('mode=setup\n')
+            self.assertEqual((ask(target).returncode, ask(target).stdout), (0, 'present\n'))
+            blocker = str(Path(directory) / 'setup-code' / 'below')  # a parent that is a file: not "missing", so no "absent"
+            self.assertNotEqual(ask(blocker).stdout, 'absent\n')
 
 
 class SshTests(unittest.TestCase):

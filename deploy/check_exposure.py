@@ -41,6 +41,19 @@ for name in sys.argv[1:]:
     out.append(r)
 print(json.dumps(out))
 '''
+# Whether the setup-code file exists, answered on stdout so that sudo's own chatter on stderr (an unresolvable host name
+# is printed on every call of a renamed cloud VM) and its exit status 1 cannot be taken for "absent". Only lstat is
+# called: the file is never opened here. An error other than "no such file" exits non-zero and prints nothing.
+SETUP_PROBE = '''import os,sys
+try:
+    os.lstat(sys.argv[1])
+except FileNotFoundError:
+    print("absent")
+except OSError:
+    sys.exit(2)
+else:
+    print("present")
+'''
 EXPECTED = {'': ('dir', 0, 0, 0o755), '/cert.pem': ('file', 0, 0, 0o644), '/key.pem': ('file', 0, 10001, 0o640),
             '/mode': ('file', 0, 0, 0o644), '/names': ('file', 0, 0, 0o644)}
 
@@ -315,6 +328,9 @@ def check_redirect(ctx, host, ui_port, http_port):
             problems.append(f'plain HTTP serves a page on the redirect port {http_port}')
         elif status == 301 and (headers or {}).get('location') == expected:
             pass
+        elif status is not None and 300 <= status < 400 and (headers or {}).get('location') and not str(headers['location']).lower().startswith('https://'):
+            # The gate answers `/` with 302 /login: a redirect that stays on plain HTTP carries the sign-in form in cleartext.
+            problems.append(f'plain HTTP on the redirect port {http_port} redirects to an address that is not https://')
         elif status is None:
             running = ctx.run([*DOCKER, 'compose', '-f', str(ctx.source / 'clab-backup-ui/compose.yml'), 'ps', '--status', 'running', '--quiet', 'http-redirect'],
                               privileged=True) if ctx.container else None
@@ -324,13 +340,13 @@ def check_redirect(ctx, host, ui_port, http_port):
         else:
             warnings.append(f'the redirect on port {http_port} answered HTTP {status}, expected 301')
     plain, _ = ctx.head('/', base=f'http://{host}:{ui_port}')
-    if plain == 200:
-        problems.append(f'plain HTTP serves a page on the TLS port {ui_port}')
-    elif plain is not None:
-        warnings.append(f'the TLS port {ui_port} answers plain HTTP (HTTP {plain})')
+    if plain is not None:
+        # uvicorn with --ssl-* never answers a plain-HTTP request, so any HTTP answer (a gated manager answers 302 /login,
+        # not 200) means the port is served without TLS.
+        problems.append(f'plain HTTP is answered on the TLS port {ui_port} (HTTP {plain})')
     fix = ctx.repair('start-manager.sh')
     if problems:
-        ctx.add('http.redirect', 'FAIL', title, 'Plain HTTP serves a page: ' + '; '.join(problems + warnings) + '.', fix)
+        ctx.add('http.redirect', 'FAIL', title, 'Plain HTTP is exposed: ' + '; '.join(problems + warnings) + '.', fix)
     elif warnings:
         text = '; '.join(warnings)
         ctx.add('http.redirect', 'WARN', title, text[0].upper() + text[1:] + '.', fix)
@@ -358,30 +374,48 @@ def port_allowed(rules, port):
     return any(low <= port <= high for low, high in rules)
 
 
+UFW_ACTION = re.compile(r'^(.*?)\s+(?:ALLOW|LIMIT)\s+IN(?:\s+(.*))?$')
+
+
 def ufw_rules(text):
     """(rules, broad): the tcp port ranges that ufw allows in, and the descriptions of the blanket allows among
-    them. A blanket allow is a rule from anywhere (the source is not limited) to every port or to a tcp range wider
-    than BROAD_RANGE ports. A rule limited to a source address does not count as blanket."""
+    them. Only inbound rows count: `ufw status verbose` prints the direction, and an `ALLOW OUT` or `ALLOW FWD` row
+    opens nothing here. The To column may carry an interface (`Anywhere on eth0`, `8443/tcp on eth0`), an
+    application profile (`22/tcp (OpenSSH)`) and `(v6)`. A blanket allow is a rule from anywhere (the source is not
+    limited) to every port or to a tcp range wider than BROAD_RANGE ports, on every interface or on any interface but
+    loopback. A rule limited to a source address does not count as blanket."""
     rules, broad = [], []
     for line in text.splitlines():
-        match = re.match(r'^(\S+)(?: \(v6\))?\s+(?:ALLOW|LIMIT)(?: IN)?(?:\s+(.*))?$', line.rstrip())
+        match = UFW_ACTION.match(line.rstrip())
         if not match:
             continue
-        spec, _, proto = match[1].partition('/')
+        column = match[1]
+        interface = re.search(r'\bon\s+(\S+)', column)
+        interface = interface[1] if interface else ''
+        column = re.sub(r'\bon\s+\S+', ' ', column)
+        while True:  # an application profile and (v6), nested: `22/tcp (OpenSSH (v6))`
+            stripped = re.sub(r'\([^()]*\)', ' ', column)
+            if stripped == column:
+                break
+            column = stripped
+        spec, _, proto = column.strip().partition('/')
         if proto == 'udp':
             continue
+        if interface == 'lo':
+            continue  # loopback is not an opening to the network
+        where = f' on {interface}' if interface else ''
         everywhere = (match[2] or '').strip().lower().startswith('anywhere')
         if spec.lower() == 'anywhere':
             rules.append((1, 65535))
             if everywhere:
-                broad.append('every port')
+                broad.append('every port' + where)
             continue
         for part in spec.split(','):
             low, _, high = part.partition(':')
             if low.isdigit() and (not high or high.isdigit()):
                 rules.append((int(low), int(high or low)))
                 if everywhere and high and int(high) - int(low) + 1 > BROAD_RANGE:
-                    broad.append(f'tcp {low}-{high}')
+                    broad.append(f'tcp {low}-{high}' + where)
     return rules, list(dict.fromkeys(broad))
 
 
@@ -486,13 +520,13 @@ def check_ports(ctx):
 
 def check_bootstrap(ctx, ui_port):
     title = 'Sign-on setup code'
-    exists = ctx.run(['test', '-e', SETUP_CODE], privileged=True, capture_stderr=True)
-    if exists.code == 1 and not exists.reason and not exists.stderr.strip():
-        ctx.add('signon.bootstrap', 'PASS', title, 'No setup or recovery code is waiting.')  # test -e answered "absent"
+    exists = ctx.run(['/usr/bin/python3', '-I', '-c', SETUP_PROBE, SETUP_CODE], privileged=True)
+    answer = exists.stdout.strip() if exists.ok else ''
+    if answer == 'absent':
+        ctx.add('signon.bootstrap', 'PASS', title, 'No setup or recovery code is waiting.')
         return
-    if not exists.ok:
-        # No answer is not "absent": the deadline, sudo, the root timeout or a missing command also end here, and a
-        # sudo refusal exits 1 like a missing file does, which is why its stderr has to be empty too.
+    if answer != 'present':
+        # No answer is not "absent": the deadline, sudo, the root timeout or a missing command also end here.
         ctx.add('signon.bootstrap', 'SKIP', title, 'The setup-code file could not be checked, so whether a setup or recovery code is waiting is unknown.',
                 'Rerun ' + ctx.repair('check-install.sh', '--owner', ctx.owner or 'YOUR_VM_USER') + ' with administrator access.')
         return

@@ -207,10 +207,15 @@ class Context:
             handlers.append(HTTPSHandler(context=self.tls_context))
         return build_opener(*handlers)
 
+    def tls_base(self):
+        """The manager address, but only when it is an https:// one: a question put to the manager's own address is a
+        claim about TLS, so a plain address is never used for it (an explicit base= is a deliberate plain probe)."""
+        return self.base_url if self.base_url.startswith('https://') else ''
+
     def head(self, path, base=None):
         """GET without following a redirect: (status, lower-case headers), or (None, {}) when nothing answered or the
         answer was not HTTP. No body is read. Used for exactly three questions (EXPOSURE 6.1 rule 1)."""
-        if not base and not self.base_url:
+        if not base and not self.tls_base():
             return None, {}
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
@@ -245,7 +250,7 @@ class Context:
         return (value if isinstance(value, dict) else None), False
 
     def http(self, path, payload=None, limit=8*MIB, base=None):
-        if not base and not self.base_url:
+        if not base and not self.tls_base():
             return Result(reason='manager HTTP unavailable'), None
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
@@ -381,11 +386,22 @@ def inspect_manager(ctx):
             'Running application version', 'Matches this source release.' if result.ok and version_matches(ctx, result.stdout.strip())
             else 'Running application version does not match this source checkout.', 'Rebuild using ' + ctx.command('install.sh') + '.')
     check_storage(ctx, docker, details.get('mounts'))
+    plain_start = ctx.manager_command is not None and '--ssl-certfile' not in ctx.manager_command
+    plain_fix = 'Start the manager with TLS: ' + ctx.repair('start-manager.sh') + '.'
+    plain_text = 'The manager was started as plain HTTP (no --ssl-certfile), so no HTTPS readiness question was sent.'
     try:
         url = module('install-manager').health_url(details.get('command'))
         ctx.base_url = re.sub(r'/api/(?:health|state)$', '', url)
     except (ValueError, TypeError):
-        ctx.add('http', 'FAIL', 'Manager HTTP', 'Could not determine its actual configured bind address and port.')
+        if plain_start:
+            ctx.add('http', 'FAIL', 'Manager HTTP', plain_text, plain_fix)
+        else:
+            ctx.add('http', 'FAIL', 'Manager HTTP', 'Could not determine its actual configured bind address and port.')
+        return
+    if not ctx.base_url.startswith('https://'):
+        # A builder that still answers http:// (a manager started without TLS) must not become a "pinned TLS" PASS.
+        ctx.add('http', 'FAIL', 'Manager HTTP', plain_text, plain_fix)
+        ctx.base_url = ''
         return
     # The one HTTP question of the health check: GET /api/health over TLS with the installed certificate pinned.
     if ctx.tls_context is None:
