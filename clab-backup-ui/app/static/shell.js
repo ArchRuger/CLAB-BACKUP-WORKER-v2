@@ -408,6 +408,12 @@ function sessionBannerClick(e){
  if(action==='retry'&&typeof sessionRetry==='function')sessionRetry();
  else if(action==='here'&&typeof sessionGo==='function')sessionGo('ended');
 }
+// A field being edited keeps focus: moving it would fire `change` on the field while signed out. The banner is role=alert and is announced anyway.
+function sessionEditing(){
+ const active=typeof document!=='undefined'?document.activeElement:null;
+ if(!active||!/^(INPUT|TEXTAREA|SELECT)$/.test(String(active.tagName||'').toUpperCase())||typeof active.closest!=='function')return false;
+ return !!active.closest('dialog[open],[data-panel]');
+}
 function renderSessionBanner(cause){
  const banner=shellEl('session-banner');if(!banner)return false;
  const words=SESSION_BANNER_TEXT[cause]||SESSION_BANNER_TEXT.closed;
@@ -417,7 +423,7 @@ function renderSessionBanner(cause){
  const old=sessionBannerClone();if(old)old.remove();
  if(!dialog){
   banner.hidden=false;
-  const retry=shellEl('session-retry');if(retry&&typeof retry.focus==='function')retry.focus();
+  const retry=shellEl('session-retry');if(retry&&typeof retry.focus==='function'&&!sessionEditing())retry.focus();
   return true;
  }
  const clone=banner.cloneNode(true);
@@ -430,7 +436,7 @@ function renderSessionBanner(cause){
   const mine=sessionBannerClone();if(mine)mine.remove();
   if(typeof sessionEnded==='function'&&sessionEnded()){const panel=sessionDirtyPanel();renderSessionBanner(panel?'panel':typeof designLeaveGuard==='function'&&designLeaveGuard()?'draft':'closed');}
  },{once:true});
- const retry=clone.querySelector('#session-retry-dialog');if(retry&&typeof retry.focus==='function')retry.focus();
+ const retry=clone.querySelector('#session-retry-dialog');if(retry&&typeof retry.focus==='function'&&!sessionEditing())retry.focus();
  return true;
 }
 function signedOut(){

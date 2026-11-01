@@ -1085,6 +1085,16 @@ test('signedOut with an open dialog puts a banner clone inside the dialog, focus
  const ids=h.doc.querySelectorAll('[id]').map(n=>n.id);assert.equal(new Set(ids).size,ids.length,'no id exists twice');
  assert.equal(h.sessionBanner.hidden,true,'the page-level banner stays hidden while the dialog carries it');
 });
+test('signedOut does not move focus off a field being edited in the open dialog or a panel (a blur would fire change while signed out); with nothing edited the focus move stays',()=>{
+ const h=harness();h.dialog.open=true;const field=h.el('input',{id:'dialog-field'});h.dialog.append(field);field.focus();
+ h.context.signedOut();
+ assert.equal(h.doc.activeElement,field,'the dialog field keeps focus');
+ assert.ok(h.dialog.querySelector('#session-banner-dialog'),'the banner is still shown');
+ const p=harness();const typed=typedSaveName(p);typed.value='x';p.saveChip.click();typed.focus();p.context.signedOut();
+ assert.equal(p.doc.activeElement,typed,'the panel field keeps focus');assert.equal(p.sessionBanner.hidden,false);
+ const q=harness();q.dialog.open=true;q.outside.focus();q.context.signedOut();
+ assert.equal(q.doc.activeElement.id,'session-retry-dialog','a focus that is not in a field moves to Try again');
+});
 test('the clone dispatches on data-session-action: Try again calls sessionRetry, Sign in here calls sessionGo, the tab link does nothing in script',async()=>{
  const h=harness();h.dialog.open=true;h.context.signedOut();
  const clone=h.dialog.querySelector('#session-banner-dialog');let retried=0;

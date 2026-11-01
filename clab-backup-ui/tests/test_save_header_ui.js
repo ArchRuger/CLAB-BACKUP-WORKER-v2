@@ -715,6 +715,19 @@ test('Q390-05 a name being typed is never posted by the poll: a change fired by 
  const live=h.el('save-name');live.value='Named by hand';live.isConnected=true;h.panel.listeners.change({target:live});await h.flush();
  assert.deepEqual(h.posts().filter(c=>c.endpoint.endsWith('/name')).map(c=>c.payload.note),['Named by hand']);
 });
+test('a rename committed while signed out leaves no stale error and is sent once after a successful Try again',async()=>{
+ const job=saved({note:'abcdefgh'});let signedOut=true;
+ const ended=Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});
+ const h=harness({state:{git_jobs:[job]},routes:{'/name':payload=>signedOut?ended:{...job,note:payload.note}}});await h.open();
+ const resumes=[];h.context.sessionOnResume=fn=>resumes.push(fn);
+ const field=h.el('save-name');field.focus();field.value='Named by hand';field.isConnected=true;
+ h.panel.listeners.change({target:field});await h.flush();
+ assert.equal(vm.runInContext('saveHeader.error',h.context),null,'the session error is not kept as a panel error');
+ assert.equal(resumes.length,1,'the rename waits for the session to come back');
+ signedOut=false;resumes[0]();await h.flush();
+ assert.deepEqual(h.posts().filter(c=>c.endpoint.endsWith('/name')).map(c=>c.payload.note),['Named by hand','Named by hand'],'one attempt while signed out, exactly one send after Try again');
+ assert.equal(vm.runInContext('saveHeader.error',h.context),null);
+});
 test('Q390-01 the view asked for with Show stays: the end of the upload that arrives after the click does not flip the panel back; it ends when the panel closes or its state ends',async()=>{
  const job=waiting({id:'w',status:'push_pending',reviewed:ago(3)});
  const lab=boundLab({git_status:{checked:true,ready:false,problem:'The remote branch advanced or diverged.',code:'diverged',waiting:1}});
