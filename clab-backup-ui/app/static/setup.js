@@ -4,6 +4,7 @@ const SETUP_DOWN='The manager did not answer. Try again.';
 const SETUP_HEAD='Too many sign-in attempts. Try again in ';
 const SETUP_TAIL=' s.';
 const SETUP_CODE_HELP='That setup code is not right. On the VM, run: sudo cat /srv/containerlab-node-manager/data/setup-code';
+const SETUP_READY='You can sign in again.';
 let setupTimer=null;
 function setupRecover(search){return new URLSearchParams(search||'').get('recover')==='1';}
 function setupProblem(username,password,confirm){
@@ -46,7 +47,7 @@ function setupThrottle(data,button,idle){
   get('setup-error').textContent='';
   button.disabled=false;button.textContent=idle;
   get('setup-code').focus();
-  get('setup-reason').textContent='You can sign in again.';
+  get('setup-reason').textContent=SETUP_READY;
  },1000);
 }
 async function setupSubmit(event){
@@ -60,6 +61,7 @@ async function setupSubmit(event){
  if(problem){error.textContent=problem;get(setupField(problem)).focus();return;}
  const idle=button.textContent;
  button.disabled=true;button.textContent='Creating…';error.textContent='';
+ if(get('setup-reason').textContent===SETUP_READY)get('setup-reason').textContent='';
  const answer=await setupRequest('/api/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,username,password})});
  if(answer&&answer.status===429){
   button.textContent=idle;

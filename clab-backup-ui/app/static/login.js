@@ -4,7 +4,8 @@ const LOGIN_ENDED='Your session ended. Sign in again to continue.';
 const LOGIN_DOWN='The manager did not answer. Try again.';
 const LOGIN_HEAD='Too many sign-in attempts. Try again in ';
 const LOGIN_TAIL=' s.';
-let signedInWith='',changeName='',loginTimer=null;
+const LOGIN_READY='You can sign in again.';
+let signedInWith='',changeName='',loginTimer=null,changeEpoch=0;
 function loginSafe(value){
  if(typeof value!=='string'||!value||value.length>2000)return '';
  if(value[0]!=='/'||value[1]==='/'||value[1]==='\\')return '';
@@ -89,7 +90,7 @@ function loginThrottle(data,button,idle,focusId){
   get('signin-error').textContent='';
   button.disabled=false;button.textContent=idle;
   get(focusId).focus();
-  get('signin-reason').textContent='You can sign in again.';
+  get('signin-reason').textContent=LOGIN_READY;
  },1000);
 }
 async function loginLoad(){
@@ -113,7 +114,7 @@ async function loginSubmit(event){
   return;
  }
  const idle=button.textContent;
- button.disabled=true;button.textContent='Signing in…';error.textContent='';
+ button.disabled=true;button.textContent='Signing in…';error.textContent='';loginClearReady();
  const answer=await loginRequest('/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
  if(answer&&answer.status===429){
   button.textContent=idle;
@@ -138,6 +139,9 @@ async function loginSubmit(event){
  }
  error.textContent=loginMessage(answer&&answer.data,LOGIN_DOWN);
 }
+function loginClearReady(){
+ if(get('signin-reason').textContent===LOGIN_READY)get('signin-reason').textContent='';
+}
 async function changeSubmit(event){
  event.preventDefault();
  const askCurrent=!get('change-current-field').hidden,error=get('change-error'),button=get('change-submit');
@@ -145,9 +149,14 @@ async function changeSubmit(event){
  const problem=changeProblem(changeName,typed,password,confirm,askCurrent);
  if(problem){error.textContent=problem;get(changeField(problem)).focus();return;}
  const idle=button.textContent;
- button.disabled=true;button.textContent='Changing…';error.textContent='';
+ const generation=changeEpoch;
+ button.disabled=true;button.textContent='Changing…';error.textContent='';get('change-signout').disabled=true;
  const answer=await loginRequest('/api/session/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current:askCurrent?typed:signedInWith,password})});
- button.disabled=false;button.textContent=idle;
+ button.disabled=false;button.textContent=idle;get('change-signout').disabled=false;
+ if(generation!==changeEpoch){
+  if(answer&&answer.status===200)await loginRequest('/api/session',{method:'DELETE',headers:{'Content-Type':'application/json'},body:'{}'});
+  return;
+ }
  const status=answer&&answer.status;
  if(status===200){
   signedInWith='';
@@ -171,10 +180,11 @@ async function changeSubmit(event){
   get('change-new').focus();
   return;
  }
- error.textContent=status===429?loginMessage(answer.data,LOGIN_DOWN):LOGIN_DOWN;
+ error.textContent=loginMessage(answer&&answer.data,LOGIN_DOWN);
 }
 function loginCode(data){return data&&data.detail&&data.detail.code;}
 async function changeSignOut(){
+ changeEpoch+=1;
  signedInWith='';
  await loginRequest('/api/session',{method:'DELETE',headers:{'Content-Type':'application/json'},body:'{}'});
  for(const id of ['change-current','change-new','change-confirm','signin-password','signin-user'])get(id).value='';

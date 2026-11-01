@@ -153,6 +153,16 @@ test('429 announces once, ticks only the aria-hidden span, re-enables at 0 (REVI
  assert.equal(f.get('setup-reason').textContent,'You can sign in again.');assert.equal(f.get('setup-reason').hidden,false);assert.equal(focused.at(-1),'setup-code');
 });
 
+test('the "You can sign in again." line is removed at the next attempt (setup)',async()=>{
+ let calls=0;
+ const f=fixture({fetch:async()=>{calls+=1;return reply(429,{detail:{retry_after:calls===1?1:5}});}});
+ fill(f);await send(f);f.intervals[0]();
+ assert.equal(f.get('setup-reason').textContent,'You can sign in again.');
+ await send(f);
+ assert.equal(f.get('setup-reason').textContent,'');
+ assert.match(f.get('setup-error').textContent,/^Too many sign-in attempts/);
+});
+
 test('429 default and cap',async()=>{
  for(const [retry,shown] of [[undefined,'60'],[99999,'3600']]){
   const f=fixture({fetch:async()=>reply(429,{detail:{retry_after:retry}})});fill(f);await send(f);assert.equal(f.walk('setup-wait').textContent,shown);

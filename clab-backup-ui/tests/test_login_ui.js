@@ -266,6 +266,52 @@ test('the held password survives 429 and a network failure and is gone after 200
  assert.deepEqual(f.replaced,['/#lab=a']);
 });
 
+test('the change view shows the manager sentence for any status that carries one (403 gate, 503 setup_required)',async()=>{
+ for(const [status,body] of [[403,{detail:{message:'Open the manager from its own address.'}}],[503,{detail:{code:'setup_required',message:'This manager is not set up yet.'}}],[500,{}]]){
+  const f=await changeView(async()=>reply(status,body));
+  f.get('change-new').value=GOOD;f.get('change-confirm').value=GOOD;await changeSubmit(f);
+  assert.equal(f.get('change-error').textContent,(body.detail&&body.detail.message)||'The manager did not answer. Try again.');
+  assert.equal(f.get('change-submit').disabled,false);assert.deepEqual(f.replaced,[]);
+ }
+});
+
+test('Sign out is disabled while the password change is in flight, and the pending 200 cannot reopen the application after a sign-out',async()=>{
+ let release;const pending=new Promise(r=>{release=r;});
+ const f=await changeView(async()=>{await pending;return reply(200,{user:{must_change_password:false}});});
+ f.get('change-new').value=GOOD;f.get('change-confirm').value=GOOD;
+ const running=changeSubmit(f);await tick();
+ assert.equal(f.get('change-submit').disabled,true);assert.equal(f.get('change-signout').disabled,true);
+ release();await running;
+ assert.equal(f.get('change-signout').disabled,false);assert.deepEqual(f.replaced,['/']);
+});
+
+test('a sign-out that ran first stops a late change answer from navigating',async()=>{
+ let release;const pending=new Promise(r=>{release=r;});
+ const f=await changeView(async(u,o)=>{if(o&&o.method==='DELETE')return reply(200,{});await pending;return reply(200,{user:{must_change_password:false}});});
+ f.get('change-new').value=GOOD;f.get('change-confirm').value=GOOD;
+ const running=changeSubmit(f);await tick();
+ f.get('change-signout').disabled=false;
+ await f.context.changeSignOut();
+ release();await running;
+ assert.deepEqual(f.replaced,[]);assert.equal(f.get('signin-form').hidden,false);
+ assert.equal(f.requests.filter(r=>r.method==='DELETE').length,2);
+});
+
+test('the "You can sign in again." line is removed at the next attempt so it never sits beside a new answer',async()=>{
+ for(const next of [()=>reply(429,{detail:{retry_after:5}}),()=>reply(401,{detail:{message:'Wrong username or password.'}})]){
+  let n429=0;
+  const f=fixture({fetch:async(u,o,n)=>{if(n===1)return done;n429+=1;return n429===1?reply(429,{detail:{retry_after:1}}):next();}});await tick();
+  fill(f,'sam','pw');await submit(f);f.intervals[0]();
+  assert.equal(f.get('signin-reason').textContent,'You can sign in again.');
+  await submit(f);
+  assert.equal(f.get('signin-reason').textContent,'');
+ }
+ const kept=fixture({fetch:async(u,o,n)=>n===1?done:reply(401,{})});await tick();
+ kept.get('signin-reason').textContent='Your session ended. Sign in again to continue.';
+ fill(kept,'sam','pw');await submit(kept);
+ assert.equal(kept.get('signin-reason').textContent,'Your session ended. Sign in again to continue.');
+});
+
 test('401 invalid_credentials shows the current field and the next submit sends the typed value',async()=>{
  const answers=[()=>reply(401,{detail:{code:'invalid_credentials',message:'The current password is not right.'}}),()=>reply(200,{user:{must_change_password:false}})];
  const f=await changeView(async(u,o,n)=>answers[n-3]());
