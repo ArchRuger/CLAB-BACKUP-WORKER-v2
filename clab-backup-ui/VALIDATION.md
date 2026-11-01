@@ -25,6 +25,18 @@ Branch `claude/vjunos-router-supported` from the merged `main` (pull request 78)
 
 **Not run.** The manager's Load and Network Design on the published image; a Git save of the B08 lab; the browser.
 
+## Test fix after the release (2026-11-01, no release change)
+
+Branch `claude/elegant-newton-tuulux` from `main` at `fac28de`; only
+`tests/test_install_tui_core.py::InstallerLockTests::test_root_takes_over_a_lock_file_owned_by_another_account` changed.
+
+**Unit, in a cloud container (system `python3`, standard library only).** As root (uid 0): the unchanged test from
+`fac28de` failed (`AssertionError: 640855 == 640855`, the inode was not swapped); the fixed test passed alone, and
+`python3 -m unittest discover -s tests -t tests -p test_install_tui_core.py` ran 177 tests OK (2 skipped, the
+non-root-only cases). As `nobody` (uid 65534, through `setpriv` on a copy of the tree): the same file ran 177 tests OK
+with none skipped. **Static:** `git diff --check`, `python3 deploy/verify-release.py`, `python3
+docs/maintenance-audit/tools/check_links.py`, `test_release_consistency.py`. **Not run:** the other suites, CI.
+
 # Campaign 2: topology editing, vSRX, Load and Network Design on the Junos VMs, the documentation audit — 1.31.7
 
 Evidence is named by kind. Branch `claude/parity-campaign`; the ledger is `docs/parity-campaign/CAMPAIGN-2.md`, the

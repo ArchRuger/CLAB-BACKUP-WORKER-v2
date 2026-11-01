@@ -16,6 +16,15 @@
 - No functional code change; `test_design_capabilities.py` pins the new reason wording ("CPU model" on the
   vJunos-router entries only). The catalog keeps the published tag; the rebuild is never pushed.
 
+### Test fix after 1.31.8 (2026-11-01, no release change)
+
+- `test_install_tui_core.py`: `test_root_takes_over_a_lock_file_owned_by_another_account` failed whenever the suite ran
+  as root (Claude Code cloud sessions run as uid 0): the lock file it wrote was already root's own, so
+  `InstallerLock.acquire` correctly left it in place and the inode did not change. Run as root, the test now gives the
+  file to `nobody` (uid 65534) before acquiring and asserts the file is not root's; the claim is unchanged (root takes
+  over a lock file owned by a non-root account: a new inode, the descriptor names the path, a second acquire is
+  `Busy`). Test only; `deploy/installer_tui/core.py` and the release markers are unchanged.
+
 # Changelog
 
 Release notes for every published version, newest first. Links point to the
