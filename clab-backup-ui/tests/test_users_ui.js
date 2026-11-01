@@ -367,8 +367,7 @@ test('Escape, Close and Cancel work while a request is in flight; a refusal afte
  const f=fixture(routesFor([person('sam','admin'),person('jo')],{'PATCH /api/users/jo':()=>new Promise(resolve=>{release=()=>resolve(reply(409,{detail:{code:'last_admin',message:refusal}}));})}));await settle();
  buttonsOf(f,'jo')['Deactivate'].onclick();f.get('active-dialog').open=true;
  const pending=f.get('active-form').onsubmit({preventDefault(){}});
- let prevented=false;f.get('active-dialog').oncancel({preventDefault(){prevented=true;}});
- assert.equal(prevented,false,'Escape is not swallowed while busy');
+ assert.equal(f.get('active-dialog').oncancel||null,null,'no cancel handler: the first Escape is not swallowed');
  f.get('active-cancel').onclick();assert.equal(f.get('active-dialog').open,false,'Cancel closes while busy');
  f.get('active-dialog').open=true;f.get('active-close').onclick();assert.equal(f.get('active-dialog').open,false,'Close closes while busy');
  release();await pending;
