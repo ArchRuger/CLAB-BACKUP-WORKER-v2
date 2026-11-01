@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create an administrator</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/login.css?v=1.31.8"><script src="/static/setup.js?v=1.31.8" defer></script></head>
+<body class="signin"><main class="signin-page">
+<div class="brand"><img class="brandmark" src="/static/fabric-mark.svg" alt="">Containerlab Node Manager</div>
+<section class="signin-card" aria-labelledby="setup-title">
+<h1 id="setup-title">Create the first administrator</h1>
+<p id="setup-lead">Enter the setup code the installer printed, then choose the account you will sign in with.</p>
+<form id="setup-form" novalidate>
+<div class="signin-field"><label for="setup-code">Setup code</label><input id="setup-code" name="code" type="text" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="64" autofocus><p class="form-help">Printed at the end of the installation. On the VM: <code>sudo cat /srv/containerlab-node-manager/data/setup-code</code></p></div>
+<div class="signin-field"><label for="setup-user">Username</label><input id="setup-user" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="32"><p class="form-help">Lowercase letters, digits, dot, dash and underscore. 2 to 32 characters.</p></div>
+<div class="signin-field"><label for="setup-password">Password</label><div class="signin-password"><input id="setup-password" name="password" type="password" autocomplete="new-password" maxlength="128"><button type="button" class="button secondary" id="setup-show" aria-pressed="false" aria-controls="setup-password setup-confirm">Show</button></div><p class="form-help" id="setup-policy">At least 12 characters. Any characters count; length matters more than symbols. Not your username, and not a common password.</p></div>
+<div class="signin-field"><label for="setup-confirm">Password again</label><input id="setup-confirm" name="confirm" type="password" autocomplete="new-password" maxlength="128"></div>
+<p id="setup-error" class="form-error" role="alert"></p>
+<p id="setup-reason" class="form-help" role="status" hidden></p>
+<div class="actions"><button type="submit" class="button primary" id="setup-submit">Create account and sign in</button><a id="setup-signin" class="button secondary" href="/login" hidden>Sign in</a></div>
+</form>
+</section>
+<div id="signin-plain" class="banner warn" role="status" hidden><p>This connection is not encrypted. Your password would travel in clear text. Ask the administrator to enable TLS before signing in from outside the lab network.</p></div>
+</main></body></html>
