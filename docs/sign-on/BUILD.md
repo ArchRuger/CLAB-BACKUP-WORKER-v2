@@ -282,5 +282,8 @@ cross-site link and an operator at 1440, 1280, 760 and 390 px.
 
 ## 5. Worktrees and integration
 
-Filled in by the lead when the worktrees are made (base commit, one line per worktree) and as each
-slice is integrated (its merge commit and the full-suite result).
+Base commit of every slice worktree: `a9e3608` (the final design, 2026-11-01). Worktrees, each on the
+branch `signon/<name>`: `core` (S1a, S1b, S2), `probe` (S3), `tls` (S4), `doors` (S5a), `installer`
+(S5b), `health` (S6), `pages` (S7), `appsession` (S8), `people` (S9), `features` (S10a), `standalone`
+(S10b). S11 and S12 get theirs from the integrated commit. Each slice's merge commit and the full-suite
+result on the merged tree are recorded here as they land.
