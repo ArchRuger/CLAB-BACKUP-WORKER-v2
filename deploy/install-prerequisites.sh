@@ -109,7 +109,7 @@ apt_install() {
     -o Dpkg::Options::=--force-confold install "$@" || fail 'Package installation failed. Resolve the APT error above, then rerun the installer. Existing configuration files are retained.'
 }
 basics=()
-for package in git curl ca-certificates openssh-server; do
+for package in git curl ca-certificates openssh-server openssl ufw; do
   installed "$package" || basics+=("$package")
 done
 apt_install "${basics[@]}"

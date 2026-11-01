@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import ssl
 import subprocess
 import sys
 import tarfile
@@ -16,6 +17,27 @@ from urllib.error import URLError
 spec = importlib.util.spec_from_file_location('install_manager', Path(__file__).resolve().parents[2] / 'deploy/install-manager.py')
 install = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(install)
+
+
+_module_patches = []
+
+
+def setUpModule():
+    """No test of this module reads this checkout's real settings, the VM's certificate or the setup code,
+    or runs sudo for them: each reader is replaced for the whole module and a test that needs a value patches it."""
+    ex = install.tui_package().exposure
+    for patcher in (patch.object(ex, 'env_file_values', return_value={}),
+                    patch.object(ex, 'facts', return_value=None),
+                    patch.object(ex, 'primary', return_value=None),
+                    patch.object(ex, 'read_setup_code', return_value=('absent', None, None)),
+                    patch.object(install, 'tls_context', return_value=ssl.create_default_context())):
+        patcher.start()
+        _module_patches.append(patcher)
+
+
+def tearDownModule():
+    while _module_patches:
+        _module_patches.pop().stop()
 
 
 def tui_core():
@@ -53,11 +75,14 @@ class InstallManagerTests(unittest.TestCase):
         self.assertNotIn('GIT_CONFIG_GLOBAL', env)
 
     def test_health_uses_actual_container_bind_and_port(self):
+        # The bind and port extraction is the kept claim; the manager serves HTTPS now (EXPOSURE.md 7.1), so the
+        # expected URL is https://…/api/health and the command carries the certificate arguments.
         for host, expected in [('0.0.0.0', '127.0.0.1'), ('::', '[::1]'),
                                ('10.0.0.5', '10.0.0.5'), ('::1', '[::1]'), ('localhost', '127.0.0.1')]:
             with self.subTest(host=host):
-                self.assertEqual(install.health_url(['uvicorn', 'app.main:create_app', '--host', host, '--port', '8099']),
-                                 f'http://{expected}:8099/api/state')
+                self.assertEqual(install.health_url(['uvicorn', 'app.main:create_app', '--host', host, '--port', '8099',
+                                                     '--ssl-certfile', '/tls/cert.pem']),
+                                 f'https://{expected}:8099/api/health')
 
     def test_unexpected_container_command_is_rejected(self):
         for cmd in ([], 'uvicorn --port 8081', ['--host', 'example.invalid', '--port', '8081'],
@@ -78,20 +103,22 @@ class InstallManagerTests(unittest.TestCase):
         network.assert_not_called()
 
     def test_health_prints_no_state_content(self):
-        response = SimpleNamespace(status=200, read=lambda limit: json.dumps({'version': '1.16.0', 'labs': 'PRIVATE'}).encode())
+        response = SimpleNamespace(status=200, read=lambda limit: json.dumps({'ready': True, 'labs': 'PRIVATE'}).encode())
         from contextlib import nullcontext
         opener = SimpleNamespace(open=lambda url, timeout: nullcontext(response))
-        with patch.object(install, 'output', side_effect=['a' * 64, '1.16.0', '["--host","0.0.0.0","--port","8081"]']), \
+        with patch.object(install, 'output', side_effect=['a' * 64, '1.16.0', json.dumps(TLS_COMMAND)]), \
                 patch.object(install, 'build_opener', return_value=opener), patch('sys.stdout', new=io.StringIO()) as printed:
             install.check_manager({}, '1.16.0', 0)
         self.assertNotIn('PRIVATE', printed.getvalue())
         self.assertIn('checks passed', printed.getvalue())
 
-    def test_wrong_http_version_does_not_report_success(self):
+    def test_a_body_without_ready_true_does_not_report_success(self):
+        # The version proof is the container's own `compose exec` answer (test_health_rejects_stale_image_before_http);
+        # /api/health says only whether the manager is ready, so a body that does not say {"ready": true} fails.
         from contextlib import nullcontext
         response = SimpleNamespace(status=200, read=lambda limit: b'{"version":"old"}')
         opener = SimpleNamespace(open=lambda url, timeout: nullcontext(response))
-        with patch.object(install, 'output', side_effect=['a' * 64, '1.16.0', '["--host","0.0.0.0","--port","8081"]']), \
+        with patch.object(install, 'output', side_effect=['a' * 64, '1.16.0', json.dumps(TLS_COMMAND)]), \
                 patch.object(install, 'build_opener', return_value=opener):
             with self.assertRaisesRegex(ValueError, 'did not pass'):
                 install.check_manager({}, '1.16.0', 0)
@@ -193,7 +220,7 @@ class InstallManagerTests(unittest.TestCase):
     def test_advanced_install_asks_every_question_in_order(self):
         for chosen in ('1', '2'):
             with self.subTest(engineer=chosen), patch.object(install, 'choose_env_copy', return_value=None), \
-                    patch.object(install, 'menu', side_effect=['1', chosen, '2']), \
+                    patch.object(install, 'menu', side_effect=['1', chosen, '1', '1', '2']), \
                     patch.object(install, 'confirm', side_effect=[False, True]), \
                     patch.object(install, 'copy_env'), patch.object(install, 'verify_manager') as verify, \
                     patch.object(install, 'setup_lazydocker'), patch.object(install, 'git_setup') as git, \
@@ -212,7 +239,7 @@ class InstallManagerTests(unittest.TestCase):
 
     def test_advanced_install_runs_git_setup_when_chosen_from_next_step_menu(self):
         with patch.object(install, 'choose_env_copy', return_value=None), \
-                patch.object(install, 'menu', side_effect=['1', '2', '1']), \
+                patch.object(install, 'menu', side_effect=['1', '2', '1', '1', '1']), \
                 patch.object(install, 'confirm', side_effect=[False, True]), \
                 patch.object(install, 'copy_env'), patch.object(install, 'verify_manager'), \
                 patch.object(install, 'setup_lazydocker'), patch.object(install, 'git_setup') as git, \
@@ -1112,10 +1139,10 @@ class StartupInvariantTests(unittest.TestCase):
 
     def test_advanced_discovery_only_asks_no_engineer_question_and_runs_no_engineer_phase(self):
         with patch.object(install, 'choose_env_copy', return_value=None), \
-                patch.object(install, 'menu', side_effect=['2']) as menu, patch.object(install, 'confirm', return_value=True):
+                patch.object(install, 'menu', side_effect=['2', '1', '1']) as menu, patch.object(install, 'confirm', return_value=True):
             options = install.ask_install_options(OWNER, advanced=True)
-        self.assertEqual(menu.call_count, 1)
-        self.assertEqual(menu.call_args.args[0], 'Lab operation access')
+        # The engineer question is still not asked; the two new exposure questions follow the operations one.
+        self.assertEqual([call.args[0] for call in menu.call_args_list], ['Lab operation access', 'Firewall (ufw)', 'SSH hardening'])
         self.assertEqual((options.operations, options.engineer, options.repair), ('2', '2', True))
         steps = install.install_steps(OWNER, '1.30.35', options)
         self.assertNotIn('engineer', [step.key for step in steps])
@@ -1124,7 +1151,7 @@ class StartupInvariantTests(unittest.TestCase):
 
         order = []
         with patch.object(install, 'choose_env_copy', return_value=None), \
-                patch.object(install, 'menu', side_effect=['2', '2']), patch.object(install, 'confirm', return_value=True), \
+                patch.object(install, 'menu', side_effect=['2', '1', '1', '2']), patch.object(install, 'confirm', return_value=True), \
                 patch.object(install, 'verify_manager'), patch.object(install, 'setup_lazydocker'), \
                 patch.object(install, 'git_setup'), patch.object(install, 'run', side_effect=record_run(order)):
             install.install(OWNER, '1.30.35', advanced=True)
@@ -1148,9 +1175,9 @@ class StartupInvariantTests(unittest.TestCase):
 
     def test_advanced_enabled_operations_asks_the_engineer_question_with_the_owner_name(self):
         with patch.object(install, 'choose_env_copy', return_value=None), \
-                patch.object(install, 'menu', side_effect=['1', '2']) as menu, patch.object(install, 'confirm', return_value=False):
+                patch.object(install, 'menu', side_effect=['1', '2', '1', '1']) as menu, patch.object(install, 'confirm', return_value=False):
             options = install.ask_install_options(OWNER, advanced=True)
-        self.assertEqual(menu.call_count, 2)
+        self.assertEqual(menu.call_count, 4, 'operations, engineer, then the firewall and SSH questions')
         self.assertIn('owner', menu.call_args_list[1].args[0])
         self.assertEqual((options.operations, options.engineer, options.repair), ('1', '2', False))
 
@@ -1159,7 +1186,7 @@ class StartupInvariantTests(unittest.TestCase):
         self.assertIn('--repair-install-media', install.prerequisites_command(True))
         order = []
         with patch.object(install, 'choose_env_copy', return_value=None), \
-                patch.object(install, 'menu', side_effect=['1', '1', '2']), patch.object(install, 'confirm', side_effect=[False, True]), \
+                patch.object(install, 'menu', side_effect=['1', '1', '1', '1', '2']), patch.object(install, 'confirm', side_effect=[False, True]), \
                 patch.object(install, 'verify_manager'), patch.object(install, 'setup_lazydocker'), \
                 patch.object(install, 'git_setup'), patch.object(install, 'run', side_effect=record_run(order)), \
                 patch('sys.stdout', new=io.StringIO()) as printed:
@@ -1169,27 +1196,37 @@ class StartupInvariantTests(unittest.TestCase):
         self.assertIn('  Installation-media APT repair: not selected', printed.getvalue().splitlines())
 
     def test_install_steps_titles_are_numbered_out_of_five_without_engineer_access(self):
-        steps = install.install_steps(OWNER, '1.30.35', install.Options(operations='2'))
+        # The firewall and SSH phases default to on and add to the total; this test's claim (the numbering of the
+        # original five) is kept by choosing neither.
+        steps = install.install_steps(OWNER, '1.30.35', install.Options(operations='2', firewall=False, ssh_hardening=False))
         numbered = [step.title for step in steps if step.title[:1].isdigit()]
         self.assertEqual(numbered, ['1/5 Administrator access and settings', '2/5 VM prerequisites',
                                     '3/5 Password, helpers, image and manager', '4/5 Browser Wireshark capture stack',
                                     '5/5 Running manager verification'])
 
     def test_install_steps_titles_are_numbered_out_of_six_with_engineer_access(self):
-        steps = install.install_steps(OWNER, '1.30.35', install.Options())
+        steps = install.install_steps(OWNER, '1.30.35', install.Options(firewall=False, ssh_hardening=False))
         numbered = [step.title for step in steps if step.title[:1].isdigit()]
         self.assertEqual(numbered, ['1/6 Administrator access and settings', '2/6 VM prerequisites',
                                     '3/6 Password, helpers, image and manager', '4/6 Browser Wireshark capture stack',
                                     '5/6 Running manager verification', '6/6 Engineer access for VS Code'])
 
     def test_plain_install_calls_phase_with_the_same_numbered_titles(self):
+        # (firewall and SSH hardening default to on; the original numbering is pinned with them off, and the
+        # standard total of eight with them on.)
         for options_kwargs, expected in (
-                ({}, ['1/6 Administrator access and settings', '2/6 VM prerequisites',
-                      '3/6 Password, helpers, image and manager', '4/6 Browser Wireshark capture stack',
-                      '5/6 Running manager verification', '6/6 Engineer access for VS Code']),
-                ({'operations': '2'}, ['1/5 Administrator access and settings', '2/5 VM prerequisites',
-                                       '3/5 Password, helpers, image and manager', '4/5 Browser Wireshark capture stack',
-                                       '5/5 Running manager verification'])):
+                ({'firewall': False, 'ssh_hardening': False},
+                 ['1/6 Administrator access and settings', '2/6 VM prerequisites',
+                  '3/6 Password, helpers, image and manager', '4/6 Browser Wireshark capture stack',
+                  '5/6 Running manager verification', '6/6 Engineer access for VS Code']),
+                ({'operations': '2', 'firewall': False, 'ssh_hardening': False},
+                 ['1/5 Administrator access and settings', '2/5 VM prerequisites',
+                  '3/5 Password, helpers, image and manager', '4/5 Browser Wireshark capture stack',
+                  '5/5 Running manager verification']),
+                ({}, ['1/8 Administrator access and settings', '2/8 VM prerequisites',
+                      '3/8 Password, helpers, image and manager', '4/8 Browser Wireshark capture stack',
+                      '5/8 Running manager verification', '6/8 Firewall', '7/8 SSH hardening',
+                      '8/8 Engineer access for VS Code'])):
             titles = []
             options = install.Options(**options_kwargs)
             with self.subTest(**options_kwargs), patch.object(install, 'ask_install_options', return_value=options), \
@@ -1201,8 +1238,8 @@ class StartupInvariantTests(unittest.TestCase):
 
     def test_install_steps_structure_order_flags_and_visibility(self):
         steps = install.install_steps(OWNER, '1.30.35', install.Options())
-        self.assertEqual([step.key for step in steps], ['admin', 'settings', 'prereqs', 'launch', 'capture', 'verify',
-                                                        'engineer', 'lazydocker', 'git'])
+        self.assertEqual([step.key for step in steps], ['admin', 'settings', 'ports', 'prereqs', 'launch', 'capture', 'verify',
+                                                        'firewall', 'sshd', 'engineer', 'lazydocker', 'git', 'signon'])
         by_key = {step.key: step for step in steps}
         self.assertEqual(by_key['admin'].argv, ['sudo', '-v'])
         self.assertEqual(by_key['admin'].interactive, 'auth')
@@ -1211,9 +1248,11 @@ class StartupInvariantTests(unittest.TestCase):
         self.assertEqual(by_key['git'].interactive, 'always')
         self.assertTrue(by_key['git'].visible)
         self.assertFalse(by_key['settings'].visible, 'nothing to copy: the settings step is hidden')
+        self.assertFalse(by_key['ports'].visible, 'no port question was answered: nothing is written')
         self.assertTrue(all(by_key[key].bare for key in ('settings', 'lazydocker', 'git')))
         self.assertTrue(all(by_key[key].post for key in ('lazydocker', 'git')))
-        self.assertFalse(any(by_key[key].post for key in ('admin', 'prereqs', 'launch', 'capture', 'verify', 'engineer')))
+        self.assertFalse(any(by_key[key].post for key in ('admin', 'prereqs', 'launch', 'capture', 'verify', 'firewall',
+                                                          'sshd', 'engineer')))
         later = {step.key: step for step in install.install_steps(
             OWNER, '1', install.Options(env_source=Path('/x/.env'), git_now=False))}
         self.assertTrue(later['settings'].visible)
@@ -1253,15 +1292,17 @@ class StartupInvariantTests(unittest.TestCase):
             'sudo', 'env', 'DOCKER_HOST=unix:///var/run/docker.sock', 'bash', str(deploy / 'setup-capture.sh')])
 
     def test_plan_lines_for_the_standard_options(self):
+        # Four plan lines joined with the TLS, firewall, SSH and sign-on steps (EXPOSURE.md 7.1): 14 became 18,
+        # and the last line is now the sign-on line; the version/HTTP line says HTTPS.
         lines = install.plan_lines(OWNER, '1.30.35', install.Options())
-        self.assertEqual(len(lines), 14)
+        self.assertEqual(len(lines), 18)
         self.assertEqual(lines[0], 'Source: ' + str(install.SOURCE) + ' (1.30.35)')
         self.assertIn('Rebuild/recreate only the manager; existing lab containers remain in place.', lines)
         self.assertIn('Lab operations: enabled with default trusted roots', lines)
         self.assertIn('Engineer access: set up for owner (VS Code, Containerlab extension)', lines)
         self.assertIn('Settings: retain current .env or use defaults', lines)
         self.assertIn('Installation-media APT repair: enabled with backup', lines)
-        self.assertEqual(lines[-1], 'Check running version/HTTP, then set up Git under owner.')
+        self.assertEqual(lines[-2], 'Check running version and HTTPS /api/health, then set up Git under owner.')
 
     def test_plan_lines_reflect_non_standard_options(self):
         lines = install.plan_lines(OWNER, '1.30.35', install.Options(env_source=Path('/old/.env'), operations='2', repair=False))
@@ -1293,10 +1334,15 @@ class StartupInvariantTests(unittest.TestCase):
                 patch('sys.stdout', new=io.StringIO()) as printed:
             install.install(OWNER, '1.30.35')
         kinds = [event[0] for event in events]
-        self.assertEqual(kinds, ['phase', 'copy', 'phase', 'phase', 'phase', 'phase', 'phase', 'lazydocker', 'git'])
+        # Two phases more than before: the firewall and SSH hardening (EXPOSURE.md 7.2 step 4).
+        self.assertEqual(kinds, ['phase', 'copy', 'phase', 'phase', 'phase', 'phase', 'phase', 'phase', 'phase',
+                                 'lazydocker', 'git'])
         self.assertEqual(events[1], ('copy', Path('/old/.env')))
         self.assertLess(printed.getvalue().index('Manager installation is ready'), printed.getvalue().index('In VM connection use'))
-        self.assertIn('check-install.sh', printed.getvalue().splitlines()[-1])
+        # The health-check sentence is no longer the final line: the setup code and its URL end the output (REVIEW U13).
+        lines = printed.getvalue().splitlines()
+        self.assertIn('check-install.sh', next(line for line in reversed(lines) if 'check-install.sh' in line))
+        self.assertLess(max(i for i, line in enumerate(lines) if 'check-install.sh' in line), len(lines) - 1)
 
     def test_git_setup_success_and_failure_messages(self):
         with patch.object(install, 'run', return_value=subprocess.CompletedProcess([], 0)) as run, \
@@ -1463,30 +1509,30 @@ class RunHelperTests(unittest.TestCase):
 class CheckManagerReturnTests(unittest.TestCase):
     def healthy(self, command, version='1.16.0'):
         from contextlib import nullcontext
-        response = SimpleNamespace(status=200, read=lambda limit: json.dumps({'version': version}).encode())
+        response = SimpleNamespace(status=200, read=lambda limit: json.dumps({'ready': True}).encode())
         opener = SimpleNamespace(open=lambda url, timeout: nullcontext(response))
         output = patch.object(install, 'output', side_effect=['a' * 64, version, json.dumps(command)])
         return output, patch.object(install, 'build_opener', return_value=opener)
 
     def test_check_manager_returns_the_vm_local_address_and_says_it(self):
         said = []
-        output, opener = self.healthy(['uvicorn', '--host', '0.0.0.0', '--port', '8099'])
+        output, opener = self.healthy(['uvicorn', '--host', '0.0.0.0', '--port', '8099', '--ssl-certfile', '/tls/cert.pem'])
         with output, opener, patch('sys.stdout', new=io.StringIO()) as printed:
             address = install.check_manager({}, '1.16.0', 0, say=said.append)
-        self.assertEqual(address, 'http://127.0.0.1:8099/')
-        self.assertIn('VM-local address: http://127.0.0.1:8099/', said)
-        self.assertIn('Manager 1.16.0: running; HTTP and version checks passed.', said)
+        self.assertEqual(address, 'https://127.0.0.1:8099/')
+        self.assertIn('VM-local address: https://127.0.0.1:8099/', said)
+        self.assertIn('Manager 1.16.0: running; HTTPS and version checks passed.', said)
         self.assertEqual(printed.getvalue(), '', 'say= replaces print')
 
     def test_check_manager_returns_a_bracketed_ipv6_address(self):
-        output, opener = self.healthy(['uvicorn', '--host', '::', '--port', '8081'])
+        output, opener = self.healthy(['uvicorn', '--host', '::', '--port', '8443', '--ssl-certfile', '/tls/cert.pem'])
         with output, opener, patch('sys.stdout', new=io.StringIO()):
-            self.assertEqual(install.check_manager({}, '1.16.0', 0), 'http://[::1]:8081/')
+            self.assertEqual(install.check_manager({}, '1.16.0', 0), 'https://[::1]:8443/')
 
     def test_check_manager_sudo_parameter_reaches_every_docker_command(self):
-        output, opener = self.healthy(['uvicorn', '--host', '10.0.0.5', '--port', '8081'])
+        output, opener = self.healthy(['uvicorn', '--host', '10.0.0.5', '--port', '8443', '--ssl-certfile', '/tls/cert.pem'])
         with output as called, opener, patch('sys.stdout', new=io.StringIO()):
-            self.assertEqual(install.check_manager({}, '1.16.0', 0, sudo=('sudo', '-n')), 'http://10.0.0.5:8081/')
+            self.assertEqual(install.check_manager({}, '1.16.0', 0, sudo=('sudo', '-n')), 'https://10.0.0.5:8443/')
         commands = [call.args[0] for call in called.call_args_list]
         self.assertEqual(len(commands), 3)
         for command in commands:
@@ -1497,7 +1543,7 @@ class CheckManagerReturnTests(unittest.TestCase):
             raise OSError('connection refused')
         clock = iter([0, 0.5, 5])
         fake_time = SimpleNamespace(monotonic=lambda: next(clock), sleep=MagicMock())
-        with patch.object(install, 'output', side_effect=['a' * 64, '1.16.0', '["--host","0.0.0.0","--port","8081"]']), \
+        with patch.object(install, 'output', side_effect=['a' * 64, '1.16.0', json.dumps(TLS_COMMAND)]), \
                 patch.object(install, 'build_opener', return_value=SimpleNamespace(open=refuse)), \
                 patch.object(install, 'time', fake_time), patch('sys.stdout', new=io.StringIO()):
             with self.assertRaisesRegex(ValueError, 'did not pass'):
@@ -1571,6 +1617,495 @@ class LazydockerResultTests(unittest.TestCase):
                 self.assertEqual(destination.read_bytes(), b'BIN')
                 self.assertIn('Added ~/.local/bin to PATH in ~/.bashrc (new shells only).', said)
                 self.assertEqual('  export PATH="$PATH:$HOME/.local/bin"' in said, not path_has_it)
+
+
+# ---------------------------------------------------------------------------------------------
+# Sign-on and exposure (EXPOSURE.md 7): HTTPS verification, the new steps, the closing lines
+# ---------------------------------------------------------------------------------------------
+GOOD_CODE = 'abcdef-ghjkmn-pqrstu-vwxy23'
+TLS_COMMAND = ['uvicorn', 'app.main:create_app', '--host', '0.0.0.0', '--port', '8443',
+               '--ssl-certfile', '/tls/cert.pem', '--ssl-keyfile', '/tls/key.pem']
+FACTS = {'mode': 'self-signed', 'fingerprint': 'AB:CD:EF', 'expires': '2028-11-01', 'addresses': ['192.0.2.10'], 'names': []}
+
+
+def exposure():
+    return install.tui_package().exposure
+
+
+# The real functions, captured at import time, before setUpModule replaces them for the whole module.
+_REAL_TLS_CONTEXT = install.tls_context
+_REAL_PORTS_COLLIDE = exposure().ports_collide
+_REAL_ENV_FILE_VALUES = exposure().env_file_values
+
+
+class HealthOverHttpsTests(unittest.TestCase):
+    def test_the_health_url_is_https_api_health_on_the_containers_bind_and_port(self):
+        for host, expected in [('0.0.0.0', '127.0.0.1'), ('::', '[::1]'), ('10.0.0.5', '10.0.0.5'),
+                               ('::1', '[::1]'), ('localhost', '127.0.0.1')]:
+            with self.subTest(host=host):
+                command = ['uvicorn', 'app.main:create_app', '--host', host, '--port', '8099',
+                           '--ssl-certfile', '/tls/cert.pem', '--ssl-keyfile', '/tls/key.pem']
+                self.assertEqual(install.health_url(command), f'https://{expected}:8099/api/health')
+
+    def test_a_manager_started_without_tls_is_refused_with_the_rebuild_advice(self):
+        with self.assertRaisesRegex(ValueError, r'^The manager is configured without TLS; rebuild it with Install/update\.$'):
+            install.health_url(['uvicorn', 'app.main:create_app', '--host', '0.0.0.0', '--port', '8081'])
+
+    def test_a_malformed_command_is_still_rejected_before_the_tls_question(self):
+        for command in ([], 'uvicorn --ssl-certfile x', ['--ssl-certfile', 'x', '--host', 'example.invalid', '--port', '1'],
+                        ['--ssl-certfile', 'x', '--host', '127.0.0.1', '--port', '99999'], ['--ssl-certfile', 'x', '--port']):
+            with self.subTest(command=command), self.assertRaises(ValueError):
+                install.health_url(command)
+
+    def healthy(self, body=None, command=TLS_COMMAND, version='1.32.0'):
+        from contextlib import nullcontext
+        payload = json.dumps({'ready': True} if body is None else body).encode()
+        response = SimpleNamespace(status=200, read=lambda limit: payload)
+        opened = []
+
+        def open_(url, timeout):
+            opened.append(url)
+            return nullcontext(response)
+        output = patch.object(install, 'output', side_effect=['a' * 64, version, json.dumps(command)])
+        return output, patch.object(install, 'build_opener', return_value=SimpleNamespace(open=open_)), opened
+
+    def test_check_manager_opens_api_health_over_https_and_returns_the_vm_local_https_address(self):
+        said = []
+        output, opener, opened = self.healthy(command=TLS_COMMAND)
+        with output, opener, patch.object(exposure(), 'facts', return_value=FACTS):
+            address = install.check_manager({}, '1.32.0', 0, say=said.append)
+        self.assertEqual(opened, ['https://127.0.0.1:8443/api/health'])
+        self.assertEqual(address, 'https://127.0.0.1:8443/')
+        self.assertIn('Manager 1.32.0: running; HTTPS and version checks passed.', said)
+        self.assertIn('VM-local address: https://127.0.0.1:8443/', said)
+        self.assertIn('The certificate is self-signed: the browser warns once; its SHA-256 fingerprint is AB:CD:EF.', said)
+
+    def test_the_opener_pins_the_installed_certificate_and_ignores_proxies(self):
+        output, opener, _ = self.healthy()
+        with output, opener as build, patch.object(install, 'tls_context', return_value='CONTEXT') as context, \
+                patch('sys.stdout', new=io.StringIO()):
+            install.check_manager({}, '1.32.0', 0)
+        self.assertEqual(context.call_args.args[0], exposure().TLS_DIR / 'cert.pem')
+        handlers = build.call_args.args
+        self.assertEqual(len(handlers), 2)
+        self.assertEqual(handlers[0].proxies, {})
+        self.assertEqual(handlers[1]._context, 'CONTEXT')
+
+    def test_the_fingerprint_comes_from_the_unprivileged_certificate_reader(self):
+        output, opener, _ = self.healthy()
+        said = []
+        with output, opener, patch.object(exposure(), 'facts', return_value=None):
+            install.check_manager({}, '1.32.0', 0, say=said.append)
+        self.assertTrue(any('could not be read here' in line for line in said), said)
+
+    def test_a_provided_certificate_gets_the_hsts_sentence_in_the_closing_text(self):
+        output, opener, _ = self.healthy()
+        said = []
+        with output, opener, patch.object(exposure(), 'facts', return_value=dict(FACTS, mode='provided')):
+            install.check_manager({}, '1.32.0', 0, say=said.append)
+        self.assertTrue(any('HSTS' in line and 'by IP address' in line for line in said), said)
+
+    def test_the_setup_code_is_never_printed_by_the_verification(self):
+        output, opener, _ = self.healthy()
+        said = []
+        with output, opener, patch.object(exposure(), 'read_setup_code', return_value=('open', 'setup', GOOD_CODE)) as read:
+            install.check_manager({}, '1.32.0', 0, say=said.append)
+        read.assert_not_called()
+        self.assertNotIn(GOOD_CODE, '\n'.join(said))
+
+    def test_only_ready_true_passes_the_body_check(self):
+        for body in ({'ready': False}, {'version': '1.32.0'}, {'ready': 'true'}, [], {}):
+            with self.subTest(body=body):
+                output, opener, _ = self.healthy(body)
+                with output, opener, patch('sys.stdout', new=io.StringIO()):
+                    with self.assertRaisesRegex(ValueError, 'did not pass'):
+                        install.check_manager({}, '1.32.0', 0)
+
+    def test_a_running_manager_of_another_version_is_refused_before_any_https_request(self):
+        output = patch.object(install, 'output', side_effect=['a' * 64, '1.31.8'])
+        with output, patch.object(install, 'build_opener') as network, self.assertRaisesRegex(ValueError, 'does not match'):
+            install.check_manager({}, '1.32.0', 0)
+        network.assert_not_called()
+
+    def test_an_unreadable_certificate_stops_with_the_next_step_instead_of_polling(self):
+        output, opener, opened = self.healthy()
+        with output, opener, patch.object(install, 'tls_context', side_effect=ValueError('The manager certificate cannot be used.')):
+            with self.assertRaisesRegex(ValueError, 'certificate'):
+                install.check_manager({}, '1.32.0', 0)
+        self.assertEqual(opened, [])
+
+    def test_tls_context_wraps_a_missing_certificate_in_a_value_error_with_the_next_step(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(ValueError, r'Install/update'):
+                _REAL_TLS_CONTEXT(Path(folder) / 'missing.pem')
+
+
+class EnvironmentTests(unittest.TestCase):
+    ACCOUNT = SimpleNamespace(pw_name='archtop', pw_dir='/home/archtop')
+
+    def test_a_well_formed_ssh_connection_is_carried_to_the_firewall_step_and_nothing_else_of_the_session(self):
+        with patch.dict(os.environ, {'SSH_CONNECTION': '198.51.100.7 51234 192.0.2.10 2222', 'SSH_AUTH_SOCK': '/tmp/agent',
+                                     'GH_TOKEN': 'secret'}):
+            env = install.environment(self.ACCOUNT)
+        self.assertEqual(env['SSH_CONNECTION'], '198.51.100.7 51234 192.0.2.10 2222')
+        self.assertNotIn('SSH_AUTH_SOCK', env)
+        self.assertNotIn('GH_TOKEN', env)
+
+    def test_a_malformed_or_absent_ssh_connection_is_dropped(self):
+        for value in ('junk; reboot', '1.2.3.4 1 5.6.7.8', '', None):
+            with self.subTest(value=value):
+                environ = {} if value is None else {'SSH_CONNECTION': value}
+                with patch.dict(os.environ, environ, clear=False):
+                    if value is None:
+                        os.environ.pop('SSH_CONNECTION', None)
+                    env = install.environment(self.ACCOUNT)
+                self.assertNotIn('SSH_CONNECTION', env)
+
+
+class OptionsAndStepsTests(unittest.TestCase):
+    def test_the_standard_options_run_the_firewall_and_ssh_hardening_and_leave_the_ports_alone(self):
+        options = install.Options()
+        self.assertEqual((options.firewall, options.ssh_hardening, options.ports), (True, True, None))
+        self.assertEqual(options.git_now, True, 'the existing positional order is unchanged')
+
+    def test_new_options_do_not_move_the_existing_positional_arguments(self):
+        options = install.Options(Path('/x/.env'), '2', '1', False, False)
+        self.assertEqual((options.env_source, options.operations, options.engineer, options.repair, options.git_now),
+                         (Path('/x/.env'), '2', '2', False, False))
+
+    def test_steps_order_the_new_phases_after_verification_and_the_setup_code_last(self):
+        steps = install.install_steps(OWNER, '1.32.0', install.Options(env_source=Path('/x/.env'), ports='redirect'))
+        self.assertEqual([step.key for step in steps],
+                         ['admin', 'settings', 'ports', 'prereqs', 'launch', 'capture', 'verify', 'firewall', 'sshd',
+                          'engineer', 'lazydocker', 'git', 'signon'])
+        by_key = {step.key: step for step in steps}
+        self.assertTrue(all(by_key[key].bare for key in ('settings', 'ports', 'lazydocker', 'git', 'signon')))
+        self.assertTrue(by_key['signon'].post, 'the setup code never changes the installation outcome')
+        self.assertTrue(by_key['signon'].visible)
+        self.assertTrue(by_key['ports'].visible)
+        self.assertFalse(by_key['firewall'].bare)
+        self.assertFalse(by_key['firewall'].post)
+
+    def test_unchosen_phases_are_hidden_and_the_total_follows_what_is_chosen(self):
+        none = install.install_steps(OWNER, '1.32.0', install.Options(operations='2', firewall=False, ssh_hardening=False))
+        hidden = {step.key: step.visible for step in none}
+        self.assertEqual((hidden['firewall'], hidden['sshd'], hidden['ports']), (False, False, False))
+        self.assertEqual([step.title for step in none if step.title[:1].isdigit()],
+                         ['1/5 Administrator access and settings', '2/5 VM prerequisites',
+                          '3/5 Password, helpers, image and manager', '4/5 Browser Wireshark capture stack',
+                          '5/5 Running manager verification'])
+        everything = install.install_steps(OWNER, '1.32.0', install.Options())
+        self.assertEqual([step.title for step in everything if step.title[:1].isdigit()],
+                         ['1/8 Administrator access and settings', '2/8 VM prerequisites',
+                          '3/8 Password, helpers, image and manager', '4/8 Browser Wireshark capture stack',
+                          '5/8 Running manager verification', '6/8 Firewall', '7/8 SSH hardening',
+                          '8/8 Engineer access for VS Code'])
+        only_ssh = install.install_steps(OWNER, '1.32.0', install.Options(firewall=False, engineer='2'))
+        self.assertEqual([step.title for step in only_ssh if step.visible and step.title[:1].isdigit()][-1], '6/6 SSH hardening')
+
+    def test_the_helper_commands_are_exactly_the_documented_argv(self):
+        deploy = install.SOURCE / 'deploy'
+        self.assertEqual(install.firewall_command({}), ['sudo', 'bash', str(deploy / 'setup-firewall.sh')])
+        self.assertEqual(install.ssh_hardening_command(), ['sudo', 'bash', str(deploy / 'setup-ssh-hardening.sh')])
+
+    def test_the_firewall_script_is_told_the_port_of_this_ssh_session_through_sudo_env(self):
+        # sudo resets the environment: without this the script could not refuse a rule set that locks this session out.
+        command = install.firewall_command({'SSH_CONNECTION': '198.51.100.7 51234 192.0.2.10 2222'})
+        self.assertEqual(command, ['sudo', 'env', 'SSH_CONNECTION=198.51.100.7 51234 192.0.2.10 2222', 'bash',
+                                   str(install.SOURCE / 'deploy/setup-firewall.sh')])
+        self.assertEqual(install.firewall_command({'SSH_CONNECTION': 'junk; reboot'})[:2], ['sudo', 'bash'])
+
+    def test_the_step_actions_run_the_argv_they_declare(self):
+        steps = {step.key: step for step in install.install_steps(OWNER, '1.32.0', install.Options())}
+        with patch.object(install, 'command_step') as command_step:
+            steps['firewall'].action()
+            steps['sshd'].action()
+        self.assertEqual(command_step.call_args_list[0].args, (steps['firewall'].argv, OWNER))
+        self.assertEqual(command_step.call_args_list[1].args, (steps['sshd'].argv, OWNER))
+        self.assertEqual(steps['firewall'].argv, install.firewall_command(OWNER))
+        self.assertEqual(steps['sshd'].argv, install.ssh_hardening_command())
+
+    def test_the_prerequisites_install_ufw_and_openssl(self):
+        script = (install.SOURCE / 'deploy/install-prerequisites.sh').read_text()
+        self.assertRegex(script, r'for package in [^;\n]*\bopenssl\b[^;\n]*\bufw\b|for package in [^;\n]*\bufw\b[^;\n]*\bopenssl\b')
+
+
+class AdvancedQuestionsTests(unittest.TestCase):
+    def ask(self, menu_answers, confirm_answers=(False,), collide=False):
+        with patch.object(install, 'choose_env_copy', return_value=None), \
+                patch.object(exposure(), 'ports_collide', return_value=collide), \
+                patch.object(install, 'menu', side_effect=menu_answers) as menu, \
+                patch.object(install, 'confirm', side_effect=list(confirm_answers)):
+            options = install.ask_install_options(OWNER, advanced=True)
+        return options, menu
+
+    def test_the_firewall_and_ssh_questions_follow_the_engineer_question(self):
+        options, menu = self.ask(['1', '1', '1', '1'])
+        titles = [call.args[0] for call in menu.call_args_list]
+        self.assertEqual(len(titles), 4)
+        self.assertEqual(titles[0], 'Lab operation access')
+        self.assertIn('owner', titles[1])
+        self.assertIn('Firewall', titles[2])
+        self.assertIn('SSH', titles[3])
+        self.assertEqual((options.firewall, options.ssh_hardening), (True, True))
+
+    def test_skipping_each_is_one_answer_and_discovery_only_still_asks_both(self):
+        options, _ = self.ask(['1', '1', '2', '2'])
+        self.assertEqual((options.firewall, options.ssh_hardening), (False, False))
+        options, menu = self.ask(['2', '1', '2'])
+        self.assertEqual(menu.call_count, 3, 'operations, firewall, SSH: no engineer question')
+        self.assertEqual((options.operations, options.engineer, options.firewall, options.ssh_hardening),
+                         ('2', '2', True, False))
+
+    def test_the_port_question_is_asked_only_when_the_settings_collide_and_before_the_other_questions(self):
+        options, menu = self.ask(['1', '1', '1', '1', '1'], collide=True)
+        titles = [call.args[0] for call in menu.call_args_list]
+        self.assertEqual(titles[0], 'Manager ports')
+        self.assertEqual(menu.call_args_list[0].args[1][0][1].split('(')[0].strip()[:3], 'TLS')
+        self.assertEqual(options.ports, 'redirect')
+        options, _ = self.ask(['2', '1', '1', '1', '1'], collide=True)
+        self.assertEqual(options.ports, 'keep')
+        options, menu = self.ask(['1', '1', '1', '1'], collide=False)
+        self.assertEqual(options.ports, None)
+        self.assertEqual(menu.call_count, 4)
+
+    def test_the_port_question_judges_the_file_that_will_be_copied(self):
+        with patch.object(install, 'choose_env_copy', return_value=Path('/old/.env')), \
+                patch.object(exposure(), 'ports_collide', return_value=True) as collide, \
+                patch.object(install, 'menu', side_effect=['1', '1', '1', '1', '1']), patch.object(install, 'confirm', return_value=False):
+            options = install.ask_install_options(OWNER, advanced=True)
+        self.assertEqual(collide.call_args.kwargs.get('env_path'), Path('/old/.env'))
+        self.assertEqual(options.ports, 'redirect')
+
+    def test_the_port_question_wording_is_the_one_of_the_upgrade_table(self):
+        _, menu = self.ask(['1', '1', '1', '1', '1'], collide=True)
+        labels = [label for _, label in menu.call_args_list[0].args[1]]
+        self.assertEqual(labels, ['TLS on 8443 and plain-HTTP redirect on your current 8081 (recommended)',
+                                  'TLS on your current 8081, no redirect'])
+
+
+class WritePortsTests(unittest.TestCase):
+    def source(self, folder, text):
+        root = Path(folder)
+        (root / 'clab-backup-ui').mkdir()
+        target = root / 'clab-backup-ui' / '.env'
+        target.write_text(text)
+        target.chmod(0o640)
+        return root, target
+
+    def run_write(self, root, ports_collide=True):
+        with patch.object(exposure(), 'ports_collide', return_value=ports_collide), patch('sys.stdout', new=io.StringIO()) as printed:
+            install.write_ports(root)
+        return printed.getvalue()
+
+    def test_the_two_lines_replace_the_old_port_and_keep_every_other_line(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root, target = self.source(folder, 'UI_BIND=0.0.0.0\nUI_PORT=8081\nCAPTURE_SESSION_TOKEN=0123\n# note\n')
+            text = self.run_write(root)
+            lines = target.read_text().splitlines()
+            self.assertEqual(lines, ['UI_BIND=0.0.0.0', 'CAPTURE_SESSION_TOKEN=0123', '# note', 'UI_PORT=8443', 'UI_HTTP_PORT=8081'])
+            self.assertEqual(stat_mode(target), 0o600)
+            self.assertIn('TLS on 8443', text)
+            self.assertNotIn('0123', text)
+
+    def test_nothing_is_written_when_the_settings_no_longer_collide(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root, target = self.source(folder, 'UI_PORT=8081\nUI_HTTP_PORT=0\n')
+            before = target.read_bytes()
+            self.run_write(root, ports_collide=False)
+            self.assertEqual(target.read_bytes(), before)
+
+    def test_a_symlinked_settings_file_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root, target = self.source(folder, 'UI_PORT=8081\n')
+            other = Path(folder) / 'elsewhere.env'
+            other.write_text('UI_PORT=8081\n')
+            target.unlink()
+            target.symlink_to(other)
+            with self.assertRaises(ValueError):
+                self.run_write(root)
+            self.assertEqual(other.read_text(), 'UI_PORT=8081\n')
+
+    def test_the_real_collision_reader_and_writer_agree_end_to_end(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root, target = self.source(folder, 'UI_PORT=8081\n')
+            with patch.object(exposure(), 'ports_collide', _REAL_PORTS_COLLIDE), \
+                    patch.object(exposure(), 'env_file_values', _REAL_ENV_FILE_VALUES), patch('sys.stdout', new=io.StringIO()):
+                self.assertTrue(exposure().ports_collide(root))
+                install.write_ports(root)
+                self.assertFalse(exposure().ports_collide(root), 'after the write the collision is gone')
+            self.assertIn('UI_HTTP_PORT=8081', target.read_text())
+
+
+def stat_mode(path):
+    return os.stat(path).st_mode & 0o777
+
+
+class PlanLinesTests(unittest.TestCase):
+    def lines(self, options=None, **patches):
+        facts = patches.get('facts')
+        with patch.object(exposure(), 'facts', return_value=facts), \
+                patch.object(exposure(), 'ports', return_value=patches.get('ports', (8443, 8081))), \
+                patch.object(exposure(), 'ports_collide', return_value=patches.get('collide', False)):
+            return install.plan_lines(dict(OWNER, **patches.get('env', {})), '1.32.0', options or install.Options())
+
+    def test_the_standard_plan_has_the_four_new_lines_and_the_setup_code_line_is_last(self):
+        lines = self.lines()
+        self.assertEqual(len(lines), 18)
+        self.assertEqual(lines[0], 'Source: ' + str(install.SOURCE) + ' (1.32.0)')
+        self.assertIn("TLS: self-signed certificate for this VM's addresses and names in "
+                      '/srv/containerlab-node-manager/tls (kept if one exists).', lines)
+        self.assertIn('Firewall: ufw allow SSH, 8443, 8081; deny other incoming.', lines)
+        ssh = next(line for line in lines if line.startswith('SSH: '))
+        for directive in ('PermitRootLogin no', 'MaxAuthTries 4', 'LoginGraceTime 30'):
+            self.assertIn(directive, ssh)
+        self.assertEqual(lines[-2], 'Check running version and HTTPS /api/health, then set up Git under owner.')
+        self.assertEqual(lines[-1], 'Sign-on: the first administrator is created in the browser with a setup code printed at the very end.')
+
+    def test_the_tls_line_names_the_installed_certificate_or_keeps_the_provided_one(self):
+        lines = self.lines(facts=dict(FACTS, names=['vm1.example.edu']))
+        self.assertIn('TLS: self-signed certificate for 192.0.2.10, vm1.example.edu in /srv/containerlab-node-manager/tls '
+                      '(kept if one exists).', lines)
+        lines = self.lines(facts=dict(FACTS, mode='provided'))
+        self.assertIn('TLS: keep the provided certificate (expires 2028-11-01).', lines)
+
+    def test_the_firewall_line_names_the_session_ssh_port_the_ports_of_the_settings_or_says_not_selected(self):
+        lines = self.lines(env={'SSH_CONNECTION': '198.51.100.7 51234 192.0.2.10 2222'}, ports=(9443, 0))
+        self.assertIn('Firewall: ufw allow 2222, 9443; deny other incoming.', lines)
+        lines = self.lines(install.Options(firewall=False, ssh_hardening=False))
+        self.assertIn('Firewall: not selected.', lines)
+        self.assertIn('SSH hardening: not selected.', lines)
+
+    def test_a_chosen_port_move_and_an_unasked_collision_are_both_announced(self):
+        lines = self.lines(install.Options(ports='redirect'))
+        self.assertIn('Manager ports: TLS on 8443, plain-HTTP redirect on 8081 (written to clab-backup-ui/.env).', lines)
+        lines = self.lines(install.Options(ports='keep'))
+        self.assertIn('Manager ports: TLS stays on your current 8081; there is no plain-HTTP redirect.', lines)
+        lines = self.lines(collide=True)
+        self.assertTrue(any(line.startswith('Manager ports: your .env sets UI_PORT=8081') and 'no plain-HTTP redirect' in line
+                            for line in lines), lines)
+
+    def test_plain_lines_never_carry_a_setup_code(self):
+        with patch.object(exposure(), 'read_setup_code', return_value=('open', 'setup', GOOD_CODE)) as read:
+            joined = '\n'.join(self.lines())
+        read.assert_not_called()
+        self.assertNotIn(GOOD_CODE, joined)
+
+
+class SetupCodeStepTests(unittest.TestCase):
+    def show(self, reading, **kwargs):
+        said = []
+        with patch.object(exposure(), 'read_setup_code', return_value=reading) as read, \
+                patch.object(exposure(), 'primary', return_value='vm1.example.edu'), \
+                patch.object(exposure(), 'facts', return_value=FACTS), \
+                patch.object(exposure(), 'ports', return_value=(8443, 8081)):
+            result = install.show_setup_code(OWNER, say=said.append, **kwargs)
+        return result, said, read
+
+    def test_the_code_is_read_now_and_printed_with_the_primary_url(self):
+        result, said, read = self.show(('open', 'setup', GOOD_CODE))
+        self.assertEqual(result, 'open')
+        self.assertEqual(said[0], f'Open https://vm1.example.edu:8443/setup and enter this setup code: {GOOD_CODE}')
+        self.assertEqual(said[1], 'It is also readable on the VM with: sudo cat /srv/containerlab-node-manager/data/setup-code')
+        self.assertEqual(read.call_args.kwargs, {'cwd': str(install.SOURCE), 'sudo': ('sudo',), 'interactive': True})
+
+    def test_the_full_screen_form_uses_sudo_n_and_no_terminal(self):
+        _, _, read = self.show(('absent', None, None), sudo=('sudo', '-n'), interactive=False)
+        self.assertEqual(read.call_args.kwargs['sudo'], ('sudo', '-n'))
+        self.assertFalse(read.call_args.kwargs['interactive'])
+
+    def test_an_existing_administrator_and_an_unreadable_file_print_their_own_sentence(self):
+        result, said, _ = self.show(('absent', None, None))
+        self.assertEqual((result, said), ('absent', ['An administrator exists; sign in at https://vm1.example.edu:8443/']))
+        result, said, _ = self.show(('unreadable', None, None))
+        self.assertEqual(result, 'unreadable')
+        self.assertIn('sudo cat /srv/containerlab-node-manager/data/setup-code', said[0])
+
+    def test_the_url_falls_back_to_the_certificate_address_when_the_primary_cannot_be_read(self):
+        said = []
+        with patch.object(exposure(), 'read_setup_code', return_value=('open', 'setup', GOOD_CODE)), \
+                patch.object(exposure(), 'primary', return_value=None), patch.object(exposure(), 'facts', return_value=FACTS), \
+                patch.object(exposure(), 'ports', return_value=(8443, 8081)):
+            install.show_setup_code(OWNER, say=said.append)
+        self.assertTrue(said[0].startswith('Open https://192.0.2.10:8443/setup and enter'), said[0])
+
+
+class ClosingLinesTests(unittest.TestCase):
+    def install_run(self, events, options=None, advanced=False, reading=('open', 'setup', GOOD_CODE)):
+        options = options or install.Options()
+        with patch.object(install, 'ask_install_options', return_value=options), \
+                patch.object(install, 'phase', side_effect=lambda title, action, env=None: events.append(('phase', title))), \
+                patch.object(install, 'setup_lazydocker', side_effect=lambda env: events.append(('lazydocker',))), \
+                patch.object(install, 'git_setup', side_effect=lambda env: events.append(('git',))), \
+                patch.object(install, 'write_ports', side_effect=lambda *a, **k: events.append(('ports',))), \
+                patch.object(exposure(), 'read_setup_code', side_effect=lambda **k: (events.append(('read-code',)), reading)[1]), \
+                patch.object(exposure(), 'primary', return_value='vm1.example.edu'), \
+                patch.object(exposure(), 'facts', return_value=FACTS), \
+                patch.object(exposure(), 'ports', return_value=(8443, 8081)), \
+                patch('sys.stdout', new=io.StringIO()) as printed:
+            install.install(OWNER, '1.32.0', advanced=advanced)
+        return printed.getvalue().splitlines()
+
+    def test_the_code_is_read_after_git_and_after_every_step_that_could_restart_the_manager(self):
+        events = []
+        self.install_run(events)
+        kinds = [event[0] for event in events]
+        self.assertEqual(kinds[-3:], ['lazydocker', 'git', 'read-code'])
+        self.assertEqual(kinds.count('read-code'), 1)
+        titles = [event[1] for event in events if event[0] == 'phase']
+        self.assertEqual([t[:3] for t in titles], ['1/8', '2/8', '3/8', '4/8', '5/8', '6/8', '7/8', '8/8'])
+        self.assertEqual(titles.index(next(t for t in titles if 'Firewall' in t)), 5)
+
+    def test_the_final_lines_are_the_setup_url_and_code_then_the_command(self):
+        lines = self.install_run([])
+        self.assertEqual(lines[-2], f'Open https://vm1.example.edu:8443/setup and enter this setup code: {GOOD_CODE}')
+        self.assertEqual(lines[-1], 'It is also readable on the VM with: sudo cat /srv/containerlab-node-manager/data/setup-code')
+
+    def test_the_address_and_the_fingerprint_come_before_the_git_and_health_check_sentences(self):
+        text = '\n'.join(self.install_run([]))
+        address = text.index('Open the manager at https://vm1.example.edu:8443/, https://192.0.2.10:8443/')
+        fingerprint = text.index('its SHA-256 fingerprint is AB:CD:EF')
+        vm_connection = text.index('In VM connection use clab-discovery')
+        health = text.index('check-install.sh')
+        self.assertLess(address, fingerprint)
+        self.assertLess(fingerprint, vm_connection)
+        self.assertLess(vm_connection, health)
+        self.assertIn('plain HTTP on 8081 redirects there', text)
+
+    def test_an_installation_with_an_administrator_ends_with_the_sign_in_line(self):
+        lines = self.install_run([], reading=('absent', None, None))
+        self.assertEqual(lines[-1], 'An administrator exists; sign in at https://vm1.example.edu:8443/')
+
+    def test_the_port_write_happens_before_the_launcher_and_only_when_chosen(self):
+        events = []
+        self.install_run(events, options=install.Options(ports='redirect'))
+        order = [event[0] if event[0] != 'phase' else event[1][:3] for event in events]
+        self.assertEqual(order[0], '1/8')
+        self.assertLess(order.index('ports'), order.index('3/8'))
+        events = []
+        self.install_run(events)
+        self.assertNotIn(('ports',), events)
+
+    def test_a_cancelled_run_prints_no_setup_code(self):
+        printed = io.StringIO()
+        with patch.object(install, 'ask_install_options', return_value=install.Options()), \
+                patch.object(install, 'phase', side_effect=install.Cancelled()), \
+                patch.object(exposure(), 'read_setup_code') as read, patch('sys.stdout', new=printed):
+            with self.assertRaises(install.Cancelled):
+                install.install(OWNER, '1.32.0')
+        read.assert_not_called()
+        self.assertNotIn('enter this setup code', printed.getvalue())
+        self.assertNotIn(GOOD_CODE, printed.getvalue())
+
+    def test_no_command_the_installer_runs_carries_the_code(self):
+        seen = []
+        with patch.object(install, 'ask_install_options', return_value=install.Options()), \
+                patch.object(install, 'run', side_effect=record_run(seen)), patch.object(install, 'verify_manager'), \
+                patch.object(install, 'setup_lazydocker'), patch.object(install, 'git_setup'), \
+                patch.object(exposure(), 'read_setup_code', return_value=('open', 'setup', GOOD_CODE)), \
+                patch.object(exposure(), 'primary', return_value='vm1'), patch('sys.stdout', new=io.StringIO()):
+            install.install(OWNER, '1.32.0')
+        self.assertNotIn(GOOD_CODE, '\n'.join(seen))
 
 
 if __name__ == '__main__':
