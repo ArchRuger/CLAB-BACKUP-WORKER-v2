@@ -57,14 +57,22 @@ U-Q1…Q8), **E** = `EXPOSURE.md`, **Dq** = D's open questions to the lead.
 | Dq 5 | Unify the three security-header sets | Yes: one function `security_headers(response)` in a new `app/headers.py` used by `HostCheck`, the gate and the guard. In scope for the build; it removes the gap that the guard's early returns carry no headers (INVENTORY 6.1). |
 | Dq 6 | `GET /api/logs` admin-only now that it names actors | Stays operator (D2 shared labs). The actor field names users, not secrets. |
 
-## 4. Interfaces E must answer (filled in when `EXPOSURE.md` lands)
+## 4. Rulings on `EXPOSURE.md` (E landed after sections 1-3 were written)
 
-1. The scheme rule `origin.scheme(scope)`: `https` when the ASGI scheme is `https`/`wss` or `UI_TLS=1`;
-   `UI_TLS` in both compose files.
-2. The health checker and the installer move their version and capture questions to `docker exec`;
-   `GET /api/health` answers `{ready:true}` only.
-3. The setup code file `/data/setup-code` is read and printed by the installer and reported by the
-   health check while it exists.
-4. `deploy/manager-recover-admin.sh` exists, runs `docker exec … python -m app.recover`, is in the CI
-   `bash -n` loop.
-5. No secret in the container environment (D ruling 13); a TLS key path is fine.
+E answered every interface of the earlier version of this section. The lead's rulings on E's open
+questions (E 11) and on its interfaces (E 9):
+
+| Id | Question | Ruling |
+|---|---|---|
+| E-Q1 | `UI_TLS` | **Dropped.** uvicorn terminates TLS, so `origin.scheme(scope)` reads the ASGI scope only. `test_release_consistency.py` asserts the key is absent from both compose files. D 5.6 and the earlier text of this section are amended accordingly. |
+| E-Q2 | `python -m app.probe design-engine|capture` | The backend builder's slice, under D's ruling 12 extended: the probe never constructs a `Store`; a fact that would need lab state is dropped from the health check rather than read. |
+| E-Q3 | `fail2ban` | Recommend and WARN in the health check, as E designs it. Not installed by the installer in this version. |
+| E-Q4 | `DOCKER-USER` rule | Out of this version; scheduled for the owner's live pass with deployed labs. |
+| E-Q5 | HSTS `max-age` | **180 days** (E 10.4): operators are lab engineers; a lapsed trusted certificate must not lock a course out for a year. No `includeSubDomains`, no `preload`. |
+| E-Q6 | A `verify_docs()` rule refusing `http://…:8081` manager URLs in living guides | **Yes**, added in the build (deploy/verify-release.py `verify_docs`), history files exempt. |
+| E-Q7 | The invariant sentence for `app/redirect.py` | The lead writes it at the release step: `app/redirect.py` is the one listener outside the guard; it answers 301 to the manager's own origin (after `host_allowed`), 400 or 405, and nothing else. |
+| E 9.4 | `--proxy-headers` | E found that uvicorn 0.54 enables `--proxy-headers` by default, trusting loopback; INVENTORY 4 is corrected: the feature is **active today**. The build passes `--no-proxy-headers` explicitly in both compose files and the Dockerfile `CMD`, and `test_release_consistency.py` pins it. |
+| E 9.5 | Health checker through `docker exec` | Accepted as E 6 designs it; `GET /api/health` stays the only HTTP question the checker asks. |
+| E 9.12 | CLAUDE.md wording | See E-Q7. |
+
+The build order for E's pieces is in `PICKUP.md` section 3.
