@@ -509,9 +509,12 @@ class PortsTests(unittest.TestCase):
         self.assertEqual(service.route_env_file().name, '.env')
         self.assertFalse(any(call[0] == 'docker' for call in runner.calls))
 
-    def test_allowed_hosts_are_the_union_of_both_env_files(self):
+    def test_allowed_hosts_are_the_union_of_both_env_files_in_the_order_written(self):
         service = tls(self.tmp, allowed='a.example.edu', image_env='UI_ALLOWED_HOSTS=b.example.edu,A.example.edu\n')
         self.assertEqual(service.allowed_names(), ['a.example.edu', 'b.example.edu'])
+        service = tls(self.tmp, allowed='Second.example.edu, first.example.edu, http://ignored', image_env='')
+        self.assertEqual(service.allowed_names(), ['second.example.edu', 'first.example.edu'])
+        self.assertEqual(service.primary(), 'second.example.edu', 'the first name listed is the primary name (EXPOSURE.md 3.2)')
 
 
 FAKE_IP = """#!/usr/bin/env bash

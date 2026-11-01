@@ -38,6 +38,7 @@ if [[ -n "$manager_image" ]]; then
   fi
 fi
 echo "Recreating the manager from $route."
-"${compose[@]}" up -d --no-build --no-deps backup-ui
+# Both services read the settings: the manager its TLS files and environment, the redirect its ports.
+"${compose[@]}" up -d --no-build --no-deps backup-ui http-redirect
 "${compose[@]}" ps
-echo 'Manager recreated with the current settings; saved data and the VM password are retained.'
+echo 'Manager recreated with the current settings, and the redirect listener with it; saved data and the VM password are retained.'

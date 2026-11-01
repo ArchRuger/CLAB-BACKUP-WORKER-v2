@@ -31,6 +31,10 @@ def docs_fixture(root, version):
         'clab-backup-ui/README.md': 'Run the tests.\n',
         'clab-backup-ui/NODE-FEATURES.md': 'Node actions.\n',
         'deploy/NOTICES.md': '| xterm (`xterm` 1.20.1) | MIT |\n',
+        # The two standalone pages are living documentation too; the fixture's own copies keep the
+        # ?v= marker setUp's lockstep check needs and carry no plain-HTTP manager address.
+        'clab-backup-ui/app/static/vm-connection.html': f'<script src="/static/vm-connection.js?v={version}"></script>\n',
+        'clab-backup-ui/app/static/capture-setup.html': f'<script src="/static/capture-setup.js?v={version}"></script>\n',
     }
     for rel, text in files.items():
         path = root / rel
@@ -85,18 +89,80 @@ class ReleaseConsistencyTests(unittest.TestCase):
         path.write_bytes(path.read_bytes().strip() + b'\r\n')
         self.assertEqual(release.verify(self.root), release.verify(ROOT))
 
-    def test_the_prepared_image_compose_file_passes_the_same_settings_as_the_source_build(self):
+    @staticmethod
+    def services(path):
+        """service name -> its block text, for the two compose files (no YAML parser: stdlib only)."""
         import re
+        text = (ROOT / path).read_text(encoding='utf-8')
+        parts = re.split(r'^  ([a-z][a-z-]*):\n', text.split('services:\n', 1)[1], flags=re.M)
+        return dict(zip(parts[1::2], parts[2::2]))
 
-        def settings(path):
-            text = (ROOT / path).read_text(encoding='utf-8')
-            block = text.split('    environment:\n', 1)[1]
-            return set(re.findall(r'^      ([A-Z][A-Z_]+):', block.split('    volumes:', 1)[0], re.M))
+    @staticmethod
+    def environment(block):
+        import re
+        return set(re.findall(r'^      ([A-Z][A-Z_]+):', block.split('    volumes:', 1)[0], re.M))
 
-        built, image = settings('clab-backup-ui/compose.yml'), settings('deploy/compose.image.yml')
-        self.assertIn('CAPTURE_EDGESHARK_URL', built)
-        self.assertFalse(any(key.startswith('TELEMETRY_') for key in built), 'the Grafana/Prometheus telemetry stack was retired')
-        self.assertEqual(built, image)
+    def test_the_prepared_image_compose_file_passes_the_same_settings_as_the_source_build(self):
+        built, image = self.services('clab-backup-ui/compose.yml'), self.services('deploy/compose.image.yml')
+        self.assertEqual(set(built), {'backup-ui', 'http-redirect'})
+        self.assertEqual(set(image), {'backup-ui', 'http-redirect'})
+        manager = self.environment(built['backup-ui'])
+        self.assertIn('CAPTURE_EDGESHARK_URL', manager)
+        self.assertFalse(any(key.startswith('TELEMETRY_') for key in manager), 'the Grafana/Prometheus telemetry stack was retired')
+        # The manager's environment gains UI_PORT for its setup log line and nothing else (EXPOSURE.md 2.4).
+        self.assertEqual(manager, {'DATA_DIR', 'UI_ALLOWED_HOSTS', 'CAPTURE_PROVIDER', 'CAPTURE_EDGESHARK_URL', 'CAPTURE_SESSION_URL',
+                                   'CAPTURE_SESSION_TOKEN', 'UI_PORT'})
+        self.assertEqual(self.environment(built['http-redirect']), {'UI_BIND', 'UI_PORT', 'UI_HTTP_PORT', 'UI_ALLOWED_HOSTS'})
+        for service in ('backup-ui', 'http-redirect'):
+            with self.subTest(service=service):
+                self.assertEqual(self.environment(built[service]), self.environment(image[service]))
+
+    def test_both_compose_files_serve_tls_with_fixed_paths_and_no_proxy_headers(self):
+        for path in ('clab-backup-ui/compose.yml', 'deploy/compose.image.yml'):
+            with self.subTest(path=path):
+                text = (ROOT / path).read_text(encoding='utf-8')
+                services = self.services(path)
+                manager, redirect = services['backup-ui'], services['http-redirect']
+                command = next(line for line in manager.splitlines() if line.strip().startswith('command:'))
+                for argument in ('"--ssl-certfile", "/tls/cert.pem"', '"--ssl-keyfile", "/tls/key.pem"', '"--no-proxy-headers"',
+                                 '"--no-server-header"', '"--port", "${UI_PORT:-8443}"', '"--host", "${UI_BIND:-0.0.0.0}"', '"--workers", "1"'):
+                    self.assertIn(argument, command)
+                self.assertIn('UI_PORT: ${UI_PORT:-8443}', manager)
+                self.assertNotIn('UI_TLS', text, 'uvicorn terminates TLS; no scheme flag exists (RECONCILIATION 4, E-Q1)')
+                self.assertNotIn('FORWARDED_ALLOW_IPS', text)
+                mount = manager.split('source: /srv/containerlab-node-manager/tls', 1)[1].split('cap_drop', 1)[0]
+                self.assertIn('target: /tls', mount)
+                self.assertIn('read_only: true', mount)
+                self.assertIn('create_host_path: false', mount)
+                self.assertIn('command: ["python", "-m", "app.redirect"]', redirect)
+                for setting in ('restart: unless-stopped', 'network_mode: host', 'read_only: true', 'cap_drop: [ALL]', 'no-new-privileges:true',
+                                'UI_HTTP_PORT: ${UI_HTTP_PORT:-8081}'):
+                    self.assertIn(setting, redirect)
+                self.assertNotIn('volumes:', redirect, 'the redirect listener mounts nothing')
+                self.assertNotIn('8081', command, 'the manager command names no plain-HTTP port')
+
+    def test_the_dockerfile_command_serves_tls_and_exposes_both_ports(self):
+        dockerfile = (ROOT / 'clab-backup-ui/Dockerfile').read_text(encoding='utf-8')
+        command = next(line for line in dockerfile.splitlines() if line.startswith('CMD '))
+        for argument in ('"--port", "8443"', '"--ssl-certfile", "/tls/cert.pem"', '"--ssl-keyfile", "/tls/key.pem"', '"--no-proxy-headers"',
+                         '"--no-server-header"'):
+            self.assertIn(argument, command)
+        self.assertNotIn('8081', command)
+        self.assertIn('EXPOSE 8443 8081', dockerfile)
+
+    def test_the_launcher_makes_the_certificate_before_the_build_and_names_the_https_address(self):
+        launcher = (ROOT / 'deploy/start-manager.sh').read_text()
+        tls_step = 'bash "$script_dir/setup-tls.sh" --no-recreate'
+        self.assertIn(tls_step, launcher)
+        self.assertLess(launcher.index('setup-vm.sh'), launcher.index(tls_step))
+        self.assertLess(launcher.index(tls_step), launcher.index('setup-discovery.sh'))
+        self.assertIn('setup-tls.sh" --primary', launcher)
+        self.assertIn('https://', launcher)
+        self.assertIn('/srv/containerlab-node-manager/data/setup-code', launcher)
+        self.assertNotIn('TCP 8081', launcher)
+        self.assertNotIn('without a login', launcher)
+        recreate = (ROOT / 'deploy/recreate-manager.sh').read_text()
+        self.assertIn('up -d --no-build --no-deps backup-ui http-redirect', recreate)
 
     def test_source_check_precedes_host_setup(self):
         launcher = (ROOT / 'deploy/start-manager.sh').read_text()
@@ -173,6 +239,25 @@ class ReleaseConsistencyTests(unittest.TestCase):
             'Prometheus v3.14.0, Grafana 13.0.2, cEOS 4.35.0F at 172.20.20.2, plugin v0.24.0 and xterm.js 1.5.0.\n'
             'See the [UI refinement](archive/UI-UPDATE-1.12.1.md) and [the audit](archive/REPOSITORY-AUDIT-1.15.1.md).\n', encoding='utf-8')
         self.assertEqual(release.verify_docs(self.root), self.version)
+
+    def test_plain_http_manager_urls_on_8081_are_refused_in_living_guides_and_allowed_in_history(self):
+        docs_fixture(self.root, self.version)
+        (self.root / 'docs/GUIDE.md').write_text('Open https://192.0.2.10:8443/ and sign in. Edgeshark listens on http://127.0.0.1:5001.\n'
+                                                 'Old bookmarks on the plain-HTTP port 8081 answer a redirect.\n', encoding='utf-8')
+        (self.root / 'docs/archive/OLD.md').write_text('# Old — 1.12.0\n\nOpen http://VM_IP:8081 in a browser.\n', encoding='utf-8')
+        (self.root / 'docs/CHANGELOG.md').write_text(f'# Changelog\n\n## Changes in {self.version}\n\n- the manager answered on http://VM:8081\n',
+                                                     encoding='utf-8')
+        self.assertEqual(release.verify_docs(self.root), self.version)
+        (self.root / 'docs/GUIDE.md').write_text('Open `http://192.0.2.10:8081/` in a browser.\n\nOr http://VM_IP:8081 and http://localhost:8081/#lab=x.\n',
+                                                 encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'disagrees') as error:
+            release.verify_docs(self.root)
+        message = str(error.exception)
+        self.assertIn('docs/GUIDE.md:1: plain-HTTP manager URL', message)
+        self.assertIn('docs/GUIDE.md:3: plain-HTTP manager URL', message)
+        self.assertIn('https://', message, 'the message says what to write instead')
+        self.assertNotIn('archive', message)
+        self.assertNotIn('CHANGELOG', message)
 
     def test_release_sections_must_lead_the_history_files_and_the_readme(self):
         docs_fixture(self.root, self.version)

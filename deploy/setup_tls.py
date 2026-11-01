@@ -140,7 +140,7 @@ def subject_names(addresses, hostname, allowed, names):
     host = (hostname or '').strip().lower()
     if host and (_is_ip(host) or (allowed_hosts.host_name(host) == host and not host.startswith('['))):
         entries.append(san(host))
-    entries += ['DNS:' + name for name in sorted(allowed)]
+    entries += ['DNS:' + name for name in allowed]
     entries += [san(name) for name in names]
     result = []
     for entry in entries:
@@ -228,8 +228,7 @@ class Tls:
         return result
 
     def _ip_json(self, argv):
-        if shutil.which('ip') is None and self.run is subprocess.run:
-            return []
+        """Parsed JSON of one `ip -j` command; an absent or failing `ip` counts as an empty document."""
         try:
             result = self.command(['ip', *argv])
             return json.loads(result.stdout) if result.returncode == 0 else []
@@ -302,10 +301,16 @@ class Tls:
         return [self.repo / 'clab-backup-ui/.env', self.repo / 'deploy/image.env']
 
     def allowed_names(self):
-        names = set()
+        """Every UI_ALLOWED_HOSTS name of both env files, in the order written (the first is the primary name)."""
+        names = []
         for path in self.env_files():
-            names |= allowed_hosts.configured_hosts(env_values(path).get('UI_ALLOWED_HOSTS', ''))
-        return sorted(names)
+            text = env_values(path).get('UI_ALLOWED_HOSTS', '')
+            accepted = allowed_hosts.configured_hosts(text)
+            for entry in text.split(','):
+                name = allowed_hosts.host_name(entry.strip()) if entry.strip() else None
+                if name in accepted and name not in names:
+                    names.append(name)
+        return names
 
     def host_addresses(self):
         routes = self._ip_json(['-j', 'route', 'show', 'default']) + self._ip_json(['-6', '-j', 'route', 'show', 'default'])
