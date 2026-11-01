@@ -136,7 +136,7 @@ class RestoreServiceTests(unittest.TestCase):
         self.backup = self.make_source_backup()
         self.app = FastAPI()
         self.svc.install(self.app)
-        self.client = SignedInClient(self.app)
+        self.client = TestClient(self.app)   # a bare FastAPI with the restore routes only: no gate, so no sign-in (the create_app sites below use SignedInClient)
 
     def node(self, name, platform='juniper_cjunosevolved'):
         return {'name': name, 'platform': platform, 'address': '172.20.20.2', 'port': 22,
