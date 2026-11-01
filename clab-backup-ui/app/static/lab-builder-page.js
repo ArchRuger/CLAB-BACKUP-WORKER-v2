@@ -14,7 +14,40 @@ let builderUnstored=null;
 // shortcuts work on the whole document, so the overlay alone does not stop them).
 let builderPaused=null;
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6000);}
-async function api(path,options={}){let response;try{response=await fetch('/api'+path,options);}catch{throw Object.assign(new Error('The manager did not answer. Check that it is running and that this computer can reach it.'),{network:true});}if(!response.ok){const value=await response.json().catch(()=>({}));throw Object.assign(new Error(value.detail||'Request failed.'),{status:response.status});}return response;}
+// A refusal's own sentence: the sign-on answers carry {detail:{code,message}} (REVIEW U11), older routes a plain string.
+function builderDetail(value){const d=value&&value.detail;return typeof d==='string'?d:d&&typeof d==='object'&&typeof d.message==='string'?d.message:'';}
+const BUILDER_SESSION_TEXT='Your session ended. Your drawing is still on this page, not stored in this browser. Sign in in a new tab, then continue.';
+// The reaction to a lost session (UI 3.5). A drawing that is stored in this browser loses nothing by a redirect; one the browser could not
+// store is held by the page (builderUnstored), so the problem overlay pauses editing until a request succeeds again. Marks the page once.
+function builderSignedOut(){
+ if(typeof sessionMark==='function'&&!sessionMark())return;
+ if(builderUnstored===null){if(typeof sessionGo==='function')sessionGo('ended');return;}
+ if(builderPaused&&builderPaused.code!=='signed_out')return;
+ builderProblem(BUILDER_SESSION_TEXT,'signed_out');
+ if(typeof sessionOnResume==='function')sessionOnResume(builderResume);
+}
+// Registered with sessionRetry(): the retry's own request (the page's refresh()) succeeded, so lift the pause. The drawing the browser could
+// not store is written again; builderStoreAgain() reloads on success and shows the storage problem when it still fails.
+function builderResume(){
+ if(!builderPaused||builderPaused.code!=='signed_out')return;
+ builderPaused=null;$('root').inert=false;$('builder-problem').hidden=true;builderRenderBar();
+ if(builderUnstored)builderStoreAgain();
+}
+// Try again: sessionRetry() clears the flag, repeats the state request and, unless that was refused again, runs builderResume().
+async function builderTryAgain(){
+ if(typeof sessionRetry==='function')await sessionRetry();else builderResume();
+}
+async function api(path,options={}){
+ // Nothing leaves a page that is signed out (REVIEW U8).
+ if(typeof sessionEnded==='function'&&sessionEnded()&&typeof sessionEndedError==='function')throw sessionEndedError();
+ let response;try{response=await fetch('/api'+path,options);}catch{throw Object.assign(new Error('The manager did not answer. Check that it is running and that this computer can reach it.'),{network:true});}
+ if(!response.ok){
+  const value=await response.json().catch(()=>({}));
+  if(response.status===401&&typeof sessionLost==='function'&&sessionLost(401,value)){builderSignedOut();throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+  throw Object.assign(new Error(builderDetail(value)||'Request failed.'),{status:response.status});
+ }
+ return response;
+}
 async function json(path,method,data){
  const value=await(await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();
  // The review's own answer says whether the save met a deployed lab (operations.js does not hand it back).
@@ -315,7 +348,7 @@ function builderRenderBar(){
  $('builder-line').hidden=!line&&!review;
 }
 function builderHint(){const hint=$('builder-hint');if(hint)hint.hidden=!builderMounted||!!document.querySelector('.react-flow__node');}
-function builderProblem(message,code){builderPaused=builderPaused||Object.assign(new Error(message),{code});$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem-retry').hidden=code!=='storage';$('builder-problem').hidden=false;$('builder-problem-download').focus();builderRenderBar();}
+function builderProblem(message,code){builderPaused=builderPaused||Object.assign(new Error(message),{code});$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem-retry').hidden=code!=='storage';$('builder-problem-signin').hidden=$('builder-problem-again').hidden=code!=='signed_out';$('builder-problem').hidden=false;$('builder-problem-download').focus();builderRenderBar();}
 // The editor's side of the page (see lab-builder/src/main.tsx).
 const builderPage={
  // Throws when the pair could not be stored; the editor then reports the edit as failed and the page
@@ -843,7 +876,7 @@ async function builderConnect(){
 async function builderStart(){
  const params=new URLSearchParams(location.hash.slice(1));
  builderLabId=params.get('lab')||'';
- for(const [id,fn] of [['builder-save',()=>opTask(null,builderSave)],['builder-yaml',()=>builderYamlPanelToggle()],['builder-undo',()=>builderHistoryStep('undo')],['builder-redo',()=>builderHistoryStep('redo')],['builder-download',builderDownload],['builder-drafts',builderDraftsDialog],['builder-welcome-new',()=>builderNewDialog(params.get('root')||opBuilderRoot('',builderCaps?.roots))],['builder-welcome-drafts',builderDraftsDialog],['builder-drop-pick',()=>$('builder-drop-file').click()],['builder-problem-reload',()=>location.reload()],['builder-problem-download',builderDownload],['builder-problem-retry',builderStoreAgain],['builder-note-retry',()=>opTask(null,builderConnect)]])$(id).onclick=fn;
+ for(const [id,fn] of [['builder-save',()=>opTask(null,builderSave)],['builder-yaml',()=>builderYamlPanelToggle()],['builder-undo',()=>builderHistoryStep('undo')],['builder-redo',()=>builderHistoryStep('redo')],['builder-download',builderDownload],['builder-drafts',builderDraftsDialog],['builder-welcome-new',()=>builderNewDialog(params.get('root')||opBuilderRoot('',builderCaps?.roots))],['builder-welcome-drafts',builderDraftsDialog],['builder-drop-pick',()=>$('builder-drop-file').click()],['builder-problem-reload',()=>location.reload()],['builder-problem-download',builderDownload],['builder-problem-retry',builderStoreAgain],['builder-problem-again',builderTryAgain],['builder-note-retry',()=>opTask(null,builderConnect)]])$(id).onclick=fn;
  builderDropWire();
  $('root').insertAdjacentHTML('afterend',builderYamlPanelMarkup());builderYamlPanelInit(builderYamlOptions(null));
  builderRenderBar();

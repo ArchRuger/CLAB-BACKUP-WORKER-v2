@@ -1,17 +1,32 @@
 // map-editor-page.js: the pure rules of the map editor page, its save and leave behaviour over a small
 // fake document, and the wiring that sends Edit map there.
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+// A stand-in for app/static/session.js with the exact contract of docs/sign-on/UI.md 3.2 (the real file is S8's).
+const SESSION_STAND_IN=`
+let sessionFlag=false;const sessionFns=new Set();
+function sessionLost(status,data){return status===401&&!!data&&typeof data==='object'&&!!data.detail&&typeof data.detail==='object'&&data.detail.code==='signed_out';}
+function loginUrl(pathname,search,hash,reason){return '/login?next='+encodeURIComponent(pathname+search+hash)+(reason?'&reason=ended':'');}
+function sessionEnded(){return sessionFlag;}
+function sessionMark(){if(sessionFlag)return false;sessionFlag=true;return true;}
+function sessionClear(){sessionFlag=false;}
+function sessionEndedError(){return Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});}
+function sessionGo(reason){if(typeof location!=='undefined')location.replace(loginUrl(location.pathname,location.search,location.hash,reason));}
+function sessionOnResume(fn){if(typeof fn==='function')sessionFns.add(fn);}
+async function sessionRetry(){sessionClear();if(typeof refresh==='function'){try{await refresh();}catch{}}if(sessionFlag)return false;if(typeof sessionRestored==='function')sessionRestored();const fns=[...sessionFns];sessionFns.clear();for(const fn of fns){try{fn();}catch{}}return true;}
+`;
 const read=name=>fs.readFileSync(path.join(__dirname,'../app/static/'+name),'utf8');
-function harness({hash='#lab=lab1',doc={name:'BGP lab',yaml:'name: bgp\n',annotations:'{"nodeAnnotations":[]}',revision:'r1'},put}={}){
+function harness({session=false,get,hash='#lab=lab1',doc={name:'BGP lab',yaml:'name: bgp\n',annotations:'{"nodeAnnotations":[]}',revision:'r1'},put}={}){
  const elements=new Map(),calls=[],moves=[],toasts=[];
  const el=id=>{if(!elements.has(id))elements.set(id,{id,hidden:false,disabled:false,textContent:'',className:'',title:'',href:'',value:'',files:[],inert:false,open:false,onclick:null,focused:0,focus(){this.focused++;},showModal(){this.open=true;},close(){this.open=false;}});return elements.get(id);};
  const context=vm.createContext({console,URLSearchParams,Blob:class{},URL:{createObjectURL:()=>'blob:x',revokeObjectURL(){}},setTimeout:()=>0,clearTimeout(){},
   document:{getElementById:el,title:'',querySelector:()=>null,createElement:()=>({click(){},remove(){}}),body:{append(){}}},
-  location:{hash,assign:u=>moves.push(u),reload:()=>moves.push('reload')},
+  location:{hash,pathname:'/static/map-editor.html',search:'',assign:u=>moves.push(u),replace:u=>moves.push('replace:'+u),reload:()=>moves.push('reload')},
   fetch:async(url,options={})=>{calls.push({url,method:options.method||'GET',body:options.body?JSON.parse(options.body):undefined});
+   if((options.method||'GET')==='GET'&&get){const answer=get(url);if(answer)return answer;}
    if((options.method||'GET')==='GET')return doc?{ok:true,json:async()=>doc}:{ok:false,status:409,json:async()=>({detail:'This lab has no topology file in the manager, so its map opens in the simple editor.'})};
    return put?put(JSON.parse(options.body)):{ok:true,json:async()=>({saved:true,revision:'r2'})};}});
  context.window=context;context.window.addEventListener=()=>{};
+ if(session)vm.runInContext(SESSION_STAND_IN,context);
  vm.runInContext(read('map-editor-page.js'),context);
  return {context,el,calls,moves,toasts,flush:()=>new Promise(r=>setImmediate(r))};
 }
@@ -133,4 +148,46 @@ test('L-37: when the editor goes inert the problem overlay takes focus on its Do
  c.mapProblem('The editor refused that edit.');
  assert.equal(h.el('root').inert,true);assert.equal(h.el('builder-problem').hidden,false);assert.equal(h.el('builder-problem-text').textContent,'The editor refused that edit.');
  assert.equal(h.el('map-problem-download').focused,1,'focus moves to Download this map, the way to keep unsaved edits');
+});
+
+// ---- signed out (docs/sign-on/UI.md 3.5) ----
+const lostAnswer={ok:false,status:401,json:async()=>({detail:{code:'signed_out',message:'Your session ended. Sign in again.'}})};
+const SESSION_TOAST='Your session ended. Sign in in a new tab, then save again.';
+test('nothing unsaved: a signed_out answer leaves for the sign-in page at once with this page as next',async()=>{
+ const h=harness({session:true,get:url=>url.endsWith('/map-document')?lostAnswer:null});await h.flush();
+ assert.deepEqual(h.moves,['replace:/login?next='+encodeURIComponent('/static/map-editor.html#lab=lab1')+'&reason=ended']);
+ assert.equal(h.context.sessionEnded(),true);
+ const before=h.calls.length;await assert.rejects(()=>h.context.api('/labs/lab1/topology'),e=>e.sessionEnded===true);
+ assert.equal(h.calls.length,before,'a page that is signed out sends nothing');
+});
+test('unsaved changes: the page pauses, says so with the new-tab link, keeps the changes and warns on leaving',async()=>{
+ const h=harness({session:true,put:()=>lostAnswer}),c=h.context;await h.flush();c.labBuilderPage.ready(async()=>{});await h.flush();
+ c.labBuilderPage.persist('name: bgp\n','a');c.labBuilderPage.persist('name: bgp\n','b');
+ await h.el('map-save').onclick();await h.flush();
+ assert.equal(h.moves.length,0,'no redirect: the drawing would be lost');
+ assert.equal(h.el('map-status').textContent,'Editing paused');assert.equal(h.el('toast').textContent,SESSION_TOAST);
+ assert.equal(h.el('map-session').hidden,false,'the new-tab link is shown');assert.equal(vm.runInContext('mapCurrent',c),'b','the changes are kept');
+ assert.equal(h.el('map-save').disabled,false,'Save stays available: it is the way back');assert.equal(vm.runInContext('mapPaused',c),false,'beforeunload keeps asking while changes are unsaved');
+ h.el('map-back').onclick({preventDefault(){}});assert.equal(h.el('map-leave').open,true);
+});
+test('the next Save calls sessionRetry first, then saves; a second 401 pauses again',async()=>{
+ let signedIn=false;const h=harness({session:true,put:()=>signedIn?{ok:true,json:async()=>({saved:true,revision:'r2'})}:lostAnswer}),c=h.context;await h.flush();
+ c.labBuilderPage.ready(async()=>{});await h.flush();c.labBuilderPage.persist('name: bgp\n','a');c.labBuilderPage.persist('name: bgp\n','b');
+ await h.el('map-save').onclick();await h.flush();assert.equal(h.el('map-status').textContent,'Editing paused');
+ const putsBefore=h.calls.filter(x=>x.method==='PUT').length,order=[];
+ const real=c.sessionRetry;c.sessionRetry=async()=>{order.push('retry:'+h.calls.filter(x=>x.method==='PUT').length);return real();};
+ await h.el('map-save').onclick();await h.flush();
+ assert.deepEqual(order,['retry:'+putsBefore],'sessionRetry ran before the PUT');assert.equal(h.calls.filter(x=>x.method==='PUT').length,putsBefore+1);
+ assert.equal(h.el('map-status').textContent,'Editing paused','still signed out: paused again');assert.equal(h.el('toast').textContent,SESSION_TOAST);
+ signedIn=true;await h.el('map-save').onclick();await h.flush();
+ assert.equal(h.el('map-status').textContent,'Saved in the manager');assert.equal(h.el('map-session').hidden,true);assert.match(h.el('toast').textContent,/Map saved/);
+});
+test('a lost session is not reported as a failed save, and other refusals keep their sentence (REVIEW U11)',async()=>{
+ const h=harness({session:true,put:()=>({ok:false,status:403,json:async()=>({detail:{code:'forbidden',message:'Not allowed here.'}})})}),c=h.context;await h.flush();
+ c.labBuilderPage.ready(async()=>{});await h.flush();c.labBuilderPage.persist('name: bgp\n','a');c.labBuilderPage.persist('name: bgp\n','b');
+ await h.el('map-save').onclick();await h.flush();assert.equal(h.el('toast').textContent,'The map was not saved: Not allowed here.');assert.equal(h.context.sessionEnded(),false);
+});
+test('the page loads session.js with the release number, before the page script',()=>{
+ const html=read('map-editor.html');assert.match(html,/<script src="\/static\/session\.js\?v=[\d.]+" defer><\/script>/);
+ assert.ok(html.indexOf('session.js')<html.indexOf('map-editor-page.js'));assert.match(html,/id="map-session"[^>]*hidden/);assert.match(html,/id="map-session-signin"[^>]*href="\/login"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
 });

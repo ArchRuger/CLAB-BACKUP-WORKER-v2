@@ -23,13 +23,15 @@ let fontSize=clampFont(prefGet(FONT_KEY)??FONT_DEFAULT);
 const terminal=new Terminal({cursorBlink:true,scrollback:SCROLLBACK,fontSize,fontFamily:'Consolas, "Liberation Mono", monospace',theme:{background:'#172431',foreground:'#e7eff2',cursor:'#9ad4ea',selectionBackground:'#41637780'}});
 const fit=new FitAddon.FitAddon();terminal.loadAddon(fit);terminal.open(get('terminal'));
 let socket=null,generation=0,opened=false;
+const SIGNED_OUT='Your session ended. Sign in again in the lab manager, then click Reconnect.';
 // The visible status is a student sentence; the manager's exact message stays in the title attribute.
 // In console mode a sentence the server wrote for the console is shown verbatim, so no SSH rewrite (credentials, discovery, CLI limit) can read it.
 const CONSOLE_VERBATIM=/serial console|console of |console is closed|console closed|limit 8|topology kind|linked to the VM|management address|launcher|started less than|has no serial/;
 function statusText(raw){
  const device=name||'the device',text=String(raw||'');
  const consoleMap=consoleMode?[[/^Connecting/,`Connecting to the console of ${device}…`],[/^Session ended\.$/,'The console session ended.'],[/Too many pending/,'Too many sessions are starting at once. Try again in a moment.'],[CONSOLE_VERBATIM,text]]:[];
- const map=[...consoleMap,[/^Connecting/,`Connecting to ${device}…`],[/^Connected$/,'Connected'],[/^Disconnected$/,'Disconnected'],[/^Session timeout/,'Closed after 15 minutes without activity. Click Reconnect to continue.'],[/^Session ended/,`The session ended. Check the device's saved credentials, or close other CLIs if too many are open.`],[/^Connection failed/,`Could not connect to ${device}.`],[/refresh VM discovery/,`${device} is not running or the lab status is stale. Refresh the lab list and try again.`],[/Assign SSH credentials/,`${device} needs login credentials. Add them in the lab under Advanced › Credentials.`],[/session limit|Too many pending/,'Too many CLIs are open (limit 32). Close one and try again.'],[/^(Lab|Node) not found/,'This lab or device is no longer in the manager.']];
+ // The session ended (a 401 signed_out, or the socket's close reason): the opener holds the sign-in, so this pop-up only says what to do.
+ const map=[[/^Your session ended|^signed_out$/,SIGNED_OUT],...consoleMap,[/^Connecting/,`Connecting to ${device}…`],[/^Connected$/,'Connected'],[/^Disconnected$/,'Disconnected'],[/^Session timeout/,'Closed after 15 minutes without activity. Click Reconnect to continue.'],[/^Session ended/,`The session ended. Check the device's saved credentials, or close other CLIs if too many are open.`],[/^Connection failed/,`Could not connect to ${device}.`],[/refresh VM discovery/,`${device} is not running or the lab status is stale. Refresh the lab list and try again.`],[/Assign SSH credentials/,`${device} needs login credentials. Add them in the lab under Advanced › Credentials.`],[/session limit|Too many pending/,'Too many CLIs are open (limit 32). Close one and try again.'],[/^(Lab|Node) not found/,'This lab or device is no longer in the manager.']];
  const hit=map.find(([re])=>re.test(text));return hit?hit[1]:text;
 }
 function setStatus(raw){const el=get('status'),text=statusText(raw);el.textContent=text;if(text===raw)el.removeAttribute('title');else el.title=raw;}
@@ -38,21 +40,38 @@ function resize(){fit.fit();if(socket?.readyState===WebSocket.OPEN)socket.send(J
 new ResizeObserver(resize).observe(get('terminal'));
 terminal.onData(data=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'input',data}));});
 function disconnect(){generation++;if(socket)socket.close();socket=null;setStatus('Disconnected');setConnectEnabled(true);}
+// The one request this page makes. While the page is marked signed out nothing is sent (REVIEW U8); a 401 signed_out marks it.
+async function ticketRequest(body){
+ if(typeof sessionEnded==='function'&&sessionEnded()&&typeof sessionEndedError==='function')throw sessionEndedError();
+ const response=await fetch('/api/labs/'+encodeURIComponent(lab)+'/terminal-ticket',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ return {response,data:await response.json()};
+}
 async function connect(){
  disconnect();const request=++generation;
  if(!lab||!name){setStatus(consoleMode?'Open this console from a device in the lab.':'Open this CLI from a device in the lab.');return;}
+ // Reconnect: the person signed in again elsewhere, so let this one request through and let its answer decide.
+ if(typeof sessionClear==='function')sessionClear();
  setConnectEnabled(false);setStatus('Connecting…');
  try{
-  const response=await fetch('/api/labs/'+encodeURIComponent(lab)+'/terminal-ticket',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(consoleMode?{name,protocol}:{name})});
+  const {response,data}=await ticketRequest(consoleMode?{name,protocol}:{name});
   if(request!==generation)return;
-  const data=await response.json();if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Connection failed');
+  if(!response.ok){
+   if(response.status===401&&typeof sessionLost==='function'&&sessionLost(401,data)){if(typeof sessionMark==='function')sessionMark();throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+   throw new Error(typeof data.detail==='string'?data.detail:data.detail&&typeof data.detail.message==='string'&&data.detail.message?data.detail.message:'Connection failed');
+  }
   get('endpoint').textContent=data.endpoint||'';
   if(request!==generation)return;
   const ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api/terminal');socket=ws;ws.binaryType='arraybuffer';
   ws.onopen=()=>{ws.send(JSON.stringify({ticket:data.ticket}));terminal.reset();clearedText='';clearedLimited=false;terminal.focus();if(opened)toolsStatus('Reconnected; the previous screen was cleared');opened=true;};
   ws.onmessage=event=>{if(request!==generation)return;if(event.data instanceof ArrayBuffer)terminal.write(new Uint8Array(event.data));else{const message=JSON.parse(event.data);setStatus(message.message);if(message.message==='Connected')resize();}};
   // On close the reason (if any) is kept after "Disconnected" instead of being appended to whatever was shown.
-  ws.onclose=()=>{if(request!==generation)return;socket=null;setConnectEnabled(true);const shown=get('status').textContent;const reason=/^(Connected|Connecting|Disconnected)/.test(shown)?'':shown;get('status').textContent=reason?'Disconnected — '+reason:'Disconnected';get('status').removeAttribute('title');};
+  ws.onclose=event=>{
+   if(request!==generation)return;socket=null;setConnectEnabled(true);
+   // The manager closes a socket of an ended session with the reason signed_out (1008): keep it after Disconnected, in the same sentence as a refused ticket.
+   const signedOut=!!event&&event.reason==='signed_out';
+   if(signedOut&&typeof sessionMark==='function')sessionMark();
+   const shown=get('status').textContent;const reason=signedOut?statusText('signed_out'):/^(Connected|Connecting|Disconnected)/.test(shown)?'':shown;get('status').textContent=reason?'Disconnected — '+reason:'Disconnected';get('status').removeAttribute('title');
+  };
   ws.onerror=()=>{if(request===generation)setStatus('Connection failed');};
  }catch(error){if(request===generation){setStatus(error.message);setConnectEnabled(true);}}
 }

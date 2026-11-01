@@ -1,17 +1,31 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../app/static/capture-session.js'),'utf8');
+// A stand-in for app/static/session.js with the exact contract of docs/sign-on/UI.md 3.2 (the real file is S8's).
+const SESSION_STAND_IN=`
+let sessionFlag=false;const sessionFns=new Set();
+function sessionLost(status,data){return status===401&&!!data&&typeof data==='object'&&!!data.detail&&typeof data.detail==='object'&&data.detail.code==='signed_out';}
+function loginUrl(pathname,search,hash,reason){return '/login?next='+encodeURIComponent(pathname+search+hash)+(reason?'&reason=ended':'');}
+function sessionEnded(){return sessionFlag;}
+function sessionMark(){if(sessionFlag)return false;sessionFlag=true;return true;}
+function sessionClear(){sessionFlag=false;}
+function sessionEndedError(){return Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});}
+function sessionGo(reason){if(typeof location!=='undefined')location.replace(loginUrl(location.pathname,location.search,location.hash,reason));}
+function sessionOnResume(fn){if(typeof fn==='function')sessionFns.add(fn);}
+async function sessionRetry(){sessionClear();if(typeof refresh==='function'){try{await refresh();}catch{}}if(sessionFlag)return false;if(typeof sessionRestored==='function')sessionRestored();const fns=[...sessionFns];sessionFns.clear();for(const fn of fns){try{fn();}catch{}}return true;}
+`;
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));};
-function harness(responses,hash='#'+'a'.repeat(64)){
- const elements=new Map(),created=[],aborted=[],fetched=[];
+function harness(responses,hash='#'+'a'.repeat(64),{session=false}={}){
+ const elements=new Map(),created=[],aborted=[],fetched=[],intervals=[],cleared=[],moves=[];
  function $(id){if(!elements.has(id))elements.set(id,{textContent:'',hidden:false,disabled:false,href:''});return elements.get(id);}
  const document={getElementById:$,body:{appendChild(){}},createElement(tag){const el={tag,clicked:0,click(){this.clicked++;},remove(){}};created.push(el);return el;}};
  const fetch=async(url,options={})=>{fetched.push({url,options});const handler=Object.entries(responses).find(([suffix])=>url.endsWith(suffix));
   if(!handler)throw Error('unexpected fetch '+url);const reply=handler[1]();return {ok:reply.ok,status:reply.status??(reply.ok?200:404),json:async()=>reply.body??{}};};
  class AbortController{constructor(){this.signal={};}abort(){aborted.push(this);}}
- const c=vm.createContext({document,fetch,AbortController,location:{hash,protocol:'http:',host:'manager',reload(){}},
-  confirm:()=>true,setInterval:()=>1,clearInterval(){},setTimeout:fn=>fn(),console});
+ const c=vm.createContext({document,fetch,AbortController,location:{hash,protocol:'http:',host:'manager',pathname:'/static/capture-session.html',search:'',reload(){},replace:u=>moves.push(u)},
+  confirm:()=>true,setInterval:fn=>{intervals.push(fn);return intervals.length;},clearInterval:id=>cleared.push(id),setTimeout:fn=>fn(),console});
+ if(session)vm.runInContext(SESSION_STAND_IN,c);
  vm.runInContext(source,c);
- return {c,$,created,aborted,fetched};
+ return {c,$,created,aborted,fetched,intervals,cleared,moves};
 }
 const base='/api/capture/sessions/'+'a'.repeat(64);
 const live={[base]:()=>({ok:true,body:{name:'clab-demo-r1',interfaces:['eth2'],running:true,remaining_seconds:7000}}),'/assets/core/rfb.js':()=>({ok:false})};
@@ -113,4 +127,73 @@ test('the tab title tells up to four viewers apart; the toolbar text is unchange
  const {c,$}=harness({...live});
  await settle();
  assert.equal(c.document.title,'clab-demo-r1 · eth2 — Wireshark');assert.equal($('capture-name').textContent,'clab-demo-r1 · eth2');
+});
+
+// ---- signed out while the viewer is open (docs/sign-on/UI.md 3.5) ----
+const VIEWER_SENTENCE='Your session ended. Sign in again in the lab manager, then click Reconnect viewer.';
+const signedOutBody={detail:{code:'signed_out',message:'Your session ended. Sign in again.'}};
+test('the status request answering signed_out says the sentence, stops the heartbeat and never navigates',async()=>{
+ const h=harness({[base]:()=>({ok:false,status:401,body:signedOutBody})},undefined,{session:true});
+ await settle();
+ assert.equal($v(h),VIEWER_SENTENCE);assert.equal(h.moves.length,0,'the viewer never navigates');
+ assert.equal(h.c.sessionEnded(),true);assert.ok(h.cleared.length>=1,'clearInterval(heartbeat) ran');
+ assert.equal(vm.runInContext('ended',h.c),false,'ended stays false so Reconnect viewer can work');
+});
+function $v(h){return h.$('viewer-status').textContent;}
+test('the heartbeat sends nothing once the page is signed out and says the sentence on its own 401',async()=>{
+ let signedOut=false;const h=harness({[base]:()=>signedOut?{ok:false,status:401,body:signedOutBody}:{ok:true,body:{name:'n',interfaces:['eth2'],running:true,remaining_seconds:7000}},'/assets/core/rfb.js':()=>({ok:false})},undefined,{session:true});
+ await settle();assert.equal(h.intervals.length,1);
+ signedOut=true;const before=h.fetched.length;await h.intervals[0]();
+ assert.equal(h.fetched.length,before+1);assert.equal($v(h),VIEWER_SENTENCE);assert.ok(h.cleared.length>=1);
+ await h.intervals[0]();assert.equal(h.fetched.length,before+1,'the guard: no second request');assert.equal($v(h),VIEWER_SENTENCE);
+});
+test('the asset probe, the download check and End session answer a signed_out the same way',async()=>{
+ const ok={ok:true,body:{name:'n',interfaces:['eth2'],running:true,remaining_seconds:7000}};
+ const probe=harness({[base]:()=>ok,'/assets/core/rfb.js':()=>({ok:false,status:401,body:signedOutBody})},undefined,{session:true});
+ await settle();assert.equal($v(probe),VIEWER_SENTENCE);assert.equal(probe.fetched.filter(f=>f.url.endsWith('/rfb.js')).length,1,'no polling after the session ended');
+ const dl=harness({...live,'/download':()=>({ok:false,status:401,body:signedOutBody})},undefined,{session:true});
+ await settle();let prevented=0;await dl.$('capture-download').onclick({preventDefault(){prevented++;}});
+ assert.equal(prevented,1);assert.equal($v(dl),VIEWER_SENTENCE);assert.equal(dl.created.length,0);
+ const end=harness({...live,'/end':()=>({ok:false,status:401,body:signedOutBody})},undefined,{session:true});
+ await settle();await end.$('capture-end').onclick();
+ assert.equal($v(end),VIEWER_SENTENCE);assert.equal(vm.runInContext('ended',end.c),false,'a session that expired has not ended the capture');assert.equal(end.$('capture-end').disabled,false);
+});
+test('once signed out no helper sends a request (the guard, REVIEW U8)',async()=>{
+ const h=harness({...live},undefined,{session:true});await settle();
+ h.c.sessionMark();const before=h.fetched.length;
+ await h.$('capture-download').onclick({preventDefault(){}});await h.$('capture-end').onclick();
+ assert.equal(h.fetched.length,before);assert.equal($v(h),VIEWER_SENTENCE);
+});
+test('the capture relay\'s own 401 refusals keep their wording (they are not a lost session)',async()=>{
+ const h=harness({[base]:()=>({ok:false,status:401,body:{detail:'This capture session belongs to another browser.'}})},undefined,{session:true});
+ await settle();assert.equal($v(h),'This capture session belongs to another browser.');assert.equal(h.c.sessionEnded(),false);assert.equal(h.cleared.length,0);
+});
+test('a refusal object with a message is shown as its sentence (REVIEW U11)',async()=>{
+ const h=harness({[base]:()=>({ok:false,status:403,body:{detail:{code:'forbidden',message:'Not allowed here.'}}})},undefined,{session:true});
+ await settle();assert.equal($v(h),'Not allowed here.');
+});
+test('without session.js the viewer behaves as before',async()=>{
+ const h=harness({[base]:()=>({ok:false,status:401,body:signedOutBody})});await settle();
+ assert.equal(h.moves.length,0);assert.notEqual($v(h),'');
+});
+
+// ---- the pages that load session.js (UI 3.2, 3.5; REVIEW U5) ----
+const pageHtml=name=>fs.readFileSync(path.join(__dirname,'../app/static',name),'utf8');
+test('capture-session.html loads session.js with the release number before its own script',()=>{
+ const html=pageHtml('capture-session.html');
+ const tags=[...html.matchAll(/<script\b[^>]*\bsrc="(\/static\/[^"?]+)\?v=([\d.]+)"/g)];
+ const session=tags.find(t=>t[1]==='/static/session.js');assert.ok(session,'session.js is loaded with ?v=');
+ assert.ok(tags.every(t=>t[2]===session[2]),'one release number on every script');
+ assert.ok(html.indexOf('session.js')<html.indexOf('capture-session.js'));
+
+});
+
+// ---- the pages that load session.js (UI 3.2, 3.5; REVIEW U5) ----
+test('capture-setup.html loads session.js with the release number before its own script',()=>{
+ const html=pageHtml('capture-setup.html');
+ const tags=[...html.matchAll(/<script\b[^>]*\bsrc="(\/static\/[^"?]+)\?v=([\d.]+)"/g)];
+ const session=tags.find(t=>t[1]==='/static/session.js');assert.ok(session,'session.js is loaded with ?v=');
+ assert.ok(tags.every(t=>t[2]===session[2]),'one release number on every script');
+
+ assert.doesNotMatch(html,/\\sstyle=|<style/,'no inline style on this page');
 });

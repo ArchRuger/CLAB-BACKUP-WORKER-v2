@@ -5,14 +5,30 @@
 // sends the annotations document to PUT /api/labs/<id>/map-document; it cannot send a topology, and it
 // has no route to the VM, to deployment or to the builder's drafts.
 const $=id=>document.getElementById(id);
-let mapLab='',mapDoc=null,mapBaseline=null,mapCurrent='',mapMount=null,mapMounted=false,mapSaving=false,mapPaused=false,toastTimer;
+let mapLab='',mapDoc=null,mapBaseline=null,mapCurrent='',mapMount=null,mapMounted=false,mapSaving=false,mapPaused=false,mapSessionLost=false,toastTimer;
 // Undo / redo belong to the page: the editor has none in its view mode. mapEditor is the adapter's handle for
 // putting a whole document into the running editor; mapApplying marks the persist() that such a step causes.
 let mapEditor=null,mapApplying=false,mapHistory={entries:[],index:-1,at:0};
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6000);}
+const MAP_SESSION_SENTENCE='Your session ended. Sign in in a new tab, then save again.';
+// A refusal's own sentence: the sign-on answers carry {detail:{code,message}} (REVIEW U11), older routes a plain string.
+function mapDetail(body){const d=body&&body.detail;return typeof d==='string'?d:d&&typeof d==='object'&&typeof d.message==='string'?d.message:'';}
+// The one reaction to a lost session. Nothing unsaved: leave for the sign-in page, which brings the person back here.
+// Unsaved changes: stay, pause (the status pill, the toast, the new-tab link) and wait for the next Save, which retries.
+function mapSignedOut(){
+ if(typeof sessionMark==='function'&&!sessionMark())return;
+ if(!mapIsDirty(mapBaseline,mapCurrent)){if(typeof sessionGo==='function')sessionGo('ended');return;}
+ mapSessionLost=true;notify(MAP_SESSION_SENTENCE);mapRenderBar();
+}
 async function api(path,options={}){
+ // Nothing leaves a page that is signed out (REVIEW U8).
+ if(typeof sessionEnded==='function'&&sessionEnded()&&typeof sessionEndedError==='function')throw sessionEndedError();
  let response;try{response=await fetch('/api'+path,options);}catch{throw Object.assign(new Error('The manager did not answer. Check that it is running, then try again.'),{network:true});}
- if(!response.ok){let detail='';try{detail=(await response.json()).detail;}catch{detail='';}throw Object.assign(new Error(typeof detail==='string'&&detail?detail:'The manager answered '+response.status+'.'),{status:response.status});}
+ if(!response.ok){
+  let body=null;try{body=await response.json();}catch{body=null;}
+  if(response.status===401&&typeof sessionLost==='function'&&sessionLost(401,body)){mapSignedOut();throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401,signedOut:true});}
+  throw Object.assign(new Error(mapDetail(body)||'The manager answered '+response.status+'.'),{status:response.status});
+ }
  return response;
 }
 // Pure helpers (tests/test_map_editor_ui.js)
@@ -105,25 +121,29 @@ async function mapTravel(delta){
  finally{mapApplying=false;mapRenderBar();}
 }
 function mapRenderBar(){
- const ready=mapMounted&&!mapPaused,view=mapStatusView({paused:mapPaused,saving:mapSaving,dirty:mapDirty()});
+ const ready=mapMounted&&!mapPaused,view=mapStatusView({paused:mapPaused||mapSessionLost,saving:mapSaving,dirty:mapDirty()});
  $('map-status').textContent=mapDoc?view.text:'';$('map-status').className='pill '+view.pill;$('map-status').hidden=!mapDoc;
  $('map-save').disabled=!ready||mapSaving||!mapDirty();$('map-save').title=!ready?'':mapDirty()?'':'There is nothing to save.';
  $('map-download').disabled=!mapDoc;$('map-import').disabled=!ready||mapSaving;
  const steady=ready&&!mapSaving&&!mapApplying&&!!mapEditor;
  $('map-link').disabled=!steady;
  $('map-undo').disabled=!steady||mapHistory.index<=0;$('map-redo').disabled=!steady||mapHistory.index>=mapHistory.entries.length-1;
+ if($('map-session'))$('map-session').hidden=!mapSessionLost;
  $('map-drawio').disabled=!ready;$('map-drawio').title=mapDirty()?'The export is made from the saved map: save first.':'';
 }
 function mapProblem(message){mapPaused=true;$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem').hidden=false;$('map-problem-download').focus();mapRenderBar();}
 function mapDownload(){const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([mapCurrent||mapDoc.annotations],{type:'application/json'}));link.download=mapFileName(mapDoc.name);document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
 async function mapSave(){
  if(!mapDoc||mapSaving||mapPaused||!mapDirty())return false;
+ // After a lost session the person signs in in a new tab and presses Save: clear the flag first, then this save is the request that decides.
+ if(mapSessionLost){mapSessionLost=false;if(typeof sessionRetry==='function')await sessionRetry();}
  mapSaving=true;mapRenderBar();const sent=mapCurrent;
  try{
   const result=await(await api('/labs/'+encodeURIComponent(mapLab)+'/map-document',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({annotations:sent,revision:mapDoc.revision})})).json();
   mapDoc={...mapDoc,annotations:sent,revision:result.revision};mapBaseline=sent;notify('Map saved. The lab’s Topology tab shows it.');return true;
  }catch(error){
-  // Nothing was saved. A 409 means the map changed elsewhere (another tab, a sync): the student keeps this version as a file.
+  // Nothing was saved. A lost session already said so (the pause and its toast). A 409 means the map changed elsewhere (another tab, a sync): the student keeps this version as a file.
+  if(error.signedOut||error.sessionEnded)return false;
   notify(error.status===409?error.message+' Download this map if you want to keep it, then reload.':'The map was not saved: '+error.message);return false;
  }finally{mapSaving=false;mapRenderBar();}
 }

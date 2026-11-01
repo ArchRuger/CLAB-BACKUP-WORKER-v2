@@ -1,4 +1,17 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+// A stand-in for app/static/session.js with the exact contract of docs/sign-on/UI.md 3.2 (the real file is S8's).
+const SESSION_STAND_IN=`
+let sessionFlag=false;const sessionFns=new Set();
+function sessionLost(status,data){return status===401&&!!data&&typeof data==='object'&&!!data.detail&&typeof data.detail==='object'&&data.detail.code==='signed_out';}
+function loginUrl(pathname,search,hash,reason){return '/login?next='+encodeURIComponent(pathname+search+hash)+(reason?'&reason=ended':'');}
+function sessionEnded(){return sessionFlag;}
+function sessionMark(){if(sessionFlag)return false;sessionFlag=true;return true;}
+function sessionClear(){sessionFlag=false;}
+function sessionEndedError(){return Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});}
+function sessionGo(reason){if(typeof location!=='undefined')location.replace(loginUrl(location.pathname,location.search,location.hash,reason));}
+function sessionOnResume(fn){if(typeof fn==='function')sessionFns.add(fn);}
+async function sessionRetry(){sessionClear();if(typeof refresh==='function'){try{await refresh();}catch{}}if(sessionFlag)return false;if(typeof sessionRestored==='function')sessionRestored();const fns=[...sessionFns];sessionFns.clear();for(const fn of fns){try{fn();}catch{}}return true;}
+`;
 const read=name=>fs.readFileSync(path.join(__dirname,'../app/static',name),'utf8');
 // A Storage like the browser's: string values, key(i), length.
 function storage(){const map=new Map();return {getItem:k=>map.has(k)?map.get(k):null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k),key:i=>[...map.keys()][i]??null,get length(){return map.size;}};}
@@ -888,4 +901,54 @@ test('T06-fix 7: Undo and Redo keep focus in the bar when the pressed button tur
  focus.length=0;p.c.document.activeElement=p.el('builder-redo');p.run('builderHistorySet({canUndo:false,canRedo:false})');
  assert.deepEqual(focus,['builder-yaml'],'else the first enabled control of the bar (Save is off here)');
  focus.length=0;p.c.document.activeElement=p.el('builder-save');p.run('builderHistorySet({canUndo:false,canRedo:false})');assert.deepEqual(focus,[],'focus elsewhere is left alone');
+});
+
+// ---- signed out (docs/sign-on/UI.md 3.5) ----
+const LOST={refused:{code:'signed_out',message:'Your session ended. Sign in again.'},status:401};
+const BUILDER_SESSION_TEXT='Your session ended. Your drawing is still on this page, not stored in this browser. Sign in in a new tab, then continue.';
+function signedPage(answer){
+ const p=page({answer});vm.runInContext(SESSION_STAND_IN,p.c);p.moves=[];
+ Object.assign(p.c.location,{pathname:'/static/lab-builder.html',search:'',hash:'#lab=lab1',replace:u=>p.moves.push(u)});
+ return p;
+}
+test('a stored drawing: a signed_out answer leaves for the sign-in page once; nothing more is sent',async()=>{
+ const p=signedPage(()=>LOST);p.run('builderUnstored=null');
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401&&!e.sessionEnded&&/Your session ended/.test(e.message));
+ assert.deepEqual(p.moves,['/login?next='+encodeURIComponent('/static/lab-builder.html#lab=lab1')+'&reason=ended']);
+ assert.equal(p.run('builderPaused'),null,'the drawing is already in this browser: no overlay');
+ const sent=p.calls.length;await assert.rejects(()=>p.c.api('/catalog'),e=>e.sessionEnded===true&&e.status===401);
+ assert.equal(p.calls.length,sent);assert.equal(p.moves.length,1);
+});
+test('a drawing the browser could not store: the overlay pauses, says why, offers Sign in in a new tab and Try again',async()=>{
+ const p=signedPage(()=>LOST);p.run(`builderDraft={id:'new:lab1',name:'lab1',yaml:'name: lab1\\n',annotations:''};builderUnstored={yaml:'name: lab1\\n# newer\\n',annotations:''}`);
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401);
+ assert.equal(p.moves.length,0,'no redirect: the drawing would be lost');
+ assert.equal(p.el('builder-problem').hidden,false);assert.equal(p.el('builder-problem-text').textContent,BUILDER_SESSION_TEXT);
+ assert.equal(p.el('builder-problem-signin').hidden,false);assert.equal(p.el('builder-problem-again').hidden,false);assert.equal(p.el('builder-problem-retry').hidden,true,'the storage retry is not offered');
+ assert.equal(p.el('root').inert,true);assert.equal(p.run('builderPaused.code'),'signed_out');
+});
+test('Try again runs sessionRetry; the overlay stays until a request succeeded, then the unstored drawing is stored again',async()=>{
+ let signedIn=false;const p=signedPage(url=>signedIn?{labs:[],jobs:[],operations:[]}:LOST);
+ p.run(`builderDraft={id:'new:lab1',name:'lab1',yaml:'name: lab1\\n',annotations:''};builderUnstored={yaml:'name: lab1\\n# newer\\n',annotations:''}`);
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401);
+ await p.c.builderTryAgain();
+ assert.equal(p.el('builder-problem').hidden,false,'still signed out: the overlay stays');assert.equal(p.run('builderPaused.code'),'signed_out');assert.ok(!p.calls.includes('reload'));
+ signedIn=true;await p.c.builderTryAgain();
+ assert.equal(p.el('builder-problem').hidden,true);assert.equal(p.run('builderPaused'),null);assert.equal(p.el('root').inert,false);
+ assert.equal(p.run('builderUnstored'),null,'the newer drawing was stored again');assert.ok(p.calls.includes('reload'));
+ assert.match(p.store.getItem(p.run('BUILDER_PREFIX')+'draft:new:lab1')??'', /newer/);
+});
+test('a plain 401 and a refusal object keep their own sentence (REVIEW U11)',async()=>{
+ const p=signedPage(url=>url.endsWith('/state')?{refused:'Nope',status:401}:{refused:{code:'forbidden',message:'Not allowed here.'},status:403});
+ await assert.rejects(()=>p.c.api('/state'),e=>e.message==='Nope'&&e.status===401);assert.equal(p.run('sessionEnded()'),false);
+ await assert.rejects(()=>p.c.api('/catalog'),e=>e.message==='Not allowed here.'&&e.status===403);
+});
+test('without session.js the helper is unchanged',async()=>{
+ const p=page({answer:()=>LOST});
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401);assert.equal(p.run('typeof sessionEnded'),'undefined');assert.equal(p.run('builderPaused'),null,'no session overlay without session.js');
+});
+test('lab-builder.html loads session.js with the release number before the page script and carries the overlay controls',()=>{
+ const html=read('lab-builder.html');assert.match(html,/<script src="\/static\/session\.js\?v=[\d.]+" defer><\/script>/);
+ assert.ok(html.indexOf('session.js')<html.indexOf('lab-builder-page.js'));
+ assert.match(html,/id="builder-problem-signin"[^>]*href="\/login"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*hidden/);assert.match(html,/id="builder-problem-again"[^>]*hidden/);
 });

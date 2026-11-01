@@ -1,10 +1,22 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../app/static/terminal.js'),'utf8'),clipboardSource=fs.readFileSync(path.join(__dirname,'../app/static/clipboard.js'),'utf8');
+const SESSION_STAND_IN=`
+let sessionFlag=false;const sessionFns=new Set();
+function sessionLost(status,data){return status===401&&!!data&&typeof data==='object'&&!!data.detail&&typeof data.detail==='object'&&data.detail.code==='signed_out';}
+function loginUrl(pathname,search,hash,reason){return '/login?next='+encodeURIComponent(pathname+search+hash)+(reason?'&reason=ended':'');}
+function sessionEnded(){return sessionFlag;}
+function sessionMark(){if(sessionFlag)return false;sessionFlag=true;return true;}
+function sessionClear(){sessionFlag=false;}
+function sessionEndedError(){return Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});}
+function sessionGo(reason){if(typeof location!=='undefined')location.replace(loginUrl(location.pathname,location.search,location.hash,reason));}
+function sessionOnResume(fn){if(typeof fn==='function')sessionFns.add(fn);}
+async function sessionRetry(){sessionClear();if(typeof refresh==='function'){try{await refresh();}catch{}}if(sessionFlag)return false;if(typeof sessionRestored==='function')sessionRestored();const fns=[...sessionFns];sessionFns.clear();for(const fn of fns){try{fn();}catch{}}return true;}
+`;
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));};
 // A buffer of rows [text, isWrapped] the way xterm's IBuffer shows them.
 function fakeBuffer(rows,viewportY=0,cursorY=Math.max(0,rows.length-1)){return {length:rows.length,viewportY,baseY:0,cursorY,getLine:i=>rows[i]?{isWrapped:!!rows[i][1],translateToString:()=>rows[i][0]}:undefined};}
-function harness({hash='#lab=l1&node=r1&label=Demo',protocol='http:',reply=()=>({ok:true,body:{ticket:'T1',endpoint:'admin@172.20.20.2'}}),deferred=false,store=undefined,throwStorage=false,clipboardWrites,fallback=false,blurOnDisable=false}={}){
- const elements=new Map(),sockets=[],fetched=[],written=[],handlers={},downloads=[],copied=[],timers=[],fitted={count:0};let term=null,pending=null;
+function harness({hash='#lab=l1&node=r1&label=Demo',protocol='http:',reply=()=>({ok:true,body:{ticket:'T1',endpoint:'admin@172.20.20.2'}}),deferred=false,store=undefined,throwStorage=false,clipboardWrites,fallback=false,blurOnDisable=false,session=false}={}){
+ const moves=[],elements=new Map(),sockets=[],fetched=[],written=[],handlers={},downloads=[],copied=[],timers=[],fitted={count:0};let term=null,pending=null;
  function $(id){if(!elements.has(id)){const attrs={},listeners={};elements.set(id,{id,textContent:'',hidden:false,href:'',title:'',removeAttribute(name){this[name]='';},attrs,listeners,
    setAttribute(n,v){attrs[n]=String(v);},getAttribute(n){return n in attrs?attrs[n]:null;},addEventListener(type,fn){listeners[type]=fn;},
    focus(){document.activeElement=this;},
@@ -20,14 +32,14 @@ function harness({hash='#lab=l1&node=r1&label=Demo',protocol='http:',reply=()=>(
  WebSocket.OPEN=1;
  const storage=store?{getItem:k=>(k in store?store[k]:null),setItem:(k,v)=>{if(throwStorage)throw new Error('blocked');store[k]=String(v);}}:undefined;
  const navigator=fallback?{}:{clipboard:{writeText:async text=>{copied.push(text);}}};
- const fetch=(url,options={})=>{fetched.push({url,options});const answer=reply(url,options);const result={ok:answer.ok,json:async()=>answer.body??{}};
+ const fetch=(url,options={})=>{fetched.push({url,options});const answer=reply(url,options);const result={ok:answer.ok,status:answer.status??(answer.ok?200:500),json:async()=>answer.body??{}};
   if(!deferred)return Promise.resolve(result);return new Promise(resolve=>{pending=()=>resolve(result);});};
  const c=vm.createContext({document,fetch,Terminal,navigator,Blob:class{constructor(parts,options){this.parts=parts;this.type=options.type;}},URL:{createObjectURL:b=>'blob:'+b.parts.join(''),revokeObjectURL(){}},Date,setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},WebSocket,URLSearchParams,JSON,Uint8Array,ArrayBuffer,Error,String,Math,encodeURIComponent,
   FitAddon:{FitAddon:class{fit(){fitted.count++;}}},ResizeObserver:class{observe(){}},
-  location:{hash,protocol,host:'manager:8080'},window:{addEventListener(name,fn){handlers[name]=fn;}}});
+  location:{hash,protocol,host:'manager:8080',pathname:'/static/terminal.html',search:'',replace(url){moves.push(url);}},window:{addEventListener(name,fn){handlers[name]=fn;}}});
  if(storage)c.localStorage=storage;
- vm.runInContext(clipboardSource,c);vm.runInContext(source,c);
- return {c,$,sockets,fetched,written,handlers,document,downloads,copied,timers,fitted,term:()=>term,release:()=>pending()};
+ vm.runInContext(clipboardSource,c);if(session)vm.runInContext(SESSION_STAND_IN,c);vm.runInContext(source,c);
+ return {moves,c,$,sockets,fetched,written,handlers,document,downloads,copied,timers,fitted,term:()=>term,release:()=>pending()};
 }
 test('script parses and connects with a single-use ticket over a same-origin WebSocket',async()=>{
  const {$,sockets,fetched,document,term}=harness();
@@ -358,4 +370,55 @@ test('console mode: exports carry a console- prefix, SSH names are unchanged; wi
 test('terminal.html carries the console-mode ids (brand label, details text)',()=>{
  const page=fs.readFileSync(path.join(__dirname,'../app/static/terminal.html'),'utf8');
  assert.match(page,/<span id="brand-label" class="brand-label">SSH session<\/span>/);assert.match(page,/<span id="details-text">/);
+});
+
+// ---- signed out while the pop-up is open (docs/sign-on/UI.md 3.5) ----
+const SIGNED_OUT_SENTENCE='Your session ended. Sign in again in the lab manager, then click Reconnect.';
+const signedOutTicket={ok:false,status:401,body:{detail:{code:'signed_out',message:'Your session ended. Sign in again.'}}};
+test('a signed_out ticket answer shows the sentence, never navigates and leaves Reconnect available',async()=>{
+ const h=harness({session:true,reply:()=>signedOutTicket});
+ await settle();
+ assert.equal(h.$('status').textContent,SIGNED_OUT_SENTENCE);assert.equal(h.sockets.length,0);assert.equal(h.moves.length,0,'a pop-up keeps its window: the opener holds the sign-in');
+ assert.equal(h.$('connect').disabled,false);assert.equal(h.c.sessionEnded(),true);
+});
+test('Reconnect clears the flag first so the one ticket request goes through, and the answer decides',async()=>{
+ let signedOut=true;const h=harness({session:true,reply:()=>signedOut?signedOutTicket:{ok:true,body:{ticket:'T2',endpoint:'admin@172.20.20.2'}}});
+ await settle();assert.equal(h.fetched.length,1);
+ // Marked: a Reconnect that kept the flag would send nothing.
+ signedOut=false;h.$('connect').onclick();await settle();
+ assert.equal(h.fetched.length,2,'sessionClear() ran before the ticket POST');assert.equal(h.sockets.length,1);assert.equal(h.c.sessionEnded(),false);
+ // Still signed out: the second answer shows the sentence again.
+ const again=harness({session:true,reply:()=>signedOutTicket});await settle();again.$('connect').onclick();await settle();
+ assert.equal(again.fetched.length,2);assert.equal(again.$('status').textContent,SIGNED_OUT_SENTENCE);
+});
+test('the WebSocket close reason signed_out is kept after Disconnected and maps to the same sentence',async()=>{
+ const h=harness({session:true});await settle();const ws=h.sockets[0];ws.onopen();
+ ws.onclose({code:1008,reason:'signed_out'});
+ assert.equal(h.$('status').textContent,'Disconnected — '+SIGNED_OUT_SENTENCE);assert.equal(h.$('connect').disabled,false);assert.equal(h.moves.length,0);
+ assert.equal(h.c.sessionEnded(),true,'the page is marked, so nothing else is sent');
+});
+test('an ordinary close still ends with Disconnected only, and a close event without a reason is accepted',async()=>{
+ const h=harness({session:true});await settle();h.sockets[0].onopen();h.sockets[0].onclose({code:1000,reason:''});
+ assert.equal(h.$('status').textContent,'Disconnected');assert.equal(h.c.sessionEnded(),false);
+});
+test('a refusal object with a message is shown as its sentence (REVIEW U11); a plain 401 keeps the plain error wording',async()=>{
+ const h=harness({session:true,reply:()=>({ok:false,status:403,body:{detail:{code:'forbidden',message:'Not allowed here.'}}})});
+ await settle();assert.equal(h.$('status').textContent,'Not allowed here.');assert.equal(h.c.sessionEnded(),false);
+ const plain=harness({session:true,reply:()=>({ok:false,status:401,body:{detail:'Assign SSH credentials to r1.'}})});
+ await settle();assert.match(plain.$('status').textContent,/needs login credentials/);assert.equal(plain.c.sessionEnded(),false);
+});
+test('without session.js a signed_out answer is an ordinary failure',async()=>{
+ const h=harness({reply:()=>signedOutTicket});await settle();
+ assert.equal(h.sockets.length,0);assert.equal(h.$('connect').disabled,false);
+});
+
+// ---- the pages that load session.js (UI 3.2, 3.5; REVIEW U5) ----
+const pageHtml=name=>fs.readFileSync(path.join(__dirname,'../app/static',name),'utf8');
+test('terminal.html loads session.js with the release number before its own script',()=>{
+ const html=pageHtml('terminal.html');
+ const tags=[...html.matchAll(/<script\b[^>]*\bsrc="(\/static\/[^"?]+)\?v=([\d.]+)"/g)];
+ const session=tags.find(t=>t[1]==='/static/session.js');assert.ok(session,'session.js is loaded with ?v=');
+ assert.ok(tags.every(t=>t[2]===session[2]),'one release number on every script');
+ assert.ok(html.indexOf('session.js')<html.indexOf('/terminal.js'));
+
 });
