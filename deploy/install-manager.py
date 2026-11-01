@@ -597,9 +597,10 @@ class Step:
         self.visible = visible
 
 
-def ask_install_options(env, advanced=False):
+def ask_install_options(env, advanced=False, no_firewall=False, no_ssh_hardening=False):
     # Standard path: the routine choices are automatic (A2). --advanced restores every
-    # question, including copying .env from a previous source folder.
+    # question, including copying .env from a previous source folder. --no-firewall and
+    # --no-ssh-hardening (advanced only, EXPOSURE.md 5.2 and 5.4) answer their own question for the person.
     if not advanced:
         return Options(env_source=default_env_choice())
     env_source = choose_env_copy()
@@ -620,10 +621,10 @@ def ask_install_options(env, advanced=False):
         engineer = menu('VS Code / Containerlab extension access for ' + env['USER'],
                         [('1', 'Set up now: docker and clab_admins groups, group-writable lab folders, containerlab SUID (standard)'),
                          ('2', 'Skip; the manager does not need it')])
-    firewall = menu('Firewall (ufw)', [
+    firewall = not no_firewall and menu('Firewall (ufw)', [
         ('1', 'Set up: allow SSH and the manager ports, deny other incoming (standard)'),
         ('2', 'Skip; I manage the firewall myself')]) == '1'
-    ssh_hardening = menu('SSH hardening', [
+    ssh_hardening = not no_ssh_hardening and menu('SSH hardening', [
         ('1', 'Apply a conservative sshd drop-in: only settings still at their defaults are written (standard)'),
         ('2', 'Skip; I manage sshd myself')]) == '1'
     repair = confirm('Back up and disable obsolete installation-media APT entries if present?')
@@ -641,10 +642,28 @@ def tls_plan_line():
             f'{exposure().TLS_DIR} (kept if one exists).')
 
 
-def firewall_plan_line(env):
-    tls_port, redirect = exposure().ports(SOURCE)
-    ssh = exposure().session_ssh_port(env) or 'SSH'
-    allowed = ', '.join(str(port) for port in (ssh, tls_port, redirect) if port)
+def manager_ports(options):
+    """(TLS port, plain-HTTP redirect port or 0) the manager will have once this installation has run, from the
+    settings it will have then: the previous file about to be copied, or the checkout's own, and the person's
+    answer to the port question. A colliding UI_PORT=8081 keeps HTTPS on 8081 with no redirect (setup-tls.sh
+    writes UI_HTTP_PORT=0), 'redirect' moves HTTPS to 8443 and the redirect to 8081 (write_ports)."""
+    ex = exposure()
+    tls_port, redirect = ex.ports(SOURCE, env_path=options.env_source)
+    if options.ports == 'redirect':
+        return ex.DEFAULT_TLS_PORT, ex.DEFAULT_HTTP_PORT
+    if ex.ports_collide(SOURCE, env_path=options.env_source):
+        return tls_port, 0
+    return tls_port, redirect
+
+
+def firewall_plan_line(options):
+    """What setup-firewall.sh will open: every port sshd listens on (the script reads sshd -T, not this
+    session), the TLS port and the redirect port when there is one."""
+    ports = []
+    for port in manager_ports(options):
+        if port and port not in ports:
+            ports.append(port)
+    allowed = ', '.join(['SSH (every port sshd listens on)', *(str(port) for port in ports)])
     return f'Firewall: ufw allow {allowed}; deny other incoming.'
 
 
@@ -662,7 +681,7 @@ def plan_lines(env, version, options):
         tls_plan_line(),
         'Lab operations: ' + ('enabled with default trusted roots' if operations == '1' else 'existing permissions retained'),
         'Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).',
-        firewall_plan_line(env) if options.firewall else 'Firewall: not selected.',
+        firewall_plan_line(options) if options.firewall else 'Firewall: not selected.',
         ('SSH: conservative sshd drop-in (PermitRootLogin no, MaxAuthTries 4, LoginGraceTime 30, PerSourceMaxStartups 8, '
          'X11Forwarding no); a setting you already changed is kept.') if options.ssh_hardening else 'SSH hardening: not selected.',
         'Engineer access: ' + ('set up for ' + env['USER'] + ' (VS Code, Containerlab extension)' if engineer == '1' else 'not selected'),
@@ -809,8 +828,8 @@ def show_setup_code(env, say=print, sudo=('sudo',), interactive=True):
     return reading[0]
 
 
-def install(env, version, advanced=False):
-    options = ask_install_options(env, advanced)
+def install(env, version, advanced=False, no_firewall=False, no_ssh_hardening=False):
+    options = ask_install_options(env, advanced, no_firewall=no_firewall, no_ssh_hardening=no_ssh_hardening)
     print('\nInstallation plan')
     for line in plan_lines(env, version, options):
         print('  ' + line)
@@ -819,15 +838,30 @@ def install(env, version, advanced=False):
             raise Cancelled()
     else:
         print('Starting now; the standard path runs these steps without further confirmation.')
-    for step in install_steps(env, version, options):
-        if step.key in ('git', 'signon'):
-            continue  # the plain menu decides Git after the summary below, as it always has; the code is last of all
-        if not step.visible:
-            continue
-        if step.bare:
-            step.action()
-        else:
-            phase(step.title, step.action, env)
+    verified = False
+    try:
+        for step in install_steps(env, version, options):
+            if step.key in ('git', 'signon'):
+                continue  # the plain menu decides Git after the summary below, as it always has; the code is last of all
+            if not step.visible:
+                continue
+            if step.bare:
+                step.action()
+            else:
+                phase(step.title, step.action, env)
+            if step.key == 'verify':
+                verified = True
+    except Cancelled:
+        if verified:
+            # The manager answers over HTTPS and is in setup mode on every interface by now: a firewall or SSH
+            # step the person returned from must not leave them without the address and the code, which the
+            # full-screen installer's summary shows in the same situation.
+            print('\nThe installation did not finish. The manager itself is verified and running; the steps after '
+                  'the one you returned from were not run. Run the installer again to finish them.')
+            for line in access_lines():
+                print(line)
+            show_setup_code(env)
+        raise
     print('\nManager installation is ready. Git is a separate setup step under your ordinary account.')
     print('Wireshark opens from the map (Capture packets).')
     for line in access_lines():
@@ -883,7 +917,8 @@ def tui_available(env):
 def run_tui(env, args):
     """Start the full-screen installer in its own process; returns its exit status."""
     bootstrap = tui_package().bootstrap
-    extra = [flag for flag, wanted in (('--git', args.git), ('--advanced', args.advanced)) if wanted]
+    extra = [flag for flag, wanted in (('--git', args.git), ('--advanced', args.advanced),
+                                       ('--no-firewall', args.no_firewall), ('--no-ssh-hardening', args.no_ssh_hardening)) if wanted]
     return bootstrap.launch(env, extra)
 
 
@@ -894,8 +929,14 @@ def main(argv=None):
     parser.add_argument('--git', action='store_true', help='Open Git setup directly (manager already installed)')
     parser.add_argument('--advanced', action='store_true',
                         help='Ask every setup question again (bind/port, lab operations, VS Code access, '
-                             'APT installation-media repair, plan confirmation, Git now/later) instead of '
-                             'the standard defaults.')
+                             'firewall, SSH hardening, APT installation-media repair, plan confirmation, '
+                             'Git now/later) instead of the standard defaults.')
+    parser.add_argument('--no-firewall', action='store_true',
+                        help='With --advanced: skip the firewall (ufw) step without being asked; you manage the '
+                             'firewall yourself.')
+    parser.add_argument('--no-ssh-hardening', action='store_true',
+                        help='With --advanced: skip the conservative sshd drop-in without being asked; you manage '
+                             'sshd yourself.')
     front = parser.add_mutually_exclusive_group()
     front.add_argument('--tui', action='store_true',
                        help='Use the full-screen installer; sets up its pinned packages first if needed, '
@@ -905,6 +946,9 @@ def main(argv=None):
                        help='Download and verify the full-screen installer\'s pinned packages into a private '
                             'virtual environment for this account, then exit. Nothing on the VM is changed.')
     args = parser.parse_args(argv)
+    if (args.no_firewall or args.no_ssh_hardening) and not args.advanced:
+        parser.error('--no-firewall and --no-ssh-hardening are advanced choices: add --advanced '
+                     '(the standard path runs both steps).')
     if sys.platform != 'linux' or os.geteuid() == 0:
         raise ValueError('Run on the Ubuntu VM as its ordinary account, without sudo.')
     import pwd
@@ -960,7 +1004,8 @@ def main(argv=None):
             # failure or cancellation keeps today's behaviour: retained work, the
             # Recovery menu inside phase(), and this Setup menu.
             if choice == '1':
-                install(env, version, advanced=args.advanced)
+                install(env, version, advanced=args.advanced, no_firewall=args.no_firewall,
+                        no_ssh_hardening=args.no_ssh_hardening)
                 return 0
             elif choice == '2':
                 if git_setup(env) == 0:

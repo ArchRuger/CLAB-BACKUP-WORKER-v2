@@ -865,13 +865,42 @@ class MainFrontEndTests(unittest.TestCase):
                 install.main(argv)
                 self.assertEqual(self.launch.call_args.args[1], expected)
 
+    def test_the_opt_out_flags_reach_install_and_the_full_screen_installer(self):
+        with patch.object(install, 'menu', side_effect=['1']), patch.object(install, 'install') as do_install:
+            install.main(['--plain', '--advanced', '--no-firewall', '--no-ssh-hardening'])
+        self.assertEqual((do_install.call_args.kwargs.get('no_firewall'), do_install.call_args.kwargs.get('no_ssh_hardening')),
+                         (True, True))
+        with patch.object(install, 'menu', side_effect=['1']), patch.object(install, 'install') as do_install:
+            install.main(['--plain', '--advanced'])
+        self.assertEqual((do_install.call_args.kwargs.get('no_firewall'), do_install.call_args.kwargs.get('no_ssh_hardening')),
+                         (False, False))
+        self.tui_available.return_value = (True, '')
+        install.main(['--advanced', '--no-firewall'])
+        self.assertEqual(self.launch.call_args.args[1], ['--advanced', '--no-firewall'])
+        self.launch.reset_mock()
+        install.main(['--tui', '--advanced', '--no-ssh-hardening', '--no-firewall'])
+        self.assertEqual(self.launch.call_args.args[1], ['--advanced', '--no-firewall', '--no-ssh-hardening'])
+
+    def test_the_opt_out_flags_are_advanced_only_and_the_help_names_them(self):
+        for argv in (['--no-firewall'], ['--no-ssh-hardening'], ['--plain', '--no-firewall']):
+            with self.subTest(argv=argv), patch('sys.stderr', new=io.StringIO()) as err:
+                with self.assertRaises(SystemExit) as caught:
+                    install.main(argv)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn('--advanced', err.getvalue())
+        with patch('sys.stdout', new=io.StringIO()) as out, self.assertRaises(SystemExit):
+            install.main(['--help'])
+        for text in ('--no-firewall', '--no-ssh-hardening', 'firewall', 'SSH hardening'):
+            self.assertIn(text, out.getvalue())
+
     def test_run_tui_builds_the_extra_flags_from_the_arguments(self):
         env = {'USER': 'owner'}
         for git, advanced, expected in ((False, False, []), (True, False, ['--git']), (False, True, ['--advanced']),
                                         (True, True, ['--git', '--advanced'])):
             with self.subTest(git=git, advanced=advanced):
                 self.launch.return_value = 9
-                self.assertEqual(install.run_tui(env, SimpleNamespace(git=git, advanced=advanced)), 9)
+                self.assertEqual(install.run_tui(env, SimpleNamespace(git=git, advanced=advanced, no_firewall=False,
+                                                                      no_ssh_hardening=False)), 9)
                 self.assertEqual(self.launch.call_args.args, (env, expected))
 
     def test_advanced_in_plain_mode_is_passed_to_install(self):
@@ -1857,6 +1886,21 @@ class AdvancedQuestionsTests(unittest.TestCase):
         self.assertEqual((options.operations, options.engineer, options.firewall, options.ssh_hardening),
                          ('2', '2', True, False))
 
+    def test_the_opt_out_flags_answer_the_firewall_and_ssh_questions_without_asking_them(self):
+        # EXPOSURE.md 5.2 and 5.4 name --no-firewall and --no-ssh-hardening for advanced mode.
+        with patch.object(install, 'choose_env_copy', return_value=None), patch.object(exposure(), 'ports_collide', return_value=False), \
+                patch.object(install, 'menu', side_effect=['1', '1']) as menu, patch.object(install, 'confirm', return_value=False):
+            options = install.ask_install_options(OWNER, advanced=True, no_firewall=True, no_ssh_hardening=True)
+        titles = [call.args[0] for call in menu.call_args_list]
+        self.assertEqual(len(titles), 2, titles)
+        self.assertFalse(any('Firewall' in title or 'SSH' in title for title in titles))
+        self.assertEqual((options.firewall, options.ssh_hardening), (False, False))
+        with patch.object(install, 'choose_env_copy', return_value=None), patch.object(exposure(), 'ports_collide', return_value=False), \
+                patch.object(install, 'menu', side_effect=['1', '1', '1']) as menu, patch.object(install, 'confirm', return_value=False):
+            options = install.ask_install_options(OWNER, advanced=True, no_firewall=True)
+        self.assertTrue(any('SSH' in call.args[0] for call in menu.call_args_list), 'only the flag given is answered for the person')
+        self.assertEqual((options.firewall, options.ssh_hardening), (False, True))
+
     def test_the_port_question_is_asked_only_when_the_settings_collide_and_before_the_other_questions(self):
         options, menu = self.ask(['1', '1', '1', '1', '1'], collide=True)
         titles = [call.args[0] for call in menu.call_args_list]
@@ -1972,7 +2016,7 @@ class PlanLinesTests(unittest.TestCase):
         self.assertEqual(lines[0], 'Source: ' + str(install.SOURCE) + ' (1.32.0)')
         self.assertIn("TLS: self-signed certificate for this VM's addresses and names in "
                       '/srv/containerlab-node-manager/tls (kept if one exists).', lines)
-        self.assertIn('Firewall: ufw allow SSH, 8443, 8081; deny other incoming.', lines)
+        self.assertIn('Firewall: ufw allow SSH (every port sshd listens on), 8443, 8081; deny other incoming.', lines)
         ssh = next(line for line in lines if line.startswith('SSH: '))
         for directive in ('PermitRootLogin no', 'MaxAuthTries 4', 'LoginGraceTime 30'):
             self.assertIn(directive, ssh)
@@ -1986,9 +2030,11 @@ class PlanLinesTests(unittest.TestCase):
         lines = self.lines(facts=dict(FACTS, mode='provided'))
         self.assertIn('TLS: keep the provided certificate (expires 2028-11-01).', lines)
 
-    def test_the_firewall_line_names_the_session_ssh_port_the_ports_of_the_settings_or_says_not_selected(self):
+    def test_the_firewall_line_names_the_ports_of_the_settings_or_says_not_selected(self):
+        # Reworded with the review of the installer slice: the script opens every port sshd listens on
+        # (setup-firewall.sh), so the line no longer names the installing session's own port.
         lines = self.lines(env={'SSH_CONNECTION': '198.51.100.7 51234 192.0.2.10 2222'}, ports=(9443, 0))
-        self.assertIn('Firewall: ufw allow 2222, 9443; deny other incoming.', lines)
+        self.assertIn('Firewall: ufw allow SSH (every port sshd listens on), 9443; deny other incoming.', lines)
         lines = self.lines(install.Options(firewall=False, ssh_hardening=False))
         self.assertIn('Firewall: not selected.', lines)
         self.assertIn('SSH hardening: not selected.', lines)
@@ -2001,6 +2047,56 @@ class PlanLinesTests(unittest.TestCase):
         lines = self.lines(collide=True)
         self.assertTrue(any(line.startswith('Manager ports: your .env sets UI_PORT=8081') and 'no plain-HTTP redirect' in line
                             for line in lines), lines)
+
+    def firewall_line(self, env_text=None, options=None, previous=None):
+        """The firewall line with the real settings readers over a temporary checkout and an optional previous file."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'clab-backup-ui').mkdir()
+            if env_text is not None:
+                (root / 'clab-backup-ui' / '.env').write_text(env_text)
+            options = options or install.Options()
+            if previous is not None:
+                (root / 'previous.env').write_text(previous)
+                options.env_source = root / 'previous.env'
+            with patch.object(install, 'SOURCE', root), patch.object(exposure(), 'env_file_values', _REAL_ENV_FILE_VALUES), \
+                    patch.object(exposure(), 'ports_collide', _REAL_PORTS_COLLIDE), patch.object(exposure(), 'facts', return_value=None):
+                lines = install.plan_lines(OWNER, '1.32.0', options)
+        return next(line for line in lines if line.startswith('Firewall: '))
+
+    def test_a_standard_run_over_a_settings_file_that_collides_opens_one_port_not_the_same_twice(self):
+        # UI_PORT=8081 and no UI_HTTP_PORT: setup-tls.sh writes UI_HTTP_PORT=0, so only 8081 is opened.
+        self.assertEqual(self.firewall_line('UI_PORT=8081\n'),
+                         'Firewall: ufw allow SSH (every port sshd listens on), 8081; deny other incoming.')
+
+    def test_the_chosen_port_answer_decides_the_ports_the_firewall_will_open(self):
+        text = 'UI_PORT=8081\n'
+        self.assertEqual(self.firewall_line(text, install.Options(ports='redirect')),
+                         'Firewall: ufw allow SSH (every port sshd listens on), 8443, 8081; deny other incoming.')
+        self.assertEqual(self.firewall_line(text, install.Options(ports='keep')),
+                         'Firewall: ufw allow SSH (every port sshd listens on), 8081; deny other incoming.')
+
+    def test_the_firewall_line_follows_the_previous_settings_file_that_will_be_copied(self):
+        self.assertEqual(self.firewall_line(previous='UI_PORT=9443\nUI_HTTP_PORT=0\n'),
+                         'Firewall: ufw allow SSH (every port sshd listens on), 9443; deny other incoming.')
+        self.assertEqual(self.firewall_line(previous='UI_PORT=9443\nUI_HTTP_PORT=9080\n'),
+                         'Firewall: ufw allow SSH (every port sshd listens on), 9443, 9080; deny other incoming.')
+
+    def test_without_any_settings_file_the_defaults_are_named(self):
+        self.assertEqual(self.firewall_line(),
+                         'Firewall: ufw allow SSH (every port sshd listens on), 8443, 8081; deny other incoming.')
+
+    def test_the_firewall_line_and_the_manager_ports_line_never_disagree(self):
+        # The plan used to promise "no plain-HTTP redirect" and open the redirect port in the line above it.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'clab-backup-ui').mkdir()
+            (root / 'clab-backup-ui' / '.env').write_text('UI_PORT=8081\n')
+            with patch.object(install, 'SOURCE', root), patch.object(exposure(), 'env_file_values', _REAL_ENV_FILE_VALUES), \
+                    patch.object(exposure(), 'ports_collide', _REAL_PORTS_COLLIDE), patch.object(exposure(), 'facts', return_value=None):
+                lines = install.plan_lines(OWNER, '1.32.0', install.Options())
+        self.assertTrue(any('no plain-HTTP redirect' in line for line in lines))
+        self.assertFalse(any(line.startswith('Firewall:') and '8081, 8081' in line for line in lines))
 
     def test_plain_lines_never_carry_a_setup_code(self):
         with patch.object(exposure(), 'read_setup_code', return_value=('open', 'setup', GOOD_CODE)) as read:
@@ -2113,6 +2209,58 @@ class ClosingLinesTests(unittest.TestCase):
         read.assert_not_called()
         self.assertNotIn('enter this setup code', printed.getvalue())
         self.assertNotIn(GOOD_CODE, printed.getvalue())
+
+    def fail_after_verify(self, failing, reading=('open', 'setup', GOOD_CODE), options=None):
+        """A run in which the phase whose title contains `failing` is returned from, after the manager is verified."""
+        events = []
+
+        def phase(title, action, env=None):
+            events.append(('phase', title))
+            if failing in title:
+                raise install.Cancelled()
+        printed = io.StringIO()
+        with patch.object(install, 'ask_install_options', return_value=options or install.Options()), \
+                patch.object(install, 'phase', side_effect=phase), \
+                patch.object(install, 'setup_lazydocker', side_effect=lambda env: events.append(('lazydocker',))), \
+                patch.object(install, 'git_setup', side_effect=lambda env: events.append(('git',))), \
+                patch.object(exposure(), 'read_setup_code', side_effect=lambda **k: (events.append(('read-code',)), reading)[1]), \
+                patch.object(exposure(), 'primary', return_value='vm1.example.edu'), \
+                patch.object(exposure(), 'facts', return_value=FACTS), \
+                patch.object(exposure(), 'ports', return_value=(8443, 8081)), patch('sys.stdout', new=printed):
+            with self.assertRaises(install.Cancelled):
+                install.install(OWNER, '1.32.0')
+        return events, printed.getvalue().splitlines()
+
+    def test_a_returned_firewall_or_ssh_step_still_ends_with_the_address_and_the_setup_code(self):
+        # The manager is verified and in setup mode by then; leaving the operator without the code strands them.
+        for failing in ('Firewall', 'SSH hardening'):
+            with self.subTest(failing=failing):
+                events, lines = self.fail_after_verify(failing)
+                self.assertEqual(lines[-2], f'Open https://vm1.example.edu:8443/setup and enter this setup code: {GOOD_CODE}')
+                self.assertEqual(lines[-1], 'It is also readable on the VM with: sudo cat /srv/containerlab-node-manager/data/setup-code')
+                self.assertIn('Open the manager at https://vm1.example.edu:8443/', '\n'.join(lines))
+                self.assertEqual([event for event in events if event[0] == 'read-code'], [('read-code',)])
+                self.assertNotIn(('git',), events, 'the steps after the returned one do not run')
+
+    def test_the_stopped_run_says_so_and_does_not_claim_the_installation_is_ready(self):
+        _, lines = self.fail_after_verify('Firewall')
+        text = '\n'.join(lines)
+        self.assertNotIn('Manager installation is ready', text)
+        self.assertIn('did not finish', text)
+        self.assertIn('verified', text)
+
+    def test_a_run_returned_from_before_the_manager_is_verified_still_prints_no_address_and_no_code(self):
+        for failing in ('Administrator', 'VM prerequisites', 'Password, helpers', 'Browser Wireshark', 'Running manager verification'):
+            with self.subTest(failing=failing):
+                events, lines = self.fail_after_verify(failing)
+                self.assertNotIn(('read-code',), events)
+                self.assertNotIn('Open the manager at', '\n'.join(lines))
+                self.assertNotIn('enter this setup code', '\n'.join(lines))
+                self.assertNotIn('did not finish', '\n'.join(lines))
+
+    def test_the_sign_in_line_is_printed_on_the_stopped_path_when_an_administrator_exists(self):
+        _, lines = self.fail_after_verify('SSH hardening', reading=('absent', None, None))
+        self.assertEqual(lines[-1], 'An administrator exists; sign in at https://vm1.example.edu:8443/')
 
     def test_no_command_the_installer_runs_carries_the_code(self):
         seen = []

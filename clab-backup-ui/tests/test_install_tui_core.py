@@ -1581,6 +1581,35 @@ class ExposureSetupCodeTests(IsolatedCase):
         run = lambda argv, **kw: completed('', 1, 'cat: /srv/containerlab-node-manager/data/setup-code: No such file or directory')
         self.assertEqual(exposure.read_setup_code(run=run), ('absent', None, None))
 
+    def test_the_missing_file_is_recognised_whatever_the_operators_locale(self):
+        # The plain menu inherits the login environment. A German `cat` says "Datei oder Verzeichnis nicht gefunden":
+        # the reader runs with a fixed C locale so an administrator who exists is never told to cat a missing file.
+        def localised(argv, **kwargs):
+            language = (kwargs.get('env') or os.environ).get('LC_ALL') or os.environ.get('LC_ALL', 'de_DE.UTF-8')
+            message = ('No such file or directory' if language == 'C'
+                       else 'Datei oder Verzeichnis nicht gefunden')
+            return completed('', 1, 'cat: /srv/containerlab-node-manager/data/setup-code: ' + message)
+        with patch.dict(os.environ, {'LC_ALL': 'de_DE.UTF-8', 'LANGUAGE': 'de'}):
+            self.assertEqual(exposure.read_setup_code(run=localised), ('absent', None, None))
+
+    def test_every_reader_that_runs_a_program_hands_it_the_c_locale_and_keeps_the_rest_of_the_environment(self):
+        seen = []
+
+        def record(argv, **kwargs):
+            seen.append((argv[0], kwargs.get('env')))
+            return completed('', 1)
+        with patch.dict(os.environ, {'LC_ALL': 'de_DE.UTF-8', 'LANGUAGE': 'de', 'SUDO_ASKPASS': '/bin/askpass'}):
+            exposure.read_setup_code(run=record)
+            exposure.facts(self.tmp, run=record)
+            exposure.primary(self.tmp, run=record)
+        self.assertEqual([name for name, _ in seen], ['sudo', 'openssl', 'bash'])
+        for name, env in seen:
+            with self.subTest(program=name):
+                self.assertEqual(env['LC_ALL'], 'C')
+                self.assertNotIn('LANGUAGE', env)
+                self.assertEqual(env['SUDO_ASKPASS'], '/bin/askpass', 'sudo and the terminal still work')
+                self.assertEqual(env['PATH'], os.environ['PATH'])
+
     def test_every_other_failure_is_unreadable_and_never_carries_text(self):
         for result in (completed('', 1, 'sudo: a password is required'), completed('', 1, 'cat: Permission denied'),
                        completed('not the two-line form', 0), completed('', 0)):
@@ -2163,13 +2192,23 @@ class EngineRunTests(EngineCase):
             self.assertIn(words, run.phase('signon').note)
             self.assertEqual(run.outcome, 'completed', 'the setup code never changes the installation outcome')
 
-    def test_signon_phase_needs_administrator_access_and_never_reads_without_it(self):
+    def test_signon_phase_never_asks_for_a_password_and_a_refusing_sudo_only_makes_the_code_unreadable(self):
+        # Rewritten with the review of the installer slice. The old claim, "needs administrator access and never reads
+        # without it", made an expired sudo timestamp after a long installation turn a finished manager into a
+        # 'returned' run. The read itself uses `sudo -n` and answers 'unreadable' when sudo refuses; the summary then
+        # prints the `sudo cat` sentence. The step never prompts and never changes the outcome.
         with patch.object(engine, 'credentials_cached', return_value=False), \
-                patch.object(engine.exposure, 'read_setup_code') as read:
+                patch.object(engine.exposure, 'read_setup_code', return_value=('unreadable', None, None)) as read:
             bridge = FakeBridge(handoff=[1], recover=[engine.RETURN])
-            self.go([install.Step('signon', 'Setup code', None, bare=True, post=True)], bridge)
-        read.assert_not_called()
-        self.assertEqual(self.bridge.recovers[0][1], 'auth')
+            run = self.go([install.Step('signon', 'Setup code', None, bare=True, post=True)], bridge)
+        read.assert_called_once()
+        self.assertEqual(read.call_args.kwargs['sudo'], ('sudo', '-n'))
+        self.assertEqual(self.bridge.recovers, [], 'no recovery question: the step cannot fail')
+        self.assertEqual(self.bridge.handoffs, [], 'the terminal is never handed over for sudo')
+        phase = run.phase('signon')
+        self.assertEqual((phase.state, phase.outcome), (engine.COMPLETED, 'unreadable'))
+        self.assertIn('sudo cat /srv/containerlab-node-manager/data/setup-code', phase.note)
+        self.assertEqual(run.outcome, 'completed', 'a finished installation is never reported as returned')
 
     def test_an_internal_error_is_a_recoverable_failure_not_a_dead_run(self):
         steps = [install.Step('weird', 'No argv and no special key', None)]

@@ -34,6 +34,17 @@ HOST_SHAPE = re.compile(r'[A-Za-z0-9._:\[\]-]{1,253}')
 SSH_CONNECTION_SHAPE = re.compile(r'[0-9A-Fa-f:.]+ [0-9]{1,5} [0-9A-Fa-f:.]+ [0-9]{1,5}')
 
 
+# ---- the environment of the programs it runs -------------------------------------------------
+def _c_locale():
+    """The caller's environment with the C locale: the plain menu runs in the operator's own login
+    environment, and the missing-file test reads `cat`'s English message. Everything else (PATH,
+    SUDO_ASKPASS, TERM) stays, so sudo still works on the terminal."""
+    environ = dict(os.environ)
+    environ['LC_ALL'] = 'C'
+    environ.pop('LANGUAGE', None)
+    return environ
+
+
 # ---- the settings file -----------------------------------------------------------------------
 def env_values(source, keys):
     """Only the named keys of the checkout's clab-backup-ui/.env."""
@@ -135,7 +146,8 @@ def facts(tls_dir=None, run=subprocess.run):
     try:
         result = run(['openssl', 'x509', '-in', str(tls_dir / 'cert.pem'), '-noout', '-fingerprint', '-sha256',
                       '-enddate', '-ext', 'subjectAltName'],
-                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=10)
+                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=10,
+                     env=_c_locale())
     except (OSError, subprocess.SubprocessError):
         return None
     if result.returncode != 0:
@@ -168,7 +180,8 @@ def primary(source, run=subprocess.run):
     """`setup-tls.sh --primary`: the one name the installers print first (EXPOSURE.md 3.1), or None."""
     try:
         result = run(['bash', str(Path(source) / 'deploy/setup-tls.sh'), '--primary'],
-                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=15)
+                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=15,
+                     env=_c_locale())
     except (OSError, subprocess.SubprocessError):
         return None
     if result.returncode != 0:
@@ -258,7 +271,8 @@ def read_setup_code(cwd=None, sudo=('sudo',), interactive=True, run=subprocess.r
     stored here and never part of an exception text."""
     try:
         result = run([*sudo, 'cat', SETUP_CODE_FILE], cwd=cwd, stdin=None if interactive else subprocess.DEVNULL,
-                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60 if interactive else 10)
+                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60 if interactive else 10,
+                     env=_c_locale())
     except (OSError, subprocess.SubprocessError):
         return 'unreadable', None, None
     if result.returncode == 0:

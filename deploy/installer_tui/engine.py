@@ -363,10 +363,10 @@ class Run:
         if key == 'signon':
             # The last phase (REVIEW U13): the code file is read now, after every step that could restart the
             # manager. Only the state is kept; the summary screen reads the file again when it is shown, and the
-            # code is in no field of this run and never in the run record.
-            if not self._authenticate(phase):
-                return Failure('auth', 'Administrator access is needed to read the setup code.',
-                               choices=(AUTH_RETRY, RETURN))
+            # code is in no field of this run and never in the run record. No sudo prompt here: a long installation
+            # often outlives the cached credentials, and `sudo -n` then simply makes the code 'unreadable' (the
+            # summary prints the `sudo cat` sentence), so this step can never turn a finished installation into a
+            # returned one.
             state = exposure.read_setup_code(cwd=str(self.install.SOURCE), sudo=('sudo', '-n'), interactive=False)[0]
             phase.outcome = state
             phase.note = {'open': 'The setup code is on the summary screen and in the scrollback after Finish.',

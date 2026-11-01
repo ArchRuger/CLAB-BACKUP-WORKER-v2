@@ -23,6 +23,7 @@ from pathlib import Path
 import re
 import shlex
 import signal
+import subprocess
 import sys
 import tempfile
 import time
@@ -248,6 +249,12 @@ class SlateCase(unittest.IsolatedAsyncioTestCase):
             # Settings files are read only inside this test's own folder: never this checkout's real .env.
             patch.object(exposure, 'env_file_values',
                          lambda path, keys, _real=exposure.env_file_values: _real(path, keys) if str(path).startswith(str(self.root)) else {}),
+            # The plan reads the certificate, and the summary the primary name and the setup code, from the VM:
+            # none of them may reach this machine's real TLS folder, `setup-tls.sh` or `sudo cat` (a test that needs
+            # a value patches it again, as ResultScreenTests does).
+            patch.object(exposure, 'facts', lambda *a, **k: None),
+            patch.object(exposure, 'primary', lambda *a, **k: None),
+            patch.object(exposure, 'read_setup_code', lambda *a, **k: ('absent', None, None)),
         ]
         for item in patches:
             item.start()
@@ -707,6 +714,49 @@ class SettingsTests(SlateCase):
             labels = self.plan_phase_labels(app)
             self.assertNotIn('Firewall', labels)
             self.assertNotIn('SSH hardening', labels)
+
+    def test_no_test_of_this_module_reads_the_vms_certificate_or_runs_a_helper_for_the_code(self):
+        # The plan's TLS line used to run `openssl x509` on the development VM's live TLS folder, so a VM with a
+        # provided certificate failed 'TLS: self-signed certificate' for a reason outside the code. Programs named
+        # on a PATH that holds only recorders show whether any of the three readers still starts one.
+        bin_dir = self.root / 'recorders'
+        bin_dir.mkdir()
+        marker = self.root / 'started'
+        for name in ('openssl', 'sudo', 'bash'):
+            script = bin_dir / name
+            script.write_text(f'#!/bin/sh\necho {name} >> {marker}\nexit 1\n')
+            script.chmod(0o755)
+        with patch.dict(os.environ, {'PATH': str(bin_dir)}):
+            self.assertIsNone(exposure.facts(exposure.TLS_DIR))
+            self.assertIsNone(exposure.primary(self.root))
+            self.assertEqual(exposure.read_setup_code(), ('absent', None, None))
+        self.assertFalse(marker.exists(), marker.read_text() if marker.exists() else '')
+
+    async def test_the_opt_out_flags_preselect_skip_for_the_firewall_and_ssh_questions(self):
+        args = slate.parse_args(['--advanced', '--no-firewall', '--no-ssh-hardening'])
+        self.assertEqual((args.advanced, args.no_firewall, args.no_ssh_hardening), (True, True, True))
+        ctx = self.ctx()
+        slate.apply_flags(ctx, args)
+        self.assertEqual((ctx.options.firewall, ctx.options.ssh_hardening), (False, False))
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.open_settings(app, pilot)
+            screen = app.screen
+            self.assertEqual(screen.query_one('#firewall', RadioSet).pressed_index, 1)
+            self.assertEqual(screen.query_one('#sshd', RadioSet).pressed_index, 1)
+        other = self.ctx()
+        slate.apply_flags(other, slate.parse_args(['--advanced', '--no-firewall']))
+        self.assertEqual((other.options.firewall, other.options.ssh_hardening), (False, True))
+        untouched = self.ctx()
+        slate.apply_flags(untouched, slate.parse_args(['--advanced']))
+        self.assertEqual((untouched.options.firewall, untouched.options.ssh_hardening), (True, True))
+
+    def test_the_opt_out_flags_are_advanced_only_in_the_full_screen_installer_too(self):
+        for argv in (['--no-firewall'], ['--no-ssh-hardening'], ['--git', '--no-firewall']):
+            with self.subTest(argv=argv), patch('sys.stderr', new=io.StringIO()) as err:
+                with self.assertRaises(SystemExit) as caught:
+                    slate.parse_args(argv)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn('--advanced', err.getvalue())
 
     async def test_the_default_plan_lists_the_tls_firewall_ssh_and_sign_on_lines_and_phases(self):
         ctx = self.ctx()
@@ -1675,6 +1725,19 @@ class ResultScreenTests(SlateCase):
             self.assertNotIn(GOOD_CODE, joined)
             self.assertNotIn('setup code', joined)
             self.assertEqual(self.reads, [], 'the file is not even read')
+
+    async def test_a_returned_firewall_step_after_verification_still_shows_the_address_and_the_code(self):
+        # Parity with the plain menu (review of the installer slice): the manager is verified and in setup mode when the
+        # firewall step is returned from, so both front ends end with the same address and code.
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = scripted_run(ctx, 'install', states={'admin': engine.COMPLETED, 'prereqs': engine.COMPLETED,
+                                                       'launch': engine.COMPLETED, 'capture': engine.COMPLETED,
+                                                       'verify': engine.COMPLETED, 'firewall': engine.FAILED}, outcome='returned')
+            run.phase('firewall').failure = engine.Failure('command', 'The step stopped with exit status 1.', 1)
+            joined = collapse('\n'.join(app.summary_plain(run)))
+            self.assertIn('https://vm1.example.edu:8443/', joined)
+            self.assertIn(f'Create the first administrator at https://vm1.example.edu:8443/setup with this setup code: {GOOD_CODE}', joined)
 
     async def test_the_run_record_never_carries_the_code(self):
         ctx = self.ctx()

@@ -1976,12 +1976,30 @@ def detect_look():
     return theme.Look(no_color=no_color, ascii_only=ascii_only)
 
 
-def main(argv=None):
+def parse_args(argv=None):
+    """--no-firewall and --no-ssh-hardening (EXPOSURE.md 5.2 and 5.4) are advanced choices, as in the plain menu."""
     import argparse
     parser = argparse.ArgumentParser(prog='install.sh --tui', description='Full-screen Containerlab Node Manager installer.')
     parser.add_argument('--git', action='store_true')
     parser.add_argument('--advanced', action='store_true')
+    parser.add_argument('--no-firewall', action='store_true')
+    parser.add_argument('--no-ssh-hardening', action='store_true')
     args = parser.parse_args(argv)
+    if (args.no_firewall or args.no_ssh_hardening) and not args.advanced:
+        parser.error('--no-firewall and --no-ssh-hardening are advanced choices: add --advanced.')
+    return args
+
+
+def apply_flags(ctx, args):
+    """Preselect Skip for the questions the flags answer; the Settings screen still shows them."""
+    if args.no_firewall:
+        ctx.options.firewall = False
+    if args.no_ssh_hardening:
+        ctx.options.ssh_hardening = False
+
+
+def main(argv=None):
+    args = parse_args(argv)
     if not (sys.__stdin__ and sys.__stdin__.isatty() and sys.__stderr__ and sys.__stderr__.isatty()
             and sys.__stdout__ and sys.__stdout__.isatty()):
         sys.stderr.write('The full-screen installer needs an interactive terminal on stdin, stdout and stderr.\n')
@@ -1991,6 +2009,7 @@ def main(argv=None):
         look = detect_look()
         theme.apply_palette(theme.color_system(os.environ))
         ctx = Context(install, look)
+        apply_flags(ctx, args)
     except (ValueError, OSError) as error:
         sys.stderr.write(f'Setup stopped: {error}\n')
         return 1
