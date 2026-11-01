@@ -557,7 +557,9 @@ class FirewallAndListenerTests(unittest.TestCase):
                    'every port on the uplink, IPv6': 'Anywhere (v6) on eth0      ALLOW IN    Anywhere (v6)\n',
                    'every port on the uplink, LIMIT': 'Anywhere on eth0           LIMIT IN    Anywhere\n',
                    'the whole tcp range on the uplink': '1:65535/tcp on eth0        ALLOW IN    Anywhere\n',
-                   'a very wide tcp range on the uplink': '2000:9000/tcp on eth0      ALLOW IN    Anywhere\n'}
+                   'a very wide tcp range on the uplink': '2000:9000/tcp on eth0      ALLOW IN    Anywhere\n',
+                   'every port to the uplink address': '192.0.2.10                 ALLOW IN    Anywhere\n',
+                   'the whole tcp range to the uplink address': '192.0.2.10 1:65535/tcp      ALLOW IN    Anywhere\n'}
         for name, rule in blanket.items():
             with self.subTest(name):
                 row = by_id(run_group(fixture=Fixture(ufw=UFW_ACTIVE + rule)), 'firewall')
@@ -584,6 +586,15 @@ class FirewallAndListenerTests(unittest.TestCase):
                  '8443/tcp on eth0           ALLOW IN    Anywhere\n'
                  '8081/tcp (v6) on eth0      ALLOW IN    Anywhere (v6)\n')
         row = by_id(run_group(fixture=Fixture(ufw=bound)), 'firewall')
+        self.assertEqual(row['status'], 'PASS', row)
+        self.assertNotIn('not allowed', row['detail'])
+
+    def test_a_needed_port_allowed_to_one_destination_address_is_allowed(self):
+        # ufw prints a destination other than anywhere as the address, then the port: `192.0.2.10 8443/tcp`.
+        only = UFW_ACTIVE.split('22/tcp ')[0] + ('22/tcp                     ALLOW IN    Anywhere\n'
+                                                 '192.0.2.10 8443/tcp        ALLOW IN    Anywhere\n'
+                                                 '192.0.2.0/24 8081/tcp      ALLOW IN    Anywhere\n')
+        row = by_id(run_group(fixture=Fixture(ufw=only)), 'firewall')
         self.assertEqual(row['status'], 'PASS', row)
         self.assertNotIn('not allowed', row['detail'])
 

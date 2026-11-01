@@ -399,8 +399,13 @@ def inspect_manager(ctx):
             ctx.add('http', 'FAIL', 'Manager HTTP', 'Could not determine its actual configured bind address and port.')
         return
     if not ctx.base_url.startswith('https://'):
-        # A builder that still answers http:// (a manager started without TLS) must not become a "pinned TLS" PASS.
-        ctx.add('http', 'FAIL', 'Manager HTTP', plain_text, plain_fix)
+        # A builder that still answers http:// must not become a "pinned TLS" PASS. The plain-HTTP sentence is true only
+        # when the command has no --ssl-certfile; for a TLS command the builder is what is wrong (an old checkout).
+        if plain_start:
+            ctx.add('http', 'FAIL', 'Manager HTTP', plain_text, plain_fix)
+        else:
+            ctx.add('http', 'FAIL', 'Manager HTTP', "install-manager.py's address builder returned no https:// address (an incomplete checkout), "
+                    'so no HTTPS readiness question was sent.', 'Update the checkout and rebuild using ' + ctx.command('install.sh') + '.')
         ctx.base_url = ''
         return
     # The one HTTP question of the health check: GET /api/health over TLS with the installed certificate pinned.

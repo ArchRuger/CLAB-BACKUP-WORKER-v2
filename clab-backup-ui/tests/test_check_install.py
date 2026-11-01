@@ -971,6 +971,8 @@ class StoppedManagerTests(unittest.TestCase):
         self.assertNotIn('certificate could not be read', by_id(ctx, 'tls.listener')['detail'])
         self.assertIn('start-manager.sh', by_id(ctx, 'tls.listener')['fix'])
         self.assertEqual(by_id(ctx, 'http.hsts')['status'], 'SKIP')
+        self.assertIn('was not asked', by_id(ctx, 'http.hsts')['detail'])
+        self.assertNotIn('did not answer', by_id(ctx, 'http.hsts')['detail'])
         self.assertNotIn('certificate could not be read', by_id(ctx, 'http.hsts')['detail'] + by_id(ctx, 'http.hsts')['fix'])
         self.assertIn('start-manager.sh', by_id(ctx, 'http.hsts')['fix'])
         for ident in ('design-engine', 'vm-connection', 'git-http', 'capture'):
@@ -1011,6 +1013,20 @@ class StoppedManagerTests(unittest.TestCase):
         ctx.head.assert_not_called()
         for ident in ('tls.listener', 'http.hsts'):
             self.assertEqual(by_id(ctx, ident)['status'], 'SKIP', ident)
+
+    def test_a_tls_start_with_an_old_url_builder_blames_the_builder_not_a_plain_start(self):
+        # install-manager.py before the TLS change answers http:// for every command; the manager here is healthy TLS.
+        ctx = self.inspect(health_url=Mock(return_value='http://127.0.0.1:8443/api/state'))
+        row = by_id(ctx, 'http')
+        self.assertEqual(row['status'], 'FAIL')
+        self.assertIn('address builder returned no https:// address', row['detail'])
+        self.assertIn('incomplete checkout', row['detail'])
+        self.assertNotIn('plain HTTP', row['detail'])
+        self.assertNotIn('--ssl-certfile', row['detail'])
+        self.assertIn('install.sh', row['fix'])
+        self.assertNotIn('start-manager.sh', row['fix'])
+        self.assertEqual(ctx.base_url, '')
+        ctx.http.assert_not_called()
 
     def test_a_url_builder_that_refuses_a_plain_start_still_names_the_plain_http_start(self):
         ctx = self.inspect(health_url=Mock(side_effect=ValueError('The manager is configured without TLS; rebuild it.')), command=self.PLAIN)

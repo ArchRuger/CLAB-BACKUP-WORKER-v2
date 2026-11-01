@@ -363,7 +363,7 @@ def check_hsts(ctx, listener):
     if ctx.tls_context is None:
         ctx.add('http.hsts', 'SKIP', title, 'The installed certificate could not be read, so the TLS listener was not probed.', ctx.repair('setup-tls.sh'))
     elif listener is None or listener[0] != 200:
-        ctx.add('http.hsts', 'SKIP', title, 'The TLS listener did not answer, so the header was not read.', ctx.repair('start-manager.sh'))
+        ctx.add('http.hsts', 'SKIP', title, 'The TLS listener ' + ('was not asked' if listener is None else 'did not answer') + ', so the header was not read.', ctx.repair('start-manager.sh'))
     elif listener[1].get('strict-transport-security') == HSTS_VALUE:
         ctx.add('http.hsts', 'PASS', title, 'Strict-Transport-Security: ' + HSTS_VALUE + ' is sent.')
     else:
@@ -383,7 +383,9 @@ def ufw_rules(text):
     opens nothing here. The To column may carry an interface (`Anywhere on eth0`, `8443/tcp on eth0`), an
     application profile (`22/tcp (OpenSSH)`) and `(v6)`. A blanket allow is a rule from anywhere (the source is not
     limited) to every port or to a tcp range wider than BROAD_RANGE ports, on every interface or on any interface but
-    loopback. A rule limited to a source address does not count as blanket."""
+    loopback. A rule limited to a source address does not count as blanket. A destination address in the To column
+    (`192.0.2.10 8443/tcp`, or alone for every port to that address) is dropped and the rest parsed; the address
+    still opens its ports, so it never hides a blanket allow."""
     rules, broad = [], []
     for line in text.splitlines():
         match = UFW_ACTION.match(line.rstrip())
@@ -398,12 +400,22 @@ def ufw_rules(text):
             if stripped == column:
                 break
             column = stripped
-        spec, _, proto = column.strip().partition('/')
+        column = column.strip()
+        destination = ''
+        first, _, rest = column.partition(' ')
+        try:
+            ipaddress.ip_network(first, strict=False)
+            destination, column = first, rest.strip()  # a rule to one destination address: `192.0.2.10 8443/tcp`
+        except ValueError:
+            pass
+        if destination and not column:
+            column = 'Anywhere'  # every port to that address
+        spec, _, proto = column.partition('/')
         if proto == 'udp':
             continue
         if interface == 'lo':
             continue  # loopback is not an opening to the network
-        where = f' on {interface}' if interface else ''
+        where = (f' to {destination}' if destination else '') + (f' on {interface}' if interface else '')
         everywhere = (match[2] or '').strip().lower().startswith('anywhere')
         if spec.lower() == 'anywhere':
             rules.append((1, 65535))
