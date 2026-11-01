@@ -80,6 +80,7 @@ and the lead corrects this file.
 | `setup_tls.certificate_addresses(routes, addresses)` (EXPOSURE 3.2), loaded by `check_exposure.py` | S4 | S6 |
 | The manager's environment key `UI_PORT` (both compose files) | S4 | S1b |
 | `setup-firewall.sh`, `setup-ssh-hardening.sh`, `manager-recover-admin.sh` options and output | S5a | S5b, S6 |
+| `install-manager.health_url(command)`: `https://<address>:<port>/api/health` for a TLS command, `ValueError` when no address can be built (EXPOSURE 7.1) | S5b | S6 |
 | `session.js` globals, `signedOut()`, `sessionOnResume(fn)`, the `sessionEnded:true` error marker | S8 | S9, S10a, S10b |
 | `diagnosticsAdvice(role)` in `status.js` | S8 | S10a, S10b |
 
