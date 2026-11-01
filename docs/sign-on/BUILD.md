@@ -139,7 +139,9 @@ REVIEW R9, R10.
 Acceptance: a ticket minted by session A is refused on a socket of session B and outlives neither its
 30 s nor its session; terminal, console and capture sockets close 1008 `signed_out` within 5 s of the
 session's end; socket input renews the session at most once a minute; both Origin checks stay and still
-refuse a foreign origin; the capture cookie's `secure` follows `origin.scheme`.
+refuse a foreign origin; the capture cookie's `secure` follows `origin.scheme`; the owner identity is `sha256(cookie + '\n' + user)` on every
+owner-scoped call and the socket, so a second person in the same browser never sees or reaches the first
+person's desktop sessions and the first person, returning, finds theirs (DESIGN 11.2).
 
 ### S3 probe and redirect
 
