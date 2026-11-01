@@ -1,5 +1,7 @@
 # Exposure: TLS and hardening of an Internet-facing VM
 
+Amended with the lead's rulings of RECONCILIATION.md section 4 (2026-11-01).
+
 The design of the transport and of the VM's other doors for the sign-on campaign (`PROMPT.md`,
 decision D3). It answers the eight questions the lead asked, in order. `DESIGN.md` owns accounts,
 sessions and the gate; `UI.md` owns the pages. Section 9 states what this design needs from them.
@@ -29,7 +31,7 @@ Where `INVENTORY.md` cites a different line of `main`, the branch line is given 
 |---|---|---|
 | 1 | TLS termination | **uvicorn serves HTTPS itself** (`--ssl-certfile /tls/cert.pem --ssl-keyfile /tls/key.pem`). Always on in both compose files. No Caddy sidecar. A reverse proxy is not a supported mode in this version (reasons in 2.3). |
 | 2 | Certificate | **Self-signed by the installer with `openssl` on the VM**, ECDSA P-256, 730 days, SANs = the VM's addresses, its host name, `localhost`, the loopback addresses and every name in `UI_ALLOWED_HOSTS`. A **provided** certificate (any CA, Let's Encrypt through certbot included) is installed with `setup-tls.sh --cert --key`. |
-| 3 | Plain HTTP | **A redirect-only listener on 8081** (a second compose service running `python -m app.redirect`), nothing else on plain HTTP. **HSTS** `max-age=31536000` on every HTTPS response, no `includeSubDomains`, no `preload`. |
+| 3 | Plain HTTP | **A redirect-only listener on 8081** (a second compose service running `python -m app.redirect`), nothing else on plain HTTP. **HSTS** `max-age=15552000` (180 days) on every HTTPS response, no `includeSubDomains`, no `preload`. |
 | 4 | Other doors | `UI_BIND` stays `0.0.0.0`. New `deploy/setup-firewall.sh` (ufw: allow the SSH port, the TLS port and the redirect port; deny the rest). Lab-node published ports and any non-loopback listener are reported by the health check. New `deploy/setup-ssh-hardening.sh` writes a conservative sshd drop-in. The `clab-discovery` policy is not touched. |
 | 5 | Health check | New module `deploy/check_exposure.py` (stdlib) with eleven checks (section 6), plus three changes in `check_install.py` (TLS-aware `Context.http`, `/api/health` instead of `/api/state`, capture and design-engine facts through `docker exec`). |
 | 6 | Installer | `setup-tls.sh` runs inside `start-manager.sh` before the image build; firewall and sshd hardening are installer steps after the manager verification; `health_url`, `probes.manager_address` and the TUI's address lines become `https://`; the setup code and the fingerprint are printed at the end. The upgrade decision is 7.4. |
@@ -102,7 +104,7 @@ Rules:
 4. TLS version and ciphers stay at uvicorn's and Python's defaults (minimum TLS 1.2 by
    `ssl.SSLContext` default since Python 3.10). Section 10 lists this for the reviewer; a cipher
    string is not added without a measured reason.
-5. The Dockerfile's `CMD` (Dockerfile:24) carries the same TLS arguments and `EXPOSE 8443 8081`
+5. The Dockerfile's `CMD` (Dockerfile:24) carries the same TLS arguments, `--no-proxy-headers` and `--no-server-header` explicitly, and `EXPOSE 8443 8081`
    (Dockerfile:22). A `docker run` without the tls mount fails at start, which is the right outcome:
    the image never serves plain HTTP by accident.
 6. Plain HTTP for development is not a container mode. The fixture tools run the app directly
@@ -327,13 +329,13 @@ mounts nothing, so it is ignored, which is correct.
 
 | Rule | Value |
 |---|---|
-| Header | `Strict-Transport-Security: max-age=31536000` |
+| Header | `Strict-Transport-Security: max-age=15552000` (180 days) |
 | Sent when | `scheme(scope) == 'https'` (DESIGN.md 5.6 item 1), on every response of the manager: pages, `/api/`, static files, the gate's and `HostCheck`'s refusals. It belongs in the one `security_headers()` of `app/headers.py` that RECONCILIATION Dq 5 creates. |
 | Not sent | over plain HTTP (the redirect listener never sends it; a browser ignores it there anyway, RFC 6797 §8.1). |
 | `includeSubDomains` | no: the manager owns one name, and a lab's other services may live under it. |
 | `preload` | no: preloading is irreversible for a name the operator may reuse. |
 | Self-signed | A browser stores HSTS only from a connection without certificate errors (RFC 6797 §8.1), so a self-signed installation sends the header and the browser discards it. The header is still sent, so a later switch to a provided certificate needs no manager change. |
-| Trusted certificate | After the first visit the browser refuses plain HTTP for a year and refuses to click through a later certificate error. That is the point, and it is the lockout case 10.4. |
+| Trusted certificate | After the first visit the browser refuses plain HTTP for 180 days and refuses to click through a later certificate error. That is the point, and it is the lockout case 10.4. |
 
 A test asserts the header with `TestClient(app, base_url='https://testserver')` and its absence with
 the default `http://testserver` (the `HostCheckTests` pattern, test_app.py:317-399, sends explicit
@@ -447,7 +449,7 @@ group *TLS, firewall and exposure* right after *Docker, manager and persistent s
 | `tls.bind` | the container command (`check_docker` already inspects `.Config.Cmd`, 260-262) carries `--ssl-certfile`, `--ssl-keyfile` and `--no-proxy-headers`; detail prints the bind and the port | `--no-proxy-headers` missing (an older compose file) | no `--ssl-certfile`: the manager serves plain HTTP | `sudo bash …/deploy/start-manager.sh` (rebuilds from the current compose file) |
 | `tls.listener` | `ctx.head('/api/health')` over HTTPS with the pinned certificate answers 200 | — | handshake fails against the pinned certificate (the listener serves another certificate), or no answer | `setup-tls.sh --show` then `recreate-manager.sh` |
 | `http.redirect` | `ctx.head('/', base='http://127.0.0.1:<UI_HTTP_PORT>')` answers 301 with `Location` = `https://127.0.0.1:<UI_PORT>/` | `UI_HTTP_PORT` ≠ 0 and the redirect container is not running (`compose ps --status running --quiet http-redirect` empty), or it answers something other than 301 | **plain HTTP serves a page**: any 200 from the redirect port, or a 200 over plain HTTP from the TLS port's address (the probe tries `http://127.0.0.1:<UI_PORT>/` too and expects a connection error) | `start-manager.sh`; when `UI_HTTP_PORT=0` the check is `INFO HTTP redirect disabled` |
-| `http.hsts` | the HTTPS `/api/health` response carries `strict-transport-security` with `max-age=31536000` | header absent or another value (an older image) | — | `start-manager.sh` (rebuild) |
+| `http.hsts` | the HTTPS `/api/health` response carries `strict-transport-security` with `max-age=15552000` | header absent or another value (an older image) | — | `start-manager.sh` (rebuild) |
 | `firewall` | `ufw status verbose` (privileged) says `Status: active`, default `deny (incoming)`, and the SSH port, `UI_PORT` and `UI_HTTP_PORT` (when ≠ 0) are allowed | ufw inactive, or a needed port not allowed (the detail names it) | `ufw` not installed | `sudo bash …/deploy/setup-firewall.sh`; a cloud security group is accepted as the reason to ignore the WARN, said in the detail |
 | `exposure.listeners` | every listening TCP socket (`ss -Hltn`, privileged for process names `-p`) that is not loopback is one of: the SSH port, `UI_PORT`, `UI_HTTP_PORT`; detail lists them with the process name | any other non-loopback listener; detail names port and process | `5001` or `5801` (the capture stack) not loopback-only | *Close or firewall the listed port; the capture stack must stay on 127.0.0.1 (`deploy/compose.capture.yml`).* |
 | `exposure.ports` | no running container publishes a port on `0.0.0.0` or `[::]` (`docker ps --format '{{.Names}}\t{{.Ports}}'`, privileged; the capture stack's `127.0.0.1:` bindings pass) | a container does; detail names container and port (a lab node with `ports:` in its topology) | — | *Remove `ports:` from the topology or bind them to 127.0.0.1; Docker-published ports bypass ufw.* |
@@ -589,7 +591,7 @@ compose files contain no plain-HTTP command.
 | `README.md` | 89, 125 | Same; the diagram says *port 8443 TLS · 8081 redirect*. |
 | `docs/WIKI-MASTER-GUIDE.md` | 31, 55, 72, 719, 753, 776-793, 808, 1399, 1414, 1509, 1572 | Each `8081` and *no login* sentence; the sample `.env` gains `UI_HTTP_PORT`. |
 | `docs/ARCHITECTURE.md` | 150-157 | The transport paragraph: uvicorn-native TLS, the redirect service, `--no-proxy-headers`, HSTS in `security_headers()`. |
-| `clab-backup-ui/README.md`, `deploy/*.md` | wherever `http://` or `8081` appears | Same. `verify-release.py` `verify_docs` does not check URLs; `check_links.py` does not either; a `grep -rn 'http://[^ ]*:8081'` across the living guides before the release is the lead's check. |
+| `clab-backup-ui/README.md`, `deploy/*.md` | wherever `http://` or `8081` appears | Same. **Ruling (RECONCILIATION 4, E-Q6): yes.** The build adds a rule to `verify_docs()` in `deploy/verify-release.py` that refuses `http://…:8081` manager URLs in the living guides; history files are exempt. `check_links.py` does not check URLs. |
 | `CLAUDE.md` | invariants | The lead's: *The manager serves TLS itself; the compose command carries the certificate paths and `--no-proxy-headers`; the only plain-HTTP listener is `app.redirect`, which holds no data and answers 301 or 400.* |
 
 ### 8.2 CI and tests
@@ -602,7 +604,8 @@ compose files contain no plain-HTTP command.
 | `tests/test_setup_tls.py` | SAN list from fixtures (addresses, names, union of two env files); the exact `openssl` argv; **real generation into a temp dir** (CI's Ubuntu has `openssl`) and parse-back of SANs and `-checkend`; a provided pair that does not match is refused; an encrypted key is refused; modes 0644/0640; `mode` file; `UI_PORT == UI_HTTP_PORT` refused; the 7.4 migration write through `setup_capture.write_env` keeps unrelated lines. |
 | `tests/test_setup_firewall.py` | The `test_recreate_manager.py` pattern (a copy of the script with the root guard neutralised, a fake `ufw`, `sshd` and `ss` on `PATH` recording argv): the allow order, refusal when `SSH_CONNECTION`'s port is not allowed, `--remove`, never `reset`. |
 | `tests/test_setup_ssh_hardening.py` | Same pattern with a fake `sshd -T`: a directive at the default is written, a customised one is not; rollback on `sshd -t` failure. |
-| `tests/test_release_consistency.py:88-99` | Compare the environment keys of **both** services across the two compose files; assert both commands carry `--ssl-certfile /tls/cert.pem`, `--ssl-keyfile /tls/key.pem`, `--no-proxy-headers`; assert the tls mount is `read_only: true`; assert `http-redirect`'s command is `python -m app.redirect`. |
+| `tests/test_release_consistency.py:88-99` | Compare the environment keys of **both** services across the two compose files; assert both commands carry `--ssl-certfile /tls/cert.pem`, `--ssl-keyfile /tls/key.pem`, `--no-proxy-headers`; assert the tls mount is `read_only: true`; assert `http-redirect`'s command is `python -m app.redirect`; assert `UI_TLS` is absent from both compose files (E-Q1, RECONCILIATION 4). |
+| `tests/test_release_consistency.py` (`verify_docs`) | The E-Q6 rule of 8.1 is in the documentation half that this test runs against the checkout: a living guide with `http://…:8081` fails it, history files pass. |
 | `tests/test_install_manager.py:55-66` | `https://…/api/health`; a command without `--ssl-certfile` raises. |
 | `tests/test_check_install.py` | `check_docker` expects `{"ready": true}`; the capture and design-engine cases route through the `docker exec` probe. |
 | `tests/test_app.py` | HSTS present under `base_url='https://testserver'`, absent under `http`. |
@@ -613,12 +616,10 @@ compose files contain no plain-HTTP command.
 What this design needs from `DESIGN.md` (D) and `UI.md` (U), and what it gives back.
 
 1. **The scheme rule (D 5.6).** Answer: uvicorn terminates TLS, so `scope['scheme']` is `https` and
-   `ws.url.scheme` is `wss` without configuration. **`UI_TLS` is not needed and this design does not
-   add it to the compose files.** Recommendation: `origin.scheme(scope)` reads the scope only. If the
-   lead keeps the environment read for a future remote-proxy design, it must be documented as
-   unsupported and `test_release_consistency.py` must assert the key is absent from both compose
-   files, because a stray `UI_TLS=1` on a plain-HTTP fixture makes every cookie `Secure` and locks the
-   tester out. RECONCILIATION §4.1 expected the key in both files; this is the answer it waited for.
+   `ws.url.scheme` is `wss` without configuration. **Decided: `UI_TLS` is dropped** (RECONCILIATION 4,
+   E-Q1). It is in neither compose file, and `origin.scheme(scope)` reads the ASGI scope only.
+   `test_release_consistency.py` asserts the key is absent from both compose files (8.2), because a
+   stray `UI_TLS=1` on a plain-HTTP fixture makes every cookie `Secure` and locks the tester out.
 2. **The `Secure` cookie (D 5.3).** `Secure` when `scheme(scope) == 'https'`: on every shipped
    installation. On the fixture over `http://127.0.0.1` it is not `Secure`, which is correct.
 3. **The health route (D 6.7).** `GET /api/health` → `200 {"ready": true}` with `Cache-Control:
@@ -664,7 +665,7 @@ What this design needs from `DESIGN.md` (D) and `UI.md` (U), and what it gives b
 | 10.1 | **Certificate expiry.** 730 days; ensure renews within 30 days at an upgrade; the health check warns and then fails. | A VM not upgraded for two years and never health-checked serves an expired certificate; browsers warn harder (Chrome still allows click-through for an expired self-signed certificate; an HSTS-stored trusted one is blocked). | Whether a renewal should also run from a timer (a systemd timer running `setup-tls.sh` monthly). Not in this version: a timer that recreates the manager at night would end sessions mid-course. |
 | 10.2 | **Clock skew.** `notBefore` is the VM's time at generation; the recovery window is the VM's mtime. | `check_host._clock` warns when NTP is not synchronised (check_host.py:67-75); the installer checks NTP before APT (install-manager.py:571). A workstation whose clock is behind the VM's sees *not yet valid*. | OpenSSL 3.0 has no `notBefore` option for `req -x509`; backdating needs `openssl ca`. Decide whether the complexity is worth one rare case. |
 | 10.3 | **A name not in the certificate.** Students type a name the operator never listed. | The warning is the same interstitial as for self-signing (`ERR_CERT_COMMON_NAME_INVALID` vs `ERR_CERT_AUTHORITY_INVALID`); `HostCheck` refuses the name anyway unless listed (allowed_hosts.py:62-64), so the list and the SANs move together; `tls.names` warns. | A single-label name typed by students passes `HostCheck` without being listed and is in the SANs only when it equals the VM's host name. |
-| 10.4 | **HSTS lockout.** A trusted certificate lapses to self-signed or expires. | Browsers that stored HSTS refuse to click through until the certificate is fixed; `max-age` one year; no `preload`, so a `chrome://net-internals/#hsts` deletion or the fix works. | Whether 180 days is the better `max-age` for a product whose operators are lab engineers, not web teams. |
+| 10.4 | **HSTS lockout.** A trusted certificate lapses to self-signed or expires. | Browsers that stored HSTS refuse to click through until the certificate is fixed; `max-age` 180 days (`15552000`); no `preload`, so a `chrome://net-internals/#hsts` deletion or the fix works. | **Decided (RECONCILIATION 4, E-Q5): 180 days.** Operators are lab engineers, and a lapsed trusted certificate must not lock a course out for a year. |
 | 10.5 | **Own origin under TLS.** The guard (main.py:122-123), both sockets, the capture cookie. | Correct by the scope because uvicorn terminates TLS and `--no-proxy-headers` is explicit (2.1.3). | Confirm in the running container that `uvicorn --no-proxy-headers` is honoured with `--factory` (it is a server option, not an app option), and that nothing else installs `ProxyHeadersMiddleware`. |
 | 10.6 | **DNS rebinding under TLS.** | Unchanged: `HostCheck` stays outermost (DESIGN.md 6.1). TLS adds a second barrier: a browser's `fetch` to the attacker's name hits a certificate whose SANs lack that name and cannot click through. | The attacker first serves their own self-signed certificate on their name and the student clicks through there; Chrome stores the exception per host **and certificate**, so the manager's certificate on that host still errors. Verify this claim against current Chromium behaviour before relying on it in a guide; the design relies on `HostCheck`, not on this. |
 | 10.7 | **The redirect listener.** A stdlib-free uvicorn process exposed to scanners. | Answers 301/400/405 only, no body, no log per request, `read_only`, `cap_drop ALL`, no mounts. `Location` is built from a `Host` that passed `host_allowed`. | An open-redirect reading: the target host is the one the client sent, with the scheme and port fixed, so a redirect only sends a client where it asked to go. Slow-client exhaustion of its event loop does not touch the manager. `--limit-concurrency` for both services is a possible addition. |
@@ -684,18 +685,27 @@ What this design needs from `DESIGN.md` (D) and `UI.md` (U), and what it gives b
 
 1. **`UI_TLS`:** drop it (9.1), or keep it as an undocumented fallback asserted absent from the compose
    files? This design recommends dropping it.
+   **Ruling (RECONCILIATION 4):** dropped (E-Q1). `origin.scheme(scope)` reads the ASGI scope only;
+   `test_release_consistency.py` asserts the key is absent from both compose files (8.2).
 2. **The in-container probes (9.5):** is `python -m app.probe` the backend builder's slice, and is the
    no-`Store` rule satisfiable for the capture facts (they need the environment and two loopback
    services only; if any of them needs lab state, the health check drops that fact rather than
    constructing a `Store`)? The alternative, prompting the operator for a manager password inside
    `check-install.sh`, was rejected: it would create sign-in audit entries from a health check and
    conflate two credentials in one terminal session.
+   **Ruling (RECONCILIATION 4):** yes, the backend builder's slice. `python -m app.probe design-engine|capture`
+   never constructs a `Store`; a fact that would need lab state is dropped from the health check rather than read (E-Q2).
 3. **`fail2ban`:** recommend only (this design), or install it from `install-prerequisites.sh` with
    `ignoreip` of the installing session's address? The latter needs the session's address from
    `SSH_CONNECTION` and a decision for console installs.
+   **Ruling (RECONCILIATION 4):** recommend and WARN (`ssh.bruteforce`, 6.2), as designed; not installed by the installer in this version (E-Q3).
 4. **`DOCKER-USER`:** out of this version (5.2); confirm, or schedule it with live validation.
+   **Ruling (RECONCILIATION 4):** out of this version; scheduled for the owner's live pass with deployed labs (E-Q4, 10.10).
 5. **The `max-age`** of HSTS: one year (this design) or 180 days (10.4).
+   **Ruling (RECONCILIATION 4):** 180 days, `max-age=15552000` (E-Q5, 4.2). No `includeSubDomains`, no `preload`.
 6. **`verify-release.py` and the docs:** no rule refuses `http://…:8081` in a living guide today. Add a
    documentation rule to `verify_docs()` (deploy/verify-release.py:132) that refuses `http://` manager
    URLs outside history files, or rely on the one-time grep of 8.1?
+   **Ruling (RECONCILIATION 4):** yes (E-Q6). The build adds the rule to `verify_docs()` in `deploy/verify-release.py`; history files are exempt (8.1, 8.2).
 7. **The invariant sentence** for `app/redirect.py` (9.12) is the lead's at the release step.
+   **Ruling (RECONCILIATION 4):** the lead writes it at the release step (E-Q7): `app/redirect.py` is the one listener outside the guard; it answers 301 to the manager's own origin (after `host_allowed`), 400 or 405, and nothing else.
