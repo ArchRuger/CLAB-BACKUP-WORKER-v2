@@ -26,6 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'deploy/setup-firewall.sh'
 ROOT_GUARD = "[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }"
+UFW_DEFAULTS_LINE = 'ufw_defaults=/etc/default/ufw'
 SYSTEM_PATH = '/usr/bin:/bin'
 
 FAKE_UFW = r'''#!PYTHON
@@ -71,6 +72,15 @@ elif args[:1] == ['default']:
 elif args == ['--force', 'enable']:
     state['active'] = True
     print('Firewall is active and enabled on system startup')
+elif args[:2] == ['app', 'info']:
+    apps = json.loads(os.environ.get('UFW_APPS', '{}'))
+    if args[2] not in apps:
+        print(f"ERROR: Could not find profile '{args[2]}'", file=sys.stderr)
+        sys.exit(1)
+    print(f'Profile: {args[2]}\nTitle: fixture\nDescription: fixture\n')
+    print('Ports:' if len(apps[args[2]]) > 1 else 'Port:')
+    for spec in apps[args[2]]:
+        print('  ' + spec)
 elif args[:1] == ['status']:
     print('Status: ' + ('active' if state['active'] else 'inactive'))
     if 'verbose' in args:
@@ -86,6 +96,7 @@ echo "sshd $*" >> "$OTHER_LOG"
 if [[ "$1" == -T ]]; then
   [[ "${SSHD_T_STATUS:-0}" == 0 ]] || { echo 'sshd: injected failure' >&2; exit "$SSHD_T_STATUS"; }
   for port in $SSHD_PORTS; do echo "port $port"; done
+  for address in ${SSHD_LISTEN-}; do echo "listenaddress $address"; done
   echo 'addressfamily any'
   echo 'permitrootlogin without-password'
   exit 0
@@ -101,6 +112,18 @@ case "$*" in
   *listening*) printf '%s' "$SS_LISTENING";;
 esac
 exit 0
+'''
+
+# systemctl answers only the ssh.socket questions; SSH_SOCKET_LISTEN empty means the unit is neither
+# enabled nor active, otherwise it is the Listen= values, one per line, as systemctl show prints them.
+FAKE_SYSTEMCTL = r'''#!/usr/bin/env bash
+echo "systemctl $*" >> "$OTHER_LOG"
+case "$*" in
+  'is-active --quiet ssh.socket'|'is-enabled --quiet ssh.socket') [[ -n "${SSH_SOCKET_LISTEN-}" ]]; exit;;
+  'show ssh.socket --property=Listen --value') printf '%s\n' "${SSH_SOCKET_LISTEN-}"; exit 0;;
+esac
+echo "unexpected call to systemctl" >&2
+exit 99
 '''
 
 FAKE_UNEXPECTED = r'''#!/usr/bin/env bash
@@ -129,14 +152,18 @@ class FirewallCase(unittest.TestCase):
         (self.base / 'deploy').mkdir()
         (self.base / 'clab-backup-ui').mkdir()
         self.script = self.base / 'deploy/setup-firewall.sh'
-        self.script.write_text(text.replace(ROOT_GUARD, ': # root check removed for this unit test'))
+        self.assertEqual(text.count(UFW_DEFAULTS_LINE + '\n'), 1, "the ufw defaults line changed; update this test")
+        self.ufw_defaults = self.base / 'default-ufw'
+        self.ufw_defaults.write_text('# /etc/default/ufw\nIPV6=yes\nDEFAULT_INPUT_POLICY="DROP"\n')
+        self.script.write_text(text.replace(ROOT_GUARD, ': # root check removed for this unit test')
+                               .replace(UFW_DEFAULTS_LINE + '\n', f'ufw_defaults={self.ufw_defaults}\n'))
         self.script.chmod(0o755)
         self.bin = self.base / 'bin'
         self.bin.mkdir()
         write_exe(self.bin / 'ufw', FAKE_UFW)
         write_exe(self.bin / 'sshd', FAKE_SSHD)
         write_exe(self.bin / 'ss', FAKE_SS)
-        write_exe(self.bin / 'systemctl', FAKE_UNEXPECTED)
+        write_exe(self.bin / 'systemctl', FAKE_SYSTEMCTL)
         write_exe(self.bin / 'docker', FAKE_UNEXPECTED)
         self.ufw_log = self.base / 'ufw.log'
         self.other_log = self.base / 'other.log'
@@ -180,7 +207,8 @@ class FirewallCase(unittest.TestCase):
         return [json.loads(line) for line in self.ufw_log.read_text().splitlines()]
 
     def mutating_calls(self):
-        return [call for call in self.ufw_calls() if call[:1] not in (['show'], ['status'])]
+        # `show added`, `status` and `app info` (an application profile's ports) only read.
+        return [call for call in self.ufw_calls() if call[:1] not in (['show'], ['status']) and call[:2] != ['app', 'info']]
 
     def allow_calls(self):
         return [call for call in self.ufw_calls() if call[:1] == ['allow']]
@@ -332,11 +360,144 @@ class SetupTests(FirewallCase):
         self.assertIn('deny 8081/tcp', result.stdout)
         self.assertIn('ufw deny 8081/tcp', self.rule_lines())
 
-    def test_rules_of_other_directions_and_ports_do_not_count_as_the_operators_rule(self):
-        self.set_rules('ufw allow out 22/tcp', 'ufw allow 22', 'ufw allow 2222/tcp')
+    def test_rules_of_other_directions_protocols_and_ports_do_not_count_as_the_operators_rule(self):
+        # 'ufw allow 22' used to be listed here; it allows TCP 22 too (no protocol means both), so it
+        # now counts as the operator's rule (the next test). A UDP-only rule takes its place.
+        self.set_rules('ufw allow out 22/tcp', 'ufw allow 22/udp', 'ufw allow 2222/tcp', 'ufw route allow 22/tcp',
+                       'ufw allow from 10.1.0.0/16', 'ufw deny from 203.0.113.9', 'ufw allow 2000:2100/tcp')
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual(self.allow_calls()[0], ['allow', '22/tcp', 'comment', 'clab-manager'])
+
+    def test_every_form_of_an_operators_allow_for_the_port_counts_as_their_rule(self):
+        for own in ('ufw allow 22', 'ufw allow log 22/tcp', 'ufw allow 21,22/tcp', 'ufw allow 20:30/tcp',
+                    'ufw allow to any port 22 proto tcp', 'ufw allow to any', 'ufw allow OpenSSH',
+                    "ufw limit 22 comment 'ssh'"):
+            with self.subTest(own=own):
+                self.ufw_log.unlink(missing_ok=True)
+                self.set_rules(own)
+                result = self.run_script(UFW_APPS='{"OpenSSH": ["22/tcp"]}')
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertNotIn('22/tcp', [call[1] for call in self.allow_calls()])
+                self.assertIn('Kept your own rule for 22/tcp', result.stdout)
+                self.assertEqual(self.rule_lines()[0], own)
+
+    def test_every_form_of_an_operators_deny_on_the_ssh_port_is_refused_before_any_change(self):
+        for own in ('ufw deny 22', 'ufw reject 22', 'ufw deny log 22/tcp', 'ufw deny 21,22/tcp', 'ufw deny 20:30/tcp',
+                    'ufw deny to any port 22', 'ufw deny from any to any port 22 proto tcp',
+                    'ufw deny from 0.0.0.0/0 to any port 22 proto tcp', 'ufw deny to any', 'ufw deny OpenSSH',
+                    "ufw deny 'Open SSH'"):
+            with self.subTest(own=own):
+                self.ufw_log.unlink(missing_ok=True)
+                self.set_rules(own)
+                result = self.run_script(UFW_APPS='{"OpenSSH": ["22/tcp"], "Open SSH": ["22"]}')
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(own[4:], result.stdout)
+                self.assertIn('Nothing was changed', result.stdout)
+                self.assertEqual(self.mutating_calls(), [])
+
+    def test_an_earlier_allow_of_the_operator_is_not_overruled_by_a_later_deny(self):
+        self.set_rules('ufw allow 22/tcp', 'ufw deny 22')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('22/tcp', [call[1] for call in self.allow_calls()])
+
+    def test_a_source_restricted_ssh_allow_is_kept_and_not_widened(self):
+        for own in ('ufw allow from 10.0.0.0/8 to any port 22 proto tcp', 'ufw allow in on eth0 to any port 22',
+                    'ufw limit from 192.0.2.0/24 to any port 22', 'ufw allow from 10.0.0.0/8 to 192.0.2.10 port 22'):
+            with self.subTest(own=own):
+                self.ufw_log.unlink(missing_ok=True)
+                self.set_state(active=True, incoming='deny', outgoing='allow')
+                self.set_rules(own)
+                result = self.run_script()
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertNotIn('22/tcp', [call[1] for call in self.allow_calls()])
+                self.assertEqual(self.rule_lines()[0], own)
+                self.assertIn(f'Kept your own rule for 22/tcp: {own[4:]}', result.stdout)
+                self.assertIn('no rule open to every address was added', result.stdout)
+
+    def test_a_restricted_allow_ahead_of_a_general_deny_is_the_operators_restriction_not_a_lockout(self):
+        self.set_rules('ufw allow from 10.0.0.0/8 to any port 22 proto tcp', 'ufw deny 22/tcp')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('22/tcp', [call[1] for call in self.allow_calls()])
+        self.assertIn('Kept your own rule for 22/tcp: allow from 10.0.0.0/8', result.stdout)
+
+    def test_an_operators_deny_on_a_manager_port_in_any_form_is_kept_and_not_reported_as_allowed(self):
+        self.set_rules('ufw deny 8443')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('8443/tcp', [call[1] for call in self.allow_calls()])
+        self.assertNotIn('Allowed 8443/tcp', result.stdout)
+        self.assertIn('The manager is not reachable on port 8443', result.stdout)
+
+    def test_a_listenaddress_port_is_allowed(self):
+        # sshd -T prints the Port default next to an explicit ListenAddress host:port.
+        result = self.run_script(unset=('SSH_CONNECTION',), SS_ESTABLISHED='', SSHD_LISTEN='0.0.0.0:2222')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('2222/tcp', [call[1] for call in self.allow_calls()])
+
+    def test_a_session_on_a_listenaddress_port_proceeds(self):
+        result = self.run_script(SSHD_LISTEN='0.0.0.0:2222 [::]:2222',
+                                 SSH_CONNECTION='198.51.100.7 53422 192.0.2.10 2222')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('2222/tcp', [call[1] for call in self.allow_calls()])
+
+    def test_an_ssh_socket_listen_port_is_allowed(self):
+        # An upgrade from Ubuntu 22.10 or 23.x can keep a ListenStream override of ssh.socket.
+        result = self.run_script(SSH_SOCKET_LISTEN='0.0.0.0:2200 (Stream)\n[::]:2200 (Stream)',
+                                 SSH_CONNECTION='198.51.100.7 53422 192.0.2.10 2200')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual([call[1] for call in self.allow_calls()][:2], ['22/tcp', '2200/tcp'])
+
+    def test_the_refusal_names_where_the_ssh_ports_come_from(self):
+        result = self.run_script(SSH_CONNECTION='198.51.100.7 53422 192.0.2.10 2200')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn('ListenAddress', result.stdout)
+        self.assertIn('ssh.socket', result.stdout)
+
+    def test_an_ipv6_session_is_refused_when_ufw_has_ipv6_disabled(self):
+        for value in ('no', '"no"', 'No', ''):
+            with self.subTest(value=value):
+                self.ufw_log.unlink(missing_ok=True)
+                self.ufw_defaults.write_text(f'IPV6={value}\n')
+                result = self.run_script(SSH_CONNECTION='2001:db8::7 53422 2001:db8::10 22')
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn('IPV6', result.stdout)
+                self.assertIn('Nothing was changed', result.stdout)
+                self.assertEqual(self.mutating_calls(), [])
+
+    def test_under_sudo_an_ipv6_sshd_session_is_refused_when_ufw_has_ipv6_disabled(self):
+        self.ufw_defaults.write_text('IPV6=no\n')
+        session = '0      0       [2001:db8::10]:22   [2001:db8::7]:50000 users:(("sshd-session",pid=99,fd=4))\n'
+        result = self.run_script(unset=('SSH_CONNECTION',), SS_ESTABLISHED=session)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn('IPV6', result.stdout)
+        self.assertEqual(self.mutating_calls(), [])
+
+    def test_a_missing_ufw_defaults_file_counts_as_ipv6_disabled(self):
+        self.ufw_defaults.unlink()
+        result = self.run_script(SSH_CONNECTION='2001:db8::7 53422 2001:db8::10 22')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(self.mutating_calls(), [])
+
+    def test_an_ipv4_mapped_session_is_ipv4(self):
+        self.ufw_defaults.write_text('IPV6=no\n')
+        session = '0      0       [::ffff:192.0.2.10]:22   [::ffff:198.51.100.7]:50000 users:(("sshd",pid=99,fd=4))\n'
+        result = self.run_script(unset=('SSH_CONNECTION',), SS_ESTABLISHED=session)
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_an_ipv6_session_proceeds_when_ufw_handles_ipv6(self):
+        result = self.run_script(SSH_CONNECTION='2001:db8::7 53422 2001:db8::10 22')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('IPV6=', result.stdout)
+
+    def test_ipv6_disabled_without_an_ipv6_session_proceeds_with_a_warning(self):
+        self.ufw_defaults.write_text('IPV6=no\n')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('IPV6=no', result.stdout)
+        self.assertIn('IPv6', result.stdout)
 
     def test_a_second_run_adds_nothing_and_keeps_the_rules(self):
         self.assertEqual(self.run_script().returncode, 0)
@@ -389,6 +550,27 @@ class RemoveTests(FirewallCase):
         self.assertEqual(self.rule_lines(), [self.OURS[0], *self.THEIRS])
         self.assertIn('Kept the SSH allow on 22/tcp', result.stdout)
         self.assertIn('sudo ufw delete allow 22/tcp', result.stdout)
+
+    def test_the_hint_for_the_kept_ssh_allow_never_names_a_rule_that_ufw_merges_into_it(self):
+        # ufw treats `allow 22/tcp` and `limit 22/tcp` as this same rule and takes it over in place, so
+        # the hint's delete would then remove the only SSH allow. It names forms ufw keeps apart.
+        self.set_state(active=True, incoming='deny', outgoing='allow')
+        self.set_rules(*self.OURS)
+        result = self.run_script('--remove')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        for merged in ('ufw allow 22/tcp', 'ufw limit 22/tcp', 'ufw allow 22 ', 'ufw limit 22 '):
+            self.assertNotIn('sudo ' + merged, result.stdout.replace('sudo ufw delete allow', ''))
+        self.assertIn('sudo ufw allow from <your network> to any port 22 proto tcp', result.stdout)
+        self.assertIn('sudo ufw allow OpenSSH', result.stdout)
+        self.assertIn('sudo ufw show added', result.stdout)
+
+    def test_the_hint_for_a_port_other_than_22_does_not_name_the_openssh_profile(self):
+        self.set_state(active=True, incoming='deny', outgoing='allow')
+        self.set_rules("ufw allow 2222/tcp comment 'clab-manager'")
+        result = self.run_script('--remove', SSHD_PORTS='2222', SSH_CONNECTION='198.51.100.7 53422 192.0.2.10 2222')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('sudo ufw allow from <your network> to any port 2222 proto tcp', result.stdout)
+        self.assertNotIn('OpenSSH', result.stdout)
         self.assertTrue(json.loads(self.state.read_text())['active'])
 
     def test_remove_on_an_inactive_firewall_deletes_all_three(self):
