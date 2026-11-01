@@ -2,6 +2,7 @@
 // account.js — Change password and Sign out for index.html (docs/sign-on/UI.md 6). Loaded after preferences.js.
 // The password dialog is static markup; the entries are never stored. A forced change of an administrator-set password is not made here (REVIEW R1): it is a view of the sign-in page.
 let accountBusy=false;
+const SIGNOUT_END_ALL_MS=5000;
 // The checks the page can make before sending (UI.md 2.3); the manager checks the same and the deny-list. '' when there is nothing to say.
 function passwordProblem(username,current,next,confirm){
  const name=String(username||'').toLowerCase(),fresh=String(next||''),again=String(confirm||'');
@@ -43,7 +44,13 @@ async function accountSignOut(){
  try{
   if(typeof sessionMark==='function')sessionMark();
   const headers={'Content-Type':'application/json'};
-  if(!(typeof captureEnabled!=='undefined'&&captureEnabled===false)){try{await fetch('/api/capture/sessions/end-all',{method:'POST',headers,body:'{}'});}catch{/* best effort: the owner cookie is cleared by the DELETE below */}}
+  if(!(typeof captureEnabled!=='undefined'&&captureEnabled===false)){
+   // A stuck end-all must not hold the sign-out back: say so, wait a few seconds, then give it up (best effort; the DELETE below clears the session).
+   notify('Signing out…');
+   const limit=typeof AbortController==='function'?new AbortController():null,timer=limit?setTimeout(()=>limit.abort(),SIGNOUT_END_ALL_MS):0;
+   try{await fetch('/api/capture/sessions/end-all',{method:'POST',headers,body:'{}',signal:limit?limit.signal:undefined});}catch{/* best effort: the owner cookie is cleared by the DELETE below */}
+   if(timer)clearTimeout(timer);
+  }
   let status=0;try{status=(await fetch('/api/session',{method:'DELETE',headers,body:'{}'})).status;}catch{status=0;}
   if(status===200){if(typeof shellRemove==='function')shellRemove('sessionStorage','activeLab');if(typeof goSignIn==='function')goSignIn();return true;}
   if(typeof sessionRetry==='function')await sessionRetry();

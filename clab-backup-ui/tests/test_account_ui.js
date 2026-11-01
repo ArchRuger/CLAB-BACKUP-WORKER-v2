@@ -3,7 +3,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const STATIC=path.join(__dirname,'../app/static');
 function harness({user={name:'ada',role:'admin',must_change_password:false},capture=undefined,answer={}}={}){
- const elements=new Map(),fetches=[],toasts=[],order=[];
+ const elements=new Map(),fetches=[],toasts=[],order=[],timers=[];
  function element(id){
   const small={textContent:'',hidden:true},el={id,dataset:{},value:'',innerHTML:'',textContent:'',title:'',open:false,disabled:false,hidden:false,listeners:{},small,
    addEventListener(name,fn){this.listeners[name]=fn;},showModal(){this.open=true;order.push('showModal:'+id);},close(){this.open=false;},appendChild(){},remove(){},click(){},focus(){elements.focused=id;},
@@ -11,13 +11,15 @@ function harness({user={name:'ada',role:'admin',must_change_password:false},capt
   return el;
  }
  const document={getElementById(id){if(!elements.has(id))elements.set(id,element(id));return elements.get(id);},querySelectorAll(){return [];},createElement:element,body:element('body')};
- const context=vm.createContext({document,sessionStorage:{getItem(){return null;},setItem(){}},setTimeout:()=>0,clearTimeout(){},setInterval(){},URL:{createObjectURL:()=>'blob:x',revokeObjectURL(){}},URLSearchParams,Blob,console,Promise,Set,Error,encodeURIComponent,
+ const context=vm.createContext({document,sessionStorage:{getItem(){return null;},setItem(){}},setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout(){},AbortController,setInterval(){},URL:{createObjectURL:()=>'blob:x',revokeObjectURL(){}},URLSearchParams,Blob,console,Promise,Set,Error,encodeURIComponent,
   location:{pathname:'/',search:'',hash:'',replace(url){order.push('replace:'+url);}}});
  context.fetch=async(url,options={})=>{
   const call={url,method:options.method||'GET',body:options.body,headers:options.headers};
   if(url==='/api/state'&&!answer['GET /api/state'])return new Promise(()=>{});   // the page's own first poll: never answers, so it cannot overwrite the state under test
   fetches.push(call);order.push(call.method+' '+url);
-  const hook=answer[call.method+' '+url];const r=hook?hook(call):{status:200,body:{}};
+  const hook=answer[call.method+' '+url];
+  if(hook&&hook.hang)return new Promise((resolve,reject)=>{options.signal&&options.signal.addEventListener('abort',()=>reject(new Error('aborted')));});
+  const r=hook?hook(call):{status:200,body:{}};
   if(r instanceof Error)throw r;
   return {ok:r.status>=200&&r.status<300,status:r.status,headers:{get:()=>''},json:async()=>r.body};
  };
@@ -27,7 +29,7 @@ function harness({user={name:'ada',role:'admin',must_change_password:false},capt
  context.notify=m=>{toasts.push(m);};
  if(capture!==undefined)vm.runInContext(`var captureEnabled=${JSON.stringify(capture)};`,context);
  Object.assign(context,{__user:user});vm.runInContext('state={labs:[],jobs:[],platforms:{},user:__user};',context);
- return {context,element:id=>document.getElementById(id),fetches,toasts,order,elements};
+ return {context,element:id=>document.getElementById(id),fetches,toasts,order,elements,timers};
 }
 const run=(h,code)=>vm.runInContext(code,h.context);
 
@@ -35,6 +37,12 @@ test('roleLabel names the two roles and nothing else',()=>{
  const h=harness();
  assert.equal(h.context.roleLabel('admin'),'Administrator');assert.equal(h.context.roleLabel('operator'),'Operator');
  assert.equal(h.context.roleLabel('root'),'');assert.equal(h.context.roleLabel(undefined),'');
+});
+
+test('renderAccount with no user in the state hides People but keeps Diagnostics and the settings (only a known operator loses them)',()=>{
+ const h=harness({user:null});h.context.renderAccount();
+ assert.equal(h.element('account-users').hidden,true);assert.equal(h.element('manager-diagnostics').hidden,false);
+ for(const id of ['vm-settings','manager-settings'])assert.equal(h.element(id).disabled,false,id);
 });
 
 test('renderAccount for an administrator: chip and group show the name and role, People is offered, Diagnostics too, the two settings items are enabled and carry no reason',()=>{
@@ -158,6 +166,19 @@ test('Sign out: end-all is skipped when capture is not set up, and a failed end-
  assert.ok(failed.fetches.some(f=>f.method==='DELETE'));assert.ok(failed.order.includes('goSignIn'),'best effort');
  const refused=harness({capture:true,answer:{'POST /api/capture/sessions/end-all':()=>({status:500,body:{}})}});await refused.context.accountSignOut();
  assert.ok(refused.order.includes('goSignIn'));
+});
+test('Sign out: an end-all that never answers is given up after a few seconds, with a Signing out toast, and the DELETE still follows',async()=>{
+ const hang=()=>{throw new Error('unused');};hang.hang=true;
+ const h=harness({capture:true,answer:{'POST /api/capture/sessions/end-all':hang}});
+ const done=h.context.accountSignOut();
+ await new Promise(r=>setImmediate(r));
+ assert.deepEqual(h.toasts,['Signing out…'],'the person sees that something is happening');
+ assert.equal(h.order.includes('DELETE /api/session'),false,'still waiting for the end-all');
+ assert.equal(await h.context.accountSignOut(),false,'a second click is ignored while it runs');
+ const limit=h.timers[h.timers.length-1];assert.ok(limit.ms>0&&limit.ms<=10000,'the wait is bounded');
+ limit.fn();
+ assert.equal(await done,true);
+ assert.ok(h.order.indexOf('DELETE /api/session')>-1&&h.order.includes('goSignIn'));
 });
 test('REVIEW R14: only a 200 of DELETE /api/session leaves; any other status or a network failure stays, restores the page and says so',async()=>{
  for(const answer of [()=>({status:500,body:{}}),()=>({status:403,body:{}}),()=>new TypeError('down')]){

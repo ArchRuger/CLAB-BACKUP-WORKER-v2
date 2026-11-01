@@ -159,7 +159,7 @@ function initPanel(button){
  button.addEventListener('click',()=>{if(panel.hidden)open();else close(false);});
  panel.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close(true);}});
  // Tab or a click that moves focus to another control closes it; a rebuilt body (focus falls to nothing) does not.
- wrapper.addEventListener('focusout',e=>{const next=e.relatedTarget;if(next&&!shellContains(wrapper,next))close(false);});
+ wrapper.addEventListener('focusout',e=>{const next=e.relatedTarget;if(next&&!shellContains(wrapper,next)&&!(typeof next.closest==='function'&&next.closest('#session-banner, #session-banner-dialog')))close(false);});   // focus to the session banner closes nothing: a typed save name survives
  return {open,close};
 }
 // Open a panel by the id of its opener or of the panel itself (openPanel('save-chip'), openPanel('load-panel')).

@@ -333,3 +333,6 @@ test('REVIEW U4 on the real markup: the two settings items carry a .menu-reason 
  const dialogAt=html.indexOf('<dialog id="password-dialog"');assert.ok(dialogAt>html.indexOf('</main>'),'the dialog sits after </main>');
  assert.doesNotMatch(html,/\sstyle="/);
 });
+test('no page other than index.html loads account.js',()=>{
+ for(const file of fs.readdirSync(dir).filter(n=>n.endsWith('.html')&&n!=='index.html'))assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/account\.js/,file);
+});

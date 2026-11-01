@@ -152,7 +152,7 @@ function renderAccount(){
  if($('account-name'))$('account-name').textContent=name;
  if($('account-role'))$('account-role').textContent=roleLabel(user&&user.role);
  if($('account-users'))$('account-users').hidden=!(user&&user.role==='admin');
- if($('manager-diagnostics'))$('manager-diagnostics').hidden=!(user&&user.role==='admin');
+ if($('manager-diagnostics'))$('manager-diagnostics').hidden=operator;   // like the settings items: only a known operator loses it, the manager refuses the rest
  if($('account-signout-note'))$('account-signout-note').hidden=typeof captureEnabled!=='undefined'&&captureEnabled===false;
  for(const id of ['vm-settings','manager-settings']){const el=$(id);if(!el)continue;el.disabled=operator;el.title=operator?'Administrators only':'';menuReason(el,operator?'Administrators only':'');}
 }

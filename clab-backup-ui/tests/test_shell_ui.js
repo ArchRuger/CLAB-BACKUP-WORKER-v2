@@ -1139,6 +1139,16 @@ test('REVIEW U9: a pointerdown on the banner closes no panel and leaves the type
  h.sessionBanner.querySelector('#session-signin-tab').dispatch('pointerdown');assert.equal(h.savePanel.hidden,false);
  h.outside.dispatch('pointerdown');assert.equal(h.savePanel.hidden,true,'a press outside still closes the panel');
 });
+test('REVIEW U9: focus moving from the typed save name to the banner (focusout with relatedTarget inside it) closes no panel and loses no text; focus to a control outside still closes',()=>{
+ const h=harness();const field=typedSaveName(h);field.value='My first save';
+ h.saveChip.click();h.context.signedOut();
+ for(const id of ['session-retry','session-signin-tab']){
+  field.dispatch('focusout',{relatedTarget:h.sessionBanner.querySelector('#'+id)});
+  assert.equal(h.savePanel.hidden,false,id+': the panel stays open');assert.equal(field.value,'My first save');
+ }
+ assert.equal(h.panelEvents.some(e=>/panelclose/.test(e)),false,'no panelclose, so the typed name is not dropped');
+ field.dispatch('focusout',{relatedTarget:h.outside});assert.equal(h.savePanel.hidden,true,'focus to a control outside still closes the panel');
+});
 test('REVIEW U9: Escape with focus on a banner button closes nothing',()=>{
  const h=harness();const field=typedSaveName(h);field.value='My first save';
  h.saveChip.click();h.context.signedOut();
