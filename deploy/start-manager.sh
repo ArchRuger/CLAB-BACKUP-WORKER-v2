@@ -23,8 +23,9 @@ docker info >/dev/null
 # The data directory must exist before setup-discovery writes the one-time VM connection seed into it.
 bash "$script_dir/setup-vm.sh"
 # The TLS files must exist before the image is built or pulled: uvicorn reads /tls at start. Ensure
-# semantics: an existing valid certificate is kept; a provided one is never touched.
-bash "$script_dir/setup-tls.sh" --no-recreate
+# semantics: an existing valid certificate is kept; a provided one is never touched. The ports are
+# settled in clab-backup-ui/.env, the file the compose command below reads (the source route).
+bash "$script_dir/setup-tls.sh" --no-recreate --route source
 bash "$script_dir/setup-discovery.sh" "${password_args[@]}" --data-dir /srv/containerlab-node-manager/data
 # Fail before recreation if the installed helper cannot return file-transfer data.
 # Only the version is printed: its response may contain inventory credentials.
@@ -63,7 +64,7 @@ fi
 # image build, and again below after the new manager is up, since the old manager's own
 # background loop can recreate its data folder while it is still running.
 env_file="$repo_dir/clab-backup-ui/.env"
-env_value() { local value=''; if [[ -f "$env_file" ]]; then value=$(grep -E "^$1=" "$env_file" | tail -n 1 | cut -d= -f2- || true); fi; printf '%s' "$value"; }
+env_value() { local value=''; if [[ -f "$env_file" ]]; then value=$(grep -E "^(export )?$1=" "$env_file" | tail -n 1 | cut -d= -f2- || true); fi; printf '%s' "$value"; }
 if ! $manager_only; then
   if [[ $(env_value CAPTURE_PROVIDER) == disabled ]]; then
     echo 'Browser capture is disabled in clab-backup-ui/.env; its stack is left alone (sudo bash deploy/setup-capture.sh re-enables it).'

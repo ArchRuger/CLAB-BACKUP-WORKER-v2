@@ -4,22 +4,35 @@ Run by ``deploy/setup-tls.sh`` with the system python3 on the VM; standard libra
 and ``ip`` are the tools. The tls directory ``/srv/containerlab-node-manager/tls`` is root's; the
 container mounts it read-only at ``/tls`` and uvicorn reads ``cert.pem`` and ``key.pem`` from there.
 
-    ensure            the default: a self-signed certificate exists, is not expiring and names every
-                      certificate address, UI_ALLOWED_HOSTS name and tls/names entry; otherwise a new
-                      one is made. A provided certificate is never touched. Also settles the ports
-                      (UI_PORT, UI_HTTP_PORT) of the upgrade table (EXPOSURE.md 7.4).
-    renew             a new self-signed certificate now; refused while mode is provided
-    self-signed       switch back from provided and generate
+    ensure            the default: a self-signed certificate exists, is not expiring, has its key and
+                      names every certificate address, UI_ALLOWED_HOSTS name and tls/names entry;
+                      otherwise a new one is made. A provided certificate is never touched, and a
+                      certificate without a tls/mode file (not made by this tool) is never touched
+                      either; when either cannot serve, ensure fails so the launcher stops before it
+                      recreates a manager that cannot start. Also settles the ports (UI_PORT,
+                      UI_HTTP_PORT) of the upgrade table (EXPOSURE.md 7.4) in the route's env file.
+    prepare           recreate-manager.sh's step: settle the ports and require a usable pair; it never
+                      generates (a missing name is ensure's business at the next start-manager.sh).
+    renew             a new self-signed certificate now; refused while mode is provided or absent
+    self-signed       switch back from provided (or adopt an unregistered pair) and generate
     provided CERT KEY validate and install an operator's certificate
     names [NAME...]   write tls/names (no names: remove it), then ensure
     show | primary | fingerprint   read-only, no root needed
 
-The certificate addresses are the global-scope addresses of the default-route interface(s): never
-docker0, br-*, veth*, virbr*, cni*, clab*, loopback or link-local (REVIEW R18), so a lab deploy
-never changes the certificate. The pure rule is ``certificate_addresses(routes, addresses)``; the
+``--route source|image`` (default source) names the env file the caller's compose command reads:
+``clab-backup-ui/.env`` for ``clab-backup-ui/compose.yml`` (start-manager.sh, always) or
+``deploy/image.env`` for the prepared-image route recreate-manager.sh may choose. The route is the
+caller's decision, so this tool never asks Docker anything.
+
+The certificate addresses are the stable global-scope addresses of the default-route interface(s):
+never docker0, br-*, veth*, virbr*, cni*, clab*, loopback, link-local, nor a temporary (RFC 4941),
+deprecated, tentative or failed address (REVIEW R18), so neither a lab deploy nor a privacy-address
+rotation changes the certificate. The pure rule is ``certificate_addresses(routes, addresses)``; the
 health check loads it from here so both sides apply the same one.
 
-Nothing here prints a key: errors quote file names, never contents.
+A replacement of the pair keeps the old files until both new ones are in place and puts them back on
+any failure, so the directory never holds a certificate without its key. Nothing here prints a key:
+errors quote file names, never contents.
 """
 import importlib.util
 import ipaddress
@@ -43,10 +56,17 @@ WORKER_GID = 10001
 DEFAULT_TLS_PORT = 8443
 DEFAULT_HTTP_PORT = 8081
 MAX_FILE = 64 * 1024
+MAX_COMMON_NAME = 64
 EXCLUDED_INTERFACES = ('lo', 'docker', 'br-', 'veth', 'virbr', 'cni', 'clab')
+UNSTABLE_FLAGS = ('temporary', 'deprecated', 'tentative', 'dadfailed')
+# name -> (mode, group): the files of EXPOSURE.md 3.3; every owner is root.
+FILES = {'cert.pem': (0o644, 0), 'key.pem': (0o640, WORKER_GID), 'mode': (0o644, 0), 'names': (0o644, 0)}
+ROUTES = {'source': 'clab-backup-ui/.env', 'image': 'deploy/image.env'}
 PORT_NOTE = ('Your settings keep the manager on port {port}, which now serves HTTPS; there is no plain-HTTP redirect. '
              'Old links to that port over plain HTTP show a browser error until retyped as `https://`. '
              'To get the redirect, set `UI_PORT=8443` and `UI_HTTP_PORT=8081` in `.env` and rerun.')
+REGISTER_HINT = ('Register the pair with setup-tls.sh --cert PATH --key PATH (copies of the files), '
+                 'or replace it with a new self-signed certificate: setup-tls.sh --self-signed.')
 
 
 def _load(name, path):
@@ -69,10 +89,20 @@ def excluded_interface(name):
     return not isinstance(name, str) or name == 'lo' or any(name.startswith(prefix) for prefix in EXCLUDED_INTERFACES)
 
 
+def _unstable(info):
+    """A temporary (privacy), deprecated, tentative or failed address, or one whose preferred lifetime is over."""
+    if any(info.get(flag) is True for flag in UNSTABLE_FLAGS):
+        return True
+    preferred = info.get('preferred_life_time')
+    return isinstance(preferred, int) and not isinstance(preferred, bool) and preferred == 0
+
+
 def _global_addresses(entry):
     infos = entry.get('addr_info')
     for info in infos if isinstance(infos, list) else ():
         if not isinstance(info, dict) or info.get('scope') != 'global' or info.get('family') not in ('inet', 'inet6'):
+            continue
+        if _unstable(info):
             continue
         try:
             address = ipaddress.ip_address(str(info.get('local', '')))
@@ -85,9 +115,10 @@ def _global_addresses(entry):
 
 def certificate_addresses(routes, addresses):
     """The IP addresses the certificate names, from the parsed JSON of ``ip -j route show default``
-    (IPv4 and IPv6 entries concatenated) and ``ip -j address``: the global-scope addresses of the
-    default-route interface(s), or of every non-excluded interface when there is no default route;
-    never an address on an excluded interface, never loopback or link-local, in document order."""
+    (IPv4 and IPv6 entries concatenated) and ``ip -j address``: the stable global-scope addresses of
+    the default-route interface(s), or of every non-excluded interface when there is no default
+    route; never an address on an excluded interface, never loopback, link-local or a temporary,
+    deprecated, tentative or failed address, in document order."""
     routes = routes if isinstance(routes, list) else []
     addresses = addresses if isinstance(addresses, list) else []
     uplinks = [route.get('dev') for route in routes if isinstance(route, dict) and route.get('dst') == 'default' and route.get('dev')]
@@ -112,9 +143,20 @@ def _is_ip(value):
         return False
 
 
+def _plain(name):
+    """A host value as the certificate names it: an IP literal without brackets, compressed; a name as is."""
+    text = (name or '').strip()
+    bare = text[1:-1] if text.startswith('[') and text.endswith(']') else text
+    try:
+        return ipaddress.ip_address(bare).compressed
+    except ValueError:
+        return text
+
+
 def validate_name(value):
     """A tls/names entry: an IP address (returned compressed) or a host name without port or brackets
-    (returned lower-case); anything else is refused with the value quoted."""
+    (returned lower-case, at most 63 characters per label and 253 in all); anything else is refused
+    with the value quoted."""
     text = (value or '').strip()
     if not text:
         raise ValueError('An empty name.')
@@ -126,6 +168,8 @@ def validate_name(value):
     if name is None or name != text.lower() or name.startswith('['):
         raise ValueError(f'{text!r} is not a host name or an IP address (write names without a port or a scheme, '
                          'IPv6 addresses without brackets).')
+    if len(name) > 253 or any(len(label) > 63 for label in name.split('.')):
+        raise ValueError(f'{text!r} is longer than a DNS name allows (63 characters per label, 253 in all).')
     return name
 
 
@@ -133,14 +177,18 @@ def san(value):
     return ('IP:' if _is_ip(value) else 'DNS:') + value
 
 
+def _valid_host(host):
+    return bool(host) and (_is_ip(host) or (allowed_hosts.host_name(host) == host and not host.startswith('[')))
+
+
 def subject_names(addresses, hostname, allowed, names):
     """The SAN list, in order: the certificate addresses, the loopback names, the host name, every
-    UI_ALLOWED_HOSTS name, every tls/names entry; no duplicates."""
+    UI_ALLOWED_HOSTS name (an IP literal among them as an IP: entry), every tls/names entry; no duplicates."""
     entries = [san(a) for a in addresses] + ['IP:127.0.0.1', 'IP:::1', 'DNS:localhost']
     host = (hostname or '').strip().lower()
-    if host and (_is_ip(host) or (allowed_hosts.host_name(host) == host and not host.startswith('['))):
+    if _valid_host(host):
         entries.append(san(host))
-    entries += ['DNS:' + name for name in allowed]
+    entries += [san(_plain(name)) for name in allowed]
     entries += [san(name) for name in names]
     result = []
     for entry in entries:
@@ -150,10 +198,10 @@ def subject_names(addresses, hostname, allowed, names):
 
 
 def primary_name(allowed, names, addresses, hostname):
-    """The CN: the first UI_ALLOWED_HOSTS name, else the first tls/names entry that is a name, else the
-    first IPv4 certificate address, else the host name."""
+    """The primary name: the first UI_ALLOWED_HOSTS name, else the first tls/names entry that is a name,
+    else the first IPv4 certificate address, else the host name."""
     for name in allowed:
-        return name
+        return _plain(name)
     for name in names:
         if not _is_ip(name):
             return name
@@ -161,6 +209,17 @@ def primary_name(allowed, names, addresses, hostname):
         if ipaddress.ip_address(address).version == 4:
             return address
     return (hostname or '').strip().lower() or 'localhost'
+
+
+def common_name(plan):
+    """The CN: the primary name when it fits X.509's 64-character limit, else the first candidate of the
+    primary-name order that does (the SAN list carries the long name; the CN is cosmetic)."""
+    host = (plan.get('hostname') or '').strip().lower()
+    candidates = ([plan.get('primary') or ''] + [_plain(name) for name in plan.get('allowed', [])]
+                  + [name for name in plan.get('names', []) if not _is_ip(name)]
+                  + [address for address in plan.get('addresses', []) if ipaddress.ip_address(address).version == 4]
+                  + ([host] if _valid_host(host) else []) + ['localhost'])
+    return next(name for name in candidates if 0 < len(name) <= MAX_COMMON_NAME)
 
 
 def openssl_argv(primary, sans, key_path, cert_path):
@@ -186,16 +245,29 @@ def san_entries(text):
     return found
 
 
+ENV_LINE = re.compile(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$')
+
+
+def _env_value(raw):
+    """The value as docker compose reads it: quotes removed, an unquoted value ends at a `#` that follows
+    whitespace, nothing evaluated."""
+    raw = raw.strip()
+    if raw[:1] in ('"', "'"):
+        end = raw.find(raw[0], 1)
+        return raw[1:end] if end > 0 else raw[1:]
+    return re.split(r'\s+#', raw, maxsplit=1)[0].rstrip()
+
+
 def env_values(path):
-    """KEY=value pairs of a dotenv file, last wins, quotes stripped, nothing evaluated."""
+    """KEY=value pairs of a dotenv file (an `export` prefix allowed), last wins."""
     path = Path(path)
     if not path.is_file():
         return {}
     values = {}
     for line in path.read_text(encoding='utf-8', errors='replace').splitlines():
-        match = re.match(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$', line)
+        match = ENV_LINE.match(line)
         if match:
-            values[match[1]] = match[2].strip().strip('"\'')
+            values[match[1]] = _env_value(match[2])
     return values
 
 
@@ -211,13 +283,15 @@ def _port(values, key, default):
 # ---- the tool -------------------------------------------------------------------------------
 
 class Tls:
-    def __init__(self, tls_dir=TLS_DIR, repo=REPO, run=subprocess.run, chown=os.chown, hostname=socket.gethostname, out=print):
+    def __init__(self, tls_dir=TLS_DIR, repo=REPO, run=subprocess.run, chown=os.chown, hostname=socket.gethostname, out=print,
+                 replace=os.replace):
         self.tls_dir = Path(tls_dir)
         self.repo = Path(repo)
         self.run = run
         self.chown = chown
         self.hostname = hostname
         self.out = out
+        self.replace = replace
 
     # -- processes
     def command(self, argv, check=False):
@@ -239,6 +313,9 @@ class Tls:
     def path(self, name):
         return self.tls_dir / name
 
+    def file_owner(self, path):
+        return os.stat(path).st_uid
+
     def check_directory(self):
         if self.tls_dir.is_symlink():
             raise ValueError(f'Refusing a symlink at {self.tls_dir}.')
@@ -250,8 +327,22 @@ class Tls:
             self.chown(self.tls_dir, 0, 0)
         os.chmod(self.tls_dir, 0o755)
 
+    def set_owner(self, path, mode, gid):
+        os.chmod(path, mode)
+        self.chown(path, 0, gid)
+
+    def stage(self, directory, name, data, mode, gid):
+        """Write a file into a staging directory with its final mode and owner (fsync'd), not yet in place."""
+        path = Path(directory) / name
+        with open(path, 'wb') as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        self.set_owner(path, mode, gid)
+        return path
+
     def install_bytes(self, name, data, mode, gid=0):
-        """Write a file through a temporary name inside the tls directory, with its final mode and
+        """Write one file through a temporary name inside the tls directory, with its final mode and
         owner, then move it into place (the write_env discipline)."""
         fd, temporary = tempfile.mkstemp(prefix='.' + name + '-', dir=self.tls_dir)
         try:
@@ -259,19 +350,65 @@ class Tls:
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
-            os.chmod(temporary, mode)
-            self.chown(temporary, 0, gid)
+            self.set_owner(temporary, mode, gid)
             os.replace(temporary, self.path(name))
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
 
+    def install_pair(self, cert, key, staging):
+        """Move a staged cert.pem and key.pem into place. The old files stay reachable through hard
+        links in the staging directory until both moves succeeded; on any failure (a full disk, an
+        interrupt) they are put back, so the directory never holds a certificate without its key."""
+        backups = []
+        for name in ('cert.pem', 'key.pem'):
+            target = self.path(name)
+            try:
+                existing = os.lstat(target)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISREG(existing.st_mode):
+                backup = Path(staging) / (name + '.old')
+                os.link(target, backup)
+                backups.append((target, backup))
+        try:
+            self.replace(cert, self.path('cert.pem'))
+            self.replace(key, self.path('key.pem'))
+        except BaseException:
+            for target, backup in backups:
+                try:
+                    os.replace(backup, target)
+                except OSError:
+                    pass
+            raise
+
+    def repair_modes(self):
+        """Give every file of the directory its owner and mode of EXPOSURE.md 3.3 again; returns the
+        names that needed it. Content is never touched: a wrong mode is no reason for a new fingerprint."""
+        repaired = []
+        for name, (mode, gid) in FILES.items():
+            path = self.path(name)
+            try:
+                existing = os.lstat(path)
+            except OSError:
+                continue
+            if not stat.S_ISREG(existing.st_mode):
+                continue
+            if stat.S_IMODE(existing.st_mode) != mode or existing.st_uid != 0 or existing.st_gid != gid:
+                self.set_owner(path, mode, gid)
+                repaired.append(name)
+        if repaired:
+            self.out('File modes repaired: ' + ', '.join(repaired) + '.')
+        return repaired
+
     def read_mode(self):
+        """'self-signed', 'provided', or None when tls/mode is absent or unreadable (a certificate this
+        tool did not make, or an install that stopped before its mode write)."""
         try:
             value = self.path('mode').read_text(encoding='utf-8').strip()
         except OSError:
-            return 'self-signed'
-        return value if value in ('self-signed', 'provided') else 'self-signed'
+            return None
+        return value if value in ('self-signed', 'provided') else None
 
     def write_mode(self, value):
         self.prepare_directory()
@@ -297,19 +434,26 @@ class Tls:
         return names
 
     # -- the facts
+    def env_file(self, route='source'):
+        """The env file of a route: what the caller's compose command reads (ROUTES)."""
+        if route not in ROUTES:
+            raise ValueError(f'Unknown route {route!r}; expected source (clab-backup-ui/.env) or image (deploy/image.env).')
+        return self.repo / ROUTES[route]
+
     def env_files(self):
-        return [self.repo / 'clab-backup-ui/.env', self.repo / 'deploy/image.env']
+        return [self.env_file(route) for route in ROUTES]
 
     def allowed_names(self):
-        """Every UI_ALLOWED_HOSTS name of both env files, in the order written (the first is the primary name)."""
+        """Every UI_ALLOWED_HOSTS name of both env files, in the order written (the first is the primary
+        name); an IP literal is returned bare and compressed."""
         names = []
         for path in self.env_files():
             text = env_values(path).get('UI_ALLOWED_HOSTS', '')
             accepted = allowed_hosts.configured_hosts(text)
             for entry in text.split(','):
                 name = allowed_hosts.host_name(entry.strip()) if entry.strip() else None
-                if name in accepted and name not in names:
-                    names.append(name)
+                if name in accepted and _plain(name) not in names:
+                    names.append(_plain(name))
         return names
 
     def host_addresses(self):
@@ -357,15 +501,42 @@ class Tls:
         facts = self.certificate_facts()
         return facts['fingerprint'] if facts else ''
 
+    def public_keys_match(self, cert, key):
+        """(matches, problem): whether the key's public key is the certificate's; the problem names the
+        file that could not be read, never its contents."""
+        key_public = self.command(['openssl', 'pkey', '-in', str(key), '-pubout', '-passin', 'pass:'])
+        if key_public.returncode != 0:
+            return False, f'{Path(key).name} cannot be read as a private key'
+        cert_public = self.command(['openssl', 'x509', '-in', str(cert), '-noout', '-pubkey'])
+        if cert_public.returncode != 0:
+            return False, f'{Path(cert).name} cannot be read'
+        if key_public.stdout.strip() != cert_public.stdout.strip():
+            return False, f'{Path(key).name} does not match {Path(cert).name}'
+        return True, None
+
+    def pair_problem(self):
+        """None, or why cert.pem and key.pem cannot serve (what uvicorn would hit at start)."""
+        if not self.path('cert.pem').exists():
+            return 'no certificate: cert.pem is missing'
+        if self.certificate_facts() is None:
+            return 'cert.pem cannot be read'
+        key = self.path('key.pem')
+        if key.is_symlink():
+            return 'key.pem is a symlink'
+        if not key.is_file():
+            return 'key.pem is missing'
+        return self.public_keys_match(self.path('cert.pem'), key)[1]
+
     def regeneration_reason(self, plan):
-        facts = self.certificate_facts()
-        if facts is None:
-            return 'no certificate' if not self.path('cert.pem').exists() else 'the certificate cannot be read'
+        problem = self.pair_problem()
+        if problem:
+            return problem
         if not self.valid_for(0):
             return 'the certificate has expired'
         if not self.valid_for(RENEW_WITHIN):
             return 'the certificate expires within 30 days'
-        missing = [entry for entry in plan['sans'] if entry not in facts['sans']]
+        present = self.certificate_facts()['sans']
+        missing = [entry for entry in plan['sans'] if entry not in present]
         if missing:
             return 'missing names: ' + ', '.join(missing)
         return None
@@ -373,18 +544,15 @@ class Tls:
     # -- the modes
     def generate(self, plan):
         self.prepare_directory()
-        temporary = Path(tempfile.mkdtemp(prefix='.tls-', dir=self.tls_dir))
+        staging = Path(tempfile.mkdtemp(prefix='.tls-', dir=self.tls_dir))
         try:
-            key, cert = temporary / 'key.pem', temporary / 'cert.pem'
-            self.command(openssl_argv(plan['primary'], plan['sans'], key, cert), check=True)
-            os.chmod(key, 0o640)
-            self.chown(key, 0, WORKER_GID)
-            os.chmod(cert, 0o644)
-            self.chown(cert, 0, 0)
-            os.replace(cert, self.path('cert.pem'))
-            os.replace(key, self.path('key.pem'))
+            key, cert = staging / 'key.pem', staging / 'cert.pem'
+            self.command(openssl_argv(common_name(plan), plan['sans'], key, cert), check=True)
+            self.set_owner(key, *FILES['key.pem'])
+            self.set_owner(cert, *FILES['cert.pem'])
+            self.install_pair(cert, key, staging)
         finally:
-            shutil.rmtree(temporary, ignore_errors=True)
+            shutil.rmtree(staging, ignore_errors=True)
         self.write_mode('self-signed')
 
     def report(self, prefix='Certificate fingerprint (SHA-256): '):
@@ -393,21 +561,34 @@ class Tls:
             self.out(prefix + facts['fingerprint'])
         return facts
 
-    def ensure(self):
-        """Returns the reason a certificate was made, or None when the existing one was kept."""
+    def ensure(self, route='source'):
+        """Returns the reason a certificate was made, or None when the existing one was kept. Raises when
+        a certificate this tool must not replace cannot serve."""
         self.check_directory()
-        self.settle_ports()
+        self.settle_ports(route)
         plan = self.plan()
-        if self.read_mode() == 'provided':
+        mode = self.read_mode()
+        self.repair_modes()
+        if mode == 'provided':
+            problem = self.pair_problem()
+            if problem:
+                raise ValueError(f'Provided certificate: {problem} in {self.tls_dir}; the manager cannot start with it. '
+                                 'Install it again with setup-tls.sh --cert PATH --key PATH, or switch to a self-signed one with setup-tls.sh --self-signed.')
             facts = self.certificate_facts()
-            if facts is None:
-                self.out('Provided certificate: cert.pem is missing or unreadable; install it again with setup-tls.sh --cert PATH --key PATH.')
-            elif not self.valid_for(0):
+            if not self.valid_for(0):
                 self.out(f'Provided certificate kept; it EXPIRED on {facts["not_after"]}. Install a new one with setup-tls.sh --cert PATH --key PATH.')
             elif not self.valid_for(RENEW_WITHIN):
                 self.out(f'Provided certificate kept; it expires on {facts["not_after"]} (within 30 days).')
             else:
                 self.out(f'Provided certificate kept; expires {facts["not_after"]}.')
+            self.report()
+            return None
+        if mode is None and self.path('cert.pem').exists():
+            problem = self.pair_problem()
+            if problem:
+                raise ValueError(f'Unregistered certificate: {problem} in {self.tls_dir} (tls/mode is absent, so setup-tls.sh did not make these files); '
+                                 'the manager cannot start with it. ' + REGISTER_HINT)
+            self.out('cert.pem exists but tls/mode is absent: setup-tls.sh did not make this certificate and leaves it alone. ' + REGISTER_HINT)
             self.report()
             return None
         reason = self.regeneration_reason(plan)
@@ -421,11 +602,29 @@ class Tls:
         self.report()
         return reason
 
+    def prepare(self, route='source'):
+        """recreate-manager.sh's step before `up`: the ports of the route settled, the files usable and
+        with their modes; never a new certificate (a changed name is ensure's business at the upgrade)."""
+        self.check_directory()
+        self.settle_ports(route)
+        self.repair_modes()
+        problem = self.pair_problem()
+        if problem:
+            raise ValueError(f'The manager cannot start: {problem} in {self.tls_dir} (uvicorn reads cert.pem and key.pem there). '
+                             'Run sudo bash deploy/start-manager.sh to make or repair the certificate, '
+                             'or setup-tls.sh --cert PATH --key PATH to install one.')
+        self.out(f'TLS files ready ({self.read_mode() or "unregistered"} certificate).')
+        self.report()
+
     def renew(self, force=False):
         self.check_directory()
-        if self.read_mode() == 'provided' and not force:
-            raise ValueError('The certificate is a provided one; --renew applies to a self-signed certificate. '
-                             'Install a new provided certificate with --cert PATH --key PATH, or add --self-signed to switch back.')
+        mode = self.read_mode()
+        if not force and mode != 'self-signed' and self.path('cert.pem').exists():
+            if mode == 'provided':
+                raise ValueError('The certificate is a provided one; --renew applies to a self-signed certificate. '
+                                 'Install a new provided certificate with --cert PATH --key PATH, or add --self-signed to switch back.')
+            raise ValueError(f'The certificate in {self.tls_dir} was not made by setup-tls.sh (tls/mode is absent); --renew replaces only '
+                             'a self-signed one. Add --self-signed to replace it with a new self-signed certificate.')
         plan = self.plan()
         self.generate(plan)
         self.out('New self-signed certificate for ' + ', '.join(plan['sans']) + f'; valid {DAYS} days. Browsers show their warning again.')
@@ -435,37 +634,56 @@ class Tls:
         self.renew(force=True)
 
     def _regular_file(self, path, what):
+        """(path, bytes) of a given certificate or key file. A symlink is followed only to a regular file
+        owned by root (certbot's live/ links into archive/); anything else must be given as the file itself."""
         path = Path(path)
         if path.is_symlink():
-            raise ValueError(f'The {what} {path} is a symlink; give the file itself.')
+            target = Path(os.path.realpath(path))
+            try:
+                resolved = os.stat(target)
+            except OSError:
+                raise ValueError(f'The {what} {path} is a symlink to {target}, which does not exist; give the file itself.') from None
+            if not stat.S_ISREG(resolved.st_mode) or self.file_owner(target) != 0:
+                raise ValueError(f'The {what} {path} is a symlink; a link is followed only to a regular file owned by root. Give the file itself.')
+            path = target
         if not path.is_file():
             raise ValueError(f'The {what} {path} is not a regular file.')
         if path.stat().st_size > MAX_FILE:
             raise ValueError(f'The {what} {path} is larger than 64 KiB.')
-        return path.read_bytes()
+        return path, path.read_bytes()
 
     def install_provided(self, cert_path, key_path):
         self.check_directory()
-        cert_bytes = self._regular_file(cert_path, 'certificate')
-        key_bytes = self._regular_file(key_path, 'key')
+        cert_path, cert_bytes = self._regular_file(cert_path, 'certificate')
+        key_path, key_bytes = self._regular_file(key_path, 'key')
+        blocks = re.findall(rb'-----BEGIN ([A-Z0-9 ]+)-----', cert_bytes)
+        if any(b'PRIVATE KEY' in block for block in blocks):
+            raise ValueError(f'The certificate {cert_path} contains a PRIVATE KEY block; cert.pem is readable by every account on the VM, '
+                             'so give the certificate chain alone as --cert and the key as --key.')
+        if not blocks or any(block != b'CERTIFICATE' for block in blocks):
+            found = ', '.join(sorted({block.decode() for block in blocks})) or 'none'
+            raise ValueError(f'The certificate {cert_path} must hold only CERTIFICATE blocks (the chain, leaf first); found: {found}.')
         if b'ENCRYPTED' in key_bytes[:4096]:
             raise ValueError(f'The key {key_path} is encrypted; decrypt the key first (uvicorn cannot ask for a password at start).')
-        cert_path, key_path = str(cert_path), str(key_path)
         if not self.valid_for(0, cert_path):
             raise ValueError(f'The certificate {cert_path} has expired or cannot be read.')
-        sans = self.command(['openssl', 'x509', '-in', cert_path, '-noout', '-ext', 'subjectAltName'], check=True)
+        sans = self.command(['openssl', 'x509', '-in', str(cert_path), '-noout', '-ext', 'subjectAltName'], check=True)
         names = san_entries(sans.stdout)
         if not names:
             raise ValueError(f'The certificate {cert_path} lists no subjectAltName; browsers need at least one name.')
-        key_public = self.command(['openssl', 'pkey', '-in', key_path, '-pubout', '-passin', 'pass:'])
-        if key_public.returncode != 0:
+        matches, problem = self.public_keys_match(cert_path, key_path)
+        if not matches:
+            if 'does not match' in problem:
+                raise ValueError(f'The key {key_path} does not match the certificate {cert_path}.')
             raise ValueError(f'The key {key_path} cannot be read by openssl; decrypt the key first or check the file.')
-        cert_public = self.command(['openssl', 'x509', '-in', cert_path, '-noout', '-pubkey'], check=True)
-        if key_public.stdout.strip() != cert_public.stdout.strip():
-            raise ValueError(f'The key {key_path} does not match the certificate {cert_path}.')
         self.prepare_directory()
-        self.install_bytes('cert.pem', cert_bytes, 0o644)
-        self.install_bytes('key.pem', key_bytes, 0o640, WORKER_GID)
+        staging = Path(tempfile.mkdtemp(prefix='.tls-', dir=self.tls_dir))
+        try:
+            cert = self.stage(staging, 'cert.pem', cert_bytes, *FILES['cert.pem'])
+            key = self.stage(staging, 'key.pem', key_bytes, *FILES['key.pem'])
+            self.install_pair(cert, key, staging)
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
         self.write_mode('provided')
         self.out('Provided certificate installed; it names ' + ', '.join(sorted(names)) + '.')
         self.report()
@@ -482,43 +700,16 @@ class Tls:
             missing = [entry for entry in plan['sans'] if entry not in facts['sans']]
             self.out('missing: ' + (', '.join(missing) if missing else 'none'))
             self.out('fingerprint: ' + facts['fingerprint'])
-        self.out('mode: ' + (self.read_mode() if facts is not None or self.path('mode').exists() else 'none'))
+        self.out('mode: ' + (self.read_mode() or 'none'))
         self.out('required: ' + ', '.join(plan['sans']))
         self.out('primary: ' + plan['primary'])
 
     # -- the ports of the upgrade table (EXPOSURE.md 7.4)
-    def route_env_file(self):
-        """The env file recreate-manager.sh would use: deploy/image.env on a prepared-image
-        installation (MANAGER_IMAGE set, and the running container uses that image or no local
-        source image exists), else clab-backup-ui/.env."""
-        source_env, image_env = self.env_files()
-        manager_image = env_values(image_env).get('MANAGER_IMAGE', '')
-        if not manager_image:
-            return source_env
-        compose = ['docker', 'compose', '-f', str(self.repo / 'clab-backup-ui/compose.yml')]
-        if source_env.is_file():
-            compose += ['--env-file', str(source_env)]
-        existing = self._quiet(compose + ['ps', '--all', '--quiet', 'backup-ui'])
-        running_image = self._quiet(['docker', 'inspect', '--format', '{{.Config.Image}}', existing]) if existing else ''
-        try:
-            version = (self.repo / 'clab-backup-ui/VERSION').read_text().strip()
-        except OSError:
-            version = ''
-        local_source = self._quiet(['docker', 'images', '--quiet', 'clab-backup:' + version])
-        return image_env if running_image == manager_image or not local_source else source_env
-
-    def _quiet(self, argv):
-        try:
-            result = self.command(argv)
-        except OSError:
-            return ''
-        return result.stdout.strip().splitlines()[0] if result.returncode == 0 and result.stdout.strip() else ''
-
-    def settle_ports(self):
-        """Refuses UI_PORT == UI_HTTP_PORT when both are explicit; writes UI_HTTP_PORT=0 when an
-        explicit UI_PORT collides with the default redirect port (the standard upgrade path).
-        Returns the line written, or None."""
-        path = self.route_env_file()
+    def settle_ports(self, route='source'):
+        """In the route's env file: refuses UI_PORT == UI_HTTP_PORT when both are explicit; writes
+        UI_HTTP_PORT=0 when an explicit UI_PORT collides with the default redirect port (the standard
+        upgrade path). Returns the line written, or None."""
+        path = self.env_file(route)
         values = env_values(path)
         tls_port, tls_explicit = _port(values, 'UI_PORT', DEFAULT_TLS_PORT)
         http_port, http_explicit = _port(values, 'UI_HTTP_PORT', DEFAULT_HTTP_PORT)
@@ -535,24 +726,28 @@ class Tls:
                          'Set UI_PORT=8443 and UI_HTTP_PORT=8081 (or UI_HTTP_PORT=0 for no redirect) and rerun.')
 
 
-USAGE = 'Usage: setup_tls.py [--tls-dir DIR] [--repo DIR] ensure|renew|self-signed|provided CERT KEY|names [NAME...]|show|primary|fingerprint'
+USAGE = ('Usage: setup_tls.py [--tls-dir DIR] [--repo DIR] [--route source|image] '
+         'ensure|prepare|renew|self-signed|provided CERT KEY|names [NAME...]|show|primary|fingerprint')
 
 
 def main(argv):
-    options = {'tls_dir': TLS_DIR, 'repo': REPO}
+    options = {'tls_dir': TLS_DIR, 'repo': REPO, 'route': 'source'}
     rest = list(argv)
-    while rest and rest[0] in ('--tls-dir', '--repo'):
+    while rest and rest[0] in ('--tls-dir', '--repo', '--route'):
         if len(rest) < 2:
             sys.exit(USAGE)
-        options[rest[0][2:].replace('-', '_')] = Path(rest[1])
+        key = rest[0][2:].replace('-', '_')
+        options[key] = rest[1] if key == 'route' else Path(rest[1])
         rest = rest[2:]
-    if not rest:
+    if not rest or options['route'] not in ROUTES:
         sys.exit(USAGE)
     mode, args = rest[0], rest[1:]
     tls = Tls(tls_dir=options['tls_dir'], repo=options['repo'])
     try:
         if mode == 'ensure' and not args:
-            tls.ensure()
+            tls.ensure(options['route'])
+        elif mode == 'prepare' and not args:
+            tls.prepare(options['route'])
         elif mode == 'renew' and not args:
             tls.renew()
         elif mode == 'self-signed' and not args:
@@ -561,7 +756,7 @@ def main(argv):
             tls.install_provided(args[0], args[1])
         elif mode == 'names':
             tls.set_names(args)
-            tls.ensure()
+            tls.ensure(options['route'])
         elif mode == 'show' and not args:
             tls.show()
         elif mode == 'primary' and not args:

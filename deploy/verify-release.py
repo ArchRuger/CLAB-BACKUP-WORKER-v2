@@ -70,7 +70,7 @@ VERSIONED_PATH = re.compile(r'projects/v\d+\.\d+\.\d+')
 VERSIONED_IMAGE = re.compile(r'clab-(?:backup|capture-service):\d+\.\d+\.\d+')
 # The manager serves HTTPS on 8443; 8081 only redirects. A living guide that sends a reader to
 # http://<anything>:8081 describes the manager before TLS (docs/sign-on/EXPOSURE.md 8.1, E-Q6).
-PLAIN_MANAGER_URL = re.compile(r'http://[^\s`"\'<>()\[\]]+:8081(?!\d)')
+PLAIN_MANAGER_URL = re.compile(r'http://(?:\[[0-9A-Fa-f:.]+\]|[^\s`"\'<>()\[\]]+):8081(?!\d)')
 
 
 def read_version(root):

@@ -161,8 +161,12 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertIn('/srv/containerlab-node-manager/data/setup-code', launcher)
         self.assertNotIn('TCP 8081', launcher)
         self.assertNotIn('without a login', launcher)
+        self.assertIn('grep -E "^(export )?$1="', launcher, 'the closing address line reads an exported port the way compose does')
         recreate = (ROOT / 'deploy/recreate-manager.sh').read_text()
         self.assertIn('up -d --no-build --no-deps backup-ui http-redirect', recreate)
+        prepare = 'bash "$script_dir/setup-tls.sh" --prepare --route "$route_name"'
+        self.assertIn(prepare, recreate, 'recreate-manager.sh settles the ports and checks the TLS files of the route it chose before `up`')
+        self.assertLess(recreate.index(prepare), recreate.index('up -d --no-build'))
 
     def test_source_check_precedes_host_setup(self):
         launcher = (ROOT / 'deploy/start-manager.sh').read_text()
@@ -248,13 +252,14 @@ class ReleaseConsistencyTests(unittest.TestCase):
         (self.root / 'docs/CHANGELOG.md').write_text(f'# Changelog\n\n## Changes in {self.version}\n\n- the manager answered on http://VM:8081\n',
                                                      encoding='utf-8')
         self.assertEqual(release.verify_docs(self.root), self.version)
-        (self.root / 'docs/GUIDE.md').write_text('Open `http://192.0.2.10:8081/` in a browser.\n\nOr http://VM_IP:8081 and http://localhost:8081/#lab=x.\n',
-                                                 encoding='utf-8')
+        (self.root / 'docs/GUIDE.md').write_text('Open `http://192.0.2.10:8081/` in a browser.\n\nOr http://VM_IP:8081 and http://localhost:8081/#lab=x.\n'
+                                                 'Over IPv6: http://[fd00::10]:8081 or `http://[2001:db8::10]:8081/`.\n', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'disagrees') as error:
             release.verify_docs(self.root)
         message = str(error.exception)
         self.assertIn('docs/GUIDE.md:1: plain-HTTP manager URL', message)
         self.assertIn('docs/GUIDE.md:3: plain-HTTP manager URL', message)
+        self.assertIn('docs/GUIDE.md:4: plain-HTTP manager URL', message, 'an IPv6 literal in brackets is a manager URL too')
         self.assertIn('https://', message, 'the message says what to write instead')
         self.assertNotIn('archive', message)
         self.assertNotIn('CHANGELOG', message)
