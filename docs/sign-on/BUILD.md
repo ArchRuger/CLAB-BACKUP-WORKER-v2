@@ -147,15 +147,20 @@ Design: EXPOSURE 4.1 (the redirect listener; REVIEW R19's sentence; `Location` f
 `query_string`, REVIEW R20) and 6.1 (every probe subcommand, what it reads and the JSON it prints);
 DESIGN 6.7. REVIEW R16.
 
-Acceptance: the redirect answers 301 to the manager's own HTTPS origin after `host_allowed`, 400, 405 and
-a socket close 1008, and nothing else; no per-request log; CR/LF, `%3F` and UTF-8 paths are safe; a probe
+The five probes are `design-engine`, `capture`, `vm-connection`, `browse <path>` and `git-registry`, with
+the shared read-only `read_state()` (EXPOSURE 6.1).
+
+Acceptance: the redirect answers 301 to the manager's own HTTPS origin after `host_allowed`, 400 (a refused
+Host or a target that is not a path), 405 with `Allow: GET, HEAD`, and a socket close 1008, and nothing else; no per-request log; CR/LF, `%3F` and UTF-8 paths are safe; a probe
 never constructs a `Store`, never writes, never prints a secret, and prints exactly its documented JSON
 line.
 
 ### S4 TLS and container
 
-Design: EXPOSURE 2, 3 (with REVIEW R18's certificate names), 4.1 (the compose service), 5.1, 7.1 (its
-rows), 7.4 (with REVIEW R17's sentence), 8.2; RECONCILIATION 4 (E-Q1, E-Q5, E-Q6, E 9.4).
+Design: EXPOSURE 2 (2.4: the manager service gains `UI_PORT` in its environment, so its container log line
+can name the port), 3 (with REVIEW R18's certificate names, `--name` and the read-only `--primary`), 4.1 (the
+compose service), 5.1, 7.1 (its rows), 7.4 (with REVIEW R17's sentence), 8.2; RECONCILIATION 4 (E-Q1, E-Q5,
+E-Q6, E 9.4).
 
 Acceptance: uvicorn serves TLS with the certificate paths and `--no-proxy-headers --no-server-header` in
 both compose files and the Dockerfile `CMD`; `UI_TLS` absent from both compose files; the redirect
@@ -176,7 +181,8 @@ script prints the code from `app.recover` and the URL; the tests are standard-li
 ### S5b installer
 
 Design: EXPOSURE 7 (installer changes, the order of a fresh installation with the setup code printed
-last, REVIEW U13; prepared images; the upgrade). REVIEW R11, R17, U13.
+last, REVIEW U13; prepared images; the upgrade; the full-screen installer's summary stops listing the
+`hostname -I` addresses of `vm_addresses()`, REVIEW R18). REVIEW R11, R17, R18, U13.
 
 Acceptance: the installer runs the TLS, firewall and SSH steps in EXPOSURE 7.2's order with their
 opt-outs, verifies the manager over HTTPS `/api/health`, prints the address, the fingerprint and, while
@@ -185,7 +191,9 @@ same; existing installer tests keep their claims.
 
 ### S6 health check
 
-Design: EXPOSURE 6 (every check, its source, the test pattern; REVIEW R16's table; R17's INFO).
+Design: EXPOSURE 6 (every check, its source, the new `Context.probe`, the SKIP table, the test pattern;
+REVIEW R16's table; R17's INFO `tls.hsts-scope`). The probes are S3's: build against the JSON lines of
+EXPOSURE 6.1 with a mocked `Context.probe`, exactly as the tests mock `ctx.http` today.
 
 Acceptance: every manager HTTP call of `check_install.py` is either `GET /api/health` or replaced by its
 probe or an explicit SKIP with the reason, as EXPOSURE 6.1 lists; every exposure check of 6.2 with its
