@@ -208,7 +208,8 @@ class PolicyTests(unittest.TestCase):
         self.assertRegex(source, r'10-million-password-list-top-100', 'and the file it was copied from')
 
     def test_length_counts_unicode_code_points_after_nfkc(self):
-        self.assertEqual(check_password('tester', 'ｆｕｌｌｗｉｄｔｈ１２'), [], 'twelve full-width characters fold to twelve code points')
+        self.assertEqual(check_password('tester', 'ｆｕｌｌｗｉｄｔｈ１２３'), [], 'twelve full-width characters fold to twelve code points')
+        self.assertEqual(check_password('tester', 'ｆｕｌｌｗｉｄｔｈ１２'), ['too_short'], 'eleven do not')
         self.assertEqual(check_password('tester', 'ﬁ' * 6), [], 'six ligatures fold to twelve letters')
         self.assertEqual(check_password('tester', 'é' * 11), ['too_short'])
         self.assertEqual(check_password('tester', '            '), [], 'whitespace is kept, not stripped: twelve spaces pass the length rule')

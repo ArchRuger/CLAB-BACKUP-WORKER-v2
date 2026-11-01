@@ -67,8 +67,12 @@ class StoreAuditTests(unittest.TestCase):
                              ['audit-failures.jsonl', 'audit-failures.jsonl.1', 'audit-failures.jsonl.2', 'audit-failures.jsonl.3'])
             self.assertEqual(sorted(p.name for p in self.root.glob('audit.jsonl*')), names, 'and the first did not move again')
             self.assertFalse(list(self.root.glob('events.jsonl.*')), 'events.jsonl keeps its own rotation')
+        kept = sum(len(p.read_text().splitlines()) for p in self.root.glob('audit*.jsonl*'))
+        active = sum(len((self.root/name).read_text().splitlines()) for name in ('audit.jsonl', 'audit-failures.jsonl'))
+        self.assertGreater(kept, active, 'the rotations hold entries of their own')
         entries, total = self.store.audit_entries(100, 0)
-        self.assertEqual(total, 24, 'audit_entries reads the rotations of both files')
+        self.assertEqual(total, kept, 'audit_entries reads the rotations of both files')
+        self.assertEqual(len(entries), kept)
 
     def test_each_file_has_its_own_write_failure_flag_and_warns_once(self):
         real = os.open
@@ -155,8 +159,8 @@ class StoreAuditTests(unittest.TestCase):
         self.store.reset()
         after = {p.name: p.read_bytes() for p in self.root.glob('audit*.jsonl*')}
         self.assertEqual(after, before)
-        self.assertNotIn('old history', (self.root/'events.jsonl').read_text())
-        self.assertFalse(any(name.startswith('audit') for name in os.listdir(self.root/'.reset-pending')) if (self.root/'.reset-pending').exists() else False)
+        self.assertFalse((self.root/'events.jsonl').exists(), 'the operational log was moved aside, as before')
+        self.assertFalse((self.root/'.reset-pending').exists())
 
 
 class VocabularyTests(unittest.TestCase):
@@ -200,7 +204,7 @@ class FailureBucketTests(unittest.TestCase):
         open_entries = buckets.open_entries()
         self.assertEqual(len(open_entries), 1, 'visible before the minute closes')
         entry = open_entries[0]
-        self.assertEqual(entry, {'time': datetime.fromtimestamp(self.T0, timezone.utc).isoformat(), 'event': 'signin.failed', 'actor': '-',
+        self.assertEqual(entry, {'time': datetime.fromtimestamp(self.T0, timezone.utc).isoformat(timespec='microseconds'), 'event': 'signin.failed', 'actor': '-',
                                  'source': '198.51.100.7', 'outcome': 'failed', 'target': '', 'detail': 'invalid_credentials count=50'})
         self.assertEqual(buckets.flush(now=self.T0 + 54), [], 'the minute has not passed')
         self.assertEqual(buckets.flush(now=self.T0 + 55), [entry], 'closed once the UTC minute passed')
@@ -263,7 +267,7 @@ class FailureBucketTests(unittest.TestCase):
             failures = [json.loads(l) for l in (Path(tmp)/'audit-failures.jsonl').read_text().splitlines()]
             self.assertEqual([e['event'] for e in security], ['forbidden'])
             self.assertEqual(sorted(e['event'] for e in failures), ['setup.failed', 'signin.failed', 'signin.throttled'])
-            self.assertEqual(security[0]['time'], datetime.fromtimestamp(self.T0, timezone.utc).isoformat(), 'the time of the first failure')
+            self.assertEqual(security[0]['time'], datetime.fromtimestamp(self.T0, timezone.utc).isoformat(timespec='microseconds'), 'the time of the first failure')
             for entry in security + failures:
                 self.assertIn(entry['event'], AUDIT_EVENTS); self.assertIn(entry['outcome'], AUDIT_OUTCOMES)
                 self.assertIn(entry['detail'].split()[0], AUDIT_REASONS)
