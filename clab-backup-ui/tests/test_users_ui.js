@@ -421,3 +421,63 @@ test('users.js keeps the house rules: strict mode, no storage, no location outsi
  assert.doesNotMatch(source,/localStorage|sessionStorage|location\./);
  assert.match(source,/typeof sessionGo==='function'/);
 });
+
+// An answer that arrives after the person closed a dialog and opened another one must not act on the new dialog.
+function pendingFixture(routes){
+ const held={},hold=(key,make)=>(url,body)=>new Promise(resolve=>{held[key]=()=>resolve(make(url,body));});
+ return {held,hold};
+}
+test('a role change finished while the dialog is reopened for someone else: the toast names the first person and the second dialog is untouched',async()=>{
+ const {held,hold}=pendingFixture();
+ const f=fixture(routesFor([person('sam','admin'),person('kim'),person('al')],{'PATCH /api/users/kim':hold('kim',()=>reply(200,{user:person('kim','admin')}))}));await settle();
+ buttonsOf(f,'kim')['Change role…'].onclick();f.get('role-select').value='admin';
+ const pending=f.get('role-form').onsubmit({preventDefault(){}});
+ f.get('role-close').onclick();
+ buttonsOf(f,'al')['Change role…'].onclick();f.get('role-select').value='admin';
+ f.focused.length=0;
+ held.kim();await pending;await settle();
+ assert.equal(f.get('toast').textContent,'kim is now an administrator.');
+ assert.equal(f.get('role-dialog').open,true,'the second dialog stays open');
+ assert.equal(f.get('role-name').textContent,'al');assert.equal(f.get('role-select').value,'admin');
+ assert.ok(!f.focusedNodes.some(n=>n===buttonsOf(f,'al')['Change role…']),'focus is not moved to the second person');
+ assert.equal(f.get('role-submit').disabled,false);
+});
+test('Add finished while the Add dialog is reopened: the passwords typed for the next person survive',async()=>{
+ const {held,hold}=pendingFixture();
+ const users=[person('sam','admin')];
+ const f=fixture(routesFor(users,{'POST /api/users':hold('add',(url,body)=>{users.push(person(body.name,body.role));return reply(200,{user:person(body.name)});})}));await settle();
+ f.get('users-add').onclick();f.get('user-name').value='jo';f.get('user-password').value='correct horse battery';f.get('user-confirm').value='correct horse battery';
+ const pending=f.get('user-form').onsubmit({preventDefault(){}});
+ f.get('user-close').onclick();f.get('users-add').onclick();
+ assert.equal(f.get('user-submit').disabled,false,'a new dialog has a working button');
+ f.get('user-name').value='ann';f.get('user-password').value='another long secret';f.get('user-confirm').value='another long secret';
+ held.add();await pending;await settle();
+ assert.equal(f.get('toast').textContent,'jo added.');assert.equal(f.get('user-dialog').open,true);
+ assert.equal(f.get('user-name').value,'ann');assert.equal(f.get('user-password').value,'another long secret');assert.equal(f.get('user-confirm').value,'another long secret');
+});
+test('Reset finished while the dialog is reopened for someone else: the typed passwords survive and the toast names the first person',async()=>{
+ const {held,hold}=pendingFixture();
+ const f=fixture(routesFor([person('sam','admin'),person('kim'),person('al')],{'POST /api/users/kim/password':hold('kim',()=>reply(200,{user:person('kim')}))}));await settle();
+ buttonsOf(f,'kim')['Reset password…'].onclick();f.get('reset-password').value='correct horse battery';f.get('reset-confirm').value='correct horse battery';
+ const pending=f.get('reset-form').onsubmit({preventDefault(){}});
+ f.get('reset-close').onclick();buttonsOf(f,'al')['Reset password…'].onclick();
+ f.get('reset-password').value='another long secret';f.get('reset-confirm').value='another long secret';
+ held.kim();await pending;await settle();
+ assert.equal(f.get('toast').textContent,'Password set for kim.');assert.equal(f.get('reset-dialog').open,true);
+ assert.equal(f.get('reset-name').textContent,'al');assert.equal(f.get('reset-password').value,'another long secret');assert.equal(f.get('reset-confirm').value,'another long secret');
+});
+test('a late refusal for the first person goes to the toast, not into the second dialog',async()=>{
+ const {held,hold}=pendingFixture();
+ const f=fixture(routesFor([person('sam','admin'),person('kim'),person('al')],{'PATCH /api/users/kim':hold('kim',()=>reply(409,{detail:{code:'last_admin',message:'Not allowed.'}}))}));await settle();
+ buttonsOf(f,'kim')['Change role…'].onclick();f.get('role-select').value='admin';
+ const pending=f.get('role-form').onsubmit({preventDefault(){}});
+ f.get('role-close').onclick();buttonsOf(f,'al')['Change role…'].onclick();
+ held.kim();await pending;await settle();
+ assert.equal(f.get('role-error').textContent,'');assert.equal(f.get('role-dialog').open,true);
+ assert.match(f.get('toast').textContent,/kim/);assert.match(f.get('toast').textContent,/Not allowed\./);
+});
+test('users.html: every ?v= equals the release in VERSION',()=>{
+ const version=fs.readFileSync(path.join(__dirname,'../VERSION'),'utf8').trim(),found=[...page.matchAll(/\?v=([^"'&\s]+)/g)].map(m=>m[1]);
+ assert.ok(found.length>=4);
+ for(const v of found)assert.equal(v,version);
+});

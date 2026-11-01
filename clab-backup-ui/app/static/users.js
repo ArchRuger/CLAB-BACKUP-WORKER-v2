@@ -57,7 +57,7 @@ const USERS_NAME_RULE='Use lowercase letters, digits, dot, dash or underscore, 2
 const AUDIT_WINDOWS={hour:3600000,day:86400000,week:604800000};
 // var, not let: the tests read the list through the context.
 var usersList=[];
-let usersMe='',usersSeq=0,auditSeq=0,usersToastTimer,usersButtons=new Map(),usersTarget='',usersDisable=true,usersFailed=false;
+let usersMe='',usersSeq=0,auditSeq=0,usersToastTimer,usersButtons=new Map(),usersTarget='',usersDisable=true,usersFailed=false,usersGen=0;
 
 function usersRoleLabel(role){return USERS_ROLES[role]||String(role||'');}
 function auditEventLabel(event,detail){
@@ -199,7 +199,8 @@ async function usersLoad(){
 }
 
 // Dialogs
-function usersOpen(id,first){const dialog=usersEl(id);if(typeof dialog.showModal==='function')dialog.showModal();else dialog.open=true;if(first)usersFocus(first);}
+// Every opening is a new dialog: an answer to an earlier one must not act on it (usersGen), and its button works again.
+function usersOpen(id,first){const dialog=usersEl(id);usersGen++;usersEl(id.replace(/-dialog$/,'-submit')).disabled=false;if(typeof dialog.showModal==='function')dialog.showModal();else dialog.open=true;if(first)usersFocus(first);}
 function usersClose(id){const dialog=usersEl(id);if(typeof dialog.close==='function')dialog.close();else dialog.open=false;}
 function usersOpenAdd(){
  for(const id of ['user-name','user-password','user-confirm'])usersEl(id).value='';
@@ -220,24 +221,30 @@ function usersOpenActive(user,disable){
 }
 
 // One send: error text in the dialog, button disabled meanwhile, a 403 sends the person to the forbidden sentence.
-async function usersSend(submitId,errorId,work,focusFor){
- const button=usersEl(submitId);
+// stale() is true once another dialog was opened since the send: the outcome then goes to the toast only, naming who it was for.
+async function usersSend(submitId,errorId,who,work,focusFor){
+ const button=usersEl(submitId),gen=usersGen,stale=()=>gen!==usersGen;
  if(button.disabled)return false;
  usersEl(errorId).textContent='';button.disabled=true;
- try{await work();return true;}
+ try{await work(stale);return true;}
  catch(error){
   if(!usersForbiddenError(error)){
-   usersEl(errorId).textContent=error.message;
-   // The dialog was closed some other way meanwhile: the refusal must still be seen.
-   if(!usersEl(errorId.replace(/-error$/,'-dialog')).open)usersToast(error.message);
-   const target=focusFor?.(error);if(target)usersFocus(target);
+   if(stale())usersToast(who+': '+error.message);
+   else{
+    usersEl(errorId).textContent=error.message;
+    // The dialog was closed some other way meanwhile: the refusal must still be seen.
+    if(!usersEl(errorId.replace(/-error$/,'-dialog')).open)usersToast(error.message);
+    const target=focusFor?.(error);if(target)usersFocus(target);
+   }
   }
   return false;
- }finally{button.disabled=false;}
+ }finally{if(!stale())button.disabled=false;}
 }
-async function usersDone(dialogId,message,focusKey){
- usersClose(dialogId);usersToast(message);
+async function usersDone(dialogId,message,focusKey,stale){
+ if(!stale)usersClose(dialogId);
+ usersToast(message);
  await usersRefresh();
+ if(stale)return;
  const button=usersButtons.get(focusKey);
  if(button)button.focus();else usersFocus('users-add');
 }
@@ -247,19 +254,19 @@ async function usersSubmitAdd(event){
  if(!/^[a-z0-9][a-z0-9._-]{1,31}$/.test(name)){error.textContent=USERS_NAME_RULE;usersFocus('user-name');return;}
  const problem=usersPasswordProblem(password,confirm,name);
  if(problem){error.textContent=problem;usersFocus('user-password');return;}
- await usersSend('user-submit','user-error',async()=>{
+ await usersSend('user-submit','user-error',name,async stale=>{
   await usersApi('/users','POST',{name,role,password});
-  usersEl('user-password').value='';usersEl('user-confirm').value='';
-  await usersDone('user-dialog',name+' added.',name+'\nrole');
+  if(!stale()){usersEl('user-password').value='';usersEl('user-confirm').value='';}
+  await usersDone('user-dialog',name+' added.',name+'\nrole',stale());
  },failure=>failure.code==='exists'||failure.code==='invalid_name'?'user-name':failure.code==='weak_password'?'user-password':'');
 }
 async function usersSubmitRole(event){
  event.preventDefault();
- const user=usersList.find(item=>item.name===usersTarget),role=usersEl('role-select').value;
+ const name=usersTarget,user=usersList.find(item=>item.name===name),role=usersEl('role-select').value;
  if(!user||user.role===role){usersClose('role-dialog');return;}
- await usersSend('role-submit','role-error',async()=>{
-  await usersApi('/users/'+encodeURIComponent(usersTarget),'PATCH',{role});
-  await usersDone('role-dialog',usersTarget+' is now '+(role==='admin'?'an administrator':'an operator')+'.',usersTarget+'\nrole');
+ await usersSend('role-submit','role-error',name,async stale=>{
+  await usersApi('/users/'+encodeURIComponent(name),'PATCH',{role});
+  await usersDone('role-dialog',name+' is now '+(role==='admin'?'an administrator':'an operator')+'.',name+'\nrole',stale());
  });
 }
 async function usersSubmitReset(event){
@@ -267,18 +274,18 @@ async function usersSubmitReset(event){
  const password=usersEl('reset-password').value,confirm=usersEl('reset-confirm').value,error=usersEl('reset-error'),name=usersTarget;
  const problem=usersPasswordProblem(password,confirm,name);
  if(problem){error.textContent=problem;usersFocus('reset-password');return;}
- await usersSend('reset-submit','reset-error',async()=>{
+ await usersSend('reset-submit','reset-error',name,async stale=>{
   await usersApi('/users/'+encodeURIComponent(name)+'/password','POST',{password});
-  usersEl('reset-password').value='';usersEl('reset-confirm').value='';
-  await usersDone('reset-dialog','Password set for '+name+'.',name+'\nreset');
+  if(!stale()){usersEl('reset-password').value='';usersEl('reset-confirm').value='';}
+  await usersDone('reset-dialog','Password set for '+name+'.',name+'\nreset',stale());
  },failure=>failure.code==='weak_password'?'reset-password':'');
 }
 async function usersSubmitActive(event){
  event.preventDefault();
  const name=usersTarget,disable=usersDisable;
- await usersSend('active-submit','active-error',async()=>{
+ await usersSend('active-submit','active-error',name,async stale=>{
   await usersApi('/users/'+encodeURIComponent(name),'PATCH',{disabled:disable});
-  await usersDone('active-dialog',name+(disable?' deactivated.':' reactivated.'),name+'\nactive');
+  await usersDone('active-dialog',name+(disable?' deactivated.':' reactivated.'),name+'\nactive',stale());
  });
 }
 
