@@ -17,7 +17,7 @@ function notify(message){$('toast').textContent=message;$('toast').hidden=false;
 // A refusal's own sentence: the sign-on answers carry {detail:{code,message}} (REVIEW U11), older routes a plain string.
 function builderDetail(value){const d=value&&value.detail;return typeof d==='string'?d:d&&typeof d==='object'&&typeof d.message==='string'?d.message:'';}
 const BUILDER_SESSION_TEXT='Your session ended. Your drawing is still on this page, not stored in this browser. Sign in in a new tab, then continue.';
-const BUILDER_SESSION_YAML_TEXT='Your session ended. The YAML you typed is still on this page, not applied. Sign in in a new tab, then continue.';
+const BUILDER_SESSION_YAML_TEXT='Your session ended. The YAML you typed is still in the YAML panel, not applied; Download this version holds the drawing, not that text. Sign in in a new tab, then choose Try again.';
 // The reaction to a lost session (UI 3.5). A drawing that is stored in this browser loses nothing by a redirect; one the browser could not
 // store is held by the page (builderUnstored), so the problem overlay pauses editing until a request succeeds again. Marks the page once.
 function builderSignedOut(){
@@ -354,7 +354,18 @@ function builderRenderBar(){
  $('builder-line').hidden=!line&&!review;
 }
 function builderHint(){const hint=$('builder-hint');if(hint)hint.hidden=!builderMounted||!!document.querySelector('.react-flow__node');}
-function builderProblem(message,code){builderPaused=builderPaused||Object.assign(new Error(message),{code});$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem-retry').hidden=code!=='storage';$('builder-problem-signin').hidden=$('builder-problem-again').hidden=code!=='signed_out';$('builder-problem').hidden=false;$('builder-problem-download').focus();builderRenderBar();}
+// The controls follow the pause that is up, not the incoming code: a storage message under a signed-out pause is added to the session
+// sentence, and Sign in, Try again and the storage retry all stay, so the overlay keeps saying what is true.
+function builderProblem(message,code){
+ const retry=$('builder-problem-retry'),retryShown=!retry.hidden;
+ builderPaused=builderPaused||Object.assign(new Error(message),{code});
+ const active=builderPaused.code,out=active==='signed_out',first=builderPaused.message;
+ const text=out&&code==='storage'&&message&&!first.includes(message)?first+' '+message:out?first:message;
+ $('root').inert=true;$('builder-problem-text').textContent=text;
+ retry.hidden=!(active==='storage'||(out&&(code==='storage'||retryShown)));
+ $('builder-problem-signin').hidden=$('builder-problem-again').hidden=!out;
+ $('builder-problem').hidden=false;$('builder-problem-download').focus();builderRenderBar();
+}
 // The editor's side of the page (see lab-builder/src/main.tsx).
 const builderPage={
  // Throws when the pair could not be stored; the editor then reports the edit as failed and the page

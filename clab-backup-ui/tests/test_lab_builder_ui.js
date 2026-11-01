@@ -941,6 +941,30 @@ test('a storage pause that is up when the session ends is replaced by the signed
  signedIn=true;await p.c.builderTryAgain();
  assert.equal(p.run('builderPaused'),null);assert.equal(p.run('builderUnstored'),null);assert.ok(p.calls.includes('reload'));
 });
+test('a failed storage retry under a signed-out overlay keeps saying the session ended and keeps every way back',async()=>{
+ const p=signedPage(()=>LOST);
+ p.run(`builderDraft={id:'new:lab1',name:'lab1',yaml:'name: lab1\\n',annotations:''};builderUnstored={yaml:'name: lab1\\n# newer\\n',annotations:''};builderProblem('This browser could not store the drawing.','storage')`);
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401);
+ p.run("draftWrite=()=>{throw Object.assign(new Error('This browser could not store the drawing.'),{code:'storage'})}");
+ p.c.builderStoreAgain();
+ assert.equal(p.run('builderPaused.code'),'signed_out');
+ assert.ok(p.el('builder-problem-text').textContent.startsWith(BUILDER_SESSION_TEXT),'the session sentence stays first');
+ assert.match(p.el('builder-problem-text').textContent,/could not store/,'the storage problem is added, not substituted');
+ assert.equal(p.el('builder-problem-signin').hidden,false);assert.equal(p.el('builder-problem-again').hidden,false);assert.equal(p.el('builder-problem-retry').hidden,false);
+ // a later storage message under the pause is not repeated and changes nothing else
+ p.c.builderStoreAgain();
+ assert.equal(p.el('builder-problem-text').textContent.split('could not store the drawing').length,2);
+});
+test('a storage pause that later meets problem(...,signed_out) keeps the storage retry',()=>{
+ const p=signedPage(()=>LOST);
+ p.run(`builderDraft={id:'new:lab1',name:'lab1',yaml:'y',annotations:''};builderUnstored={yaml:'z',annotations:''};builderProblem('This browser could not store the drawing.','storage');builderProblem('Your session ended.','signed_out')`);
+ assert.equal(p.el('builder-problem-retry').hidden,false);
+});
+test('the typed-YAML overlay says where the text is and that Download does not hold it',async()=>{
+ const p=signedPage(()=>LOST);p.run(`builderUnstored=null;builderYamlPanelState=()=>({dirty:true,applying:false})`);
+ await assert.rejects(()=>p.c.api('/state'),e=>e.status===401);
+ const t=p.el('builder-problem-text').textContent;assert.match(t,/in the YAML panel/);assert.match(t,/Download this version holds the drawing, not that text/);
+});
 test('typed YAML that is not applied is held by the page: a lost session shows the overlay instead of leaving',async()=>{
  const p=signedPage(()=>LOST);
  p.run(`builderUnstored=null;builderYamlPanelState=()=>({dirty:true,applying:false})`);
