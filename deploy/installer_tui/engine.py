@@ -22,7 +22,7 @@ import time
 import traceback
 from types import SimpleNamespace
 
-from . import core
+from . import core, exposure
 
 PENDING = 'Pending'
 RUNNING = 'Running'
@@ -104,6 +104,10 @@ LABELS = {
     'launch': 'Password, helpers, image and manager',
     'capture': 'Browser Wireshark capture stack',
     'verify': 'Running manager verification',
+    'ports': 'Manager ports',
+    'firewall': 'Firewall',
+    'sshd': 'SSH hardening',
+    'signon': 'Setup code',
     'engineer': 'VS Code / Containerlab access',
     'lazydocker': 'lazydocker (optional)',
     'git': 'Git setup',
@@ -348,6 +352,26 @@ class Run:
             except (OSError, ValueError) as error:
                 return Failure('settings', f'Previous settings were not copied: {error}', choices=(RETRY, RETURN))
             phase.note = 'copied with private permissions; contents not shown'
+            return None
+        if key == 'ports':
+            try:
+                step.action()   # write_ports(): two lines of clab-backup-ui/.env through the capture setup's writer
+            except (OSError, ValueError) as error:
+                return Failure('settings', f'The manager ports were not written: {error}', choices=(RETRY, RETURN))
+            phase.note = 'TLS on 8443, plain-HTTP redirect on 8081 (clab-backup-ui/.env)'
+            return None
+        if key == 'signon':
+            # The last phase (REVIEW U13): the code file is read now, after every step that could restart the
+            # manager. Only the state is kept; the summary screen reads the file again when it is shown, and the
+            # code is in no field of this run and never in the run record.
+            if not self._authenticate(phase):
+                return Failure('auth', 'Administrator access is needed to read the setup code.',
+                               choices=(AUTH_RETRY, RETURN))
+            state = exposure.read_setup_code(cwd=str(self.install.SOURCE), sudo=('sudo', '-n'), interactive=False)[0]
+            phase.outcome = state
+            phase.note = {'open': 'The setup code is on the summary screen and in the scrollback after Finish.',
+                          'absent': 'An administrator exists; there is no setup code.'}.get(
+                state, 'The setup code could not be read; on the VM run: ' + exposure.SETUP_CODE_COMMAND)
             return None
         if key == 'verify':
             if not self._authenticate(phase):

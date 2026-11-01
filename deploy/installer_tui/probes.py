@@ -123,6 +123,11 @@ def probe_prereqs(ctx):
     return ATTENTION, 'Missing: ' + ', '.join(missing), 'Install/update installs the missing ones.'
 
 
+def http_ready(url, cafile, timeout=3):
+    """True when the manager answers GET /api/health over HTTPS with the installed certificate pinned."""
+    return exposure.health_ready(url, cafile, timeout)
+
+
 VERSION_SHAPE = re.compile(r'\d+\.\d+\.\d+')
 
 
@@ -136,7 +141,7 @@ def manager_version(ctx):
 def probe_manager(ctx):
     url, port = manager_address(ctx.source)
     try:
-        ready = exposure.health_ready(url, exposure.TLS_DIR / 'cert.pem')
+        ready = http_ready(url, exposure.TLS_DIR / 'cert.pem')
     except (OSError, ValueError, ssl.SSLError):
         ready = False
     if ready:

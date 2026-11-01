@@ -1884,6 +1884,23 @@ class AdvancedQuestionsTests(unittest.TestCase):
                                   'TLS on your current 8081, no redirect'])
 
 
+class SettingsSentencesTests(unittest.TestCase):
+    def test_the_default_settings_sentences_name_the_tls_port_and_the_redirect(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(install, 'SOURCE', Path(folder)), \
+                patch('sys.stdout', new=io.StringIO()) as printed:
+            (Path(folder) / 'clab-backup-ui').mkdir()
+            install.default_env_choice()
+        self.assertIn('using the defaults (all VM interfaces, TLS port 8443, plain-HTTP redirect on 8081)', printed.getvalue())
+        self.assertNotIn('port 8081)', printed.getvalue().replace('redirect on 8081)', ''))
+
+    def test_the_copy_menu_default_names_the_tls_port_and_the_redirect(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(install, 'SOURCE', Path(folder)), \
+                patch.object(install, 'menu', return_value='1') as menu:
+            (Path(folder) / 'clab-backup-ui').mkdir()
+            self.assertIsNone(install.choose_env_copy())
+        self.assertEqual(menu.call_args.args[1][0], ('1', 'Use defaults: all VM interfaces, TLS port 8443, plain-HTTP redirect on 8081'))
+
+
 class WritePortsTests(unittest.TestCase):
     def source(self, folder, text):
         root = Path(folder)

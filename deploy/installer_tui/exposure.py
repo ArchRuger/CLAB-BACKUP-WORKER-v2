@@ -258,7 +258,7 @@ def read_setup_code(cwd=None, sudo=('sudo',), interactive=True, run=subprocess.r
     stored here and never part of an exception text."""
     try:
         result = run([*sudo, 'cat', SETUP_CODE_FILE], cwd=cwd, stdin=None if interactive else subprocess.DEVNULL,
-                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60 if interactive else 10)
     except (OSError, subprocess.SubprocessError):
         return 'unreadable', None, None
     if result.returncode == 0:

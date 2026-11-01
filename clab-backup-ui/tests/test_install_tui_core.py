@@ -1688,7 +1688,7 @@ class FakeInstall:
         if self.check_error:
             raise ValueError(self.check_error)
         say('Manager running')
-        return 'http://127.0.0.1:8081/'
+        return 'https://127.0.0.1:8443/'
 
     def setup_lazydocker(self, env, say=print):
         say('lazydocker output')
@@ -2099,7 +2099,7 @@ class EngineRunTests(EngineCase):
     def test_verify_phase_reports_the_manager_address_and_failures(self):
         steps = [install.Step('verify', 'Verify', None)]
         run = self.go(steps)
-        self.assertEqual(run.phase('verify').outcome, 'http://127.0.0.1:8081/')
+        self.assertEqual(run.phase('verify').outcome, 'https://127.0.0.1:8443/')
         self.assertEqual(self.fake.check_args, ('1.2.3', ('sudo', '-n')))
         self.assertEqual(self.bridge.lines['verify'], ['Manager running'])
         steps = [install.Step('verify', 'Verify', None)]
@@ -2122,6 +2122,54 @@ class EngineRunTests(EngineCase):
         steps = [install.Step('settings', 'Copy', failing, bare=True)]
         self.go(steps, FakeBridge(recover=[engine.RETURN]))
         self.assertEqual(self.bridge.recovers[0][1], 'settings')
+
+    def test_ports_phase_runs_its_write_and_says_which_file_never_its_contents(self):
+        written = []
+        steps = [install.Step('ports', 'Manager ports', lambda: written.append('done'), bare=True)]
+        run = self.go(steps)
+        self.assertEqual(written, ['done'])
+        self.assertEqual(run.phase('ports').state, engine.COMPLETED)
+        self.assertIn('clab-backup-ui/.env', run.phase('ports').note)
+
+        def failing():
+            raise ValueError('The source .env is a symlink.')
+        self.go([install.Step('ports', 'Manager ports', failing, bare=True)], FakeBridge(recover=[engine.RETURN]))
+        self.assertEqual(self.bridge.recovers[0][1], 'settings')
+
+    def test_signon_phase_reads_the_code_with_sudo_n_and_keeps_it_out_of_every_field_and_the_record(self):
+        steps = [install.Step('signon', 'Setup code', None, bare=True, post=True)]
+        seen = {}
+
+        def reading(**kwargs):
+            seen.update(kwargs)
+            return 'open', 'setup', 'abcdef-ghjkmn-pqrstu-vwxy23'
+        with patch.object(engine.exposure, 'read_setup_code', side_effect=reading):
+            run = self.go(steps)
+        self.assertEqual(seen, {'cwd': str(self.source), 'sudo': ('sudo', '-n'), 'interactive': False})
+        phase = run.phase('signon')
+        self.assertEqual((phase.state, phase.outcome), (engine.COMPLETED, 'open'))
+        everything = json.dumps(run.record()) + repr(vars(phase)) + json.dumps(self.bridge.lines)
+        self.assertNotIn('abcdef', everything)
+        self.assertNotIn('ghjkmn', everything)
+        self.assertEqual(run.outcome, 'completed')
+        self.assertIn('summary', phase.note)
+
+    def test_signon_phase_completes_when_an_administrator_exists_or_the_file_cannot_be_read(self):
+        for reading, outcome, words in ((('absent', None, None), 'absent', 'administrator exists'),
+                                        (('unreadable', None, None), 'unreadable', 'sudo cat /srv/containerlab-node-manager/data/setup-code')):
+            with self.subTest(outcome=outcome), patch.object(engine.exposure, 'read_setup_code', return_value=reading):
+                run = self.go([install.Step('signon', 'Setup code', None, bare=True, post=True)])
+            self.assertEqual((run.phase('signon').state, run.phase('signon').outcome), (engine.COMPLETED, outcome))
+            self.assertIn(words, run.phase('signon').note)
+            self.assertEqual(run.outcome, 'completed', 'the setup code never changes the installation outcome')
+
+    def test_signon_phase_needs_administrator_access_and_never_reads_without_it(self):
+        with patch.object(engine, 'credentials_cached', return_value=False), \
+                patch.object(engine.exposure, 'read_setup_code') as read:
+            bridge = FakeBridge(handoff=[1], recover=[engine.RETURN])
+            self.go([install.Step('signon', 'Setup code', None, bare=True, post=True)], bridge)
+        read.assert_not_called()
+        self.assertEqual(self.bridge.recovers[0][1], 'auth')
 
     def test_an_internal_error_is_a_recoverable_failure_not_a_dead_run(self):
         steps = [install.Step('weird', 'No argv and no special key', None)]
@@ -2624,7 +2672,8 @@ class PlanParityTests(unittest.TestCase):
     VERSION = '1.30.35'
 
     def plain_sequence(self, options, advanced):
-        """What install() really runs, as [('run', argv, tee) | ('settings', path) | ('verify',) | ('lazydocker',)]."""
+        """What install() really runs, as [('run', argv, tee) | ('settings', path) | ('verify',) | ('lazydocker',)
+        | ('ports',) | ('signon',)]."""
         sequence = []
 
         def fake_run(args, env, capture=False, tee=False):
@@ -2636,6 +2685,9 @@ class PlanParityTests(unittest.TestCase):
                 patch.object(install, 'copy_env', side_effect=lambda path: path is not None and sequence.append(('settings', path))), \
                 patch.object(install, 'verify_manager', side_effect=lambda env, version: sequence.append(('verify',))), \
                 patch.object(install, 'setup_lazydocker', side_effect=lambda env, say=print: sequence.append(('lazydocker',))), \
+                patch.object(install, 'write_ports', side_effect=lambda *a, **k: sequence.append(('ports',))), \
+                patch.object(install, 'show_setup_code', side_effect=lambda env, **k: sequence.append(('signon',))), \
+                patch.object(install, 'access_lines', return_value=[]), \
                 patch.object(install, 'run', side_effect=fake_run), patch('sys.stdout', new=io.StringIO()):
             install.install(self.ENV, self.VERSION, advanced=advanced)
         return sequence
@@ -2649,8 +2701,10 @@ class PlanParityTests(unittest.TestCase):
                 sequence.append(('run', list(step.argv), step.tee))
             elif step.key == 'settings':   # (plain install() also calls copy_env(None), a no-op, when invisible)
                 sequence.append(('settings', options.env_source))
-            elif step.key in ('verify', 'lazydocker'):
+            elif step.key in ('verify', 'lazydocker', 'ports'):
                 sequence.append((step.key,))
+            elif step.key == 'signon':
+                sequence.append(('signon',))
             else:
                 self.fail(f'unexpected step {step.key}')
         return sequence
@@ -2678,26 +2732,32 @@ class PlanParityTests(unittest.TestCase):
     def test_standard_options_match_the_plain_standard_path(self):
         steps = self.assert_plan_matches_plain(install.Options(), advanced=False)
         self.assertEqual([s.key for s in steps if s.visible],
-                         ['admin', 'prereqs', 'launch', 'capture', 'verify', 'engineer', 'lazydocker', 'git'])
+                         ['admin', 'prereqs', 'launch', 'capture', 'verify', 'firewall', 'sshd', 'engineer', 'lazydocker',
+                          'git', 'signon'])
 
     def test_every_advanced_combination_matches_the_plain_advanced_path(self):
         count = 0
-        for operations, engineer, repair, git_now, env_source in itertools.product(
-                ('1', '2'), ('1', '2'), (True, False), (True, False), (None, Path('/home/owner/old/clab-backup-ui/.env'))):
-            options = install.Options(env_source, operations, engineer, repair, git_now)
+        for operations, engineer, repair, git_now, env_source, firewall, hardening, ports in itertools.product(
+                ('1', '2'), ('1', '2'), (True, False), (True, False), (None, Path('/home/owner/old/clab-backup-ui/.env')),
+                (True, False), (True, False), (None, 'redirect', 'keep')):
+            options = install.Options(env_source, operations, engineer, repair, git_now, firewall, hardening, ports)
             with self.subTest(operations=operations, engineer=engineer, repair=repair, git_now=git_now,
-                              env_source=str(env_source)):
+                              env_source=str(env_source), firewall=firewall, hardening=hardening, ports=ports):
                 steps = self.assert_plan_matches_plain(options, advanced=True)
                 keys = [s.key for s in steps if s.visible]
                 self.assertEqual('git' in keys, git_now)
                 self.assertEqual('settings' in keys, env_source is not None)
                 self.assertEqual('engineer' in keys, options.engineer == '1')
+                self.assertEqual('firewall' in keys, firewall)
+                self.assertEqual('sshd' in keys, hardening)
+                self.assertEqual('ports' in keys, ports == 'redirect')
+                self.assertEqual(keys[-1], 'signon', 'the setup code is the last step of every installation')
                 launch = next(s for s in steps if s.key == 'launch')
                 self.assertEqual('--enable-operations' in launch.argv, operations == '1')
                 prereqs = next(s for s in steps if s.key == 'prereqs')
                 self.assertEqual('--repair-install-media' in prereqs.argv, repair)
                 count += 1
-        self.assertEqual(count, 32)
+        self.assertEqual(count, 32 * 2 * 2 * 3)
 
     def test_step_actions_run_the_same_commands_as_the_steps_declare(self):
         options = install.Options(env_source=None, operations='1', engineer='1', repair=True, git_now=True)
