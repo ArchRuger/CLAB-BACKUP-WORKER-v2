@@ -13,6 +13,7 @@ import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 import app.lab_operations as lab_operations
 from app.host_operations import digest
@@ -64,12 +65,11 @@ class TopologyEditTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
-        self.auth = {'Authorization': 'Bearer ' + self.app.state.store.token}
+        self.client = SignedInClient(self.app)
         self.store = self.app.state.store; self.operations = self.app.state.operations; self.service = self.app.state.discovery
-        response = self.client.put('/api/host', headers=self.auth, json=dict(address='127.0.0.1', port=22, username='fixture', auth='password', password='host-secret'))
+        response = self.client.put('/api/host', json=dict(address='127.0.0.1', port=22, username='fixture', auth='password', password='host-secret'))
         self.assertEqual(response.status_code, 200, response.text)
-        response = self.client.post('/api/lab-definitions', headers=self.auth, files={'definition': ('training.clab.yml', OLD.encode(), 'application/yaml')})
+        response = self.client.post('/api/lab-definitions', files={'definition': ('training.clab.yml', OLD.encode(), 'application/yaml')})
         self.assertEqual(response.status_code, 200, response.text)
         self.lab_id = response.json()['id']
         with self.store.lock:
@@ -115,7 +115,7 @@ class TopologyEditTests(unittest.TestCase):
                     'argv': [], 'steps': [], 'warnings': warnings, **extra}
         return {}
 
-    def post(self, **body): return self.client.post('/api/operations/preview', headers=self.auth, json=body)
+    def post(self, **body): return self.client.post('/api/operations/preview', json=body)
 
     def revise(self, text=NEW, **extra):
         options = {'text': text, 'base': {'yaml': sha(self.files[PATH]), 'annotations': ''}, **extra.pop('options', {})}
@@ -124,7 +124,7 @@ class TopologyEditTests(unittest.TestCase):
     def execute(self, token):
         """Confirm a review and run its job on this thread; returns the stored job."""
         with patch.object(self.operations.pool, 'submit') as submit, patch.object(self.service, 'refresh'):
-            job = self.client.post('/api/operations/confirm', headers=self.auth, json={'token': token})
+            job = self.client.post('/api/operations/confirm', json={'token': token})
             self.assertEqual(job.status_code, 200, job.text)
             args = submit.call_args.args; args[0](*args[1:])
         found = next(j for j in self.store.state['operations'] if j['id'] == job.json()['id'])
@@ -166,7 +166,7 @@ class TopologyEditTests(unittest.TestCase):
 
     # 2. The map revision.
     def test_a_map_changed_in_the_manager_since_edit_topology_opened_refuses_before_the_helper(self):
-        current = self.client.get('/api/labs/' + self.lab_id + '/map-document', headers=self.auth).json()['revision']
+        current = self.client.get('/api/labs/' + self.lab_id + '/map-document').json()['revision']
         self.assertEqual(current, revision(self.store.lab(self.lab_id)['drawing']))
         before = len(self.calls)
         stale = self.revise(lab_id=self.lab_id, map_revision='0' * 64, options={'deployed': True})
@@ -269,7 +269,7 @@ class TopologyEditTests(unittest.TestCase):
         self.assertEqual([e['message'] for e in self.events('topology.registered')], ['Lab definition refreshed after apply'])
 
     def test_deploy_and_redeploy_register_too_and_a_map_placed_in_the_manager_keeps_its_positions(self):
-        response = self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {'r1': [11, 22]}})
+        response = self.client.put('/api/labs/' + self.lab_id + '/layout', json={'positions': {'r1': [11, 22]}})
         self.assertEqual(response.status_code, 200, response.text)
         self.files[PATH] = NEW
         self.files[PATH + '.annotations.json'] = json.dumps({'nodeAnnotations': [{'id': 'r1', 'position': {'x': 999, 'y': 999}}]})
@@ -312,7 +312,7 @@ class TopologyEditTests(unittest.TestCase):
     def placed(self, names=('r1', 'r2', 'r3', 'sw1', 'gone', 'old')):
         """Register the lab again from a file with a placed map, as the builder's undeployed save does."""
         ann = json.dumps({'nodeAnnotations': [{'id': n, 'position': {'x': 10 + i * 100, 'y': 10}} for i, n in enumerate(names)]})
-        response = self.client.post('/api/lab-definitions', headers=self.auth, data={'lab_id': self.lab_id},
+        response = self.client.post('/api/lab-definitions', data={'lab_id': self.lab_id},
                                     files={'definition': ('training.clab.yml', OLD.encode(), 'application/yaml'),
                                            'annotations': ('training.clab.yml.annotations.json', ann.encode(), 'application/json')})
         self.assertEqual(response.status_code, 200, response.text)
@@ -341,7 +341,7 @@ class TopologyEditTests(unittest.TestCase):
 
     def test_a_map_changed_in_the_manager_keeps_its_positions_and_takes_the_new_devices_from_the_vm_file(self):
         self.placed()
-        response = self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {'r1': [11, 22]}})
+        response = self.client.put('/api/labs/' + self.lab_id + '/layout', json={'positions': {'r1': [11, 22]}})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertTrue(Runner.map_changed_in_manager(self.store.lab(self.lab_id)))
         vm_map = json.dumps({'nodeAnnotations': [{'id': 'r1', 'position': {'x': 999, 'y': 999}}, {'id': 'r2', 'position': {'x': 998, 'y': 998}},
@@ -366,8 +366,8 @@ class TopologyEditTests(unittest.TestCase):
 
     def test_a_device_the_vm_map_file_lacks_takes_nothing_extra(self):
         self.placed()
-        self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {'r1': [11, 22]}})
-        kept = self.client.get('/api/labs/' + self.lab_id + '/map-document', headers=self.auth).json()
+        self.client.put('/api/labs/' + self.lab_id + '/layout', json={'positions': {'r1': [11, 22]}})
+        kept = self.client.get('/api/labs/' + self.lab_id + '/map-document').json()
         vm_map = json.dumps({'nodeAnnotations': [{'id': 'r1', 'position': {'x': 999, 'y': 999}}, {'id': 'ghost', 'position': {'x': 5, 'y': 5}}],
                              'freeTextAnnotations': [{'id': 't1', 'text': 'from the VM', 'position': {'x': 1, 'y': 1}}]})
         lab, drawn = self.apply_new(vm_map)
@@ -381,20 +381,20 @@ class TopologyEditTests(unittest.TestCase):
     # 8. The map revision again at confirm (A19).
     def test_a_map_changed_between_review_and_confirm_refuses_the_confirm_and_creates_no_job(self):
         self.deployed()
-        current = self.client.get('/api/labs/' + self.lab_id + '/map-document', headers=self.auth).json()['revision']
+        current = self.client.get('/api/labs/' + self.lab_id + '/map-document').json()['revision']
         token = self.revise(lab_id=self.lab_id, map_revision=current, options={'deployed': True}).json()['token']
-        response = self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {'r1': [11, 22]}})
+        response = self.client.put('/api/labs/' + self.lab_id + '/layout', json={'positions': {'r1': [11, 22]}})
         self.assertEqual(response.status_code, 200, response.text)
         jobs = len(self.store.state['operations'])
         with patch.object(self.operations.pool, 'submit') as submit:
-            refused = self.client.post('/api/operations/confirm', headers=self.auth, json={'token': token})
+            refused = self.client.post('/api/operations/confirm', json={'token': token})
         self.assertEqual((refused.status_code, refused.json()['detail']), (409, MAP_CHANGED_SENTENCE))
         submit.assert_not_called(); self.assertEqual(len(self.store.state['operations']), jobs); self.assertEqual(self.files[PATH], OLD)
-        current = self.client.get('/api/labs/' + self.lab_id + '/map-document', headers=self.auth).json()['revision']
+        current = self.client.get('/api/labs/' + self.lab_id + '/map-document').json()['revision']
         job = self.execute(self.revise(lab_id=self.lab_id, map_revision=current, options={'deployed': True}).json()['token'])
         self.assertEqual(job['status'], 'succeeded', job); self.assertEqual(self.files[PATH], NEW)
         path_only = self.revise(text=OLD, options={'deployed': True}).json()['token']
-        self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {'r1': [33, 44]}})
+        self.client.put('/api/labs/' + self.lab_id + '/layout', json={'positions': {'r1': [33, 44]}})
         self.assertEqual(self.execute(path_only)['status'], 'succeeded', 'a save without lab_id names no map to compare')
 
     def test_a_failed_apply_registers_nothing(self):

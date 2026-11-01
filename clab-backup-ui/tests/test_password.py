@@ -11,6 +11,7 @@ import threading
 import time
 import unicodedata
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from app import accounts
@@ -296,3 +297,79 @@ class ExecutorTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+# ---- route level (BUILD.md S1b): one scrypt per POST /api/session, the busy bound through the route, rehash on sign-in ----
+import tempfile
+from fastapi.testclient import TestClient
+from app.main import create_app
+from session_fixture import SignedInClient, PASSWORD, NAME, sign_in, assert_not_logged
+
+
+def close_app(app):
+    for name in ('design_apply', 'network_design', 'telemetry_retirement', 'restore', 'git_progress', 'operations', 'discovery',
+                 'readiness', 'node_services', 'runner'):
+        getattr(app.state, name).close()
+
+
+class SignInRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.app = create_app(self.tmp.name); self.addCleanup(close_app, self.app)
+        self.client = SignedInClient(self.app); self.addCleanup(self.client.close)
+
+    def test_exactly_one_scrypt_per_attempt_whatever_the_name_and_none_when_throttled(self):
+        anonymous = TestClient(self.app); self.addCleanup(anonymous.close)
+        calls = []; real = accounts._scrypt
+        def counting(*args, **kwargs):
+            calls.append(threading.current_thread().name); return real(*args, **kwargs)
+        with patch('app.accounts._scrypt', counting):
+            for name, password, status in (('nobody', 'whatever', 401), (NAME, 'wrong passphrase', 401), (NAME, PASSWORD, 200), ('NOT a name', 'x', 401)):
+                calls.clear()
+                self.assertEqual(anonymous.post('/api/session', json={'username': name, 'password': password}).status_code, status, name)
+                self.assertEqual(len(calls), 1, name); self.assertTrue(calls[0].startswith('scrypt'), calls)
+            calls.clear()
+            with patch.object(self.app.state.sessions, 'check', return_value=3):
+                self.assertEqual(anonymous.post('/api/session', json={'username': NAME, 'password': PASSWORD}).status_code, 429)
+            self.assertEqual(calls, [])
+        assert_not_logged(self.app, PASSWORD, 'wrong passphrase', anonymous.cookies.get('clab_session'))
+
+    def test_the_21st_queued_verify_is_refused_busy_through_the_route_while_20_are_held(self):
+        gate = threading.Event(); real = accounts.verify_password
+        def held(hash_string, password):
+            gate.wait(30); return real(hash_string, password)
+        with SignedInClient(self.app) as client, patch('app.accounts.verify_password', held):
+            browsers = [TestClient(self.app) for _ in range(21)]
+            for browser in browsers: browser.portal = client.portal; self.addCleanup(browser.close)
+            results = []
+            def attempt(browser): results.append(browser.post('/api/session', json={'username': NAME, 'password': PASSWORD}))
+            threads = [threading.Thread(target=attempt, args=(browser,)) for browser in browsers[:20]]
+            for thread in threads: thread.start()
+            for _ in range(500):
+                if accounts.pending >= VERIFY_LIMIT: break
+                time.sleep(0.01)
+            self.assertEqual(accounts.pending, VERIFY_LIMIT)
+            refused = browsers[20].post('/api/session', json={'username': NAME, 'password': PASSWORD})
+            self.assertEqual(refused.status_code, 429, refused.text)
+            self.assertEqual(refused.json()['detail'], {'code': 'throttled', 'retry_after': 2, 'message': 'Too many sign-in attempts. Try again in 2 s.'})
+            self.assertEqual(refused.headers['retry-after'], '2')
+            gate.set()
+            for thread in threads: thread.join(timeout=60)
+            self.assertEqual([r.status_code for r in results], [200] * 20)
+            self.assertEqual(accounts.pending, 0)
+        self.app.state.sessions.flush_failures(force=True)
+        text = (Path(self.tmp.name)/'audit-failures.jsonl').read_text()
+        self.assertIn('"signin.throttled"', text); self.assertIn('busy count=1 retry_after=2', text)
+
+    def test_rehash_on_sign_in_keeps_the_stamp_and_the_session(self):
+        store = self.app.state.store
+        with store.lock:
+            record = store.state['users'][NAME]
+            record['password'] = hash_password(PASSWORD, FAST); stamp = record['password_changed']; store.save()
+        self.app.state.sessions.set_user(record)
+        anonymous = TestClient(self.app); self.addCleanup(anonymous.close)
+        self.assertEqual(sign_in(anonymous)['user']['name'], NAME)
+        saved = store.state['users'][NAME]
+        self.assertEqual((parse_hash(saved['password'])['n'], saved['password_changed']), (PARAMS['n'], stamp))
+        self.assertEqual(anonymous.get('/api/state').status_code, 200)
+        self.assertEqual(self.client.get('/api/state').status_code, 200, 'the other session survives: the password did not change')

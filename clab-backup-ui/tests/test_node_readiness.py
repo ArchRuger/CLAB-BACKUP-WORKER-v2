@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import paramiko
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app.main import create_app
 from app.node_readiness import MAX_TEST_ATTEMPTS, REFUSALS_BEFORE_FAILED, cli_answers, login_state, summarize
@@ -37,7 +38,7 @@ class ReadinessTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.store = self.app.state.store
         self.monitor = self.app.state.readiness
         self.monitor.pool = Inline()

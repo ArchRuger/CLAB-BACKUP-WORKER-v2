@@ -300,3 +300,160 @@ class ResetKeepsUsersTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+# ---- route level (BUILD.md S1b): setup mode, POST /api/setup, the log line from create_app, recovery through the routes ----
+import logging
+from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+from app.main import create_app, APP
+from session_fixture import SignedInClient, PASSWORD, NAME, assert_not_logged, setup_code
+
+HTML = {'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8'}
+SETUP_HTML = (APP/'static'/'setup.html').is_file()
+
+
+def close_app(app):
+    for name in ('design_apply', 'network_design', 'telemetry_retirement', 'restore', 'git_progress', 'operations', 'discovery',
+                 'readiness', 'node_services', 'runner'):
+        getattr(app.state, name).close()
+
+
+class SetupModeRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        with self.assertLogs('app.main', level='WARNING') as captured:
+            with patch.dict('os.environ', {'UI_PORT': '9443', 'UI_ALLOWED_HOSTS': ' Lab.Example.edu:8443, other.example'}):
+                self.app = create_app(self.tmp.name)
+        self.addCleanup(close_app, self.app)
+        self.captured = '\n'.join(captured.output)
+        self.client = TestClient(self.app); self.addCleanup(self.client.close)
+        self.code = setup_code(self.app)
+
+    def audit(self, name='audit.jsonl'):
+        path = self.root/name
+        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    def test_create_app_writes_the_file_and_logs_the_line_without_the_code(self):
+        path = self.root/'setup-code'
+        self.assertEqual(oct(path.stat().st_mode & 0o777), '0o600')
+        self.assertEqual(path.read_text().splitlines()[0], 'mode=setup')
+        self.assertRegex(self.code, r'^[a-z2-9]{6}-[a-z2-9]{6}-[a-z2-9]{6}-[a-z2-9]{6}$')
+        self.assertIn(f'Setup required: open https://lab.example.edu:9443/setup and enter the code from {path} '
+                      '(on the VM: sudo cat /srv/containerlab-node-manager/data/setup-code).', self.captured)
+        self.assertNotIn(self.code, self.captured); self.assertNotIn(normalize_code(self.code), normalize_code(self.captured))
+        self.assertTrue(self.app.state.sessions.setup_mode())
+        # A restart in setup mode regenerates the code; without UI_PORT and UI_ALLOWED_HOSTS the line says 8443 and the VM's address.
+        with self.assertLogs('app.main', level='WARNING') as again:
+            with patch.dict('os.environ', {'UI_PORT': '', 'UI_ALLOWED_HOSTS': ''}): other = create_app(self.tmp.name)
+        self.addCleanup(close_app, other)
+        self.assertNotEqual(setup_code(other), self.code)
+        self.assertIn("open https://the VM's address:8443/setup", '\n'.join(again.output))
+        assert_not_logged(self.app, self.code, setup_code(other), captured=self.captured + '\n'.join(again.output))
+
+    def test_what_answers_in_setup_mode(self):
+        for path in ('/', '/login', '/student-guide', '/static/app.js'):
+            response = self.client.get(path, headers=HTML, follow_redirects=False)
+            self.assertEqual((response.status_code, response.headers['location']), (302, '/setup'), path)
+        for method, path in (('GET', '/api/state'), ('POST', '/api/session'), ('GET', '/api/session'), ('DELETE', '/api/session'), ('GET', '/api/users'), ('GET', '/static/app.js')):
+            response = self.client.request(method, path, json={} if method != 'GET' else None)
+            self.assertEqual(response.status_code, 503, (method, path))
+            self.assertEqual(response.json()['detail'], {'code': 'setup_required', 'message': 'This manager is not set up yet. Open /setup to create the first administrator.'})
+        with self.assertRaises(WebSocketDisconnect) as ctx:
+            with self.client.websocket_connect('/api/terminal', headers={'Origin': 'http://testserver'}): pass
+        self.assertEqual((ctx.exception.code, ctx.exception.reason), (1008, 'setup_required'))
+        self.assertEqual(self.client.get('/api/health').json(), {'ready': True})
+        served = self.client.get('/setup', headers=HTML, follow_redirects=False)
+        self.assertEqual(served.status_code, 200 if SETUP_HTML else 404, 'the gate serves /setup; the page itself is S7')
+        self.assertEqual(self.client.get('/static/fabric-mark.svg').status_code, 200)
+        self.assertNotIn(self.client.get('/static/login.css').status_code, (302, 503), 'an exempt asset reaches the mount')
+        self.assertEqual(self.audit(), []); self.assertEqual(self.audit('audit-failures.jsonl'), [])
+
+    def test_post_setup_creates_the_admin_deletes_the_file_and_signs_in(self):
+        wrong = self.client.post('/api/setup', json={'code': 'abcdef-abcdef-abcdef-abcdef', 'username': 'root', 'password': PASSWORD})
+        self.assertEqual((wrong.status_code, wrong.json()['detail']), (401, {'code': 'invalid_code', 'message': 'That setup code is not right. On the VM, run: sudo cat /srv/containerlab-node-manager/data/setup-code'}))
+        bad_name = self.client.post('/api/setup', json={'code': self.code, 'username': 'Root!', 'password': PASSWORD})
+        self.assertEqual((bad_name.status_code, bad_name.json()['detail']['code']), (422, 'invalid_name')); self.assertIn('message', bad_name.json()['detail'])
+        weak = self.client.post('/api/setup', json={'code': self.code, 'username': 'root', 'password': 'root'})
+        self.assertEqual((weak.status_code, weak.json()['detail']), (422, {'code': 'weak_password', 'reasons': ['too_short', 'equals_name'], 'message': 'Use at least 12 characters. Choose a password that is not your username.'}))
+        self.assertEqual(self.client.post('/api/setup', json={'code': self.code, 'username': 'root', 'password': PASSWORD, 'role': 'admin'}).status_code, 422, "extra='forbid'")
+        self.assertTrue((self.root/'setup-code').exists(), 'nothing consumed the code')
+        typed = ' ' + self.code.upper().replace('-', '') [:12] + ' ' + self.code.upper().replace('-', '')[12:] + '\n'
+        done = self.client.post('/api/setup', json={'code': typed, 'username': 'Root', 'password': PASSWORD})
+        self.assertEqual(done.status_code, 200, done.text)
+        self.assertEqual(done.json()['user'], {'name': 'root', 'role': 'admin', 'must_change_password': False})
+        self.assertIn('clab_session', done.headers['set-cookie'])
+        self.assertFalse((self.root/'setup-code').exists())
+        self.assertFalse(self.app.state.sessions.setup_mode())
+        self.assertEqual(self.client.get('/api/state').status_code, 200)
+        record = self.app.state.store.state['users']['root']
+        self.assertEqual((record['created_by'], record['must_change_password'], record['known_sources']), ('setup', False, []))
+        self.assertIsNotNone(record['last_signin'])
+        self.assertEqual(self.client.get('/setup', headers=HTML, follow_redirects=False).status_code, 302, 'a live session is sent home')
+        anonymous = TestClient(self.app); self.addCleanup(anonymous.close)
+        self.assertEqual(anonymous.get('/setup', headers=HTML).status_code, 404)
+        closed = anonymous.post('/api/setup', json={'code': self.code, 'username': 'second', 'password': PASSWORD})
+        self.assertEqual((closed.status_code, closed.json()['detail']), (404, {'code': 'setup_closed', 'message': 'Setup is closed. Sign in, or ask the VM administrator to run the recovery command.'}))
+        self.app.state.sessions.flush_failures(force=True)
+        self.assertEqual([(e['event'], e['actor'], e['detail']) for e in self.audit('audit-failures.jsonl')],
+                         [('setup.failed', '-', 'invalid_code count=1'), ('setup.failed', '-', 'invalid_name count=1'), ('setup.failed', '-', 'weak_password count=1')])
+        self.assertEqual([(e['event'], e['actor'], e['detail']) for e in self.audit() if e['event'] in ('setup', 'signin')], [('setup', 'root', 'setup')])
+        self.assertEqual([e for e in self.app.state.store.events() if e['action'] == 'api.request' and '/api/setup' in e['message']], [], 'no api.request for POST /api/setup (R8)')
+        assert_not_logged(self.app, self.code, PASSWORD, self.client.cookies.get('clab_session'), captured=self.captured)
+
+    def test_the_setup_route_is_throttled_like_a_sign_in(self):
+        with patch.object(self.app.state.sessions, 'check', return_value=7):
+            response = self.client.post('/api/setup', json={'code': self.code, 'username': 'root', 'password': PASSWORD})
+        self.assertEqual((response.status_code, response.headers['retry-after'], response.json()['detail']), (429, '7', {'code': 'throttled', 'retry_after': 7, 'message': 'Too many sign-in attempts. Try again in 7 s.'}))
+        self.assertTrue((self.root/'setup-code').exists())
+
+
+class RecoveryRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.app = create_app(self.tmp.name); self.addCleanup(close_app, self.app)
+        self.client = SignedInClient(self.app); self.addCleanup(self.client.close)
+        self.anonymous = TestClient(self.app); self.addCleanup(self.anonymous.close)
+
+    def recover(self):
+        out = io.StringIO(); err = io.StringIO()
+        self.assertEqual(recover.main(root=str(self.root), out=out, err=err), 0, err.getvalue())
+        return out.getvalue().splitlines()[0].split(': ', 1)[1]
+
+    def audit(self):
+        return [json.loads(line) for line in (self.root/'audit.jsonl').read_text().splitlines()]
+
+    def test_recovery_creates_one_new_admin_and_never_overwrites(self):
+        self.assertEqual(self.anonymous.get('/setup', headers=HTML).status_code, 404)
+        code = self.recover()
+        served = self.anonymous.get('/setup', headers=HTML, follow_redirects=False)
+        self.assertEqual(served.status_code, 200 if SETUP_HTML else 404)
+        self.assertEqual(self.client.get('/setup', headers=HTML, follow_redirects=False).status_code, 302, 'a live session is sent home')
+        before = dict(self.app.state.store.state['users'][NAME])
+        taken = self.anonymous.post('/api/setup', json={'code': code, 'username': NAME, 'password': 'a different passphrase'})
+        self.assertEqual((taken.status_code, taken.json()['detail']), (409, {'code': 'exists', 'message': 'That name already exists. Choose a new name for the recovery administrator.'}))
+        self.assertEqual(self.app.state.store.state['users'][NAME], before); self.assertTrue((self.root/'setup-code').exists())
+        self.assertEqual(self.client.get('/api/state').status_code, 200, 'the existing admin session is untouched')
+        made = self.anonymous.post('/api/setup', json={'code': code, 'username': 'rescue', 'password': 'a different passphrase'})
+        self.assertEqual(made.status_code, 200, made.text)
+        self.assertEqual(made.json()['user'], {'name': 'rescue', 'role': 'admin', 'must_change_password': False})
+        self.assertEqual(self.app.state.store.state['users']['rescue']['created_by'], 'recover')
+        self.assertEqual(self.app.state.store.state['users'][NAME], before)
+        self.assertFalse((self.root/'setup-code').exists())
+        self.assertEqual(self.anonymous.get('/api/users').status_code, 200)
+        self.assertEqual([(e['event'], e['actor'], e['detail']) for e in self.audit() if e['event'] == 'recover.requested' or e['actor'] == 'rescue'], [('recover.requested', '-', ''), ('setup', 'rescue', 'recover')])
+        self.app.state.sessions.flush_failures(force=True)
+        self.assertEqual([(e['event'], e['actor'], e['detail']) for e in json.loads('[' + ','.join((self.root/'audit-failures.jsonl').read_text().splitlines()) + ']')], [('setup.failed', NAME, 'exists count=1')])
+        assert_not_logged(self.app, code, 'a different passphrase', PASSWORD, self.anonymous.cookies.get('clab_session'))
+
+    def test_a_sixteen_minute_old_recover_file_is_refused_and_deleted(self):
+        code = self.recover()
+        path = self.root/'setup-code'; old = time.time() - 16*60; os.utime(path, (old, old))
+        response = self.anonymous.post('/api/setup', json={'code': code, 'username': 'rescue', 'password': 'a different passphrase'})
+        self.assertEqual((response.status_code, response.json()['detail']['code']), (404, 'setup_closed'))
+        self.assertFalse(path.exists())
+        self.assertEqual([e['event'] for e in self.audit() if e['event'].startswith('recover.')], ['recover.requested', 'recover.expired'])
+        self.assertEqual(self.anonymous.get('/setup', headers=HTML).status_code, 404)
+        self.assertNotIn('rescue', self.app.state.store.state['users'])

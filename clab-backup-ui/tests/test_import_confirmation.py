@@ -18,12 +18,12 @@ class ImportConfirmationTests(unittest.TestCase):
         return patch('app.discovery.inspect_host', return_value=(parse_snapshot(json.dumps(value or envelope()).encode()), 'SHA256:fixture'))
 
     def preview(self):
-        response = self.client.post('/api/discovery/import-preview', headers=self.auth, json={'name': 'training'})
+        response = self.client.post('/api/discovery/import-preview', json={'name': 'training'})
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
 
     def confirm(self, preview):
-        return self.client.post('/api/discovery/import', headers=self.auth,
+        return self.client.post('/api/discovery/import', 
                                 json={'name': 'training', 'token': preview['token']})
 
     def test_poll_preview_and_cancel_do_not_save_lab_or_credentials(self):
@@ -42,7 +42,7 @@ class ImportConfirmationTests(unittest.TestCase):
     def test_confirmation_saves_once_and_requires_preview_token(self):
         self.host()
         with self.remote():
-            missing = self.client.post('/api/discovery/import', headers=self.auth, json={'name': 'training'})
+            missing = self.client.post('/api/discovery/import', json={'name': 'training'})
             self.assertEqual(missing.status_code, 422)
             preview = self.preview()
             result = self.confirm(preview)
@@ -79,7 +79,7 @@ class ImportConfirmationTests(unittest.TestCase):
             self.service.refresh()
             self.assertEqual(self.store.state['ignored_labs'], ['training'])
             self.assertEqual(self.store.state['labs'], [])
-            old = self.client.post('/api/discovery/allow-import', headers=self.auth, json={'name': 'training'})
+            old = self.client.post('/api/discovery/allow-import', json={'name': 'training'})
             self.assertEqual(old.status_code, 409)
             self.assertEqual(self.store.state['ignored_labs'], ['training'])
             self.assertEqual(self.confirm(preview).status_code, 200)
@@ -103,7 +103,7 @@ class ImportConfirmationTests(unittest.TestCase):
         self.host()
         with self.remote():
             preview = self.preview()
-            wrong = self.client.post('/api/discovery/import', headers=self.auth, json={'name': 'other', 'token': preview['token']})
+            wrong = self.client.post('/api/discovery/import', json={'name': 'other', 'token': preview['token']})
             self.assertEqual(wrong.status_code, 409)
         with patch('app.discovery.inspect_host', side_effect=OSError()):
             self.assertEqual(self.confirm(preview).status_code, 409)

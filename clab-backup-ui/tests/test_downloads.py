@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 import zipfile
 from app.main import create_app
 from app.downloads import topology_names, component, config_names, archive_name, short_name
@@ -12,8 +13,7 @@ from app.downloads import topology_names, component, config_names, archive_name,
 class DownloadTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.app=create_app(self.tmp.name)
-        self.client=TestClient(self.app);self.store=self.app.state.store
-        self.auth={'Authorization':'Bearer '+self.store.token}
+        self.client=SignedInClient(self.app);self.store=self.app.state.store
         self.lab={'id':'lab','name':'BGP_TheoryToPractice','nodes':[], 'profiles':[], 'defaults':{}, 'interval':0}
         types=[('juniper_cjunosevolved','GTW-2','set','set system host-name GTW-2\n'),
                ('cisco_xrv9k','PE1','cfg','!! IOS XR Configuration 24.3.1\nhostname PE1\n'),
@@ -29,7 +29,7 @@ class DownloadTests(unittest.TestCase):
         self.store.state['labs'].append(self.lab);self.store.state['jobs'].append(self.job);self.store.save()
     def tearDown(self):
         self.app.state.runner.close();self.client.close();self.tmp.cleanup()
-    def get(self,path): return self.client.get(path,headers=self.auth)
+    def get(self,path): return self.client.get(path)
     def test_each_device_download_name_type_time_and_bytes(self):
         expected=['cjunosevo_GTW-2_2026-09-10_01-04UTC.cfg','IOS-XR_PE1_2026-09-10_01-04UTC.txt','CEOS_IXP-L2-Switch_2026-09-10_01-04UTC.conf']
         for index,name in enumerate(expected):
@@ -80,8 +80,7 @@ class DownloadTests(unittest.TestCase):
             for k in ('platform','short_name','captured_at','download_metadata_version'): n.pop(k)
         before={p.name:(p.read_bytes(),p.stat().st_mtime_ns) for p in self.folder.iterdir()}
         self.store.save();self.app.state.runner.close();self.client.close()
-        self.app=create_app(self.tmp.name);self.client=TestClient(self.app);self.store=self.app.state.store
-        self.auth={'Authorization':'Bearer '+self.store.token}
+        self.app=create_app(self.tmp.name);self.client=SignedInClient(self.app);self.store=self.app.state.store
         nodes=self.get('/api/state').json()['jobs'][0]['nodes']
         self.assertEqual([n['platform'] for n in nodes],['juniper_cjunosevolved','cisco_xrv9k','arista_ceos'])
         self.assertEqual(nodes[0]['download_name'],'cjunosevo_GTW-2_2026-09-10_01-09UTC.cfg')

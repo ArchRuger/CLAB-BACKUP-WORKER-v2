@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 from starlette.websockets import WebSocketDisconnect
 from app.main import create_app
 from app.node_readiness import login_state, summarize
@@ -67,8 +68,7 @@ class NodeTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
-        self.auth = {'Authorization': 'Bearer ' + self.app.state.store.token}
+        self.client = SignedInClient(self.app)
         self.lab = {'id': 'lab', 'name': 'Example', 'profiles': [], 'defaults': {}, 'interval': 30,
                     'next_run': 123456, 'nodes': [
                         {'name': name, 'address': '192.0.2.1', 'port': 22, 'platform': platform,
@@ -84,7 +84,7 @@ class NodeTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def post(self, path, data):
-        return self.client.post(path, headers=self.auth, json=data)
+        return self.client.post(path, json=data)
 
     def test_targeted_backup_preserves_schedule_and_ignores_other_readiness(self):
         self.lab['nodes'][0]['password'] = ''
@@ -107,15 +107,15 @@ class NodeTests(unittest.TestCase):
         self.lab['monitor_host'] = 'legacy-host'
         self.lab['nodes'][0]['container_name'] = 'legacy-container'
         self.app.state.store.save()
-        state = self.client.get('/api/state', headers=self.auth).json()
+        state = self.client.get('/api/state').json()
         self.assertNotIn('monitoring_enabled', state)
         self.assertNotIn('monitor_host', state['labs'][0])
         self.assertNotIn('container_name', state['labs'][0]['nodes'][0])
-        health = self.client.get('/api/labs/lab/health', headers=self.auth).json()
+        health = self.client.get('/api/labs/lab/health').json()
         self.assertEqual(set(health), {'nodes'})
         self.assertEqual(set(health['nodes'][0]), {'name', 'ssh', 'backup'})
         self.assertEqual(self.post('/api/monitoring/report', {'host': 'host', 'containers': []}).status_code, 404)
-        response = self.client.put('/api/labs/lab/monitoring', headers=self.auth, json={'host': 'host'})
+        response = self.client.put('/api/labs/lab/monitoring', json={'host': 'host'})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(self.lab['monitor_host'], 'legacy-host')
         self.assertEqual(self.lab['nodes'][0]['password'], 'never-log-this')
@@ -123,11 +123,11 @@ class NodeTests(unittest.TestCase):
 
     def test_linux_profile_and_sanitized_login_check(self):
         self.lab['nodes'][2]['password'] = ''
-        response = self.client.post('/api/labs/lab/profiles', headers=self.auth,
+        response = self.client.post('/api/labs/lab/profiles', 
             data={'label': 'Linux', 'platform': 'ssh', 'username': 'root', 'auth': 'password', 'password': 'secret'})
         self.assertEqual(response.status_code, 200, response.text)
         # A generic default supports imported Linux nodes without assigning NOS.
-        public = self.client.get('/api/state', headers=self.auth).json()
+        public = self.client.get('/api/state').json()
         self.assertTrue(public['labs'][0]['nodes'][2]['ssh_ready'])
         self.assertFalse(public['labs'][0]['nodes'][2]['enabled'])
         with patch('app.node_services.connect', side_effect=ValueError('never-log-this')):
@@ -135,7 +135,7 @@ class NodeTests(unittest.TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json()['status'], 'failed')
         self.assertNotIn('never-log-this', result.text)
-        self.assertNotIn('never-log-this', self.client.get('/api/logs', headers=self.auth).text)
+        self.assertNotIn('never-log-this', self.client.get('/api/logs').text)
         self.assertFalse(self.services.clients)
         with patch('app.node_services.connect'), patch('app.node_services.cli_answers', return_value=True):
             self.assertEqual(self.post('/api/labs/lab/ssh-check', {'name': 'linux'}).json()['status'], 'reachable')
@@ -146,7 +146,7 @@ class NodeTests(unittest.TestCase):
         self.lab['nodes'].append({'name': 'host1', 'address': '172.20.20.105', 'port': 22, 'platform': '',
                                   'image': multitool + ':latest', 'username': '', 'password': '',
                                   'profile_id': '', 'enabled': False})
-        public = self.client.get('/api/state', headers=self.auth).json()
+        public = self.client.get('/api/state').json()
         row = next(n for n in public['labs'][0]['nodes'] if n['name'] == 'host1')
         self.assertEqual(row['image'], multitool + ':latest')
         self.assertEqual(row['credential_source'], 'default')
@@ -162,13 +162,13 @@ class NodeTests(unittest.TestCase):
         used = connect.call_args.args[2]
         self.assertEqual((used['username'], used['password']), (username, password))
         self.assertNotIn(password, result.text)
-        self.assertNotIn(password, self.client.get('/api/logs', headers=self.auth).text)
+        self.assertNotIn(password, self.client.get('/api/logs').text)
 
     def test_a_different_linux_image_still_needs_credentials(self):
         self.lab['nodes'].append({'name': 'host2', 'address': '172.20.20.106', 'port': 22, 'platform': '',
                                   'image': 'ghcr.io/library/alpine:latest', 'username': '', 'password': '',
                                   'profile_id': '', 'enabled': False})
-        public = self.client.get('/api/state', headers=self.auth).json()
+        public = self.client.get('/api/state').json()
         row = next(n for n in public['labs'][0]['nodes'] if n['name'] == 'host2')
         self.assertEqual(row['credential_source'], '')
         self.assertFalse(row['login_configured'])
@@ -217,7 +217,7 @@ class NodeTests(unittest.TestCase):
         client.close.assert_called()
         self.assertFalse(self.services.clients)
         self.assertNotIn(key, self.services.tickets)
-        logs = self.client.get('/api/logs', headers=self.auth).text
+        logs = self.client.get('/api/logs').text
         self.assertIn('terminal.open', logs)
         self.assertNotIn('show version', logs)
         self.assertNotIn(key, logs)
@@ -236,7 +236,7 @@ class NodeTests(unittest.TestCase):
                     self.assertEqual(ws.receive_json()['type'], 'error')
             client.close.assert_called()
             self.assertFalse(self.services.clients, 'the reserved client is still released')
-            logs = self.client.get('/api/logs', headers=self.auth).text
+            logs = self.client.get('/api/logs').text
             self.assertNotIn('terminal.open', logs, failure)
             self.assertNotIn('terminal.close', logs, failure)
 
@@ -295,14 +295,14 @@ class NodeTests(unittest.TestCase):
             while self.services.checking_all and time.monotonic() < deadline:
                 time.sleep(0.01)
         self.assertFalse(self.services.checking_all)
-        health = {row['name']: row['ssh'] for row in self.client.get('/api/labs/lab/health', headers=self.auth).json()['nodes']}
+        health = {row['name']: row['ssh'] for row in self.client.get('/api/labs/lab/health').json()['nodes']}
         for i in range(1, 6):
             self.assertEqual(health[f'n{i}']['status'], 'reachable', f"n6 failing did not stop n{i}")
         self.assertEqual(health['n6']['status'], 'failed')
         self.assertEqual(health['off']['status'], 'reachable', 'excluded from backups, but its login is still tested')
         for name in ('noaddr', 'nocreds'):
             self.assertIsNone(health[name], f'{name} was skipped, never attempted')
-        self.assertNotIn('never-log-this-either', self.client.get('/api/logs', headers=self.auth).text)
+        self.assertNotIn('never-log-this-either', self.client.get('/api/logs').text)
 
     def test_test_login_asks_the_cli_and_marks_reachable_only_on_a_real_answer(self):
         # M-11: authenticating over SSH is not readiness; show version (or the generic command for a
@@ -329,7 +329,7 @@ class NodeTests(unittest.TestCase):
             shown = login_state({'deployment_name': 'clab-demo'}, self.lab['nodes'][0], True, stored)
             self.assertEqual(shown['status'], 'booting', 'Open CLI is not offered before the CLI answers')
         self.assertFalse(self.services.clients)
-        logs = self.client.get('/api/logs', headers=self.auth).text
+        logs = self.client.get('/api/logs').text
         self.assertNotIn('never-log-this', logs); self.assertNotIn('not yet ready', logs)
 
     def test_test_login_counts_any_real_answer_from_a_node_without_a_platform(self):
@@ -573,8 +573,7 @@ class ConsoleTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
-        self.auth = {'Authorization': 'Bearer ' + self.app.state.store.token}
+        self.client = SignedInClient(self.app)
         self.store = self.app.state.store
         self.services = self.app.state.node_services
         now = time.time()
@@ -609,7 +608,7 @@ class ConsoleTests(unittest.TestCase):
 
     def ticket(self, name='r1', protocol='console'):
         body = {'name': name, 'protocol': protocol} if protocol else {'name': name}
-        return self.client.post('/api/labs/lab/terminal-ticket', headers=self.auth, json=body)
+        return self.client.post('/api/labs/lab/terminal-ticket', json=body)
 
     def key(self, name='r1'):
         result = self.ticket(name); self.assertEqual(result.status_code, 200, result.text)
@@ -619,7 +618,7 @@ class ConsoleTests(unittest.TestCase):
         with self.store.lock: return console_gate(self.store.state, self.lab, node or self.node)
 
     def logs(self):
-        return self.client.get('/api/logs', headers=self.auth).text
+        return self.client.get('/api/logs').text
 
     def read_until(self, ws, expected):
         """Collect binary frames until their concatenation is `expected`."""

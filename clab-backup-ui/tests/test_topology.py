@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 from app.main import create_app
 from app.topology import (parse_drawing, bind_drawing, session_xml, unplaced, grid_position,
                           container_interface, displayed_interface, exported_interface)
@@ -123,20 +124,20 @@ class TopologyTests(unittest.TestCase):
     def test_authenticated_api_persistence_and_public_state(self):
         with tempfile.TemporaryDirectory() as tmp:
             app=create_app(tmp);app.state.store.state['labs'].append(self.lab)
-            client=TestClient(app);auth={'Authorization':'Bearer '+app.state.store.token}
+            client=SignedInClient(app)
             path='/api/labs/lab/topology'
             self.assertEqual(client.get(path, headers={'Origin':'https://other.example'}).status_code,403)
-            result=client.post(path,headers=auth,files={'annotations':('lab.annotations.json',json.dumps(self.annotations),'application/json')})
+            result=client.post(path,files={'annotations':('lab.annotations.json',json.dumps(self.annotations),'application/json')})
             self.assertEqual(result.status_code,200,result.text)
-            self.assertNotIn('drawing',client.get('/api/state',headers=auth).json()['labs'][0])
-            self.assertEqual(client.get(path,headers=auth).json()['nodes'][0]['inventory_name'],'clab-Example-r1')
-            export=client.post('/api/labs/lab/superputty',headers=auth,json={})
+            self.assertNotIn('drawing',client.get('/api/state').json()['labs'][0])
+            self.assertEqual(client.get(path).json()['nodes'][0]['inventory_name'],'clab-Example-r1')
+            export=client.post('/api/labs/lab/superputty',json={})
             self.assertEqual(export.status_code,200,export.text)
             self.assertIn("filename*=UTF-8''Example.xml",export.headers['content-disposition'])
             self.assertEqual(ET.fromstring(export.content).tag,'ArrayOfSessionData')
-            bad=client.post(path,headers=auth,files={'annotations':('bad.json','{}','application/json')})
+            bad=client.post(path,files={'annotations':('bad.json','{}','application/json')})
             self.assertEqual(bad.status_code,400)
-            self.assertEqual(client.get(path,headers=auth).json(),result.json())
+            self.assertEqual(client.get(path).json(),result.json())
             app.state.node_services.close();app.state.runner.close();client.close()
 
 

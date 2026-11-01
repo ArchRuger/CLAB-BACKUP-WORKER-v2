@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app import telemetry_retirement as retirement
 from app.main import create_app
@@ -434,7 +435,7 @@ class RetirementApiTests(unittest.TestCase):
         seed.save()
         self.app = create_app(self.tmp.name)
         self.store = self.app.state.store
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.retirement = self.app.state.telemetry_retirement
         with self.store.lock:
             self.store.state['host'] = {'enabled': True}

@@ -14,6 +14,7 @@ import unittest
 import uuid
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app import design_capabilities as dc
 from app import design_intent as di
@@ -133,7 +134,7 @@ class AuthoringRouteTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self.app.state.network_design.close)
         self.lab_id = add_lab(self.app)

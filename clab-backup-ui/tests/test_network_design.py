@@ -6,7 +6,7 @@ requested_features).
 Everything here drives the real app through TestClient against scratch state (create_app(<tempdir>)
 or Store(<tempdir>) directly, never live data). Generation is a real child process (design_engine
 runs the pinned `netlab` CLI), so every test that submits a generation and polls it to completion
-uses `with TestClient(app) as client:` so the ASGI portal (and its event loop) is created once up
+uses `with SignedInClient(app) as client:` so the ASGI portal (and its event loop) is created once up
 front, before any test that also needs to patch socket.socket around the request/poll loop (patching
 socket.socket while TestClient still has to open a *new* portal per call breaks the client itself,
 since starlette's default portal is created lazily per request outside a `with` block).
@@ -26,6 +26,7 @@ from io import BytesIO
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app.main import create_app
 from app.store import Store
@@ -129,7 +130,7 @@ class DesignViewTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self.app.state.network_design.close)
 
@@ -219,7 +220,7 @@ class SaveDesignTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self.app.state.network_design.close)
         self.lab_id = add_lab(self.app)
@@ -344,7 +345,7 @@ class ClearAndRenumberTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self.app.state.network_design.close)
         self.lab_id = add_lab(self.app)
@@ -391,7 +392,7 @@ class GenerateGuardTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self.app.state.network_design.close)
 
@@ -429,7 +430,7 @@ class RealEngineGenerationTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.client.__enter__()
         self.addCleanup(self.client.__exit__, None, None, None)
         self.addCleanup(self.app.state.network_design.close)
@@ -605,7 +606,7 @@ class VlanSegmentGenerationTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.client.__enter__()
         self.addCleanup(self.client.__exit__, None, None, None)
         self.addCleanup(self.app.state.network_design.close)
@@ -663,7 +664,7 @@ class GenerationFailureTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.client.__enter__()
         self.addCleanup(self.client.__exit__, None, None, None)
         self.addCleanup(self.app.state.network_design.close)
@@ -849,7 +850,7 @@ class GenerationCapIntegrationTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.client.__enter__()
         self.addCleanup(self.client.__exit__, None, None, None)
         self.addCleanup(self.app.state.network_design.close)
@@ -887,7 +888,7 @@ class ExportImportTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self.app.state.network_design.close)
 
@@ -1062,7 +1063,7 @@ class ReviewRegressionGenerationTests(unittest.TestCase):
         self.lab_id = add_lab(self.app)
 
     def test_two_links_added_to_a_pinned_design_keep_every_pin_and_get_free_prefixes(self):
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             revision, first = save_and_generate(client, self.lab_id, valid_intent())
             self.assertEqual(first['status'], 'succeeded', first)
             with self.app.state.store.lock:
@@ -1083,7 +1084,7 @@ class ReviewRegressionGenerationTests(unittest.TestCase):
             self.assertEqual(len(used), len(set(used)), 'no two links share an IPv4 prefix')
 
     def test_an_explicit_link_prefix_counts_as_pinned_for_the_collision_check(self):
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             first_key = sorted(intent_schema.link_key(pair) for pair in (
                 [('ceos', 'eth1'), ('cjunosevolved', 'et-0/0/0')], [('cjunosevolved', 'et-0/0/1'), ('vjunos-switch', 'ge-0/0/0')]))[0]
             intent = valid_intent()
@@ -1099,7 +1100,7 @@ class ReviewRegressionGenerationTests(unittest.TestCase):
         """A device's own module list is checked too: EIGRP on one device of an old design (planted, since a design
         cannot gain EIGRP any more) is refused at Generate, by path, before the engine; and the capability check
         still names that device."""
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             intent = valid_intent()
             intent['nodes'] = {'ceos': {'modules': ['eigrp'], 'eigrp': {'as': 1}}}
             revision = plant_design(self.app, self.lab_id, intent)
@@ -1116,7 +1117,7 @@ class ReviewRegressionGenerationTests(unittest.TestCase):
     def test_a_missing_prerequisite_blocks_before_the_engine_runs(self):
         """Segment routing without an IGP (sr_mpls needs IS-IS or OSPF). This used EVPN without BGP before EVPN was
         made unavailable (D10.3); the claim, a missing prerequisite fails the plan before the engine runs, is the same."""
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             intent = valid_intent()
             intent['modules'] = ['sr']
             intent.pop('ospf'); intent.pop('bgp')
@@ -1126,7 +1127,7 @@ class ReviewRegressionGenerationTests(unittest.TestCase):
             self.assertTrue(any('prerequisite' in e for e in record['errors']), record['errors'])
 
     def test_renumbering_is_reported_against_the_previous_plan_not_the_cleared_ledger(self):
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             revision, first = save_and_generate(client, self.lab_id, valid_intent())
             self.assertEqual(first['status'], 'succeeded')
             intent = client.get(f'/api/labs/{self.lab_id}/design').json()['intent']
@@ -1143,7 +1144,7 @@ class ReviewRegressionGenerationTests(unittest.TestCase):
 
     def test_generated_files_are_private_to_the_manager_user(self):
         import os, stat
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             revision, record = save_and_generate(client, self.lab_id, valid_intent())
             self.assertEqual(record['status'], 'succeeded')
             root = os.path.join(self.tmp, 'network-design')
@@ -1154,7 +1155,7 @@ class ReviewRegressionGenerationTests(unittest.TestCase):
 
     def test_remove_lab_and_start_fresh_take_the_generated_plans_along(self):
         import os
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             revision, record = save_and_generate(client, self.lab_id, valid_intent())
             folder = os.path.join(self.tmp, 'network-design', self.lab_id)
             self.assertTrue(os.path.isdir(folder))
@@ -1178,7 +1179,7 @@ class ReviewRegressionUnitTests(unittest.TestCase):
         self.lab_id = add_lab(self.app)
 
     def test_import_requires_the_current_revision_and_keeps_the_server_ledger(self):
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             saved = client.put(f'/api/labs/{self.lab_id}/design', json={'intent': valid_intent(), 'revision': ''})
             revision = saved.json()['intent']['revision']
             with self.app.state.store.lock:
@@ -1237,7 +1238,7 @@ class SecondPassRegressionGenerationTests(unittest.TestCase):
 
     def test_remove_lab_and_start_fresh_wait_for_a_running_generation(self):
         import os
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             hold, generation_id = self._held_generation(client)
             removed = client.request('DELETE', f'/api/labs/{self.lab_id}', json={'name': 'restore-square'})
             self.assertEqual(removed.status_code, 409, removed.text)
@@ -1253,7 +1254,7 @@ class SecondPassRegressionGenerationTests(unittest.TestCase):
 
     def test_a_lab_removed_from_the_store_while_its_plan_runs_leaves_no_files(self):
         import os
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             hold, generation_id = self._held_generation(client)
             with self.app.state.store.lock:   # the store-level removal the route refuses: the record must still clean up
                 self.app.state.store.state['labs'] = [l for l in self.app.state.store.state['labs'] if l['id'] != self.lab_id]
@@ -1265,7 +1266,7 @@ class SecondPassRegressionGenerationTests(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(self.tmp, 'network-design', self.lab_id)))
 
     def test_stale_is_reported_after_a_renumber_until_the_next_plan(self):
-        with TestClient(self.app) as client:
+        with SignedInClient(self.app) as client:
             revision, first = save_and_generate(client, self.lab_id, valid_intent())
             self.assertEqual(first['status'], 'succeeded')
             self.assertFalse(client.get(f'/api/labs/{self.lab_id}/design').json()['summary']['stale'])

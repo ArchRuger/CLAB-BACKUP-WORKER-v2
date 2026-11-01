@@ -267,3 +267,101 @@ class AccountModelTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+# ---- route level (BUILD.md S1b): the users routes through the real app ----
+from app.main import create_app
+from session_fixture import SignedInClient, PASSWORD, NAME, sign_in, sign_out, assert_not_logged
+
+
+def close_app(app):
+    for name in ('design_apply', 'network_design', 'telemetry_retirement', 'restore', 'git_progress', 'operations', 'discovery',
+                 'readiness', 'node_services', 'runner'):
+        getattr(app.state, name).close()
+
+
+class UsersRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.app = create_app(self.tmp.name); self.addCleanup(close_app, self.app)
+        self.client = SignedInClient(self.app); self.addCleanup(self.client.close)
+
+    def create(self, name, role='operator', password='a password nobody guesses', expect=200):
+        response = self.client.post('/api/users', json={'name': name, 'role': role, 'password': password})
+        self.assertEqual(response.status_code, expect, response.text)
+        return response.json()
+
+    def test_public_user_fields_and_nothing_more(self):
+        user = self.create('olivia')['user']
+        self.assertEqual(set(user), {'name', 'role', 'disabled', 'must_change_password', 'created', 'created_by', 'password_changed', 'last_signin', 'sessions'})
+        self.assertEqual((user['name'], user['role'], user['disabled'], user['must_change_password'], user['created_by'], user['last_signin'], user['sessions']), ('olivia', 'operator', False, True, NAME, None, 0))
+        listed = self.client.get('/api/users')
+        self.assertEqual([u['name'] for u in listed.json()['users']], ['olivia', NAME])
+        mine = next(u for u in listed.json()['users'] if u['name'] == NAME)
+        self.assertEqual((mine['sessions'], mine['created_by']), (1, 'setup')); self.assertIsNotNone(mine['last_signin'])
+        for secret in ('"password"', 'known_sources', 'scrypt$'): self.assertNotIn(secret, listed.text)
+
+    def test_every_4xx_of_the_users_routes_carries_its_sentence(self):
+        self.create('olivia')
+        cases = [
+            ('POST', '/api/users', {'name': 'olivia', 'role': 'operator', 'password': 'a password nobody guesses'}, 409, 'exists', 'That name already exists.'),
+            ('POST', '/api/users', {'name': 'Olivia!', 'role': 'operator', 'password': 'a password nobody guesses'}, 422, 'invalid_name', 'Use lowercase letters, digits, dot, dash or underscore, 2 to 32 characters.'),
+            ('POST', '/api/users', {'name': 'kim', 'role': 'operator', 'password': 'kim'}, 422, 'weak_password', 'Use at least 12 characters. Choose a password that is not your username.'),
+            ('POST', '/api/users', {'name': 'kim', 'role': 'operator', 'password': 'password'}, 422, 'weak_password', 'Use at least 12 characters. That password is too common. Choose another.'),
+            ('PATCH', '/api/users/nobody', {'disabled': True}, 404, 'user_not_found', 'No account has that name.'),
+            ('DELETE', '/api/users/nobody', {}, 404, 'user_not_found', 'No account has that name.'),
+            ('POST', '/api/users/nobody/password', {'password': 'a password nobody guesses'}, 404, 'user_not_found', 'No account has that name.'),
+            ('PATCH', f'/api/users/{NAME}', {'disabled': True}, 409, 'self_change', 'You cannot deactivate your own account. Sign out instead.'),
+            ('PATCH', f'/api/users/{NAME}', {'role': 'operator'}, 409, 'self_change', 'You cannot change your own role. Ask another administrator.'),
+            ('DELETE', f'/api/users/{NAME}', {}, 409, 'self_change', 'You cannot remove your own account. Ask another administrator.'),
+            ('POST', f'/api/users/{NAME}/password', {'password': 'a password nobody guesses'}, 409, 'self_change', 'Use Manager ▾ › Change password… for your own account.'),
+            ('POST', '/api/users/olivia/password', {'password': 'olivia'}, 422, 'weak_password', 'Use at least 12 characters. Choose a password that is not your username.'),
+        ]
+        for method, path, body, status, code, message in cases:
+            response = self.client.request(method, path, json=body)
+            self.assertEqual(response.status_code, status, (method, path, response.text))
+            self.assertEqual((response.json()['detail']['code'], response.json()['detail']['message']), (code, message), (method, path))
+        for method, path, body in (('POST', '/api/users', {'name': 'kim', 'role': 'owner', 'password': 'a password nobody guesses'}),
+                                   ('PATCH', '/api/users/olivia', {'role': 'owner'}),
+                                   ('POST', '/api/users', {'name': 'kim', 'role': 'operator', 'password': 'a password nobody guesses', 'disabled': True}),
+                                   ('PATCH', '/api/users/olivia', {'name': 'renamed'}), ('DELETE', '/api/users/olivia', {'force': True})):
+            self.assertEqual(self.client.request(method, path, json=body).status_code, 422, (method, path, "extra='forbid' and the role values"))
+        self.assertEqual(self.client.request('DELETE', '/api/users/olivia').status_code, 413, 'a mutating request needs a body')
+        self.assertIn('olivia', self.app.state.store.state['users'])
+
+    def test_the_last_admin_stays_through_the_route(self):
+        self.create('second', role='admin', password='another administrator one')
+        second = SignedInClient(self.app, name='second', password='another administrator one'); self.addCleanup(second.close)
+        changed = second.post('/api/session/password', json={'current': 'another administrator one', 'password': 'another administrator two'})
+        self.assertEqual(changed.status_code, 200, changed.text)
+        # Two admins: each may demote the other only while the other is not the last one. `second` demotes tester;
+        # now `second` is the last admin and tester, an operator, is refused everything admin-only.
+        self.assertEqual(second.patch(f'/api/users/{NAME}', json={'role': 'operator'}).status_code, 200)
+        self.assertEqual(self.client.get('/api/users').status_code, 403, 'the role change takes effect on the next request')
+        self.assertEqual(self.client.get('/api/state').json()['user']['role'], 'operator')
+        # A direct model call with a third-party actor shows the rule itself; through HTTP no enabled admin remains to be the actor.
+        with self.assertRaises(AccountError) as ctx: self.app.state.accounts.update('second', actor='someone-else', disabled=True)
+        self.assertEqual((ctx.exception.status, ctx.exception.detail), (409, {'code': 'last_admin', 'message': 'The last administrator stays.'}))
+        with self.assertRaises(AccountError) as ctx: self.app.state.accounts.delete('second', actor='someone-else')
+        self.assertEqual(ctx.exception.code, 'last_admin')
+        self.assertEqual(second.patch(f'/api/users/{NAME}', json={'role': 'admin'}).status_code, 200)
+        self.assertEqual(self.client.get('/api/users').status_code, 200)
+        self.assertEqual(second.patch(f'/api/users/{NAME}', json={'disabled': True}).json()['user']['disabled'], True)
+        self.assertEqual(self.client.get('/api/state').status_code, 401, 'disabled: every session ended')
+        self.assertEqual(second.request('DELETE', f'/api/users/{NAME}', json={}).json(), {'deleted': True})
+        self.assertNotIn(NAME, self.app.state.store.state['users'])
+        assert_not_logged(self.app, PASSWORD, 'another administrator one', 'another administrator two', second.cookies.get('clab_session'))
+
+    def test_an_admin_reset_restricts_the_user_and_an_operator_is_refused_everything_here(self):
+        self.create('olivia')
+        operator = SignedInClient(self.app, role='operator', name='olivia', password='a password nobody guesses'); self.addCleanup(operator.close)
+        for method, path, body in (('GET', '/api/users', None), ('POST', '/api/users', {'name': 'x1', 'role': 'operator', 'password': 'a password nobody guesses'}),
+                                   ('PATCH', '/api/users/olivia', {'disabled': False}), ('DELETE', '/api/users/olivia', {}), ('POST', '/api/users/olivia/password', {'password': 'a password nobody guesses'}), ('GET', '/api/audit', None)):
+            response = operator.request(method, path, json=body)
+            self.assertEqual((response.status_code, response.json()['detail']), (403, {'code': 'admin_required', 'message': 'Administrators only.'}), (method, path))
+        reset = self.client.post('/api/users/olivia/password', json={'password': 'the admin set this one'})
+        self.assertEqual((reset.status_code, reset.json()['user']['must_change_password'], reset.json()['user']['sessions']), (200, True, 0))
+        self.assertEqual(operator.get('/api/state').status_code, 401)
+        self.assertEqual(sign_in(operator, 'olivia', 'the admin set this one')['user']['must_change_password'], True)
+        self.assertEqual(operator.get('/api/state').status_code, 403)
+        self.assertEqual([(e['event'], e['target']) for e in self.app.state.store.audit_entries(50, 0, event='user.password_reset')[0]], [('user.password_reset', 'olivia')])

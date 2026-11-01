@@ -291,3 +291,101 @@ class FailureBucketTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+# ---- route level (BUILD.md S1b): GET /api/audit, the forbidden bucket, the actor rule, events.jsonl's actor ----
+from fastapi.testclient import TestClient
+from app.main import create_app
+from session_fixture import SignedInClient, PASSWORD, NAME, sign_in, sign_out, assert_not_logged
+
+
+def close_app(app):
+    for name in ('design_apply', 'network_design', 'telemetry_retirement', 'restore', 'git_progress', 'operations', 'discovery',
+                 'readiness', 'node_services', 'runner'):
+        getattr(app.state, name).close()
+
+
+class AuditRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.app = create_app(self.tmp.name); self.addCleanup(close_app, self.app)
+        self.client = SignedInClient(self.app); self.addCleanup(self.client.close)
+        self.anonymous = TestClient(self.app); self.addCleanup(self.anonymous.close)
+
+    def entries(self, **params):
+        response = self.client.get('/api/audit', params=params)
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
+    def test_fifty_failures_under_fifty_unknown_names_are_one_entry_visible_before_the_minute_closes(self):
+        with patch('app.accounts.verify_password', return_value=False):   # the verify's answer, not its cost, is the point here
+            for i in range(50):
+                self.assertEqual(self.anonymous.post('/api/session', json={'username': f'nobody{i:02d}', 'password': 'wrong'}).status_code, 401)
+        summed = self.entries(event='signin.failed')
+        self.assertEqual(summed['total'], 1)
+        entry, = summed['entries']
+        self.assertEqual((entry['event'], entry['actor'], entry['source'], entry['outcome'], entry['detail'], entry['target']), ('signin.failed', '-', 'testclient', 'failed', 'invalid_credentials count=50', ''))
+        self.assertFalse((Path(self.tmp.name)/'audit-failures.jsonl').exists(), 'still an open bucket')
+        self.app.state.sessions.flush_failures(force=True)
+        self.assertEqual(self.entries(event='signin.failed')['total'], 1, 'written once, listed once')
+        assert_not_logged(self.app, 'wrong', 'nobody07')
+
+    def test_paging_and_every_filter_merge_both_files_and_the_open_buckets(self):
+        self.client.post('/api/users', json={'name': 'olivia', 'role': 'operator', 'password': 'a password nobody guesses'})
+        self.client.patch('/api/users/olivia', json={'disabled': True}); self.client.patch('/api/users/olivia', json={'disabled': False})
+        with patch('app.accounts.verify_password', return_value=False):
+            self.anonymous.post('/api/session', json={'username': 'olivia', 'password': 'wrong'})
+            self.anonymous.post('/api/session', json={'username': 'stranger', 'password': 'wrong'})
+        everything = self.entries(limit=500)
+        events = [e['event'] for e in everything['entries']]
+        self.assertEqual(everything['total'], len(events))
+        self.assertEqual(sorted(events), sorted(['setup', 'user.created', 'user.disabled', 'user.enabled', 'signin.failed', 'signin.failed']))
+        times = [e['time'] for e in everything['entries']]
+        self.assertEqual(times, sorted(times, reverse=True), 'newest first')
+        self.assertEqual(sorted(e['actor'] for e in self.entries(event='signin.failed')['entries']), ['-', 'olivia'])
+        self.assertEqual(self.entries(event='user.disabled,user.enabled')['total'], 2)
+        self.assertEqual(self.entries(event='no.such.event')['total'], 0)
+        self.assertEqual(self.entries(actor=NAME)['total'], 4)
+        self.assertEqual(self.entries(outcome='failed')['total'], 2)
+        self.assertEqual(self.entries(address='testc')['total'], 6); self.assertEqual(self.entries(address='203.')['total'], 0)
+        self.assertEqual(self.entries(since='2999-01-01T00:00:00+00:00')['total'], 0)
+        page = self.entries(limit=2, offset=1)
+        self.assertEqual((len(page['entries']), page['total']), (2, 6)); self.assertEqual(page['entries'], everything['entries'][1:3])
+        self.assertEqual(self.client.get('/api/audit', params={'limit': 0}).status_code, 422)
+        self.assertEqual(self.client.get('/api/audit', params={'limit': 501}).status_code, 422)
+        for secret in ('password', 'scrypt$', 'a password nobody guesses', 'wrong'): self.assertNotIn(secret, json.dumps(everything))
+
+    def test_thirty_admin_only_requests_by_one_operator_are_one_forbidden_entry(self):
+        operator = SignedInClient(self.app, role='operator', name='olivia', password='a password nobody guesses'); self.addCleanup(operator.close)
+        for _ in range(30): self.assertEqual(operator.get('/api/users').status_code, 403)
+        entry, = self.entries(event='forbidden')['entries']
+        self.assertEqual((entry['actor'], entry['target'], entry['outcome'], entry['detail']), ('olivia', '/api/users', 'failed', 'admin_required count=30'))
+        self.app.state.sessions.flush_failures(force=True)
+        self.assertIn('"forbidden"', (Path(self.tmp.name)/'audit.jsonl').read_text())
+        self.assertNotIn('forbidden', (Path(self.tmp.name)/'audit-failures.jsonl').read_text() if (Path(self.tmp.name)/'audit-failures.jsonl').exists() else '')
+
+    def test_the_actor_rule_the_real_password_typed_as_the_username_leaves_no_trace(self):
+        self.assertEqual(self.anonymous.post('/api/session', json={'username': PASSWORD, 'password': PASSWORD}).status_code, 401)
+        self.assertEqual(self.anonymous.post('/api/session', json={'username': NAME, 'password': 'a wrong passphrase'}).status_code, 401)
+        self.assertEqual(self.anonymous.post('/api/session', json={'username': 'who-is-this', 'password': 'a wrong passphrase'}).status_code, 401)
+        self.app.state.sessions.flush_failures(force=True)
+        failures = [json.loads(l) for l in (Path(self.tmp.name)/'audit-failures.jsonl').read_text().splitlines()]
+        self.assertEqual(sorted((e['actor'], e['detail']) for e in failures), [('-', 'invalid_credentials count=1'), ('-', 'invalid_name count=1'), (NAME, 'invalid_credentials count=1')])
+        assert_not_logged(self.app, PASSWORD, 'who-is-this', 'a wrong passphrase')
+        self.assertEqual(self.entries(actor='-')['total'], 2)
+
+    def test_events_jsonl_names_the_actor_never_the_source_and_skips_the_sign_in_routes(self):
+        self.client.post('/api/labs/x/jobs', json={})
+        self.anonymous.request('DELETE', '/api/session', json={})
+        self.anonymous.post('/api/session', json={'username': NAME, 'password': 'wrong one here'})
+        self.anonymous.post('/api/setup', json={'code': 'x', 'username': NAME, 'password': 'wrong one here'})
+        events = [e for e in self.app.state.store.events() if e['action'] == 'api.request']
+        messages = [e['message'] for e in events]
+        self.assertTrue(any(m.startswith('POST /api/labs/{lab_id}/jobs') for m in messages), messages)
+        self.assertTrue(any(m.startswith('DELETE /api/session') for m in messages), messages)
+        self.assertEqual([m for m in messages if m.startswith('POST /api/session') or m.startswith('POST /api/setup')], [])
+        by_route = {e['message'].split(' -> ')[0]: e['actor'] for e in events}
+        self.assertEqual(by_route['POST /api/labs/{lab_id}/jobs'], NAME); self.assertEqual(by_route['DELETE /api/session'], '-')
+        for entry in events:
+            self.assertNotIn('source', entry); self.assertEqual(list(entry)[-1], 'actor')
+        self.assertEqual(self.app.state.store.events(actor=NAME)[0]['actor'], NAME)

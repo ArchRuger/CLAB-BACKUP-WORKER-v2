@@ -35,15 +35,15 @@ class TelemetryAbsenceTests(unittest.TestCase):
 
     def test_telemetry_and_grafana_routes_answer_404(self):
         for path in ('/api/telemetry/health', '/api/telemetry/metrics', '/api/telemetry/grafana'):
-            self.assertEqual(self.client.get(path, headers=self.auth).status_code, 404, path)
+            self.assertEqual(self.client.get(path).status_code, 404, path)
         lab = self.register()
         for path in (f'/api/labs/{lab["id"]}/telemetry', f'/api/labs/{lab["id"]}/telemetry/map.svg'):
-            self.assertEqual(self.client.get(path, headers=self.auth).status_code, 404, path)
-        settings = self.client.post(f'/api/labs/{lab["id"]}/telemetry/settings', headers=self.auth, json={})
+            self.assertEqual(self.client.get(path).status_code, 404, path)
+        settings = self.client.post(f'/api/labs/{lab["id"]}/telemetry/settings', json={})
         self.assertEqual(settings.status_code, 404, settings.text)
 
     def test_inventory_import_carries_no_telemetry_key(self):
-        r = self.client.post('/api/inventory', headers=self.auth, data={'name': 'Example lab', 'lab_id': ''},
+        r = self.client.post('/api/inventory', data={'name': 'Example lab', 'lab_id': ''},
                              files={'inventory': ('ansible-inventory.yml', INVENTORY)})
         self.assertEqual(r.status_code, 200, r.text)
         lab = r.json()
@@ -64,7 +64,7 @@ class TelemetryAbsenceTests(unittest.TestCase):
 
     def test_state_labs_and_nodes_carry_no_telemetry_field(self):
         lab = self.register()
-        state = self.client.get('/api/state', headers=self.auth).json()
+        state = self.client.get('/api/state').json()
         found = next(l for l in state['labs'] if l['id'] == lab['id'])
         self.assertNotIn('telemetry', found)
         for node in found['nodes']:

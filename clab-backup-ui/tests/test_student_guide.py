@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app.main import GUIDE_NAME, create_app, guide_path
 
@@ -11,7 +12,7 @@ from app.main import GUIDE_NAME, create_app, guide_path
 class StudentGuideTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.root = Path(self.tmp.name)
-        self.app = create_app(self.tmp.name); self.client = TestClient(self.app)
+        self.app = create_app(self.tmp.name); self.client = SignedInClient(self.app)
         self.headers = {'Origin': 'http://testserver'}
 
     def tearDown(self): self.tmp.cleanup()
