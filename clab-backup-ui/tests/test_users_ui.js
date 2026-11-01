@@ -361,18 +361,18 @@ test('after a change the same button gets the focus again; the dialog closes',as
  assert.ok(walk(f.rows().find(r=>flat(r.children[0])==='jo')).includes(last),'it is the button of the new row');
 });
 
-test('Escape and Close while a request is in flight are held; a refusal after the dialog closed is toasted',async()=>{
+test('Escape, Close and Cancel work while a request is in flight; a refusal after the dialog closed is toasted',async()=>{
  let release;
  const refusal='The last administrator stays.';
  const f=fixture(routesFor([person('sam','admin'),person('jo')],{'PATCH /api/users/jo':()=>new Promise(resolve=>{release=()=>resolve(reply(409,{detail:{code:'last_admin',message:refusal}}));})}));await settle();
  buttonsOf(f,'jo')['Deactivate'].onclick();f.get('active-dialog').open=true;
  const pending=f.get('active-form').onsubmit({preventDefault(){}});
  let prevented=false;f.get('active-dialog').oncancel({preventDefault(){prevented=true;}});
- assert.equal(prevented,true,'Escape is cancelled while busy');
- f.get('active-close').onclick();f.get('active-cancel').onclick();assert.equal(f.get('active-dialog').open,true,'Close and Cancel are held while busy');
+ assert.equal(prevented,false,'Escape is not swallowed while busy');
+ f.get('active-cancel').onclick();assert.equal(f.get('active-dialog').open,false,'Cancel closes while busy');
+ f.get('active-dialog').open=true;f.get('active-close').onclick();assert.equal(f.get('active-dialog').open,false,'Close closes while busy');
  release();await pending;
- assert.equal(f.get('active-error').textContent,refusal);
- let idle=false;f.get('active-dialog').oncancel({preventDefault(){idle=true;}});assert.equal(idle,false,'Escape works again when idle');
+ assert.equal(f.get('toast').textContent,refusal,'the refusal is still seen after the dialog closed');
  // the dialog was closed some other way before the answer: the refusal is toasted
  const g=fixture(routesFor([person('sam','admin'),person('jo')],{'PATCH /api/users/jo':()=>new Promise(resolve=>{release=()=>resolve(reply(409,{detail:{code:'last_admin',message:refusal}}));})}));await settle();
  buttonsOf(g,'jo')['Deactivate'].onclick();const p2=g.get('active-form').onsubmit({preventDefault(){}});

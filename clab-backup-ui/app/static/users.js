@@ -57,7 +57,7 @@ const USERS_NAME_RULE='Use lowercase letters, digits, dot, dash or underscore, 2
 const AUDIT_WINDOWS={hour:3600000,day:86400000,week:604800000};
 // var, not let: the tests read the list through the context.
 var usersList=[];
-let usersMe='',usersSeq=0,auditSeq=0,usersToastTimer,usersButtons=new Map(),usersTarget='',usersDisable=true,usersFailed=false,usersBusy=false;
+let usersMe='',usersSeq=0,auditSeq=0,usersToastTimer,usersButtons=new Map(),usersTarget='',usersDisable=true,usersFailed=false;
 
 function usersRoleLabel(role){return USERS_ROLES[role]||String(role||'');}
 function auditEventLabel(event,detail){
@@ -200,7 +200,7 @@ async function usersLoad(){
 
 // Dialogs
 function usersOpen(id,first){const dialog=usersEl(id);if(typeof dialog.showModal==='function')dialog.showModal();else dialog.open=true;if(first)usersFocus(first);}
-function usersClose(id){if(usersBusy)return;const dialog=usersEl(id);if(typeof dialog.close==='function')dialog.close();else dialog.open=false;}
+function usersClose(id){const dialog=usersEl(id);if(typeof dialog.close==='function')dialog.close();else dialog.open=false;}
 function usersOpenAdd(){
  for(const id of ['user-name','user-password','user-confirm'])usersEl(id).value='';
  usersEl('user-role').value='operator';usersEl('user-error').textContent='';usersOpen('user-dialog','user-name');
@@ -223,20 +223,20 @@ function usersOpenActive(user,disable){
 async function usersSend(submitId,errorId,work,focusFor){
  const button=usersEl(submitId);
  if(button.disabled)return false;
- usersEl(errorId).textContent='';button.disabled=true;usersBusy=true;
+ usersEl(errorId).textContent='';button.disabled=true;
  try{await work();return true;}
  catch(error){
   if(!usersForbiddenError(error)){
-   usersBusy=false;usersEl(errorId).textContent=error.message;
+   usersEl(errorId).textContent=error.message;
    // The dialog was closed some other way meanwhile: the refusal must still be seen.
    if(!usersEl(errorId.replace(/-error$/,'-dialog')).open)usersToast(error.message);
    const target=focusFor?.(error);if(target)usersFocus(target);
   }
   return false;
- }finally{usersBusy=false;button.disabled=false;}
+ }finally{button.disabled=false;}
 }
 async function usersDone(dialogId,message,focusKey){
- usersBusy=false;usersClose(dialogId);usersToast(message);
+ usersClose(dialogId);usersToast(message);
  await usersRefresh();
  const button=usersButtons.get(focusKey);
  if(button)button.focus();else usersFocus('users-add');
@@ -337,7 +337,6 @@ function usersInit(){
  usersEl('audit-form').onsubmit=event=>{event.preventDefault();return auditLoad();};
  for(const [close,cancel,dialog] of [['user-close','user-cancel','user-dialog'],['role-close','role-cancel','role-dialog'],['reset-close','reset-cancel','reset-dialog'],['active-close','active-cancel','active-dialog']]){
   usersEl(close).onclick=()=>usersClose(dialog);usersEl(cancel).onclick=()=>usersClose(dialog);
-  usersEl(dialog).oncancel=event=>{if(usersBusy)event.preventDefault();};
  }
  return usersRefresh();
 }
