@@ -76,3 +76,14 @@ questions (E 11) and on its interfaces (E 9):
 | E 9.12 | CLAUDE.md wording | See E-Q7. |
 
 The build order for E's pieces is in `PICKUP.md` section 3.
+
+## 5. Rulings made while the documents were amended (2026-11-01)
+
+The rulings of sections 1-4 are now applied to `DESIGN.md`, `UI.md` and `EXPOSURE.md` (commits on
+`claude/sign-on-and-hardening`); those three documents are the single source for the design review, and
+this file remains the record of why. Two points surfaced while applying them:
+
+| Point | Ruling |
+|---|---|
+| `setup.html` `<title>` | **`Create an administrator`**: the rule of section 2 (a bare title on an exposed page) applies to both exposed pages, and the same page serves setup and recovery (D 9.5). |
+| `POST /api/setup` answering 404 while the page is open (another person finished setup, or the 15 min recovery window ended) | Its own sentence, *Setup is closed. Sign in, or ask the VM administrator to run the recovery command again.*, and a static `#setup-signin` link to `/login` that the page unhides. Only a person already holding the page sees it; a scanner's `GET /setup` is still a plain 404. |

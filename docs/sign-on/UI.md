@@ -6,6 +6,8 @@ refers to that commit. Sibling documents own the backend account, session and ro
 (`DESIGN.md`) and TLS and exposure (`EXPOSURE.md`). This document assumes the backend contract the
 lead gave (section 0.3) and lists every deviation it needs in section 12.
 
+Amended with the lead's rulings of RECONCILIATION.md (2026-11-01).
+
 ## 0. Scope, terms and the contract this design builds on
 
 ### 0.1 What this document decides
@@ -40,7 +42,7 @@ lead gave (section 0.3) and lists every deviation it needs in section 12.
    with `retry_after` (seconds) when throttled.
 3. `DELETE /api/session` with body `{}` signs out. `GET /api/session` returns the current user or 401.
 4. Every other page and `/api/` route answers 401 JSON `{detail:{code:'signed_out'}}` without a
-   session; a page is redirected to `/login?next=<path+hash>`. WebSockets refuse without a session.
+   session; a page request (a `GET` or `HEAD` whose `Accept` includes `text/html`) is redirected to `/login?next=<path+search>`, every other request answers 401 JSON (section 12, C15). WebSockets refuse without a session.
 5. Admin routes: `GET/POST /api/users`, `PATCH/DELETE /api/users/{name}`,
    `POST /api/users/{name}/password`, `POST /api/session/password` (own password), `GET /api/audit`.
 6. A first-run bootstrap exists; the likely form is a one-time setup code printed by the installer
@@ -52,10 +54,11 @@ Section 12 lists what this design needs beyond that contract.
 
 1. The sign-in page is the only thing an attacker gets to talk to (D3 item 2). It is small, static,
    has one script, and says nothing about the product beyond its name.
-2. Nothing new is invented visually. The page reuses the tokens (style.css:55-120), the button
-   classes (style.css:479-515), the form classes (style.css:1279-1330), the banner (style.css:935-975)
-   and the standalone-page shell (style.css:2287-2322). A person who has seen the manager recognises
-   the sign-in page; a person who has not learns nothing from it.
+2. Nothing new is invented visually, but the exposed pages do not load `style.css`: it names every
+   feature of the product, and the sign-in page is the one surface a scanner sees. `login.css` is a
+   small self-contained sheet that copies the tokens (style.css:55-120) and the few rules the page
+   needs (section 1.3); `style.css` stays behind the session. A person who has seen the manager
+   recognises the sign-in page; a person who has not learns nothing from it.
 3. A session that ends mid-work never destroys what the person typed. Section 3.4 is the rule.
 4. Every string is in the product's voice: short, concrete, no exclamation marks (the toasts in
    app.js:51 and shell.js:270-277 are the reference).
@@ -68,22 +71,22 @@ Section 12 lists what this design needs beyond that contract.
 |---|---|---|
 | Page file | `app/static/login.html`, served by `GET /login` (`FileResponse`, like `vm-connection.html` at main.py:501-502). | One template engine does not exist (`INVENTORY.md` 1); static HTML is the house way. |
 | Script | `app/static/login.js`, `defer`, `?v=<release>`, the only script on the page. | `test_page_load_ui.js:10` pins the tag form `<script src="/static/X.js?v=…" defer></script>`; `verify-release.py:40-41` needs the page in its tuple (section 12, C1). |
-| Stylesheet | `/static/style.css?v=<release>` (the whole sheet). | The page must look like the manager; a second sheet would drift. The sheet is 2760 lines and cached; the cost is one request on first load. |
+| Stylesheet | `/static/login.css?v=<release>` (section 1.3); `style.css` is not loaded. | RECONCILIATION 1 and 2: `style.css` names every feature of the product; `login.css` copies only the tokens and rules the page needs, so the page still looks like the manager. |
 | Icon | `/static/fabric-mark.svg` as favicon and brandmark, as index.html:3 and :24 do. | Same brand treatment. |
-| Reachable without a session | `/login`, `/static/style.css`, `/static/login.js`, `/static/fabric-mark.svg`. Nothing else under `/static/` (section 12, C2). | D3 item 1: no static asset reveals the product beyond the sign-in page. `style.css` carries class names of the product; that is accepted (section 10, item 9). |
+| Reachable without a session | `/login`, `/static/login.css`, `/static/login.js`, `/static/fabric-mark.svg`. Nothing else under `/static/` (section 12, C2). | D3 item 1: no static asset reveals the product beyond the sign-in page. `login.css` names no selector of the application (section 1.3, section 10, item 9). |
 | CSP | The guard's CSP (main.py:154-155) unchanged: `script-src 'self'`, no inline styles. | Invariant. |
-| `<title>` | `Sign in · Containerlab Node Manager` | Pattern of debug.html:2 (`Diagnostics · Containerlab Node Manager`). |
+| `<title>` | `Sign in` | RECONCILIATION 2: the title is what a scanner indexes. The brand mark and the product name appear on the page itself, so a student recognises where they are. |
 
 ### 1.2 Layout
 
-The page is `body.standalone-workspace.signin` (style.css:2287 gives the background) with one
-`main.content.signin-page` holding one card. There is no header bar, no back link and no footer: the
+The page is `body.signin` (`login.css` gives the background) with one
+`main.signin-page` holding one card. There is no header bar, no back link and no footer: the
 page has nowhere else to go.
 
 ```
 ┌──────────────────────────────────────────────┐
 │                                              │
-│        [mark] Containerlab Node Manager      │   .brand (style.css:226-244), not a link
+│        [mark] Containerlab Node Manager      │   .brand (login.css), not a link
 │                                              │
 │   ┌──────────────────────────────────────┐   │
 │   │ Sign in                              │   │   h1
@@ -115,20 +118,26 @@ Alignment: everything left-aligned inside the card; the card is centred on the p
 not used (the product never centres a form).
 
 Width: the card is `max-width: 440px`, with the page's 16 px gutter under 760 px. Inputs are 100 %
-wide. The Sign in button is full width on every viewport: on a 390 px phone the existing rule
-`.actions .button { flex: 1 1 auto }` (style.css:2449-2450) already does that, and on a desktop a
-full-width button in a 440 px card reads as the one action the page has.
+wide. The Sign in button is full width on every viewport (`.signin .actions .button { width: 100% }`,
+section 1.3): a full-width button in a 440 px card reads as the one action the page has.
 
 Vertical position: `margin-top: min(12vh, 96px)`, never vertically centred (a soft keyboard on a
 phone would push a centred card off screen).
 
-### 1.3 CSS additions (one new section 27 of style.css)
+### 1.3 `login.css`: the sheet of the exposed pages
 
-No new tokens. Values are taken from the classes they stand beside.
+`login.css` is a small self-contained sheet (RECONCILIATION 2). It holds: the colour, spacing, radius
+and font tokens copied verbatim from `style.css` `:root` (style.css:55-120); their dark-scheme
+overrides; and the rules for `body`, the card, the form fields, the primary button (and the secondary
+Show button), the error and help lines, the banner and the brand mark. Nothing else. The Source
+column names where a value was copied from; no selector of the application is copied. A test
+asserts that `login.css` names no selector of the application (`#save-chip`, `.topbar`, `.panel`, …;
+section 9.1). `style.css` section 27 keeps only the account block and the chip for `index.html`
+(section 4.1). `login.html` and `setup.html` load `login.css`, never `style.css`.
 
 | Rule | Value | Source |
 |---|---|---|
-| `.signin-page` | `max-width: 440px; margin: min(12vh, 96px) auto 32px; padding: 0 16px;` | `.standalone-workspace main` (style.css:2288) overridden for width. |
+| `.signin-page` | `max-width: 440px; margin: min(12vh, 96px) auto 32px; padding: 0 16px;` | `main` of the standalone pages (style.css:2288), copied with the width changed. |
 | `.signin .brand` | `justify-content: center; margin: 0 0 20px; white-space: normal;` | `.brand` (style.css:226-241) is a flex row; the wrap is allowed at 390 px. |
 | `.signin-card` | same declarations as `.debug-card` (style.css:2316): `background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px;` | One card look for standalone pages. Not reusing the class name `.debug-card` itself: that name is pinned by the debug report tests by position and should stay the diagnostics page's. |
 | `.signin-card h1` | `margin: 0 0 6px;` | h1 is 22 px (style.css:179). |
@@ -148,15 +157,15 @@ No animation on the page. The global reduced-motion rule (style.css:2360-2363) c
 
 ```html
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.31.8"><script src="/static/login.js?v=1.31.8" defer></script></head>
-<body class="standalone-workspace signin"><main class="content signin-page">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/login.css?v=1.31.8"><script src="/static/login.js?v=1.31.8" defer></script></head>
+<body class="signin"><main class="signin-page">
 <div class="brand"><img class="brandmark" src="/static/fabric-mark.svg" alt="">Containerlab Node Manager</div>
 <section class="signin-card" aria-labelledby="signin-title">
 <h1 id="signin-title">Sign in</h1>
 <p>Use the account your administrator gave you.</p>
 <p id="signin-reason" class="form-help" role="status" hidden></p>
 <form id="signin-form" novalidate>
-<div class="signin-field"><label for="signin-user">Username</label><input id="signin-user" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="64" autofocus></div>
+<div class="signin-field"><label for="signin-user">Username</label><input id="signin-user" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="32" autofocus></div>
 <div class="signin-field"><label for="signin-password">Password</label><div class="signin-password"><input id="signin-password" name="password" type="password" autocomplete="current-password" maxlength="128"><button type="button" class="button secondary" id="signin-show" aria-pressed="false" aria-controls="signin-password">Show</button></div></div>
 <p id="signin-error" class="form-error" role="alert"></p>
 <div class="actions"><button type="submit" class="button primary" id="signin-submit">Sign in</button></div>
@@ -177,7 +186,7 @@ Notes on the markup:
    has no `action`: without JavaScript the page cannot work (the API takes JSON), and an accidental
    native post would send form-encoded data to `/api/session`.
 4. `maxlength` equals the backend limits (section 12, C4) so the page never sends what the manager
-   would refuse for length.
+   would refuse for length. The username is lowercased before it is sent (section 1.5), because the manager's rule is lowercase.
 5. `autofocus` on the username: the page has one job. Screen readers announce the heading first
    because the card is `aria-labelledby`.
 6. The Show button has text, not an icon: the product's buttons carry words (index.html:68-69).
@@ -199,7 +208,7 @@ Submit, in order:
 
 1. `event.preventDefault()`.
 2. Read the two fields. If either is empty after `trim()` on the username (the password is never
-   trimmed): show *Enter your username and password.* in `#signin-error`, focus the empty field,
+   trimmed; the username is lowercased before it is sent): show *Enter your username and password.* in `#signin-error`, focus the empty field,
    stop.
 3. Disable `#signin-submit`, set its text to *Signing in…* (the idle label is captured first, per
    DESIGN-SPEC-ADDENDUM A.4), clear `#signin-error`.
@@ -278,12 +287,13 @@ sign-in the person lands on the lab, tab and device they had open.
 1. `login.js` stays the smallest script on the exposed surface. Setup fields and the policy check
    would double it.
 2. `/setup` exists for minutes after installation and never again. `GET /setup` after the first
-   admin exists redirects to `/login` (section 12, C6); the file and its script then have no route
-   without a session, so they reveal nothing.
+   admin exists answers 404 (section 12, C6: a 404 says less than a page that exists); the file and
+   its script then have no route without a session, so they reveal nothing.
 3. One test file per script, in the pattern of `test_debug_ui.js`.
 
-The page shares `login.html`'s classes and layout exactly (section 1.2 and 1.3): `body.standalone-workspace.signin`,
-`main.content.signin-page`, `.brand`, `section.signin-card`. Only the fields differ.
+The page shares `login.html`'s classes and layout exactly (section 1.2 and 1.3): `body.signin`,
+`main.signin-page`, `.brand`, `section.signin-card`. Only the fields differ. `setup.html` loads
+`login.css` and `setup.js` only.
 
 ### 2.2 Markup
 
@@ -293,16 +303,17 @@ The page shares `login.html`'s classes and layout exactly (section 1.2 and 1.3):
 <p>Enter the setup code the installer printed, then choose the account you will sign in with.</p>
 <form id="setup-form" novalidate>
 <div class="signin-field"><label for="setup-code">Setup code</label><input id="setup-code" name="code" type="text" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="64" autofocus><p class="form-help">Printed by <code>install-manager</code> on the VM, and in the installer's closing lines. It works once.</p></div>
-<div class="signin-field"><label for="setup-user">Username</label><input id="setup-user" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="64"><p class="form-help">Letters, digits, dot, dash and underscore. 2 to 64 characters.</p></div>
+<div class="signin-field"><label for="setup-user">Username</label><input id="setup-user" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="32"><p class="form-help">Lowercase letters, digits, dot, dash and underscore. 2 to 32 characters.</p></div>
 <div class="signin-field"><label for="setup-password">Password</label><div class="signin-password"><input id="setup-password" name="password" type="password" autocomplete="new-password" maxlength="128"><button type="button" class="button secondary" id="setup-show" aria-pressed="false" aria-controls="setup-password setup-confirm">Show</button></div><p class="form-help" id="setup-policy">At least 12 characters. Any characters count; length matters more than symbols. Not your username, and not a common password.</p></div>
 <div class="signin-field"><label for="setup-confirm">Password again</label><input id="setup-confirm" name="confirm" type="password" autocomplete="new-password" maxlength="128"></div>
 <p id="setup-error" class="form-error" role="alert"></p>
-<div class="actions"><button type="submit" class="button primary" id="setup-submit">Create account and sign in</button></div>
+<div class="actions"><button type="submit" class="button primary" id="setup-submit">Create account and sign in</button><a id="setup-signin" class="button secondary" href="/login" hidden>Sign in</a></div>
 </form>
 </section>
 ```
 
-The same `#signin-plain` banner follows the card.
+The same `#signin-plain` banner follows the card. The head links `/static/login.css?v=…` and
+`/static/setup.js?v=…` only.
 
 ### 2.3 Password policy as the page states it
 
@@ -320,8 +331,9 @@ can before sending, so the common mistakes never reach the manager:
 The deny-list stays on the manager: sending it to the browser would publish it on the exposed
 surface, and the manager must check anyway.
 
-Username rule as shown: `^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$`, checked by the page with *Use letters,
-digits, dot, dash or underscore, 2 to 64 characters.* and by the manager.
+Username rule as shown: lowercase, 2 to 32 characters, `^[a-z0-9][a-z0-9._-]{1,31}$`. The page sets
+`maxlength="32"`, lowercases the value before sending, and shows the rule from the manager's 422
+message (*Use lowercase letters, digits, dot, dash or underscore, 2 to 32 characters.*).
 
 ### 2.4 Behaviour (`setup.js`)
 
@@ -334,19 +346,23 @@ Submit, in order:
 
 1. `preventDefault()`. If the code is empty: *Enter the setup code.*, focus it, stop. If
    `setupProblem(...)` returns a message: show it, focus the field it names, stop.
-2. Disable the button (*Creating…*). `POST /api/setup` with `{code,username,password}`.
+2. Disable the button (*Creating…*). `POST /api/setup` with `{code,username,password}` (the username
+   lowercased).
 3. 200: the manager has set the session cookie for the new admin (section 12, C6);
    `location.replace('/')`. The person lands on Home signed in. No welcome toast: Home's own empty
    state (*Works with Junos, IOS-XR and Arista EOS*, DESIGN-SPEC-ADDENDUM A.6) is the welcome.
-4. 403 (wrong code): *That setup code is not right. Check the installer's output.* The code field
-   is cleared and focused. The username and password stay.
-5. 429: as the sign-in page, with its countdown.
-6. 409 (an admin exists already): *The first account was already created. Sign in instead.* with
-   a link to `/login` placed in the error line as text (the sentence is set with `textContent`; the
-   link is a static `<a id="setup-signin" href="/login" hidden>` after the error, unhidden here).
-7. 422 (the manager refused the username or the password): the manager's `detail.message` as given
+4. 401 `invalid_code` (wrong code): *That setup code is not right. Check the installer's output.* The
+   code field is cleared and focused. The username and password stay.
+5. 429 with `retry_after`: as the sign-in page, with its countdown.
+6. 422 (the manager refused the username or the password): the manager's `detail.message` as given
    (its sentences are the ones in section 2.3). The page never shows a stack or a code.
-8. Other or network: *The manager did not answer. Try again.*
+7. 404 (setup is closed: another person finished setup or the recovery window ended while the page was
+   open): *Setup is closed. Sign in, or ask the VM administrator to run the recovery command again.* and
+   the static `<a id="setup-signin" class="button secondary" href="/login" hidden>Sign in</a>` is
+   unhidden (RECONCILIATION 5, lead's ruling). A 404 to a person already holding the page says nothing a
+   scanner learns: `GET /setup` itself is 404 outside the two modes. The former 409 sentence (*The first
+   account was already created…*) is gone with the 409.
+8. Any other status, or a network failure: *The manager did not answer. Try again.*
 
 The code is never stored, never put in the URL and never echoed back.
 
@@ -364,6 +380,12 @@ Every request helper does the same four things on `401` + `{detail:{code:'signed
 4. Offer the sign-in page with `next` pointing back here.
 
 What differs per page is only whether item 4 is a redirect or a link (section 3.5).
+
+The manager chooses between a page and an API answer by `Accept` (section 12, C15): a `GET` or `HEAD`
+whose `Accept` includes `text/html` without a session is redirected 302 to `/login?next=<path+search>`
+(the hash never reaches the server), every other request answers 401 JSON `signed_out` (or closes a
+socket with 1008). A `window.open` of an API URL such as the design export is therefore a page
+request and is redirected.
 
 ### 3.2 Where the code lives: `session.js`
 
@@ -464,7 +486,7 @@ function signedOut(){
 | Page | Helper | On `sessionLost` |
 |---|---|---|
 | workspace.js:6 `api()` | add the check | `sessionGo('ended')` at once: the page holds nothing typed. |
-| debug.js:7-14 `debugFetch()` | add the check | `sessionGo('ended')`. |
+| debug.js:7-14 `debugFetch()` | add the check | `sessionGo('ended')`. On 403 `admin_required` the page shows *Administrators only.* in place of the report (Diagnostics is admin-only, section 4.4). |
 | lab-builder-page.js:17 `api()` | add the check | `sessionGo('ended')` when `builderUnstored===null`; else the page's existing problem overlay (`builderPaused`, lab-builder-page.js:15) with the banner sentence and the *Sign in in a new tab* link, and `builderPaused` stays set until a request succeeds. |
 | map-editor-page.js:13-16 `api()` | add the check | When `mapIsDirty(mapBaseline,mapCurrent)` is false: `sessionGo('ended')`. When true: `mapPaused=true` (map-editor-page.js:8), the status pill reads *Editing paused* (mapStatusView, line 23) and a toast carries the sentence with the new-tab link; Save tries again after `sessionClear()` on the next click. |
 | terminal.js:46 ticket `POST` | `response.status===401` and `sessionLost` | `setStatus('Your session ended. Sign in again in the lab manager, then click Reconnect.')` through the status map (terminal.js:29-34 gets one more row). No navigation: this is a pop-up (app.js:410-411); the opener holds the sign-in. |
@@ -496,7 +518,7 @@ Two places, both static markup, text set by `render()` (J3: the header is never 
 2. In the Manager ▾ menu, a new group after Diagnostics and before `.menu-foot` (index.html:54-55):
 
 ```html
-        <a role="menuitem" href="/static/debug.html">Diagnostics</a>
+        <a role="menuitem" id="manager-diagnostics" href="/static/debug.html">Diagnostics</a>
         <hr class="menu-sep" role="separator">
         <div class="menu-account" role="group" aria-labelledby="account-name"><p id="account-name"></p><p id="account-role" class="caption"></p></div>
         <a role="menuitem" id="account-users" href="/static/users.html" hidden>People and sign-ins…</a>
@@ -507,7 +529,8 @@ Two places, both static markup, text set by `render()` (J3: the header is never 
 
    `#account-name` is the name (`state.user.name`), `#account-role` reads *Administrator* or
    *Operator*. `#account-users` is unhidden only for `state.user.role==='admin'`; an Operator never
-   sees it (and the manager refuses the page anyway, section 5.5).
+   sees it (and the manager refuses the page anyway, section 5.5). `#manager-diagnostics` is hidden for
+   an Operator the same way (section 4.4).
 
 CSS: `.menu-account { padding: 8px 12px 4px; }`, `.menu-account p { margin: 0; font-size: 13px;
 color: var(--ink); font-weight: 600; }`, `.menu-account .caption { font-weight: 400; margin-top: 2px; }`
@@ -547,11 +570,12 @@ function renderAccount(){
  if($('account-name'))$('account-name').textContent=name;
  if($('account-role'))$('account-role').textContent=roleLabel(user&&user.role);
  if($('account-users'))$('account-users').hidden=!(user&&user.role==='admin');
+ if($('manager-diagnostics'))$('manager-diagnostics').hidden=!(user&&user.role==='admin');
  for(const id of ['vm-settings','manager-settings'])menuReason($(id),user&&user.role==='operator'?'Administrators only':'');
 }
 ```
 
-`state.user` comes with `/api/state` (section 12, C8): one request, and a role change or a
+`state.user` is `{name, role, must_change_password}` and comes with `/api/state` (section 12, C8): one request, and a role change or a
 deactivation reaches the menu on the next poll (a deactivated person gets a 401 instead, section 3).
 
 Operator gating of *VM connection…* (index.html:31) and *Manager settings…* (index.html:42): the
@@ -559,6 +583,10 @@ items stay visible and become disabled with the visible reason *Administrators o
 `menuReason()` (app.js:86), the pattern of every disabled menu item (DESIGN-SPEC-ADDENDUM J2, last
 bullet). Disabled, not hidden: an Operator should know the setting exists and who to ask. The manager
 refuses the routes with 403 regardless (section 12, C3).
+
+*Diagnostics* is different (RECONCILIATION 3, U-Q7): `GET /api/debug` is admin-only, so the page
+would be empty for an Operator. The item is hidden for an Operator like *People and sign-ins…*, and
+`debug.html` opened directly shows the sentence *Administrators only.* on the 403.
 
 ## 5. The administrator's page: `users.html` and `users.js`
 
@@ -584,7 +612,7 @@ Two sections, in `.debug-card`s under `main.content.debug-page`:
 
 ```
 ← Back to My labs
-Manager                                     (.eyebrow, kept for this page as style.css:190-191 says)
+Manager                                     (.eyebrow, reused; the comment at style.css:190 names both pages)
 People and sign-ins                         h1
 Who can sign in to this manager, and what happened at the sign-in page.
 
@@ -630,12 +658,17 @@ pins for the index.html dialogs; the same pin is extended to this page (section 
 
 | Rule | How it shows |
 |---|---|
-| Never delete the last admin; never deactivate or demote them | The *Deactivate* and *Change role…* buttons of the only active admin are disabled with `title` and a visible `<small class="menu-reason">`-style caption under the row: *The last administrator stays.* The manager refuses with 409 anyway (section 12, C10) and the page shows that sentence. |
-| Your own account | *Deactivate* on your own row is disabled: *Sign out instead.* *Change role…* on your own row is disabled: *Ask another administrator.* (You could demote yourself out of the page.) |
+| Never delete the last admin; never deactivate or demote them | The *Deactivate* and *Change role…* buttons of the only active admin are disabled with `title` and a visible `<small class="menu-reason">`-style caption under the row: *The last administrator stays.* The manager refuses with 409 `last_admin` anyway (section 12, C10) and the page shows that sentence. |
+| Your own account | *Deactivate* on your own row is disabled: *Sign out instead.* *Change role…* on your own row is disabled: *Ask another administrator.* (You could demote yourself out of the page.) The manager refuses with 409 `self_change` anyway. |
 | A deactivated person's sessions end | The confirmation says so (section 5.3). The manager does it (section 12, C10). |
-| Reset password | The admin types a temporary password and tells the person. The manager sets `must_change` (section 12, C11); the person's next sign-in opens the change-password dialog with no Cancel (section 6.3). The page never displays a generated password: the admin chose it, so there is nothing to show once. |
-| No delete | There is no Delete button. `DELETE /api/users/{name}` stays for the API; the page offers Deactivate, which keeps the audit trail readable (a name in the audit table should still resolve to a person). Open question Q3. |
-| Add a person | `POST /api/users {name, role, password, must_change:true}`; the new person must change the password at first sign-in. The dialog says so. |
+| Reset password | The admin types a temporary password and tells the person. The manager sets `must_change_password` (section 12, C11); the person's next sign-in opens the change-password dialog with no Cancel (section 6.3). The page never displays a generated password: the admin chose it, so there is nothing to show once. |
+| No delete | There is no Delete button. `DELETE /api/users/{name}` stays for the API; the page offers Deactivate, which keeps the audit trail readable (a name in the audit table should still resolve to a person). Decided (U-Q3): no Delete on the Users page; the audit reads "deactivated". |
+| Add a person | `POST /api/users {name, role, password}`; the manager sets `must_change_password: true` on the new record, so the person must change the password at first sign-in. The dialog says so. |
+
+Wire form: *Change role…* sends `PATCH /api/users/{name}` `{role}`; *Deactivate* and *Reactivate* send
+`{disabled:true}` and `{disabled:false}`. A user row is `{name, role, disabled, must_change_password,
+created, created_by, password_changed, last_signin, sessions}`; the *Status* column labels `disabled`
+as *Inactive* and its negation as *Active* (wording is the page's, the field is `disabled`).
 
 After every change the page reloads both lists (`usersRefresh()`); a success is a toast through the
 page's own `notify()` (the pattern of workspace.js:5) with the sentences of section 8.
@@ -648,7 +681,8 @@ page's own `notify()` (the pattern of workspace.js:5) with the sentences of sect
 
 ### 5.6 The audit table's vocabulary
 
-The manager records events by code (section 12, C12); the page translates them, like
+The manager records events by code (section 12, C12; a row is `{time, actor, event, outcome, source,
+detail}`, the *Source address* column shows `source`); the page translates them, like
 `debugCheckNames` (debug.js:16-20):
 
 | Event code | Shown as | Outcome codes shown as |
@@ -682,15 +716,13 @@ with the page open). The source address is text; IPv6 addresses wrap (`overflow-
 <form id="password-form" novalidate>
 <label for="password-current">Current password</label><input id="password-current" type="password" autocomplete="current-password" maxlength="128">
 <label for="password-new">New password</label><input id="password-new" type="password" autocomplete="new-password" maxlength="128"><p class="form-help">At least 12 characters. Any characters count; length matters more than symbols. Not your username, and not a common password.</p>
-<label for="password-confirm">New password again</label><input id="password-confirm" type="password" autocomplete="new-password" maxlength="128">
-<label class="checkbox-label"><input type="checkbox" id="password-everywhere" checked>Also sign out my other browsers and devices</label>
+<label for="password-confirm">New password again</label><input id="password-confirm" type="password" autocomplete="new-password" maxlength="128"><p class="form-help" id="password-sessions">Your other browsers and devices are signed out when the password changes.</p>
 <p id="password-error" class="form-error" role="alert"></p>
 <div class="dialog-actions"><button type="button" class="button secondary" id="password-cancel">Cancel</button><button type="submit" class="button primary" id="password-submit">Change password</button></div>
 </form></dialog>
 ```
 
-Styling comes from the dialog rules (style.css:1568-1588, labels 1306-1313, `.checkbox-label`
-1319-1326, `.form-error` 1328, `.form-help` 1330, `.dialog-actions` 556). The dialog sits after
+Styling comes from the dialog rules (style.css:1568-1588, labels 1306-1313, `.form-error` 1328, `.form-help` 1330, `.dialog-actions` 556). The dialog sits after
 `</main>` (index.html:319) with the other dialogs (`test_shell_ui.js:864` pins that a dialog is never
 inside a tab panel).
 
@@ -705,22 +737,24 @@ your current password.* and *The new password is the same as the current one.*).
 1. Manager ▾ › *Change password…* → `accountOpenPassword()`: clears the fields and the error,
    `showModal()`, focus on `#password-current`.
 2. Submit: `passwordProblem()` first; then `POST /api/session/password`
-   `{current, password, everywhere}` (section 12, C11).
-   200 → close, toast *Password changed.* (plus *Other sessions were signed out.* when the box was
-   ticked, as one toast: *Password changed. Other sessions were signed out.*).
-   403 → *The current password is not right.*, focus `#password-current`.
+   `{current, password}` (section 12, C11). A password change always ends the person's other
+   sessions; there is no checkbox.
+   200 → close, one toast *Password changed. Other sessions were signed out.*
+   401 `invalid_credentials` → *The current password is not right.*, focus `#password-current`. This
+   401 is not `signed_out`: `sessionLost` matches only `detail.code==='signed_out'`, so the page does
+   not treat it as an ended session.
    422 → the manager's `detail.message` (section 2.3 sentences). 429 → the throttled sentence
    without a countdown (the dialog is not the sign-in page; the person waits and tries again).
 3. Cancel and × close without a request.
 
 ### 6.3 Must change at first sign-in
 
-When `state.user.must_change` is true (section 12, C11), `render()` opens the dialog once per page
+When `state.user.must_change_password` is true (section 12, C11), `render()` opens the dialog once per page
 load (`accountOpenPassword({required:true})`): the lead reads *Choose a new password before you
 continue. The one you signed in with was set by an administrator.*; Cancel and × are hidden; Escape
 is swallowed by the dialog's `cancel` event. The manager also refuses every other mutating route with
 403 `{code:'password_change_required'}` until it is done (section 12, C11), so the lock is not only in
-the browser. After success `must_change` clears on the next poll and the dialog closes.
+the browser. After success `must_change_password` clears on the next poll and the dialog closes.
 
 ### 6.4 Sign out
 
@@ -736,9 +770,9 @@ Manager ▾ › *Sign out* → `accountSignOut()`:
 4. Terminal pop-ups and capture viewers opened by this tab: the manager ends their sockets when the
    session ends (section 12, C9); their pages show the sentence of section 3.5. The application does
    not try to close them (`window.open` returns a handle the page does not keep, app.js:410-411).
-5. *Sign out everywhere* is not a separate menu item: it is the checkbox in the change-password
-   dialog and the administrator's Deactivate. A person who suspects a stolen session changes the
-   password; that is the right reflex and the one action that helps.
+5. *Sign out everywhere* is not a separate menu item: a password change always ends the person's
+   other sessions, and so does the administrator's Deactivate. A person who suspects a stolen session
+   changes the password; that is the right reflex and the one action that helps.
 
 ## 7. Storage
 
@@ -764,7 +798,7 @@ is the manager's (422 messages), the manager uses the same text (section 12, C7)
 
 | Where | Id or place | Text |
 |---|---|---|
-| login.html | title | Sign in · Containerlab Node Manager |
+| login.html | title | Sign in |
 | login.html | h1 | Sign in |
 | login.html | lead | Use the account your administrator gave you. |
 | login.html | labels | Username / Password |
@@ -777,21 +811,21 @@ is the manager's (422 messages), the manager uses the same text (section 12, C7)
 | login.js | other | The manager did not answer. Try again. |
 | login.js | `#signin-reason` for `reason=ended` | Your session ended. Sign in again to continue. |
 | login.html | `#signin-plain` | This connection is not encrypted. Your password would travel in clear text. Ask the administrator to enable TLS before signing in from outside the lab network. |
-| setup.html | title | First administrator · Containerlab Node Manager |
+| setup.html | title | Create an administrator (RECONCILIATION 5: a bare title on an exposed page, as `Sign in`) |
 | setup.html | h1 | Create the first administrator |
 | setup.html | lead | Enter the setup code the installer printed, then choose the account you will sign in with. |
 | setup.html | code help | Printed by `install-manager` on the VM, and in the installer's closing lines. It works once. |
-| setup.html | username help | Letters, digits, dot, dash and underscore. 2 to 64 characters. |
+| setup.html | username help | Lowercase letters, digits, dot, dash and underscore. 2 to 32 characters. |
 | setup.html, dialogs | policy | At least 12 characters. Any characters count; length matters more than symbols. Not your username, and not a common password. |
 | setup.html | `#setup-submit` | Create account and sign in / Creating… |
 | setup.js | empty code | Enter the setup code. |
-| setup.js | 403 | That setup code is not right. Check the installer's output. |
-| setup.js | 409 | The first account was already created. Sign in instead. |
+| setup.js | 401 `invalid_code` | That setup code is not right. Check the installer's output. |
+| setup.js | 404 | Setup is closed. Sign in, or ask the VM administrator to run the recovery command again. |
 | setup.js, users.js, account.js | length | Use at least 12 characters. |
 | same | match | The two passwords are not the same. |
 | same | username | Choose a password that is not your username. |
 | same (manager) | deny-list | That password is too common. Choose another. |
-| same | username rule | Use letters, digits, dot, dash or underscore, 2 to 64 characters. |
+| same (manager's 422 text) | username rule | Use lowercase letters, digits, dot, dash or underscore, 2 to 32 characters. |
 | app.js `api()` | 401 error message | Your session ended. Sign in again. |
 | index.html | `#session-banner-text` | Your session ended. What you typed in the open dialog is still here. |
 | index.html | banner caption | Sign in in a new tab, come back and choose Try again. Or sign in here and lose the open dialog. |
@@ -813,19 +847,19 @@ is the manager's (422 messages), the manager uses the same text (section 12, C7)
 | index.html | `#password-lead` | Choose a new password for your account. |
 | account.js | `#password-lead` when required | Choose a new password before you continue. The one you signed in with was set by an administrator. |
 | index.html | labels | Current password / New password / New password again |
-| index.html | `#password-everywhere` | Also sign out my other browsers and devices |
+| index.html | `#password-sessions` | Your other browsers and devices are signed out when the password changes. |
 | index.html | `#password-submit` | Change password / Changing… |
 | account.js | empty current | Enter your current password. |
 | account.js | same | The new password is the same as the current one. |
-| account.js | 403 | The current password is not right. |
+| account.js | 401 `invalid_credentials` | The current password is not right. |
 | account.js | 429 | Too many attempts. Wait a minute, then try again. |
-| account.js | toast | Password changed. / Password changed. Other sessions were signed out. |
+| account.js | toast | Password changed. Other sessions were signed out. |
 | users.html | title | People and sign-ins · Containerlab Node Manager |
 | users.html | h1 | People and sign-ins |
 | users.html | lead | Who can sign in to this manager, and what happened at the sign-in page. |
 | users.html | card 1 | People |
 | users.html | columns | Name / Role / Status / Last sign-in / Actions |
-| users.js | status values | Active / Inactive |
+| users.js | status values (the field is `disabled`) | Active / Inactive |
 | users.js | last sign-in | Never / the relative time (`relativeTimeShort` of status.js, loaded by the page) |
 | users.html | `#users-add` | Add a person… |
 | users.html | `#user-dialog` title | Add a person |
@@ -842,7 +876,7 @@ is the manager's (422 messages), the manager uses the same text (section 12, C7)
 | users.js | toasts | {name} deactivated. / {name} reactivated. |
 | users.js | last admin | The last administrator stays. |
 | users.js | own row | Sign out instead. / Ask another administrator. |
-| users.js | 409 from the manager | the same two sentences as above (the manager sends the code, the page the sentence) |
+| users.js | 409 from the manager | the same two sentences as above (the manager sends `last_admin` or `self_change`, the page the sentence) |
 | users.js | `#users-status` | {n} people · updated {time} |
 | users.html | card 2 | Sign-ins and changes |
 | users.html | filters | Show (Last hour / Last 24 hours / Last 7 days / All) / Person / Event (All + the list of 5.6) / Outcome (All / Succeeded / Failed / Throttled) / Address / Apply |
@@ -850,6 +884,7 @@ is the manager's (422 messages), the manager uses the same text (section 12, C7)
 | users.js | `#audit-status` | {n} events shown (latest 500 matching). Updated {time}. |
 | users.js | empty | No events match. Change the filters. |
 | users.html | `#users-forbidden` | Only administrators can open this page. |
+| debug.js | 403 `admin_required` | Administrators only. |
 | users.js | load failure | The list could not be loaded: {detail} |
 
 ## 9. Tests
@@ -858,14 +893,14 @@ is the manager's (422 messages), the manager uses the same text (section 12, C7)
 
 | New or changed file | Harness to copy | What it pins |
 |---|---|---|
-| `tests/test_login_ui.js` (new) | `test_debug_ui.js:4-13` (`fixture(fetch)`: a `Map` of fake elements, `vm.createContext` with `document`, `fetch`, `setTimeout`) plus a fake `location` `{search,protocol,hostname,replace(url){calls.push(url)}}` and a `setInterval` that the test ticks. | `loginNext`: `/`, `/#lab=a&view=devices`, `/static/workspace.html#mode=ssh` pass; `//evil`, `/\evil`, `https://evil`, `javascript:…`, `/login`, `/api/state`, a 3000-char path, missing → `/`. `loginPlain`. Empty submit shows the sentence and sends nothing. 401 keeps the username, clears the password, shows *Wrong username or password.* 429 with `retry_after:3` shows *Try again in 3 s*, button disabled, after three ticks enabled and the error empty. 200 calls `location.replace` with the safe `next`. Source pin: no `innerHTML`, no `style=`, no `localStorage`/`sessionStorage`, no `addEventListener('keydown'`. |
-| `tests/test_setup_ui.js` (new) | same | `setupProblem` for each message; 403 clears and focuses the code; 409 unhides `#setup-signin`; 200 → `location.replace('/')`; the code never appears in `location` calls or storage. |
+| `tests/test_login_ui.js` (new) | `test_debug_ui.js:4-13` (`fixture(fetch)`: a `Map` of fake elements, `vm.createContext` with `document`, `fetch`, `setTimeout`) plus a fake `location` `{search,protocol,hostname,replace(url){calls.push(url)}}` and a `setInterval` that the test ticks. | `loginNext`: `/`, `/#lab=a&view=devices`, `/static/workspace.html#mode=ssh` pass; `//evil`, `/\evil`, `https://evil`, `javascript:…`, `/login`, `/api/state`, a 3000-char path, missing → `/`. `loginPlain`. Empty submit shows the sentence and sends nothing. 401 keeps the username, clears the password, shows *Wrong username or password.* 429 with `retry_after:3` shows *Try again in 3 s*, button disabled, after three ticks enabled and the error empty. 200 calls `location.replace` with the safe `next`. Source pin: no `innerHTML`, no `style=`, no `localStorage`/`sessionStorage`, no `addEventListener('keydown'`. The username is lowercased in the request body. `login.css` names no selector of the application (`#save-chip`, `.topbar`, `.panel`, …; a list is asserted absent). `login.html` and `setup.html` link `/static/login.css` and never `style.css`; `setup.html` loads `login.css` and `setup.js` only. |
+| `tests/test_setup_ui.js` (new) | same | `setupProblem` for each message; 401 clears and focuses the code; 404 shows *Setup is closed…* and unhides `#setup-signin` (href `/login`); another status shows *The manager did not answer. Try again.*; 429 counts down; 422 shows the manager's message; 200 → `location.replace('/')`; the code never appears in `location` calls or storage. |
 | `tests/test_session_ui.js` (new) | `test_operations_ui.js` (pure functions) | `sessionLost` shapes (401 without the code is false; 403 is false); `loginUrl` encoding of path, search and hash; `sessionMark` once; `sessionGo` under a fake `location`. |
-| `tests/test_users_ui.js` (new) | `test_debug_ui.js` | Rows are text (a name `<b>x</b>` renders as text); the last-admin and own-row buttons are disabled with the sentences; 403 shows `#users-forbidden`; the audit query string carries the filters; unknown actor shows *—*; event codes map to the labels. |
-| `tests/test_account_ui.js` (new) | `test_readiness_ui.js` (loads `status.js` and `app.js` together) + `account.js` | `passwordProblem`; `roleLabel`; `renderAccount` hides `#account-users` for an operator and sets the chip; `must_change` opens the dialog once with Cancel hidden; sign-out marks the session before `DELETE` and calls `goSignIn` after a failed `DELETE` too. |
+| `tests/test_users_ui.js` (new) | `test_debug_ui.js` | Rows are text (a name `<b>x</b>` renders as text); the last-admin and own-row buttons are disabled with the sentences; 403 shows `#users-forbidden`; the audit query string carries the filters (`limit&offset&event&actor&outcome&since&address`); the PATCH bodies are `{role}` and `{disabled}`; unknown actor shows *—*; event codes map to the labels. |
+| `tests/test_account_ui.js` (new) | `test_readiness_ui.js` (loads `status.js` and `app.js` together) + `account.js` | `passwordProblem`; `roleLabel`; `renderAccount` hides `#account-users` and `#manager-diagnostics` for an operator and sets the chip; `must_change_password` opens the dialog once with Cancel hidden; sign-out marks the session before `DELETE` and calls `goSignIn` after a failed `DELETE` too. |
 | `tests/test_shell_ui.js` (changed) | its own harness (43-84): add `#session-banner` with its three buttons, `data-session-action`, and the `sessionMark`/`sessionClear`/`sessionGo` stubs to the context | `signedOut()` with no open dialog calls `sessionGo('ended')`; with `dialog.open` shows the banner clone inside the dialog and does not navigate; a second call does nothing; `sessionRetry` on 200 hides the banner and removes the clone. **Rewrite, never delete**: the menu-order pin at :846-859 (`Diagnostics` last) becomes "Diagnostics is the last item before the account group" with the new ids in order; the listener-count pin at :947-954 stays at nine unless the lead chooses document delegation (then ten, with the reason). |
 | `tests/test_page_load_ui.js` (changed) | its own `loadPage()` (24-43) | `session.js` is listed between `status.js` and `shell.js`, `account.js` after `preferences.js`; no top-level name collides (the `get` of login.js is a file-local `const`: login.js is never loaded with the page, but `session.js` and `account.js` are, so their names must be unique: `sessionLost`, `loginUrl`, `sessionEnded`, `sessionMark`, `sessionClear`, `sessionGo`, `accountOpenPassword`, `accountSignOut`, `passwordProblem`, `roleLabel`, `renderAccount`). `api()` on a 401 `signed_out` stub calls `signedOut` (set a counter on the context) and still throws with `status 401`. `refresh()` sends nothing once `sessionEnded()` is true. The pin at :207-210 (no page other than index.html loads `device-diagnostics.js`) is unchanged; a sibling pin says no page other than `index.html` loads `account.js`, and every page that fetches loads `session.js` with the one `?v=`. Add `login.html`, `setup.html`, `users.html` to the standalone list the harness iterates for `?v=` and inline styles (:212-228 does that for lab-builder.html; the sweep at `test_shell_ui.js:879` already covers foreign assets on every `.html`). |
-| `tests/test_debug_ui.js`, `test_terminal_ui.js`, `test_capture_session_ui.js`, `test_map_editor_ui.js`, `test_lab_builder_ui.js` (changed) | each its own | one test each: a 401 `signed_out` answer produces the page's sentence (section 3.5) and, where the page redirects, one `location.replace` call to `/login?next=…`; the terminal and the capture viewer never navigate. |
+| `tests/test_debug_ui.js`, `test_terminal_ui.js`, `test_capture_session_ui.js`, `test_map_editor_ui.js`, `test_lab_builder_ui.js` (changed) | each its own | one test each: a 401 `signed_out` answer produces the page's sentence (section 3.5) and, where the page redirects, one `location.replace` call to `/login?next=…`; the terminal and the capture viewer never navigate; `test_debug_ui.js` also pins the 403 `admin_required` sentence. |
 
 Python side (the backend designer's, listed so the lead can route it): `test_app.py` gains the
 session fixture (`client.post('/api/session', json=…)`), and every existing test that calls a route
@@ -875,7 +910,7 @@ signs in first through a helper; TestClient keeps the cookie jar.
 
 One script `check_signon.py` in the shape of `docs/ui-review-001/tools/check_ui001.py` against
 `docs/redesign/tools/fixture_manager.py` (with a fixture flag that seeds one admin and one operator
-and prints the setup code; section 13, Q5), at the four viewports 1440×900, 1280×800, 760×1024,
+and prints the setup code; section 13, Q5; the QA worker changes it in the verification phase), at the four viewports 1440×900, 1280×800, 760×1024,
 390×844:
 
 | Check | Assertion |
@@ -885,10 +920,10 @@ and prints the setup code; section 13, Q5), at the four viewports 1440×900, 128
 | Throttling | After the fixture's limit, `#signin-error` matches `/Try again in \d+ s\./`, `#signin-submit` is disabled; after the countdown it is enabled. |
 | Sign-in and `next` | Visit `/#lab=<id>&view=devices` signed out → `/login?next=%2F%23lab%3D…`; sign in → URL is `/#lab=<id>&view=devices`, the Devices tab is active, `#account-chip` shows the name at 1440 and 1280 and is hidden at 760 and 390. |
 | Open redirect | `/login?next=//example.org` then sign in → the URL is `/`. Same for `/login?next=/api/state`. |
-| 401 mid-work | Open the VM connection dialog, type into a field, expire the session through the fixture (`POST /__fixture/expire`), wait 6 s → one `GET /api/state` request after expiry, no more (the fixture counts); the banner clone is inside `#vm-dialog`; the typed value is still there. Click *Try again* after signing in in a second context (same browser context, new page) → the banner is gone, polling resumed. |
+| 401 mid-work | Open the VM connection dialog, type into a field, expire the session through the fixture (`POST /__fixture/expire`, a hook that exists only when `FIXTURE_DATA` is set), wait 6 s → one `GET /api/state` request after expiry, no more (the fixture counts); the banner clone is inside `#vm-dialog`; the typed value is still there. Click *Try again* after signing in in a second context (same browser context, new page) → the banner is gone, polling resumed. |
 | Sign out | Manager ▾ › Sign out → `/login` with no `next`; `GET /api/state` answers 401; the Back button does not show the application. |
 | Users page as admin | `#account-users` visible; the page lists two people; the only admin's Deactivate is disabled with the sentence; add, role change, reset and deactivate each produce their toast; the audit table shows the sign-ins of this run with the operator's failed attempt and a throttled row. |
-| Users page as operator | `#account-users` hidden; `/static/users.html` shows `#users-forbidden`; *VM connection…* and *Manager settings…* are disabled with *Administrators only*. |
+| Users page as operator | `#account-users` and `#manager-diagnostics` hidden; `/static/users.html` shows `#users-forbidden`; `/static/debug.html` shows *Administrators only.*; *VM connection…* and *Manager settings…* are disabled with *Administrators only*. |
 | Terminal pop-up | Open a CLI (fixture device), expire the session → the status line reads the sentence, the pop-up is still on `terminal.html`. |
 | Student guide | With the fixture's PDF staged, the Help link downloads it when signed in and redirects to `/login?next=%2Fstudent-guide` when not. |
 | Keyboard | On `/login`: Tab order user → password → Show → Sign in; Enter in the password field submits. In Manager ▾: ArrowDown reaches *Change password…* and *Sign out*, skips the account block; Escape returns focus to the button. |
@@ -940,13 +975,14 @@ assertion table and exit status.
 8. **Password managers.** Chrome, Firefox and Safari must offer to save after a successful sign-in
    (`autocomplete` attributes, `location.replace` after success) and must fill the change-password
    dialog correctly (`current-password` then `new-password`).
-9. **What the sign-in page reveals.** `style.css` is public and names every feature class; the
-   favicon names nothing. Decision: accepted. The reviewer says whether a trimmed `login.css` is
-   worth the second stylesheet (section 13, Q2).
+9. **What the sign-in page reveals.** Decided (RECONCILIATION 1 and 2): the exposed pages load
+   `login.css`, a small self-contained sheet, never `style.css`; the favicon and the title name
+   nothing. The reviewer attacks the sheet: does any selector or comment of `login.css` name a feature
+   of the application (section 9.1)?
 10. **Reduced motion, contrast, 390 px.** No animation on the new pages; `.form-error` on `--surface`
     is the existing contrast; the Show button and the input share a row at 390 px without overflow;
     the users tables scroll sideways rather than squeeze.
-11. **`must_change` lock.** With the dialog open and required, can the person use the menus behind it?
+11. **`must_change_password` lock.** With the dialog open and required, can the person use the menus behind it?
     (A modal dialog blocks them.) Can they navigate the hash to a lab and act? (The manager refuses
     mutating routes with 403 until the change.)
 12. **Two people, one browser.** Sign out, sign in as another: no trace of the first in the page
@@ -957,15 +993,15 @@ assertion table and exit status.
 
 | File | New or changed | Owner (lead to route) |
 |---|---|---|
-| `app/static/login.html`, `login.js` | new | UI builder |
+| `app/static/login.html`, `login.js`, `login.css` | new | UI builder |
 | `app/static/setup.html`, `setup.js` | new | UI builder |
 | `app/static/session.js` | new | UI builder |
 | `app/static/account.js` | new | UI builder |
 | `app/static/users.html`, `users.js` | new | UI builder |
-| `app/static/index.html` | changed: scripts (session.js, account.js), `#account-chip`, the account menu group, `#session-banner`, `#password-dialog` | UI builder |
+| `app/static/index.html` | changed: scripts (session.js, account.js), `#account-chip`, `#manager-diagnostics` id, the account menu group, `#session-banner`, `#password-dialog` | UI builder |
 | `app/static/app.js` | changed: `api()` 401 line, `refresh()` guard, `renderAccount()` + `roleLabel()`, call in `render()` | UI builder |
 | `app/static/shell.js` | changed: `signedOut()`, `renderSessionBanner()`, `sessionRetry()`, `goSignIn()` | UI builder |
-| `app/static/style.css` | changed: section 27 (sign-in, account block, chip) | UI builder |
+| `app/static/style.css` | changed: section 27 (account block and chip for `index.html` only; the sign-in rules live in `login.css`); the comment at :190 names both pages that use `.eyebrow` | UI builder |
 | `app/static/workspace.js`, `debug.js`, `lab-builder-page.js`, `map-editor-page.js`, `terminal.js`, `capture-session.js`, `device-diagnostics.js` | changed: the one 401 check each | UI builder |
 | the standalone `.html` pages | changed: load `session.js` | UI builder |
 | `deploy/verify-release.py:40-41` | the three new pages in the tuple | the lead (release owner) |
@@ -976,36 +1012,37 @@ assertion table and exit status.
 ## 12. Contract requests for `DESIGN.md`
 
 Each item is something this design needs that section 0.3 does not state. The backend designer
-decides the mechanism; the UI depends on the behaviour.
+decides the mechanism; the UI depends on the behaviour. The Ruling column is the outcome in
+`RECONCILIATION.md` (2026-11-01); the text of each request is already amended to it.
 
-| Id | Request | Why |
-|---|---|---|
-| C1 | `login.html`, `setup.html` and `users.html` are static files under `app/static`, served at `/login`, `/setup` and `/static/users.html`; the lead adds the first two to `verify-release.py`'s tuple (:40-41) and `set-release.py`. | `?v=` on every asset is checked only for listed pages (`INVENTORY.md` 5). |
-| C2 | Without a session, exactly these are reachable: `GET /login`, `GET /setup` (while open), `GET /static/style.css`, `/static/login.js`, `/static/setup.js` (while open), `/static/fabric-mark.svg`, `POST /api/session`, `POST /api/setup`. Every other `/static/*` file, including `index.html` and the editor bundle, needs a session. | D3 item 1. |
-| C3 | One 401 body for an unknown name, a wrong password and a deactivated account; equal throttling and no measurable timing difference (hash a dummy for unknown names). Role refusals answer 403 `{detail:{code:'forbidden',message:'Administrators only.'}}`. | No enumeration (section 10, item 6); the UI shows one sentence. |
-| C4 | Limits the pages mirror: username 2–64 chars `^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$`; password 12–128 chars; `retry_after` an integer ≤ 3600. | `maxlength` and the countdown cap. |
-| C5 | `GET /login` and `GET /setup` with a valid session redirect to `/`. | A bookmark to the sign-in page must not show it to a signed-in person. |
-| C6 | `POST /api/setup {code,username,password}`: 200 `{user}` and the session cookie; 403 wrong code (throttled like sign-in, 429 with `retry_after`); 409 when an admin exists; 422 `{detail:{code,message}}` for a refused username or password. `GET /setup` after setup → 302 `/login`. The code is single-use and expires (the installer prints it; the health check reports whether setup is still open). | Section 2. |
-| C7 | The password policy and its sentences (section 2.3) are the manager's; 422 carries `detail.message` with exactly those sentences so the pages show the manager's own words. The deny-list stays server-side. | One voice; the deny-list is not published. |
-| C8 | `GET /api/state` includes `user:{name,role,must_change}`. | One request; the role is live on the poll (section 4.4). |
-| C9 | A WebSocket refused for a missing or ended session closes with code 1008 and reason `signed_out`; ending a session (sign-out, deactivation, password change with `everywhere`) closes that session's open terminal and capture sockets within 5 s. | The terminal and viewer sentences (section 3.5). |
-| C10 | `PATCH /api/users/{name}` `{role}` or `{active}`; 409 `{code:'last_admin'}` when it would remove the last active admin; 409 `{code:'self'}` when an admin deactivates or demotes themselves; deactivation ends the person's sessions. `GET /api/users` rows `{name,role,active,created,last_signin,sessions}`. | Section 5.4. |
-| C11 | `must_change` on a user: set by `POST /api/users` and `POST /api/users/{name}/password`; cleared by `POST /api/session/password {current,password,everywhere}`; while set, every mutating route except that one answers 403 `{code:'password_change_required'}`. `everywhere:true` ends the person's other sessions. | Sections 5.4, 6.2, 6.3. |
-| C12 | `GET /api/audit?since=<iso>&actor=&event=&outcome=&address=&limit=` (≤ 500, newest first) rows `{time,actor,event,outcome,address,detail}`; `actor` is `null` for a sign-in attempt whose name matched no account; events and outcomes are the codes of section 5.6; `detail` is controlled metadata only (never a password or a user-agent string longer than 200 chars). | Section 5.6; the logs invariant (`CLAUDE.md`). |
-| C13 | Amendment of DESIGN-SPEC-ADDENDUM J1: `session.js` is a second shared script (after `status.js`, before `shell.js`) with no top-level side effect whose one `location` access is inside `sessionGo()`; the standalone pages load it too. | Section 3.2. |
-| C14 | `DELETE /api/session` always clears the cookie (also when the session is already gone); sessions have an idle timeout the UI does not need to know (open question Q1) and an absolute lifetime. | Section 6.4 item 3. |
-| C15 | A page request (`GET`, `Accept` includes `text/html`) without a session redirects with 302 to `/login?next=<path>`; the manager builds `next` from the request path only (the hash never reaches it). Everything else answers the 401 JSON. `/student-guide` and `/api/labs/<id>/design/export` are page requests. | Section 0.3 item 4 made precise; section 10 item 1. |
-| C16 | The capture viewer's HTTP routes and websockify require the manager session *and* the owner cookie; a manager session that ends does not end the capture container. | Section 10, item 2. |
+| Id | Request | Why | Ruling |
+|---|---|---|---|
+| C1 | `login.html`, `setup.html` and `users.html` are static files under `app/static`, served at `/login`, `/setup` and `/static/users.html`; the lead adds the first two to `verify-release.py`'s tuple (:40-41) and `set-release.py`. | `?v=` on every asset is checked only for listed pages (`INVENTORY.md` 5). | Not contested. |
+| C2 | Without a session, exactly these are reachable: `GET /login`, `GET /setup` (while open), `GET /static/login.css`, `/static/login.js`, `/static/setup.js` (while open), `/static/fabric-mark.svg`, `POST /api/session`, `POST /api/setup`. Every other `/static/*` file, including `style.css`, `index.html` and the editor bundle, needs a session. | D3 item 1. | **Answered (D):** the exposed pages use `login.css`, not `style.css` (RECONCILIATION 1, 2). |
+| C3 | One 401 body for an unknown name, a wrong password and a deactivated account; equal throttling and no measurable timing difference (hash a dummy for unknown names). Role refusals answer 403 `{detail:{code:'admin_required',message:'Administrators only.'}}`. | No enumeration (section 10, item 6); the UI shows one sentence. | **D's code, U's sentence:** `admin_required`. |
+| C4 | Limits the pages mirror: username lowercase, 2–32 chars `^[a-z0-9][a-z0-9._-]{1,31}$` (the pages set `maxlength="32"`, lowercase before sending and show the manager's 422 message); password 12–128 chars; `retry_after` an integer ≤ 3600. | `maxlength` and the countdown cap. | **D.** |
+| C5 | `GET /login` and `GET /setup` with a valid session redirect (302) to `/`. | A bookmark to the sign-in page must not show it to a signed-in person. | **Accepted** into D 6.3. |
+| C6 | `POST /api/setup {code,username,password}`: 200 `{user}` and the session cookie; 401 `invalid_code` (throttled like sign-in); 404 outside setup or recovery mode; 429 with `retry_after`; 422 `{detail:{code,message}}` for a refused username or password. `GET /setup` after setup → 404. The code is single-use and expires (the installer prints it; the health check reports whether setup is still open). | Section 2. | **D** (401 / 404 / 429); no redirect after setup. |
+| C7 | The password policy and its sentences (section 2.3) are the manager's; 422 carries `detail.message` with exactly those sentences so the pages show the manager's own words. The deny-list stays server-side. | One voice; the deny-list is not published. | Not contested. |
+| C8 | `GET /api/state` includes `user:{name, role, must_change_password}`. | One request; the role is live on the poll (section 4.4). | **Accepted, with D's field name.** The `users` table itself never reaches `/api/state`. |
+| C9 | A WebSocket refused for a missing or ended session closes with code 1008 and reason `signed_out`; an ended session's open terminal, console and capture sockets close within 5 s (the handlers check the session on every idle tick); ending a session (sign-out, deactivation) is the cause. | The terminal and viewer sentences (section 3.5). | **Accepted.** |
+| C10 | `PATCH /api/users/{name}` `{role}` or `{disabled}`; 409 `{code:'last_admin'}` when it would remove the last active admin; 409 `{code:'self_change'}` when an admin deactivates or demotes themselves; deactivation ends the person's sessions. `GET /api/users` rows `{name, role, disabled, must_change_password, created, created_by, password_changed, last_signin, sessions}`. | Section 5.4. | **D:** `disabled`, `self_change`; `last_signin` accepted into the record. |
+| C11 | `must_change_password` on a user: set by `POST /api/users {name, role, password}` (a new record starts with it true) and by `POST /api/users/{name}/password`; cleared by `POST /api/session/password {current,password}`; while set, every mutating route except that one answers 403 `{code:'password_change_required'}`. A password change always ends the person's other sessions; there is no `everywhere` option. A wrong current password answers 401 `invalid_credentials` (not `signed_out`). | Sections 5.4, 6.2, 6.3. | **D.** No checkbox. |
+| C12 | `GET /api/audit?limit&offset&event&actor&outcome&since&address` → `{entries,total}`, newest first, `limit` ≤ 500; entry fields `{time,actor,event,outcome,source,detail}`; `actor` is `null` for a sign-in attempt whose name matched no account; events and outcomes are the codes of section 5.6; `detail` is controlled metadata only (never a password or a user-agent string longer than 200 chars). | Section 5.6; the logs invariant (`CLAUDE.md`). | **D's shape plus the `address` filter;** the field is `source`. |
+| C13 | Amendment of DESIGN-SPEC-ADDENDUM J1: `session.js` is a second shared script (after `status.js`, before `shell.js`) with no top-level side effect whose one `location` access is inside `sessionGo()`; the standalone pages load it too. | Section 3.2. | **Accepted;** recorded as amendment M of `docs/redesign/DESIGN-SPEC-ADDENDUM.md` at the release step. |
+| C14 | `DELETE /api/session` always answers 200 and clears the cookies (also when the session is already gone); sessions have an idle timeout the UI does not need to know (open question Q1) and an absolute lifetime. | Section 6.4 item 3. | **Accepted.** |
+| C15 | A page request (`GET` or `HEAD`, `Accept` includes `text/html`) without a session redirects with 302 to `/login?next=<path+search>`; the manager builds `next` from the request path and query only (the hash never reaches it). Every other request answers the 401 JSON. `/student-guide` and `/api/labs/<id>/design/export` are page requests. | Section 0.3 item 4 made precise; section 3.1; section 10 item 1. | **Accepted** as written: decided by `Accept`. |
+| C16 | The capture viewer's HTTP routes and websockify require the manager session *and* the owner cookie; a manager session that ends does not end the capture container. | Section 10, item 2. | **Accepted** as written. |
 
 ## 13. Open questions for the lead
 
-| Id | Question | This design's default |
+| Id | Question | Ruling (RECONCILIATION 3) |
 |---|---|---|
-| Q1 | Should the application warn before an idle timeout (a *Still there?* banner), which needs `expires` in `GET /api/session` and a timer in `shell.js`? | No for the first version: the banner-in-dialog path (section 3.3) makes an expiry mid-work recoverable without a warning. |
-| Q2 | A trimmed `login.css` instead of the full `style.css` on the exposed page? | Full `style.css` (section 1.1); the reviewer weighs it (section 10, item 9). |
-| Q3 | Should the Users page offer Delete at all? | No (section 5.4); Deactivate keeps the audit readable. The API route stays for the backend designer's reasons. |
-| Q4 | Account chip in the top bar (section 4.1 item 1): keep, or menu only? | Keep, hidden under 900 px. |
-| Q5 | The fixture manager needs a seeded admin and operator, a printed setup code and a `/__fixture/expire` hook for the Playwright checks (section 9.2). Who owns that change to `docs/redesign/tools/fixture_manager.py`? | The QA worker, with the backend designer's hook. |
-| Q6 | `account.js` as a separate page script (section 6.2) or inside `preferences.js`? | Separate: one owner per concern, and `test_page_load_ui.js` already pins `preferences.js` by position (:243). |
-| Q7 | Does the Diagnostics page (`debug.html`) stay reachable for an Operator? It shows versions, VM flags and request metadata. | Yes for both roles: a student needs it to report a problem; it holds no secret (debug.html:5, 10). The lead may restrict it. |
-| Q8 | The `.eyebrow` class is "kept for the diagnostics page only" (style.css:190). `users.html` reuses it for *Manager*. Accept, or drop the eyebrow on the new page? | Reuse; the comment is updated to name both pages. |
+| Q1 | Should the application warn before an idle timeout (a *Still there?* banner), which needs `expires` in `GET /api/session` and a timer in `shell.js`? | **No** idle pre-warning in the first version; the banner-in-dialog path (section 3.3) makes an expiry mid-work recoverable. |
+| Q2 | A trimmed `login.css` instead of the full `style.css` on the exposed page? | **Answered:** `login.css`, self-contained (section 1.1, 1.3); `style.css` is not loaded by `login.html` or `setup.html`. |
+| Q3 | Should the Users page offer Delete at all? | **No.** The route `DELETE /api/users/{name}` stays for the API; the UI reads "deactivated" (section 5.4). |
+| Q4 | Account chip in the top bar (section 4.1 item 1): keep, or menu only? | **Keep,** hidden under 900 px. |
+| Q5 | The fixture manager needs a seeded admin and operator, a printed setup code and a `/__fixture/expire` hook for the Playwright checks (section 9.2). Who owns that change to `docs/redesign/tools/fixture_manager.py`? | **The QA worker,** in the verification phase, against the backend's `/__fixture/expire` hook, which exists **only when `FIXTURE_DATA` is set** (never in a production path). |
+| Q6 | `account.js` as a separate page script (section 6.2) or inside `preferences.js`? | **Separate script.** |
+| Q7 | Does the Diagnostics page (`debug.html`) stay reachable for an Operator? | **Admin-only.** `GET /api/debug` is admin-only; the Diagnostics menu item is hidden for operators like the Users item (section 4.4); `debug.html` opened directly shows *Administrators only.* on the 403. |
+| Q8 | The `.eyebrow` class is "kept for the diagnostics page only" (style.css:190). `users.html` reuses it for *Manager*. Accept, or drop the eyebrow on the new page? | **Reuse;** the comment at style.css:190 is updated to name both pages. |

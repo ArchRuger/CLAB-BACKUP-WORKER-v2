@@ -12,7 +12,8 @@ first session. Verify Git before trusting any line here: `git log --oneline -8` 
 | Read-only inventory (guard, every route and socket, store, browser side, deploy, CI) | done | `INVENTORY.md`, 272 lines, file:line to `fac28de` (1.31.8) |
 | Design: accounts, sessions, gate, roles, throttling, bootstrap, audit, tickets, tests | drafted, not reviewed | `DESIGN.md`, 1002 lines, 20 sections |
 | Design: the pages (sign-in, setup, signed-out handling, account menu, Users and Audit pages, wording, tests) | drafted, not reviewed | `UI.md`, 1011 lines, 13 sections |
-| Lead's rulings on every DESIGN/UI disagreement | done | `RECONCILIATION.md` (binds both documents; the amendments are not yet applied to them) |
+| Lead's rulings on every DESIGN/UI disagreement | done | `RECONCILIATION.md` (sections 1-5) |
+| Rulings applied to `DESIGN.md`, `UI.md`, `EXPOSURE.md` (section 3 steps 2-3) | done, 2026-11-01, second session | the three documents are the single source; `RECONCILIATION.md` 5 records the two rulings made while applying them; `docs/sign-on/` is a history folder for `verify-release.py` |
 | Design: TLS, firewall, installer, health check, recovery script | drafted, not reviewed | `EXPOSURE.md`, 701 lines, 11 sections (uvicorn TLS, self-signed ECDSA certs, redirect-only listener on 8081, ufw and sshd scripts, 13 exposure checks, upgrade decision 7.4) |
 | Opus design review (`/clab-design-review`) | **not started** | — |
 | Build, verification, release | not started | — |
