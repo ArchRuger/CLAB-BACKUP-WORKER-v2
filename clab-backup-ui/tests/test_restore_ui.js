@@ -457,3 +457,30 @@ test('U1: the job window shows Load this backup… only while the backup taken b
  // The window's other words are unchanged: the closing sentences still name the lab header and Advanced › Action logs.
  assert.doesNotMatch(fs.readFileSync(path.join(__dirname,'../app/static/restore.js'),'utf8'),/Progress tab|Progress ›|showTab\('progress'\)/,'nothing names the removed tab');
 });
+
+// ---- Sign-on S10a (docs/sign-on/UI.md 3.3; REVIEW U8): the Restore watch ---------------------------------------------------------
+// session.js does not load here: stand-ins with the exact contract of UI 3.2 (sessionEnded, sessionOnResume, sessionEndedError).
+test('S10a: the Restore watch starts nothing while signed out, stops at the first 401 without a paused state, and resumes after sessionRetry()',async()=>{
+ const resume=new Set(),timers=[],job={id:'r1',lab_id:'lab',status:'applying',targets:[]};
+ let ended=false,sent=0,mode='ok';
+ const c=ctx();
+ Object.assign(c,{
+  sessionEnded:()=>ended,sessionOnResume:fn=>{if(typeof fn==='function')resume.add(fn);},
+  sessionEndedError:()=>Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true}),
+  setTimeout:fn=>{timers.push(fn);return timers.length;},restoreRenderJob(){},
+  api:async()=>{
+   if(ended)throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});
+   sent++;
+   if(mode==='401'){ended=true;throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+   return {json:async()=>({...job,status:'succeeded'})};
+  }});
+ c.restoreStartWatch(job);assert.equal(timers.length,1);
+ mode='401';await timers.shift()();
+ assert.equal(sent,1);assert.equal(timers.length,0,'no further poll');
+ assert.equal(vm.runInContext('restoreWatch',c),null,'the watch is stopped');assert.equal(vm.runInContext('restorePaused',c),false,'a sign-out is not a paused state');
+ assert.equal(resume.size,1);
+ c.restoreStartWatch(job);assert.equal(timers.length,0,'the start guard: a re-arm from the job window sends nothing while signed out');assert.equal(vm.runInContext('restoreWatch',c),null);
+ mode='ok';ended=false;for(const fn of [...resume]){resume.delete(fn);fn();}
+ assert.equal(vm.runInContext('restoreWatch',c),'r1','sessionRetry() follows the job again');assert.equal(timers.length,1);
+ await timers.shift()();assert.equal(sent,2);
+});

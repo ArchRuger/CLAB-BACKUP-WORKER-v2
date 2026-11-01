@@ -841,6 +841,10 @@ test('Images on this VM with no Docker client says so and wires nothing; the fil
 });
 
 // ---- C05: Start device, Stop device, the apply plan, Run with options, pending changes, node-filtered jobs -----------------------------
+// Sign-on S10a (UI 4.5): the stand-in of status.js diagnosticsAdvice(role) with its exact contract, and a state.user for the role.
+// A pinned "see Diagnostics" label is read with an administrator signed in; each has an operator sibling below.
+const signonAdvice=role=>role==='operator'?'ask an administrator to check Diagnostics':'see Diagnostics';
+function signonAdmin(c){c.diagnosticsAdvice=signonAdvice;c.state.user={name:'ada',role:'admin',must_change_password:false};return c;}
 const c05={lab:{id:'a',name:'square',deployment_name:'square',vm_project_path:'/srv/p/square.clab.yml',deployment:{status:'Running'},nodes:[{name:'clab-square-ceos',short_name:'ceos',definition_node:'ceos',discovered:true,runtime_state:'running'},{name:'clab-square-vsw',short_name:'vsw',definition_node:'vsw',discovered:true,runtime_state:'exited'}]}};
 const plainJson=o=>JSON.parse(JSON.stringify(o));
 function c05Context({preview=async()=>({}),caps=null,labs=[c05.lab],operations=[]}={}){
@@ -859,7 +863,7 @@ const c05Caps={actions:{'start-node':{available:true},'stop-node':{available:tru
 const c05Value=(extra)=>({token:'tok',action:'apply',name:'square',path:'/srv/p/square.clab.yml',warnings:[],affected:[{name:'clab-square-ceos',state:'running'}],argv:['containerlab','deploy','-t','x'],...extra});
 
 test('C05: Start device and Stop device are eligible by the device\'s own state, with reasons; unknown capabilities count as available and a loaded answer decides',()=>{
- const {c}=c05Context();const [ceos,vsw]=c05.lab.nodes,d={connected:true};
+ const {c}=c05Context();signonAdmin(c);const [ceos,vsw]=c05.lab.nodes,d={connected:true};
  assert.deepEqual(plainJson(c.opNodeActionState('stop-node',c05.lab,ceos,d)),{ok:true,reason:''});
  assert.deepEqual(plainJson(c.opNodeActionState('stop-node',c05.lab,vsw,d)),{ok:false,reason:'vsw is not running',own:true});
  assert.deepEqual(plainJson(c.opNodeActionState('start-node',c05.lab,vsw,d)),{ok:true,reason:''});
@@ -1270,4 +1274,100 @@ test('a deployed save is recognised from the builder page when the job record it
  vm.runInContext("builderPending=null",c);assert.equal(c.opDeployedSave(job),true,'remembered once the page forgot the pending save');
  assert.equal(c.opDeployedSave({...job,id:'j2'}),false,'another job is not');assert.equal(c.opDeployedSave({...job,action:'publish'}),false);
  assert.equal(c.opDeployedSave({...job,id:'j3',deployed:true}),true,'the job record carries the flag (the manager sets it at confirm)');
+});
+
+// ---- Sign-on S10a (docs/sign-on/UI.md 3.3 and 4.5; REVIEW U5, U8) ----------------------------------------------------------------
+// session.js and diagnosticsAdvice do not load here: these are stand-ins with the exact contract of UI 3.2 (sessionEnded,
+// sessionOnResume, sessionEndedError) and UI 4.5 (diagnosticsAdvice).
+function signonSession(){
+ const resume=new Set();let ended=false;
+ return {resume,
+  sessionEnded:()=>ended,
+  sessionOnResume:fn=>{if(typeof fn==='function')resume.add(fn);},
+  sessionEndedError:()=>Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true}),
+  end(){ended=true;},
+  async retry(){ended=false;const fns=[...resume];resume.clear();for(const fn of fns)fn();await new Promise(r=>setImmediate(r));}};
+}
+function signonOps(role){
+ const c=vm.createContext({$:()=>null,esc:context.esc,state:{user:role?{name:'u',role}:undefined,labs:[],discovery:{connected:true}}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ if(role)c.diagnosticsAdvice=signonAdvice;
+ return c;
+}
+const SEE='see Diagnostics',ASK='ask an administrator to check Diagnostics';
+test('S10a: every sentence that sends the person to Diagnostics has an administrator and an operator form, and a page without the helper keeps today\'s words',()=>{
+ for(const [role,advice] of [['admin',SEE],['operator',ASK],[null,SEE]]){
+  const c=signonOps(role);
+  vm.runInContext("opCaps={actions:{destroy:{available:false},revise:{available:false},'stop-node':{available:false},save:{available:false}}}",c);
+  assert.match(c.opCommand('destroy','Destroy'),new RegExp('<small>Not available on this VM — '+advice+'</small>'),'opCommand '+role);
+  const lab={id:'a',name:'sq',deployment_name:'sq',vm_project_path:'/srv/p/sq.clab.yml',deployment:{status:'Running'}};
+  assert.equal(c.opTopologyEditReason(lab,{connected:true},false,{actions:{revise:{available:false}}}),`The VM helpers are older than the manager: refresh them (${advice})`,'revise '+role);
+  assert.equal(c.opTopologyEditReason(lab,{connected:true},false,{actions:{revise:{available:false,reason:'Own reason.'}}}),'Own reason.','a reason the manager gave is kept');
+  const node={name:'clab-sq-r1',short_name:'r1',discovered:true,runtime_state:'running'},l2={...lab,nodes:[node]};
+  assert.equal(c.opNodeActionState('stop-node',l2,node,{connected:true}).reason,`Not available on this VM — its containerlab or helper cannot stop one device (${advice})`,'stop '+role);
+  assert.equal(c.opSaveNodeState(l2,node,{connected:true}).reason,`Not available on this VM — its containerlab cannot save one device (${advice})`,'save '+role);
+ }
+});
+test('S10a: the lab actions menu reason and the topology browser\'s failed command check use the same helper',async()=>{
+ for(const [role,advice] of [['admin',SEE],['operator',ASK]]){
+  const lab={...c05.lab,deployment:{status:'Running'}};
+  const h=c05Context({labs:[lab],caps:{actions:{apply:{available:false}}}});h.c.current=()=>lab;h.c.diagnosticsAdvice=signonAdvice;h.c.state.user={name:'u',role};
+  vm.runInContext("opCaps={actions:{apply:{available:false}}}",h.c);
+  const button={dataset:{opAction:'apply',opOptions:'{}'},disabled:false,title:'',querySelector:()=>null};
+  h.c.$=id=>id==='lab-actions-menu'?{querySelectorAll:()=>[button]}:null;
+  h.c.renderLabOperations();
+  assert.equal(button.disabled,true);assert.equal(button.title,`Not available on this VM — ${advice}`,'menu '+role);
+  const b=browseHarness();b.c.diagnosticsAdvice=signonAdvice;b.c.state.user={name:'u',role};
+  await b.c.opBrowse('','L1');
+  b.c.opCapabilities=async()=>{throw new Error('no helper');};
+  await b.c.opBrowse('','L1');await new Promise(r=>setImmediate(r));
+  assert.match(b.get('help').textContent,new RegExp('Files are available, but the VM command check failed — '+advice+'\\. Online downloads stay off\\.'),'browser '+role);
+ }
+});
+test('S10a: the operation output poll sends nothing after a session end, spends no retry, writes no sentence, and resumes after sessionRetry()',async()=>{
+ const jobs={current:stopJob({status:'running'})},h=stopHarness(jobs),sess=signonSession();
+ Object.assign(h.c,{sessionEnded:sess.sessionEnded,sessionOnResume:sess.sessionOnResume,sessionEndedError:sess.sessionEndedError});
+ const timers=[];h.c.setTimeout=fn=>{timers.push(fn);return timers.length;};
+ const errorBox={textContent:''};h.dialog.querySelector=sel=>sel==='.form-error'?errorBox:{textContent:''};
+ let sent=0,answer='ok';
+ h.c.api=async()=>{
+  if(sess.sessionEnded())throw sess.sessionEndedError();
+  sent++;
+  if(answer==='401'){sess.end();throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+  return {json:async()=>jobs.current};
+ };
+ await h.c.opShowJob('a');
+ assert.equal(sent,1);assert.equal(timers.length,1,'a running job is polled again');
+ answer='401';await timers.shift()();
+ assert.equal(sent,2,'the first 401 is the last request that left');assert.equal(timers.length,0,'no retry is scheduled');
+ assert.equal(errorBox.textContent,'','no failure sentence in the dialog');
+ assert.equal(sess.resume.size,1,'the poll registered itself for the resume');
+ const poll=[...sess.resume][0];await poll();
+ assert.equal(sent,2,'a stray timer firing while signed out still sends nothing');assert.equal(sess.resume.size,1,'registered once: the same function twice runs once');
+ answer='ok';await sess.retry();
+ assert.equal(sent,3,'sessionRetry() resumes the poll and it asks again');assert.equal(timers.length,1,'the job is polled on, as before');
+ assert.equal(errorBox.textContent,'');
+});
+test('S10a: a poll kept for a closed output dialog is not revived into the dialog reopened for another job',async()=>{
+ const jobs={current:stopJob({status:'running'})},h=stopHarness(jobs),sess=signonSession();
+ Object.assign(h.c,{sessionEnded:sess.sessionEnded,sessionOnResume:sess.sessionOnResume,sessionEndedError:sess.sessionEndedError});
+ const timers=[];h.c.setTimeout=fn=>{timers.push(fn);return timers.length;};
+ h.dialog.querySelector=sel=>sel==='.form-error'?{textContent:''}:{textContent:''};
+ const asked=[];let answer='ok';
+ h.c.api=async url=>{
+  if(sess.sessionEnded())throw sess.sessionEndedError();
+  asked.push(url);
+  if(answer==='401'){sess.end();throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+  return {json:async()=>({...jobs.current,id:url.split('/').pop()})};
+ };
+ await h.c.opShowJob('A');
+ answer='401';await timers.shift()();
+ assert.equal(sess.resume.size,1,'poll A is kept for the resume');
+ h.dialog.open=false;if(typeof h.dialog.onclose==='function')h.dialog.onclose();
+ h.dialog.open=true;
+ await h.c.opShowJob('B');
+ assert.equal(sess.resume.size,2,'a second closure for the second call');
+ asked.length=0;answer='ok';await sess.retry();
+ assert.deepEqual(asked,['/operations/B'],'only the job the dialog shows is polled');
+ assert.equal(timers.length,1,'one chain drives the dialog');
 });

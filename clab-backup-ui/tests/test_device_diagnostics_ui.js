@@ -599,3 +599,31 @@ test('C06: diagVisibilityChanged tells the map once the page is visible, and not
  h.context.diagVisibilityChanged();assert.equal(calls,0);
  h.context.visible=true;h.context.diagVisibilityChanged();assert.equal(calls,1);
 });
+
+// ---- Sign-on S10a (docs/sign-on/UI.md 3.3; REVIEW U8): the Interfaces and Logs poll ------------------------------------------------
+// session.js does not load here: stand-ins with the exact contract of UI 3.2 (sessionEnded, sessionOnResume, sessionEndedError).
+test('S10a: the Interfaces poll sends nothing after the first 401, plans no failure and says nothing, and resumes after sessionRetry()',async()=>{
+ const h=harness(),resume=new Set();let ended=false,sent=0,mode='ok';
+ const orig=h.context.api;
+ Object.assign(h.context,{
+  sessionEnded:()=>ended,sessionOnResume:fn=>{if(typeof fn==='function')resume.add(fn);},
+  sessionEndedError:()=>Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true}),
+  api:async url=>{if(ended)throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});return orig(url);}});
+ h.on('/operations/netem',()=>({container:'c',present:true,impairments:[]}));
+ h.on('/operations/interfaces',()=>{
+  sent++;
+  if(mode==='401'){ended=true;throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+  return answer();
+ });
+ h.context.renderDeviceDiagnostics({name:'r1'});
+ h.open('interfaces');await tick();await tick();
+ assert.equal(sent,1);assert.equal(h.live().length,1,'the poll is planned after the answer');
+ const said=h.get('diag-if-status').textContent;
+ mode='401';await h.run();
+ assert.equal(sent,2,'the first 401 is the last request that left');assert.equal(h.live().length,0,'no failure is planned: no retry, no stop button');
+ assert.equal(h.get2('diagSec.interfaces.message'),'','nothing is said');assert.equal(h.get2('diagSec.interfaces.flight'),false,'no request is left in flight');
+ assert.equal(h.get2('diagSec.interfaces.plan.errors'),0,'no error is counted');assert.equal(h.get('diag-if-status').textContent,said);
+ assert.equal(resume.size,1);
+ mode='ok';ended=false;for(const fn of [...resume]){resume.delete(fn);fn();}await tick();await tick();
+ assert.equal(sent,3,'sessionRetry() asks again');assert.equal(h.live().length,1,'and the poll goes on');
+});

@@ -326,6 +326,8 @@ function gitDoneToast(job){
  return gitSaveSentence(job)+'.';
 }
 function gitStartWatch(job,options={}){
+ // Signed out (UI 3.3): the render paths re-arm this watch on every render, so it starts nothing; the kept watch resumes through sessionRetry().
+ if(typeof sessionEnded==='function'&&sessionEnded())return;
  // A save already followed (the poll's own render follows an active save of the lab on screen) takes what this caller asks for:
  // its end still reaches the header (quiet) and it survives a render for another lab (keep). Without this, a poll that lands
  // between a click on Upload and its answer would swallow the upload's toast and leave the panel open.
@@ -343,7 +345,10 @@ function gitStartWatch(job,options={}){
     if(watch.quiet&&typeof saveFinished==='function')saveFinished(value);
     else if(watch.quiet){if(value.status==='review_pending'&&gitNeedsReview(value))await gitReviewJob(value);else if(['push_pending','export_pending','failed','capture_incomplete','interrupted','review_pending'].includes(value.status))await gitShowJob(value.id,value);else notify(gitDoneToast(value));}
    }
-  }catch(error){if(gitWatch===watch){gitWatch=null;if(gitDialogJob===job.id&&$('git-job-dialog')?.open)$('git-job-dialog').querySelector('.form-error').textContent='The save status could not be refreshed. Close and reopen this save to check it. ('+error.message+')';else if(watch.quiet)notify('The save status could not be refreshed. Open the save chip in the header to check it.');}}
+  }catch(error){
+   // A session end: gitWatch stays set (gitResumeWatch does not re-arm), no dialog text and no toast; sessionRetry() runs poll again.
+   if(gitWatch===watch&&typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(poll);return;}
+   if(gitWatch===watch){gitWatch=null;if(gitDialogJob===job.id&&$('git-job-dialog')?.open)$('git-job-dialog').querySelector('.form-error').textContent='The save status could not be refreshed. Close and reopen this save to check it. ('+error.message+')';else if(watch.quiet)notify('The save status could not be refreshed. Open the save chip in the header to check it.');}}
  };gitWatchTimer=setTimeout(poll,1000);
 }
 async function gitDismissJob(job){

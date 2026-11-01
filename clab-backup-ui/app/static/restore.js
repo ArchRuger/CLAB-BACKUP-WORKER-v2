@@ -355,7 +355,10 @@ function restoreBackupLoadable(job) {
  return effective && !!backup && ['succeeded', 'partial'].includes(backup.status);
 }
 function restoreStartWatch(job) {
- if (restoreWatch === job.id) return; restoreStopWatch();
+ if (restoreWatch === job.id) return;
+ // Signed out (UI 3.3): the job window re-arms this watch; it sends nothing until sessionRetry() resumes it from the catch below.
+ if (typeof sessionEnded === 'function' && sessionEnded()) return;
+ restoreStopWatch();
  restoreWatch = job.id;
  const poll = async () => {
   if (restoreWatch !== job.id) return;
@@ -365,7 +368,10 @@ function restoreStartWatch(job) {
    restoreRenderJob(value);
    if (restoreJobActive(value)) restoreWatchTimer = setTimeout(poll, 1500);
    else { restoreStopWatch(); await refresh(); }
-  } catch (error) { restoreStopWatch(); restorePaused = true; if (restoreLastJob && restoreLastJob.id === job.id) restoreRenderJob(restoreLastJob); }
+  } catch (error) {
+   // A session end is not a paused watch: no paused state; sessionRetry() starts it again.
+   if (typeof sessionEnded === 'function' && sessionEnded()) { restoreStopWatch(); sessionOnResume(() => restoreStartWatch(job)); return; }
+   restoreStopWatch(); restorePaused = true; if (restoreLastJob && restoreLastJob.id === job.id) restoreRenderJob(restoreLastJob); }
  };
  restoreWatchTimer = setTimeout(poll, 1200);
 }
