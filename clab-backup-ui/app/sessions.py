@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import quote
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
@@ -662,7 +662,3 @@ def install(app, sessions, accounts_):
         if getattr(request.state, 'user', None): return RedirectResponse('/', status_code=302)
         if accounts_.read_setup_code() is None: raise HTTPException(404, 'Not found')
         return page('setup.html')
-
-
-__all__ = ['Sessions', 'SessionGate', 'require_admin', 'install', 'EXEMPT', 'RESTRICTED', 'COOKIE', 'IDLE', 'ABSOLUTE',
-           'source_key', 'source_prefix', 'client_address', 'UserFacts', 'Depends']

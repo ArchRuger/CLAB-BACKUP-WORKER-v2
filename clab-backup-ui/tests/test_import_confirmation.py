@@ -23,7 +23,7 @@ class ImportConfirmationTests(unittest.TestCase):
         return response.json()
 
     def confirm(self, preview):
-        return self.client.post('/api/discovery/import', 
+        return self.client.post('/api/discovery/import',
                                 json={'name': 'training', 'token': preview['token']})
 
     def test_poll_preview_and_cancel_do_not_save_lab_or_credentials(self):

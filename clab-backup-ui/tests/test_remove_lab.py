@@ -21,7 +21,7 @@ class RemoveLabTests(unittest.TestCase):
         return self.store.state['labs'][0]
 
     def remove(self, lab, **options):
-        return self.client.request('DELETE', '/api/labs/' + lab['id'], 
+        return self.client.request('DELETE', '/api/labs/' + lab['id'],
                                    json={'name': lab['name'], **options})
 
     def test_remove_only_manager_workspace_and_history(self):

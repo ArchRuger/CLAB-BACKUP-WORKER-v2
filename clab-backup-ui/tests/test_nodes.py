@@ -123,7 +123,7 @@ class NodeTests(unittest.TestCase):
 
     def test_linux_profile_and_sanitized_login_check(self):
         self.lab['nodes'][2]['password'] = ''
-        response = self.client.post('/api/labs/lab/profiles', 
+        response = self.client.post('/api/labs/lab/profiles',
             data={'label': 'Linux', 'platform': 'ssh', 'username': 'root', 'auth': 'password', 'password': 'secret'})
         self.assertEqual(response.status_code, 200, response.text)
         # A generic default supports imported Linux nodes without assigning NOS.
