@@ -905,7 +905,7 @@ test('T06-fix 7: Undo and Redo keep focus in the bar when the pressed button tur
 
 // ---- signed out (docs/sign-on/UI.md 3.5) ----
 const LOST={refused:{code:'signed_out',message:'Your session ended. Sign in again.'},status:401};
-const BUILDER_SESSION_TEXT='Your session ended. Your drawing is still on this page, not stored in this browser. Sign in in a new tab, then continue.';
+const BUILDER_SESSION_TEXT='Your session ended. Your drawing is still on this page, not stored in this browser. Sign in in a new tab, then choose Try again.';
 function signedPage(answer){
  const p=page({answer});vm.runInContext(SESSION_STAND_IN,p.c);p.moves=[];
  Object.assign(p.c.location,{pathname:'/static/lab-builder.html',search:'',hash:'#lab=lab1',replace:u=>p.moves.push(u)});

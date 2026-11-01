@@ -187,7 +187,7 @@ code, kbd, pre, .mono { font-family: var(--mono); }
 code { font-size: .92em; }
 
 .caption { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
-/* .eyebrow is kept for the diagnostics page only (drawer/dialog heads no longer use it) */
+/* .eyebrow is kept for the diagnostics and the people pages only (drawer/dialog heads no longer use it) */
 .eyebrow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--muted); margin: 0 0 6px; }
 
 /* inline SVG sprite glyphs (#i-info #i-clock #i-alert …): sized here, otherwise an inline <svg> renders 300×150 */

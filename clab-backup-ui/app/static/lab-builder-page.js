@@ -16,7 +16,7 @@ let builderPaused=null;
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6000);}
 // A refusal's own sentence: the sign-on answers carry {detail:{code,message}} (REVIEW U11), older routes a plain string.
 function builderDetail(value){const d=value&&value.detail;return typeof d==='string'?d:d&&typeof d==='object'&&typeof d.message==='string'?d.message:'';}
-const BUILDER_SESSION_TEXT='Your session ended. Your drawing is still on this page, not stored in this browser. Sign in in a new tab, then continue.';
+const BUILDER_SESSION_TEXT='Your session ended. Your drawing is still on this page, not stored in this browser. Sign in in a new tab, then choose Try again.';
 const BUILDER_SESSION_YAML_TEXT='Your session ended. The YAML you typed is still in the YAML panel, not applied; Download this version holds the drawing, not that text. Sign in in a new tab, then choose Try again.';
 // The reaction to a lost session (UI 3.5). A drawing that is stored in this browser loses nothing by a redirect; one the browser could not
 // store is held by the page (builderUnstored), so the problem overlay pauses editing until a request succeeds again. Marks the page once.

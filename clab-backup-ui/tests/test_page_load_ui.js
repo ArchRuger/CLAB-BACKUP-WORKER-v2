@@ -336,3 +336,13 @@ test('REVIEW U4 on the real markup: the two settings items carry a .menu-reason 
 test('no page other than index.html loads account.js',()=>{
  for(const file of fs.readdirSync(dir).filter(n=>n.endsWith('.html')&&n!=='index.html'))assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/account\.js/,file);
 });
+test('the sign-on pages (login.html, setup.html, users.html) carry no inline style, and every script and stylesheet they load carries ?v= of VERSION (UI.md 9.1; the favicon carries none, as on index.html)',()=>{
+ const version=fs.readFileSync(path.join(dir,'..','..','VERSION'),'utf8').trim();
+ for(const file of ['login.html','setup.html','users.html']){
+  const page=fs.readFileSync(path.join(dir,file),'utf8');
+  assert.doesNotMatch(page,/\sstyle="/,file+' keeps no inline style');
+  const assets=[...page.matchAll(/(?:src|href)="(\/static\/[^"]+\.(?:js|css)(?:\?[^"]*)?)"/g)].map(m=>m[1]);
+  assert.ok(assets.length>0,file+' loads assets');
+  for(const asset of assets)assert.match(asset,new RegExp('\\?v='+version.replace(/\./g,'\\.')+'$'),file+': '+asset);
+ }
+});
