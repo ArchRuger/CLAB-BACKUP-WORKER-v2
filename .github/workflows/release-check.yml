@@ -35,6 +35,7 @@ jobs:
           python3 -m unittest discover -s tests -p test_check_install.py -v
           python3 -m unittest discover -s tests -p test_check_host.py -v
           python3 -m unittest discover -s tests -p test_check_git.py -v
+          python3 -m unittest discover -s tests -p test_check_exposure.py -v
       - name: Check installer shell syntax
         run: |
           for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh deploy/setup-engineer-access.sh deploy/setup-capture.sh deploy/retire-telemetry.sh deploy/recreate-manager.sh deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-operations.sh deploy/setup-password.sh deploy/migrate-worker-data.sh; do
