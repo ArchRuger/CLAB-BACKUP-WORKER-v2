@@ -31,8 +31,13 @@ echo "$@" >> "$DOCKER_LOG"
 case "$*" in
   *'ps --all --quiet backup-ui'*) [[ -z "$EXISTING_ID" ]] || printf '%s\n' "$EXISTING_ID";;
   *'inspect --format {{.Config.Image}}'*) printf '%s\n' "$RUNNING_IMAGE";;
+  *'inspect --format {{.State.Status}}'*) printf '%s\n' "$CONTAINER_STATUS";;
   *'images --quiet '*) [[ -z "$LOCAL_SOURCE_IMAGE_ID" ]] || printf '%s\n' "$LOCAL_SOURCE_IMAGE_ID";;
-  exec\ *) printf '%s' "$RECOVER_OUTPUT"; exit "$RECOVER_STATUS";;
+  exec\ *)
+    if [[ "$CONTAINER_STATUS" != running ]]; then
+      echo "Error response from daemon: container $EXISTING_ID is not running" >&2; exit 1
+    fi
+    printf '%s' "$RECOVER_OUTPUT"; exit "$RECOVER_STATUS";;
 esac
 exit 0
 '''
@@ -75,7 +80,8 @@ class RecoverAdminTests(unittest.TestCase):
         self.env = {'PATH': f'{bin_dir}{os.pathsep}{SYSTEM_PATH}', 'HOME': str(self.base), 'LC_ALL': 'C',
                     'DOCKER_LOG': str(self.docker_log), 'TLS_LOG': str(self.tls_log), 'EXISTING_ID': 'abc123',
                     'RUNNING_IMAGE': 'clab-backup:9.9.9', 'LOCAL_SOURCE_IMAGE_ID': 'sha256:local',
-                    'RECOVER_OUTPUT': RECOVER_OUTPUT, 'RECOVER_STATUS': '0', 'PRIMARY': 'vm.example.org'}
+                    'RECOVER_OUTPUT': RECOVER_OUTPUT, 'RECOVER_STATUS': '0', 'PRIMARY': 'vm.example.org',
+                    'CONTAINER_STATUS': 'running'}
 
     def run_script(self, *args, **overrides):
         result = subprocess.run(['bash', str(self.script), *args], cwd=str(self.base), env={**self.env, **overrides},
@@ -163,6 +169,19 @@ class RecoverAdminTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn('start-manager.sh', result.stderr)
         self.assertFalse([call for call in self.docker_calls() if call.startswith('exec')])
+
+    def test_a_container_that_is_not_running_is_refused_with_the_start_command(self):
+        for status in ('exited', 'created', 'restarting', 'paused', 'dead', ''):
+            with self.subTest(status=status):
+                self.docker_log.unlink(missing_ok=True)
+                result = self.run_script(CONTAINER_STATUS=status)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn('not running', result.stderr)
+                self.assertIn('start-manager.sh', result.stderr)
+                self.assertNotIn('Error response from daemon', result.stderr)
+                self.assertEqual(result.stdout, '')
+                self.assertFalse([call for call in self.docker_calls() if call.startswith('exec')])
+                self.assertFalse(self.tls_log.exists())
 
     def test_the_first_container_id_is_used(self):
         result = self.run_script(EXISTING_ID='abc123\ndef456')

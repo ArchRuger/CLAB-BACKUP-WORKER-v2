@@ -3,7 +3,7 @@
 # any directory: sudo bash deploy/manager-recover-admin.sh (no options).
 #
 # Finds the manager container exactly as recreate-manager.sh does (source build, or a prepared image
-# from deploy/image.env), runs `python -m app.recover` inside it and prints its output unchanged: the
+# from deploy/image.env), refuses with the start command when it is not running, runs `python -m app.recover` inside it and prints its output unchanged: the
 # recovery code and how long it is valid. app.recover changes no account; it opens the setup page for
 # 15 minutes so one new administrator can be created. When it succeeds, this script prints one line of
 # its own, last: the address of that page, https://<primary>:<UI_PORT>/setup?recover=1, with the
@@ -26,6 +26,14 @@ manager_image=''
 existing=$("${source_compose[@]}" ps --all --quiet backup-ui 2>/dev/null | head -n 1 || true)
 if [[ -z "$existing" ]]; then
   printf 'No manager container exists for %s; start it with:\n  sudo bash %q\n' "$repo_dir" "$script_dir/start-manager.sh" >&2
+  exit 1
+fi
+# app.recover runs inside the container, so a stopped, paused or restarting one is refused here with the
+# way out instead of docker's daemon error.
+state=$(docker inspect --format '{{.State.Status}}' "$existing" 2>/dev/null || true)
+if [[ "$state" != running ]]; then
+  printf 'The manager container %s is %s, not running; the recovery runs inside it. Start the manager with:\n  sudo bash %q\nthen rerun this script.\n' \
+    "$existing" "${state:-in an unknown state}" "$script_dir/start-manager.sh" >&2
   exit 1
 fi
 
