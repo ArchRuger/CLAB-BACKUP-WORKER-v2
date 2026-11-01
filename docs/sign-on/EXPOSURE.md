@@ -199,6 +199,23 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -sha256
 temporary directory inside the tls directory, given their final modes, then moved with `os.replace`
 (the `write_env` discipline).
 
+**As built (S4, the lead's record after three verification rounds).** (1) A certificate that `setup-tls.sh`
+did not make is never regenerated: when `cert.pem` exists and `tls/mode` is absent ("unregistered"), `ensure`
+(and so `start-manager.sh`) keeps it when the pair can serve (`cert.pem` readable by openssl and free of a
+`PRIVATE KEY` block, `key.pem` a regular file that matches it), prints that `setup-tls.sh` did not make it and how to
+register it (`setup-tls.sh --cert PATH --key PATH`) or replace it (`setup-tls.sh --self-signed`), reports its
+expiry (within 30 days and expired named), and does not recreate the manager for it; when the pair cannot serve,
+`ensure` and `--prepare` fail and `start-manager.sh` stops before recreating. `--renew` refuses an unregistered pair;
+`--show` prints `mode: none`; file modes are repaired to 3.3 without touching content, and a `cert.pem` holding a
+private key is never widened. The health check's `tls.files` Next line for a missing mode names those two commands.
+(2) `--name` refuses a scoped IPv6 address (`%zone`) with a sentence naming the value; a hand-written `tls/names` line
+of that kind is skipped with a note on stderr and never reaches openssl. (3) A root-only read-only mode `setup_tls.py
+digest` (SHA-256 over the length-prefixed content of `cert.pem` and `key.pem`) decides whether the manager is
+recreated: a change of either file recreates it even behind the same leaf fingerprint (a corrected chain), and the
+person is told which. (4) `--prepare` creates the tls directory (0755 root) when it is absent, because the lock lives
+inside it; it still never generates. (5) `--primary` and `--fingerprint` print exactly one line on stdout; notes go to
+stderr.
+
 ### 3.2 Names in the certificate
 
 | SAN | Source | Why |
@@ -247,6 +264,11 @@ prints a hash of the key: the key's entry is passed with a flag that skips the d
 The key never leaves the VM. `setup-tls.sh --show` prints the certificate's facts, never the key.
 `setup_tls.py` never prints a key path's contents in an error message.
 
+**As built (S4):** the directory also holds `tls/.lock` (root:root, 0600, empty, permanent): every writing mode
+takes an exclusive `fcntl.flock` on it (opened with `O_NOFOLLOW`, never unlinked) from before its first read of the
+directory until its files are installed; a second run waits up to 60 s and then refuses with a sentence that names
+the lock; the read-only modes take no lock.
+
 ### 3.4 A provided certificate
 
 `setup-tls.sh --cert PATH --key PATH` (root) validates before it copies:
@@ -266,6 +288,15 @@ Rotation of a provided certificate is the same command again. A certbot deploy h
 is the documented way to use Let's Encrypt (8.1); certbot in `standalone` mode needs port 80 free and
 reachable, which the firewall section (5.2) does not open by default, so the guide states the DNS-01
 alternative. Neither certbot nor any ACME client is installed by the installer.
+
+**As built (S4), rule 1 for symlinks:** a `--cert` or `--key` path is resolved with `realpath` over every
+component. A path that is its own real path is used as is (a regular file of at most 64 KiB). A path whose real path
+differs (a link as its last component, or a linked ancestor directory) is followed only when the real path lies under
+`/etc/letsencrypt/archive/`, the last component (the link or the file) is owned by root, its directory is owned by root
+and writable by root alone, and the target is a regular file owned by root: certbot's `live/NAME/*.pem` layout and
+nothing else. Any other link, including a root-owned link in a root-owned directory to a root-owned key outside the
+archive (an SSH host key), is refused before anything is read into the tls directory, with the real path named; a
+dangling link is refused as such. The copied files are regular files with the modes of 3.3.
 
 ### 3.5 Rotation of a self-signed certificate
 
