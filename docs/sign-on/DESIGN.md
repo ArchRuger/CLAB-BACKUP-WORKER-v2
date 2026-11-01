@@ -322,8 +322,9 @@ attributes and deletes the record, and the same response always clears `clab_cap
   so no poller keeps a tab signed in; an open tab in which nobody acts expires after 12 h and the
   next poll's 401 sends it to `/login`. The earlier special list (`/api/state`, `/api/session`) is gone.
 - Renewal changes nothing in the browser: the cookie is never re-sent (5.3), so `Set-Cookie:
-  clab_session=…` appears only on the sign-in, setup and own-change responses and the clearing one of
-  sign-out. `touch` is a dictionary write under the sessions lock and nothing else.
+  clab_session=…` appears only on the sign-in, setup and own-change responses and the clearing ones of
+  sign-out and of the 401 of `GET /api/session` (6.4). `touch` is a dictionary write under the sessions
+  lock and nothing else.
 - Expiry is checked by the gate on every request: `now - last_seen > 43200` or
   `now - created > 604800` → the record is deleted, the request is refused as signed out, and
   `session.expired` is audited **once**, with the reason: `resolve` queues the entry and the sweep
@@ -576,7 +577,9 @@ read-only** with `state.key`, exactly as `STORAGE_PROBE` (check_install.py:299-3
 serves the VM connection and discovery facts and the list of Git bindings; the end-to-end checks
 (`http-browse`, `git-http`) become probes that run the manager's own clients read-only from that state,
 and where a probe cannot be built without a `Store` the check stays and answers SKIP with the reason and
-*Open Manager ▾ › Diagnostics, which runs the same check.* The probe names and their JSON are
+*Open Manager ▾ › Diagnostics, which runs the same check.*; the exact SKIP sentences, including the
+save-drawer advice for the Git registry (`git-http`: Diagnostics never lists the registry, so it is not
+named there), are EXPOSURE.md 6.1's SKIP table. The probe names and their JSON are
 EXPOSURE.md 6.1's table; none of today's checks is dropped silently. A version-less health route is a weaker fingerprint
 than today's unauthenticated `/api/state`, but it still says "this is a web service that answers
 `/api/health`". The alternative, no route at all, would leave the installer polling a 302 from `/`,
@@ -635,7 +638,7 @@ Decisions the prompt left open:
 | Route | Body | Answer | Role |
 |---|---|---|---|
 | `POST /api/session` (`async`) | `{username, password}` | `200 {user:{name,role,must_change_password}, expires}` + cookie (with `must_change_password: true` the session is restricted and the page shows the change view, 6.3); `401 invalid_credentials`; `429 throttled` + `Retry-After` (8.3; also the `busy` refusal of 4.1); `503 setup_required` in setup mode | exempt |
-| `GET /api/session` | | `200 {user:{name,role,must_change_password}, expires}`; `401 signed_out` | exempt |
+| `GET /api/session` | | `200 {user:{name,role,must_change_password}, expires}`; `401 signed_out` + the clearing `clab_session` cookie (6.4) | exempt |
 | `DELETE /api/session` | `{}` | `200 {signed_out: true}` + the two clearing cookies (`clab_session`, `clab_capture_owner` with `Path=/api/capture`, 11.2), always, also when the session is already gone; no 401 | exempt |
 | `POST /api/session/password` (`async`) | `{current, password}` | `200 {changed: true}` + rotated cookie; `401 invalid_credentials` when `current` fails (a failure for the three levels of 8 under the session's own name; the sentence *The current password is not right.*); `422 weak_password`; `429 throttled` | signed in (also restricted) |
 | `GET /api/users` | | `200 {users:[public_user…]}` | admin |
@@ -913,9 +916,14 @@ session id or a hash (10.4).
 
 This table is the vocabulary (REVIEW R3): the constants `AUDIT_EVENTS`, `AUDIT_OUTCOMES = ('ok',
 'failed', 'throttled')` and `AUDIT_REASONS` in `app/accounts.py` are built from it; the label maps of
-`users.js` (`AUDIT_EVENT_LABELS`, `AUDIT_OUTCOME_LABELS`, UI.md 5.6) and the page's filter lists name
-exactly these codes, and `test_audit.py` reads `users.js` and compares the two sets (13.1). An
-`outcome` is one of the three values; a reason goes in `detail`.
+`users.js` (`AUDIT_EVENT_LABELS`, `AUDIT_OUTCOME_LABELS`, `AUDIT_DETAIL_LABELS`, written as JSON object
+literals, UI.md 5.6) and the page's filter lists name exactly these codes, and `test_audit.py` reads
+`users.js` and compares the three sets (13.1). An `outcome` is one of the three values; a reason goes
+in `detail`. `AUDIT_REASONS` is exactly the reason words of the `detail` column: `setup`, `recover`,
+`invalid_code`, `weak_password`, `invalid_name`, `exists`, `invalid_credentials`, `disabled`,
+`bad_record`, `pair`, `source`, `name`, `busy`, `idle`, `absolute`, `user_disabled`, `user_deleted`,
+`password_reset`, `password_changed`, `evicted`, `admin_required` (21 words; `count=`, `retry_after=`
+and `role=` are tokens with a value, not reasons).
 
 | `event` | `actor` | `target` | `outcome` | `detail` |
 |---|---|---|---|---|
@@ -1061,6 +1069,13 @@ and a Bearer header will not be read after this design either: there is one cred
 - Every HTML page except `login.html` and `setup.html` is behind the gate; nothing in them changes
   for this design (UI.md changes their scripts for 401 handling).
 - No stored lab, job, binding or snapshot shape changes.
+- `allowed_hosts.py` (EXPOSURE.md 7.1, the row of that file): its docstring's *The manager has no login*
+  becomes the gate sentence of 14 (sign-in is required for everything but the exempt rows; behind the gate
+  `/api/` keeps the same-origin guard and the sockets their Origin checks, all building "own origin"
+  from the request's `Host`), and `REFUSAL` names `https://192.0.2.10:8443/` instead of
+  `http://192.0.2.10:8081/`, the address a refused browser is told to open. BUILD.md S1b owns both
+  changes with the file; `verify_docs` (EXPOSURE.md 8.2) reads guides, not this body, so nothing else
+  would catch the stale address.
 
 ## 13. Tests
 
@@ -1068,14 +1083,14 @@ and a Bearer header will not be read after this design either: there is one cred
 
 | File | What it proves |
 |---|---|
-| `tests/test_session.py` | The gate on every route: a walk of `app.routes` (and the two sockets) without a cookie gets 401, 302 or 1008 by the rules of 6.4, except the exempt rows of 6.3; the classification table of 7.1 names every route (a route absent from the table fails); every gate body carries `message` (7.4). Cookie attributes exactly as 5.3, under `http` and under `https` (`base_url='https://testserver'`). Idle and absolute expiry with a patched monotonic clock. **Renewal (R9):** no `GET /api/...` moves `last_seen` (the poll, `/api/session`, a drawer's GET), a `POST` and a page navigation do; `Set-Cookie: clab_session` appears on the sign-in, setup, own-change and sign-out responses and on no other (never re-sent, 5.3). **The restricted session (R1):** sign in as a user an admin created, follow every redirect to a final 200 on `/login?change=1&next=…`, see `GET /api/session` answer `must_change_password: true`, see `/api/state` answer 403 `password_change_required` and a socket close 1008 with that reason, change the password, land on `next`; the allowlist resists `/api/session/password/../../state`, `/API/state` and a trailing slash. **No normalisation (6.3):** `GET /api/capture/sessions/x/assets/../../../../session` without a cookie answers 401, not the exempt route. Sign-out everywhere: disable, delete, admin reset, own change (other sessions end, the current id rotates). **The own change keeps the current session (R1/R4):** after `POST /api/session/password` the very next request on the rotated cookie (a page `GET /` and a `GET /api/state`) answers 200, the old cookie answers 401, and the other sessions of the user are gone; a request on the current session that runs concurrently with the own change is never refused. **Lock order (R4):** the sessions lock and `store.lock` are wrapped by recording locks, every route runs once, and no `store.lock` acquisition happens while the same thread holds the sessions lock; the gate acquires `store.lock` never. **Gate refusals are logged nowhere (R8):** a dead cookie polled ten times adds no line to `events.jsonl` or either audit file beyond the one `session.expired`. Constant work: a wrong user and a wrong password both call the verify function exactly once (patched). Session fixation: the id after sign-in differs from any cookie sent with the request. `/api/state` contains neither `users`, `known_sources` nor `scrypt$`. |
+| `tests/test_session.py` | The gate on every route: a walk of `app.routes` (and the two sockets) without a cookie gets 401, 302 or 1008 by the rules of 6.4, except the exempt rows of 6.3; the classification table of 7.1 names every route (a route absent from the table fails); every gate body carries `message` (7.4). Cookie attributes exactly as 5.3, under `http` and under `https` (`base_url='https://testserver'`). Idle and absolute expiry with a patched monotonic clock. **Renewal (R9):** no `GET /api/...` moves `last_seen` (the poll, `/api/session`, a drawer's GET), a `POST` and a page navigation do; `Set-Cookie: clab_session` appears on the sign-in, setup, own-change and sign-out responses and the 401 of `GET /api/session` (a clearing cookie), and on no other (never re-sent, 5.3). **The restricted session (R1):** sign in as a user an admin created, follow every redirect to a final 200 on `/login?change=1&next=…`, see `GET /api/session` answer `must_change_password: true`, see `/api/state` answer 403 `password_change_required` and a socket close 1008 with that reason, change the password, land on `next`; the allowlist resists `/api/session/password/../../state`, `/API/state` and a trailing slash. **No normalisation (6.3):** `GET /api/capture/sessions/x/assets/../../../../session` without a cookie answers 401, not the exempt route. Sign-out everywhere: disable, delete, admin reset, own change (other sessions end, the current id rotates). **The own change keeps the current session (R1/R4):** after `POST /api/session/password` the very next request on the rotated cookie (a page `GET /` and a `GET /api/state`) answers 200, the old cookie answers 401, and the other sessions of the user are gone; a request on the current session that runs concurrently with the own change is never refused. **Lock order (R4):** the sessions lock and `store.lock` are wrapped by recording locks, every route runs once, and no `store.lock` acquisition happens while the same thread holds the sessions lock; the gate acquires `store.lock` never. **Gate refusals are logged nowhere (R8):** a dead cookie polled ten times adds no line to `events.jsonl` or either audit file beyond the one `session.expired`. Constant work: a wrong user and a wrong password both call the verify function exactly once (patched). Session fixation: the id after sign-in differs from any cookie sent with the request. `/api/state` contains neither `users`, `known_sources` nor `scrypt$`. |
 | `tests/test_setup.py` | Setup mode answers of 9.3 with their messages; the code file's mode and content, written by `create_app`; the container log line names the file and never the code; `POST /api/setup` creates the admin, deletes the file, signs in; a code typed in capitals, without dashes and with spaces matches (U13); a second setup is `404 setup_closed`; `app.recover` writes a `mode=recover` file and prints no URL, one admin is created, existing users untouched, an existing name answers `409 exists` and changes nothing (R11), a 16-minute-old file is refused and deleted; `Store.reset` keeps `users`, `audit.jsonl` and `audit-failures.jsonl`. |
 | `tests/test_users.py` | Name rule, role values, `extra='forbid'`, uniqueness, last-admin and self-change refusals, `POST /api/users/{own name}/password` is `409 self_change` with its sentence (R12), `public_user` fields and nothing more (never `known_sources`), role change effective on the next request, every 4xx of the users routes carries `message`. |
-| `tests/test_audit.py` | Every event of 10.2 is written with its fields and one of the three outcomes; the two files and their rotation; **summing (R8):** 50 failures from one source under 50 distinct unknown names (actor `-`, reason `invalid_credentials`, so L1 never fires and L2's 100 is not reached) in one minute are one `signin.failed` entry with `count=50`, visible through `GET /api/audit` before the minute closes; 30 admin-only requests by one operator in one minute are one `forbidden` entry in `audit.jsonl` with `admin_required count=30` and the route template as `target`; **the actor rule (R2):** the real password typed as the username leaves no trace (`assert_not_logged`), a failure under an existing name carries that name, an unknown name carries `-`; `GET /api/audit` paging and filters merge both files; the actor on `api.request` in `events.jsonl` and no `source` key there (R22b); no `api.request` event for `POST /api/session` or `POST /api/setup`; `test_users_js_labels_match_vocabulary` parses `AUDIT_EVENT_LABELS` and `AUDIT_OUTCOME_LABELS` out of `app/static/users.js` and compares them with `AUDIT_EVENTS` and `AUDIT_OUTCOMES` (R3). |
+| `tests/test_audit.py` | Every event of 10.2 is written with its fields and one of the three outcomes; the two files and their rotation; **summing (R8):** 50 failures from one source under 50 distinct unknown names (actor `-`, reason `invalid_credentials`, so L1 never fires and L2's 100 is not reached) in one minute are one `signin.failed` entry with `count=50`, visible through `GET /api/audit` before the minute closes; 30 admin-only requests by one operator in one minute are one `forbidden` entry in `audit.jsonl` with `admin_required count=30` and the route template as `target`; **the actor rule (R2):** the real password typed as the username leaves no trace (`assert_not_logged`), a failure under an existing name carries that name, an unknown name carries `-`; `GET /api/audit` paging and filters merge both files; the actor on `api.request` in `events.jsonl` and no `source` key there (R22b); no `api.request` event for `POST /api/session` or `POST /api/setup`; `test_users_js_labels_match_vocabulary` parses `AUDIT_EVENT_LABELS`, `AUDIT_OUTCOME_LABELS` and `AUDIT_DETAIL_LABELS` out of `app/static/users.js`, each lifted with a regex and `json.loads` (UI.md 5.6), and compares them with `AUDIT_EVENTS`, `AUDIT_OUTCOMES` and `AUDIT_REASONS` (R3). |
 | `tests/test_password.py` | The hash string format and parser (every malformed case), round trip, `compare_digest` use (patched), rehash on sign-in when parameters differ without moving `password_changed`, `DUMMY_HASH` parses, the policy's reason codes and their joined `message`, the deny-list, NFKC length, the 500 ms bound of one verify with the shipped parameters and `maxmem`; every `hashlib.scrypt` call runs on a `scrypt` executor thread (patched to record the thread name); the 21st queued verify is `429 throttled` with `retry_after: 2` while 20 are held (R7). |
 | `tests/test_signon_load.py` | **Throttling (R5, R6):** the L1 delay sequence (five free, then 30, 60, 120 … s, the 15 min cap, a success clears only the pair); the L2 sequence (100 failures in the window, then the delays; a success removes only that name's records); 30 users behind one address making ordinary typos all sign in; a distributed attack of one failure every 30 s from fresh sources against one name while the familiar source still signs in and an unfamiliar one waits for a token; an insider's own success does not clear their guesses at another name; the IPv4-mapped address keys like its IPv4 address; the table bounds. **Load (R7):** 50 concurrent sign-ins while `GET /api/state` answers within its normal time. |
 | `tests/test_ticket_binding.py`, `tests/test_socket_session.py` | A ticket minted by session A is refused on a socket with session B; a ticket survives neither its 30 s nor the end of its session; an open socket closes 1008 `signed_out` within 5 s of its session ending; a restricted session's socket closes 1008 `password_change_required`; client input calls `touch` at most once a minute and the socket's own output never does (R9). |
-| `tests/test_login_ui.js`, `tests/test_setup_ui.js` | UI.md's (the `next` rule of section 15 with the hash, the change view with **Sign out**, the load check through `GET /api/session`, the countdown, the recovery heading are asserted there). |
+| `tests/test_login_ui.js`, `tests/test_setup_ui.js` | UI.md's (the `next` rule of UI.md 1.6 (section 15) with the hash, the change view with **Sign out**, the load check through `GET /api/session`, the countdown, the recovery heading are asserted there). |
 
 New Python and Node test files go to the lead for the CI lists (CLAUDE.md "CI runs an explicit list").
 
@@ -1117,7 +1132,7 @@ and the sign-on checks use them. The `/__fixture/expire` hook is a route of that
 app, and calls `app.state.sessions.end_user(name, reason)` (16.1). For the live tools, a
 standard-library helper `docs/sign-on/tools/manager_http.py` (an `https` base URL, `--cafile` or
 `--pin <cert.pem>`, credentials from `CLAB_USER` and `CLAB_PASSWORD` or a prompt, never a command-line
-value, a cookie jar) replaces their bare `urllib` calls; `docs/sign-on/tools/TOOLS.md` lists every
+value, a cookie jar) replaces their bare `urllib` calls; `docs/sign-on/TOOLS.md` lists every
 tool that talks HTTP with its status (works through the fixture, migrated, or needs the helper and
 why it was not migrated).
 
@@ -1174,42 +1189,50 @@ applies it at the release step):
 >   WebSocket still checks `Origin` itself, and a terminal ticket is single-use and bound to the session
 >   that minted it. Never add a route or socket outside this; the one exception is the redirect listener:
 >   `app/redirect.py` is the one listener outside the gate and the guard: it holds no data and answers 301
->   to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host, 405 for any method but
->   GET and HEAD, closes a socket 1008, and nothing else. Admin-only routes declare `Depends(require_admin)`;
->   every other route is operator. Passwords are `hashlib.scrypt` strings (`scrypt$n$r$p$salt$hash`)
->   verified in a four-thread executor, never in the shared pool; a sign-in always runs one verify (a dummy
->   for an unknown name) and is throttled per source-and-name pair, per source and, for unfamiliar sources,
->   per name, never permanently. Users survive *Start fresh*; the first admin is created once through a
->   setup code from `<DATA_DIR>/setup-code` (never printed to a log), and `deploy/manager-recover-admin.sh`
->   is the only way to reopen that page. Security events go to `audit.jsonl` and sign-in failures, summed
->   per source and minute, to `audit-failures.jsonl` (both admin-only, both survive a reset); a gate
->   refusal is logged nowhere; no log ever holds a password, a code, a session id or a hash. "Own origin"
->   is `origin.scheme(scope)` (the ASGI scope only), never a forwarded header, and uvicorn runs with
->   `--no-proxy-headers`.
+>   to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host or a request target that
+>   is not a path, 405 for any method but GET and HEAD, closes a socket 1008, and nothing else. Admin-only
+>   routes declare `Depends(require_admin)`; every other route is operator. Passwords are `hashlib.scrypt`
+>   strings (`scrypt$n$r$p$salt$hash`) verified in a four-thread executor, never in the shared pool; a
+>   sign-in always runs one verify (a dummy for an unknown name) and is throttled per source-and-name
+>   pair, per source and, for unfamiliar sources, per name, never permanently. Users survive *Start
+>   fresh*; the first admin is created once through a setup code from `<DATA_DIR>/setup-code` (never
+>   printed to a log), and `deploy/manager-recover-admin.sh` is the only way to reopen that page.
+>   Security events go to `audit.jsonl` and sign-in failures, summed per source and minute, to
+>   `audit-failures.jsonl` (both admin-only, both survive a reset); a gate refusal is logged nowhere; no
+>   log ever holds a password, a code, a session id or a hash. "Own origin" is `origin.scheme(scope)` (the
+>   ASGI scope only), never a forwarded header. The manager serves TLS itself; the compose command
+>   carries the certificate paths and `--no-proxy-headers`.
 
 The replacement keeps the three sentences of the current bullet that the first draft dropped (*Never add a
 route or socket outside this*, the DNS-rebinding sentence, *`X-Forwarded-Host` is never read*), with the
 redirect named as the one exception (REVIEW R19). The redirect sentence above is the one sentence
 used everywhere (CLAUDE.md, EXPOSURE.md 4.1 and 8.1, `app/redirect.py`'s docstring): *`app/redirect.py`
 is the one listener outside the gate and the guard: it holds no data and answers 301 to the manager's
-own HTTPS origin after `host_allowed`, 400 for a refused Host, 405 for any method but GET and HEAD,
-closes a socket 1008, and nothing else.* At the release step the lead also adds the new security
-files (`app/accounts.py`, `app/sessions.py`, `app/origin.py`, `app/headers.py`, `app/recover.py`,
-`app/redirect.py`, `app/probe.py`) to `.claude/rules/routing-privileged-paths.md` once they exist
-(`test_path_globs_match_a_repository_file` refuses a glob without a file), and a row "Sign-on,
-sessions, TLS" to the CLAUDE.md routing table.
+own HTTPS origin after `host_allowed`, 400 for a refused Host or a request target that is not a path,
+405 for any method but GET and HEAD, closes a socket 1008, and nothing else.* (The non-path refusal is
+REVIEW R20, answered in EXPOSURE.md 4.1; REVIEW R19 carries it in the sentence.) At the release step the
+lead also adds the new security files of EXPOSURE.md 8.1 (`app/accounts.py`, `app/sessions.py`,
+`app/origin.py`, `app/headers.py`, `app/recover.py`, `app/redirect.py`, `app/probe.py`,
+`deploy/setup_tls.py`, `deploy/manager-recover-admin.sh`; the three new `deploy/setup-*.sh` scripts
+already match the rule's existing glob, so no second glob is added for them) to
+`.claude/rules/routing-privileged-paths.md` once they exist (`test_path_globs_match_a_repository_file`
+refuses a glob without a file), and a row "Sign-on, sessions, TLS" to the CLAUDE.md routing table.
 
 ## 15. The `next` parameter
 
-The gate builds `next` from the request's own path and query (6.4). `login.js` (UI.md) accepts `next`
-only when it matches `^/(?![/\\])[^\s]*$` (one leading slash, not `//` or `/\`, no whitespace) and
-does not start with `/login` or `/setup`; otherwise it goes to `/`. The server never redirects to
+The gate builds `next` from the request's own path and query (6.4). `login.js` accepts `next` by the
+string rule of UI.md 1.6, which is the rule (UI.md owns the page's behaviour): missing or empty → `/`;
+more than 2000 characters → `/`; it must start with `/` and must not start with `//` or `/\`; no `\`
+and no control character anywhere; it must not start with `/login`, `/setup` or `/api/` (a JSON page
+is never a destination); a value that fails any of these goes to `/`. The server never redirects to
 `next` itself (the sign-in answer is JSON; the page navigates), so an open redirect would have to pass
 the page's rule. The hash never reaches the server, so `loginNext` appends `location.hash` to the safe
-`next` when that `next` has no `#`, through the same character checks: a bookmarked lab address
-(`/#lab=…&view=devices`) is sent to `/login?next=%2F#lab=…` by the browser and, after sign-in, lands on
-its lab, tab and device (REVIEW U7). `test_login_ui.js` asserts the rule with `//evil.example`,
-`/\evil.example`, `https://evil.example`, `javascript:`, `/login?next=/login` and the hash case.
+`next` when that `next` has no `#`, under item 6 of that rule (the same `\` and control-character
+checks, the length cap on the whole; a hash that fails them is dropped, never the `next`): a bookmarked
+lab address (`/#lab=…&view=devices`) is sent to `/login?next=%2F#lab=…` by the browser and, after
+sign-in, lands on its lab, tab and device (REVIEW U7). `test_login_ui.js` asserts the rule with
+`//evil.example`, `/\evil.example`, `https://evil.example`, `javascript:`, `/login?next=/login`,
+`/api/state`, a 3000-character value and the hash case.
 
 ## 16. Build slices and the contract between them
 
@@ -1296,7 +1319,8 @@ written to `audit.jsonl` by the flush (7.1, 10.1).
 - Routes, bodies and answers: 7.3; every error body with its `code` and `message`: 7.4; the throttle
   answer: 8.3; setup mode's answers: 9.3; the restricted session's answers: 6.4.
 - Cookies: `clab_session` with the attributes of 5.3; on sign-out the two clearing cookies, `clab_session`
-  (`Path=/`) and `clab_capture_owner` (`Path=/api/capture`), 11.2.
+  (`Path=/`) and `clab_capture_owner` (`Path=/api/capture`), 11.2; on the 401 of `GET /api/session` the
+  clearing `clab_session` alone (6.4).
 - `<DATA_DIR>/setup-code`: two lines, `mode=setup` or `mode=recover`, then `code=<24 symbols in four
   groups of six>`; mode 0600; written by `create_app` in setup mode (9.2) and by `python -m app.recover`
   (9.5); read per request by `read_setup_code`; deleted in the block that saves the new admin (9.3).
@@ -1528,10 +1552,9 @@ as "not found", which is correct outside the two modes.
     owner cookie. Attack the inheritance case directly: sign in, start a capture, fail step 1 (stop
     the capture service), sign out, sign in as another user in the same browser: `GET
     /api/capture/sessions` must answer an empty list (a new owner cookie), and the old session must be
-    gone within the capture service's own limit. Then attack the named remainder of 11.2: let the
-    first session *expire* instead (or sign in as a second name over the live session) and sign in as
-    another user in the same browser: that person **does** inherit the desktop sessions, because only
-    sign-out separates two people in one browser. Check that the design says so and that the sign-out
-    menu item carries the sentence; the lead decides whether the remainder is accepted or whether
-    `POST /api/session` should also clear `clab_capture_owner` when it replaces a live session of
-    another name (which still leaves the expiry case open).
+    gone within the capture service's own limit. Then attack the owner identity of 11.2: let the first
+    session *expire* instead (or sign in as a second name over the live session) and sign in as another
+    user in the same browser. `GET /api/capture/sessions` must answer an empty list, and the first
+    person's desktop session must be unreachable by its id for the listing, `end`, the assets, the
+    download and `websockify`. The first person, signing in again in that browser, must find it
+    (REVIEW R10, the lead's addendum).

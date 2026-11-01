@@ -36,7 +36,7 @@ Where `INVENTORY.md` cites a different line of `main`, the branch line is given 
 |---|---|---|
 | 1 | TLS termination | **uvicorn serves HTTPS itself** (`--ssl-certfile /tls/cert.pem --ssl-keyfile /tls/key.pem`). Always on in both compose files. No Caddy sidecar. A reverse proxy is not a supported mode in this version (reasons in 2.3). |
 | 2 | Certificate | **Self-signed by the installer with `openssl` on the VM**, ECDSA P-256, 730 days, SANs = the certificate addresses of 3.2 (the default-route interface's global addresses, never a bridge or a link-local address; REVIEW R18), its host name, `localhost`, the loopback addresses, every name in `UI_ALLOWED_HOSTS` and every name or address the operator gives with `setup-tls.sh --name`. A **provided** certificate (any CA, Let's Encrypt through certbot included) is installed with `setup-tls.sh --cert --key`. |
-| 3 | Plain HTTP | **A redirect-only listener on 8081** (a second compose service running `python -m app.redirect`), nothing else on plain HTTP. It answers 301 to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host, 405 for any method but GET and HEAD, closes a socket 1008, and nothing else (the one sentence of REVIEW R19, 4.1); `Location` is built from the raw path and query, and a target that is not origin-form gets the same 400 (REVIEW R20, 4.1 rule 3). **HSTS** `max-age=15552000` (180 days) on every HTTPS response, no `includeSubDomains`, no `preload`; its port-wide scope is documented (REVIEW R17, 4.2). |
+| 3 | Plain HTTP | **A redirect-only listener on 8081** (a second compose service running `python -m app.redirect`), nothing else on plain HTTP. It answers 301 to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host or a request target that is not a path, 405 for any method but GET and HEAD, closes a socket 1008, and nothing else (the one sentence of REVIEW R19, 4.1); `Location` is built from the raw path and query (REVIEW R20, 4.1 rule 3). **HSTS** `max-age=15552000` (180 days) on every HTTPS response, no `includeSubDomains`, no `preload`; its port-wide scope is documented (REVIEW R17, 4.2). |
 | 4 | Other doors | `UI_BIND` stays `0.0.0.0`. New `deploy/setup-firewall.sh` (ufw: allow the SSH port, the TLS port and the redirect port; deny the rest). Lab-node published ports and any non-loopback listener are reported by the health check. New `deploy/setup-ssh-hardening.sh` writes a conservative sshd drop-in. The `clab-discovery` policy is not touched. |
 | 5 | Health check | New module `deploy/check_exposure.py` (stdlib) with fourteen checks (section 6.2), plus the changes in `check_install.py` of 6.1: `GET /api/health` over TLS with the pinned certificate is **the only HTTP question the checker asks**; every other manager fact (design engine, capture, the saved VM connection, the topology browser, the Git registry) comes from a probe through `docker exec` (REVIEW R16). No check is dropped silently. |
 | 6 | Installer | `setup-tls.sh` runs inside `start-manager.sh` before the image build; firewall and sshd hardening are installer steps after the manager verification; `health_url`, `probes.manager_address` and the TUI's address lines become `https://`; the fingerprint is printed with the verification and **the setup code is printed last, after every step that recreates the manager** (REVIEW U13). The recovery script prints the exact recovery URL (REVIEW R11). The upgrade decision is 7.4. |
@@ -109,7 +109,7 @@ Rules:
 4. TLS version and ciphers stay at uvicorn's and Python's defaults (minimum TLS 1.2 by
    `ssl.SSLContext` default since Python 3.10). Section 10 lists this for the reviewer; a cipher
    string is not added without a measured reason.
-5. The Dockerfile's `CMD` (Dockerfile:24) carries the same TLS arguments, `--no-proxy-headers` and `--no-server-header` explicitly, and `EXPOSE 8443 8081`
+5. The Dockerfile's `CMD` (Dockerfile:24) carries `--port 8443` (was 8081), the same TLS arguments, `--no-proxy-headers` and `--no-server-header` explicitly, and `EXPOSE 8443 8081`
    (Dockerfile:22). A `docker run` without the tls mount fails at start, which is the right outcome:
    the image never serves plain HTTP by accident.
 6. Plain HTTP for development is not a container mode. The fixture tools run the app directly
@@ -131,8 +131,8 @@ Rules:
 | Key | Where | Values | Default | Written by | Validation |
 |---|---|---|---|---|---|
 | `UI_BIND` | `.env`, compose | an address | `0.0.0.0` | the operator (unchanged; the installer never writes it, install-manager.py:244-254) | existing (`health_url`, install-manager.py:104-114) |
-| `UI_PORT` | `.env`, compose (both commands, and the `environment:` of both services: the manager prints it in its setup log line, 7.2) | 1-65535 | **8443** (was 8081) | the operator; the installer never writes it | `setup_tls.py` refuses `UI_PORT == UI_HTTP_PORT` (7.4) |
-| `UI_HTTP_PORT` | `.env`, compose (redirect service only) | 0 or 1-65535 | 8081 | the operator, or `setup_tls.py` in the one migration case of 7.4 (`UI_HTTP_PORT=0`) | `app.redirect` exits with a message on a value outside 0-65535 |
+| `UI_PORT` | `.env`, compose (both commands, and the `environment:` of both services: the manager prints it in its setup log line, 7.2) | 1-65535 | **8443** (was 8081) | the operator; the installer only in 7.4's advanced option (1), which writes `UI_PORT=8443` through `setup_capture.write_env` | `setup_tls.py` refuses `UI_PORT == UI_HTTP_PORT` (7.4) |
+| `UI_HTTP_PORT` | `.env`, compose (redirect service only) | 0 or 1-65535 | 8081 | the operator; `setup_tls.py` (`UI_HTTP_PORT=0`, the standard path of 7.4) or the installer (advanced option (1), `UI_HTTP_PORT=8081`), both through `setup_capture.write_env` | `app.redirect` exits with a message on a value outside 0-65535 |
 | `UI_ALLOWED_HOSTS` | `.env`, compose | names | empty | the operator (INSTALL.md:225-233) | existing (`configured_hosts`, allowed_hosts.py:67-76); its names also become SANs (3.2) |
 | `UI_TLS` | — | — | — | **not introduced** (section 9, interface 1) | — |
 
@@ -313,8 +313,12 @@ http-redirect:
   security_opt: [no-new-privileges:true]
 ```
 
-`app/redirect.py` (new, about 60 lines, stdlib plus `uvicorn` and `app.allowed_hosts`; it never
-imports `app.main`, `app.store` or any service):
+`app/redirect.py` (new, about 60 lines, stdlib plus `uvicorn`, `app.allowed_hosts` and `app.headers`;
+it never imports `app.main`, `app.store` or any service). Every response it sends carries the headers of
+`app.headers.security_headers(scope, status=<code>, refusal=True)` (DESIGN.md 16.3; over plain HTTP the
+function adds no HSTS) encoded into the ASGI header list, plus `Content-Length: 0`, and an empty body;
+`allowed_hosts.HEADERS` is not used, because it carries the `Content-Length` and `Content-Type` of
+`HostCheck`'s refusal body (allowed_hosts.py:31-33) and would contradict an empty body:
 
 1. Reads the four variables. `UI_HTTP_PORT=0` prints `HTTP redirect disabled` and waits for SIGTERM
    without binding anything (a `threading.Event().wait()`): the container stays *running* and
@@ -324,25 +328,27 @@ imports `app.main`, `app.store` or any service):
 2. Otherwise `uvicorn.run(app, host=UI_BIND, port=UI_HTTP_PORT, server_header=False, proxy_headers=False, workers=1)`.
 3. `app` is a pure ASGI callable. For an `http` scope it takes the single `Host` header; when
    `host_allowed(host, configured_hosts(UI_ALLOWED_HOSTS))` (allowed_hosts.py:62-64) is false, or the
-   header is missing or repeated, it answers `400` with the fixed headers of `allowed_hosts.HEADERS`
-   (allowed_hosts.py:31-33) and an empty body. **A `raw_path` that does not start with `b'/'` answers the
+   header is missing or repeated, it answers `400` with the headers of
+   `security_headers(scope, status=400, refusal=True)` plus `Content-Length: 0` and an empty body. **A
+   `raw_path` that does not start with `b'/'` answers the
    same `400`** (REVIEW R20, the reviewer's second pass): h11 accepts a request target that is not
    origin-form, and uvicorn splits it at the first `?` and passes the rest unchanged (uvicorn 0.54.0
    h11_impl.py:204-218), so an absolute-form target, `*` or `@evil.example/` would otherwise become
    `Location: https://host:8443@evil.example/`, the userinfo form that points at another host. Browsers send
    origin-form targets only, so a victim's browser cannot be made to send one; the listener refuses it
-   anyway. (The one sentence of REVIEW R19 says *400 for a refused Host*; this is the same answer, with the
-   same headers, for the one other refusal, and the sentence itself is not changed.) The checks run in
-   that order: Host, target form, then method. Otherwise it answers `301` with
-   `Location: https://<host_name(host)>:<UI_PORT><raw_path>[?<query_string>]` and the same fixed headers plus
-   `Content-Length: 0`. **`Location` is built from `scope['raw_path']` and `scope['query_string']`, both
+   anyway. (REVIEW R19's sentence names this refusal: *400 for a refused Host or a request target that is
+   not a path*.) The checks run in that order: Host, target form, then method. Otherwise it answers `301`
+   with `Location: https://<host_name(host)>:<UI_PORT><raw_path>[?<query_string>]` and the headers of
+   `security_headers(scope, status=301, refusal=True)` plus `Content-Length: 0`. **`Location` is built
+   from `scope['raw_path']` and `scope['query_string']`, both
    bytes, unchanged** (REVIEW R20): never from the decoded `scope['path']`, so `%0d%0a` stays `%0d%0a`
    (a decoded CR/LF is a header h11 refuses), `%3F` stays `%3F` (decoded it would move the query), and a
    UTF-8 path travels as the percent-encoded bytes the browser sent; `?` and the query are appended only
    when `query_string` is non-empty. The name is the browser's own `Host` without its port, exactly as
    `HostCheck` would accept it, so the redirect never sends a browser to a name the manager would
    refuse. The port is omitted when `UI_PORT` is 443. Methods other than `GET` and `HEAD` answer
-   `405` (fixed headers, `Allow: GET, HEAD`, empty body). A `websocket` scope is closed with 1008
+   `405` (the headers of `security_headers(scope, status=405, refusal=True)`, `Allow: GET, HEAD`,
+   `Content-Length: 0`, empty body). A `websocket` scope is closed with 1008
    before accept. `lifespan` passes. The fragment never reaches the server; the browser carries a
    bookmark's `#lab=…` over the 301 itself (9, interface 4).
 4. Nothing is logged per request (an exposed port must not fill the disk with scanner lines); uvicorn's
@@ -352,8 +358,8 @@ The one sentence that describes it everywhere (REVIEW R19; CLAUDE.md, ARCHITECTU
 section and INSTALL.md use it verbatim):
 
 > `app/redirect.py` is the one listener outside the gate and the guard: it holds no data and answers 301
-> to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host, 405 for any method but
-> GET and HEAD, closes a socket 1008, and nothing else.
+> to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host or a request target that
+> is not a path, 405 for any method but GET and HEAD, closes a socket 1008, and nothing else.
 
 What the redirect cannot do (REVIEW R17): HSTS applies to every port of a host name (RFC 6797 §8.3). With
 a **provided** certificate on a name, a browser that once opened `https://<name>:8443` rewrites
@@ -602,7 +608,7 @@ the VM did not answer) is a `FAIL` with that sentence, exactly as the failed HTT
 | `firewall` | `ufw status verbose` (privileged) says `Status: active`, default `deny (incoming)`, and the SSH port, `UI_PORT` and `UI_HTTP_PORT` (when ≠ 0) are allowed | ufw inactive, or a needed port not allowed (the detail names it) | `ufw` not installed | `sudo bash …/deploy/setup-firewall.sh`; a cloud security group is accepted as the reason to ignore the WARN, said in the detail |
 | `exposure.listeners` | every listening TCP socket (`ss -Hltn`, privileged for process names `-p`) that is not loopback is one of: the SSH port, `UI_PORT`, `UI_HTTP_PORT`; detail lists them with the process name | any other non-loopback listener; detail names port and process | `5001` or `5801` (the capture stack) not loopback-only | *Close or firewall the listed port; the capture stack must stay on 127.0.0.1 (`deploy/compose.capture.yml`).* |
 | `exposure.ports` | no running container publishes a port on `0.0.0.0` or `[::]` (`docker ps --format '{{.Names}}\t{{.Ports}}'`, privileged; the capture stack's `127.0.0.1:` bindings pass) | a container does; detail names container and port (a lab node with `ports:` in its topology) | — | *Remove `ports:` from the topology or bind them to 127.0.0.1; Docker-published ports bypass ufw.* |
-| `signon.bootstrap` | `/srv/containerlab-node-manager/data/setup-code` absent (`test -e`, privileged, as 662-664) | present with `mode=setup`: **Setup not completed: no administrator exists** (D3 point 2); or `mode=recover`: *A recovery is open (it closes 15 minutes after the recovery command ran)* | — | `mode=setup`: *Open `https://<address>:<port>/setup` and enter the code from `sudo cat /srv/containerlab-node-manager/data/setup-code`.*; `mode=recover`: *Open `https://<address>:<port>/setup?recover=1` with the code the recovery command printed, or run `sudo bash …/deploy/manager-recover-admin.sh` again.* (REVIEW R11). **The report never prints the code** (HEALTH-CHECK.md "Save a support report": reports are shared). The privileged read is `head -c 16` of the first line only (`mode=…`). |
+| `signon.bootstrap` | `/srv/containerlab-node-manager/data/setup-code` absent (`test -e`, privileged, as 662-664) | present with `mode=setup`: **Setup not completed: no administrator exists** (D3 point 2); or `mode=recover` and the file's mtime (`stat -c %Y`, privileged) younger than 15 minutes: *A recovery is open (it closes 15 minutes after the recovery command ran)*; or `mode=recover` and the mtime 15 minutes or older: *A recovery code expired unused; the manager removes it at the next /setup request.* (DESIGN.md 9.5: the manager deletes an expired file only when `/setup` or `/api/setup` is next requested, and `read_setup_code` treats it as absent, DESIGN.md 16.1) | — | `mode=setup`: *Open `https://<address>:<port>/setup` and enter the code from `sudo cat /srv/containerlab-node-manager/data/setup-code`.*; `mode=recover`, open: *Open `https://<address>:<port>/setup?recover=1` with the code the recovery command printed, or run `sudo bash …/deploy/manager-recover-admin.sh` again.* (REVIEW R11); `mode=recover`, expired: *Run `sudo bash …/deploy/manager-recover-admin.sh` again and open the URL it prints within 15 minutes.* **The report never prints the code** (HEALTH-CHECK.md "Save a support report": reports are shared). The privileged reads are `head -c 16` of the first line only (`mode=…`) and `stat -c %Y`; the age is `time.time()` minus that mtime, with the same 15-minute limit as `read_setup_code`. |
 | `ssh.hardening` | `sshd -T` (privileged, 100-101) shows `permitrootlogin no`, `maxauthtries ≤ 4`, `logingracetime ≤ 30` | any of them at the OpenSSH default; detail names which | — | `sudo bash …/deploy/setup-ssh-hardening.sh` |
 | `ssh.bruteforce` | `systemctl is-active fail2ban` succeeds | not active or not installed; detail: *recommended on an Internet-facing VM; see INSTALL.md* | — | `sudo apt-get install -y fail2ban` (documented, not scripted) |
 
@@ -641,7 +647,10 @@ Required cases, each asserting `check.render(check.summarize(ctx))` or the JSON:
 4. The redirect port answering `200` → `http.redirect FAIL`; `UI_HTTP_PORT=0` → `INFO`.
 5. `setup-code` present with `mode=setup` and a body `PRIVATE` → `signon.bootstrap WARN` and the
    sentinel `PRIVATE` (test_check_install.py:21) does not appear anywhere in the report; `mode=recover`
-   → `WARN` whose fix names `?recover=1` and the recovery script.
+   with a `stat -c %Y` answer 5 minutes old → `WARN` *A recovery is open* whose fix names `?recover=1`
+   and the recovery script; the same file with a `stat -c %Y` answer 16 minutes old → `WARN` *A recovery
+   code expired unused* whose fix names the recovery script and not `?recover=1` (the page would answer
+   404, DESIGN.md 9.5); in both the body stays absent from the report.
 6. `tls.files` with a 0644 key → `FAIL`; the report contains no key material (the fake probe returns a
    `PRIVATE` sha256 for the key and the test asserts it is absent).
 7. No `docker` answer → the group's checks `SKIP` with the Docker fix, never `PASS`.
@@ -764,7 +773,8 @@ code never appear in stdout or stderr; an unknown name exits 2 with no JSON.
 The manager's own container log never carries the code (REVIEW R22a): its line is *Setup required: open
 https://<address>:<port>/setup and enter the code from <DATA_DIR>/setup-code (on the VM: sudo cat
 /srv/containerlab-node-manager/data/setup-code).*, where `<port>` is `UI_PORT` from the manager's environment
-(2.4; the literal `<port>` when the variable is absent, as under a bare `docker run`) and `<address>` is the
+(2.4; 8443 when the variable is absent, as under a bare `docker run`: DESIGN.md 9.2's default and the port of
+the Dockerfile `CMD`, 2.2 rule 5) and `<address>` is the
 first `UI_ALLOWED_HOSTS` name or the literal words *the VM's address* (DESIGN.md 9.2): the app knows its bind,
 not the address students use, so the exact URL comes from the installer (step 7) and the recovery script
 (7.1) (9, interface 6). The code is typed by a person and
@@ -790,7 +800,7 @@ has never signed in to anything. After `bash deploy/install.sh` → *Install or 
 | Situation | What happens | Who decides |
 |---|---|---|
 | No `UI_PORT` in `.env` | TLS on 8443, redirect on 8081. Old links `http://VM:8081` answer `301` to `https://VM:8443`. | automatic; `plan_lines` says it |
-| `UI_PORT=8081` explicit, `UI_HTTP_PORT` absent | **Standard path:** the operator's explicit port is kept for TLS and `setup_tls.py` writes `UI_HTTP_PORT=0` (the `write_env` pattern), then prints: *Your settings keep the manager on port 8081, which now serves HTTPS; there is no plain-HTTP redirect. Old links `http://VM:8081` show a browser error until retyped as `https://`. To get the redirect, set `UI_PORT=8443` and `UI_HTTP_PORT=8081` in `.env` and rerun.* **Advanced path:** the question *Manager ports: (1) TLS on 8443 and plain-HTTP redirect on your current 8081 (recommended) (2) TLS on your current 8081, no redirect*; (1) writes `UI_PORT=8443`, `UI_HTTP_PORT=8081`. | the installer; the operator in advanced mode |
+| `UI_PORT=8081` explicit, `UI_HTTP_PORT` absent | **Standard path:** the operator's explicit port is kept for TLS and `setup_tls.py` writes `UI_HTTP_PORT=0` (the `write_env` pattern), then prints: *Your settings keep the manager on port 8081, which now serves HTTPS; there is no plain-HTTP redirect. Old links `http://VM:8081` show a browser error until retyped as `https://`. To get the redirect, set `UI_PORT=8443` and `UI_HTTP_PORT=8081` in `.env` and rerun.* **Advanced path:** the question *Manager ports: (1) TLS on 8443 and plain-HTTP redirect on your current 8081 (recommended) (2) TLS on your current 8081, no redirect*; on (1) the installer writes `UI_PORT=8443`, `UI_HTTP_PORT=8081` (the `write_env` pattern, 2.4) before `start-manager.sh` runs. | the installer; the operator in advanced mode |
 | `UI_PORT == UI_HTTP_PORT`, both explicit | `setup_tls.py` refuses with the sentence above; `start-manager.sh` stops before building. | the operator |
 | A certificate already in the tls directory | kept (ensure semantics, 3.1). | automatic |
 | `UI_ALLOWED_HOSTS` set | its names become SANs. | automatic |
@@ -800,8 +810,11 @@ Why the operator is not locked out: the old address answers with a redirect; the
 with the setup page (DESIGN.md 12.1: an upgraded install is in setup mode), and the code is printed
 by the installer the operator is sitting at, and remains readable with `sudo cat`. The firewall step
 runs after the manager verification and allows the session's own SSH port first (5.2). Nothing in
-this design deletes or rewrites a setting the operator wrote, except the one `UI_HTTP_PORT=0` line
-above, which is announced and reversible.
+this design deletes or rewrites a setting the operator wrote, except the two writes of the
+`UI_PORT=8081` row above, both announced and reversible, both through `setup_capture.write_env` (2.4):
+the standard path's `UI_HTTP_PORT=0` line, written by `setup_tls.py`, and the advanced option (1),
+`UI_PORT=8443` with `UI_HTTP_PORT=8081`, written by the installer (slice S5b) after the operator chose
+it and before `start-manager.sh` runs, so `setup_tls.py` then finds no collision and writes nothing.
 
 Why plain HTTP is not silently kept: after the upgrade the only plain-HTTP answer on the VM is
 `301`; the health check fails when a page is served over plain HTTP (`http.redirect`, 6.2); the
@@ -824,7 +837,7 @@ compose files contain no plain-HTTP command.
 | | 280-287 | The noVNC *secure context* paragraph becomes history: *before TLS (1.31.8 and earlier) the console logged …*; the rebuild advice stays. |
 | `docs/HEALTH-CHECK.md` | *What it checks* (92-123) | The new group and its ids (6.2). |
 | | 232-239 | `https://…:8443`, accept or verify the certificate, the firewall sentence. |
-| `docs/STANDALONE-SETUP.md` | 89-90, 107 | `https://VM_ADDRESS:8443`; the sign-in sentence; the `docker run` migration needs the tls mount and `-e UI_PORT=<port>` for the setup log line (absent, the line prints the literal `<port>`, 7.2). |
+| `docs/STANDALONE-SETUP.md` | 89-90, 107 | `https://VM_ADDRESS:8443`; the sign-in sentence; the `docker run` migration needs the tls mount and `-e UI_PORT=<port>` for the setup log line (absent, the line names 8443, which is right unless the `docker run` overrides `--port`; 7.2). |
 | `docs/FRESH-VM-GUIDE-V2.md` | 584-600 | `8443` and `8081`; *the installer sets up ufw* replaces *does not configure … firewall rules* (595-596); the `Test-NetConnection` lines. |
 | `docs/VM-CONNECTION.md` | 41 | `https://VM_IP:8443`, sign in first. |
 | `docs/QUICK-INSTALL.md` | 62, 171 | Same. |
@@ -833,8 +846,8 @@ compose files contain no plain-HTTP command.
 | `docs/ARCHITECTURE.md` | 150-157 | The transport paragraph: uvicorn-native TLS, the redirect service described with the one sentence of 4.1 (REVIEW R19), `--no-proxy-headers`, HSTS in `security_headers()`. |
 | `clab-backup-ui/README.md`, `deploy/*.md` | wherever `http://` or `8081` appears | Same. **Ruling (RECONCILIATION 4, E-Q6): yes.** The build adds a rule to `verify_docs()` in `deploy/verify-release.py` that refuses `http://…:8081` manager URLs in the living guides; history files are exempt. `check_links.py` does not check URLs. |
 | `docs/HEALTH-CHECK.md` | *What it checks* | Besides the new group (above): the one-HTTP-question rule and the probes of 6.1, and the SKIP reasons a reader may meet (*predates this check's probe*, *Diagnostics runs the same check*, *a lab's save drawer lists the registry*). |
-| `CLAUDE.md` | invariants (the lead, at the release step; REVIEW R19) | The replacement of the "There is no login" bullet **keeps every sentence of the current bullet** (CLAUDE.md:247-253: the guard's body rule, *a mutating request needs a body; content-length 0 is refused, so pages post `{}`*; *every WebSocket checks `Origin` itself and terminals need a single-use ticket*; `HostCheck` *stays the outermost ASGI layer (added last in `create_app`)* and *nothing bypasses it*), rewriting only *There is no login* and the guard's description for the gate, and in particular the three REVIEW R19 found dropped: *Never add a route or socket outside this*, the DNS-rebinding sentence (*a `Host` that outside DNS could control is refused unless `UI_ALLOWED_HOSTS` lists it*) and *`X-Forwarded-Host` is never read*, with the redirect named as the one exception by the sentence of 4.1, verbatim: *`app/redirect.py` is the one listener outside the gate and the guard: it holds no data and answers 301 to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host, 405 for any method but GET and HEAD, closes a socket 1008, and nothing else.* Plus: *The manager serves TLS itself; the compose command carries the certificate paths and `--no-proxy-headers`.* A row *Sign-on, sessions, TLS* joins the routing table. |
-| `.claude/rules/routing-privileged-paths.md` | the path globs (the lead; REVIEW R19) | `app/sessions.py`, `app/accounts.py`, `app/origin.py`, `app/headers.py`, `app/recover.py`, `app/probe.py`, `app/redirect.py`, `deploy/setup-tls.sh`, `deploy/setup_tls.py`, `deploy/setup-firewall.sh`, `deploy/setup-ssh-hardening.sh`, `deploy/manager-recover-admin.sh` join the rule **once the files exist** (`test_claude_config.py` `test_path_globs_match_a_repository_file` refuses a glob without a file), so the rule change is part of the integration commit, not of a slice. |
+| `CLAUDE.md` | invariants (the lead, at the release step; REVIEW R19) | The replacement of the "There is no login" bullet **keeps every sentence of the current bullet** (CLAUDE.md:247-253: the guard's body rule, *a mutating request needs a body; content-length 0 is refused, so pages post `{}`*; *every WebSocket checks `Origin` itself and terminals need a single-use ticket*; `HostCheck` *stays the outermost ASGI layer (added last in `create_app`)* and *nothing bypasses it*), rewriting only *There is no login* and the guard's description for the gate, and in particular the three REVIEW R19 found dropped: *Never add a route or socket outside this*, the DNS-rebinding sentence (*a `Host` that outside DNS could control is refused unless `UI_ALLOWED_HOSTS` lists it*) and *`X-Forwarded-Host` is never read*, with the redirect named as the one exception by the sentence of 4.1, verbatim: *`app/redirect.py` is the one listener outside the gate and the guard: it holds no data and answers 301 to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host or a request target that is not a path, 405 for any method but GET and HEAD, closes a socket 1008, and nothing else.* Plus: *The manager serves TLS itself; the compose command carries the certificate paths and `--no-proxy-headers`.* A row *Sign-on, sessions, TLS* joins the routing table. |
+| `.claude/rules/routing-privileged-paths.md` | the path globs (the lead; REVIEW R19) | `app/sessions.py`, `app/accounts.py`, `app/origin.py`, `app/headers.py`, `app/recover.py`, `app/probe.py`, `app/redirect.py`, `deploy/setup_tls.py`, `deploy/manager-recover-admin.sh` join the rule **once the files exist** (`deploy/setup-tls.sh`, `deploy/setup-firewall.sh` and `deploy/setup-ssh-hardening.sh` are already covered by the rule's existing `deploy/setup-*.sh` glob, routing-privileged-paths.md:5, so no glob is added for them) (`test_claude_config.py` `test_path_globs_match_a_repository_file` refuses a glob without a file), so the rule change is part of the integration commit, not of a slice. |
 
 ### 8.2 CI and tests
 
@@ -842,7 +855,7 @@ compose files contain no plain-HTTP command.
 |---|---|
 | `.github/workflows/release-check.yml:40` (`bash -n` loop) | `deploy/setup-tls.sh deploy/setup-firewall.sh deploy/setup-ssh-hardening.sh deploy/manager-recover-admin.sh`. |
 | release-check.yml:19-37 (stdlib group) | `test_setup_tls.py`, `test_setup_firewall.py`, `test_setup_ssh_hardening.py`, `test_check_exposure.py`, `test_manager_recover_admin.py` (the name BUILD.md S5a uses). |
-| venv group | `test_redirect.py` (TestClient on `app.redirect:app`: 301 with the exact `Location`, 400 on a refused `Host`, 405 on `POST`, 1008 on a socket; no import of `app.main`; and the three `raw_path` cases of REVIEW R20: `/a%0d%0ab` gives `Location: …/a%0d%0ab` and no second header line, `/a%3Fb?c=1` gives `…/a%3Fb?c=1`, a UTF-8 path travels as its percent-encoded bytes; and a target that is not origin-form, `@evil.example/`, `http://evil.example/` and `*`, sent through a raw socket or a transport that passes the target unchanged, answers 400 with the fixed headers and no `Location`), `test_probe.py` (6.3). |
+| venv group | `test_redirect.py` (TestClient on `app.redirect:app`: 301 with the exact `Location`, 400 on a refused `Host`, 405 on `POST`, 1008 on a socket; no import of `app.main`; and the three `raw_path` cases of REVIEW R20: `/a%0d%0ab` gives `Location: …/a%0d%0ab` and no second header line, `/a%3Fb?c=1` gives `…/a%3Fb?c=1`, a UTF-8 path travels as its percent-encoded bytes; and a target that is not origin-form, `@evil.example/`, `http://evil.example/` and `*`, sent through a raw socket or a transport that passes the target unchanged, answers 400 with the `security_headers(refusal=True)` headers and `Content-Length: 0` and no `Location`; every 400, 301 and 405 carries exactly one `Content-Length`, `0`, and no `Strict-Transport-Security`), `test_probe.py` (6.3). |
 | `tests/test_setup_tls.py` | SAN list from fixtures (addresses, names, union of two env files, `tls/names`); **`certificate_addresses()` on the `ip -j` fixture of 6.3 case 3**: the default-route interface's global addresses are in, `docker0`, `br-…`, `veth…`, `virbr0`, `cni0`, `clab…`, link-local and loopback are out, and a VM without a default route falls back to every non-excluded interface (REVIEW R18); **ensure does not regenerate** when only an excluded address appeared; the exact `openssl` argv; **real generation into a temp dir** (CI's Ubuntu has `openssl`) and parse-back of SANs and `-checkend`; a provided pair that does not match is refused; an encrypted key is refused; modes 0644/0640; `mode` file; `--name` validation and `tls/names`; `--primary`; `UI_PORT == UI_HTTP_PORT` refused; the 7.4 migration write through `setup_capture.write_env` keeps unrelated lines. |
 | `tests/test_manager_recover_admin.py` | The `test_recreate_manager.py` pattern (a copy of the script with the root guard neutralised, a fake `docker` and `setup-tls.sh` on `PATH`): the route choice, `app.recover`'s output passed through unchanged, the final URL line built from the chosen env file's `UI_PORT` (default 8443; omitted at 443) with `?recover=1`, no URL line when `app.recover` exited non-zero, the exit status passed through (REVIEW R11). |
 | `tests/test_setup_firewall.py` | The `test_recreate_manager.py` pattern (a copy of the script with the root guard neutralised, a fake `ufw`, `sshd` and `ss` on `PATH` recording argv): the allow order, refusal when `SSH_CONNECTION`'s port is not allowed, `--remove`, never `reset`. |
@@ -938,8 +951,8 @@ What this design needs from `DESIGN.md` (D) and `UI.md` (U), and what it gives b
     *`X-Forwarded-Host` is never read*, and names the redirect as the one exception with the sentence of 4.1, verbatim and
     the same everywhere (CLAUDE.md, ARCHITECTURE.md, INSTALL.md, the handoff section): *`app/redirect.py`
     is the one listener outside the gate and the guard: it holds no data and answers 301 to the
-    manager's own HTTPS origin after `host_allowed`, 400 for a refused Host, 405 for any method but
-    GET and HEAD, closes a socket 1008, and nothing else.* The new files join
+    manager's own HTTPS origin after `host_allowed`, 400 for a refused Host or a request target that
+    is not a path, 405 for any method but GET and HEAD, closes a socket 1008, and nothing else.* The new files join
     `routing-privileged-paths.md` at integration (8.1) and a *Sign-on, sessions, TLS* row joins the
     routing table.
 13. **The TLS paths (D 16, slice S4).** The certificate paths inside the container are fixed:
@@ -1008,5 +1021,5 @@ What this design needs from `DESIGN.md` (D) and `UI.md` (U), and what it gives b
    **Ruling (RECONCILIATION 4):** yes (E-Q6). The build adds the rule to `verify_docs()` in `deploy/verify-release.py`; history files are exempt (8.1, 8.2).
 7. **The invariant sentence** for `app/redirect.py` (9.12) is the lead's at the release step.
    **Ruling (RECONCILIATION 4):** the lead writes it at the release step (E-Q7). The draft sentence that ruling carried is **superseded by the final wording below** and is not quoted here, so that this document carries one description of the redirect (REVIEW R19).
-   **Final wording (REVIEW R19), the same in every document:** *`app/redirect.py` is the one listener outside the gate and the guard: it holds no data and answers 301 to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host, 405 for any method but GET and HEAD, closes a socket 1008, and nothing else.* The replacement bullet keeps every sentence of CLAUDE.md's current bullet, among them the three REVIEW R19 found dropped (*Never add a route or socket outside this*, DNS rebinding, *`X-Forwarded-Host` is never read*; 8.1); the new files join `routing-privileged-paths.md` once they exist; a *Sign-on, sessions, TLS* row joins the routing table (8.1).
+   **Final wording (REVIEW R19), the same in every document:** *`app/redirect.py` is the one listener outside the gate and the guard: it holds no data and answers 301 to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host or a request target that is not a path, 405 for any method but GET and HEAD, closes a socket 1008, and nothing else.* The replacement bullet keeps every sentence of CLAUDE.md's current bullet, among them the three REVIEW R19 found dropped (*Never add a route or socket outside this*, DNS rebinding, *`X-Forwarded-Host` is never read*; 8.1); the new files join `routing-privileged-paths.md` once they exist; a *Sign-on, sessions, TLS* row joins the routing table (8.1).
 8. **Which probes exist and what they print** (REVIEW R16): decided in 6.1, five names with their exact JSON; the probe builder (S3) and the health-check builder (S6) build against that table and `test_probe.py` and `test_check_install.py` pin it from both sides.

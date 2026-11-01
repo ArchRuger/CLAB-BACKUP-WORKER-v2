@@ -47,11 +47,11 @@ Paths are relative to the repository root; `app/` and `tests/` mean `clab-backup
 | **S4** TLS and container | `clab-fable-specialist` | `deploy/setup-tls.sh`, `deploy/setup_tls.py` (new), `clab-backup-ui/Dockerfile`, `clab-backup-ui/compose.yml`, `deploy/compose.image.yml`, `deploy/start-manager.sh`, `deploy/recreate-manager.sh`, `deploy/verify-release.py` (the `verify_docs` rule only), `tests/test_setup_tls.py` (new), `tests/test_release_consistency.py` | `tls` |
 | **S5a** host doors | `clab-opus-specialist` | `deploy/setup-firewall.sh`, `deploy/setup-ssh-hardening.sh`, `deploy/manager-recover-admin.sh` (new), `tests/test_setup_firewall.py`, `tests/test_setup_ssh_hardening.py`, `tests/test_manager_recover_admin.py` (new) | `doors` |
 | **S5b** installer | `clab-devops-engineer` | `deploy/install-manager.py`, `deploy/install-prerequisites.sh`, `deploy/installer_tui/**`, `tests/test_install_manager.py`, `tests/test_install_tui_*.py` | `installer` |
-| **S6** health check | `clab-devops-engineer` | `deploy/check_install.py`, `deploy/check_host.py`, `tests/test_check_install.py`, `tests/test_check_host.py` | `health` |
+| **S6** health check | `clab-devops-engineer` | `deploy/check_install.py`, `deploy/check_host.py`, `deploy/check_exposure.py` (new), `tests/test_check_install.py`, `tests/test_check_host.py`, `tests/test_check_exposure.py` (new) | `health` |
 | **S7** exposed pages | `clab-ui-builder` | `app/static/{login.html,login.css,login.js,setup.html,setup.js}` (new), `tests/test_login_ui.js`, `tests/test_setup_ui.js` (new) | `pages` |
 | **S8** the app's session | `clab-ui-builder` | `app/static/{session.js,account.js}` (new), `app/static/{shell.js,app.js,index.html,style.css,status.js,management.js,home.js}`, `tests/test_session_ui.js`, `tests/test_account_ui.js` (new), `tests/{test_page_load_ui,test_shell_ui,test_status_ui,test_home_ui,test_vm_password_ui,test_readiness_ui,test_download_ui,test_telemetry_retired_ui}.js` | `appsession` |
 | **S9** people page | `clab-ui-builder` | `app/static/{users.html,users.js}` (new), `tests/test_users_ui.js` (new) | `people` |
-| **S10a** feature scripts | `clab-ui-builder` | `app/static/{operations,network-design,load,restore,git-progress,device-diagnostics,map-tools,device-impairments,workspace}.js`, `app/static/workspace.html`, `tests/{test_operations_ui,test_network_design_ui,test_load_ui,test_restore_ui,test_git_progress_ui,test_device_diagnostics_ui,test_map_tools_ui,test_device_impairments_ui}.js` | `features` |
+| **S10a** feature scripts | `clab-ui-builder` | `app/static/{operations,network-design,load,restore,git-progress,device-diagnostics,map-tools,device-impairments,workspace}.js`, `app/static/workspace.html`, `tests/{test_operations_ui,test_network_design_ui,test_load_ui,test_restore_ui,test_git_progress_ui,test_device_diagnostics_ui,test_map_tools_ui,test_device_impairments_ui}.js`, `tests/test_workspace_ui.js` (new) | `features` |
 | **S10b** standalone pages | `clab-ui-builder` | `app/static/{debug,lab-builder-page,map-editor-page,terminal,capture-session}.js`, `app/static/{debug,lab-builder,map-editor,terminal,capture-session,capture-setup,vm-connection}.html`, `tests/{test_debug_ui,test_lab_builder_ui,test_lab_builder_check_ui,test_lab_builder_yaml_ui,test_map_editor_ui,test_terminal_ui,test_capture_session_ui,test_topology_ui}.js` | `standalone` |
 | **S11** tools and fixture | `clab-ui-qa` with `clab-test-engineer` | `docs/redesign/tools/fixture_manager.py`, `docs/sign-on/tools/**` and `docs/sign-on/TOOLS.md` (new), the live tools of REVIEW R15 | after S1, S7, S8 are integrated |
 | **S12** documentation | `docs-auditor` (two, split by file) | the living guides that `EXPOSURE.md` 8.1 and `DESIGN.md` 12 name | after the code is integrated |
@@ -76,7 +76,9 @@ and the lead corrects this file.
 | The setup-code file `<DATA_DIR>/setup-code` (`mode=setup` or `mode=recover`, `code=…`, 0600), written by `create_app` | S1a, S1b | S5a, S5b, S6, S11 |
 | `python -m app.recover` output | S1a | S5a |
 | `python -m app.probe <name>` and its one-line JSON | S3 | S6 |
-| TLS files, modes and `setup-tls.sh` options | S4 | S5b, S6 |
+| TLS files, modes and `setup-tls.sh` options (including the read-only `--primary`) | S4 | S5a, S5b, S6 |
+| `setup_tls.certificate_addresses(routes, addresses)` (EXPOSURE 3.2), loaded by `check_exposure.py` | S4 | S6 |
+| The manager's environment key `UI_PORT` (both compose files) | S4 | S1b |
 | `setup-firewall.sh`, `setup-ssh-hardening.sh`, `manager-recover-admin.sh` options and output | S5a | S5b, S6 |
 | `session.js` globals, `signedOut()`, `sessionOnResume(fn)`, the `sessionEnded:true` error marker | S8 | S9, S10a, S10b |
 | `diagnosticsAdvice(role)` in `status.js` | S8 | S10a, S10b |
@@ -109,7 +111,10 @@ any log (`assert_not_logged`).
 Design: DESIGN 5 (sessions, the cookie, renewal only on acts, sign-out everywhere, the user index and
 the lock order), 6 (the gate, `EXEMPT`, every refusal including the restricted session, the bodies, the
 health route), 7 (authorization and every route), 8 (the L1, L2 and L3 throttle, the executor), 9.3 and
-9.4 (setup mode and the setup route, recovery's `409 exists`), 10.3 (the guard's actor), 13 (the
+9.4 (setup mode and the setup route, recovery's `409 exists`), 9.2 (the code and its file written by
+`create_app`, the container log line with `UI_PORT` from the environment and the first `UI_ALLOWED_HOSTS`
+name; EXPOSURE 2.4, 7.2), 10.3 (the guard's actor), EXPOSURE 7.1 (the `allowed_hosts.py` row: `REFUSAL`
+names `https://192.0.2.10:8443/`, and the docstring's "has no login" becomes the gate sentence), 13 (the
 fixture, the 52 sites, the `HostCheckTests` cookies), 19. REVIEW R1, R4, R5, R6, R7, R8, R9, R10 (the
 `DELETE /api/session` response clears `clab_capture_owner` with `Path=/api/capture`), R11, R12, R14
 (`GET /login` with a session), R21 (no fixture code in `app/`), R22, U11.
@@ -117,8 +122,9 @@ fixture, the 52 sites, the `HostCheckTests` cookies), 19. REVIEW R1, R4, R5, R6,
 `login.html` and `setup.html` are S7's: in this worktree they do not exist, so a test of a 200 from
 `GET /login` or `GET /setup` is skipped while the file is absent and every redirect and refusal test runs.
 The setup-code file is written by `create_app`, not by the lifespan, because the tests build
-`TestClient` without running the lifespan. The case of `test_audit.py` that compares `users.js`'s label maps with
-`AUDIT_EVENTS`, `AUDIT_OUTCOMES` and `AUDIT_REASONS` crosses into S9's file: it is skipped while
+`TestClient` without running the lifespan. The case of `test_audit.py` that compares `users.js`'s three label maps (`AUDIT_EVENT_LABELS`,
+`AUDIT_OUTCOME_LABELS`, `AUDIT_DETAIL_LABELS`) with `AUDIT_EVENTS`, `AUDIT_OUTCOMES` and the exact
+`AUDIT_REASONS` of DESIGN 10.2 crosses into S9's file: it is skipped while
 `app/static/users.js` is absent and runs at integration.
 
 Acceptance: the route walk of `test_session.py` (every route and both sockets classified; without a
@@ -163,7 +169,8 @@ line.
 
 Design: EXPOSURE 2 (2.4: the manager service gains `UI_PORT` in its environment, so its container log line
 can name the port), 3 (with REVIEW R18's certificate names, `--name` and the read-only `--primary`), 4.1 (the
-compose service), 5.1, 7.1 (its rows), 7.4 (with REVIEW R17's sentence), 8.2; RECONCILIATION 4 (E-Q1, E-Q5,
+compose service), 5.1, 7.1 (its rows), 7.4 (with REVIEW R17's sentence; the standard path's
+`UI_HTTP_PORT=0` write through `setup_tls.py` is S4's), 8.2; RECONCILIATION 4 (E-Q1, E-Q5,
 E-Q6, E 9.4).
 
 Acceptance: uvicorn serves TLS with the certificate paths and `--no-proxy-headers --no-server-header` in
@@ -175,7 +182,8 @@ only for a lost or expiring certificate or a missing filtered address; the `veri
 ### S5a host doors
 
 Design: EXPOSURE 5.2 (firewall), 5.4 (SSH hardening), 7.1 (`manager-recover-admin.sh`, which builds the
-`https://<address>:<UI_PORT>/setup?recover=1` URL from `.env` as `start-manager.sh` does, REVIEW R11).
+`https://<primary>:<UI_PORT>/setup?recover=1` URL, `<primary>` from `setup-tls.sh --primary` and `UI_PORT`
+from `.env` as `start-manager.sh` reads it, EXPOSURE 3.1; REVIEW R11).
 
 Acceptance: the firewall script never locks out the current SSH session's port, never runs `ufw reset`,
 adds only its own commented rules and removes only those; the SSH drop-in writes only directives whose
@@ -186,7 +194,8 @@ script prints the code from `app.recover` and the URL; the tests are standard-li
 
 Design: EXPOSURE 7 (installer changes, the order of a fresh installation with the setup code printed
 last, REVIEW U13; prepared images; the upgrade; the full-screen installer's summary stops listing the
-`hostname -I` addresses of `vm_addresses()`, REVIEW R18). REVIEW R11, R17, R18, U13.
+`hostname -I` addresses of `vm_addresses()`, REVIEW R18; 7.4's advanced option (1), which writes
+`UI_PORT=8443` and `UI_HTTP_PORT=8081`, is S5b's). REVIEW R11, R17, R18, U13.
 
 Acceptance: the installer runs the TLS, firewall and SSH steps in EXPOSURE 7.2's order with their
 opt-outs, verifies the manager over HTTPS `/api/health`, prints the address, the fingerprint and, while
@@ -207,11 +216,11 @@ OK, WARN and FAIL; no case of `test_check_install.py` is deleted (each is rewrit
 ### S7 exposed pages
 
 Design: UI 1 (the sign-in page: the load-time session check, the change view with Sign out, the
-countdown, `next` with the hash), 2 (setup and recovery), 8, 9.1; RECONCILIATION 2 (`login.css`);
-DESIGN 15 (the `next` rule). REVIEW R1, R11, R14, U7, U13, U15.
+countdown, `next` with the hash), 1.6 (the `next` rule; DESIGN 15 refers to it), 2 (setup and recovery), 8,
+9.1; RECONCILIATION 2 (`login.css`). REVIEW R1, R11, R14, U7, U13, U15.
 
 Acceptance: `login.css` names no application selector; neither page links `style.css`; the `next` rule
-of DESIGN 15 with every listed attack and the hash; the load check with 200, restricted 200, 401 and a
+of UI 1.6 with every listed attack and the hash; the load check with 200, restricted 200, 401 and a
 network failure; the change view's current-password handling after a reload; the countdown announced
 once; the setup and recovery wording; every page asset carries `?v=` of `clab-backup-ui/VERSION`; house
 style and `esc()`; no inline styles.
