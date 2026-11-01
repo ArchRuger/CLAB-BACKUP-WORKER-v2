@@ -175,6 +175,37 @@ class ManagerResetTests(unittest.TestCase):
         self.assertEqual(self.store.state['labs'],[]);self.assertFalse(stage.exists());self.assertFalse(backup.exists())
         self.assertEqual(Store(self.tmp.name).state['labs'],[])
 
+    # Sign-on (DESIGN.md 3.3): a reset that emptied `users` would reopen setup mode on an exposed address.
+    def test_reset_keeps_users_and_the_audit_files(self):
+        from app import accounts
+        self.host(); self.register()
+        record = accounts.new_record('root', 'admin', 'scrypt$32768$8$1$' + 'A'*43 + '$' + 'B'*43, created_by='setup', must_change_password=False)
+        self.store.state['users'] = {'root': record}; self.store.save()
+        self.store.audit('setup', actor='root', source='203.0.113.9', outcome='ok', detail='setup')
+        self.store.audit_failure('signin.failed', actor='-', source='203.0.113.9', outcome='failed', detail='invalid_credentials count=1')
+        (self.store.root/'audit.jsonl.1').write_text('{"event":"old"}\n')
+        self.store.reset()
+        self.assertEqual(self.store.state['labs'], [])
+        self.assertEqual(self.store.state['users'], {'root': record})
+        saved = Store(self.tmp.name)
+        self.assertEqual(saved.state['users'], {'root': record})
+        for name in ('audit.jsonl', 'audit-failures.jsonl', 'audit.jsonl.1'):
+            self.assertTrue((saved.root/name).exists(), name)
+        self.assertEqual(len((saved.root/'audit.jsonl').read_text().splitlines()), 1)
+        self.assertFalse((saved.root/'ui.token').exists())
+
+    def test_a_journal_of_an_older_release_applies_without_users(self):
+        # Prepared by a release that did not know `users`: applied as it is; the manager then enters setup mode (DESIGN 12.1).
+        self.host(); self.register()
+        self.store.state['users'] = {'root': {'name': 'root'}}; self.store.save()
+        stage = self.store.root/'.reset-pending'; stage.mkdir(mode=0o700)
+        fresh = {'labs': [], 'jobs': [], 'operations': [], 'git_jobs': [], 'ignored_labs': [], 'host': {}, 'reset_id': 'older-release'}
+        Store.atomic(stage/'new-state.enc', self.store.cipher.encrypt(json.dumps(fresh).encode()))
+        restarted = Store(self.tmp.name)
+        self.assertFalse(restarted.reset_pending)
+        self.assertEqual(restarted.state['labs'], [])
+        self.assertEqual(restarted.state.get('users', {}), {})
+
     def test_unknown_entry_in_unprepared_journal_still_needs_attention(self):
         stage=self.store.root/'.reset-pending'
         stage.mkdir(mode=0o700);(stage/'new-state.enc.tmp').write_bytes(b'partial');(stage/'backups').mkdir()
