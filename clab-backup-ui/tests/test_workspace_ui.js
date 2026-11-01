@@ -9,7 +9,7 @@ const VERSION=fs.readFileSync(path.join(__dirname,'../VERSION'),'utf8').trim();
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function page({hash='',session=true,answers=[],dialog=null}={}){
  const els=new Map(),fetches=[],handlers={},gone=[];
- const get=id=>{if(!els.has(id))els.set(id,{id,hidden:false,textContent:'',innerHTML:'',onclick:null});return els.get(id);};
+ const get=id=>{if(!els.has(id))els.set(id,{id,hidden:false,textContent:'',innerHTML:'',onclick:null,addEventListener(){},focus(){}});return els.get(id);};
  let ended=false;
  const queue=[...answers];
  const context=vm.createContext({URLSearchParams,decodeURIComponent,console,
@@ -115,10 +115,11 @@ test('stacked dialogs: typed text in a lower or upper dialog holds the page, whi
  await p.start();
  assert.deepEqual(p.gone,[],'the topology typed in the second open dialog is kept');assert.ok(p.ended());
 });
-test('a held page: the error says what to do (sign in in a new tab, press the button again, the text is kept)',async()=>{
+// Rewritten claim, same test: the held sentence no longer says "press this button again", which is false for a read-only act (an output poll); it says "try again here" and still names the new tab and the kept text.
+test('a held page: the error says what to do (sign in in a new tab, try again here, the text is kept) and names no button',async()=>{
  const p=page({answers:[SIGNED_OUT],dialog:dialogWith([{type:'textarea',value:'name: lab'}])});
  await p.start();
- await assert.rejects(p.context.api('/state'),e=>e.sessionEnded===true&&/new tab/.test(e.message)&&/still here/.test(e.message));
+ await assert.rejects(p.context.api('/state'),e=>e.sessionEnded===true&&/new tab/.test(e.message)&&/try again here/.test(e.message)&&/still here/.test(e.message)&&!/button/.test(e.message));
 });
 test('a held page: after signing in elsewhere the next Create is sent; a 401 again holds the page again',async()=>{
  const fields=[{type:'textarea',value:'name: lab'}];
@@ -130,4 +131,51 @@ test('a held page: after signing in elsewhere the next Create is sent; a 401 aga
  assert.ok(p.ended(),'the 401 marked the page again');assert.deepEqual(p.gone,[],'and it is still held');
  const result=await p.context.json('/operations/preview','POST',{});
  assert.deepEqual(result,{ok:1});assert.equal(p.fetches.length,before+2);assert.equal(p.ended(),false,'a success leaves the page signed in');
+});
+
+// UI 3.2 stand-ins of sessionOnResume and sessionRetry: retry clears the mark, runs the page's refresh() and then the registered resume functions, and resolves whether the session is back.
+function withRetry(p,{back=true}={}){
+ const resume=new Set();let retries=0;
+ Object.assign(p.context,{
+  sessionOnResume:fn=>{if(typeof fn==='function')resume.add(fn);},
+  sessionRetry:async()=>{retries++;p.context.sessionClear();if(!back){p.context.sessionMark();return false;}await p.context.refresh();const fns=[...resume];resume.clear();for(const fn of fns)await fn();return true;}});
+ return {retries:()=>retries,resume};
+}
+test('a held page: a person-initiated act calls sessionRetry() and is sent only when it resolves true; otherwise the held error is thrown and nothing is sent',async()=>{
+ const p=page({answers:[SIGNED_OUT],dialog:dialogWith([{type:'textarea',value:'name: lab'}])});
+ const r=withRetry(p,{back:false});
+ await p.start();
+ const before=p.fetches.length;
+ await assert.rejects(p.context.json('/operations/preview','POST',{}),e=>e.sessionEnded===true&&/new tab/.test(e.message));
+ assert.equal(r.retries(),1);assert.equal(p.fetches.length,before,'sessionRetry() said no: nothing was sent');
+ assert.ok(p.ended());
+});
+test('a held page: with a running job, the output poll goes quiet on the 401, the dialog shows the held sentence, and the next act resumes the poll',async()=>{
+ const operations=fs.readFileSync(path.join(STATIC,'operations.js'),'utf8'),HELD='Your session ended. Sign in again in a new tab, then try again here; what you typed is still here.';
+ const field={type:'textarea',value:'git@host:course/labs.git',readOnly:false,disabled:false};
+ const line={textContent:''},out={textContent:'',innerHTML:'',hidden:false,className:'',scrollTop:0,scrollHeight:0,clientHeight:0};
+ const dialog={id:'operation-output',open:true,onclose:null,classList:{toggle(){}},querySelector:sel=>sel==='.form-error'?line:sel==='h2'?{textContent:''}:null,querySelectorAll:()=>[field],close(){this.open=false;}};
+ const clone={open:true,querySelector:sel=>sel==='.form-error'?{textContent:''}:null,querySelectorAll:()=>[field]};
+ const p=page({answers:[SIGNED_OUT],dialog:[clone,dialog]});
+ const r=withRetry(p);
+ const timers=[];p.context.setTimeout=fn=>{timers.push(fn);return timers.length;};
+ vm.runInContext(operations,p.context,{filename:'operations.js'});
+ p.context.opDialog=()=>dialog;
+ p.get('op-job-banner');p.get('op-job-output');p.get('op-job-result');
+ // The first answer (a 401) is the poll's own GET; the person's act and the resumed poll then see running jobs.
+ const running={status:200,body:{id:'j1',action:'clone',status:'running',output:'cloning'}};
+ p.queue.push(running);
+ await p.context.opShowJob('j1');
+ assert.ok(p.ended(),'the 401 marked the page signed out');assert.deepEqual(p.gone,[],'a typed dialog holds the page');
+ assert.equal(line.textContent,HELD,'the dialog tells the person, though the poll swallows the error');
+ assert.match(line.textContent,/new tab/);assert.equal(timers.length,0,'the quiet poll arms no timer and spends no retry');
+ assert.equal(r.resume.size,1,'the poll waits for the resume');
+ // The person's next act: sessionRetry() runs the registered poll before the act is sent.
+ p.queue.push(running,{status:200,body:{ok:1}});
+ const before=p.fetches.length;
+ const result=await p.context.json('/operations/preview','POST',{});
+ assert.deepEqual(result,{ok:1});assert.equal(r.retries(),1);
+ assert.ok(p.fetches.slice(before).some(u=>u==='/api/operations/j1'),'the output poll asked again');
+ assert.notEqual(line.textContent,HELD,'the held sentence is gone once the session is back');
+ assert.equal(timers.length,1,'and the running job is polled on');
 });

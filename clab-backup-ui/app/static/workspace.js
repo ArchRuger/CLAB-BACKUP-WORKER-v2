@@ -15,13 +15,26 @@ function workspaceTyped(){
  if(typeof document.querySelectorAll!=='function')return false;
  return [...document.querySelectorAll('dialog[open]')].some(dialog=>dialog&&typeof dialog.querySelectorAll==='function'&&[...dialog.querySelectorAll('textarea,input')].some(f=>!f.readOnly&&!f.disabled&&!['checkbox','radio','hidden','button','submit'].includes(f.type)&&String(f.value||'').trim()!==''));
 }
-// The sentence of a held page: it says how to get back and that the text is kept.
-const WORKSPACE_HELD='Your session ended. Sign in again in a new tab, then press this button again; what you typed is still here.';
-function workspaceHeldError(){return Object.assign(new Error(WORKSPACE_HELD),{status:401,sessionEnded:true});}
+// The sentence of a held page: it says how to get back and that the text is kept. It is true for every act (a button, a read that polls on), so it names no button.
+const WORKSPACE_HELD='Your session ended. Sign in again in a new tab, then try again here; what you typed is still here.';
+// Every open dialog shows the sentence in its alert line, so a caller that swallows the error (a poll) still leaves it on screen; `text` '' takes it away again (only where it is still the held sentence).
+function workspaceShowHeld(text){
+ if(typeof document.querySelectorAll!=='function')return;
+ for(const dialog of document.querySelectorAll('dialog[open]')){
+  const line=dialog&&typeof dialog.querySelector==='function'?dialog.querySelector('.form-error'):null;
+  if(!line)continue;
+  if(text)line.textContent=text;else if(line.textContent===WORKSPACE_HELD)line.textContent='';
+ }
+}
+function workspaceHeldError(){workspaceShowHeld(WORKSPACE_HELD);return Object.assign(new Error(WORKSPACE_HELD),{status:401,sessionEnded:true});}
 // No request leaves a signed-out page (REVIEW U8); a 401 signed_out marks the page and leaves for the sign-in page at once, unless an open dialog holds typed text: then the page stays and the dialog's error says what to do. The person's own act (a non-GET) clears the mark once, as Reconnect does on the terminal page, so it is sent after signing in elsewhere and the answer decides; a read never is. The page leaves on the next request after no dialog holds typed text.
 let workspaceHeld=false;
 async function api(path,options={}){
- if(workspaceHeld&&options.method&&options.method!=='GET'&&typeof sessionEnded==='function'&&sessionEnded()&&workspaceTyped()&&typeof sessionClear==='function')sessionClear();
+ if(workspaceHeld&&options.method&&options.method!=='GET'&&typeof sessionEnded==='function'&&sessionEnded()&&workspaceTyped()){
+  // The person's own act: sessionRetry() clears the mark, runs this page's refresh() and the registered resume functions (a job's output poll), and says whether the session is back; the act is sent only then. Without it the mark is only cleared and the answer decides.
+  if(typeof sessionRetry==='function'){if(await sessionRetry())workspaceShowHeld('');else throw workspaceHeldError();}
+  else if(typeof sessionClear==='function')sessionClear();
+ }
  if(typeof sessionEnded==='function'&&sessionEnded()){
   if(workspaceHeld&&!workspaceTyped()&&typeof sessionGo==='function'){workspaceHeld=false;sessionGo('ended');}
   throw workspaceHeld?workspaceHeldError():sessionEndedError();
