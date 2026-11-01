@@ -1634,3 +1634,59 @@ test('L-36: History > View of a plan whose fetch fails shows the failure for tha
  await c.designLoadPlan('lab-a','g2');
  assert.equal(stateOf(c).planError,'','the answer for a plan that is not shown does not touch the shown plan\'s state');
 });
+
+// ---- Sign-on S10a (docs/sign-on/UI.md 3.3; REVIEW U8): the three design watchers ---------------------------------------------------
+// session.js does not load here: a stand-in with the exact contract of UI 3.2 (sessionEnded, sessionOnResume, sessionEndedError,
+// sessionRetry) and an api() that, like the real one, sends nothing while the page is marked signed out.
+function signonWatchHarness(answer){
+ const resume=new Set();let ended=false,sent=0,mode='401';
+ const timers=[],els={};
+ const el=id=>{if(!els[id])els[id]={id,value:'',disabled:false,title:'',textContent:'',className:'',hidden:false,innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};return els[id];};
+ const c=ctx({$:el,setMarkup:(e,h)=>{if(e)e.innerHTML=h;},current:()=>({id:'lab-a',name:'A'}),
+  setTimeout:fn=>{timers.push(fn);return timers.length;},
+  sessionEnded:()=>ended,sessionOnResume:fn=>{if(typeof fn==='function')resume.add(fn);},
+  sessionEndedError:()=>Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true}),
+  api:async()=>{
+   if(ended)throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});
+   sent++;
+   if(mode==='401'){ended=true;throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+   return {json:async()=>answer()};
+  },refresh:async()=>{}});
+ return {c,el,timers,resume,sent:()=>sent,ended:()=>ended,ok(){mode='ok';},
+  async retry(){ended=false;const fns=[...resume];resume.clear();for(const fn of fns)fn();await new Promise(r=>setImmediate(r));},
+  async fire(){const fn=timers.pop();return fn();}};
+}
+test('S10a: the design generation watch stops at the first 401 without spending a retry, and the resume polls again',async()=>{
+ const h=signonWatchHarness(()=>({intent:{schema:1},generations:[{id:'g',status:'succeeded'}],problems:[],nodes:{}}));
+ stateOf(h.c).labId='lab-a';stateOf(h.c).view={intent:{schema:1},generations:[{id:'g',status:'running'}],problems:[],nodes:{}};
+ h.c.designMaybeStartWatch();
+ assert.equal(h.timers.length,1);await h.fire();
+ assert.equal(h.sent(),1);assert.equal(h.timers.length,0,'no retry is scheduled');
+ assert.equal(stateOf(h.c).pollProblem||'','','no failure sentence is written');assert.notEqual(stateOf(h.c).pollGaveUp,true);
+ assert.equal(h.resume.size,1,'poll is registered for the resume');
+ h.c.designMaybeStartWatch();h.c.designRenderAll();assert.equal(h.timers.length,0,'a render does not start a second watch: designWatch stays set');
+ await [...h.resume][0]();assert.equal(h.sent(),1,'a stray call while signed out sends nothing');
+ h.ok();await h.retry();
+ assert.ok(h.sent()>=2,'sessionRetry() polls again (and the finished job loads its plan)');assert.equal(stateOf(h.c).view.generations[0].status,'succeeded');
+});
+test('S10a: the design review watch stops at the first 401 before the retry count and the 404 branch, and the resume polls again',async()=>{
+ const h=signonWatchHarness(()=>({id:'job1',status:'done'}));
+ h.c.designReviewStartWatch('lab-a','job1',true);
+ assert.equal(h.timers.length,1);await h.fire();
+ assert.equal(h.sent(),1);assert.equal(h.timers.length,0,'no retry is scheduled');
+ assert.equal(vm.runInContext('designReviewWatch',h.c),'job1','the watch stays set');
+ assert.equal(h.resume.size,1);
+ h.ok();await h.retry();
+ assert.equal(h.sent(),2,'sessionRetry() polls again');assert.equal(vm.runInContext('designReviewWatch',h.c),null,'a finished review ends the watch as before');
+});
+test('S10a: the design apply watch stops at the first 401 without writing a problem or spending a retry, and the resume polls again',async()=>{
+ const h=signonWatchHarness(()=>({id:'j1',lab_id:'lab-a',status:'done',targets:[]}));
+ vm.runInContext("designApplyState.labId='lab-a';designApplyState.jobId='j1';designApplyState.step='progress';designApplyState.job={id:'j1',lab_id:'lab-a',status:'applying',targets:[]}",h.c);
+ h.c.designApplyStartWatch('j1');
+ assert.equal(h.timers.length,1);await h.fire();
+ assert.equal(h.sent(),1);assert.equal(h.timers.length,0,'no retry is scheduled');
+ assert.equal(vm.runInContext('designApplyFollow.problem',h.c),'','designApplyFollow.problem is not written');
+ assert.equal(vm.runInContext('designApplyWatch',h.c),'j1');assert.equal(h.resume.size,1);
+ h.ok();await h.retry();
+ assert.ok(h.sent()>=2,'sessionRetry() polls again (a finished job also reads the ownership)');assert.equal(vm.runInContext('designApplyWatch',h.c),null,'a finished job ends the watch as before');
+});

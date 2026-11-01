@@ -1028,6 +1028,8 @@ function designMaybeStartWatch(){
    // A failed poll (a lost connection, a 500, a bad answer) is retried a bounded number of times with the
    // student told so; after that the watch stops and the state says the progress is unknown, with a way out.
    if(designWatch!==labId||designState.labId!==labId)return;
+   // A session end (UI 3.3): nothing was sent. No retry is spent and nothing is said; designWatch stays set, so a render does not start a second watch.
+   if(typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(poll);return;}
    failures++;
    if(failures<=DESIGN_POLL_RETRIES){
     designState.pollProblem='Could not check the plan\'s progress (attempt '+failures+' of '+DESIGN_POLL_RETRIES+'): '+(error&&error.message||'no answer')+'. Trying again…';
@@ -1857,6 +1859,8 @@ function designReviewStartWatch(labId,jobId,quiet,delay){
    else{designReviewStopWatch();designReviewSettled(job);}
   }catch(error){
    if(designReviewWatch!==jobId)return;
+   // A session end (UI 3.3): before the 404 branch and the retry count; the watch stays set.
+   if(typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(poll);return;}
    if(error&&error.status===404){
     designReviewStopWatch();
     if(designReviewKnown.jobId===jobId)designReviewForget();
@@ -2030,6 +2034,8 @@ function designApplyStartWatch(jobId){
    // Whether the job is still running is not known here (after a manager restart it is "interrupted"): its real
    // state is on the manager, which Check again and the Last apply line under Generated plan read.
    if(designApplyWatch!==jobId)return;
+   // A session end (UI 3.3): nothing was sent; no retry, no problem line; designApplyWatch stays set.
+   if(typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(poll);return;}
    failures++;
    const why=error&&error.message||'no answer';
    if(failures<=DESIGN_POLL_RETRIES){

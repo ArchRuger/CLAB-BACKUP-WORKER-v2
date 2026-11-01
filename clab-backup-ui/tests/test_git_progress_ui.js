@@ -615,3 +615,47 @@ test('a top-level lab is labelled "top level", not "whole repository", now that 
  context.gitRepository=()=>({prefix:''});context.gitRepoName=()=>'Course';
  assert.equal(context.gitFolderWords({binding_id:'x'}),'Course (top level)');
 });
+
+// ---- Sign-on S10a (docs/sign-on/UI.md 3.3; REVIEW U8): the Git save watch ----------------------------------------------------
+// session.js does not load here: stand-ins with the exact contract of UI 3.2 (sessionEnded, sessionOnResume, sessionEndedError).
+function signonGitHarness(){
+ const resume=new Set(),timers=[],toasts=[],texts=[];let ended=false,sent=0,mode='ok';
+ const context=makeContext();
+ const errorBox={set textContent(v){texts.push(v);}};
+ Object.assign(context,{
+  sessionEnded:()=>ended,sessionOnResume:fn=>{if(typeof fn==='function')resume.add(fn);},
+  sessionEndedError:()=>Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true}),
+  setTimeout:fn=>{timers.push(fn);return timers.length;},notify:m=>toasts.push(m),
+  gitRememberJob(){},gitRenderJob(){},
+  $:id=>id==='git-job-dialog'?{open:true,querySelector:()=>errorBox}:null,
+  api:async()=>{
+   if(ended)throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});
+   sent++;
+   if(mode==='401'){ended=true;throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+   return {json:async()=>({id:'s1',lab_id:'lab',status:'capturing'})};
+  }});
+ return {context,timers,toasts,texts,resume,sent:()=>sent,ended:()=>ended,set mode(v){mode=v;},
+  async retry(){ended=false;const fns=[...resume];resume.clear();for(const fn of fns)fn();await new Promise(r=>setImmediate(r));}};
+}
+test('S10a: the Git save watch sends nothing after the first 401, keeps its place so no render re-arms it, says nothing, and resumes after sessionRetry()',async()=>{
+ const h=signonGitHarness(),job={id:'s1',lab_id:'lab',status:'capturing'};
+ h.context.gitStartWatch(job,{quiet:true});
+ assert.equal(h.timers.length,1);h.mode='401';await h.timers.pop()();
+ assert.equal(h.sent(),1);assert.equal(h.timers.length,0,'no retry is scheduled');
+ assert.ok(vm.runInContext('gitWatch',h.context),'gitWatch stays set: the render path at gitResumeWatch does not re-arm');
+ assert.deepEqual(h.toasts,[],'no toast');assert.deepEqual(h.texts,[],'no dialog text');assert.equal(h.resume.size,1);
+ // The render path (gitResumeWatch) and a fresh start both stay quiet while signed out.
+ h.context.state.git_jobs=[job];h.context.gitResumeWatch({id:'lab'});
+ h.context.gitStartWatch({id:'other',lab_id:'lab',status:'capturing'},{quiet:true});
+ assert.equal(h.timers.length,0,'no timer from the render path or from a start while signed out');
+ assert.equal(vm.runInContext('gitWatch.id',h.context),'s1','a start while signed out does not replace the kept watch');
+ h.mode='ok';await h.retry();
+ assert.equal(h.sent(),2,'sessionRetry() polls again');assert.equal(h.timers.length,1,'and the save is followed on');
+ assert.deepEqual(h.toasts,[]);
+});
+test('S10a: gitStartWatch returns at its start while signed out and starts nothing',()=>{
+ const h=signonGitHarness();h.mode='401';
+ h.context.sessionEnded=()=>true;
+ h.context.gitStartWatch({id:'s2',lab_id:'lab',status:'capturing'},{quiet:true});
+ assert.equal(vm.runInContext('gitWatch',h.context),null);assert.equal(h.timers.length,0);
+});

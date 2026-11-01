@@ -464,12 +464,19 @@ function loadRetry(job){
 // Follows a load every 1.5 s while it is active (as restoreStartWatch does) and re-renders the chip panel; the chip itself follows the 4 s poll.
 function loadWatch(job){
  if(!job||!job.id||loadWatching===job.id)return;
+ // Signed out (UI 3.3): the header render re-arms this watch every time, so it sends nothing; sessionRetry() resumes it from the catch below.
+ if(typeof sessionEnded==='function'&&sessionEnded())return;
  loadStopWatch();loadWatching=job.id;if(loadPaused===job.id)loadPaused='';loadSeenActive.add(job.id);
  const id=job.id,poll=async()=>{
   if(loadWatching!==id)return;
   let value;
   try{value=await (await api('/restore/jobs/'+encodeURIComponent(id))).json();}
-  catch{if(loadWatching!==id)return;loadStopWatch();loadPaused=id;loadRepaint();return;}
+  catch{
+   if(loadWatching!==id)return;
+   // A session end is not a paused watch: no Refresh note, no retry; sessionRetry() follows the load again.
+   if(typeof sessionEnded==='function'&&sessionEnded()){loadStopWatch();sessionOnResume(()=>loadWatch(job));return;}
+   loadStopWatch();loadPaused=id;loadRepaint();return;
+  }
   if(loadWatching!==id||!value)return;
   loadJobs.set(id,value);
   if(loadJobActive(value)){loadWatchTimer=setTimeout(poll,1500);loadRepaint();return;}

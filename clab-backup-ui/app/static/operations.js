@@ -30,10 +30,10 @@ function opPath(lab){return lab?.vm_project_path||lab?.vm_source?.files?.definit
 function opName(lab){return lab?.deployment_name||lab?.name||'';}
 function opWhen(value){if(!value)return '';return typeof relativeTime==='function'?relativeTime(value):new Date(value).toLocaleString();}
 function opStatusWord(status){return {succeeded:'Completed',failed:'Failed',interrupted:'Interrupted',cancelled:'Stopped by you',running:'Running',queued:'Waiting'}[status]||String(status||'');}
-async function opCapabilities(){opCaps=await(await api('/operations/capabilities')).json();return opCaps;}
+async function opCapabilities(){opCaps=await(await api('/operations/capabilities')).json();return opCaps;} /* "see Diagnostics" is an administrator's sentence (sign-on UI 4.5): an operator is told to ask one; without status.js the old words stay. */ function opRole(){return typeof state==='object'&&state&&state.user?state.user.role:'';} function opAdvice(){return typeof diagnosticsAdvice==='function'?diagnosticsAdvice(opRole()):'see Diagnostics';}
 function opCommand(action,label=opLabels[action],options={}){
  const cap=opCaps?.actions?.[action], unavailable=cap&&!cap.available;
- return `<button class="button ${['destroy','delete'].includes(action)?'danger-outline':'secondary'}" data-op-action="${esc(action)}" data-op-options="${esc(JSON.stringify(options))}" ${unavailable?'disabled':''}>${esc(label||action)}${unavailable?'<small>Not available on this VM — see Diagnostics</small>':''}</button>`;
+ return `<button class="button ${['destroy','delete'].includes(action)?'danger-outline':'secondary'}" data-op-action="${esc(action)}" data-op-options="${esc(JSON.stringify(options))}" ${unavailable?'disabled':''}>${esc(label||action)}${unavailable?`<small>Not available on this VM — ${esc(opAdvice())}</small>`:''}</button>`;
 }
 // Destroy always runs containerlab destroy --cleanup: the containers go together with the generated
 // lab folder (clab-<name>: TLS material, generated startup files), so the next deploy starts clean.
@@ -622,7 +622,7 @@ async function opShowJob(id,{auto=false,stop=false}={}){
    $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(opPublishedPath(job))));$('op-back-review')?.addEventListener('click',()=>opBackToReview(job));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(typeof opJobDone==='function')opJobDone(job);}
-  }catch(e){if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);else if(typeof opJobLost==='function')opJobLost(id);}
+  }catch(e){if(typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(poll);return;}/* signed out (UI 3.3): nothing was sent, no retry, no sentence; sessionRetry() runs poll again */ if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);else if(typeof opJobLost==='function')opJobLost(id);}
  };dialog.onclose=()=>{opClosedOutputs.add(id);if(!follows)clearTimeout(opOutputTimer);};await poll();
 }
 // The topology file a finished job left on the VM, to continue with "Deploy or add this lab…": the builder's
@@ -793,7 +793,7 @@ async function opBrowse(path='',labId='',options={}){
   if(!caps.network&&!files)help.textContent+=' Downloading labs from the internet is turned off on this VM. An administrator can enable it (--allow-downloads) in VM setup.';
  }).catch(()=>{
   if(!clone.isConnected)return;
-  help.textContent+=' Files are available, but the VM command check failed — open Diagnostics for details. Online downloads stay off.';
+  help.textContent+=' Files are available, but the VM command check failed — '+opAdvice()+'. Online downloads stay off.';
  });
 }
 // A file of the lab's folder that is not a topology (a startup configuration, a map file): read-only, hidden lines said.
@@ -935,7 +935,7 @@ function opTopologyEditReason(lab,discovery,isBusy=false,caps=opCaps){
  const path=opPath(lab),status=lab.deployment?.status,revise=caps?.actions?.revise,roots=Array.isArray(caps?.roots)?caps.roots.filter(r=>typeof r==='string'&&r):[];
  if(!path)return 'This lab has no topology file on the VM (Advanced › Deployment details)';
  if(!discovery?.connected)return 'Connect the VM first';
- if(revise&&revise.available===false)return typeof revise.reason==='string'&&revise.reason?revise.reason:'The VM helpers are older than the manager: refresh them (see Diagnostics)';
+ if(revise&&revise.available===false)return typeof revise.reason==='string'&&revise.reason?revise.reason:`The VM helpers are older than the manager: refresh them (${opAdvice()})`;
  if(isBusy)return 'Wait for the current operation to finish';
  if(!['Not deployed','Running','Stopped','Partially running'].includes(status))return 'Lab status is unknown — refresh the lab list';
  if(roots.length&&!roots.some(r=>path===r||path.startsWith(r.replace(/\/+$/,'')+'/')))return 'The topology file is outside the folders the manager may edit';
@@ -973,7 +973,7 @@ function opNodeActionState(action,lab,n,discovery,isBusy=false){
  const dev=n.short_name||n.name||'This device',verb=OP_NODE_VERBS[action]||'restart';
  if(action==='stop-node'&&n.runtime_state!=='running'&&n.runtime_state!=='unknown')return {ok:false,reason:`${dev} is not running`,own:true};
  if(action==='start-node'&&(!n.runtime_state||n.runtime_state==='running'))return {ok:false,reason:n.runtime_state==='running'?`${dev} is already running`:`${dev} is not deployed on the VM`,own:n.runtime_state==='running'};
- if(opCaps&&opCaps.actions&&opCaps.actions[action]?.available!==true)return {ok:false,reason:`Not available on this VM — its containerlab or helper cannot ${verb} one device (see Diagnostics)`};
+ if(opCaps&&opCaps.actions&&opCaps.actions[action]?.available!==true)return {ok:false,reason:`Not available on this VM — its containerlab or helper cannot ${verb} one device (${opAdvice()})`};
  return {ok:true,reason:''};
 }
 function opRestartState(lab,n,discovery,isBusy=false){return opNodeActionState('restart-node',lab,n,discovery,isBusy);}
@@ -983,7 +983,7 @@ function opSaveNodeState(lab,n,discovery,isBusy=false){
  const dev=n.short_name||n.name||'This device';
  if(n.runtime_state!=='running')return {ok:false,reason:`${dev} is not running`,own:true};
  const cap=opCaps&&opCaps.actions?opCaps.actions.save:null;
- if(opCaps&&opCaps.actions&&(!cap||cap.available!==true||cap.node_filter!==true))return {ok:false,reason:'Not available on this VM — its containerlab cannot save one device (see Diagnostics)'};
+ if(opCaps&&opCaps.actions&&(!cap||cap.available!==true||cap.node_filter!==true))return {ok:false,reason:`Not available on this VM — its containerlab cannot save one device (${opAdvice()})`};
  return {ok:true,reason:''};
 }
 async function opRestartDevice(labId,name,opener){
@@ -1219,7 +1219,7 @@ function renderLabOperations(){
   if(b.dataset.opVariant==='cleanup')b.hidden=opCaps?.actions?.redeploy?.cleanup!==true;
   const capability=opCaps?.actions?.[b.dataset.opAction],unavailable=capability&&capability.available===false;
   const ok=!unavailable&&quick.available&&(b.dataset.opAction==='redeploy'?status!=='Not deployed':running);
-  opMenuState(b,!ok,unavailable?'Not available on this VM — see Diagnostics':quick.available?'The lab is not running':quick.reason);
+  opMenuState(b,!ok,unavailable?`Not available on this VM — ${opAdvice()}`:quick.available?'The lab is not running':quick.reason);
  }
 if($('topology-edit')){const reason=opTopologyEditReason(lab,state.discovery,busy());$('topology-edit').disabled=!!reason||!lab;$('topology-edit').title=reason||'Devices and links, saved to the lab file on the VM; applying is a separate step';}
  if($('vm-projects')){const connected=!!state.discovery?.connected;opMenuState($('vm-projects'),!connected,'Connect the VM to browse its lab topologies');}

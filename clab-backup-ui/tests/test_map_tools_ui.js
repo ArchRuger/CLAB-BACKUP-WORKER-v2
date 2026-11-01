@@ -462,3 +462,30 @@ test('Arrange: a failure after the dialog was closed goes to the chip line, not 
  const open=harness(),oc=open.context;open.on('/labs/',async()=>{throw Object.assign(new Error('The VM is busy.'),{status:409});});
  open.render();oc.mapArrangeOpen();await oc.mapArrangeRun('rows');assert.equal(open.$('map-arrange-status').textContent,'The VM is busy.');
 });
+
+// ---- Sign-on S10a (docs/sign-on/UI.md 3.3; REVIEW U8): the map's link state poll ---------------------------------------------------
+// session.js does not load here: stand-ins with the exact contract of UI 3.2 (sessionEnded, sessionOnResume, sessionEndedError).
+test('S10a: the link-state poll sends nothing after the first 401, keeps the colours without a paused sentence, is not re-armed by the render path, and resumes after sessionRetry()',async()=>{
+ const h=harness(),resume=new Set();let ended=false,mode='ok';
+ const orig=h.context.api;
+ Object.assign(h.context,{
+  sessionEnded:()=>ended,sessionOnResume:fn=>{if(typeof fn==='function')resume.add(fn);},
+  sessionEndedError:()=>Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true}),
+  api:async url=>{if(ended)throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});return orig(url);}});
+ h.on('/operations/link-state',async()=>{
+  if(mode==='401'){ended=true;throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+  return {json:async()=>answer()};
+ });
+ h.render();await h.fire();
+ assert.equal(h.requests.length,1);const chip=h.$('map-links').innerHTML;assert.match(chip,/Links: 2 up/);
+ mode='401';await h.fire();
+ assert.equal(h.requests.length,2,'the first 401 is the last request that left');assert.equal(h.live().length,0,'no retry is scheduled');
+ assert.equal(h.$('map-links').innerHTML,chip,'the colours and the chip stay; no "paused" sentence');assert.equal(h.get('mapLinkPoll.inFlight'),false);
+ assert.equal(resume.size,1);
+ // topology.js re-arms the poll on every render: while signed out it starts nothing.
+ h.context.mapLinkSchedule();h.context.mapLinkSchedule();
+ assert.equal(h.live().length,0);assert.equal(h.requests.length,2);
+ mode='ok';ended=false;for(const fn of [...resume]){resume.delete(fn);fn();}
+ assert.equal(h.live().length,1,'sessionRetry() schedules the poll again');assert.equal(h.live()[0].ms,0,'with a fresh fetch');
+ await h.fire();assert.equal(h.requests.length,3);
+});

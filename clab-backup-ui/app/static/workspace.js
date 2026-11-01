@@ -3,7 +3,24 @@ const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,
 const params=new URLSearchParams(location.hash.slice(1));let activeId=params.get('lab')||'',state={labs:[],jobs:[],operations:[]},toastTimer;
 const current=()=>state.labs.find(l=>l.id===activeId),busy=()=>[...state.jobs,...state.operations].some(j=>['queued','running'].includes(j.status));
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
-async function api(path,options={}){const response=await fetch('/api'+path,options);if(!response.ok){const value=await response.json();throw new Error(value.detail||'Request failed.');}return response;}
+// The sentence of an error answer: detail.message of the sign-on answers ({detail:{code,message}}), a plain string detail of the older ones.
+function workspaceMessage(value){
+ const detail=value&&typeof value==='object'?value.detail:null;
+ if(typeof detail==='string'&&detail)return detail;
+ if(detail&&typeof detail==='object'&&typeof detail.message==='string'&&detail.message)return detail.message;
+ return 'Request failed.';
+}
+// No request leaves a signed-out page (REVIEW U8); a 401 signed_out marks the page and leaves for the sign-in page at once: this page holds nothing typed (UI 3.5).
+async function api(path,options={}){
+ if(typeof sessionEnded==='function'&&sessionEnded())throw sessionEndedError();
+ const response=await fetch('/api'+path,options);
+ if(!response.ok){
+  let value=null;try{value=await response.json();}catch{value=null;}
+  if(typeof sessionLost==='function'&&sessionLost(response.status,value)&&typeof sessionMark==='function'&&sessionMark()&&typeof sessionGo==='function')sessionGo('ended');
+  throw Object.assign(new Error(workspaceMessage(value)),{status:response.status});
+ }
+ return response;
+}
 async function json(path,method,data){return(await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}
 function attachmentName(response,fallback){const match=(response.headers.get('Content-Disposition')||'').match(/filename\*=UTF-8''([^;]+)/i);return match?decodeURIComponent(match[1]):fallback;}
 async function refresh(){state=await(await api('/state')).json();}
@@ -15,6 +32,8 @@ function workspaceDeviceRow(lab,n,link){
 async function launchWorkspace(){
  try{
   await refresh();$('workspace-message').textContent='';
+  // An operator is not sent into Diagnostics, which is administrators only (REVIEW U5).
+  if($('workspace-links'))$('workspace-links').hidden=!!(state.user&&state.user.role==='operator');
   if(params.get('mode')==='ssh'){
    const lab=current();if(!lab)throw new Error('This lab is no longer in the manager. Go back to My labs.');
    $('workspace-title').textContent='Open CLIs · '+lab.name;document.title='Open CLIs · '+lab.name+' · Containerlab Node Manager';$('workspace-open').hidden=true;
