@@ -643,7 +643,7 @@ Decisions the prompt left open:
 | `PATCH /api/users/{name}` | `{role?, disabled?}` | `200 {user}`; `409 last_admin` / `self_change`; `404 user_not_found` | admin |
 | `DELETE /api/users/{name}` | `{}` | `200 {deleted: true}`; `409 last_admin` / `self_change`; `404 user_not_found` | admin |
 | `POST /api/users/{name}/password` | `{password}` | `200 {user}` (ends the user's sessions, sets `must_change_password`); `409 self_change` when `{name}` is the caller's own (3.2; REVIEW R12); `422 weak_password`; `404 user_not_found` | admin |
-| `GET /api/audit` | query `limit` (1..500, default 100), `offset`, `event`, `actor`, `outcome`, `since` (ISO), `address` (filters the row field `source`) | `200 {entries:[…], total}` newest first, merged from both audit files and the open failure buckets (10.1) | admin |
+| `GET /api/audit` | query `limit` (1..500, default 100), `offset`, `event` (one code of 10.2 or a comma-separated list of them; an unknown code matches nothing), `actor`, `outcome`, `since` (ISO), `address` (filters the row field `source`) | `200 {entries:[…], total}` newest first, merged from both audit files and the open failure buckets (10.1) | admin |
 | `POST /api/setup` (`async`) | `{code, username, password}` | `200 {user}` + cookie; `401 invalid_code`; `404 setup_closed` when not in setup or recovery; `409 exists` in recovery mode when the name is an existing record's (it never overwrites, 9.5; REVIEW R11); `422 weak_password` / `invalid_name`; `429 throttled` | exempt |
 | `GET /api/health` | | `200 {ready: true}` | exempt |
 
@@ -673,7 +673,9 @@ carries one (13.1).
 | 409 | `exists` | That name already exists. | `POST /api/users` |
 | 409 | `exists` | That name already exists. Choose a new name for the recovery administrator. | `POST /api/setup` (REVIEW R11) |
 | 409 | `last_admin` | The last administrator stays. | `PATCH`, `DELETE /api/users/{name}` |
-| 409 | `self_change` | Ask another administrator. | `PATCH`, `DELETE /api/users/{name}` |
+| 409 | `self_change` | You cannot deactivate your own account. Sign out instead. | `PATCH /api/users/{own name}` with `disabled: true` |
+| 409 | `self_change` | You cannot change your own role. Ask another administrator. | `PATCH /api/users/{own name}` with `role` |
+| 409 | `self_change` | You cannot remove your own account. Ask another administrator. | `DELETE /api/users/{own name}` |
 | 409 | `self_change` | Use Manager ▾ › Change password… for your own account. | `POST /api/users/{name}/password` (REVIEW R12) |
 | 422 | `invalid_name` | Use lowercase letters, digits, dot, dash or underscore, 2 to 32 characters. | setup, create |
 | 422 | `weak_password` (+ `reasons`) | the sentences of its reasons, joined by one space, in this order: `too_short` *Use at least 12 characters.*; `too_long` *Use at most 128 characters.*; `equals_name` *Choose a password that is not your username.*; `common` *That password is too common. Choose another.* | setup, create, reset, own change |
@@ -899,7 +901,7 @@ admin-only request without limit and rotate the record away (5 MiB × 4), which 
 produced by an insider instead of a scanner; summed per `(actor, route template)` and minute it costs
 one line per route and minute, with the actor's name on it. `GET /api/audit` lists the open buckets
 too, so an attack in progress is visible at once. `Store.audit_entries(limit, offset, *, event='',
-actor='', outcome='', since='', address='', extra=())` reads both current files and their rotations,
+actor='', outcome='', since='', address='', extra=())` (`event` is one code or a comma-separated list, lead's ruling after the UI amendment) reads both current files and their rotations,
 merges them with `extra` (the open buckets) by `time`, newest first, and answers `(entries, total)`.
 
 Entry: `{time, event, actor, source, outcome, target, detail}`; the `address` filter of `GET /api/audit`

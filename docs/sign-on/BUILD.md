@@ -117,7 +117,9 @@ fixture, the 52 sites, the `HostCheckTests` cookies), 19. REVIEW R1, R4, R5, R6,
 `login.html` and `setup.html` are S7's: in this worktree they do not exist, so a test of a 200 from
 `GET /login` or `GET /setup` is skipped while the file is absent and every redirect and refusal test runs.
 The setup-code file is written by `create_app`, not by the lifespan, because the tests build
-`TestClient` without running the lifespan.
+`TestClient` without running the lifespan. The case of `test_audit.py` that compares `users.js`'s label maps with
+`AUDIT_EVENTS`, `AUDIT_OUTCOMES` and `AUDIT_REASONS` crosses into S9's file: it is skipped while
+`app/static/users.js` is absent and runs at integration.
 
 Acceptance: the route walk of `test_session.py` (every route and both sockets classified; without a
 session each answers by DESIGN 6.4 except the `EXEMPT` rows); the restricted session reaches the change
