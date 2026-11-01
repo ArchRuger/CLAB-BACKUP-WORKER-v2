@@ -5,6 +5,8 @@ The task is [PROMPT.md](PROMPT.md) (D1 local accounts, D2 Admin + Operator with 
 threat model); the facts it fits are [INVENTORY.md](INVENTORY.md). Base: `main` at 1.31.8
 (`fac28de`); every file:line below is to that commit. Written 2026-11-01, before code.
 
+Amended with the lead's rulings of RECONCILIATION.md (2026-11-01); where this file and RECONCILIATION differ, RECONCILIATION's ruling has been applied here.
+
 | Part | Where |
 |---|---|
 | Threat model, accounts, hashing, sessions, the gate, roles, throttling, bootstrap, audit, tickets, migration, tests | this file |
@@ -71,6 +73,7 @@ Defined terms, used with these meanings throughout:
 | Terminal ticket | Bound to nothing (node_services.py:566-567) | Bound to the session that minted it (11.1). |
 | Users | None | `state['users']` (3), admin routes (7.3). |
 | Logs | `events.jsonl` without actor or source (store.py:115-138) | `events.jsonl` gains `actor`; a new `audit.jsonl` holds security events (10). |
+| The user on the poll | `/api/state` carries no user (main.py:247-261) | `/api/state` gains `user:{name, role, must_change_password}` for the session's own user (3.4). |
 | `ui.token` | Read into `Store.token` (store.py:22-23), hidden by the runner (runner.py:420), sent by `test_app.py:47` | Removed from the read path (12.2). |
 | Startup banner | `'UI login is disabled for this lab VM.'` (main.py:72) | `'Containerlab Node Manager ready; sign-in required.'` or, in setup mode, the setup code notice (9.2). |
 | CLAUDE.md invariant "There is no login" | CLAUDE.md "VM boundary and data" | Replaced by the text in section 14. |
@@ -93,9 +96,10 @@ other lazily added key (INVENTORY 6.5).
 | `created` | ISO 8601 UTC | As `Store.event` writes time (store.py:117). |
 | `created_by` | string | The actor that created the record; `setup` for the first admin, `recover` for a recovery admin (9.5). |
 | `password_changed` | ISO 8601 UTC | Updated by every password set. Each session carries a copy; a mismatch ends the session (5.5). |
+| `last_signin` | ISO 8601 UTC or `null` | Updated on every successful sign-in (and the setup sign-in); `null` before the first. An admin of an exposed system sees it without opening the audit log (RECONCILIATION 1). |
 
-No email, no display name, no last-sign-in field in the record: the last sign-in is an audit fact
-(10), and the record stays what `/api/users` may show.
+No email and no display name in the record; `last_signin` is the only sign-in fact it keeps, and the
+rest of the history is the audit log (10). The record stays what `/api/users` may show.
 
 ### 3.2 Uniqueness and the last-admin rule
 
@@ -139,12 +143,14 @@ setup mode, which is the upgrade behaviour of section 12.1 and is audited.
 
 ### 3.4 What reaches the browser
 
-- `/api/state` (main.py:247-261) is not changed. `users` is a top-level key that none of its copies
-  read; nothing has to be stripped. A test asserts that the JSON of `/api/state` contains neither
+- `/api/state` (main.py:247-261) gains one key, `user:{name, role, must_change_password}`, for the
+  session's own user (read from `request.state.user` and the record), so the 4 s poll carries a role
+  change without a second request. `users` is a top-level key that none of its copies read; nothing
+  has to be stripped. A test asserts that the JSON of `/api/state` contains neither
   `users` nor the substring `scrypt$` (13.1).
 - `GET /api/users` and every users route answer through one function `public_user(record)` that
-  copies exactly `name, role, disabled, must_change_password, created, created_by, password_changed`
-  and adds `sessions` (the count of live sessions, from memory). Allowlisted copies, never the record
+  copies exactly `name, role, disabled, must_change_password, created, created_by, password_changed,
+  last_signin` and adds `sessions` (the count of live sessions, from memory). Allowlisted copies, never the record
   (CLAUDE.md "Public views strip secrets").
 - `GET /api/session` answers `{user:{name, role, must_change_password}, expires}` for the session's own
   user only.
@@ -304,38 +310,35 @@ The routes also delete the sessions eagerly under the sessions lock, so the audi
 `session.ended` entry per ended session with its reason (`user_disabled`, `user_deleted`,
 `password_reset`, `password_changed`). The stamp check is the safety net for any path that forgets.
 
-The own change (`POST /api/session/password`) ends every other session of the user and **rotates the
+The own change (`POST /api/session/password`) takes no option: it always ends every other session of the
+user (there is no "sign out everywhere" checkbox) and **rotates the
 current session's id**: a new id is minted, the record is moved, the new cookie is sent. The role is
 re-read from the record on every request, so a `PATCH` of the role takes effect on the next request
 without ending the session.
 
 ### 5.6 The scheme rule (interface with EXPOSURE.md)
 
-Nothing reads `X-Forwarded-*` (INVENTORY 6.6, last item) and uvicorn runs without `--proxy-headers`.
-Three places today derive "own origin" from the request alone: the guard compares `Origin` with
-`request.base_url` (main.py:123), the two sockets compare the Origin's scheme with `ws.url.scheme`
-(node_services.py:573-574; capture_sessions.py:318-319), and the capture cookie sets `secure` from
-`request.url.scheme` (capture_sessions.py:114). **If EXPOSURE.md terminates TLS in front of the
-manager (a reverse proxy on the VM), all three break**: the browser's Origin says `https`, the
-manager's scope says `http`, and every socket handshake and every `/api/` request with an Origin
-header is refused.
+Nothing reads `X-Forwarded-*` (INVENTORY 6.6, last item). Three places today derive "own origin" from
+the request alone: the guard compares `Origin` with `request.base_url` (main.py:123), the two sockets
+compare the Origin's scheme with `ws.url.scheme` (node_services.py:573-574; capture_sessions.py:318-319),
+and the capture cookie sets `secure` from `request.url.scheme` (capture_sessions.py:114). They stay
+correct only while the scope's scheme is true, which is why EXPOSURE.md terminates TLS in uvicorn itself
+(EXPOSURE.md section 2) and not in a proxy in front of the manager.
 
-The rule, binding for both designs:
+The rule, binding for both designs (RECONCILIATION 4, E-Q1: `UI_TLS` is dropped):
 
 1. One function `app/origin.py: scheme(scope)` answers `https` when `scope['scheme']` is `https` or
-   `wss`, or when the environment variable `UI_TLS` is `1`; otherwise `http`. It reads no header.
-2. The guard, both sockets, the capture cookie and the session cookie use it. The guard's
+   `wss`, otherwise `http`. It reads the ASGI scope only: no environment variable, no header.
+2. The guard, both sockets, the capture cookie, the session cookie and HSTS (6.1) use it. The guard's
    comparison becomes `origin == f'{scheme(scope)}://{host}'` with the `Host` the request carries.
-3. `UI_TLS=1` means exactly: *the browser reaches this manager over TLS that something on this VM
-   terminates before the manager's socket*. EXPOSURE.md sets it in `compose.yml` and
-   `deploy/compose.image.yml` (`test_release_consistency.py:88-99` requires equal key sets) when it
-   chooses an edge proxy, and leaves it unset when uvicorn serves TLS itself (then `scope['scheme']`
-   is already `https`). **Recommendation to EXPOSURE.md:** uvicorn's own `--ssl-certfile` /
-   `--ssl-keyfile`, so that the scheme is true without configuration and `UI_TLS` is only a fallback.
-4. The source address is `scope['client'][0]` in every case. Behind a proxy on the same VM every
-   source would be `127.0.0.1`; EXPOSURE.md must either avoid a proxy or accept that the audit log
-   then shows the proxy. `X-Forwarded-For` is not read; a later design that supports a remote proxy
-   adds `--forwarded-allow-ips` with an explicit list and is reviewed then.
+3. uvicorn runs with an explicit `--no-proxy-headers` in both compose files (`compose.yml`,
+   `deploy/compose.image.yml`) and in the Dockerfile `CMD`. uvicorn 0.54 enables proxy headers by
+   default and trusts loopback, so the feature is active today; INVENTORY 4 is corrected by EXPOSURE.md
+   section 2.1. `test_release_consistency.py` asserts that `UI_TLS` is absent from both compose files
+   and pins `--no-proxy-headers`.
+4. The source address is `scope['client'][0]` in every case. `X-Forwarded-For` is not read; a later
+   design that supports a remote proxy adds `--forwarded-allow-ips` with an explicit list and is
+   reviewed then.
 
 ## 6. The gate
 
@@ -359,7 +362,11 @@ A refusal by the gate is therefore not in the diagnostics request list (it is in
 does not reach the guard. The gate's own responses carry the same fixed headers as `HostCheck`
 (allowed_hosts.py:31-33) plus `Cache-Control: no-store`, because the guard's headers (main.py:145-155)
 are not applied to a response the guard never sees (the same gap INVENTORY 6.1 notes for the guard's
-own early returns; a follow-up may move those headers into one function used by all three).
+own early returns). Ruling (RECONCILIATION 3, Dq5): one function `security_headers(response)` in a new
+`app/headers.py` is used by `HostCheck`, the gate and the guard, in scope for the build; it closes the
+gap that the guard's early returns carry no headers. `Strict-Transport-Security: max-age=15552000`
+(180 days, no `includeSubDomains`, no `preload`) lives in it and is sent when `scheme(scope) == 'https'`
+(RECONCILIATION 4, E-Q5).
 
 ### 6.2 What the gate does, in order
 
@@ -385,11 +392,12 @@ Exact. Everything not in this table needs a session. The table is a constant `EX
 
 | Method | Path | Why |
 |---|---|---|
-| `GET` | `/login` | Serves `login.html`. The only page reachable without a session. |
-| `GET` | `/setup` | Serves `setup.html` in setup mode or recovery (9); 404 otherwise. |
-| `GET` | `/static/login.css`, `/static/login.js`, `/static/setup.js`, `/static/fabric-mark.svg` | What those two pages need. `login.css` is a self-contained stylesheet: `style.css` (2760 lines of every feature's class names, INVENTORY 3) is a product fingerprint and stays behind the gate. UI.md may copy the token block of `style.css:55-120` into `login.css`. |
+| `GET` | `/login` | Serves `login.html` (page `<title>` `Sign in`). The only page reachable without a session. With a live session it answers `302 /`. |
+| `GET` | `/setup` | Serves `setup.html` in setup mode or recovery (9), loading `login.css` and `setup.js` only; 404 otherwise. With a live session it answers `302 /`. |
+| `GET` | `/static/login.css`, `/static/login.js`, `/static/setup.js`, `/static/fabric-mark.svg` | What those two pages need. `login.css` is a small self-contained stylesheet: `style.css` (2760 lines of every feature's class names, INVENTORY 3) is a product fingerprint and stays behind the gate. `login.css` holds the colour, spacing, radius and font tokens copied verbatim from `style.css:55-120`, the dark-scheme overrides for those tokens, and the rules for `body`, the card, the form fields, the primary button, the error and help lines, the banner and the brand mark; nothing else. A test asserts that it names no application selector (`#save-chip`, `.topbar`, `.panel`, …). |
 | `POST` | `/api/session` | Sign in. |
 | `GET` | `/api/session` | Answers 200 with the user or 401 cleanly; the pages use it to decide where to go. |
+| `DELETE` | `/api/session` | Sign out. Always answers 200 with the cookies cleared, also when the session is already gone; never 401 (a signed-out tab can still clear its cookie). |
 | `POST` | `/api/setup` | The first admin (9). |
 | `GET` | `/api/health` | `{"ready": true}` and nothing else (6.7). |
 
@@ -397,17 +405,17 @@ What is **not** exempt, stated because a reader might expect it: `/` (redirects 
 `/static/*` including `style.css`, every manager script and the editor bundle, `/student-guide`
 (main.py:505), `/vm-connection-guide` (main.py:501), `/api/logs`, every download, every socket.
 
-Allowlist for a **restricted** session (`must_change_password`): the exempt rows above plus
-`DELETE /api/session`, `POST /api/session/password`. UI.md's `/login?change=1` view shows the change
+Allowlist for a **restricted** session (`must_change_password`): the exempt rows above (which already
+include `DELETE /api/session`) plus `POST /api/session/password`. UI.md's `/login?change=1` view shows the change
 form.
 
 ### 6.4 The refusals
 
 | Scope | Condition | Answer |
 |---|---|---|
-| `http`, path starts with `/api/` | no session | `401` JSON `{"detail":{"code":"signed_out"}}`, `WWW-Authenticate` is **not** sent (it would make browsers show a basic-auth prompt on a `fetch` in some configurations; the JSON code is the contract). |
-| `http`, any other path | no session | `302` to `/login?next=<path+query, percent-encoded>` for `GET` and `HEAD`; `401` JSON for any other method. `next` is built from `scope['path']` and `scope['query_string']` only, never from a header, so it always starts with a single `/` (the open-redirect rule is checked again by `login.js`, 15). |
-| `websocket` | no session | `websocket.close` code 1008 before accept, as `HostCheck` does (allowed_hosts.py:92-95). |
+| `http`, any path, any method but a page request (below) | no session | `401` JSON `{"detail":{"code":"signed_out"}}`, `WWW-Authenticate` is **not** sent (it would make browsers show a basic-auth prompt on a `fetch` in some configurations; the JSON code is the contract). |
+| `http`, `GET` or `HEAD` whose `Accept` includes `text/html` | no session | `302` to `/login?next=<path+query, percent-encoded>`. Page against API is decided by `Accept`, not by the path: this covers `/student-guide`, `/vm-connection-guide` and `window.open('/api/labs/<id>/design/export')`; every other request (a `fetch`, another method) gets the 401 JSON above. `next` is the path and query only (the hash never reaches the server), built from `scope['path']` and `scope['query_string']`, never from a header, so it always starts with a single `/` (the open-redirect rule is checked again by `login.js`, 15). |
+| `websocket` | no session | `websocket.close` code 1008 before accept, reason `signed_out`, as `HostCheck` does (allowed_hosts.py:92-95). |
 | any | setup mode | section 9.3 |
 
 `POST /api/session` with a valid session already present signs in again: the old session is deleted,
@@ -424,7 +432,9 @@ cross-site socket handshake in every current browser, so the Origin check is a s
 redundant one: a browser that sends a cross-site cookie on a WebSocket handshake would still be refused.
 
 The terminal handler receives the session through `ws.scope['state']['user']` and uses it for the
-ticket binding (11.1).
+ticket binding (11.1). A session that ends while a socket is open closes the socket: the terminal,
+console and capture socket handlers check the session on every idle tick (at most 5 s) and close 1008
+with reason `signed_out` when it is gone (11.3).
 
 ### 6.6 CSRF: why no token
 
@@ -453,7 +463,9 @@ version, no release, no capture status, no uptime. The installer's `check_manage
 for EXPOSURE.md:** the version comes from the image label or from `docker exec <container> python -c
 'import app; print(app.__version__)'` (the pattern of `STORAGE_PROBE`, check_install.py:299-331), and
 every other manager fact the health check needs comes the same way, through `docker exec`, never
-through an admin credential stored on the VM. A version-less health route is a weaker fingerprint
+through an admin credential stored on the VM. The facts for the design engine and the capture service
+come from `python -m app.probe design-engine|capture` (RECONCILIATION 4, E-Q2): the probe never
+constructs a `Store`, and a fact that would need lab state is dropped from the health check rather than read. A version-less health route is a weaker fingerprint
 than today's unauthenticated `/api/state`, but it still says "this is a web service that answers
 `/api/health`". The alternative, no route at all, would leave the installer polling a 302 from `/`,
 which is a worse signal to an operator and the same signal to a scanner. EXPOSURE.md removes
@@ -465,7 +477,7 @@ uvicorn's `server:` header (`--no-server-header`) and the gate's own responses c
 
 Every route that passes the gate is **operator** unless it declares **admin**. The gate enforces
 "signed in"; the handful of admin routes declare `Depends(require_admin)` from `app/sessions.py`,
-which reads `request.state.user` and raises 403 `{detail:{code:'admin_required'}}`. A middleware
+which reads `request.state.user` and raises `403 {detail:{code:'admin_required', message:'Administrators only.'}}`. A middleware
 path table was considered and rejected: the admin routes are few, live in three modules, and a
 dependency sits next to the handler where a reviewer reads it. The declaration is kept honest by a
 test that walks `app.routes` and asserts that every route is in a classification table (13.1): a route
@@ -510,14 +522,14 @@ Decisions the prompt left open:
 |---|---|---|---|
 | `POST /api/session` | `{username, password}` | `200 {user:{name,role,must_change_password}, expires}` + cookie; `401 {detail:{code:'invalid_credentials'}}`; `429 {detail:{code:'throttled', retry_after}}` + `Retry-After` | exempt |
 | `GET /api/session` | | `200 {user, expires}`; `401 {detail:{code:'signed_out'}}` | exempt |
-| `DELETE /api/session` | `{}` | `200 {signed_out: true}` + clearing cookie | signed in |
+| `DELETE /api/session` | `{}` | `200 {signed_out: true}` + clearing cookies, always, also when the session is already gone; no 401 | exempt |
 | `POST /api/session/password` | `{current, password}` | `200 {changed: true}` + rotated cookie; `401 invalid_credentials` when `current` fails (throttled like a sign-in); `422 weak_password` | signed in (also restricted) |
 | `GET /api/users` | | `200 {users:[public_user…]}` | admin |
 | `POST /api/users` | `{name, role, password}` | `200 {user}`; `409 exists`; `422 weak_password` or `invalid_name`. The new record has `must_change_password: true`. | admin |
 | `PATCH /api/users/{name}` | `{role?, disabled?}` | `200 {user}`; `409 last_admin` / `self_change`; `404` | admin |
 | `DELETE /api/users/{name}` | `{}` | `200 {deleted: true}`; `409 last_admin` / `self_change`; `404` | admin |
 | `POST /api/users/{name}/password` | `{password}` | `200 {user}` (ends the user's sessions, sets `must_change_password`); `422 weak_password` | admin |
-| `GET /api/audit` | query `limit` (1..500, default 100), `offset`, `event`, `actor`, `outcome`, `since` (ISO) | `200 {entries:[…], total}` newest first | admin |
+| `GET /api/audit` | query `limit` (1..500, default 100), `offset`, `event`, `actor`, `outcome`, `since` (ISO), `address` (filters the row field `source`) | `200 {entries:[…], total}` newest first | admin |
 | `POST /api/setup` | `{code, username, password}` | `200 {user}` + cookie; `401 {detail:{code:'invalid_code'}}`; `404` when not in setup or recovery; `422`; `429` | exempt |
 | `GET /api/health` | | `200 {ready: true}` | exempt |
 
@@ -662,7 +674,8 @@ operator by `GET /api/logs` (main.py:304-306) and is moved aside by *Start fresh
 the audit log is admin-only and survives a reset (3.3). The write failure path is the same warning
 once, then silence (store.py:132-137), with its own flag `audit_error`.
 
-Entry: `{time, event, actor, source, outcome, target, detail}`. `detail` is a short string of
+Entry: `{time, event, actor, source, outcome, target, detail}`; the `address` filter of `GET /api/audit`
+matches the `source` field. `detail` is a short string of
 controlled vocabulary (a reason code or a count), never user input longer than 200 characters, never
 a password, a code, a session id or a hash (10.4).
 
@@ -725,6 +738,16 @@ ever set for a signed-in user. Sign-out clears it in the same response as `clab_
 flag follows the scheme rule (5.6). It is not tied to the user: a second sign-in in the same browser
 keeps the same desktop sessions, which is the behaviour of a browser, not of an account.
 
+Capture routes need the manager session **and** the owner cookie (RECONCILIATION 1). Ending the manager
+session does not end the capture container: the desktop session belongs to the owner cookie, and the
+same browser signing in again finds it.
+
+### 11.3 Sockets close when their session ends
+
+The close reason is `signed_out`. The terminal, console and capture socket handlers check that the
+session still resolves on every idle tick (at most 5 s) and close 1008 `signed_out` when it is gone
+(ended by sign-out, expiry, a disabled or deleted user, or a password change, 5.5).
+
 ## 12. Compatibility and migration
 
 ### 12.1 An existing install
@@ -757,7 +780,7 @@ and a Bearer header will not be read after this design either: there is one cred
 
 | File | What it proves |
 |---|---|
-| `tests/test_session.py` | The gate on every route: a walk of `app.routes` (and the two sockets) without a cookie gets 401, 302 or 1008 by the rules of 6.4, except the exempt rows of 6.3; the classification table of 7.1 names every route (a route absent from the table fails). Cookie attributes exactly as 5.3, under `http` and with `UI_TLS=1`. Idle and absolute expiry with a patched monotonic clock; renewal excludes `GET /api/state`. Sign-out everywhere: disable, delete, admin reset, own change (other sessions end, the current id rotates). Throttling: the fifth failure is free, the sixth is 429 with `retry_after`, doubling, the 15 min cap, the per-name 30 s cap, success clears. Constant work: a wrong user and a wrong password both call the verify function exactly once (patched). Session fixation: the id after sign-in differs from any cookie sent with the request. `/api/state` contains neither `users` nor `scrypt$`. |
+| `tests/test_session.py` | The gate on every route: a walk of `app.routes` (and the two sockets) without a cookie gets 401, 302 or 1008 by the rules of 6.4, except the exempt rows of 6.3; the classification table of 7.1 names every route (a route absent from the table fails). Cookie attributes exactly as 5.3, under `http` and under `https` (`base_url='https://testserver'`). Idle and absolute expiry with a patched monotonic clock; renewal excludes `GET /api/state`. Sign-out everywhere: disable, delete, admin reset, own change (other sessions end, the current id rotates). Throttling: the fifth failure is free, the sixth is 429 with `retry_after`, doubling, the 15 min cap, the per-name 30 s cap, success clears. Constant work: a wrong user and a wrong password both call the verify function exactly once (patched). Session fixation: the id after sign-in differs from any cookie sent with the request. `/api/state` contains neither `users` nor `scrypt$`. |
 | `tests/test_setup.py` | Setup mode answers of 9.3; the code file's mode and content; `POST /api/setup` creates the admin, deletes the file, signs in; a second setup is 404; `app.recover` writes a `mode=recover` file, one admin is created, existing users untouched, a 16-minute-old file is refused and deleted; `Store.reset` keeps `users` and `audit.jsonl`. |
 | `tests/test_users.py` | Name rule, role values, `extra='forbid'`, uniqueness, last-admin and self-change refusals, `public_user` fields and nothing more, role change effective on the next request. |
 | `tests/test_audit.py` | Every event of 10.2 is written with its fields; rotation; `GET /api/audit` paging and filters; operators get 403 and that 403 is itself audited; the actor on `api.request` in `events.jsonl`. |
@@ -791,8 +814,13 @@ class SignedInClient(TestClient):
 `httpx` cookie jar in `TestClient` keeps the cookie for every later request, and `websocket_connect`
 goes through `super().request` (starlette 1.x `TestClient.websocket_connect`), so the sockets receive
 it too. `HostCheckTests` (test_app.py:317-399) send explicit `Host` headers; the cookie is host-only in
-the jar for `testserver`, so those tests pass `cookies=` explicitly or the subclass sets the jar
-without a domain. This is the one place that needs care; the fixture file documents it.
+the jar for `testserver`, so the fixture signs in and those tests then pass `cookies=` explicitly
+(RECONCILIATION 3, Dq2). This is the one place that needs care; the fixture file documents it.
+
+For the browser fixture (RECONCILIATION 3, U-Q5): the backend builder adds a `/__fixture/expire` hook
+**only when `FIXTURE_DATA` is set**, never in a production path (so no test-only argument reaches
+`create_app`'s production behaviour, ruling 12), and the QA worker changes
+`docs/redesign/tools/fixture_manager.py` against it in the verification phase.
 
 Counting the change on this checkout:
 
@@ -817,7 +845,8 @@ sign-in, setup, failure and throttle path with the password, the code and the co
 ### 13.4 Environment
 
 The scrypt timing test asserts under 500 ms with `maxmem=64 MiB`, so it passes on the image's
-`python:3.12-slim` and in CI; it also asserts that the shipped `maxmem` is passed, because the
+`python:3.12-slim` and in CI. The backend builder re-measures inside `python:3.12-slim` in CI (the
+figure measured on 3.13 in 4.1 is not the image's) and records the figure in `clab-backup-ui/VALIDATION.md`; it also asserts that the shipped `maxmem` is passed, because the
 default refuses the shipped parameters (4.1).
 
 ## 14. The CLAUDE.md invariant
@@ -825,7 +854,7 @@ default refuses the shipped parameters (4.1).
 Replacement for the bullet that begins "There is no login:" under "VM boundary and data" (the lead
 applies it at the release step):
 
-> - Sign-in is required for everything but `/login`, `/setup`, their three assets, `POST`/`GET /api/session`,
+> - Sign-in is required for everything but `/login`, `/setup`, their three assets, `POST`/`GET`/`DELETE /api/session`,
 >   `POST /api/setup` and `GET /api/health` (`EXEMPT` in `app/sessions.py`; `test_session.py` walks every
 >   route). `SessionGate` resolves the `clab_session` cookie (`HttpOnly`, `SameSite=Strict`, `Secure` under
 >   TLS, idle 12 h, absolute 7 d, in memory only) for HTTP and WebSocket scopes and sits directly inside
@@ -838,8 +867,12 @@ applies it at the release step):
 >   never permanently. Users survive *Start fresh*; the first admin is created once through a setup code
 >   from `<DATA_DIR>/setup-code`, and `deploy/manager-recover-admin.sh` is the only way to reopen that page.
 >   Security events go to `audit.jsonl` (admin-only, survives a reset); no log ever holds a password, a
->   code, a session id or a hash. "Own origin" is `origin.scheme(scope)` (the scope, or `UI_TLS=1`),
->   never a forwarded header.
+>   code, a session id or a hash. "Own origin" is `origin.scheme(scope)` (the ASGI scope only),
+>   never a forwarded header, and uvicorn runs with `--no-proxy-headers`.
+
+The lead also writes, at the release step, the invariant sentence for `app/redirect.py` (RECONCILIATION 4,
+E-Q7): `app/redirect.py` is the one listener outside the guard; it answers 301 to the manager's own
+origin (after `host_allowed`), 400 or 405, and nothing else.
 
 ## 15. The `next` parameter
 
@@ -855,12 +888,14 @@ the page's rule. `test_login_ui.js` asserts the rule with `//evil.example`, `/\e
 | Slice | Files | Owner (routing) |
 |---|---|---|
 | Accounts: the record, the hash, the policy, `public_user`, the users routes, `recover.py` | `app/accounts.py`, `app/recover.py` | `clab-fable-specialist` or `clab-opus-specialist` (privileged: the Store and the guard are touched) |
-| Sessions: the gate, the sessions table, throttling, the session and setup routes, `origin.py` | `app/sessions.py`, `app/origin.py`, `app/main.py` (the `add_middleware` line, the guard's Origin comparison and actor, the banner), `app/allowed_hosts.py:3` docstring | same |
+| Sessions: the gate, the sessions table, throttling, the session and setup routes, `origin.py`, `headers.py` (`security_headers(response)`, HSTS; used by `HostCheck`, the gate and the guard) | `app/sessions.py`, `app/origin.py`, `app/headers.py`, `app/allowed_hosts.py` (calls `security_headers`), the `FIXTURE_DATA`-only `/__fixture/expire` hook, `app/main.py` (the `add_middleware` line, the guard's Origin comparison and actor, the banner), `app/allowed_hosts.py:3` docstring | same |
 | Store: `users` in reset, `audit()`, `actor` on `event()` | `app/store.py` | same; `risk-reviewer` on the diff |
 | Ticket binding, socket scheme rule | `app/node_services.py`, `app/capture_sessions.py` | `clab-backend-engineer` with the lines specified here |
 | The fixture and the 23 test files, the new test files | `tests/session_fixture.py`, `tests/test_session.py`, `test_setup.py`, `test_users.py`, `test_audit.py`, `test_password.py` | `clab-test-engineer`; the 52 replacements by `mechanical-editor` |
 | Pages, scripts, 401 handling | `app/static/login.html`, `login.css`, `login.js`, `setup.html`, `setup.js`, the Users and Audit views, every script's 401 path | UI.md's slices |
-| `UI_TLS`, `/api/health` in the installer and health check, `manager-recover-admin.sh`, `start-manager.sh:120`, the documents of INVENTORY 4 | `deploy/*`, `docs/*.md` | EXPOSURE.md's slices |
+| `python -m app.probe design-engine\|capture` (never constructs a `Store`) | `app/probe.py` | the backend builder (`clab-backend-engineer`) |
+| TLS in uvicorn, `--no-proxy-headers`, `/api/health` in the installer and health check, `manager-recover-admin.sh`, `start-manager.sh:120`, the documents of INVENTORY 4 | `deploy/*`, `docs/*.md` | EXPOSURE.md's slices |
+| `docs/redesign/tools/fixture_manager.py` (against the `/__fixture/expire` hook) | | the QA worker, verification phase |
 | `verify-release.py:40-41` (the two new pages), the CI lists, `CLAUDE.md` | | the lead |
 
 Names shared between slices, fixed here: `app.state.sessions` (the `Sessions` object with
@@ -876,19 +911,21 @@ marked **changed** or **added** differs from the brief.
 
 | Briefed | Final | Status |
 |---|---|---|
-| `GET /login` serves `login.html`, the only page without a session | As briefed. Its assets are `/static/login.css`, `/static/login.js`, `/static/fabric-mark.svg` only; `style.css` is behind the gate (6.3). | **changed**: no `style.css` |
-| | `GET /setup` serves `setup.html` with `/static/setup.js` and `login.css`; 404 unless setup or recovery mode. In setup mode every page redirects here, `/login` too. There is no `GET /api/setup`: the page is a static file, calls `POST /api/setup` only, and shows the recovery sentence when its own address carries `?recover=1` (the URL the recovery command prints, 9.5). | **added** |
+| `GET /login` serves `login.html`, the only page without a session | As briefed. Its assets are `/static/login.css`, `/static/login.js`, `/static/fabric-mark.svg` only; `style.css` is behind the gate (6.3). | **changed**: no `style.css`; page `<title>` `Sign in`; with a live session `302 /` (**changed (reconciliation)**) |
+| | `GET /setup` serves `setup.html` with `/static/setup.js` and `login.css`; 404 unless setup or recovery mode. In setup mode every page redirects here, `/login` too. There is no `GET /api/setup`: the page is a static file, calls `POST /api/setup` only, and shows the recovery sentence when its own address carries `?recover=1` (the URL the recovery command prints, 9.5). | **added**; with a live session `302 /` (**changed (reconciliation)**) |
 | `POST /api/session {username,password}` → 200 `{user:{name,role}}` + cookie; 401 generic; 429 with `retry_after` | 200 `{user:{name,role,must_change_password}, expires}`; 401 `{detail:{code:'invalid_credentials'}}`; 429 `{detail:{code:'throttled', retry_after}}` + `Retry-After`; 503 `{detail:{code:'setup_required'}}` in setup mode | **changed**: `must_change_password`, `expires`, the 503 |
-| `DELETE /api/session` body `{}` | As briefed; the response also clears `clab_capture_owner` | unchanged |
+| `DELETE /api/session` body `{}` | As briefed; the response also clears `clab_capture_owner`; always 200 with the cookies cleared, also when the session is already gone, never 401 | **changed (reconciliation)**: always 200 |
 | `GET /api/session` → user or 401 | 200 `{user:{name,role,must_change_password}, expires}` or 401 `{detail:{code:'signed_out'}}` | **changed**: fields |
-| Every other page and `/api/` route → 401 `{detail:{code:'signed_out'}}`; pages redirect to `/login?next=` | As briefed, for `GET`/`HEAD` on pages; other methods on pages get the 401 JSON. A restricted session (`must_change_password`) gets 403 `{detail:{code:'password_change_required'}}` on `/api/` and `302 /login?change=1` on pages; only `GET /api/session`, `POST /api/session/password` and `DELETE /api/session` answer it | **added**: the restricted state |
-| WebSockets refuse without a session | Close 1008 before accept | unchanged |
-| Admin routes `GET/POST /api/users`, `PATCH/DELETE /api/users/{name}`, `POST /api/users/{name}/password` | As briefed with the bodies and codes of 7.3: `exists`, `last_admin`, `self_change`, `weak_password` (with `reasons`), `invalid_name`; a new user starts with `must_change_password: true`; `public_user` fields of 3.4 including `sessions` | **changed**: codes and fields made exact |
-| `POST /api/session/password` (own change) | `{current, password}`; other sessions end; the cookie is rotated in the response | **changed**: `current` required |
-| `GET /api/audit` (admin) | `?limit&offset&event&actor&outcome&since` → `{entries, total}`, newest first; entry fields of 10.1; operators get 403 `{detail:{code:'admin_required'}}` | **changed**: made exact |
+| | `GET /api/state` gains `user:{name, role, must_change_password}` for the session's own user; the `users` table never reaches it | **added (reconciliation)** |
+| Every other page and `/api/` route → 401 `{detail:{code:'signed_out'}}`; pages redirect to `/login?next=` | Decided by `Accept` (**changed (reconciliation)**): a `GET`/`HEAD` whose `Accept` includes `text/html` gets `302 /login?next=<path+query>`; every other request gets the 401 JSON. A restricted session (`must_change_password`) gets 403 `{detail:{code:'password_change_required'}}` on `/api/` and `302 /login?change=1` on pages; only `GET /api/session`, `POST /api/session/password` and `DELETE /api/session` answer it | **added**: the restricted state |
+| WebSockets refuse without a session | Close 1008 before accept, reason `signed_out`; open terminal, console and capture sockets close 1008 `signed_out` within 5 s of their session ending (11.3) | **changed (reconciliation)**: reason and idle-tick rule |
+| Admin routes `GET/POST /api/users`, `PATCH/DELETE /api/users/{name}`, `POST /api/users/{name}/password` | As briefed with the bodies and codes of 7.3: `exists`, `last_admin`, `self_change`, `weak_password` (with `reasons`), `invalid_name`; a new user starts with `must_change_password: true`; `public_user` fields of 3.4 including `sessions` and `last_signin` | **changed**: codes and fields made exact; `last_signin` **changed (reconciliation)** |
+| `POST /api/session/password` (own change) | `{current, password}`; no option or checkbox: the other sessions always end; the cookie is rotated in the response | **changed**: `current` required; no checkbox (reconciliation) |
+| `GET /api/audit` (admin) | `?limit&offset&event&actor&outcome&since` → `{entries, total}`, newest first; entry fields of 10.1; operators get 403 `{detail:{code:'admin_required', message:'Administrators only.'}}` (every `require_admin` refusal carries that message). Filters `limit offset event actor outcome since address`, `limit` at most 500, row field `source` | **changed (reconciliation)**: `address` filter, `message` |
 | First-run bootstrap with a one-time setup code | `POST /api/setup {code, username, password}` → like a sign-in; 401 `{detail:{code:'invalid_code'}}`; 404 when unavailable; 429 | **changed**: made exact |
 | | `GET /api/health` → `{ready:true}`, no session; pages never call it | **added** (for EXPOSURE.md) |
 | | The `next` rule of section 15 is `login.js`'s to enforce | **added** |
+| | Capture routes need the manager session and the owner cookie; ending the manager session does not end the capture container (11.2) | **added (reconciliation)** |
 | | `/api/logs` entries gain `actor`; the Audit page is a different log (`audit.jsonl`) | **added** |
 
 On the `/setup` row: the page is a static file and cannot know the mode. Final ruling: `setup.html`
@@ -901,7 +938,7 @@ the recovery command's printed URL, 9.5) to show the recovery sentence; the serv
 | Prompt | Decision | Why |
 |---|---|---|
 | Sessions "stored in memory with the record's hash persisted?" | In memory only, nothing persisted | 5.1: no session secret on disk, no write amplification from the 4 s poll, one process by compose. |
-| `Secure` "when the request scheme is https or the env `UI_TLS=1`" | Same, but through one function `origin.scheme(scope)` that the guard and both sockets must also use | 5.6: a TLS edge in front of the manager breaks the guard and both sockets today, not only the cookie. |
+| `Secure` "when the request scheme is https or the env `UI_TLS=1`" | Through one function `origin.scheme(scope)` that the guard and both sockets must also use. `UI_TLS` was later dropped (RECONCILIATION 4, E-Q1): the scope alone decides, because uvicorn terminates TLS itself | 5.6: a TLS edge in front of the manager breaks the guard and both sockets, not only the cookie. |
 | Login assets "`/static/style.css`, `/static/login.js`, `/static/login.css`?" | `login.css`, `login.js`, `setup.js`, the favicon; not `style.css` | 6.3: `style.css` names every feature of the product. |
 | Health route "a version-less `{ready:true}`" | `{ready:true}`, and the installer's version check moves to `docker exec` | 6.7. |
 | "extend the guard's `api.request` event with `actor` and `source`? or keep events.jsonl as is" | Extend `Store.event` with `actor`; security events in a separate `audit.jsonl` | 10.3: one operational log for operators, one security log for admins, the second survives a reset. |
@@ -932,11 +969,13 @@ the recovery command's printed URL, 9.5) to show the recovery sentence; the serv
 9. The ticket tuple carries the session id and the socket compares it; the Origin checks of both
    sockets stay.
 10. `scope['client'][0]` is the source everywhere; no `X-Forwarded-*` header is read by any new code.
-11. The gate's refusals carry the fixed security headers of `HostCheck` plus `Cache-Control: no-store`.
+11. The gate's refusals carry the fixed security headers plus `Cache-Control: no-store`, all from the one
+    function `security_headers(response)` in `app/headers.py`, which `HostCheck`, the gate and the guard
+    also use (it adds HSTS when `scheme(scope) == 'https'`).
 12. `create_app` gains no test-only argument. Tests sign in through `/api/setup` and `/api/session`.
 13. `runner.job_environment` (runner.py:152) keeps passing `os.environ` to Ansible; therefore
     **no secret of this design is placed in the environment**: the setup code is a file, sessions are
-    memory, `UI_TLS` is a flag. A review of EXPOSURE.md's environment keys applies the same rule.
+    memory. A review of EXPOSURE.md's environment keys applies the same rule.
 14. The guard's `api.request` event and every security event name the actor by user name, never by
     session id.
 15. `/setup` and `POST /api/setup` answer 404 whenever `<DATA_DIR>/setup-code` is absent; the file is
@@ -970,7 +1009,7 @@ the recovery command's printed URL, 9.5) to show the recovery sentence; the serv
    plus a checkout path useful to A2 with an operator session? They already have a terminal on every
    device and the Git save surface.
 8. **`runner.py:152` passes the environment to Ansible.** Ruling 13: nothing of this design is in the
-   environment except `UI_TLS`. Check EXPOSURE.md's keys against the same rule (a TLS key path is
+   environment. Check EXPOSURE.md's keys against the same rule (a TLS key path is
    fine; a TLS key is not).
 9. **Memory growth.** 512 sessions × a small dict; two throttle tables × 10 000 entries; the ticket
    dictionary unchanged at 32. Attack the eviction order: can an attacker evict a legitimate admin's
@@ -979,9 +1018,9 @@ the recovery command's printed URL, 9.5) to show the recovery sentence; the serv
    oldest-first by last failure; the attacker's own entry is the newest. Check both.
 10. **The health route as a fingerprint.** `{ready:true}` with no server header. Compare with what a
     302 from `/` to `/login` already reveals (a sign-in page with the product's name in its title, by
-    UI.md): the page is the larger fingerprint and is unavoidable. Decide whether the title should be
-    generic ("Sign in") rather than the product name; this design recommends the product name stays off
-    the sign-in page's `<title>` and heading until after sign-in, and leaves the call to UI.md.
+    UI.md): the page is the larger fingerprint and is unavoidable. Decided (RECONCILIATION 2): the page
+    `<title>` is `Sign in`; the brand mark and product name appear on the page itself so a student
+    recognises where they are, and the title is what a scanner indexes.
 11. **`SameSite=Strict` and the external link.** A student who follows a link from a course page lands on
     `/login`, which immediately redirects to `next` because `GET /api/session` is same-site. Check that
     this does not loop and that a signed-out student sees the form.
