@@ -754,6 +754,8 @@ function sessionDirtyPanel(){
    listeners in `test_shell_ui.js:947-954` stays true. If the lead prefers delegation on `document`,
    that pin is rewritten to ten with the reason, never deleted.
 
+**As built (S8, the lead's record), two rules this section adds:** (1) `renderSessionBanner()` does not move focus while `document.activeElement` is an input, textarea or select inside the open dialog or a `[data-panel]` (`sessionEditing()`, shell.js): a programmatic focus would fire `change` on that field and run its handler while signed out; the banner is `role=alert` and is announced anyway. (2) The save chip panel's rename joins the chains: when `saveRename` (save-header.js) meets the `sessionEnded` error it writes no error, registers `sessionOnResume(()=>saveRename(job,value))` and returns, so the rename is sent once after a successful *Try again*.
+
 ### 3.4 What is kept
 
 | Content | Where it is | Rule |
@@ -877,7 +879,7 @@ function renderAccount(){
  if($('account-name'))$('account-name').textContent=name;
  if($('account-role'))$('account-role').textContent=roleLabel(user&&user.role);
  if($('account-users'))$('account-users').hidden=!(user&&user.role==='admin');
- if($('manager-diagnostics'))$('manager-diagnostics').hidden=!(user&&user.role==='admin');
+ if($('manager-diagnostics'))$('manager-diagnostics').hidden=Boolean(user&&user.role==='operator');   // as built (S8, the lead's record): hidden only for a known operator, so an admin's menu does not lose Diagnostics before the first /api/state answer (parity X7); People stays hidden without a user
  if($('account-signout-note'))$('account-signout-note').hidden=typeof captureEnabled!=='undefined'&&captureEnabled===false;
  for(const id of ['vm-settings','manager-settings']){const el=$(id);if(!el)continue;el.disabled=operator;el.title=operator?'Administrators only':'';menuReason(el,operator?'Administrators only':'');}
 }
@@ -1285,6 +1287,7 @@ rows marked "the manager's … message" are those. A page's own sentence is used
 | same (manager's 422 text) | username rule | Use lowercase letters, digits, dot, dash or underscore, 2 to 32 characters. |
 | app.js `api()` | 401 error message | Your session ended. Sign in again. |
 | index.html | `#session-banner-text`, dialog case (the markup's default; `renderSessionBanner('dialog')`) | Your session ended. What you typed in the open dialog is still here. |
+| shell.js | `SESSION_BANNER_TEXT.closed` (as built: a dialog closed while signed out) | Your session ended. / Sign in in a new tab, come back and choose Try again. Or sign in here. |
 | index.html | `#session-banner-caption`, dialog case (the markup's default) | Sign in in a new tab, come back and choose Try again. Or sign in here and lose the open dialog. |
 | shell.js | `#session-banner-text`, draft case (`renderSessionBanner('draft')`) | Your session ended. Your design draft is still on this page. |
 | shell.js | `#session-banner-caption`, draft case | Sign in in a new tab, come back and choose Try again. Or sign in here and lose the draft. |
@@ -1311,6 +1314,12 @@ rows marked "the manager's … message" are those. A page's own sentence is used
 | management.js | `#vm-operator` (REVIEW R13) | Ask an administrator to set up the VM connection. |
 | management.js | `#home-vm-banner-text` for an Operator | The lab VM is not connected yet. Ask an administrator to connect it. |
 | home.js | `homeStartReason()` for an Operator | Ask an administrator to connect the VM |
+| management.js | Home deploy reason, Operator, VM not configured (as built) | Ask an administrator to connect the lab VM first: deploying needs it. Building a lab works without it. |
+| management.js | Home deploy reason, Administrator, VM not configured (as built) | Connect the lab VM first: deploying needs it. Building a lab works without it. |
+| management.js | Home deploy reason, VM configured but not answering (as built) | Waiting for the lab VM to answer: deploying needs it. Building a lab works meanwhile. |
+| management.js | Labs found on the VM, Operator, VM not connected (as built) | Ask an administrator to connect the VM first. |
+| management.js | `#vm-operator` heading and button (as built) | VM connection / Close |
+| app.js | `title` of `#vm-settings` and `#manager-settings` for an Operator | Administrators only |
 | status.js | `diagnosticsAdvice(role)` (REVIEW U5) | see Diagnostics / ask an administrator to check Diagnostics |
 | vm-connection.html | the Diagnostics sentence | An administrator can open Diagnostics to check the manager version and the VM connection. |
 | app.js | reason on VM connection… and Manager settings… for an Operator | Administrators only |
