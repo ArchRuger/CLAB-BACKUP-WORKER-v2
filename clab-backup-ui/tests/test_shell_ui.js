@@ -1100,9 +1100,19 @@ test('closing the dialog while signed out removes the clone and shows the page b
  assert.equal(h.dialog.querySelector('#session-banner-dialog'),null,'clone removed');
  assert.equal(h.sessionBanner.hidden,false,'the page-level banner takes over');assert.deepEqual(h.replaced,[]);
  h.context.sessionRestored();assert.equal(h.sessionBanner.hidden,true);
- const again=harness();again.dialog.open=true;again.context.signedOut();again.context.sessionRestored();
+ const again=harness();again.dialog.open=true;again.context.signedOut();again.context.sessionClear();again.context.sessionRestored();
  assert.equal(again.dialog.querySelector('#session-banner-dialog'),null,'restored: the clone is removed');
  again.dialog.close();assert.equal(again.sessionBanner.hidden,true,'a dialog closed after the restore does not bring the banner back');
+});
+test('a dialog rebuilt while signed out loses its clone; closing it still shows the page banner and the page is not stuck',()=>{
+ const h=harness();h.dialog.open=true;h.context.signedOut();
+ assert.ok(h.dialog.querySelector('#session-banner-dialog'),'the clone is there first');
+ h.dialog.children=[];
+ assert.equal(h.dialog.querySelector('#session-banner-dialog'),null,'the rebuild wiped the clone');
+ h.dialog.close();
+ assert.equal(h.sessionBanner.hidden,false,'the page-level banner takes over although no clone was left');assert.deepEqual(h.replaced,[]);
+ const ok=harness();ok.dialog.open=true;ok.context.signedOut();ok.dialog.children=[];ok.context.sessionClear();ok.context.sessionRestored();ok.dialog.close();
+ assert.equal(ok.sessionBanner.hidden,true,'restored before the close: no banner comes back');
 });
 test('signedOut with a design draft the browser could not store takes the banner path (draft text), not a redirect',()=>{
  const h=harness();h.context.designLeaveGuard=()=>true;

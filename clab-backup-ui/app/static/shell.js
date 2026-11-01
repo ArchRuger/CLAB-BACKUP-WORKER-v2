@@ -426,8 +426,8 @@ function renderSessionBanner(cause){
  dialog.prepend(clone);
  // The person pressed Escape or Cancel while signed out: the clone goes with the dialog, the page-level banner stays for the way back.
  dialog.addEventListener('close',()=>{
-  const mine=sessionBannerClone();if(!mine)return;
-  mine.remove();
+  // The clone may be gone already (opDialog rebuilds the dialog's innerHTML): a session still ended must still show the page banner.
+  const mine=sessionBannerClone();if(mine)mine.remove();
   if(typeof sessionEnded==='function'&&sessionEnded()){const panel=sessionDirtyPanel();renderSessionBanner(panel?'panel':typeof designLeaveGuard==='function'&&designLeaveGuard()?'draft':'closed');}
  },{once:true});
  const retry=clone.querySelector('#session-retry-dialog');if(retry&&typeof retry.focus==='function')retry.focus();
