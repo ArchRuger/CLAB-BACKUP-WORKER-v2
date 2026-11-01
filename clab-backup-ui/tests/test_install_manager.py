@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import ssl
 import subprocess
 import sys
@@ -1298,7 +1299,8 @@ class StartupInvariantTests(unittest.TestCase):
         self.assertEqual(command_step.call_args_list[1].args, (steps['prereqs'].argv, OWNER))
         self.assertEqual(command_step.call_args_list[1].kwargs, {'tee': True})
         self.assertEqual(command_step.call_args_list[2].args, (steps['launch'].argv, OWNER))
-        self.assertEqual(steps['prereqs'].argv, install.prerequisites_command(False))
+        # The default options choose the firewall step, so the prerequisites install ufw (--firewall).
+        self.assertEqual(steps['prereqs'].argv, install.prerequisites_command(False, True))
         self.assertEqual(steps['launch'].argv, install.launch_command('1'))
         self.assertEqual(steps['engineer'].argv, install.engineer_command(OWNER))
         self.assertEqual(steps['capture'].argv, install.stack_command('setup-capture.sh'))
@@ -1322,9 +1324,10 @@ class StartupInvariantTests(unittest.TestCase):
 
     def test_plan_lines_for_the_standard_options(self):
         # Four plan lines joined with the TLS, firewall, SSH and sign-on steps (EXPOSURE.md 7.1): 14 became 18,
-        # and the last line is now the sign-on line; the version/HTTP line says HTTPS.
+        # and the last line is now the sign-on line; the version/HTTP line says HTTPS. A fifth, 19, tells an
+        # upgrade without UI_PORT that the manager moves to HTTPS (EXPOSURE.md 7.4).
         lines = install.plan_lines(OWNER, '1.30.35', install.Options())
-        self.assertEqual(len(lines), 18)
+        self.assertEqual(len(lines), 19)
         self.assertEqual(lines[0], 'Source: ' + str(install.SOURCE) + ' (1.30.35)')
         self.assertIn('Rebuild/recreate only the manager; existing lab containers remain in place.', lines)
         self.assertIn('Lab operations: enabled with default trusted roots', lines)
@@ -1854,9 +1857,25 @@ class OptionsAndStepsTests(unittest.TestCase):
         self.assertEqual(steps['firewall'].argv, install.firewall_command(OWNER))
         self.assertEqual(steps['sshd'].argv, install.ssh_hardening_command())
 
-    def test_the_prerequisites_install_ufw_and_openssl(self):
+    def test_the_prerequisites_install_openssl_always_and_ufw_only_for_the_firewall_step(self):
         script = (install.SOURCE / 'deploy/install-prerequisites.sh').read_text()
-        self.assertRegex(script, r'for package in [^;\n]*\bopenssl\b[^;\n]*\bufw\b|for package in [^;\n]*\bufw\b[^;\n]*\bopenssl\b')
+        loop = re.search(r'for package in (git [^;\n]*); do', script).group(1).split()
+        self.assertIn('openssl', loop)
+        self.assertNotIn('ufw', loop, 'ufw breaks iptables-persistent: the unconditional apt call must not carry it')
+        self.assertRegex(script, r'if \$firewall_requested && ! installed ufw')
+        self.assertIn('--firewall) firewall_requested=true', script)
+
+    def test_ufw_is_asked_of_the_prerequisites_only_when_the_firewall_step_is_chosen(self):
+        # A VM that keeps iptables-persistent opts out with --no-firewall; its prerequisites step must not
+        # then ask APT for ufw, which APT refuses under --no-remove and fails the whole step.
+        for firewall in (True, False):
+            with self.subTest(firewall=firewall):
+                options = install.Options(firewall=firewall)
+                steps = {step.key: step for step in install.install_steps(OWNER, '1.32.0', options)}
+                self.assertEqual('--firewall' in steps['prereqs'].argv, firewall)
+                self.assertEqual(steps['prereqs'].argv, install.prerequisites_command(options.repair, firewall))
+        self.assertNotIn('--firewall', install.prerequisites_command(True))
+        self.assertIn('--firewall', install.prerequisites_command(True, firewall=True))
 
 
 class AdvancedQuestionsTests(unittest.TestCase):
@@ -2012,7 +2031,9 @@ class PlanLinesTests(unittest.TestCase):
 
     def test_the_standard_plan_has_the_four_new_lines_and_the_setup_code_line_is_last(self):
         lines = self.lines()
-        self.assertEqual(len(lines), 18)
+        # 18 became 19 with the manager-ports line every plan now carries (the common upgrade has none of the
+        # three special cases, and the person must still be told the address moves to HTTPS).
+        self.assertEqual(len(lines), 19)
         self.assertEqual(lines[0], 'Source: ' + str(install.SOURCE) + ' (1.32.0)')
         self.assertIn("TLS: self-signed certificate for this VM's addresses and names in "
                       '/srv/containerlab-node-manager/tls (kept if one exists).', lines)
@@ -2047,6 +2068,21 @@ class PlanLinesTests(unittest.TestCase):
         lines = self.lines(collide=True)
         self.assertTrue(any(line.startswith('Manager ports: your .env sets UI_PORT=8081') and 'no plain-HTTP redirect' in line
                             for line in lines), lines)
+
+    def test_an_upgrade_without_a_ui_port_is_told_the_manager_moves_to_https_on_8443(self):
+        # EXPOSURE.md 7.4, the row 'No UI_PORT in .env': the plan the person approves says so even when the
+        # firewall step is not selected (the ports otherwise appear only in the firewall line).
+        for options in (install.Options(), install.Options(firewall=False)):
+            lines = self.lines(options)
+            self.assertIn('Manager ports: HTTPS on 8443; plain HTTP on 8081 redirects there.', lines)
+        lines = self.lines(ports=(9443, 0))
+        self.assertIn('Manager ports: HTTPS on 9443; no plain-HTTP redirect.', lines)
+
+    def test_exactly_one_manager_ports_line_whichever_branch_applies(self):
+        for options, collide in ((install.Options(), False), (install.Options(ports='redirect'), False),
+                                 (install.Options(ports='keep'), False), (install.Options(), True)):
+            lines = self.lines(options, collide=collide)
+            self.assertEqual(sum(line.startswith('Manager ports:') for line in lines), 1, (options.ports, collide))
 
     def firewall_line(self, env_text=None, options=None, previous=None):
         """The firewall line with the real settings readers over a temporary checkout and an optional previous file."""
@@ -2241,6 +2277,24 @@ class ClosingLinesTests(unittest.TestCase):
                 self.assertIn('Open the manager at https://vm1.example.edu:8443/', '\n'.join(lines))
                 self.assertEqual([event for event in events if event[0] == 'read-code'], [('read-code',)])
                 self.assertNotIn(('git',), events, 'the steps after the returned one do not run')
+
+    def test_a_returned_firewall_or_ssh_step_names_the_opt_out_that_finishes_without_it(self):
+        # The refusal of these two steps can be a choice the person made (a narrowed allow while ufw is off), so
+        # 'run the installer again' meets it again: the way out is named, per step.
+        install_sh = str(install.SOURCE / 'deploy/install.sh')
+        for failing, flag in (('Firewall', '--no-firewall'), ('SSH hardening', '--no-ssh-hardening')):
+            with self.subTest(failing=failing):
+                _, lines = self.fail_after_verify(failing)
+                self.assertIn(f'To finish without this step: bash {install_sh} --advanced {flag}', lines)
+        _, lines = self.fail_after_verify('Firewall')
+        self.assertNotIn('--no-ssh-hardening', '\n'.join(lines))
+
+    def test_no_opt_out_is_named_for_a_phase_that_has_none(self):
+        # Only the verified run reaches the message at all; a different phase returned from names no flag.
+        for failing in ('Engineer access', 'Administrator', 'VM prerequisites'):
+            with self.subTest(failing=failing):
+                _, lines = self.fail_after_verify(failing)
+                self.assertNotIn('To finish without this step', '\n'.join(lines))
 
     def test_the_stopped_run_says_so_and_does_not_claim_the_installation_is_ready(self):
         _, lines = self.fail_after_verify('Firewall')

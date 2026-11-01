@@ -694,6 +694,12 @@ def plan_lines(env, version, options):
     elif exposure().ports_collide(SOURCE, env_path=env_source):
         lines.append('Manager ports: your .env sets UI_PORT=8081, so HTTPS stays on 8081 with no plain-HTTP redirect '
                      '(Advanced settings can move it to 8443).')
+    else:
+        # The common upgrade (no UI_PORT in the settings): the student address changes from plain HTTP to HTTPS,
+        # which the person is told before it happens, not only in the closing lines.
+        tls, redirect = manager_ports(options)
+        lines.append(f'Manager ports: HTTPS on {tls}' + (f'; plain HTTP on {redirect} redirects there.' if redirect
+                                                           else '; no plain-HTTP redirect.'))
     lines += [
         'Installation-media APT repair: ' + ('enabled with backup' if options.repair else 'not selected'),
         'lazydocker: install or update for ' + env['USER'] + ' (never fails the installation).',
@@ -703,8 +709,12 @@ def plan_lines(env, version, options):
     return lines
 
 
-def prerequisites_command(repair):
+def prerequisites_command(repair, firewall=False):
+    """`firewall` adds --firewall: ufw is installed only for a person who chose the firewall step, because it
+    conflicts with iptables-persistent and netfilter-persistent, which a VM that opted out may use."""
     command = ['sudo', 'bash', str(SOURCE / 'deploy/install-prerequisites.sh'), '--docker', '--containerlab']
+    if firewall:
+        command.append('--firewall')
     if repair:
         command.append('--repair-install-media')
     return command
@@ -744,7 +754,7 @@ def install_steps(env, version, options):
 
     def title(text):
         return f'{next(count)}/{total} {text}'
-    prereqs = prerequisites_command(options.repair)
+    prereqs = prerequisites_command(options.repair, options.firewall)
     # A separate phase so a failed image pull is retried on its own instead of repeating the
     # password, helper and image-build step.
     launch = launch_command(options.operations)
@@ -828,6 +838,9 @@ def show_setup_code(env, say=print, sudo=('sudo',), interactive=True):
     return reading[0]
 
 
+OPT_OUT_FLAGS = {'firewall': '--no-firewall', 'sshd': '--no-ssh-hardening'}
+
+
 def install(env, version, advanced=False, no_firewall=False, no_ssh_hardening=False):
     options = ask_install_options(env, advanced, no_firewall=no_firewall, no_ssh_hardening=no_ssh_hardening)
     print('\nInstallation plan')
@@ -839,12 +852,14 @@ def install(env, version, advanced=False, no_firewall=False, no_ssh_hardening=Fa
     else:
         print('Starting now; the standard path runs these steps without further confirmation.')
     verified = False
+    running = None
     try:
         for step in install_steps(env, version, options):
             if step.key in ('git', 'signon'):
                 continue  # the plain menu decides Git after the summary below, as it always has; the code is last of all
             if not step.visible:
                 continue
+            running = step.key
             if step.bare:
                 step.action()
             else:
@@ -858,6 +873,12 @@ def install(env, version, advanced=False, no_firewall=False, no_ssh_hardening=Fa
             # full-screen installer's summary shows in the same situation.
             print('\nThe installation did not finish. The manager itself is verified and running; the steps after '
                   'the one you returned from were not run. Run the installer again to finish them.')
+            way_out = OPT_OUT_FLAGS.get(running)
+            if way_out:
+                # The refusal of these two steps can be a condition the operator chose on purpose, so running
+                # the installer again meets it again: name the one way that finishes the rest without the step.
+                print('To finish without this step: ' + shlex.join(['bash', str(SOURCE / 'deploy/install.sh'),
+                                                                     '--advanced', way_out]))
             for line in access_lines():
                 print(line)
             show_setup_code(env)

@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import re
 import ssl
+import stat
 import subprocess
 from datetime import date, datetime
 from urllib.request import HTTPSHandler, ProxyHandler, build_opener
@@ -52,19 +53,35 @@ def env_values(source, keys):
 
 
 def env_file_values(path, keys):
-    """Only the named keys of one settings file (it also holds a session token). A symlink or a
-    file over 64 KiB answers nothing, as the manager's own readers do."""
-    path = Path(path)
+    """Only the named keys of one settings file (it also holds a session token). The path may be typed on
+    the full-screen installer's settings screen and is read on every keystroke, on the event loop, so only
+    a regular file is ever read: it is opened without following a symlink and without blocking (a named
+    pipe or a terminal device would otherwise stop the installer), checked on the open descriptor, and at
+    most 64 KiB are read. A symlink, a special file or a file over 64 KiB answers nothing, as the
+    manager's own readers do."""
     values = {}
+    descriptor = None
     try:
-        if path.is_symlink() or path.stat().st_size > MAX_ENV_BYTES:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, 'O_CLOEXEC', 0))
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             return values
-        for line in path.read_text(errors='replace').splitlines():
-            name, sep, value = line.partition('=')
-            if sep and name.strip() in keys:
-                values[name.strip()] = value.strip().strip('"\'')
-    except OSError:
-        pass
+        data = b''
+        while len(data) <= MAX_ENV_BYTES:
+            chunk = os.read(descriptor, MAX_ENV_BYTES + 1 - len(data))
+            if not chunk:
+                break
+            data += chunk
+        if len(data) > MAX_ENV_BYTES:
+            return values
+    except (OSError, ValueError):
+        return values
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    for line in data.decode('utf-8', errors='replace').splitlines():
+        name, sep, value = line.partition('=')
+        if sep and name.strip() in keys:
+            values[name.strip()] = value.strip().strip('"\'')
     return values
 
 

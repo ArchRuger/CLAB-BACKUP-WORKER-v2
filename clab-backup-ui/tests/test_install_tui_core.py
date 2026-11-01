@@ -1227,6 +1227,39 @@ class ProbeTests(IsolatedCase):
             self.assertEqual(result[0], probes.ATTENTION)
             self.assertIn('no HTTP answer on port 8443', result[1].replace('HTTPS', 'HTTP'))
 
+    def test_a_running_container_with_an_older_version_and_no_https_is_the_version_mismatch_not_starting(self):
+        # An upgrade from plain HTTP: the old manager runs, there is no TLS door yet, and 'still starting'
+        # would never resolve. The row says what runs, as it did before the HTTPS door.
+        ctx = self.manager_context()
+        answers = iter([(0, 'a' * 12), (0, '1.31.7')])
+        with patch.object(probes.exposure, 'health_ready', side_effect=OSError('refused')), \
+                patch.object(core, 'run_capture', side_effect=lambda *a, **k: next(answers)):
+            state, summary, detail, value = probes.probe_manager(ctx)
+        self.assertEqual((state, value), (probes.ATTENTION, '1.31.7'))
+        self.assertEqual(summary, 'Running 1.31.7; this checkout is 1.32.0')
+        self.assertIn('Install/update rebuilds it from this checkout', detail)
+        self.assertNotIn('still starting', summary + detail)
+
+    def test_a_running_container_of_this_release_without_https_may_still_be_starting_and_names_the_repair(self):
+        ctx = self.manager_context()
+        answers = iter([(0, 'a' * 12), (0, '1.32.0')])
+        with patch.object(probes.exposure, 'health_ready', side_effect=OSError('refused')), \
+                patch.object(core, 'run_capture', side_effect=lambda *a, **k: next(answers)):
+            state, summary, detail, value = probes.probe_manager(ctx)
+        self.assertEqual((state, value), (probes.ATTENTION, '1.32.0'))
+        self.assertIn('no HTTPS answer on port 8443', summary)
+        self.assertIn('Install/update sets up HTTPS', detail)
+
+    def test_a_running_container_whose_version_cannot_be_read_keeps_the_starting_wording(self):
+        ctx = self.manager_context()
+        answers = iter([(0, 'a' * 12), (1, 'docker: error')])
+        with patch.object(probes.exposure, 'health_ready', side_effect=OSError('refused')), \
+                patch.object(core, 'run_capture', side_effect=lambda *a, **k: next(answers)):
+            result = probes.probe_manager(ctx)
+        self.assertEqual(result[0], probes.ATTENTION)
+        self.assertEqual(result[1], 'Container running but no HTTPS answer on port 8443')
+        self.assertEqual(result[2], 'It may still be starting; refresh shortly.')
+
     def test_manager_not_ready_and_no_docker_says_not_installed(self):
         ctx = self.manager_context()
         with patch.object(probes.exposure, 'health_ready', return_value=False), \
@@ -1363,6 +1396,58 @@ class ExposureSettingsTests(IsolatedCase):
     def test_a_symlinked_or_oversized_env_answers_the_defaults(self):
         self.assertEqual(exposure.ports(self.source('UI_PORT=9001\n', symlink=True)), (8443, 8081))
         self.assertEqual(exposure.ports(self.source('UI_PORT=9001\n' + '#' * 70000)), (8443, 8081))
+
+    def read_with_deadline(self, path, seconds=3):
+        """env_file_values on a worker thread: a read that blocks fails the test instead of hanging the suite."""
+        answer = []
+        worker = threading.Thread(target=lambda: answer.append(exposure.env_file_values(path, ('UI_PORT',))), daemon=True)
+        worker.start()
+        worker.join(seconds)
+        return answer[0] if answer else None
+
+    def test_a_named_pipe_is_never_read_and_never_blocks(self):
+        # The full-screen settings screen reads the typed path on every keystroke, on the event loop.
+        fifo = self.tmp / 'pipe.env'
+        os.mkfifo(fifo)
+        released = []
+
+        def release():
+            # Unblock a reader that wrongly waits for a writer, so a failure here cannot hang the run.
+            if not released:
+                released.append(True)
+                try:
+                    descriptor = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+                    os.write(descriptor, b'UI_PORT=9001\n')
+                    os.close(descriptor)
+                except OSError:
+                    pass
+        self.addCleanup(release)
+        self.assertEqual(self.read_with_deadline(fifo), {}, 'a FIFO answers nothing and the read returns at once')
+
+    def test_a_character_device_and_a_directory_answer_nothing_without_reading(self):
+        # /dev/zero has st_size 0, so a size check alone lets read_text() consume memory without end.
+        self.assertEqual(self.read_with_deadline('/dev/zero'), {})
+        self.assertEqual(self.read_with_deadline(self.tmp), {})
+        self.assertEqual(self.read_with_deadline('/dev/null'), {})
+
+    def test_the_read_never_passes_the_size_limit_even_when_the_size_lies(self):
+        # Boundary: exactly 64 KiB is read, one byte more answers nothing.
+        head = b'UI_PORT=9001\n'
+        exact = self.tmp / 'exact.env'
+        exact.write_bytes(head + b'#' * (exposure.MAX_ENV_BYTES - len(head)))
+        self.assertEqual(exposure.env_file_values(exact, ('UI_PORT',)), {'UI_PORT': '9001'})
+        over = self.tmp / 'over.env'
+        over.write_bytes(head + b'#' * (exposure.MAX_ENV_BYTES - len(head) + 1))
+        self.assertEqual(exposure.env_file_values(over, ('UI_PORT',)), {})
+
+    def test_a_symlink_and_a_path_with_a_null_byte_answer_nothing(self):
+        real = self.tmp / 'real.env'
+        real.write_text('UI_PORT=9001\n')
+        link = self.tmp / 'link.env'
+        os.symlink(real, link)
+        self.assertEqual(exposure.env_file_values(link, ('UI_PORT',)), {})
+        self.assertEqual(exposure.env_file_values(str(real) + '\0x', ('UI_PORT',)), {})
+        self.assertEqual(exposure.env_file_values(real, ('UI_PORT',)), {'UI_PORT': '9001'})
 
     def test_only_the_named_keys_are_read_never_the_token(self):
         root = self.source('UI_PORT=9001\nCAPTURE_SESSION_TOKEN=secret\n')

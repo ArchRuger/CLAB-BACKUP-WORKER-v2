@@ -168,6 +168,17 @@ def probe_manager(ctx):
     if _sudo_refused(code, text):
         return NEEDS_AUTH, f'No answer on port {port}; container state needs sudo', 'Refresh after authenticating, or run Check installation.'
     if code == 0 and text.strip():
+        # An upgrade from plain HTTP lands here: the old manager runs but has no TLS door yet. Say what runs, as
+        # the row did before the HTTPS door, instead of "still starting", which never resolves for it.
+        vcode, vtext = manager_version(ctx)
+        lines = vtext.strip().splitlines()
+        running = lines[-1].strip() if vcode == 0 and lines and VERSION_SHAPE.fullmatch(lines[-1].strip()) else None
+        if running and running != ctx.version:
+            return (ATTENTION, f'Running {running}; this checkout is {ctx.version}',
+                    f'No HTTPS answer on port {port}. Install/update rebuilds it from this checkout.', running)
+        if running:
+            return (ATTENTION, f'Running {running} but no HTTPS answer on port {port}',
+                    'It may still be starting; if this persists, Install/update sets up HTTPS.', running)
         return ATTENTION, f'Container running but no HTTPS answer on port {port}', 'It may still be starting; refresh shortly.'
     if code == 0:
         if exists:

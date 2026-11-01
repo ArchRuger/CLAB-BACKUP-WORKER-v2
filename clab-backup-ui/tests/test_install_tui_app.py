@@ -26,6 +26,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from types import SimpleNamespace
@@ -822,6 +823,33 @@ class SettingsTests(SlateCase):
             self.assertTrue(screen.query_one('#ports', RadioSet).display, 'the file that will be copied decides')
             await self.review(app, pilot)
             self.assertEqual((ctx.options.env_source, ctx.options.ports), (previous, 'redirect'))
+
+    async def test_a_typed_path_to_a_named_pipe_is_not_read_on_the_event_loop(self):
+        # The path is judged on every keystroke on the event loop; a FIFO with no writer used to freeze the
+        # installer, and Ctrl+C is handled on the same loop. A late writer lets a regression fail, not hang.
+        fifo = self.root / 'pipe.env'
+        os.mkfifo(fifo)
+
+        def late_writer():
+            try:
+                descriptor = os.open(fifo, os.O_WRONLY)
+                os.write(descriptor, b'UI_PORT=8081\n')
+                os.close(descriptor)
+            except OSError:
+                pass
+        writer = threading.Timer(5, late_writer)
+        writer.daemon = True
+        writer.start()
+        self.addCleanup(writer.cancel)
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.open_settings(app, pilot)
+            await self.choose(app, pilot, 'env-choice', 1)
+            started = time.monotonic()
+            await self.type_path(app, pilot, str(fifo), typed=5)
+            elapsed = time.monotonic() - started
+            self.assertLess(elapsed, 2, 'the settings screen read the FIFO on the event loop')
+            self.assertFalse(app.screen.query_one('#ports', RadioSet).display, 'a pipe holds no settings to judge')
 
     async def test_standard_defaults_restores_the_exposure_choices(self):
         ctx = self.ctx()
