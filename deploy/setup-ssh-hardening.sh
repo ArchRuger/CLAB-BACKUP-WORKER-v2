@@ -12,8 +12,9 @@
 # passwords), AllowTcpForwarding (VS Code Remote-SSH) or AllowUsers, and it never touches the
 # clab-discovery policy of setup-password.sh. PermitRootLogin no is not written while root can log in
 # with a key (one in root's AuthorizedKeysFile other than cloud-init's "Please login as" stub, or an
-# AuthorizedKeysCommand or TrustedUserCAKeys that could admit one): on a VM reached as root by key it
-# would refuse the operator's next login. The candidate is checked with sshd -t -f, the applied
+# AuthorizedKeysCommand or TrustedUserCAKeys that could admit one), read with sshd -T -C for a root
+# connection so that a Match User root block counts: on a VM reached as root by key it would refuse the
+# operator's next login. When those settings cannot be read it is not written either. The candidate is checked with sshd -t -f, the applied
 # configuration with sshd -t, then sshd is reloaded; any failure restores the previous drop-in (or its
 # absence) and reloads that.
 set -euo pipefail
@@ -82,18 +83,24 @@ fi
 # mistaken for the operator's and an operator's change since the last run is released.
 if $had_dropin; then changed=true; rm -f -- "$dropin"; fi
 effective=$("$sshd" -T) || { echo 'Could not read the effective SSH configuration with sshd -T.' >&2; exit 1; }
-value_of() { awk -v key="$1" '$1 == key {print $2; exit}' <<< "$effective"; }
+value_of() { awk -v key="$1" '$1 == key {print $2; exit}' <<< "${2-$effective}"; }
+# The settings sshd applies to a root connection: the global ones with every Match block that names
+# root (Match User root, Match all) applied over them. Match blocks on another address or host are not
+# evaluated.
+root_connection='user=root,host=localhost,addr=127.0.0.1'
+root_effective=$("$sshd" -T -C "$root_connection" 2>/dev/null) || root_effective=''
 # Why root can log in with a key, or nothing. sshd expands %% %h %u %U in AuthorizedKeysFile and reads
 # a relative path from the user's home. A line that is a comment, blank, or cloud-init's stub (a forced
 # command that prints "Please login as the user ..." and exits) is no login.
 root_key_login() {
   local value file path line
   local -a files
-  value=$(value_of authorizedkeyscommand)
-  if [[ -n $value && $value != none ]]; then echo 'sshd -T names an AuthorizedKeysCommand, which may give root a key'; return; fi
-  value=$(value_of trustedusercakeys)
-  if [[ -n $value && $value != none ]]; then echo 'sshd -T names TrustedUserCAKeys, which may admit a certificate for root'; return; fi
-  read -ra files <<< "$(awk '$1 == "authorizedkeysfile" {$1 = ""; print; exit}' <<< "$effective")"
+  if [[ -z $root_effective ]]; then echo "sshd -T -C $root_connection could not show the settings sshd applies to root, so a key of root's is not ruled out"; return; fi
+  value=$(value_of authorizedkeyscommand "$root_effective")
+  if [[ -n $value && $value != none ]]; then echo 'sshd -T names an AuthorizedKeysCommand for root, which may give root a key'; return; fi
+  value=$(value_of trustedusercakeys "$root_effective")
+  if [[ -n $value && $value != none ]]; then echo 'sshd -T names TrustedUserCAKeys for root, which may admit a certificate for root'; return; fi
+  read -ra files <<< "$(awk '$1 == "authorizedkeysfile" {$1 = ""; print; exit}' <<< "$root_effective")"
   for file in "${files[@]}"; do
     [[ $file != none ]] || continue
     path=${file//%%/$'\001'}; path=${path//%h/$root_home}; path=${path//%u/root}; path=${path//%U/0}; path=${path//$'\001'/%}
@@ -145,10 +152,10 @@ if (( ${#written[@]} == 0 )); then
     "$sshd" -t
     reload
     committed=true
-    echo "Every directive now has a value of your own; removed $dropin."
+    echo "No directive is left to write (see above); removed $dropin."
     reloaded
   else
-    echo 'Every directive already has a value of your own; no drop-in was written.'
+    echo 'No directive is left to write (see above); no drop-in was written.'
   fi
   exit 0
 fi

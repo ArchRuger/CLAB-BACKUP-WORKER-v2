@@ -15,8 +15,9 @@ The script must run as root and this suite never touches /etc/ssh or /root: each
 of the shipped script with exactly three lines replaced, the root guard (a no-op), the SSH directory
 and root's home (temporary ones); the texts are asserted, so a change fails loudly instead of testing
 stale logic. The fake sshd emulates the include order of Ubuntu (drop-ins first, then the rest of
-sshd_config, the first value wins) over a base of OpenSSH defaults the test chooses. Standard
-library only.
+sshd_config, the first value wins) over a base of OpenSSH defaults the test chooses; with `-C`
+(`sshd -T -C user=root,...`) it applies the `Match User` and `Match all` blocks that name the user over
+that, as sshd does for one connection. Standard library only.
 """
 import os
 import shutil
@@ -65,17 +66,28 @@ def lines(path):
 if args[:1] == ['-T']:
     if os.environ.get('SSHD_T_STATUS', '0') != '0':
         sys.exit(int(os.environ['SSHD_T_STATUS']))
-    seen = {}
-    for path in sorted((ssh_dir / 'sshd_config.d').glob('*.conf')):
+    connection = {}
+    if args[1:2] == ['-C']:
+        if os.environ.get('SSHD_TC_STATUS', '0') != '0':
+            sys.exit(int(os.environ['SSHD_TC_STATUS']))
+        connection = dict(item.split('=', 1) for item in args[2].split(','))
+    files = sorted((ssh_dir / 'sshd_config.d').glob('*.conf')) + [ssh_dir / 'sshd_config']
+    seen, matched = {}, {}
+    for path in files:
+        block = None  # None: global; True or False: inside a Match block that does or does not apply
         for key, value in lines(path):
-            seen.setdefault(key, value)
-    for key, value in lines(ssh_dir / 'sshd_config'):
-        if key == 'match':
-            break
-        if key != 'include':
-            seen.setdefault(key, value)
+            if key == 'match':
+                words = value.split()
+                block = words == ['all'] or (words[0].lower() == 'user' and connection.get('user') in words[1].split(','))
+            elif key == 'include':
+                continue
+            elif block is None:
+                seen.setdefault(key, value)
+            elif block:
+                matched.setdefault(key, value)
     for key, value in lines(Path(os.environ['SSHD_BASE'])):
         seen.setdefault(key, value)
+    seen.update(matched)
     for key, value in seen.items():
         print(key, value.lower() if key in ('permitrootlogin', 'x11forwarding') else value)
     sys.exit(0)
@@ -270,6 +282,36 @@ class SshHardeningTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('PermitRootLogin no', self.directives())
 
+    def test_a_root_key_that_only_a_match_user_root_block_admits_keeps_permitrootlogin(self):
+        # The global AuthorizedKeysFile is the default (.ssh/authorized_keys, absent for root); a Match
+        # block at the end of sshd_config points root at a file of its own, which holds root's key.
+        keys = self.base / 'rootkeys'
+        keys.mkdir()
+        (keys / 'root').write_text('ssh-ed25519 AAAAC3fixture admin@laptop\n')
+        self.config.write_text(self.config.read_text() + f'Match User root\n    AuthorizedKeysFile {keys}/%u\n')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('PermitRootLogin no', self.directives())
+        self.assertIn('Not written: PermitRootLogin', result.stdout)
+        self.assertIn(f'{keys}/root', result.stdout)
+        self.assertIn('sshd -T -C user=root,host=localhost,addr=127.0.0.1', self.calls())
+
+    def test_a_match_block_for_other_users_does_not_give_root_a_key(self):
+        keys = self.base / 'rootkeys'
+        keys.mkdir()
+        (keys / 'root').write_text('ssh-ed25519 AAAAC3fixture admin@laptop\n')
+        self.config.write_text(self.config.read_text() + f'Match User deploy\n    AuthorizedKeysFile {keys}/%u\n')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('PermitRootLogin no', self.directives())
+
+    def test_root_settings_that_cannot_be_read_keep_permitrootlogin(self):
+        result = self.run_script(SSHD_TC_STATUS='255')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('PermitRootLogin no', self.directives())
+        self.assertIn('Not written: PermitRootLogin', result.stdout)
+        self.assertIn('MaxAuthTries 4', self.directives())
+
     def test_keys_sshd_finds_elsewhere_keep_permitrootlogin(self):
         for change in ({'authorizedkeyscommand': '/usr/bin/sss_ssh_authorizedkeys'},
                        {'trustedusercakeys': '/etc/ssh/user_ca.pub'}):
@@ -362,11 +404,24 @@ class SshHardeningTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertFalse(self.dropin.exists())
         self.assertNotIn('systemctl reload ssh', self.calls())
+        self.assertNotIn('your own', result.stdout)
         self.dropin.write_text('PermitRootLogin no\n')
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertFalse(self.dropin.exists())
         self.assertIn('systemctl reload ssh', self.calls())
+        self.assertNotIn('your own', result.stdout)
+
+    def test_nothing_to_write_because_root_keeps_its_key_is_not_called_a_value_of_your_own(self):
+        # PermitRootLogin stays at the default (root has a key) and every other directive is set:
+        # "every directive already has a value of your own" would be false for PermitRootLogin.
+        self.root_keys('ssh-ed25519 AAAAC3fixture admin@laptop\n')
+        self.set_base(maxauthtries='3', logingracetime='60', persourcemaxstartups='4', x11forwarding='yes')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse(self.dropin.exists())
+        self.assertNotIn('your own', result.stdout)
+        self.assertIn('no drop-in was written', result.stdout)
 
     def test_a_directive_an_earlier_drop_in_sets_is_reported_as_not_in_effect(self):
         (self.ssh_dir / 'sshd_config.d/10-operator.conf').write_text('MaxAuthTries 6\n')
