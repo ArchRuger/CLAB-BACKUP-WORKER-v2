@@ -14,8 +14,10 @@
 #   --primary             print the primary name alone (no root)
 #   --fingerprint         print the SHA-256 fingerprint alone (no root)
 #   --no-recreate         leave the manager container alone (start-manager.sh recreates it itself)
-# Every writing mode ends with the fingerprint and, when the certificate changed and a manager
-# container exists, recreates the manager so uvicorn loads the new files.
+# Every writing mode ends with the fingerprint and, when the certificate or key file changed and a manager
+# container exists, recreates the manager so uvicorn loads the new files. The decision rests on the file
+# content (setup_tls.py digest), not on the leaf fingerprint: a chain repaired behind the same leaf is a
+# new file to serve. Writing modes serialise on tls/.lock inside setup_tls.py.
 set -euo pipefail
 usage() {
   echo 'Options: --renew, --cert PATH --key PATH, --self-signed, --name NAME (repeatable), --prepare, --route source|image, --show, --primary, --fingerprint, --no-recreate.' >&2
@@ -67,13 +69,19 @@ if ! $needs_root || [[ $mode == prepare ]]; then
   # Read-only modes, and the prepare step that runs inside recreate-manager.sh: no recreate decision here.
   exec /usr/bin/python3 "$script_dir/setup_tls.py" "${python_args[@]}"
 fi
-before=$(/usr/bin/python3 "$script_dir/setup_tls.py" fingerprint 2>/dev/null || true)
+# The file content decides whether the manager must be recreated; the fingerprint is what the person is told.
+before=$(/usr/bin/python3 "$script_dir/setup_tls.py" digest 2>/dev/null || true)
+before_fingerprint=$(/usr/bin/python3 "$script_dir/setup_tls.py" fingerprint 2>/dev/null || true)
 /usr/bin/python3 "$script_dir/setup_tls.py" "${python_args[@]}"
-after=$(/usr/bin/python3 "$script_dir/setup_tls.py" fingerprint 2>/dev/null || true)
+after=$(/usr/bin/python3 "$script_dir/setup_tls.py" digest 2>/dev/null || true)
+after_fingerprint=$(/usr/bin/python3 "$script_dir/setup_tls.py" fingerprint 2>/dev/null || true)
 if [[ "$after" == "$before" ]]; then
   echo 'The certificate is unchanged; the manager keeps running.'
 elif $recreate; then
   # uvicorn reads /tls/cert.pem and /tls/key.pem at start, so the manager must be recreated to serve the new ones.
+  if [[ "$after_fingerprint" == "$before_fingerprint" ]]; then
+    echo 'The certificate files changed behind the same fingerprint (the chain or the key file differs); the manager is recreated to serve them.'
+  fi
   bash "$script_dir/recreate-manager.sh"
 else
   echo 'The manager serves the new certificate when start-manager.sh or recreate-manager.sh next creates it.'

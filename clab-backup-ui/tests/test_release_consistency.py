@@ -248,18 +248,23 @@ class ReleaseConsistencyTests(unittest.TestCase):
         docs_fixture(self.root, self.version)
         (self.root / 'docs/GUIDE.md').write_text('Open https://192.0.2.10:8443/ and sign in. Edgeshark listens on http://127.0.0.1:5001.\n'
                                                  'Old bookmarks on the plain-HTTP port 8081 answer a redirect.\n', encoding='utf-8')
-        (self.root / 'docs/archive/OLD.md').write_text('# Old — 1.12.0\n\nOpen http://VM_IP:8081 in a browser.\n', encoding='utf-8')
+        (self.root / 'docs/archive/OLD.md').write_text('# Old — 1.12.0\n\nOpen http://VM_IP:8081 or HTTP://<VM address>:8081 in a browser.\n',
+                                                       encoding='utf-8')
         (self.root / 'docs/CHANGELOG.md').write_text(f'# Changelog\n\n## Changes in {self.version}\n\n- the manager answered on http://VM:8081\n',
                                                      encoding='utf-8')
         self.assertEqual(release.verify_docs(self.root), self.version)
         (self.root / 'docs/GUIDE.md').write_text('Open `http://192.0.2.10:8081/` in a browser.\n\nOr http://VM_IP:8081 and http://localhost:8081/#lab=x.\n'
-                                                 'Over IPv6: http://[fd00::10]:8081 or `http://[2001:db8::10]:8081/`.\n', encoding='utf-8')
+                                                 'Over IPv6: http://[fd00::10]:8081 or `http://[2001:db8::10]:8081/`.\n'
+                                                 'Then open http://<VM address>:8081 (or `http://<vm-ip>:8081/`).\n'
+                                                 'Upper case: HTTP://192.0.2.10:8081 and Http://[2001:DB8::10]:8081/.\n', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'disagrees') as error:
             release.verify_docs(self.root)
         message = str(error.exception)
         self.assertIn('docs/GUIDE.md:1: plain-HTTP manager URL', message)
         self.assertIn('docs/GUIDE.md:3: plain-HTTP manager URL', message)
         self.assertIn('docs/GUIDE.md:4: plain-HTTP manager URL', message, 'an IPv6 literal in brackets is a manager URL too')
+        self.assertIn('docs/GUIDE.md:5: plain-HTTP manager URL', message, 'a <placeholder> host is a manager URL too')
+        self.assertIn('docs/GUIDE.md:6: plain-HTTP manager URL', message, 'the scheme is matched case-insensitively')
         self.assertIn('https://', message, 'the message says what to write instead')
         self.assertNotIn('archive', message)
         self.assertNotIn('CHANGELOG', message)

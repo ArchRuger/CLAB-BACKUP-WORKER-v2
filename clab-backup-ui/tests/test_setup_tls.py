@@ -14,7 +14,9 @@ The `ip -j` fixture below (IP_ADDRESS, IP_ROUTE4, IP_ROUTE6) is shared with test
 docker0, br-*, veth*, virbr*, cni*, clab*, loopback and link-local addresses never are.
 """
 import contextlib
+import fcntl
 import importlib.util
+import io
 import ipaddress
 import json
 import os
@@ -25,6 +27,8 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 import unittest.mock
 
@@ -130,6 +134,16 @@ def tls(tmp, runner=None, allowed='', image_env=None, hostname='archtop', **kw):
     return setup_tls.Tls(tls_dir=Path(tmp) / 'tls', repo=repo, run=runner or Runner(), hostname=lambda: hostname, **kw)
 
 
+LOCK = '.lock'
+
+
+def files(tls_dir):
+    """The names in the tls directory except the permanent lock file: every writing mode holds
+    `tls/.lock` (never removed, because unlinking a lock file lets a waiter and a newcomer both win),
+    so a "no leftovers" claim is about everything else."""
+    return sorted(p.name for p in Path(tls_dir).iterdir() if p.name != LOCK)
+
+
 class CertificateAddressesTests(unittest.TestCase):
     def test_default_route_interface_global_addresses_only(self):
         self.assertEqual(setup_tls.certificate_addresses(IP_ROUTE4 + IP_ROUTE6, IP_ADDRESS), ['192.0.2.10', '2001:db8::10'])
@@ -207,6 +221,17 @@ class NamesTests(unittest.TestCase):
                     setup_tls.validate_name(bad)
                 if bad:
                     self.assertIn(repr(bad), str(error.exception))
+
+    def test_a_scoped_ipv6_address_is_refused_by_name(self):
+        # ipaddress accepts a zone (`fe80::1%eth0`, Python 3.9+), but a certificate cannot carry one: openssl
+        # refuses the SAN, so `--name fe80::1%eth0` used to be written to tls/names and every later ensure, and
+        # with it every start-manager.sh run, failed with an openssl error.
+        for scoped in ('fe80::1%eth0', '2001:db8::10%2', 'FE80::1%ENS3'):
+            with self.subTest(scoped=scoped):
+                with self.assertRaisesRegex(ValueError, 'scoped') as error:
+                    setup_tls.validate_name(scoped)
+                self.assertIn(repr(scoped), str(error.exception))
+                self.assertIn('%', str(error.exception))
 
     def test_ip_literals_among_the_allowed_hosts_become_ip_sans(self):
         # allowed_hosts.host_name() accepts an IPv4 literal and a bracketed IPv6 literal; a browser matches an
@@ -293,7 +318,7 @@ class SelfSignedTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE((tls_dir / 'key.pem').stat().st_mode), 0o640)
         self.assertEqual(stat.S_IMODE((tls_dir / 'mode').stat().st_mode), 0o644)
         self.assertEqual((tls_dir / 'mode').read_text(), 'self-signed\n')
-        self.assertEqual(sorted(p.name for p in tls_dir.iterdir()), ['cert.pem', 'key.pem', 'mode'], 'no temporary directory is left behind')
+        self.assertEqual(files(tls_dir), ['cert.pem', 'key.pem', 'mode'], 'no temporary directory is left behind')
         self.assertIn(('key.pem', 0, 10001), chown.calls)
         self.assertIn(('cert.pem', 0, 0), chown.calls)
         self.assertIn(('mode', 0, 0), chown.calls)
@@ -457,7 +482,7 @@ class SelfSignedTests(unittest.TestCase):
         self.assertEqual(service.certificate_facts()['fingerprint'], first, 'the certificate replaced before the failure is put back')
         self.assertEqual((self.tmp / 'tls/key.pem').read_bytes(), key_before)
         self.assertTrue(pair_matches(self.tmp / 'tls'))
-        self.assertEqual(sorted(p.name for p in (self.tmp / 'tls').iterdir()), ['cert.pem', 'key.pem', 'mode'], 'no temporary files are left behind')
+        self.assertEqual(files(self.tmp / 'tls'), ['cert.pem', 'key.pem', 'mode'], 'no temporary files are left behind')
 
         def no_space(source, target):
             if Path(target).name == 'key.pem':
@@ -485,7 +510,7 @@ class SelfSignedTests(unittest.TestCase):
         service.replace = interrupted
         with self.assertRaises(KeyboardInterrupt):
             service.ensure()
-        self.assertEqual(sorted(p.name for p in (self.tmp / 'tls').iterdir()), [], 'a target that did not exist before is removed again')
+        self.assertEqual(files(self.tmp / 'tls'), [], 'a target that did not exist before is removed again')
         service.replace = os.replace
         self.assertIn('no certificate', service.ensure())
         self.assertTrue(pair_matches(self.tmp / 'tls'))
@@ -504,7 +529,7 @@ class SelfSignedTests(unittest.TestCase):
         service.replace = no_space
         with self.assertRaises(OSError):
             service.ensure()
-        self.assertEqual(sorted(p.name for p in (self.tmp / 'tls').iterdir()), [], 'no pair without its mode')
+        self.assertEqual(files(self.tmp / 'tls'), [], 'no pair without its mode')
         service.replace = os.replace
         service.ensure()
         first = service.certificate_facts()['fingerprint']
@@ -516,7 +541,7 @@ class SelfSignedTests(unittest.TestCase):
         self.assertEqual((self.tmp / 'tls/key.pem').read_bytes(), key_before)
         self.assertEqual(service.read_mode(), 'self-signed')
         self.assertTrue(pair_matches(self.tmp / 'tls'))
-        self.assertEqual(sorted(p.name for p in (self.tmp / 'tls').iterdir()), ['cert.pem', 'key.pem', 'mode'])
+        self.assertEqual(files(self.tmp / 'tls'), ['cert.pem', 'key.pem', 'mode'])
 
     def test_an_unregistered_certificate_reports_its_expiry_like_a_provided_one(self):
         service = tls(self.tmp)
@@ -679,6 +704,96 @@ class SelfSignedTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'symlink'):
             service.ensure()
 
+    def test_a_scoped_address_in_the_names_file_is_skipped_with_a_note_and_never_reaches_openssl(self):
+        runner = Runner()
+        service = tls(self.tmp, runner)
+        service.out = lambda line: None
+        notes = []
+        service.err = notes.append
+        service.ensure()
+        (self.tmp / 'tls/names').write_text('fe80::1%eth0\nlab.example.edu\n')
+        self.assertEqual(service.ensure(), 'missing names: DNS:lab.example.edu')
+        self.assertEqual(len(notes), 1, notes)
+        self.assertIn("'fe80::1%eth0'", notes[0])
+        self.assertIn('scoped', notes[0])
+        self.assertIn('line 1', notes[0])
+        for _ in range(2):
+            self.assertIsNone(service.ensure(), 'the skipped line never regenerates')
+        generations = [call for call in runner.calls if call[:2] == ['openssl', 'req']]
+        self.assertEqual(len(generations), 2)
+        self.assertFalse(any('%' in argument for call in generations for argument in call), 'no zone reaches openssl')
+
+    def test_a_second_run_waits_until_a_replacement_in_progress_is_complete(self):
+        # Two setup-tls.sh runs at once (an operator's --renew while start-manager.sh's ensure runs, two renews,
+        # a provided install racing a renew) used to interleave their moves and leave one run's cert.pem beside
+        # the other's key.pem: a pair uvicorn refuses at start. Every writing mode holds tls/.lock now.
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        service.ensure()
+        lock = self.tmp / 'tls' / LOCK
+        self.assertTrue(lock.is_file(), 'the lock file is made by the first writing run')
+        self.assertEqual(stat.S_IMODE(lock.stat().st_mode), 0o600)
+        entered, release = threading.Event(), threading.Event()
+
+        def slow(source, target):
+            if Path(target).name == 'cert.pem':
+                entered.set()
+                release.wait(10)
+            return os.replace(source, target)
+        first, second = tls(self.tmp), tls(self.tmp)
+        first.out = second.out = lambda line: None
+        first.replace = slow
+        errors = []
+
+        def run(instance):
+            try:
+                instance.renew()
+            except BaseException as error:   # noqa: BLE001 - reported by the test
+                errors.append(error)
+        one = threading.Thread(target=run, args=(first,))
+        one.start()
+        self.assertTrue(entered.wait(10))
+        two = threading.Thread(target=run, args=(second,))
+        two.start()
+        two.join(0.5)
+        self.assertTrue(two.is_alive(), 'the second run waits for the lock instead of moving files into a replacement in progress')
+        release.set()
+        one.join(30)
+        two.join(30)
+        self.assertFalse(one.is_alive() or two.is_alive())
+        self.assertEqual(errors, [])
+        self.assertTrue(pair_matches(self.tmp / 'tls'))
+        self.assertEqual(service.read_mode(), 'self-signed')
+        self.assertEqual(files(self.tmp / 'tls'), ['cert.pem', 'key.pem', 'mode'])
+
+    def test_a_lock_held_beyond_the_bounded_wait_is_refused_with_a_sentence(self):
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        service.ensure()
+        before = service.certificate_facts()['fingerprint']
+        service.lock_wait = 0.3
+        descriptor = os.open(self.tmp / 'tls' / LOCK, os.O_RDONLY)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            started = time.monotonic()
+            with self.assertRaisesRegex(ValueError, 'Another setup-tls.sh run') as error:
+                service.renew()
+            self.assertLess(time.monotonic() - started, 10, 'the wait is bounded')
+            self.assertIn(LOCK, str(error.exception))
+            for step in (service.ensure, service.prepare, service.self_signed, lambda: service.set_names(['x.example.edu'])):
+                with self.assertRaisesRegex(ValueError, 'Another setup-tls.sh run'):
+                    step()
+            cert, key = make_pair(self.tmp, 'waiting')
+            with self.assertRaisesRegex(ValueError, 'Another setup-tls.sh run'):
+                service.install_provided(cert, key)
+            self.assertEqual(service.primary(), '192.0.2.10', 'the read-only modes take no lock')
+            self.assertEqual(service.fingerprint(), before)
+        finally:
+            os.close(descriptor)
+        self.assertEqual(service.certificate_facts()['fingerprint'], before)
+        self.assertFalse((self.tmp / 'tls/names').exists())
+        self.assertIsNone(service.ensure(), 'once the lock is released the next run proceeds')
+
     def test_show_and_primary(self):
         service = tls(self.tmp, allowed='manager.example.edu')
         lines = []
@@ -813,7 +928,7 @@ class ProvidedTests(unittest.TestCase):
         self.assertEqual(service.read_mode(), 'self-signed')
         self.assertEqual(service.certificate_facts()['fingerprint'], before, 'the self-signed pair is back with its mode')
         self.assertTrue(pair_matches(self.tmp / 'tls'))
-        self.assertEqual(sorted(p.name for p in (self.tmp / 'tls').iterdir()), ['cert.pem', 'key.pem', 'mode'])
+        self.assertEqual(files(self.tmp / 'tls'), ['cert.pem', 'key.pem', 'mode'])
         self.assertIsNone(service.ensure())
         service.replace = os.replace
         service.install_provided(cert, key)
@@ -821,19 +936,31 @@ class ProvidedTests(unittest.TestCase):
         self.assertIsNone(service.ensure(), 'the provided certificate is kept although it names none of the VM addresses')
         self.assertEqual(service.certificate_facts()['sans'], {'DNS:manager.example.edu'})
 
+    def archive(self, name='manager.example.edu'):
+        """A directory shaped like certbot's /etc/letsencrypt/archive/NAME, under the test's own tree (resolved,
+        so a symlinked temporary directory on the test host cannot blur the real-path comparison)."""
+        directory = Path(os.path.realpath(self.source)) / 'archive' / name
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
     def test_a_symlink_is_followed_only_from_a_root_owned_link_in_a_directory_root_alone_writes(self):
         # Someone with write access to /tmp or a home directory can plant `k.pem -> /etc/ssh/ssh_host_ecdsa_key`
         # (root-owned, regular) beside a certificate made for that public key; the documented
         # `sudo setup-tls.sh --cert c.pem --key k.pem` would copy the host key where the container reads it.
-        # certbot's live/ links are root-owned links in a root-owned 0755 directory, and those are followed.
+        # certbot's live/ links are root-owned links in a root-owned 0755 directory into archive/, and those
+        # are followed; the ownership rules hold even for a target inside the archive.
         cert, key = make_pair(self.source, 'planted')
+        archive = self.archive()
+        shutil.copyfile(cert, archive / 'fullchain1.pem')
+        shutil.copyfile(key, archive / 'privkey1.pem')
         drop = self.source / 'drop'
         drop.mkdir()
-        (drop / 'c.pem').symlink_to(cert)
-        (drop / 'k.pem').symlink_to(key)
+        (drop / 'c.pem').symlink_to(archive / 'fullchain1.pem')
+        (drop / 'k.pem').symlink_to(archive / 'privkey1.pem')
         service = tls(self.tmp)
         service.out = lambda line: None
         service.file_owner = lambda path: 0
+        service.archive = archive.parent
         cases = {'the link belongs to an ordinary account': (1000, (0, 0o755)),
                  'the directory belongs to an ordinary account': (0, (1000, 0o755)),
                  'the directory is world-writable (sticky /tmp)': (0, (0, 0o1777)),
@@ -852,13 +979,15 @@ class ProvidedTests(unittest.TestCase):
         service.install_provided(drop / 'c.pem', drop / 'k.pem')
         self.assertTrue(pair_matches(self.tmp / 'tls'))
 
-    def test_a_symlink_whose_target_is_a_root_owned_regular_file_is_followed(self):
+    def test_a_certbot_live_link_into_the_archive_is_followed_and_a_root_owned_link_anywhere_else_is_refused(self):
         # certbot's /etc/letsencrypt/live/NAME/*.pem are root-owned symlinks in a root-owned directory, pointing
-        # into archive/ (root-owned regular files); the documented deploy hook passes them. A link to anything
-        # else is still refused.
-        cert, key = make_pair(self.source, 'acme')
-        live = self.source / 'live'
-        live.mkdir()
+        # into archive/ (root-owned regular files); the documented deploy hook passes them. A root-owned link in a
+        # root-owned directory whose target is a root-owned regular file *outside* the archive (an SSH host key)
+        # is refused: the ownership of link and directory never vouches for the target.
+        archive = self.archive()
+        cert, key = make_pair(archive, 'acme')
+        live = self.source / 'live' / 'manager.example.edu'
+        live.mkdir(parents=True)
         (live / 'fullchain.pem').symlink_to(cert)
         (live / 'privkey.pem').symlink_to(key)
         service = tls(self.tmp)
@@ -866,14 +995,61 @@ class ProvidedTests(unittest.TestCase):
         service.file_owner = lambda path: 0
         service.link_owner = lambda path: 0
         service.directory_state = lambda path: (0, 0o755)
+        service.archive = archive.parent
         service.install_provided(live / 'fullchain.pem', live / 'privkey.pem')
         self.assertEqual((self.tmp / 'tls/mode').read_text(), 'provided\n')
         self.assertFalse((self.tmp / 'tls/cert.pem').is_symlink())
         self.assertTrue(pair_matches(self.tmp / 'tls'))
+        before = service.certificate_facts()['fingerprint']
         dangling = live / 'dangling.pem'
         dangling.symlink_to(self.source / 'gone.pem')
         with self.assertRaisesRegex(ValueError, 'symlink'):
             service.install_provided(dangling, live / 'privkey.pem')
+        host_cert, host_key = make_pair(self.source, 'host')   # stands for /etc/ssh/ssh_host_ecdsa_key and a certificate made for it
+        (live / 'other-cert.pem').symlink_to(host_cert)
+        (live / 'other-key.pem').symlink_to(host_key)
+        with self.assertRaisesRegex(ValueError, 'symlink') as error:
+            service.install_provided(live / 'other-cert.pem', live / 'other-key.pem')
+        self.assertIn(str(service.archive), str(error.exception), 'the refusal names where a link may point')
+        self.assertEqual(service.certificate_facts()['fingerprint'], before)
+        self.assertEqual(setup_tls.Tls().archive, Path('/etc/letsencrypt/archive'), 'the shipped rule is certbot\'s archive')
+
+    def test_a_symlinked_ancestor_directory_carries_no_key_from_outside_the_archive(self):
+        # `--key /tmp/drop/key.pem` where /tmp/drop -> /etc/ssh: the last path component is a regular root-owned
+        # file, so a rule that inspects the last component alone follows the planted directory link and copies the
+        # SSH host key into tls/key.pem. The real path decides: it must equal the given path, or lie in the archive.
+        cert, key = make_pair(self.source, 'host')
+        elsewhere = self.source / 'etc-ssh'
+        elsewhere.mkdir()
+        shutil.move(str(key), str(elsewhere / 'ssh_host_ecdsa_key'))
+        shutil.move(str(cert), str(elsewhere / 'cert.pem'))
+        drop = self.source / 'drop'
+        drop.symlink_to(elsewhere)
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        service.file_owner = lambda path: 0
+        service.link_owner = lambda path: 0
+        service.directory_state = lambda path: (0, 0o755)
+        with self.assertRaisesRegex(ValueError, 'symlink') as error:
+            service.install_provided(elsewhere / 'cert.pem', drop / 'ssh_host_ecdsa_key')
+        self.assertIn(os.path.realpath(elsewhere / 'ssh_host_ecdsa_key'), str(error.exception), 'the refusal names the real path')
+        self.assertFalse((self.tmp / 'tls/key.pem').exists())
+        self.assertFalse((self.tmp / 'tls').exists() and (self.tmp / 'tls/cert.pem').exists())
+        with self.assertRaisesRegex(ValueError, 'symlink') as error:
+            service.install_provided(drop / 'cert.pem', elsewhere / 'ssh_host_ecdsa_key')
+        self.assertIn(os.path.realpath(elsewhere / 'cert.pem'), str(error.exception), 'the certificate path is held to the same rule')
+        self.assertFalse((self.tmp / 'tls').exists() and (self.tmp / 'tls/cert.pem').exists())
+        service.install_provided(elsewhere / 'cert.pem', elsewhere / 'ssh_host_ecdsa_key')
+        self.assertTrue(pair_matches(self.tmp / 'tls'), 'the same files given by their own path are accepted')
+        # The same shape into the archive (certbot's archive reached through a linked directory) is followed.
+        archive = self.archive('linked.example.edu')
+        acme_cert, acme_key = make_pair(archive, 'acme', cn='linked.example.edu')
+        service.archive = archive.parent
+        linked = self.source / 'linked'
+        linked.symlink_to(archive)
+        service.install_provided(linked / acme_cert.name, linked / acme_key.name)
+        self.assertEqual(service.certificate_facts()['sans'], {'DNS:linked.example.edu'})
+        self.assertTrue(pair_matches(self.tmp / 'tls'))
 
     def test_a_combined_certificate_and_key_file_given_as_the_certificate_is_refused(self):
         # cert.pem is 0644 and readable by every VM account: a private key must never be copied into it.
@@ -932,7 +1108,7 @@ class ProvidedTests(unittest.TestCase):
         self.assertEqual(service.certificate_facts()['fingerprint'], before)
         self.assertTrue(pair_matches(self.tmp / 'tls'))
         self.assertEqual(service.read_mode(), 'provided')
-        self.assertEqual(sorted(p.name for p in (self.tmp / 'tls').iterdir()), ['cert.pem', 'key.pem', 'mode'])
+        self.assertEqual(files(self.tmp / 'tls'), ['cert.pem', 'key.pem', 'mode'])
         self.assertIsNone(service.ensure())
 
     def test_names_are_recorded_but_change_nothing_for_a_provided_certificate(self):
@@ -1059,8 +1235,22 @@ class PortsTests(unittest.TestCase):
         service = tls(self.tmp, allowed='a.example.edu', image_env='UI_ALLOWED_HOSTS=b.example.edu,A.example.edu\n')
         self.assertEqual(service.allowed_names(), ['a.example.edu', 'b.example.edu'])
         service = tls(self.tmp, allowed='Second.example.edu, first.example.edu, http://ignored', image_env='')
+        service.err = lambda note: None   # the note about the ignored entry is the next test's business
         self.assertEqual(service.allowed_names(), ['second.example.edu', 'first.example.edu'])
         self.assertEqual(service.primary(), 'second.example.edu', 'the first name listed is the primary name (EXPOSURE.md 3.2)')
+
+    def test_an_ignored_allowed_hosts_entry_is_noted_on_stderr_never_on_stdout(self):
+        # allowed_hosts.configured_hosts prints its "ignored entries" note with print(). Reached from primary(), that
+        # line landed on stdout before the primary name, and manager-recover-admin.sh builds a URL from `--primary`.
+        service = tls(self.tmp, allowed='https://manager.example.edu,manager.example.edu')
+        notes = []
+        service.err = notes.append
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            self.assertEqual(service.primary(), 'manager.example.edu')
+            self.assertEqual(service.allowed_names(), ['manager.example.edu'])
+        self.assertEqual(captured.getvalue(), '')
+        self.assertTrue(any('ignored 1 of 2' in note for note in notes), notes)
 
 
 FAKE_IP = """#!/usr/bin/env bash
@@ -1263,6 +1453,75 @@ class ShellScriptTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1)
                 self.assertIn('Run with sudo', result.stderr)
         self.assertEqual(self.fingerprint(), before)
+
+    def test_primary_prints_one_line_on_stdout_even_when_an_allowed_hosts_entry_is_ignored(self):
+        # manager-recover-admin.sh and start-manager.sh build a URL from `--primary`; a note about an ignored
+        # UI_ALLOWED_HOSTS entry belongs on stderr.
+        (self.base / 'clab-backup-ui/.env').write_text('UI_ALLOWED_HOSTS=https://manager.example.edu,manager.example.edu\n')
+        self.assertEqual(self.run_script('--no-recreate').returncode, 0)
+        result = subprocess.run(['bash', str(self.script), '--primary'], cwd=str(self.base), env=self.env,
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, 'manager.example.edu\n')
+        self.assertIn('ignored 1 of 2', result.stderr)
+        result = subprocess.run(['bash', str(self.script), '--fingerprint'], cwd=str(self.base), env=self.env,
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.stdout, self.fingerprint() + '\n')
+
+    def test_two_concurrent_renews_leave_one_matching_pair(self):
+        self.assertEqual(self.run_script('--no-recreate').returncode, 0)
+        runs = [subprocess.Popen(['bash', str(self.script), '--renew', '--no-recreate'], cwd=str(self.base), env=self.env,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) for _ in range(2)]
+        outputs = [run.communicate(timeout=120)[0] for run in runs]
+        for run, output in zip(runs, outputs):
+            self.assertEqual(run.returncode, 0, output)
+        self.assertTrue(pair_matches(self.tls_dir))
+        self.assertEqual((self.tls_dir / 'mode').read_text(), 'self-signed\n')
+        self.assertEqual(files(self.tls_dir), ['cert.pem', 'key.pem', 'mode'])
+        self.assertTrue((self.tls_dir / LOCK).is_file(), 'the writing modes serialise on tls/.lock')
+
+    def test_a_provided_certificate_whose_chain_alone_changed_recreates_the_manager(self):
+        # The recreate decision compared the leaf fingerprint before and after: a reinstall with the intermediate
+        # added (the usual repair after "certificate chain incomplete") said "unchanged" and uvicorn kept serving
+        # the old file. The file content decides; the fingerprint is what the person is told.
+        source = self.base / 'source'
+        source.mkdir()
+        cert, key = make_pair(source, 'leaf')
+        issuer, _issuer_key = make_pair(source, 'issuer', cn='issuer.example.edu')   # stands for the intermediate
+        result = self.run_script('--cert', str(cert), '--key', str(key))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.recreations(), 1)
+        leaf = self.fingerprint()
+        leaf_only = (self.tls_dir / 'cert.pem').read_bytes()
+        chain = source / 'fullchain.pem'
+        chain.write_bytes(cert.read_bytes() + issuer.read_bytes())
+        result = self.run_script('--cert', str(chain), '--key', str(key))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.recreations(), 2, 'the leaf fingerprint is the same, the file uvicorn serves is not')
+        self.assertNotIn('unchanged', result.stdout)
+        self.assertIn(leaf, result.stdout)
+        self.assertEqual(self.fingerprint(), leaf)
+        self.assertNotEqual((self.tls_dir / 'cert.pem').read_bytes(), leaf_only)
+        result = self.run_script('--cert', str(chain), '--key', str(key))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.recreations(), 2, 'the same files again change nothing')
+        self.assertIn('unchanged', result.stdout)
+
+    def test_a_scoped_address_as_a_name_is_refused_and_never_written(self):
+        self.assertEqual(self.run_script('--no-recreate').returncode, 0)
+        result = self.run_script('--name', 'fe80::1%eth0', '--no-recreate')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("'fe80::1%eth0'", result.stdout)
+        self.assertIn('scoped', result.stdout)
+        self.assertFalse((self.tls_dir / 'names').exists(), 'nothing is written that would fail every later start')
+        (self.tls_dir / 'names').write_text('fe80::1%eth0\nlab.example.edu\n')   # edited by hand
+        result = self.run_script('--no-recreate')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('ignored', result.stdout)
+        self.assertIn('DNS:lab.example.edu', result.stdout)
+        result = self.run_script('--no-recreate')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('kept', result.stdout, "the launcher's step stays stable with the line in place")
 
     def test_syntax(self):
         subprocess.run(['bash', '-n', str(SCRIPT)], check=True)

@@ -18,6 +18,8 @@ container mounts it read-only at ``/tls`` and uvicorn reads ``cert.pem`` and ``k
     provided CERT KEY validate and install an operator's certificate
     names [NAME...]   write tls/names (no names: remove it), then ensure
     show | primary | fingerprint   read-only, no root needed
+    digest            read-only, root: a SHA-256 over the content of cert.pem and key.pem (setup-tls.sh's
+                      recreate decision)
 
 ``--route source|image`` (default source) names the env file the caller's compose command reads:
 ``clab-backup-ui/.env`` for ``clab-backup-ui/compose.yml`` (start-manager.sh, always) or
@@ -33,11 +35,20 @@ health check loads it from here so both sides apply the same one.
 A replacement is one set, cert.pem, key.pem and mode (the mode moved last): the old files stay until
 every new one is in place and are put back on any failure, and a file that did not exist before is
 removed again, so the directory never holds a certificate without its key, a pair without its mode, or
-a mode that describes another pair. A cert.pem that carries a PRIVATE KEY block is never widened to
-0644 and never kept. Nothing here prints a key: errors quote file names, never contents. Notes that
-are not the result (an ignored tls/names line, an env file this account cannot read) go to stderr, so
-``primary`` and ``fingerprint`` stay one clean line on stdout.
+a mode that describes another pair. Every writing mode holds an exclusive ``flock`` on ``tls/.lock``
+(root's, 0600, never removed) from its first read of the directory through its last move, so two runs
+at once never mix two key pairs or overwrite a provided pair while it is being installed; a second run
+waits up to a minute, then refuses with a sentence. A cert.pem that carries a PRIVATE KEY block is
+never widened to 0644 and never kept. Nothing here prints a key: errors quote file names, never
+contents. Notes that are not the result (an ignored tls/names line, an ignored UI_ALLOWED_HOSTS entry,
+an env file this account cannot read) go to stderr, so ``primary`` and ``fingerprint`` stay one clean
+line on stdout. ``digest`` (root) prints a SHA-256 over the content of cert.pem and key.pem:
+setup-tls.sh compares it before and after a writing mode to decide whether the manager must be
+recreated, because a chain repaired behind the same leaf changes the file and not the fingerprint.
 """
+import contextlib
+import fcntl
+import hashlib
 import importlib.util
 import ipaddress
 import json
@@ -50,10 +61,15 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 TLS_DIR = Path('/srv/containerlab-node-manager/tls')
+# certbot's archive: the only place a symlink (live/NAME/*.pem, or a linked directory) may lead to.
+ARCHIVE = Path('/etc/letsencrypt/archive')
+LOCK_FILE = '.lock'
+LOCK_WAIT = 60
 DAYS = 730
 RENEW_WITHIN = 30 * 86400
 WORKER_GID = 10001
@@ -164,6 +180,11 @@ def validate_name(value):
     text = (value or '').strip()
     if not text:
         raise ValueError('An empty name.')
+    if '%' in text:
+        # ipaddress accepts a zone (fe80::1%eth0); openssl refuses it in a SAN, so written to tls/names it
+        # would fail every later ensure and with it every start-manager.sh run.
+        raise ValueError(f'{text!r} is a scoped IPv6 address (the part after % is an interface zone); a certificate cannot carry it. '
+                         'Give the address without the %zone, and leave link-local addresses out (a browser cannot open them by name).')
     try:
         return ipaddress.ip_address(text).compressed
     except ValueError:
@@ -301,6 +322,47 @@ class Tls:
         self.out = out
         self.err = err
         self.replace = replace
+        self.archive = ARCHIVE
+        self.lock_wait = LOCK_WAIT
+        self._locks = 0
+
+    # -- one writer at a time
+    @contextlib.contextmanager
+    def locked(self):
+        """Every writing mode runs inside this: an exclusive flock on tls/.lock (root's, 0600, never removed,
+        because unlinking a lock file lets a waiter and a newcomer both win), held from the first read of the
+        directory through the last move, so two setup-tls.sh runs at once cannot mix two key pairs or overwrite
+        a provided pair while it is being installed. A second run waits up to lock_wait seconds, then refuses.
+        Reentrant within one Tls (the names mode runs set_names and then ensure)."""
+        if self._locks:
+            self._locks += 1
+            try:
+                yield
+            finally:
+                self._locks -= 1
+            return
+        self.prepare_directory()
+        lock = self.path(LOCK_FILE)
+        descriptor = os.open(lock, os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        try:
+            os.fchmod(descriptor, 0o600)
+            deadline = time.monotonic() + self.lock_wait
+            while True:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise ValueError(f'Another setup-tls.sh run holds {lock} and did not finish within {self.lock_wait:g} seconds; '
+                                         f'wait for it to end (sudo fuser {lock} names a stuck one), then rerun.') from None
+                    time.sleep(0.05)
+            self._locks += 1
+            try:
+                yield
+            finally:
+                self._locks -= 1
+        finally:
+            os.close(descriptor)
 
     # -- processes
     def command(self, argv, check=False):
@@ -476,6 +538,11 @@ class Tls:
 
     def set_names(self, values):
         names = [validate_name(value) for value in values if (value or '').strip()]
+        self.check_directory()
+        with self.locked():
+            return self._set_names(names)
+
+    def _set_names(self, names):
         if not names:
             if self.path('names').exists() or self.path('names').is_symlink():
                 self.path('names').unlink()
@@ -512,10 +579,16 @@ class Tls:
         names = []
         for path in self.env_files():
             text = self.env_of(path).get('UI_ALLOWED_HOSTS', '')
-            accepted = allowed_hosts.configured_hosts(text)
-            for entry in text.split(','):
-                name = allowed_hosts.host_name(entry.strip()) if entry.strip() else None
-                if name in accepted and _plain(name) not in names:
+            # The same set allowed_hosts.configured_hosts() builds (host_name(entry) is not None), without its
+            # print(): its note about ignored entries would land on stdout in front of the primary name.
+            entries = [entry.strip() for entry in text.split(',') if entry.strip()]
+            ignored = sum(1 for entry in entries if allowed_hosts.host_name(entry) is None)
+            if ignored:
+                self.err(f'Note: UI_ALLOWED_HOSTS in {path}: ignored {ignored} of {len(entries)} entries that are not host names '
+                         '(the manager ignores them too); write names only, for example manager.example.edu.')
+            for entry in entries:
+                name = allowed_hosts.host_name(entry)
+                if name is not None and _plain(name) not in names:
                     names.append(_plain(name))
         return names
 
@@ -563,6 +636,21 @@ class Tls:
     def fingerprint(self):
         facts = self.certificate_facts()
         return facts['fingerprint'] if facts else ''
+
+    def digest(self):
+        """SHA-256 over the content of cert.pem and key.pem (a missing or unreadable file counts as empty):
+        what setup-tls.sh compares before and after a writing mode to decide whether uvicorn must be given
+        the files again. A chain repaired behind the same leaf changes this and not the fingerprint. Root
+        only in practice (key.pem is 0640); the digest reveals nothing about the key."""
+        total = hashlib.sha256()
+        for name in ('cert.pem', 'key.pem'):
+            try:
+                data = self.path(name).read_bytes()
+            except OSError:
+                data = b''
+            total.update(len(data).to_bytes(8, 'big'))
+            total.update(data)
+        return total.hexdigest()
 
     def public_keys_match(self, cert, key):
         """(matches, problem): whether the key's public key is the certificate's; the problem names the
@@ -640,6 +728,10 @@ class Tls:
         """Returns the reason a certificate was made, or None when the existing one was kept. Raises when
         a certificate this tool must not replace cannot serve."""
         self.check_directory()
+        with self.locked():
+            return self._ensure(route)
+
+    def _ensure(self, route):
         self.settle_ports(route)
         plan = self.plan()
         mode = self.read_mode()
@@ -676,6 +768,10 @@ class Tls:
         """recreate-manager.sh's step before `up`: the ports of the route settled, the files usable and
         with their modes; never a new certificate (a changed name is ensure's business at the upgrade)."""
         self.check_directory()
+        with self.locked():
+            self._prepare(route)
+
+    def _prepare(self, route):
         self.settle_ports(route)
         self.repair_modes()
         problem = self.pair_problem()
@@ -688,6 +784,10 @@ class Tls:
 
     def renew(self, force=False):
         self.check_directory()
+        with self.locked():
+            self._renew(force)
+
+    def _renew(self, force):
         mode = self.read_mode()
         if not force and mode != 'self-signed' and self.path('cert.pem').exists():
             if mode == 'provided':
@@ -704,26 +804,32 @@ class Tls:
         self.renew(force=True)
 
     def _regular_file(self, path, what):
-        """(path, bytes) of a given certificate or key file. A symlink is followed only when the link itself
-        and its directory are root's, the directory is writable by root alone, and the target is a regular
-        file owned by root (certbot's live/NAME links into archive/). A link anyone else could have planted
-        (in /tmp, in a home directory) would otherwise carry any root-owned key on the host, such as an
-        SSH host key, into tls/key.pem where the container reads it."""
-        path = Path(path)
-        if path.is_symlink():
-            target = Path(os.path.realpath(path))
+        """(path, bytes) of a given certificate or key file. The real path (every symlink resolved, in any
+        component) must be the given path itself; otherwise it is followed only when it lies in certbot's
+        archive (``self.archive``, /etc/letsencrypt/archive/, where the documented live/NAME links point),
+        the last component (the link, or the file) and its directory are root's, the directory is writable
+        by root alone and the target is a regular file owned by root. A link anyone else could have planted
+        (in /tmp, in a home directory, or a linked *directory* whose last component is an ordinary file)
+        would otherwise carry any root-owned key on the host, such as an SSH host key, into tls/key.pem
+        where the container reads it."""
+        given = Path(os.path.abspath(path))
+        real = Path(os.path.realpath(path))
+        if real != given:
             try:
-                resolved = os.stat(target)
+                resolved = os.stat(real)
             except OSError:
-                raise ValueError(f'The {what} {path} is a symlink to {target}, which does not exist; give the file itself.') from None
-            directory_owner, directory_mode = self.directory_state(path.absolute().parent)
-            trusted = (self.link_owner(path) == 0 and directory_owner == 0 and not directory_mode & 0o022
-                       and stat.S_ISREG(resolved.st_mode) and self.file_owner(target) == 0)
+                raise ValueError(f'The {what} {path} is a symlink to {real}, which does not exist; give the file itself.') from None
+            archive = Path(os.path.realpath(self.archive))
+            directory_owner, directory_mode = self.directory_state(given.parent)
+            trusted = ((real == archive or archive in real.parents) and self.link_owner(given) == 0 and directory_owner == 0
+                       and not directory_mode & 0o022 and stat.S_ISREG(resolved.st_mode) and self.file_owner(real) == 0)
             if not trusted:
-                raise ValueError(f'The {what} {path} is a symlink; a link is followed only when the link, its directory and its target '
-                                 'are owned by root and the directory is writable by root alone (certbot\'s /etc/letsencrypt/live). '
-                                 'Give the file itself.')
-            path = target
+                raise ValueError(f'The {what} {path} is a symlink or lies behind one: its real path is {real}. A path through a link is '
+                                 f'followed only into {self.archive}/ (certbot\'s live/ links) when the link, its directory and its target '
+                                 'are owned by root and the directory is writable by root alone. Give the file itself.')
+            path = real
+        else:
+            path = given
         if not path.is_file():
             raise ValueError(f'The {what} {path} is not a regular file.')
         if path.stat().st_size > MAX_FILE:
@@ -732,6 +838,10 @@ class Tls:
 
     def install_provided(self, cert_path, key_path):
         self.check_directory()
+        with self.locked():
+            self._install_provided(cert_path, key_path)
+
+    def _install_provided(self, cert_path, key_path):
         cert_path, cert_bytes = self._regular_file(cert_path, 'certificate')
         key_path, key_bytes = self._regular_file(key_path, 'key')
         blocks = re.findall(rb'-----BEGIN ([A-Z0-9 ]+)-----', cert_bytes)
@@ -805,7 +915,7 @@ class Tls:
 
 
 USAGE = ('Usage: setup_tls.py [--tls-dir DIR] [--repo DIR] [--route source|image] '
-         'ensure|prepare|renew|self-signed|provided CERT KEY|names [NAME...]|show|primary|fingerprint')
+         'ensure|prepare|renew|self-signed|provided CERT KEY|names [NAME...]|show|primary|fingerprint|digest')
 
 
 def main(argv):
@@ -841,6 +951,8 @@ def main(argv):
             print(tls.primary())
         elif mode == 'fingerprint' and not args:
             print(tls.fingerprint())
+        elif mode == 'digest' and not args:
+            print(tls.digest())
         else:
             sys.exit(USAGE)
     except (OSError, ValueError) as error:
