@@ -1,9 +1,10 @@
 """The Host check in front of every request: the defence against DNS rebinding.
 
-The manager has no login; `/api/` is protected by the same-origin guard in main.py and the two WebSockets
-compare Origin with their own URL. All three build "own origin" from the request's Host header. A page on a
-name the attacker's DNS controls can re-resolve that name to the manager's address: its requests then carry
-a matching Host and Origin (and Sec-Fetch-Site same-origin), so only the Host name itself tells them apart.
+Sign-in is required for everything but the exempt rows of `app/sessions.py` (`EXEMPT`); behind the session gate
+`/api/` keeps the same-origin guard in main.py and the two WebSockets their own Origin checks, and all of them
+build "own origin" from the request's Host header. A page on a name the attacker's DNS controls can re-resolve
+that name to the manager's address: its requests then carry a matching Host and Origin (and Sec-Fetch-Site
+same-origin), so only the Host name itself tells them apart.
 
 Accepted without configuration are names no internet DNS server answers as written: IP literals, `localhost`,
 single-label names and `.local` names (answered on the browser's own network; see the residual below). Any other
@@ -23,14 +24,20 @@ with it (audit 2026-10-03 core/repair, M-13).
 import ipaddress
 import re
 
+from .headers import encoded, security_headers
+
 HOST = re.compile(r'(\[[0-9a-f:.]+\]|[a-z0-9_-]+(?:\.[a-z0-9_-]+)*)(?::[0-9]{1,5})?')
 REFUSAL = (b'This manager does not answer to the name in the address bar. Open it by the lab VM\'s IP address, for example '
-           b'http://192.0.2.10:8081/. To open it by a name such as manager.example.edu, add that name to '
+           b'https://192.0.2.10:8443/. To open it by a name such as manager.example.edu, add that name to '
            b'UI_ALLOWED_HOSTS in clab-backup-ui/.env (deploy/image.env for a prepared release image) and recreate '
            b'the manager.\n')
-HEADERS = [(b'content-type', b'text/plain; charset=utf-8'), (b'content-length', str(len(REFUSAL)).encode()),
-           (b'x-content-type-options', b'nosniff'), (b'x-frame-options', b'DENY'), (b'referrer-policy', b'no-referrer'),
-           (b'cache-control', b'no-store'), (b'content-security-policy', b"default-src 'none'; frame-ancestors 'none'")]
+
+
+def refusal_headers(scope):
+    """The fixed security headers of a refusal (app/headers.py, shared with the gate and the guard) plus the body's type and length."""
+    headers = security_headers(scope, status=403, refusal=True)
+    headers.update({'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': str(len(REFUSAL))})
+    return encoded(headers)
 
 
 def host_name(value):
@@ -93,7 +100,7 @@ class HostCheck:
                     # Before accept, a close makes the server answer the handshake with 403.
                     await send({'type': 'websocket.close', 'code': 1008})
                     return
-                await send({'type': 'http.response.start', 'status': 403, 'headers': HEADERS})
+                await send({'type': 'http.response.start', 'status': 403, 'headers': refusal_headers(scope)})
                 await send({'type': 'http.response.body', 'body': REFUSAL})
                 return
         await self.app(scope, receive, send)

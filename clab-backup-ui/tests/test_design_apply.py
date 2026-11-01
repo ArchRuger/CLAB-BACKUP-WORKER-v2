@@ -21,6 +21,7 @@ import uuid
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app.main import create_app
 from app.store import Store
@@ -535,7 +536,7 @@ class DesignApplyTestCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self.app.state.design_apply.close)
         self.addCleanup(self.app.state.network_design.close)
@@ -1532,7 +1533,7 @@ class RecheckConcurrencyTests(DesignApplyTestCase):
         # The restart: a new app on the same data directory; its design service marks the job and reads it back.
         self.app.state.design_apply.close()
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self.app.state.design_apply.close)
         self.addCleanup(self.app.state.network_design.close)

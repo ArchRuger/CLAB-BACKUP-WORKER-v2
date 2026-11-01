@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 from app.main import create_app
 from app.discovery import (parse_definition, parse_inspect, lab_status, automatic_ready,
                            node_available, PinnedHostKey)
@@ -36,8 +37,7 @@ class DiscoveryTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.app=create_app(self.tmp.name)
-        self.client=TestClient(self.app)
-        self.auth={'Authorization':'Bearer '+self.app.state.store.token}
+        self.client=SignedInClient(self.app)
         self.store=self.app.state.store
         self.service=self.app.state.discovery
 
@@ -47,7 +47,7 @@ class DiscoveryTests(unittest.TestCase):
         self.client.close();self.tmp.cleanup()
 
     def register(self, raw=YAML, **fields):
-        r=self.client.post('/api/lab-definitions',headers=self.auth,data=fields,
+        r=self.client.post('/api/lab-definitions',data=fields,
                            files={'definition':('training.clab.yaml',raw,'application/yaml')})
         self.assertEqual(r.status_code,200,r.text)
         return r.json()
@@ -55,7 +55,7 @@ class DiscoveryTests(unittest.TestCase):
     def host(self, **changes):
         payload=dict(address='127.0.0.1',port=22,username='fixture',auth='password',password='host-secret')
         payload.update(changes)
-        r=self.client.put('/api/host',headers=self.auth,json=payload)
+        r=self.client.put('/api/host',json=payload)
         self.assertEqual(r.status_code,200,r.text)
         return r.json()
 
@@ -144,10 +144,10 @@ class DiscoveryTests(unittest.TestCase):
         saved=Store(self.tmp.name)
         self.assertEqual(saved.state['host']['password'],'host-secret')
         self.assertEqual(saved.lab(lab['id'])['deployment_name'],'training')
-        self.assertEqual(saved.token,self.store.token)
+        self.assertFalse(hasattr(saved,'token'),'one credential, the session cookie (sign-on DESIGN.md 12.2); the key file is shared')
         raw=(Path(self.tmp.name)/'state.enc').read_bytes()
         self.assertNotIn(b'host-secret',raw)
-        public=self.client.get('/api/state',headers=self.auth).text
+        public=self.client.get('/api/state').text
         for secret in ('host-secret','example-yaml-secret','definition_yaml','private_key'):
             self.assertNotIn(secret,public)
         self.assertNotIn('host-secret',(Path(self.tmp.name)/'events.jsonl').read_text())
@@ -158,7 +158,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(lab_status(self.store.state,saved)['status'],'Partially running')
         with self.assertRaisesRegex(ValueError,'paused'):
             self.app.state.runner.submit(lab['id'],source='scheduled')
-        r=self.client.post('/api/labs/'+lab['id']+'/ssh-check',headers=self.auth,json={'name':saved['nodes'][1]['name']})
+        r=self.client.post('/api/labs/'+lab['id']+'/ssh-check',json={'name':saved['nodes'][1]['name']})
         self.assertEqual(r.status_code,409)
         self.poll();self.store.state['discovery']['checked_epoch']=time.time()-100
         self.assertEqual(lab_status(self.store.state,saved)['status'],'Unknown')
@@ -186,17 +186,17 @@ class DiscoveryTests(unittest.TestCase):
     def test_linking_to_another_deployment_drops_the_cached_pending_changes_plan(self):
         lab=self.register();operations=self.app.state.operations
         operations.plan_cache[lab['id']]=(time.monotonic()+60,{'changed':True});generation=operations.plan_gen.get(lab['id'],0)
-        r=self.client.put('/api/labs/'+lab['id']+'/deployment',headers=self.auth,json={'deployed_name':'renamed','prefix':'clab'})
+        r=self.client.put('/api/labs/'+lab['id']+'/deployment',json={'deployed_name':'renamed','prefix':'clab'})
         self.assertEqual(r.status_code,200)
         self.assertNotIn(lab['id'],operations.plan_cache,'a plan computed against the previous deployment is not served for 60 s')
         self.assertEqual(operations.plan_gen[lab['id']],generation+1)
         operations.plan_cache[lab['id']]=(time.monotonic()+60,{'changed':True})
-        self.assertEqual(self.client.put('/api/labs/'+lab['id']+'/deployment',headers=self.auth,json={'deployed_name':'bad name!','prefix':'clab'}).status_code,400)
+        self.assertEqual(self.client.put('/api/labs/'+lab['id']+'/deployment',json={'deployed_name':'bad name!','prefix':'clab'}).status_code,400)
         self.assertIn(lab['id'],operations.plan_cache,'a refused link keeps it')
 
     def test_link_existing_inventory_and_custom_name(self):
         lab=self.register()
-        r=self.client.put('/api/labs/'+lab['id']+'/deployment',headers=self.auth,json={'deployed_name':'renamed','prefix':'clab'})
+        r=self.client.put('/api/labs/'+lab['id']+'/deployment',json={'deployed_name':'renamed','prefix':'clab'})
         self.assertEqual(r.status_code,200)
         self.host();self.poll(response('renamed'))
         saved=self.store.lab(lab['id'])
@@ -206,9 +206,9 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_authentication_and_invalid_inputs(self):
         self.assertEqual(self.client.get('/api/discovery', headers={'Origin':'https://other.example'}).status_code,403)
-        r=self.client.put('/api/host',headers=self.auth,json=dict(address='localhost;whoami',username='x',password='x'))
+        r=self.client.put('/api/host',json=dict(address='localhost;whoami',username='x',password='x'))
         self.assertEqual(r.status_code,400)
-        r=self.client.post('/api/lab-definitions',headers=self.auth,files={'definition':('bad.yaml',b'name: x\ntopology: {}')})
+        r=self.client.post('/api/lab-definitions',files={'definition':('bad.yaml',b'name: x\ntopology: {}')})
         self.assertEqual(r.status_code,400)
         self.assertEqual(self.store.state['labs'],[])
 
@@ -216,7 +216,7 @@ class DiscoveryTests(unittest.TestCase):
         lab=self.register();self.host();self.poll();self.store.save()
         other=create_app(self.tmp.name)
         try:
-            self.assertEqual(other.state.store.token,self.store.token)
+            self.assertFalse(hasattr(other.state.store,'token'))
             self.assertEqual(other.state.store.lab(lab['id'])['nodes'][0]['address'],'172.20.20.2')
             self.assertFalse(other.state.discovery.public()['connected'])
             self.assertEqual(lab_status(other.state.store.state,other.state.store.lab(lab['id']))['status'],'Unknown')
@@ -237,7 +237,7 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_invalid_request_never_echoes_secret_input(self):
         secret='private-request-secret'
-        r=self.client.put('/api/host',headers=self.auth,json={'address':'127.0.0.1','username':'x','private_key':secret*6000})
+        r=self.client.put('/api/host',json={'address':'127.0.0.1','username':'x','private_key':secret*6000})
         self.assertEqual(r.status_code,422)
         self.assertNotIn(secret,r.text)
 

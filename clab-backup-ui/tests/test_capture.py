@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 from app.main import create_app
 from app.capture import (CaptureError, EdgesharkProvider, MAX_RESPONSE, MAY_HAVE_STARTED, NOT_ATTEMPTED, NoRedirect, PRUNE_GRACE_SECONDS,
                          configured_provider, normalize_targets, read_discovery, service_url)
@@ -133,7 +134,7 @@ class CaptureAPITests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         with patch.dict('os.environ',{'CAPTURE_PROVIDER':'disabled'}): self.app=create_app(self.tmp.name)
-        self.client=TestClient(self.app)
+        self.client=SignedInClient(self.app)
         self.captures=self.app.state.captures
         self.lab={'id':'lab','name':'demo','deployment_name':'demo','container_prefix':'clab',
                   'nodes':[{'name':'r1','definition_node':'r1'}]}
@@ -671,7 +672,7 @@ class CaptureSetTests(unittest.TestCase):
 
     def test_end_all_needs_the_cookie_the_origin_and_a_body(self):
         self.launch((self.r1,['eth2']),(self.host,['ens18']))
-        stranger=TestClient(self.app)
+        stranger=SignedInClient(self.app)
         try:
             r=stranger.post('/api/capture/sessions/end-all',json={})
             self.assertEqual((r.status_code,r.json()['detail']),(404,'Capture session not found in this browser.'))

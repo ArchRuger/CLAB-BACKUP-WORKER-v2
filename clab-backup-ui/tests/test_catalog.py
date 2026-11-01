@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app.main import create_app
 
@@ -30,7 +31,7 @@ class CatalogTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.addCleanup(self.client.close)
         resp = self.client.get('/api/catalog')
         self.assertEqual(resp.status_code, 200)

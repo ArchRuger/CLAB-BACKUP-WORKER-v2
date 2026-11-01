@@ -294,7 +294,7 @@ class EveryWholeSaveCarriesTheLabTests(WholeLabCase):
             self.assertEqual((snapshot['manifest']['topology_provenance'], snapshot['manifest']['topology_digest']), ('embedded', sha(lab['definition_yaml'])))
             for word in ('map', 'annotation', 'missing', 'warning', 'problem', 'error'):
                 self.assertNotIn(word, outcome['message'].lower())
-        logged = self.client.get('/api/logs', headers=self.auth).json()['events']
+        logged = self.client.get('/api/logs').json()['events']
         self.assertEqual([e for e in logged if e['action'] == 'topology.skip' or e['level'] in ('warning', 'error')], [])
         self.assertNotIn(MAP_FILE, self.names_in(outcome['commit'], 'checkpoints/no-map'))
 
@@ -512,7 +512,7 @@ class GapTests(WholeLabCase):
         capture = next(j for j in self.store.state['jobs'] if j['id'] == outcome['backup_job_id'])
         self.assertEqual(capture['topology_missing'], 'error'); self.assertNotIn('topology', capture)
         self.refused(capture, target='latest')   # nor can that capture be saved afterwards
-        events = self.client.get('/api/logs?job_id=' + capture['id'], headers=self.auth).json()['events']
+        events = self.client.get('/api/logs?job_id=' + capture['id']).json()['events']
         self.assertEqual([e['level'] for e in events if e['action'] == 'topology.skip'], ['warning'])
 
     def test_an_unwritable_map_stops_the_save_instead_of_saving_the_topology_alone(self):
@@ -529,7 +529,7 @@ class GapTests(WholeLabCase):
     def test_gap_a_lab_known_only_from_an_inventory_has_no_topology_to_save(self):
         # G1 would require: say so when a save cannot carry the lab's topology (an inventory import has none; it
         # arrives only through Update topology file… or a VM import).
-        created = self.client.post('/api/inventory', headers=self.auth, data={'name': 'Example lab'},
+        created = self.client.post('/api/inventory', data={'name': 'Example lab'},
                                    files={'inventory': ('ansible-inventory.yml', INVENTORY)})
         self.assertEqual(created.status_code, 200, created.text)
         lab = created.json(); url = '/api/labs/' + lab['id'] + '/git'
