@@ -7,13 +7,19 @@ AllowTcpForwarding or AllowUsers; the candidate is checked with `sshd -t -f`, th
 configuration with `sshd -t`, and any failure restores the previous state and reloads it; `--remove`
 deletes the drop-in and reloads.
 
-The script must run as root and this suite never touches /etc/ssh: each test drives a copy of the
-shipped script with exactly two lines replaced, the root guard (a no-op) and the SSH directory (a
-temporary one); both texts are asserted, so a change fails loudly instead of testing stale logic.
-The fake sshd emulates the include order of Ubuntu (drop-ins first, the first value wins) over a
-base of effective values the test chooses. Standard library only.
+PermitRootLogin is not written while root can log in with a key (a key in root's AuthorizedKeysFile
+other than cloud-init's "Please login as" stub, or an AuthorizedKeysCommand or TrustedUserCAKeys that
+could admit one): `no` would refuse the very login the operator may depend on.
+
+The script must run as root and this suite never touches /etc/ssh or /root: each test drives a copy
+of the shipped script with exactly three lines replaced, the root guard (a no-op), the SSH directory
+and root's home (temporary ones); the texts are asserted, so a change fails loudly instead of testing
+stale logic. The fake sshd emulates the include order of Ubuntu (drop-ins first, then the rest of
+sshd_config, the first value wins) over a base of OpenSSH defaults the test chooses. Standard
+library only.
 """
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -25,12 +31,20 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'deploy/setup-ssh-hardening.sh'
 ROOT_GUARD = "[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }"
 SSH_DIR_LINE = 'ssh_dir=/etc/ssh'
+ROOT_HOME_LINE = 'root_home=$(getent passwd root | cut -d: -f6)'
 SYSTEM_PATH = '/usr/bin:/bin'
 DROPIN = 'sshd_config.d/40-clab-manager.conf'
 
 DEFAULTS = {'port': '22', 'permitrootlogin': 'without-password', 'maxauthtries': '6', 'logingracetime': '120',
             'persourcemaxstartups': 'none', 'x11forwarding': 'no', 'passwordauthentication': 'yes',
-            'allowtcpforwarding': 'yes', 'maxstartups': '10:30:100'}
+            'allowtcpforwarding': 'yes', 'maxstartups': '10:30:100',
+            'authorizedkeysfile': '.ssh/authorized_keys .ssh/authorized_keys2', 'authorizedkeyscommand': 'none',
+            'trustedusercakeys': 'none'}
+# The stock Ubuntu 24.04 sshd_config, apart from its comments.
+UBUNTU_SSHD_CONFIG = ('Include /etc/ssh/sshd_config.d/*.conf\n\nKbdInteractiveAuthentication no\nUsePAM yes\n'
+                      'X11Forwarding yes\nPrintMotd no\nAcceptEnv LANG LC_*\nSubsystem sftp /usr/lib/openssh/sftp-server\n')
+CLOUD_INIT_STUB = ('no-port-forwarding,no-agent-forwarding,no-X11-forwarding,command="echo \'Please login as the user '
+                   '\\"ubuntu\\" rather than the user \\"root\\".\';echo;sleep 10;exit 142" ssh-ed25519 AAAAC3fixture root@x\n')
 
 FAKE_SSHD = r'''#!PYTHON
 import os, sys
@@ -54,6 +68,11 @@ if args[:1] == ['-T']:
     seen = {}
     for path in sorted((ssh_dir / 'sshd_config.d').glob('*.conf')):
         for key, value in lines(path):
+            seen.setdefault(key, value)
+    for key, value in lines(ssh_dir / 'sshd_config'):
+        if key == 'match':
+            break
+        if key != 'include':
             seen.setdefault(key, value)
     for key, value in lines(Path(os.environ['SSHD_BASE'])):
         seen.setdefault(key, value)
@@ -106,19 +125,26 @@ class SshHardeningTests(unittest.TestCase):
         text = SCRIPT.read_text()
         self.assertIn(ROOT_GUARD, text, "the root guard text changed; update this test's neutralised copy")
         self.assertEqual(text.count(SSH_DIR_LINE + '\n'), 1, 'the SSH directory line changed; update this test')
+        self.assertEqual(text.count(ROOT_HOME_LINE + '\n'), 1, "the root home line changed; update this test")
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name)
         self.ssh_dir = self.base / 'etc-ssh'
         (self.ssh_dir / 'sshd_config.d').mkdir(parents=True)
         self.config = self.ssh_dir / 'sshd_config'
+        # Without Ubuntu's X11Forwarding yes, so that every directive starts at OpenSSH's default (the
+        # fake sshd reads this file; it used to ignore it and contradict the line). The stock file is
+        # UBUNTU_SSHD_CONFIG, used by its own test.
         self.config.write_text('Include /etc/ssh/sshd_config.d/*.conf\n\nKbdInteractiveAuthentication no\nUsePAM yes\n'
-                               'X11Forwarding yes\nSubsystem sftp /usr/lib/openssh/sftp-server\n')
+                               'Subsystem sftp /usr/lib/openssh/sftp-server\n')
         self.dropin = self.ssh_dir / DROPIN
+        self.root_home = self.base / 'root-home'
+        self.root_home.mkdir()
         (self.base / 'deploy').mkdir()
         self.script = self.base / 'deploy/setup-ssh-hardening.sh'
         self.script.write_text(text.replace(ROOT_GUARD, ': # root check removed for this unit test')
-                               .replace(SSH_DIR_LINE + '\n', f'ssh_dir={self.ssh_dir}\n'))
+                               .replace(SSH_DIR_LINE + '\n', f'ssh_dir={self.ssh_dir}\n')
+                               .replace(ROOT_HOME_LINE + '\n', f'root_home={self.root_home}\n'))
         self.bin = self.base / 'bin'
         self.bin.mkdir()
         write_exe(self.bin / 'sshd', FAKE_SSHD)
@@ -187,6 +213,80 @@ class SshHardeningTests(unittest.TestCase):
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertNotIn('PerSourceMaxStartups 8', self.directives())
+
+    def root_keys(self, text, name='.ssh/authorized_keys'):
+        path = self.root_home / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        return path
+
+    def test_stock_ubuntu_x11forwarding_yes_is_kept_and_not_called_the_operators_own(self):
+        self.config.write_text(UBUNTU_SSHD_CONFIG)
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.directives(), ['PermitRootLogin no', 'MaxAuthTries 4', 'LoginGraceTime 30',
+                                             'PerSourceMaxStartups 8'])
+        self.assertIn('Kept X11Forwarding yes', result.stdout)
+        self.assertNotIn('your own', result.stdout)
+
+    def test_root_with_an_authorized_key_keeps_its_login_and_the_rest_is_written(self):
+        for name in ('.ssh/authorized_keys', '.ssh/authorized_keys2'):
+            with self.subTest(name=name):
+                shutil.rmtree(self.root_home / '.ssh', ignore_errors=True)
+                self.dropin.unlink(missing_ok=True)
+                path = self.root_keys('# operator key\nssh-ed25519 AAAAC3fixture admin@laptop\n', name)
+                result = self.run_script()
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertEqual(self.directives(), ['MaxAuthTries 4', 'LoginGraceTime 30', 'PerSourceMaxStartups 8',
+                                                     'X11Forwarding no'])
+                self.assertIn('Not written: PermitRootLogin', result.stdout)
+                self.assertIn(str(path), result.stdout)
+
+    def test_a_root_key_with_options_or_a_forced_command_still_counts(self):
+        self.root_keys('command="/usr/local/bin/backup",no-pty ssh-ed25519 AAAAC3fixture backup@host\n')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('PermitRootLogin no', self.directives())
+
+    def test_an_absolute_authorized_keys_file_with_tokens_is_read_for_root(self):
+        keys = self.base / 'keys'
+        keys.mkdir()
+        (keys / 'root').write_text('ssh-ed25519 AAAAC3fixture admin@laptop\n')
+        self.set_base(authorizedkeysfile=f'{keys}/%u')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('PermitRootLogin no', self.directives())
+        self.assertIn(f'{keys}/root', result.stdout)
+
+    def test_a_home_token_in_the_authorized_keys_file_is_roots_home(self):
+        self.root_keys('ssh-ed25519 AAAAC3fixture admin@laptop\n', 'keys/authorized')
+        self.set_base(authorizedkeysfile='%h/keys/authorized')
+        self.assertEqual(self.run_script().returncode, 0)
+        self.assertNotIn('PermitRootLogin no', self.directives())
+
+    def test_the_cloud_init_stub_comments_and_blank_lines_are_not_a_root_login(self):
+        self.root_keys('\n# nothing here\n   \n' + CLOUD_INIT_STUB)
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('PermitRootLogin no', self.directives())
+
+    def test_keys_sshd_finds_elsewhere_keep_permitrootlogin(self):
+        for change in ({'authorizedkeyscommand': '/usr/bin/sss_ssh_authorizedkeys'},
+                       {'trustedusercakeys': '/etc/ssh/user_ca.pub'}):
+            with self.subTest(change=change):
+                self.dropin.unlink(missing_ok=True)
+                self.set_base(**change)
+                result = self.run_script()
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertNotIn('PermitRootLogin no', self.directives())
+                self.assertIn('Not written: PermitRootLogin', result.stdout)
+
+    def test_working_as_root_without_any_root_key_still_writes_permitrootlogin(self):
+        # With prohibit-password and no key, root has no SSH login that `no` could take away; running
+        # the script from root's console or `sudo -i` changes nothing about that.
+        result = self.run_script(USER='root', LOGNAME='root')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('PermitRootLogin no', self.directives())
 
     def test_password_forwarding_and_user_directives_are_never_written(self):
         self.assertEqual(self.run_script().returncode, 0)

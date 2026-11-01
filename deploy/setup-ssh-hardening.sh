@@ -10,7 +10,10 @@
 # effective value (sshd -T, read without this script's own earlier drop-in) is still OpenSSH's
 # default. It never writes PasswordAuthentication (WinSCP, VS Code and the clab-discovery account use
 # passwords), AllowTcpForwarding (VS Code Remote-SSH) or AllowUsers, and it never touches the
-# clab-discovery policy of setup-password.sh. The candidate is checked with sshd -t -f, the applied
+# clab-discovery policy of setup-password.sh. PermitRootLogin no is not written while root can log in
+# with a key (one in root's AuthorizedKeysFile other than cloud-init's "Please login as" stub, or an
+# AuthorizedKeysCommand or TrustedUserCAKeys that could admit one): on a VM reached as root by key it
+# would refuse the operator's next login. The candidate is checked with sshd -t -f, the applied
 # configuration with sshd -t, then sshd is reloaded; any failure restores the previous drop-in (or its
 # absence) and reloads that.
 set -euo pipefail
@@ -26,6 +29,8 @@ esac
 refuse() { printf '%s\n' "$1" >&2; exit 1; }
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ssh_dir=/etc/ssh
+root_home=$(getent passwd root | cut -d: -f6)
+[[ -n $root_home ]] || root_home=/root
 config="$ssh_dir/sshd_config"
 dropin_dir="$ssh_dir/sshd_config.d"
 dropin="$dropin_dir/40-clab-manager.conf"
@@ -78,6 +83,31 @@ fi
 if $had_dropin; then changed=true; rm -f -- "$dropin"; fi
 effective=$("$sshd" -T) || { echo 'Could not read the effective SSH configuration with sshd -T.' >&2; exit 1; }
 value_of() { awk -v key="$1" '$1 == key {print $2; exit}' <<< "$effective"; }
+# Why root can log in with a key, or nothing. sshd expands %% %h %u %U in AuthorizedKeysFile and reads
+# a relative path from the user's home. A line that is a comment, blank, or cloud-init's stub (a forced
+# command that prints "Please login as the user ..." and exits) is no login.
+root_key_login() {
+  local value file path line
+  local -a files
+  value=$(value_of authorizedkeyscommand)
+  if [[ -n $value && $value != none ]]; then echo 'sshd -T names an AuthorizedKeysCommand, which may give root a key'; return; fi
+  value=$(value_of trustedusercakeys)
+  if [[ -n $value && $value != none ]]; then echo 'sshd -T names TrustedUserCAKeys, which may admit a certificate for root'; return; fi
+  read -ra files <<< "$(awk '$1 == "authorizedkeysfile" {$1 = ""; print; exit}' <<< "$effective")"
+  for file in "${files[@]}"; do
+    [[ $file != none ]] || continue
+    path=${file//%%/$'\001'}; path=${path//%h/$root_home}; path=${path//%u/root}; path=${path//%U/0}; path=${path//$'\001'/%}
+    [[ $path == /* ]] || path="$root_home/$path"
+    [[ -f $path ]] || continue
+    while IFS= read -r line || [[ -n $line ]]; do
+      line=${line#"${line%%[![:space:]]*}"}
+      [[ -n $line && $line != '#'* ]] || continue
+      [[ $line == *'command="'*'Please login as the user'* ]] && continue
+      echo "root has an SSH key in $path"
+      return
+    done < "$path"
+  done
+}
 written=()
 # Directive, the value written, the sshd -T key, then OpenSSH's default as sshd -T prints it.
 consider() {
@@ -88,9 +118,21 @@ consider() {
     return 0
   fi
   for default in "$@"; do
-    if [[ $current == "$default" ]]; then written+=("$directive $value"); return 0; fi
+    [[ $current == "$default" ]] || continue
+    if [[ $directive == PermitRootLogin ]]; then
+      local reason
+      reason=$(root_key_login)
+      if [[ -n $reason ]]; then
+        echo "Not written: PermitRootLogin ($reason; PermitRootLogin no would refuse that login)."
+        return 0
+      fi
+    fi
+    written+=("$directive $value")
+    return 0
   done
-  echo "Kept your own $directive $current."
+  # The value may be the operator's or the distribution's (Ubuntu's sshd_config sets X11Forwarding yes);
+  # either way it is not OpenSSH's default, so the drop-in, read first, must not override it.
+  echo "Kept $directive $current: the SSH configuration on this VM sets it."
 }
 consider PermitRootLogin no permitrootlogin prohibit-password without-password
 consider MaxAuthTries 4 maxauthtries 6
