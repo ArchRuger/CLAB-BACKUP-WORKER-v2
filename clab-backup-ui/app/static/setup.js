@@ -44,10 +44,9 @@ function setupThrottle(data,button,idle){
   if(left>0){wait.textContent=String(left);return;}
   clearInterval(setupTimer);setupTimer=null;
   get('setup-error').textContent='';
-  get('setup-reason').textContent='You can sign in again.';
-  get('setup-reason').hidden=false;
   button.disabled=false;button.textContent=idle;
   get('setup-code').focus();
+  get('setup-reason').textContent='You can sign in again.';
  },1000);
 }
 async function setupSubmit(event){
@@ -89,7 +88,7 @@ async function setupSubmit(event){
   error.textContent=setupMessage(answer.data,'The manager did not accept those details. Check them and try again.');
   return;
  }
- error.textContent=SETUP_DOWN;
+ error.textContent=setupMessage(answer&&answer.data,SETUP_DOWN);
 }
 function setupToggle(){
  const button=get('setup-show'),show=button.getAttribute('aria-pressed')!=='true';
@@ -103,4 +102,6 @@ if(setupRecover(location.search)){
 }
 if(setupPlain(location.protocol,location.hostname))get('signin-plain').hidden=false;
 get('setup-form').onsubmit=setupSubmit;
+get('setup-form').hidden=false;
+get('setup-code').focus();
 get('setup-show').onclick=setupToggle;

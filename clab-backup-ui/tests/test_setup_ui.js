@@ -17,7 +17,7 @@ function node(tag,id){
 function fixture({fetch,search='',protocol='https:',hostname='manager.lab'}={}){
  focused=[];
  const elements=new Map(),replaced=[],intervals=[],requests=[];
- for(const id of IDS){const n=node('x',id);n.hidden=['setup-reason','setup-signin','signin-plain'].includes(id);elements.set(id,n);}
+ for(const id of IDS){const n=node('x',id);n.hidden=['setup-form','setup-signin','signin-plain'].includes(id);elements.set(id,n);}
  elements.get('setup-submit').textContent='Create account and sign in';elements.get('setup-show').textContent='Show';
  elements.get('setup-title').textContent='Create the first administrator';
  const get=id=>elements.get(id);
@@ -122,6 +122,20 @@ test('other statuses, non-JSON and a network failure say the manager did not ans
   const f=fixture({fetch:async()=>answer()});fill(f);await send(f);
   assert.equal(f.get('setup-error').textContent,'The manager did not answer. Try again.');assert.equal(f.get('setup-submit').disabled,false);assert.deepEqual(f.replaced,[]);
  }
+});
+
+test('a 503 setup_required shows the manager sentence',async()=>{
+ const message='This manager is not set up yet. Open /setup to create the first administrator.';
+ const f=fixture({fetch:async()=>reply(503,{detail:{code:'setup_required',message}})});fill(f);await send(f);
+ assert.equal(f.get('setup-error').textContent,message);
+});
+
+test('the form is unhidden and the code field focused by the script; markup hides it; reason is not hidden',()=>{
+ const f=fixture({fetch:async()=>reply(200,{})});
+ assert.equal(f.get('setup-form').hidden,false);assert.equal(focused.at(-1),'setup-code');
+ assert.match(html,/<form id="setup-form" novalidate hidden/);
+ assert.doesNotMatch(html,/id="setup-reason"[^>]*\shidden/);
+ assert.doesNotMatch(source,/setup-reason'\)\.hidden=true/);
 });
 
 test('429 announces once, ticks only the aria-hidden span, re-enables at 0 (REVIEW U15)',async()=>{

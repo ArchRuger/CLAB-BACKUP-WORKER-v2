@@ -5,7 +5,7 @@ const version=fs.readFileSync(path.join(__dirname,'../VERSION'),'utf8').trim();
 const tick=async()=>{for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));};
 const IDS=['signin-card','signin-form','signin-checking','signin-reason','signin-user','signin-password','signin-show','signin-error','signin-submit','signin-plain',
  'signin-change','change-form','change-current-field','change-current','change-new','change-confirm','change-show','change-error','change-submit','change-signout'];
-const HIDDEN=['signin-form','signin-reason','signin-plain','signin-change','change-current-field'];
+const HIDDEN=['signin-form','signin-plain','signin-change','change-current-field'];
 function node(tag,id){
  const n={tag,id:id||'',children:[],hidden:false,disabled:false,value:'',_text:'',className:'',attrs:{},
   get textContent(){return this._text+this.children.map(c=>c.text!==undefined?c.text:c.textContent).join('');},
@@ -14,14 +14,15 @@ function node(tag,id){
   appendChild(i){this.children.push(i);return i;},
   replaceChildren(...items){this.children=[];this._text='';this.append(...items);},
   setAttribute(k,v){this.attrs[k]=String(v);},getAttribute(k){return k in this.attrs?this.attrs[k]:null;},
-  focus(){focused.push(this.id);}};
+  focus(){focused.push(this.id);if(typeof elements!=='undefined'&&elements.get('signin-reason'))focusSeen.push(this.id+'|'+elements.get('signin-reason').textContent);}};
  return n;
 }
-let focused;
+let focused,focusSeen=[],elements;
 function walk(n,id){if(n.id===id)return n;for(const c of n.children||[]){const f=c.text===undefined?walk(c,id):null;if(f)return f;}return null;}
 function fixture({fetch,search='',hash='',protocol='https:',hostname='manager.lab'}){
  focused=[];
- const elements=new Map(),replaced=[],intervals=[],cleared=[],requests=[];
+ focusSeen=[];elements=new Map();
+ const replaced=[],intervals=[],cleared=[],requests=[];
  for(const id of IDS){const n=node('x',id);n.hidden=HIDDEN.includes(id);elements.set(id,n);}
  elements.get('signin-submit').textContent='Sign in';elements.get('change-submit').textContent='Change password and continue';elements.get('signin-show').textContent='Show';elements.get('change-show').textContent='Show';
  const get=id=>elements.get(id);
@@ -175,11 +176,36 @@ test('429 announces once, ticks only the hidden-from-readers span and re-enables
  assert.equal(focused.at(-1),'signin-password');assert.deepEqual(f.cleared,[1]);
 });
 
+test('at the end of the delay focus moves before the status line is written, and the line is never hidden (U15)',async()=>{
+ const f=fixture({fetch:async(u,o,n)=>n===1?done:reply(429,{detail:{retry_after:1}})});await tick();
+ fill(f,'sam','pw');await submit(f);
+ focusSeen.length=0;f.intervals[0]();
+ assert.deepEqual(focusSeen,['signin-password|']);
+ assert.equal(f.get('signin-reason').textContent,'You can sign in again.');
+ assert.doesNotMatch(loginHtml,/id="signin-reason"[^>]*\shidden/);
+ assert.match(loginHtml,/id="signin-reason"[^>]*role="status"/);
+ assert.doesNotMatch(source,/signin-reason'\)\.hidden=true/);
+});
+
 test('429 without a usable retry_after counts from 60 and a huge one is capped at 3600',async()=>{
  for(const [retry,shown] of [[undefined,'60'],['x','60'],[99999,'3600'],[0,'1']]){
   const f=fixture({fetch:async(u,o,n)=>n===1?done:reply(429,{detail:{retry_after:retry}})});await tick();
   fill(f,'sam','pw');await submit(f);assert.equal(f.walk('signin-wait').textContent,shown);
  }
+});
+
+test('a 503 setup_required and a gate 403 show the manager sentence; none falls back to the generic one',async()=>{
+ for(const [status,body] of [[503,{detail:{code:'setup_required',message:'This manager is not set up yet. Open /setup to create the first administrator.'}}],[403,{detail:{message:'Blocked.'}}]]){
+  const f=fixture({fetch:async(u,o,n)=>n===1?done:reply(status,body)});await tick();
+  fill(f,'sam','pw');await submit(f);
+  assert.equal(f.get('signin-error').textContent,body.detail.message);
+ }
+});
+
+test('loginNext refuses dot segments and percent escapes in the path',()=>{
+ const f=fixture({fetch:async()=>done}),n=v=>f.context.loginNext('?next='+encodeURIComponent(v),'');
+ for(const bad of ['/./api/state','/x/../api/state','/x/../login','/./login','/./setup','/%2e/api/state','/%2561pi/state','/%256Cogin','/a/%2e%2e/b','/a/./b','/a/..'])assert.equal(n(bad),'/',bad);
+ assert.equal(n('/?x=%41#a'),'/?x=%41#a');assert.equal(n('/a.b/c..d'),'/a.b/c..d');
 });
 
 test('other statuses, non-JSON 2xx and network failures show the manager-did-not-answer sentence',async()=>{
@@ -277,6 +303,13 @@ test('Sign out in the change view clears the held password and shows a clean for
  assert.equal(f.get('change-new').value,'');assert.equal(f.get('change-confirm').value,'');assert.equal(f.get('signin-reason').textContent,'');
  f.get('change-new').value=GOOD;f.get('change-confirm').value=GOOD;f.get('change-current-field').hidden=true;
  await changeSubmit(f);assert.equal(f.requests.at(-1).body.current,'');
+});
+
+test('Sign out from the change view forgets the previous username',async()=>{
+ const f=await changeView(async()=>reply(200,{}));
+ f.get('signin-user').value='alex';
+ await f.context.changeSignOut();
+ assert.equal(f.get('signin-user').value,'');assert.equal(f.get('signin-password').value,'');
 });
 
 test('Sign out still shows the form when the request fails',async()=>{

@@ -10,6 +10,7 @@ function loginSafe(value){
  if(value[0]!=='/'||value[1]==='/'||value[1]==='\\')return '';
  if(/[\\\u0000-\u001f\u007f]/.test(value))return '';
  const path=value.split(/[?#]/)[0];
+ if(path.includes('%')||path.split('/').some(part=>part==='.'||part==='..'))return '';
  if(/^\/(login|setup)/.test(path)||path.startsWith('/api/'))return '';
  return value;
 }
@@ -86,15 +87,14 @@ function loginThrottle(data,button,idle,focusId){
   if(left>0){wait.textContent=String(left);return;}
   clearInterval(loginTimer);loginTimer=null;
   get('signin-error').textContent='';
-  get('signin-reason').textContent='You can sign in again.';
-  get('signin-reason').hidden=false;
   button.disabled=false;button.textContent=idle;
   get(focusId).focus();
+  get('signin-reason').textContent='You can sign in again.';
  },1000);
 }
 async function loginLoad(){
  const reason=loginReason(location.search);
- if(reason){get('signin-reason').textContent=reason;get('signin-reason').hidden=false;}
+ if(reason)get('signin-reason').textContent=reason;
  if(loginPlain(location.protocol,location.hostname))get('signin-plain').hidden=false;
  const answer=await loginRequest('/api/session',{cache:'no-store'});
  const user=answer&&answer.status===200&&answer.data&&answer.data.user;
@@ -136,7 +136,7 @@ async function loginSubmit(event){
   passField.value='';passField.focus();
   return;
  }
- error.textContent=LOGIN_DOWN;
+ error.textContent=loginMessage(answer&&answer.data,LOGIN_DOWN);
 }
 async function changeSubmit(event){
  event.preventDefault();
@@ -157,7 +157,7 @@ async function changeSubmit(event){
  if(status===401&&loginCode(answer.data)==='signed_out'){
   signedInWith='';
   loginShowForm(true);
-  get('signin-reason').textContent=LOGIN_ENDED;get('signin-reason').hidden=false;
+  get('signin-reason').textContent=LOGIN_ENDED;
   return;
  }
  if(status===401){
@@ -177,10 +177,10 @@ function loginCode(data){return data&&data.detail&&data.detail.code;}
 async function changeSignOut(){
  signedInWith='';
  await loginRequest('/api/session',{method:'DELETE',headers:{'Content-Type':'application/json'},body:'{}'});
- for(const id of ['change-current','change-new','change-confirm','signin-password'])get(id).value='';
+ for(const id of ['change-current','change-new','change-confirm','signin-password','signin-user'])get(id).value='';
  get('change-error').textContent='';
  get('change-current-field').hidden=true;
- get('signin-reason').textContent='';get('signin-reason').hidden=true;
+ get('signin-reason').textContent='';
  get('signin-error').textContent='';
  loginShowForm(true);
 }
