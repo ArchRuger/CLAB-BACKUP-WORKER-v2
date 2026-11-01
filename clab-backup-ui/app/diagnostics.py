@@ -8,11 +8,12 @@ import threading
 import time
 import uuid
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import __version__
 from .lab_operations import remote
+from .sessions import require_admin
 
 # The capabilities probe runs up to nine containerlab --help commands of 15 s
 # each on the VM; the normal UI allows 180 s. Keep the panel responsive but
@@ -131,12 +132,13 @@ class Diagnostics:
                             'route': route, 'status': status,
                             'duration_ms': round((time.monotonic() - started) * 1000)})
 
+        # Both admin-only (sign-on DESIGN.md 7.2): metadata about the manager, the VM address and the last 200 requests.
         @app.get('/api/debug')
-        def snapshot():
+        def snapshot(user: dict = Depends(require_admin)):
             return self.snapshot()
 
         @app.post('/api/debug/probe')
-        def probe(data: ProbeRequest):
+        def probe(data: ProbeRequest, user: dict = Depends(require_admin)):
             if not self.probe_lock.acquire(blocking=False):
                 raise HTTPException(409, 'A diagnostic check is already running. Wait for it to finish.')
             try:

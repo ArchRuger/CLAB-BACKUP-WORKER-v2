@@ -1,6 +1,7 @@
 import copy
 import io
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -9,7 +10,7 @@ import uuid
 import zipfile
 from contextlib import asynccontextmanager
 import paramiko
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Request, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
@@ -30,7 +31,11 @@ from .git_progress import GitProgress
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
 from .diagnostics import Diagnostics
-from .allowed_hosts import HostCheck, configured_hosts
+from .allowed_hosts import HostCheck, configured_hosts, host_name
+from .accounts import Accounts, write_setup_code, setup_log_line
+from .sessions import Sessions, SessionGate, require_admin, install as install_sessions, client_address
+from .headers import security_headers
+from .origin import scheme
 from .capture import Captures
 from .telemetry_retirement import TelemetryRetirement, migrate_retired_telemetry, public_retired_telemetry
 from .network_design import NetworkDesign, public_design
@@ -47,8 +52,26 @@ def guide_path(root):
     return path if path.is_file() and not path.is_symlink() else None
 
 
+def first_allowed_host(value):
+    """The first name of UI_ALLOWED_HOSTS, for the setup log line (DESIGN 9.2); '' when none is listed."""
+    for entry in (value or '').split(','):
+        name = host_name(entry.strip()) if entry.strip() else None
+        if name: return name
+    return ''
+
+
 def create_app(data_dir=None):
     store=Store(data_dir or os.environ.get('DATA_DIR','/data'))
+    # The user index the gate reads instead of the state, built right after the Store and before any route
+    # (sign-on DESIGN.md 5.5); setup mode is "the index is empty" (9.1).
+    sessions=Sessions(store)
+    sessions.load_users(store.state.get('users', {}))
+    accounts=Accounts(store, sessions)
+    if sessions.setup_mode():
+        # The setup code is written here, not in the lifespan (tests build the app without it); the container log
+        # names the file and the command, never the code (REVIEW R22a).
+        write_setup_code(store.root, 'setup')
+        logging.getLogger(__name__).warning(setup_log_line(store.root, os.environ.get('UI_PORT') or '8443', first_allowed_host(os.environ.get('UI_ALLOWED_HOSTS'))))
     migrate_download_metadata(store)
     migrate_retired_telemetry(store)
     runner=Runner(store)
@@ -69,7 +92,7 @@ def create_app(data_dir=None):
     design_apply=DesignApply(store,runner,network_design)
     @asynccontextmanager
     async def lifespan(app):
-        print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
+        print('Containerlab Node Manager ready; sign in with a manager account.',flush=True)
         runner.start()
         restore.start()
         design_apply.start()
@@ -86,11 +109,15 @@ def create_app(data_dir=None):
         readiness_monitor.close()
         services.close()
         runner.close()
+        sessions.flush_failures(force=True)
     app=FastAPI(title='Containerlab Node Manager',version=__version__,lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request, exc):
         return JSONResponse({"detail":"Check the request fields and upload sizes."},status_code=422)
     app.state.store=store; app.state.runner=runner
+    app.state.sessions=sessions; app.state.accounts=accounts
+    install_sessions(app,sessions,accounts)   # the exempt routes: session, setup, health, the two pages (DESIGN 7.3)
+    accounts.install(app)   # the admin-only users and audit routes
     app.state.discovery=discovery
     app.state.operations=operations
     app.state.device_diagnostics=device_diagnostics
@@ -118,20 +145,30 @@ def create_app(data_dir=None):
     design_apply.install(app)
     @app.middleware('http')
     async def guard(request, call_next):
+        def refusal(status, text):
+            # The guard's own early returns carry the same fixed headers as a routed response (DESIGN 6.1).
+            return JSONResponse({'detail':text},status_code=status,headers=security_headers(request.scope,status=status,refusal=True))
         if request.url.path.startswith('/api/'):
             origin=request.headers.get('origin')
-            if request.headers.get('sec-fetch-site') == 'cross-site' or (origin and origin.rstrip('/') != str(request.base_url).rstrip('/')):
-                return JSONResponse({'detail':'Use this manager from its own browser page.'},status_code=403)
+            # "Own origin" is the scope's scheme (origin.scheme, DESIGN 5.6) and the Host the request carries, which HostCheck
+            # already accepted; no forwarded header is read.
+            own=f"{scheme(request.scope)}://{request.headers.get('host','')}"
+            if request.headers.get('sec-fetch-site') == 'cross-site' or (origin and origin.rstrip('/') != own):
+                return refusal(403,'Use this manager from its own browser page.')
             if store.reset_pending and request.url.path != '/api/manager/reset':
-                return JSONResponse({'detail':'A storage reset did not finish. Retry Start fresh to complete it. A manager restart completes only a reset that was fully prepared; otherwise the labs, credentials and backups stay as they were and Start fresh must be chosen again.'},status_code=503)
+                return refusal(503,'A storage reset did not finish. Retry Start fresh to complete it. A manager restart completes only a reset that was fully prepared; otherwise the labs, credentials and backups stay as they were and Start fresh must be chosen again.')
             if request.method in ('POST','PUT','PATCH','DELETE'):
                 try: size=int(request.headers.get('content-length','0'))
-                except ValueError: return JSONResponse({'detail':'Invalid request length'},status_code=400)
+                except ValueError: return refusal(400,'Invalid request length')
                 if size>2_500_000 or size<=0:
-                    return JSONResponse({'detail':'Upload limit is 2.5 MB per request; content length is required.'},status_code=413)
+                    return refusal(413,'Upload limit is 2.5 MB per request; content length is required.')
         started=time.monotonic()
         response=await call_next(request)
-        if request.url.path.startswith('/api/') and (request.method!='GET' or request.url.path.endswith('/download')):
+        # The sign-in and setup routes write no api.request event: their outcome is in the audit files only, so a
+        # scanner cannot write two lines per attempt (REVIEW R8). The actor is the session's user, '-' for nobody (10.3).
+        user=getattr(request.state,'user',None)
+        audited_elsewhere=request.method=='POST' and request.url.path in ('/api/session','/api/setup')
+        if request.url.path.startswith('/api/') and not audited_elsewhere and (request.method!='GET' or request.url.path.endswith('/download')):
             parts=request.url.path.split('/')
             lab_id=parts[3] if len(parts)>3 and parts[2]=='labs' else ''
             job_id=parts[3] if len(parts)>3 and parts[2]=='jobs' else ''
@@ -141,22 +178,16 @@ def create_app(data_dir=None):
                     if matched: lab_id=matched['lab_id']
             route=request.scope.get('route')
             store.event('api.request',f'{request.method} {getattr(route, "path", "/api/unknown")} -> {response.status_code} ({time.monotonic()-started:.3f}s)',
-                        level='error' if response.status_code>=400 else 'info',lab_id=lab_id,job_id=job_id)
-        response.headers['X-Content-Type-Options']='nosniff'
-        response.headers['Referrer-Policy']='no-referrer'
-        response.headers['X-Frame-Options']='DENY'
-        # The lab builder's editor bundle is several megabytes of content-hashed files that only change
-        # with a release; everything else is never cached.
-        response.headers['Cache-Control']='public, max-age=31536000, immutable' if request.url.path.startswith('/static/lab-builder/assets/') and response.status_code == 200 else 'no-store'
-        # xterm's DOM renderer creates font, cell-width and ANSI-color styles, and the lab builder's
-        # editor (React Flow, MUI) sets element styles at run time.
-        # Permit those only in their dedicated documents; scripts remain self-only.
-        styles="'self' 'unsafe-inline'" if request.url.path in ('/static/terminal.html', '/static/capture-session.html', '/static/lab-builder.html', '/static/map-editor.html') else "'self'"
-        response.headers['Content-Security-Policy']=f"default-src 'self'; script-src 'self'; style-src {styles}; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+                        level='error' if response.status_code>=400 else 'info',lab_id=lab_id,job_id=job_id,actor=user['name'] if user else '-')
+        # One function for every response: caching, CSP by path and HSTS under TLS (app/headers.py).
+        response.headers.update(security_headers(request.scope,status=response.status_code))
         return response
     diagnostics = Diagnostics(store, discovery, operations)
     app.state.diagnostics = diagnostics
     diagnostics.install(app)
+    def actor_of(request):
+        user=getattr(request.state,'user',None)
+        return user['name'] if user else '-'
     def get_lab(lab_id):
         if operation_busy(store.state,lab_id): raise HTTPException(409,'Wait for the lab operation to finish.')
         lab=store.lab(lab_id)
@@ -223,7 +254,7 @@ def create_app(data_dir=None):
         confirmation: str
 
     @app.post('/api/manager/reset')
-    def reset_manager(data: ResetManager):
+    def reset_manager(data: ResetManager, request: Request, user: dict = Depends(require_admin)):
         if data.confirmation != 'RESET': raise HTTPException(400, 'Type RESET to confirm.')
         if not discovery.lock.acquire(blocking=False):
             raise HTTPException(409, 'Discovery is checking the VM. Retry after it finishes.')
@@ -242,10 +273,13 @@ def create_app(data_dir=None):
                 discovery.sources.clear(); discovery.import_previews.clear()
                 operations.previews.clear(); operations.cap_cache = None
             discovery.wake.set()
+            # Users survive the reset (store.reset copies them) and the index is left as it is; the reset itself is audited (10.2).
+            store.audit('manager.reset', actor=user['name'], source=client_address(request), outcome='ok')
             return {'reset': True, 'vm_connection_retained': True}
         finally: discovery.lock.release()
     @app.get('/api/state')
-    def state():
+    def state(request: Request):
+        user=getattr(request.state,'user',None)
         with store.lock:
             # jobs, git_jobs, restore_jobs and operations are all bounded in storage at write time
             # now (Runner.submit()/_append_git_job()/_append_restore_job()/the operations preview
@@ -258,14 +292,16 @@ def create_app(data_dir=None):
                     'git_jobs':[git_progress.public(j) for j in store.state.get('git_jobs', [])],
                     'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])],
                     'design_jobs':[public_design_job(j) for j in store.state.get('design_jobs', [])],
-                    'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])]}
+                    'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])],
+                    # The session's own user, so the 4 s poll carries a role change (DESIGN 3.4); the `users` table is never copied.
+                    'user':{k:user[k] for k in ('name','role','must_change_password')} if user else None}
     class RemoveLab(BaseModel):
         model_config = ConfigDict(extra='forbid')
         name: str = Field(min_length=1, max_length=120)
         prevent_reimport: bool = True
 
     @app.delete('/api/labs/{lab_id}')
-    def remove_lab(lab_id: str, data: RemoveLab):
+    def remove_lab(lab_id: str, data: RemoveLab, request: Request):
         with store.lock:
             lab = get_lab(lab_id)
             git_progress.guard_pending(lab_id)
@@ -298,14 +334,14 @@ def create_app(data_dir=None):
                 services.tickets = {k:v for k,v in services.tickets.items() if v[1] != lab_id}
             # The lab's generated design plans (plain-text copies of its intent and configuration) go with the workspace.
             network_design.forget_lab(lab_id)
-            store.event('lab.remove', 'Removed saved workspace, history entries and generated design plans; backup files and audit logs retained; automatic import '+('excluded' if data.prevent_reimport else 'allowed'), lab_id=lab_id)
+            store.event('lab.remove', 'Removed saved workspace, history entries and generated design plans; backup files and audit logs retained; automatic import '+('excluded' if data.prevent_reimport else 'allowed'), lab_id=lab_id, actor=actor_of(request))
             return {'removed': lab_id, 'name': lab['name'], 'prevent_reimport': data.prevent_reimport}
 
     @app.get('/api/logs')
     def logs(lab_id: str='', job_id: str='', level: str='', node: str='', limit: int=Query(500,ge=1,le=2000)):
         return {'events':store.events(lab_id,job_id,level,node,limit)}
     @app.post('/api/inventory')
-    async def upload_inventory(name: str=Form(...), inventory: UploadFile=File(...),
+    async def upload_inventory(request: Request, name: str=Form(...), inventory: UploadFile=File(...),
                                lab_id: str=Form(''), topology: UploadFile|None=File(None)):
         try:
             name=literal(name.strip(),'Lab name',120)
@@ -341,7 +377,7 @@ def create_app(data_dir=None):
             if lab['interval'] and any(readiness(lab,n)!='Ready' for n in lab['nodes'] if n['enabled']):
                 lab.update(interval=0,next_run=None)
             save_lab(lab,prior,'inventory')
-            store.event('inventory.import',f'Imported {len(nodes)} nodes; {sum(n["enabled"] for n in nodes)} enabled',lab_id=lab['id'])
+            store.event('inventory.import',f'Imported {len(nodes)} nodes; {sum(n["enabled"] for n in nodes)} enabled',lab_id=lab['id'],actor=actor_of(request))
             return public_lab(lab)
     class NodeEdit(BaseModel):
         model_config=ConfigDict(extra='forbid')
@@ -354,7 +390,7 @@ def create_app(data_dir=None):
         short_name: str|None=None
         endpoint_mode: str|None=None
     @app.put('/api/labs/{lab_id}/node')
-    def edit_node(lab_id: str, edit: NodeEdit):
+    def edit_node(lab_id: str, edit: NodeEdit, request: Request):
         with store.lock:
             lab=get_lab(lab_id)
             node=next((n for n in lab['nodes'] if n['name']==edit.name),None)
@@ -380,10 +416,10 @@ def create_app(data_dir=None):
             if edit.endpoint_mode=='auto':
                 reconcile(store.state)
             save_lab(lab,prior,'connection settings')
-            store.event('node.edit',f'Connection updated: {endpoint}:{ssh_port}; NOS {edit.platform or "unmapped"}; enabled={edit.enabled}; profile={edit.profile_id or "default/inventory"}',lab_id=lab_id,node=node['name'])
+            store.event('node.edit',f'Connection updated: {endpoint}:{ssh_port}; NOS {edit.platform or "unmapped"}; enabled={edit.enabled}; profile={edit.profile_id or "default/inventory"}',lab_id=lab_id,node=node['name'],actor=actor_of(request))
             return public_lab(lab)
     @app.post('/api/labs/{lab_id}/profiles')
-    async def profile(lab_id: str, label: str=Form(...), platform: str=Form(...),
+    async def profile(lab_id: str, request: Request, label: str=Form(...), platform: str=Form(...),
                       username: str=Form(...), auth: str=Form('password'), password: str=Form(''),
                       passphrase: str=Form(''), enable_password: str=Form(''), make_default: str|None=Form(None),
                       private_key: UploadFile|None=File(None)):
@@ -423,12 +459,12 @@ def create_app(data_dir=None):
             lab['profiles'].append(p)
             if make_default: lab['defaults'][platform]=p['id']
             save_lab(lab,prior,'credential profile')
-            store.event('credentials.create',f'{platform} {auth} profile {p["id"]} created; default={make_default}; enable credential configured={bool(enable_password)}',lab_id=lab_id)
+            store.event('credentials.create',f'{platform} {auth} profile {p["id"]} created; default={make_default}; enable credential configured={bool(enable_password)}',lab_id=lab_id,actor=actor_of(request))
             return public_lab(lab)
     class Schedule(BaseModel):
         interval: int=Field(ge=0,le=10080)
     @app.put('/api/labs/{lab_id}/schedule')
-    def schedule(lab_id: str, data: Schedule):
+    def schedule(lab_id: str, data: Schedule, request: Request):
         with store.lock:
             lab=get_lab(lab_id)
             if data.interval:
@@ -438,7 +474,7 @@ def create_app(data_dir=None):
             prior=copy.deepcopy(lab)
             lab.update(interval=data.interval,next_run=time.time()+data.interval*60 if data.interval else None)
             save_lab(lab,prior,'backup schedule')
-            store.event('schedule.update',f'Backup interval set to {data.interval} minutes (0 means manual)',lab_id=lab_id)
+            store.event('schedule.update',f'Backup interval set to {data.interval} minutes (0 means manual)',lab_id=lab_id,actor=actor_of(request))
             return public_lab(lab)
     class JobRequest(BaseModel):
         operation: str='backup'
@@ -456,7 +492,7 @@ def create_app(data_dir=None):
         return decorate_job(job)
 
     @app.get('/api/jobs/{job_id}/nodes/{node_index}/download')
-    def download_device(job_id: str, node_index: int):
+    def download_device(job_id: str, node_index: int, request: Request):
         job=finished_backup(job_id)
         if node_index<0 or node_index>=len(job['nodes']): raise HTTPException(404,'Device backup not found')
         node=job['nodes'][node_index]
@@ -464,11 +500,11 @@ def create_app(data_dir=None):
         path=stored_path(store,job,node)
         if not path: raise HTTPException(404,'Configuration file is unavailable')
         store.event('download.device',f"Configuration download requested: {node['download_name']}",
-                    lab_id=job['lab_id'],job_id=job_id,node=node['name'])
+                    lab_id=job['lab_id'],job_id=job_id,node=node['name'],actor=actor_of(request))
         return FileResponse(path,filename=node['download_name'],media_type='application/octet-stream')
 
     @app.get('/api/jobs/{job_id}/download')
-    def download(job_id: str):
+    def download(job_id: str, request: Request):
         job=finished_backup(job_id)
         names=config_names(job)
         if not names: raise HTTPException(404,'This job has no saved configurations')
@@ -493,7 +529,7 @@ def create_app(data_dir=None):
                 for source,name in files: archive.write(source,name)
                 archive.writestr('manifest.json',json.dumps(job,indent=2))
             store.event('download.archive',f"Archive download requested: {archive_name(job)}; {len(names)} configurations and {len(files)-len(names)} topology files",
-                        lab_id=job['lab_id'],job_id=job_id)
+                        lab_id=job['lab_id'],job_id=job_id,actor=actor_of(request))
         except Exception:
             os.unlink(path); raise
         return FileResponse(path,filename=archive_name(job),media_type='application/zip',
@@ -510,7 +546,12 @@ def create_app(data_dir=None):
     app.mount('/static',StaticFiles(directory=APP/'static'),name='static')
     @app.get('/')
     def index(): return FileResponse(APP/'static/index.html')
+    # The session gate sits directly inside HostCheck (added on the line before it, so Starlette places it second
+    # from the outside): it resolves the cookie for HTTP and WebSocket scopes and refuses without a session before
+    # the diagnostics list, the guard or any route sees the request (sign-on DESIGN.md 6.1). It receives the
+    # Sessions object and nothing else: no Store.
+    app.add_middleware(SessionGate,sessions=sessions)
     # Added last, so it is the outermost layer: a Host name outside DNS could control (DNS rebinding) is refused
-    # before the guard above, any route, static file or WebSocket handler sees the request.
+    # before the gate, the guard above, any route, static file or WebSocket handler sees the request.
     app.add_middleware(HostCheck,allowed=configured_hosts(os.environ.get('UI_ALLOWED_HOSTS')))
     return app

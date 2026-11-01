@@ -23,6 +23,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
+from fastapi import Depends, HTTPException, Query, Request
+from pydantic import BaseModel, ConfigDict, Field
+
 from .store import Store
 
 # ---- scrypt (DESIGN 4.1, 4.2) ----
@@ -432,6 +435,10 @@ class Accounts:
     def public_user(self, record):
         return public_user(record, self.sessions.count(record['name']) if self.sessions else 0)
 
+    def install(self, app):
+        """The admin-only users and audit routes (the module function `install` below, bound to app.state.accounts)."""
+        install(app)
+
     def read_setup_code(self, root=None):
         root = self.store.root if root is None else root
         return read_setup_code(root, on_expired=lambda: self.store.audit('recover.expired', actor='-', source='-', outcome='ok'))
@@ -595,3 +602,97 @@ class Accounts:
             self._save_or_restore(record, prior)
             self.store.audit('signin', actor=name, source=source, outcome='ok')
             return record
+
+
+# ---- the admin-only routes (DESIGN 7.3; BUILD.md S1b) ----
+class NewUser(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    name: str = Field(max_length=256)
+    role: str = Field(max_length=32)
+    password: str = Field(max_length=1024)
+
+
+class UserPatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    role: str | None = Field(default=None, max_length=32)
+    disabled: bool | None = None
+
+
+class NewPassword(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    password: str = Field(max_length=1024)
+
+
+class EmptyBody(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+
+def install(app):
+    """The users routes and GET /api/audit, every one behind `require_admin`. The hashes of the `def` routes run on
+    SCRYPT_EXECUTOR through a submitted future (4.1); the record operations are those of `app.state.accounts`."""
+    from .sessions import require_admin, client_address   # here, not at module level: sessions imports this module
+    accounts = app.state.accounts; store = accounts.store; sessions = accounts.sessions
+
+    def refused(exc):
+        return HTTPException(exc.status, exc.detail)
+
+    def policy(name, password):
+        reasons = check_password(name, password)
+        if reasons: raise HTTPException(422, detail(422, 'weak_password', reasons=reasons))
+
+    def hashed(password):
+        return SCRYPT_EXECUTOR.submit(hash_password, password).result()
+
+    def shown(record):
+        return accounts.public_user(record)
+
+    @app.get('/api/users')
+    def list_users(user: dict = Depends(require_admin)):
+        with store.lock: records = [dict(record) for record in accounts.users().values()]
+        return {'users': [shown(record) for record in sorted(records, key=lambda r: r['name'])]}
+
+    @app.post('/api/users')
+    def create_user(data: NewUser, request: Request, user: dict = Depends(require_admin)):
+        name = data.name.strip().lower()
+        if not check_name(name): raise HTTPException(422, detail(422, 'invalid_name'))
+        if data.role not in ROLES: raise HTTPException(422, {'code': 'invalid_role', 'message': 'Choose admin or operator.'})
+        policy(name, data.password)
+        try: record = accounts.create(name, data.role, hashed(data.password), actor=user['name'], source=client_address(request))
+        except AccountError as exc: raise refused(exc)
+        except OSError: raise HTTPException(500, 'Could not save the account; nothing was changed. Check manager storage and retry.')
+        return {'user': shown(record)}
+
+    @app.patch('/api/users/{name}')
+    def patch_user(name: str, data: UserPatch, request: Request, user: dict = Depends(require_admin)):
+        if data.role is not None and data.role not in ROLES: raise HTTPException(422, {'code': 'invalid_role', 'message': 'Choose admin or operator.'})
+        try: record = accounts.update(name, actor=user['name'], source=client_address(request), role=data.role, disabled=data.disabled)
+        except AccountError as exc: raise refused(exc)
+        except OSError: raise HTTPException(500, 'Could not save the account; nothing was changed. Check manager storage and retry.')
+        return {'user': shown(record)}
+
+    @app.delete('/api/users/{name}')
+    def delete_user(name: str, data: EmptyBody, request: Request, user: dict = Depends(require_admin)):
+        try: accounts.delete(name, actor=user['name'], source=client_address(request))
+        except AccountError as exc: raise refused(exc)
+        except OSError: raise HTTPException(500, 'Could not save the removal; nothing was changed. Check manager storage and retry.')
+        return {'deleted': True}
+
+    @app.post('/api/users/{name}/password')
+    def reset_user_password(name: str, data: NewPassword, request: Request, user: dict = Depends(require_admin)):
+        with store.lock: exists = accounts.record(name) is not None
+        if not exists: raise HTTPException(404, detail(404, 'user_not_found'))
+        if name == user['name']: raise HTTPException(409, detail(409, 'self_change', 'POST /api/users/{name}/password'))
+        policy(name, data.password)
+        try: record = accounts.reset_password(name, hashed(data.password), actor=user['name'], source=client_address(request))
+        except AccountError as exc: raise refused(exc)
+        except OSError: raise HTTPException(500, 'Could not save the password; nothing was changed. Check manager storage and retry.')
+        return {'user': shown(record)}
+
+    @app.get('/api/audit')
+    def audit(limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0), event: str = Query('', max_length=1000),
+              actor: str = Query('', max_length=64), outcome: str = Query('', max_length=16), since: str = Query('', max_length=64),
+              address: str = Query('', max_length=64), user: dict = Depends(require_admin)):
+        sessions.flush_failures()   # closed buckets go to their file first, so the merge below sees them once
+        entries, total = store.audit_entries(limit, offset, event=event, actor=actor, outcome=outcome, since=since, address=address,
+                                             extra=sessions.open_failures())
+        return {'entries': entries, 'total': total}
