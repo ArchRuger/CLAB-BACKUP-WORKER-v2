@@ -511,7 +511,11 @@ class StaleSetupFileTests(unittest.TestCase):
         self.assertEqual([e['event'] for e in entries if e['event'] == 'setup'], ['setup'])
         app.state.sessions.flush_failures(force=True)
         failures = Path(tmp.name)/'audit-failures.jsonl'
-        self.assertFalse(failures.exists() and 'exists count=' in failures.read_text(), 'the lost race is not a name collision')
+        # The lost race ran its hash with the right code: it is neither a name collision (`exists`) nor a failed setup,
+        # and the vocabulary of DESIGN 10.2 has no word for it, so it leaves no failure entry; the one `setup ok` line
+        # above is the record (second verification round: `setup_closed` was written, outside AUDIT_REASONS).
+        self.assertFalse(failures.exists() and failures.read_text().strip(),
+                         'the lost race of a double click is neither a name collision nor a failed setup')
         assert_not_logged(app, code, PASSWORD, PASSWORD + ' two')
 
 

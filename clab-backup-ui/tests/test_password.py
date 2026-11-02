@@ -97,6 +97,38 @@ class HashStringTests(unittest.TestCase):
             self.assertEqual(scrypt.call_args.kwargs['n'], PARAMS['n'])
         self.assertFalse(needs_rehash(build(2**16, 8, 1)))
 
+    def test_n_must_stay_under_two_to_the_sixteen_r_and_every_accepted_string_verifies(self):
+        # OpenSSL also refuses N >= 2**(16 r) (hashlib raises ValueError) below the memory bound: with r=1 every n from
+        # 2**16 up is inside the ranges of 4.2 and under MAXMEM, so the parser must refuse it too, or a stored string
+        # would turn a sign-in into a 500 that no level counts (second verification round).
+        good = hash_password('correct horse battery staple', FAST)
+        _, _, _, salt, digest = good.split('$')[1:]
+        def build(n, r, p):
+            return '$'.join(['scrypt', str(n), str(r), str(p), salt, digest])
+        for n, r, p in ((2**16, 1, 1), (2**17, 1, 1), (2**18, 1, 1), (2**18, 1, 16)):
+            with self.subTest((n, r, p)):
+                self.assertLessEqual(128*r*(n+p+2), MAXMEM, 'inside the memory bound: only the 16 r rule refuses it')
+                with self.assertRaises(ValueError): hashlib.scrypt(b'x', salt=b'y'*16, n=n, r=r, p=p, dklen=32, maxmem=MAXMEM)
+                self.assertIsNone(parse_hash(build(n, r, p)))
+        accepted = ((2**14, 1, 1), (2**15, 1, 1), (2**15, 1, 16), (2**16, 2, 1), (2**17, 2, 1), (2**14, 8, 16), (2**16, 4, 1), (2**14, 31, 1))
+        for n, r, p in accepted:
+            with self.subTest((n, r, p)):
+                self.assertIsNotNone(parse_hash(build(n, r, p)))
+                # Every string the parser accepts is one hashlib verifies: a wrong password answers False, never a raise.
+                self.assertFalse(verify_password(build(n, r, p), 'not the password'))
+
+    def test_a_verify_that_hashlib_refuses_anyway_answers_false_after_the_dummy_and_never_raises(self):
+        # The parser is the rule; should a build of OpenSSL refuse more, the verify still answers like a bad record.
+        good = hash_password('correct horse battery staple', FAST)
+        real = hashlib.scrypt; calls = []
+        def refusing(*args, **kwargs):
+            calls.append(kwargs['n'])
+            if len(calls) == 1: raise ValueError('[digital envelope routines] memory limit exceeded')
+            return real(*args, **kwargs)
+        with patch('app.accounts.hashlib.scrypt', refusing):
+            self.assertFalse(verify_password(good, 'correct horse battery staple'))
+        self.assertEqual(calls, [FAST['n'], PARAMS['n']], 'the refused call did no work; the dummy is verified instead')
+
     def test_a_record_that_does_not_parse_never_verifies_but_still_costs_one_scrypt(self):
         for bad in (None, '', 'scrypt$x', 'plain-text-password', 'scrypt$16384$8$1$$'):
             with patch('app.accounts.hashlib.scrypt', wraps=hashlib.scrypt) as scrypt:

@@ -13,6 +13,7 @@ from http.cookies import SimpleCookie
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
 from fastapi.testclient import TestClient
 from starlette.routing import Mount, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
@@ -650,6 +651,77 @@ class ConstantWorkTests(SessionTestCase):
         self.sessions.flush_failures(force=True)
         self.assertEqual([(e['actor'], e['detail']) for e in self.audit('audit-failures.jsonl')], [(NAME, 'bad_record count=1')])
         self.assertIsNone(self.client.get('/api/users').json()['users'][0]['password_changed'])
+
+    def test_a_stored_string_hashlib_refuses_is_a_bad_record_not_a_500(self):
+        # scrypt$65536$1$1$…: inside the ranges and the memory bound of 4.2, refused by OpenSSL's N < 2**(16 r) rule.
+        # The sign-in answers the one 401, the failure is counted on the pair and audited bad_record (second
+        # verification round).
+        with self.store.lock:
+            _, _, _, salt, digest = self.store.state['users'][NAME]['password'].split('$')[1:]
+            self.store.state['users'][NAME]['password'] = '$'.join(['scrypt', str(2**16), '1', '1', salt, digest]); self.store.save()
+        anonymous = self.anonymous()
+        response = anonymous.post('/api/session', json={'username': NAME, 'password': PASSWORD})
+        self.assertEqual((response.status_code, response.json()['detail']['code']), (401, 'invalid_credentials'))
+        self.sessions.flush_failures(force=True)
+        self.assertEqual([(e['actor'], e['detail']) for e in self.audit('audit-failures.jsonl')], [(NAME, 'bad_record count=1')])
+        with self.sessions.lock: pair = dict(self.sessions.pairs[(source_key('testclient'), NAME)])
+        self.assertEqual((pair['failures'], pair['inflight']), (1, 0), 'the failure is counted and settled')
+        self.assertIsNone(self.client.get('/api/users').json()['users'][0]['password_changed'])
+
+
+class GuardEventTests(SessionTestCase):
+    """The guard's api.request event (DESIGN 10.3): its actor, no line for a request nobody made, never on the loop."""
+    def hold_store_lock(self, seconds):
+        """Holds store.lock in another thread, as GET /api/logs or a state save does, until `release` or `seconds`."""
+        release = threading.Event(); holding = threading.Event()
+        def holder():
+            with self.store.lock:
+                holding.set(); release.wait(seconds)
+        thread = threading.Thread(target=holder); thread.start()
+        self.addCleanup(thread.join); self.addCleanup(release.set)
+        self.assertTrue(holding.wait(2))
+        return release
+
+    def during_hold(self, send):
+        """`send(browser)` is awaited while the lock is held; a health probe sent 0.3 s later must answer at once.
+        Returns the response of `send` and the seconds from the send to the probe's answer."""
+        release = self.hold_store_lock(4)
+        async def go():
+            transport = httpx.ASGITransport(app=self.app, client=('203.0.113.7', 4242))
+            async with httpx.AsyncClient(transport=transport, base_url='http://testserver') as browser:
+                started = time.monotonic()
+                pending = asyncio.ensure_future(send(browser))
+                await asyncio.sleep(0.3)
+                health = await browser.get('/api/health'); elapsed = time.monotonic() - started
+                release.set()
+                return await pending, health.status_code, elapsed
+        response, health, elapsed = asyncio.run(go())
+        self.assertEqual(health, 200)
+        return response, elapsed
+
+    def test_an_unauthenticated_sign_out_writes_no_event_and_a_signed_in_one_names_its_actor(self):
+        anonymous = self.anonymous()
+        for _ in range(3): self.assertEqual(anonymous.request('DELETE', '/api/session', json={}).status_code, 200)
+        self.assertEqual([e for e in self.store.events() if 'DELETE /api/session' in e['message']], [],
+                         'a scanner cannot grow events.jsonl through the exempt sign-out (one line per request, no session)')
+        self.assertEqual(self.client.request('DELETE', '/api/session', json={}).status_code, 200)
+        signed = [e for e in self.store.events() if 'DELETE /api/session' in e['message']]
+        self.assertEqual([(e['action'], e['actor']) for e in signed], [('api.request', NAME)])
+
+    def test_an_unauthenticated_sign_out_never_waits_for_the_store_lock(self):
+        response, elapsed = self.during_hold(lambda browser: browser.request('DELETE', '/api/session', json={}))
+        self.assertEqual(response.status_code, 200)
+        self.assertLess(elapsed, 1.5, f'/api/health waited {elapsed:.2f}s behind an unauthenticated sign-out')
+
+    def test_the_guards_event_write_never_blocks_the_event_loop(self):
+        # A signed-in mutating request to a path without a route: no handler touches the store, only the guard's
+        # event does, and that write must wait for the lock off the loop.
+        cookie = self.client.cookies.get(COOKIE)
+        response, elapsed = self.during_hold(lambda browser: browser.post('/api/no-such-route', json={}, cookies={COOKIE: cookie}))
+        self.assertEqual(response.status_code, 404)
+        self.assertLess(elapsed, 1.5, f'/api/health waited {elapsed:.2f}s behind the guard\'s event write')
+        logged = [e for e in self.store.events() if e['action'] == 'api.request' and '/api/unknown' in e['message']]
+        self.assertEqual([(e['actor'], e['level']) for e in logged], [(NAME, 'error')], 'the event is still written, after the lock')
 
 
 class NoNormalisationTests(SessionTestCase):

@@ -171,6 +171,61 @@ class ThrottleTests(unittest.TestCase):
         for i in range(L2_THRESHOLD): self.sessions.success(STRANGER, f'guess{i:03d}')
         self.assertEqual(self.sessions.check(STRANGER, 'guess101', False), 0, 'the successes settled every reservation')
 
+    # Once the last failure is older than the current delay, the reservation alone must hold the level: a burst sent
+    # then verifies one attempt, never VERIFY_LIMIT (second verification round on 8.2). An attempt in flight is the
+    # failure it may become, dated now, so while one is in flight every other attempt waits the delay that failure
+    # would start; `last` still never moves on a reservation, so a released one restarts nothing.
+    def test_l1_after_the_delay_has_run_out_one_attempt_at_a_time_is_in_flight(self):
+        check = lambda: self.sessions.check(FAMILIAR, 'victim', True)
+        for _ in range(L1_FREE):
+            self.assertEqual(check(), 0); self.sessions.failure(FAMILIAR, 'victim', True, 'invalid_credentials')
+        self.advance(DELAY_CAP + 1)
+        answers = [check() for _ in range(20)]
+        self.assertEqual(answers.count(0), 1, answers)
+        self.assertEqual(set(answers) - {0}, {FIRST_DELAY * 2}, 'the others wait the delay a sixth failure would start, counted from now')
+        self.sessions.failure(FAMILIAR, 'victim', True, 'invalid_credentials')
+        self.assertEqual(check(), FIRST_DELAY * 2, 'the sixth failure started its delay now')
+        self.advance(FIRST_DELAY * 2 + 1)
+        self.assertEqual(check(), 0); self.assertEqual(check(), FIRST_DELAY * 4)
+        self.sessions.release(FAMILIAR, 'victim', True)
+        self.assertEqual(check(), 0, 'a released reservation restarts no delay: the next attempt may proceed')
+        self.sessions.release(FAMILIAR, 'victim', True)
+
+    def test_l1_at_its_cap_a_burst_after_fifteen_minutes_verifies_one(self):
+        check = lambda: self.sessions.check(FAMILIAR, 'victim', True)
+        delay = 0
+        for step in range(L1_FREE + 6):   # five free, then 30, 60, 120, 240, 480 and 900 s, each waited out
+            self.advance(delay + 1)
+            self.assertEqual(check(), 0, step); self.sessions.failure(FAMILIAR, 'victim', True, 'invalid_credentials')
+            delay = min(DELAY_CAP, FIRST_DELAY * 2 ** (step + 1 - L1_FREE)) if step + 1 >= L1_FREE else 0
+        self.assertEqual(check(), DELAY_CAP)
+        self.advance(DELAY_CAP + 1)
+        answers = [check() for _ in range(20)]
+        self.assertEqual((answers.count(0), set(answers) - {0}), (1, {DELAY_CAP}), answers)
+        self.sessions.failure(FAMILIAR, 'victim', True, 'invalid_credentials')
+        self.assertEqual(check(), DELAY_CAP, 'one failure per fifteen minutes once capped')
+        throttled = [e for e in self.throttled() if e['event'] == 'signin.throttled']
+        self.assertEqual(sum(int(e['detail'].split('count=')[1].split()[0]) for e in throttled), 21)
+        self.assertTrue(all(e['detail'].startswith('pair count=') for e in throttled), throttled)
+
+    def test_l2_after_the_source_delay_has_run_out_one_attempt_at_a_time_is_in_flight(self):
+        for i in range(L2_THRESHOLD):
+            self.assertEqual(self.sessions.check(STRANGER, f'guess{i:03d}', False), 0, i)
+            self.sessions.failure(STRANGER, f'guess{i:03d}', False, 'invalid_credentials')
+        self.assertEqual(self.sessions.check(STRANGER, 'other000', False), FIRST_DELAY)
+        self.advance(FIRST_DELAY + 1)
+        answers = [self.sessions.check(STRANGER, f'other{i:03d}', False) for i in range(20)]
+        self.assertEqual((answers.count(0), set(answers) - {0}), (1, {FIRST_DELAY}), answers)
+        self.sessions.failure(STRANGER, 'other000', False, 'invalid_credentials')
+        self.assertEqual(self.sessions.check(STRANGER, 'other020', False), FIRST_DELAY * 2, 'the failure doubled the source delay, counted from now')
+        self.advance(FIRST_DELAY * 2 + 1)
+        self.assertEqual(self.sessions.check(STRANGER, 'other021', False), 0)
+        self.assertEqual(self.sessions.check(STRANGER, 'other022', False), FIRST_DELAY * 2)
+        self.sessions.release(STRANGER, 'other021', False)
+        self.assertEqual(self.sessions.check(STRANGER, 'other022', False), 0, 'a released reservation restarts no delay')
+        self.sessions.release(STRANGER, 'other022', False)
+        self.assertEqual(sorted(set(e['detail'].split(' count=')[0] for e in self.throttled() if e['event'] == 'signin.throttled')), ['source'])
+
     def test_l3_tokens_are_held_by_the_attempts_in_flight_from_unfamiliar_sources(self):
         for i in range(L3_TOKENS):
             self.assertEqual(self.sessions.check(f'198.51.{i}.9', 'victim', False), 0, i)
@@ -262,6 +317,54 @@ class ConcurrentBurstTests(unittest.TestCase):
             verified += self.burst([f'203.0.{host + window}.{i}' for i in range(1, 21)]).count(401)
         self.assertLessEqual(verified, L3_TOKENS + 5, verified)
         assert_not_logged(self.app, PASSWORD, 'wrong guess 0000')
+
+    def attempts(self, address, pairs):
+        """Sign-ins sent at once from one address: `pairs` are (name, password); the statuses in order."""
+        async def go():
+            client = browser(self.app, address)
+            try: return await asyncio.gather(*[client.post('/api/session', json={'username': n, 'password': p}) for n, p in pairs])
+            finally: await client.aclose()
+        return [response.status_code for response in asyncio.run(go())]
+
+    def test_an_insider_at_the_capped_delay_gets_one_guess_per_fifteen_minutes_not_twenty(self):
+        # A source on the admin's own /24 is familiar, so L3 never applies and L1 alone holds. The pair is walked to
+        # its cap one failure at a time; after the fifteen minutes a burst of nineteen verifies one attempt and the
+        # eighteen others answer 429 with the full delay (second verification round on 8.2).
+        clock = [self.app.state.sessions.clock()]; self.app.state.sessions.clock = lambda: clock[0]
+        insider = '203.0.113.77'
+        self.assertEqual(self.attempts(insider, [(NAME, PASSWORD)]), [200], 'one success makes the /24 familiar')
+        self.assertEqual(self.attempts(insider, [(NAME, f'wrong {i}') for i in range(L1_FREE)]).count(401), L1_FREE)
+        for delay in (30, 60, 120, 240, 480):
+            clock[0] += delay + 1
+            self.assertEqual(self.attempts(insider, [(NAME, 'wrong again')]), [401], delay)
+        clock[0] += DELAY_CAP + 1
+        self.calls.clear()
+        statuses = self.attempts(insider, [(NAME, f'burst {i}') for i in range(19)])
+        self.assertEqual((statuses.count(401), statuses.count(429)), (1, 18), statuses)
+        self.assertEqual(len(self.calls), 1, 'one scrypt for the one verified attempt')
+        self.app.state.sessions.flush_failures(force=True)
+        entries = [json.loads(l) for l in (Path(self.tmp.name)/'audit-failures.jsonl').read_text().splitlines()]
+        throttled = [e for e in entries if e['event'] == 'signin.throttled']
+        self.assertTrue(throttled and all(e['detail'].startswith('pair count=') and e['detail'].endswith(f'retry_after={DELAY_CAP}') for e in throttled), throttled)
+        assert_not_logged(self.app, PASSWORD, 'burst 0', 'wrong again')
+
+    def test_a_password_spray_from_one_source_gets_one_guess_per_delay_once_the_source_is_delayed(self):
+        # A hundred failures with distinct names delay the source (L2); after the thirty seconds a burst of nineteen
+        # new names verifies one attempt, and the next delay is doubled from that failure.
+        clock = [self.app.state.sessions.clock()]; self.app.state.sessions.clock = lambda: clock[0]
+        sprayer = '198.51.100.40'; verified = 0
+        for start in range(0, L2_THRESHOLD, 10):
+            verified += self.attempts(sprayer, [(f'nobody{i:03d}', 'x' * 12) for i in range(start, start + 10)]).count(401)
+        self.assertEqual(verified, L2_THRESHOLD)
+        with self.app.state.sessions.lock: delay = self.app.state.sessions.sources[sprayer]['delay']
+        self.assertEqual(delay, FIRST_DELAY)
+        clock[0] += FIRST_DELAY + 1
+        self.calls.clear()
+        statuses = self.attempts(sprayer, [(f'other{i:03d}', 'x' * 12) for i in range(19)])
+        self.assertEqual((statuses.count(401), statuses.count(429)), (1, 18), statuses)
+        self.assertEqual(len(self.calls), 1)
+        with self.app.state.sessions.lock: entry = self.app.state.sessions.sources[sprayer]
+        self.assertEqual((entry['delay'], entry['inflight']), (FIRST_DELAY * 2, 0))
 
 
 class LoadTests(unittest.TestCase):
