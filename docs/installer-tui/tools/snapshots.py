@@ -6,16 +6,34 @@ Uses tools/fixture.py: invented account/host/status, a scripted run; nothing on 
 is probed or changed. Each file name carries its size and colour mode.
 """
 import asyncio
+import contextlib
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fixture  # noqa: E402
-from installer_tui import app as slate, engine  # noqa: E402
+from installer_tui import app as slate, engine, exposure  # noqa: E402
 
 SIZES = [(80, 24), (120, 40), (160, 50)]
+
+FIXTURE_TLS = {'mode': 'self-signed', 'fingerprint': 'AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89',
+               'expires': '2099-01-01', 'addresses': ['192.0.2.10', '198.51.100.7'], 'names': []}
+FIXTURE_NAME = 'vm1.example.edu'
+FIXTURE_SETUP_CODE = 'abcdef-ghjkmn-pqrstu-vwxy23'   # an invented code of the right shape; never read from a VM
+
+
+@contextlib.contextmanager
+def fixture_vm():
+    """Every reader of the VM that the result screen calls, replaced for the whole run: the certificate
+    (`openssl`), the primary name (`setup-tls.sh --primary`) and the setup code (`sudo -n cat`). Without them a
+    rerun on a development VM with passwordless sudo would put the live setup code into the committed snapshots."""
+    with patch.object(exposure, 'facts', lambda *a, **k: FIXTURE_TLS), \
+            patch.object(exposure, 'primary', lambda *a, **k: FIXTURE_NAME), \
+            patch.object(exposure, 'read_setup_code', lambda *a, **k: ('open', 'setup', FIXTURE_SETUP_CODE)):
+        yield
 
 
 class ScriptedBridge(slate.Bridge):
@@ -126,7 +144,7 @@ def result_screen(partial=True):
         run = scripted_run(app.ctx, upto=len(engine.Run(app.ctx.install, 'install', app.ctx.env, app.ctx.version).phases))
         run.finished_at = run.started + 1312
         verify = run.phase('verify')
-        verify.outcome = 'http://127.0.0.1:8081/'
+        verify.outcome = 'https://127.0.0.1:8443/'
         if partial:
             git = run.phase('git')
             git.state = engine.SKIPPED
@@ -141,7 +159,6 @@ def result_screen(partial=True):
             run.phase('lazydocker').outcome = ('installed', 'lazydocker 0.24.1 installed to /home/student/.local/bin/lazydocker.')
         run.thread = None
         app.current_run = run
-        slate.vm_addresses = lambda: ['192.0.2.10']
         await app.push_screen(slate.ResultScreen(run))
     return step
 
@@ -168,21 +185,22 @@ async def main():
     png = '--png' in sys.argv
     only = [arg.split('=', 1)[1] for arg in sys.argv if arg.startswith('--only=')]
     files = []
-    for name, steps in SCENES:
-        if only and name not in only:
-            continue
-        for size in SIZES:
-            files.append(await shoot(out, name, fixture.context(scrub=True), size, steps))
-    import os
-    for mode, kwargs in (('nocolor', {'no_color': True}), ('ascii', {'ascii_only': True})):
-        if only and 'dashboard' not in only:
-            continue
-        if mode == 'nocolor':
-            os.environ['NO_COLOR'] = '1'   # Textual picks its monochrome filter at construction
-        try:
-            files.append(await shoot(out, f'dashboard-{mode}', fixture.context(scrub=True, **kwargs), (100, 30), [nothing]))
-        finally:
-            os.environ.pop('NO_COLOR', None)
+    with fixture_vm():
+        for name, steps in SCENES:
+            if only and name not in only:
+                continue
+            for size in SIZES:
+                files.append(await shoot(out, name, fixture.context(scrub=True), size, steps))
+        import os
+        for mode, kwargs in (('nocolor', {'no_color': True}), ('ascii', {'ascii_only': True})):
+            if only and 'dashboard' not in only:
+                continue
+            if mode == 'nocolor':
+                os.environ['NO_COLOR'] = '1'   # Textual picks its monochrome filter at construction
+            try:
+                files.append(await shoot(out, f'dashboard-{mode}', fixture.context(scrub=True, **kwargs), (100, 30), [nothing]))
+            finally:
+                os.environ.pop('NO_COLOR', None)
     if png and shutil.which('rsvg-convert'):
         for svg in files:
             subprocess.run(['rsvg-convert', '-b', '#0F172A', '-o', str(svg.with_suffix('.png')), str(svg)], check=False)

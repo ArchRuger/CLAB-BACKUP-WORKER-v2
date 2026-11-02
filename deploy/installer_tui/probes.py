@@ -4,13 +4,15 @@ Every probe is bounded, changes nothing, and never prompts: privileged questions
 `sudo -n`, and a refused sudo is reported as "Needs authentication", not as absence.
 A probe that cannot answer says so ("Unavailable"); only positive evidence such as a
 missing command or data folder is reported as "Not installed". The manager's settings
-file is read for its UI_BIND, UI_PORT and CAPTURE_PROVIDER keys only.
+file is read for its UI_BIND, UI_PORT, UI_HTTP_PORT and CAPTURE_PROVIDER keys only.
 
 Intentional difference from the plain menu: when sudo already runs without a prompt
 (cached credentials or a NOPASSWD rule), the dashboard asks three read-only root
 questions with `sudo -n` (the clab-discovery password state, the manager container's
-state, and the Git helper's registration list via `setup-git.sh --list`). None changes
-anything; without cached credentials they report "Needs authentication" instead.
+state and version, and the Git helper's registration list via `setup-git.sh --list`). None
+changes anything; without cached credentials they report "Needs authentication" instead.
+The manager itself answers over HTTPS: `/api/health` is asked with the installed certificate
+pinned (exposure.health_ready), and the certificate row reads that same public file.
 """
 from concurrent.futures import ThreadPoolExecutor
 import grp
@@ -18,12 +20,15 @@ import json
 import os
 from pathlib import Path
 import pwd
+import re
+import shlex
 import shutil
+import ssl
 import stat
 import time
 from urllib.request import ProxyHandler, build_opener
 
-from . import core
+from . import core, exposure
 
 NOT_CHECKED = 'Not checked'
 CHECKING = 'Checking'
@@ -65,6 +70,7 @@ def probe_sudo(ctx):
 COMPONENTS = [
     ('prereqs', 'Prerequisites'),
     ('manager', 'Manager'),
+    ('tls', 'TLS certificate'),
     ('access', 'VM connection account'),
     ('engineer', 'VS Code access'),
     ('git', 'Git'),
@@ -77,46 +83,26 @@ def placeholder():
     return {key: Result(key, label) for key, label in COMPONENTS + EXTRA}
 
 
-def env_settings(source, keys=('UI_BIND', 'UI_PORT', 'CAPTURE_PROVIDER')):
+def env_settings(source, keys=('UI_BIND', 'UI_PORT', 'UI_HTTP_PORT', 'CAPTURE_PROVIDER')):
     """Only the named keys of clab-backup-ui/.env (the file also holds a session token)."""
-    path = Path(source) / 'clab-backup-ui' / '.env'
-    values = {}
-    try:
-        if path.is_symlink() or path.stat().st_size > 65536:
-            return values
-        for line in path.read_text(errors='replace').splitlines():
-            name, sep, value = line.partition('=')
-            if sep and name.strip() in keys:
-                values[name.strip()] = value.strip().strip('"\'')
-    except OSError:
-        pass
-    return values
+    return exposure.env_values(source, keys)
 
 
 def manager_address(source):
+    """(https://<VM-local address>:<TLS port>/, port): where this VM reaches the manager itself."""
     settings = env_settings(source)
     host = settings.get('UI_BIND') or '0.0.0.0'
     try:
-        port = int(settings.get('UI_PORT') or 8081)
+        port = int(settings.get('UI_PORT') or exposure.DEFAULT_TLS_PORT)
     except ValueError:
-        port = 8081
+        port = exposure.DEFAULT_TLS_PORT
     if host in ('0.0.0.0', '', 'localhost'):
         host = '127.0.0.1'
     elif host == '::':
         host = '[::1]'
     elif ':' in host and not host.startswith('['):
         host = f'[{host}]'
-    return f'http://{host}:{port}/', port
-
-
-def http_version(url, timeout=3):
-    opener = build_opener(ProxyHandler({}))
-    with opener.open(url + 'api/state', timeout=timeout) as response:
-        data = response.read(8 * 1024 * 1024 + 1)
-    if len(data) > 8 * 1024 * 1024:
-        return None
-    body = json.loads(data)
-    return body.get('version') if isinstance(body, dict) else None
+    return f'https://{host}:{port}/', port
 
 
 def _sudo_refused(code, text):
@@ -138,16 +124,39 @@ def probe_prereqs(ctx):
     return ATTENTION, 'Missing: ' + ', '.join(missing), 'Install/update installs the missing ones.'
 
 
+def http_ready(url, cafile, timeout=3):
+    """True when the manager answers GET /api/health over HTTPS with the installed certificate pinned."""
+    return exposure.health_ready(url, cafile, timeout)
+
+
+VERSION_SHAPE = re.compile(r'\d+\.\d+\.\d+')
+
+
+def manager_version(ctx):
+    """(code, text) of the running manager's version, asked inside its container with `sudo -n`."""
+    return core.run_capture(['sudo', '-n', 'docker', '--host', 'unix:///var/run/docker.sock', 'compose', '-f',
+                             str(Path(ctx.source) / 'clab-backup-ui/compose.yml'), 'exec', '-T', 'backup-ui', 'python',
+                             '-c', 'from app import __version__; print(__version__)'], ctx.env, ctx.source, timeout=15)
+
+
 def probe_manager(ctx):
     url, port = manager_address(ctx.source)
     try:
-        running = http_version(url)
-    except (OSError, ValueError):
-        running = None
-    if running == ctx.version:
-        return READY, f'Running {running} on port {port}', f'VM-local address {url} (verified on this VM only).', running
-    if running:
-        return ATTENTION, f'Running {running}; this checkout is {ctx.version}', 'Install/update rebuilds it from this checkout.', running
+        ready = http_ready(url, exposure.TLS_DIR / 'cert.pem')
+    except (OSError, ValueError, ssl.SSLError):
+        ready = False
+    if ready:
+        code, text = manager_version(ctx)
+        if _sudo_refused(code, text):
+            return (NEEDS_AUTH, f'Answering on port {port}; version needs sudo',
+                    'Refresh after authenticating, or run Check installation.')
+        lines = text.strip().splitlines()
+        running = lines[-1].strip() if code == 0 and lines and VERSION_SHAPE.fullmatch(lines[-1].strip()) else None
+        if running == ctx.version:
+            return READY, f'Running {running} on port {port}', f'VM-local address {url} (verified on this VM only).', running
+        if running:
+            return ATTENTION, f'Running {running}; this checkout is {ctx.version}', 'Install/update rebuilds it from this checkout.', running
+        return UNAVAILABLE, f'Answering on port {port}; could not read the version', 'Run Check installation.'
     try:
         exists = DATA_DIR.exists()
     except OSError:
@@ -160,12 +169,45 @@ def probe_manager(ctx):
     if _sudo_refused(code, text):
         return NEEDS_AUTH, f'No answer on port {port}; container state needs sudo', 'Refresh after authenticating, or run Check installation.'
     if code == 0 and text.strip():
-        return ATTENTION, f'Container running but no HTTP answer on port {port}', 'It may still be starting; refresh shortly.'
+        # An upgrade from plain HTTP lands here: the old manager runs but has no TLS door yet. Say what runs, as
+        # the row did before the HTTPS door, instead of "still starting", which never resolves for it.
+        vcode, vtext = manager_version(ctx)
+        lines = vtext.strip().splitlines()
+        running = lines[-1].strip() if vcode == 0 and lines and VERSION_SHAPE.fullmatch(lines[-1].strip()) else None
+        if running and running != ctx.version:
+            return (ATTENTION, f'Running {running}; this checkout is {ctx.version}',
+                    f'No HTTPS answer on port {port}. Install/update rebuilds it from this checkout.', running)
+        if running:
+            return (ATTENTION, f'Running {running} but no HTTPS answer on port {port}',
+                    'It may still be starting; if this persists, Install/update sets up HTTPS.', running)
+        return ATTENTION, f'Container running but no HTTPS answer on port {port}', 'It may still be starting; refresh shortly.'
     if code == 0:
         if exists:
             return ATTENTION, 'Installed but not running', 'Install/update recreates it; data is retained.'
         return NOT_INSTALLED, 'Not installed', ''
     return UNAVAILABLE, 'Could not determine the container state', (text or '')[-200:]
+
+
+def probe_tls(ctx):
+    """The certificate the manager serves: its mode and expiry, from the public cert.pem."""
+    certificate = exposure.TLS_DIR / 'cert.pem'
+    try:
+        present = certificate.is_file()
+    except OSError:
+        present = False
+    if not present:
+        return NOT_INSTALLED, 'No certificate yet', 'Install/update creates a self-signed one.'
+    facts = exposure.facts(exposure.TLS_DIR)
+    if facts is None:
+        return UNAVAILABLE, 'The certificate could not be read', 'bash ' + shlex.quote(str(Path(ctx.source) / 'deploy/setup-tls.sh')) + ' --show prints its facts.'
+    kind = {'provided': 'Provided', 'self-signed': 'Self-signed'}.get(facts['mode'], 'Certificate')
+    left = exposure.days_left(facts['expires'])
+    detail = 'SHA-256 fingerprint ' + facts['fingerprint']
+    if left is not None and left < 0:
+        return ATTENTION, f'{kind}, expired {facts["expires"]}', 'Install/update renews a self-signed certificate. ' + detail
+    if left is not None and left < 30:
+        return ATTENTION, f'{kind}, expires {facts["expires"]} ({left} days)', detail
+    return READY, f'{kind}, expires {facts["expires"]}', detail
 
 
 def probe_access(ctx):
@@ -269,7 +311,7 @@ def probe_lazydocker(ctx):
     return (READY, f'Installed {version}'.strip(), '') if code == 0 else (ATTENTION, 'Installed but does not run', '')
 
 
-PROBES = {'prereqs': probe_prereqs, 'manager': probe_manager, 'access': probe_access, 'engineer': probe_engineer,
+PROBES = {'prereqs': probe_prereqs, 'manager': probe_manager, 'tls': probe_tls, 'access': probe_access, 'engineer': probe_engineer,
           'git': probe_git, 'capture': probe_capture, 'lazydocker': probe_lazydocker, 'sudo': probe_sudo}
 EXTRA = [('sudo', 'Administrator')]
 

@@ -17,17 +17,24 @@ in system Python). Without it this module is skipped, unless INSTALLER_TUI_REQUI
 import asyncio
 import contextlib
 import io
+import json
 import os
 from pathlib import Path
 import re
 import shlex
 import signal
+import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+GOOD_CODE = 'abcdef-ghjkmn-pqrstu-vwxy23'
+TLS_FACTS = {'mode': 'self-signed', 'fingerprint': 'AB:CD:EF', 'expires': '2099-01-01',
+             'addresses': ['192.0.2.10', '198.51.100.7'], 'names': []}
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'deploy'))
@@ -47,8 +54,9 @@ from rich.text import Text  # noqa: E402
 from textual.widgets import Button, Checkbox, Input, ListItem, Log, RadioSet, Static  # noqa: E402
 
 import fixture  # noqa: E402
+import snapshots  # noqa: E402
 from installer_tui import app as slate  # noqa: E402
-from installer_tui import core, engine, probes  # noqa: E402
+from installer_tui import core, engine, exposure, probes  # noqa: E402
 
 SIZES = [(80, 24), (120, 40), (160, 50)]
 FULL_LABELS = ['Install / update', 'Git setup / repair', 'VS Code / Containerlab access', 'Browser Wireshark stack',
@@ -138,7 +146,7 @@ def scripted_run(ctx, action='install', states=None, default=engine.PENDING, ali
 def full_install_run(ctx, partial=True):
     """A finished install: every phase Completed; with `partial`, Git skipped and lazydocker skipped."""
     run = scripted_run(ctx, 'install', default=engine.COMPLETED)
-    run.phase('verify').outcome = 'http://127.0.0.1:8081/'
+    run.phase('verify').outcome = 'https://127.0.0.1:8443/'
     if partial:
         git, lazy = run.phase('git'), run.phase('lazydocker')
         git.state, git.code, git.note = engine.SKIPPED, 2, 'not completed; run it again later from the dashboard'
@@ -179,7 +187,7 @@ class FakeInstall:
 
     def check_manager(self, env, version, wait_seconds=45, say=print, sudo=('sudo',)):
         say('fake manager check')
-        return 'http://127.0.0.1:8081/'
+        return 'https://127.0.0.1:8443/'
 
     def setup_lazydocker(self, env, say=print):
         return ('installed', 'fake lazydocker')
@@ -240,6 +248,15 @@ class SlateCase(unittest.IsolatedAsyncioTestCase):
             patch.object(core.StepProcess, 'start', guarded_step_start),
             patch.object(engine, 'credentials_cached', lambda env, cwd: True),
             patch.object(core, 'run_capture', lambda argv, env, cwd, timeout=10: (0, 'clab-discovery P')),
+            # Settings files are read only inside this test's own folder: never this checkout's real .env.
+            patch.object(exposure, 'env_file_values',
+                         lambda path, keys, _real=exposure.env_file_values: _real(path, keys) if str(path).startswith(str(self.root)) else {}),
+            # The plan reads the certificate, and the summary the primary name and the setup code, from the VM:
+            # none of them may reach this machine's real TLS folder, `setup-tls.sh` or `sudo cat` (a test that needs
+            # a value patches it again, as ResultScreenTests does).
+            patch.object(exposure, 'facts', lambda *a, **k: None),
+            patch.object(exposure, 'primary', lambda *a, **k: None),
+            patch.object(exposure, 'read_setup_code', lambda *a, **k: ('absent', None, None)),
         ]
         for item in patches:
             item.start()
@@ -254,6 +271,9 @@ class SlateCase(unittest.IsolatedAsyncioTestCase):
         asyncio.get_running_loop().set_debug(False)
 
     def ctx(self, **kwargs):
+        # docs/installer-tui/tools/fixture.py predates the TLS row: give it the answer a healthy VM would.
+        if 'status' not in kwargs:
+            kwargs['status'] = {**fixture.FIXTURE_STATUS, 'tls': (probes.READY, 'Self-signed, expires 2099-01-01', '')}
         return fixture.context(**kwargs)
 
     @contextlib.asynccontextmanager
@@ -425,7 +445,7 @@ class DashboardTests(SlateCase):
             self.assertEqual(highlighted_nav(app), ['nav-engineer'])
 
     async def test_status_table_renders_every_component_with_its_state_word(self):
-        expected_words = {'prereqs': 'READY', 'manager': 'ATTENTION', 'access': 'NEEDS AUTH', 'engineer': 'READY',
+        expected_words = {'prereqs': 'READY', 'manager': 'ATTENTION', 'tls': 'READY', 'access': 'NEEDS AUTH', 'engineer': 'READY',
                           'git': 'ATTENTION', 'capture': 'READY', 'lazydocker': 'NOT INSTALLED'}
         short = {'access': 'VM account', 'capture': 'Wireshark', 'engineer': 'VS Code access'}
         for size in SIZES:
@@ -438,6 +458,14 @@ class DashboardTests(SlateCase):
                         row = [line for line in lines if re.search(r'│\s*' + re.escape(name) + r'\s', line)
                                and expected_words[key] in line]
                         self.assertTrue(row, f'{name!r} row with {expected_words[key]!r} not found at {size}')
+
+    async def test_the_tls_row_follows_the_manager_row_and_opens_the_install_action(self):
+        async with self.running((120, 40)) as (app, pilot):
+            lines = screen_text(app).splitlines()
+            manager = next(i for i, line in enumerate(lines) if re.search(r'│\s*Manager\s+.*ATTENTION', line))
+            self.assertRegex(lines[manager + 1], r'│\s*TLS certificate\s')
+            self.assertIn('Self-signed, expires 2099-01-01', lines[manager + 1])
+            self.assertEqual(slate.FIX_ACTION['tls'], 'install')
 
     async def test_unchecked_status_shows_not_checked_words_without_probing(self):
         ctx = self.ctx(status=None)
@@ -663,6 +691,179 @@ class SettingsTests(SlateCase):
             await pilot.press('escape')
             await pilot.pause()
             self.assertIsInstance(app.screen, slate.Dashboard)
+
+    async def test_settings_open_with_the_firewall_and_ssh_hardening_chosen_and_no_port_question(self):
+        async with self.running((120, 40)) as (app, pilot):
+            await self.open_settings(app, pilot)
+            screen = app.screen
+            self.assertEqual(screen.query_one('#firewall', RadioSet).pressed_index, 0)
+            self.assertEqual(screen.query_one('#sshd', RadioSet).pressed_index, 0)
+            self.assertFalse(screen.query_one('#ports', RadioSet).display, 'nothing collides: the question is not asked')
+            self.assertFalse(screen.query_one('#ports-label').display)
+
+    async def test_skipping_the_firewall_and_ssh_hardening_removes_both_phases_from_the_plan(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.open_settings(app, pilot)
+            await self.choose(app, pilot, 'firewall', 1)
+            await self.choose(app, pilot, 'sshd', 1)
+            await self.review(app, pilot)
+            self.assertIsInstance(app.screen, slate.ReviewScreen)
+            self.assertEqual((ctx.options.firewall, ctx.options.ssh_hardening), (False, False))
+            body = widget_text(app.screen.query_one('#review-body'))
+            self.assertIn('Firewall: not selected.', body)
+            self.assertIn('SSH hardening: not selected.', body)
+            labels = self.plan_phase_labels(app)
+            self.assertNotIn('Firewall', labels)
+            self.assertNotIn('SSH hardening', labels)
+
+    def test_no_test_of_this_module_reads_the_vms_certificate_or_runs_a_helper_for_the_code(self):
+        # The plan's TLS line used to run `openssl x509` on the development VM's live TLS folder, so a VM with a
+        # provided certificate failed 'TLS: self-signed certificate' for a reason outside the code. Programs named
+        # on a PATH that holds only recorders show whether any of the three readers still starts one.
+        bin_dir = self.root / 'recorders'
+        bin_dir.mkdir()
+        marker = self.root / 'started'
+        for name in ('openssl', 'sudo', 'bash'):
+            script = bin_dir / name
+            script.write_text(f'#!/bin/sh\necho {name} >> {marker}\nexit 1\n')
+            script.chmod(0o755)
+        with patch.dict(os.environ, {'PATH': str(bin_dir)}):
+            self.assertIsNone(exposure.facts(exposure.TLS_DIR))
+            self.assertIsNone(exposure.primary(self.root))
+            self.assertEqual(exposure.read_setup_code(), ('absent', None, None))
+        self.assertFalse(marker.exists(), marker.read_text() if marker.exists() else '')
+
+    async def test_the_opt_out_flags_preselect_skip_for_the_firewall_and_ssh_questions(self):
+        args = slate.parse_args(['--advanced', '--no-firewall', '--no-ssh-hardening'])
+        self.assertEqual((args.advanced, args.no_firewall, args.no_ssh_hardening), (True, True, True))
+        ctx = self.ctx()
+        slate.apply_flags(ctx, args)
+        self.assertEqual((ctx.options.firewall, ctx.options.ssh_hardening), (False, False))
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.open_settings(app, pilot)
+            screen = app.screen
+            self.assertEqual(screen.query_one('#firewall', RadioSet).pressed_index, 1)
+            self.assertEqual(screen.query_one('#sshd', RadioSet).pressed_index, 1)
+        other = self.ctx()
+        slate.apply_flags(other, slate.parse_args(['--advanced', '--no-firewall']))
+        self.assertEqual((other.options.firewall, other.options.ssh_hardening), (False, True))
+        untouched = self.ctx()
+        slate.apply_flags(untouched, slate.parse_args(['--advanced']))
+        self.assertEqual((untouched.options.firewall, untouched.options.ssh_hardening), (True, True))
+
+    def test_the_opt_out_flags_are_advanced_only_in_the_full_screen_installer_too(self):
+        for argv in (['--no-firewall'], ['--no-ssh-hardening'], ['--git', '--no-firewall']):
+            with self.subTest(argv=argv), patch('sys.stderr', new=io.StringIO()) as err:
+                with self.assertRaises(SystemExit) as caught:
+                    slate.parse_args(argv)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn('--advanced', err.getvalue())
+
+    async def test_the_default_plan_lists_the_tls_firewall_ssh_and_sign_on_lines_and_phases(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await pilot.press('enter')
+            await pilot.pause()
+            body = widget_text(app.screen.query_one('#review-body'))
+            self.assertIn('TLS: self-signed certificate', body)
+            self.assertIn('Firewall: ufw allow', body)
+            self.assertIn('SSH: conservative sshd drop-in', body)
+            self.assertIn('Sign-on: the first administrator is created in the browser with a setup code printed at the very end.',
+                          collapse(body))
+            labels = self.plan_phase_labels(app)
+            for label in ('Firewall', 'SSH hardening', 'Setup code'):
+                self.assertIn(label, labels)
+            self.assertLess(labels.index('Running manager verification'), labels.index('Firewall'))
+            self.assertLess(labels.index('Firewall'), labels.index('SSH hardening'))
+            self.assertLess(labels.index('Git setup'), labels.index('Setup code'))
+
+    async def test_a_colliding_checkout_env_shows_the_port_question_with_the_recommended_answer_selected(self):
+        checkout = self.root / 'checkout'
+        (checkout / 'clab-backup-ui').mkdir(parents=True)
+        (checkout / 'clab-backup-ui' / '.env').write_text('UI_PORT=8081\n')
+        ctx = self.ctx(source=checkout)
+        ctx.env_state = lambda: 'existing'
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.open_settings(app, pilot)
+            screen = app.screen
+            radios = screen.query_one('#ports', RadioSet)
+            self.assertTrue(radios.display)
+            self.assertEqual(radios.pressed_index, 0)
+            self.assertIn('TLS on 8443 and plain-HTTP redirect on your current 8081', screen_text(app))
+            await self.review(app, pilot)
+            self.assertEqual(ctx.options.ports, 'redirect')
+            self.assertIn('Manager ports: TLS on 8443, plain-HTTP redirect on 8081', widget_text(app.screen.query_one('#review-body')))
+            self.assertIn('Manager ports', self.plan_phase_labels(app))
+
+    async def test_choosing_to_keep_the_current_port_writes_nothing_and_adds_no_phase(self):
+        checkout = self.root / 'checkout'
+        (checkout / 'clab-backup-ui').mkdir(parents=True)
+        (checkout / 'clab-backup-ui' / '.env').write_text('UI_PORT=8081\n')
+        ctx = self.ctx(source=checkout)
+        ctx.env_state = lambda: 'existing'
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.open_settings(app, pilot)
+            await self.choose(app, pilot, 'ports', 1)
+            await self.review(app, pilot)
+            self.assertEqual(ctx.options.ports, 'keep')
+            self.assertIn('TLS stays on your current 8081', widget_text(app.screen.query_one('#review-body')))
+            self.assertNotIn('Manager ports', self.plan_phase_labels(app))
+
+    async def test_a_previous_env_that_collides_brings_the_port_question_when_its_path_is_typed(self):
+        previous = self.root / 'previous' / '.env'
+        previous.parent.mkdir()
+        previous.write_text('UI_PORT=8081\n')
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.open_settings(app, pilot)
+            screen = app.screen
+            self.assertFalse(screen.query_one('#ports', RadioSet).display)
+            await self.choose(app, pilot, 'env-choice', 1)
+            await self.type_path(app, pilot, str(previous), typed=5)
+            self.assertTrue(screen.query_one('#ports', RadioSet).display, 'the file that will be copied decides')
+            await self.review(app, pilot)
+            self.assertEqual((ctx.options.env_source, ctx.options.ports), (previous, 'redirect'))
+
+    async def test_a_typed_path_to_a_named_pipe_is_not_read_on_the_event_loop(self):
+        # The path is judged on every keystroke on the event loop; a FIFO with no writer used to freeze the
+        # installer, and Ctrl+C is handled on the same loop. A late writer lets a regression fail, not hang.
+        fifo = self.root / 'pipe.env'
+        os.mkfifo(fifo)
+
+        def late_writer():
+            try:
+                descriptor = os.open(fifo, os.O_WRONLY)
+                os.write(descriptor, b'UI_PORT=8081\n')
+                os.close(descriptor)
+            except OSError:
+                pass
+        writer = threading.Timer(5, late_writer)
+        writer.daemon = True
+        writer.start()
+        self.addCleanup(writer.cancel)
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.open_settings(app, pilot)
+            await self.choose(app, pilot, 'env-choice', 1)
+            started = time.monotonic()
+            await self.type_path(app, pilot, str(fifo), typed=5)
+            elapsed = time.monotonic() - started
+            self.assertLess(elapsed, 2, 'the settings screen read the FIFO on the event loop')
+            self.assertFalse(app.screen.query_one('#ports', RadioSet).display, 'a pipe holds no settings to judge')
+
+    async def test_standard_defaults_restores_the_exposure_choices(self):
+        ctx = self.ctx()
+        ctx.options = ctx.install.Options(firewall=False, ssh_hardening=False, ports='keep')
+        ctx.advanced = True
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.open_settings(app, pilot)
+            self.assertEqual(app.screen.query_one('#firewall', RadioSet).pressed_index, 1)
+            await self.focus(app, pilot, 'defaults')
+            await pilot.press('enter')
+            await pilot.pause()
+            self.assertEqual((ctx.options.firewall, ctx.options.ssh_hardening, ctx.options.ports), (True, True, None))
+            self.assertEqual(app.screen.query_one('#firewall', RadioSet).pressed_index, 0)
 
     async def test_discovery_only_disables_engineer_choice(self):
         async with self.running((120, 40)) as (app, pilot):
@@ -1451,7 +1652,19 @@ class ResultScreenTests(SlateCase):
 
     def setUp(self):
         super().setUp()
-        patcher = patch.object(slate, 'vm_addresses', lambda: ['192.0.2.10'])
+        # The summary reads the certificate, its primary name and the setup code itself (EXPOSURE.md 7.1): here
+        # fixtures stand in for the VM, and no `hostname -I` exists to patch any more.
+        self.readings = [('open', 'setup', GOOD_CODE)]
+        for name, value in (('primary', 'vm1.example.edu'), ('facts', TLS_FACTS)):
+            patcher = patch.object(exposure, name, lambda *a, _v=value, **k: _v)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.reads = []
+
+        def read(**kwargs):
+            self.reads.append(kwargs)
+            return self.readings[min(len(self.reads), len(self.readings)) - 1]
+        patcher = patch.object(exposure, 'read_setup_code', side_effect=read)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -1474,7 +1687,9 @@ class ResultScreenTests(SlateCase):
             self.assertNotRegex(self.row(body, 'Manager'), r'ATTENTION|SKIPPED|FAILED')
             self.assertNotRegex(self.row(body, 'Git'), r'READY')
             self.assertIn('Verified only on this VM', collapse(body))
-            self.assertIn('http://192.0.2.10:8081/', body)
+            # The addresses come from the certificate (REVIEW R18): the primary name first, then the IP names.
+            self.assertIn('https://vm1.example.edu:8443/, https://192.0.2.10:8443/, https://198.51.100.7:8443/', collapse(body))
+            self.assertNotIn('http://', body)
             self.assertIn('network unreachable (fixture)', body)
             self.assertIn('Wireshark opens from the map', body)
             # And what is actually painted.
@@ -1484,6 +1699,141 @@ class ResultScreenTests(SlateCase):
             self.assertIn('ATTENTION', painted)
             self.assertIn('SKIPPED', painted)
             self.assertIs(app.focused, screen.query_one('#finish'))
+
+    async def test_a_verified_install_shows_the_certificate_sentence_and_the_setup_code(self):
+        ctx = self.ctx()
+        async with self.running((160, 50), ctx) as (app, pilot):
+            run = full_install_run(ctx, partial=False)
+            screen = await self.show_result(app, pilot, run)
+            body = collapse(widget_text(screen.query_one('#result')))
+            self.assertIn('The certificate is self-signed: the browser warns once; its SHA-256 fingerprint is AB:CD:EF.', body)
+            self.assertIn(f'Create the first administrator at https://vm1.example.edu:8443/setup with this setup code: {GOOD_CODE}', body)
+            self.assertIn('On the VM: sudo cat /srv/containerlab-node-manager/data/setup-code', body)
+            self.assertEqual(self.reads[-1], {'cwd': str(ctx.source), 'sudo': ('sudo', '-n'), 'interactive': False})
+
+    async def test_the_plain_summary_after_finish_carries_the_same_code(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = full_install_run(ctx, partial=False)
+            joined = collapse('\n'.join(app.summary_plain(run)))
+            self.assertIn(f'Create the first administrator at https://vm1.example.edu:8443/setup with this setup code: {GOOD_CODE}', joined)
+
+    async def test_a_provided_certificate_limits_the_redirect_to_the_ip_urls_and_says_what_hsts_does_to_names(self):
+        # Parity with the plain menu (EXPOSURE.md 7.4, REVIEW R17): http://<name>:8081 is never reached by name.
+        ctx = self.ctx()
+        with patch.object(exposure, 'primary', lambda *a, **k: 'lab.example'), \
+                patch.object(exposure, 'facts', lambda *a, **k: dict(TLS_FACTS, mode='provided')):
+            async with self.running((120, 40), ctx) as (app, pilot):
+                run = full_install_run(ctx, partial=False)
+                joined = collapse('\n'.join(app.summary_plain(run)))
+        self.assertIn('https://lab.example:8443/, https://192.0.2.10:8443/, https://198.51.100.7:8443/', joined)
+        self.assertIn('Plain HTTP on 8081 redirects to the IP address URLs.', joined)
+        self.assertNotIn('redirects there', joined)
+        self.assertIn('http://lab.example:8081 is never reached by name', joined)
+        self.assertIn('retype old links by name as https://lab.example:8443', joined)
+        self.assertIn('Links by IP address keep redirecting.', joined)
+
+    async def test_the_self_signed_summary_keeps_the_plain_redirect_sentence(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            joined = collapse('\n'.join(app.summary_plain(full_install_run(ctx, partial=False))))
+        self.assertIn('Plain HTTP on 8081 redirects there.', joined)
+        self.assertNotIn('never reached by name', joined)
+
+    async def test_the_git_row_chosen_for_later_names_the_installer_by_absolute_path(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = full_install_run(ctx, partial=False)
+            run.phases = [phase for phase in run.phases if phase.key != 'git']
+            rows = collapse(' '.join(str(item) for item in app.outcomes(run)))
+        self.assertIn('bash ' + str(Path(ctx.source) / 'deploy/install.sh') + ' --git.', rows)
+
+    async def test_the_code_is_read_again_each_time_the_summary_is_built_never_kept(self):
+        self.readings = [('open', 'setup', GOOD_CODE), ('open', 'setup', 'zzzzzz-yyyyyy-xxxxxx-wwwwww')]
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = full_install_run(ctx, partial=False)
+            first = collapse('\n'.join(app.summary_plain(run)))
+            second = collapse('\n'.join(app.summary_plain(run)))
+            self.assertIn(GOOD_CODE, first)
+            self.assertIn('zzzzzz-yyyyyy-xxxxxx-wwwwww', second)
+            self.assertNotIn(GOOD_CODE, second)
+            self.assertFalse(hasattr(app, 'setup_code'), 'the app keeps no copy of the code')
+
+    async def test_an_existing_administrator_and_an_unreadable_file_each_get_their_own_sentence(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = full_install_run(ctx, partial=False)
+            self.readings = [('absent', None, None)]
+            self.reads.clear()
+            joined = collapse('\n'.join(app.summary_plain(run)))
+            self.assertIn('An administrator exists; sign in at https://vm1.example.edu:8443/', joined)
+            self.assertNotIn('setup code:', joined)
+            self.readings = [('unreadable', None, None)]
+            self.reads.clear()
+            joined = collapse('\n'.join(app.summary_plain(run)))
+            self.assertIn('The setup code could not be read here. On the VM, run: sudo cat', joined)
+
+    async def test_a_run_that_did_not_verify_the_manager_shows_neither_address_nor_code(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = scripted_run(ctx, 'install', states={'admin': engine.COMPLETED, 'prereqs': engine.COMPLETED,
+                                                       'launch': engine.FAILED}, outcome='returned')
+            run.phase('launch').failure = engine.Failure('command', 'The launcher stopped with exit status 1.', 1)
+            joined = collapse('\n'.join(app.summary_plain(run)))
+            self.assertNotIn(GOOD_CODE, joined)
+            self.assertNotIn('setup code', joined)
+            self.assertEqual(self.reads, [], 'the file is not even read')
+
+    async def test_a_returned_firewall_step_after_verification_still_shows_the_address_and_the_code(self):
+        # Parity with the plain menu (review of the installer slice): the manager is verified and in setup mode when the
+        # firewall step is returned from, so both front ends end with the same address and code.
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = scripted_run(ctx, 'install', states={'admin': engine.COMPLETED, 'prereqs': engine.COMPLETED,
+                                                       'launch': engine.COMPLETED, 'capture': engine.COMPLETED,
+                                                       'verify': engine.COMPLETED, 'firewall': engine.FAILED}, outcome='returned')
+            run.phase('firewall').failure = engine.Failure('command', 'The step stopped with exit status 1.', 1)
+            joined = collapse('\n'.join(app.summary_plain(run)))
+            self.assertIn('https://vm1.example.edu:8443/', joined)
+            self.assertIn(f'Create the first administrator at https://vm1.example.edu:8443/setup with this setup code: {GOOD_CODE}', joined)
+
+    async def test_the_run_record_never_carries_the_code(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = full_install_run(ctx, partial=False)
+            app.summary_plain(run)
+            self.assertNotIn(GOOD_CODE, json.dumps(run.record()))
+            self.assertNotIn('AB:CD:EF', json.dumps(run.record()))
+
+    async def test_a_provided_certificate_gets_the_hsts_sentence(self):
+        ctx = self.ctx()
+        async with self.running((160, 50), ctx) as (app, pilot):
+            with patch.object(exposure, 'facts', return_value=dict(TLS_FACTS, mode='provided')):
+                joined = collapse('\n'.join(app.summary_plain(full_install_run(ctx, partial=False))))
+            self.assertIn('the one you provided (expires 2099-01-01)', joined)
+            self.assertIn('HSTS', joined)
+
+    async def test_no_summary_asks_the_interface_list_for_an_address(self):
+        self.assertFalse(hasattr(slate, 'vm_addresses'))
+        with patch('subprocess.run', side_effect=AssertionError('hostname -I must not run')):
+            ctx = self.ctx()
+            async with self.running((120, 40), ctx) as (app, pilot):
+                app.summary_plain(full_install_run(ctx, partial=False))
+
+    async def test_firewall_and_ssh_hardening_are_reported_as_their_own_rows(self):
+        ctx = self.ctx()
+        async with self.running((160, 50), ctx) as (app, pilot):
+            run = full_install_run(ctx, partial=False)
+            body = widget_text((await self.show_result(app, pilot, run)).query_one('#result'))
+            self.assertRegex(self.row(body, 'Firewall'), r'COMPLETED')
+            self.assertRegex(self.row(body, 'SSH hardening'), r'COMPLETED')
+        ctx = self.ctx()
+        ctx.options = ctx.install.Options(firewall=False, ssh_hardening=False)
+        async with self.running((160, 50), ctx) as (app, pilot):
+            body = '\n'.join(app.summary_plain(full_install_run(ctx, partial=False)))
+            self.assertRegex(body, r'(?m)^\s+Firewall\s+NOT SELECTED\s')
+            self.assertRegex(body, r'(?m)^\s+SSH hardening\s+NOT SELECTED\s')
 
     async def test_summary_plain_matches_and_carries_no_markup(self):
         ctx = self.ctx()
@@ -1973,7 +2323,9 @@ class MainReturnCodeTests(unittest.TestCase):
         code, out, err = self.main(behavior)
         self.assertEqual(code, 1)
         self.assertIn('The installer screen stopped unexpectedly (RuntimeError)', out)
-        self.assertIn('rerun bash deploy/install.sh', out)
+        # The advice runs from the operator's own directory: the installer is named by absolute path.
+        self.assertIn('rerun bash ' + str(Path(self.ctx.source) / 'deploy/install.sh'), out)
+        self.assertTrue((Path(self.ctx.source) / 'deploy/install.sh').is_absolute())
         self.assertNotIn('Nothing was changed', err)
 
     def test_return_code_75_after_a_run_is_reported_as_1(self):
@@ -2200,7 +2552,7 @@ class StatusFocusTests(SlateCase):
     async def test_needs_auth_status_explains_that_no_answer_is_not_absence(self):
         async with self.running((120, 40)) as (app, pilot):
             await self.focus_status(app, pilot)
-            await pilot.press('down', 'down')   # VM connection account: Needs authentication (fixture)
+            await pilot.press('down', 'down', 'down')   # VM connection account (after Manager and TLS): Needs authentication (fixture)
             await pilot.pause()
             body = collapse(widget_text(app.screen.query_one('#detail-body')))
             self.assertIn('not proof that the component is missing', body)
@@ -2208,7 +2560,7 @@ class StatusFocusTests(SlateCase):
     async def test_enter_on_a_status_row_reviews_the_fixing_action_without_running_it(self):
         async with self.running((120, 40)) as (app, pilot):
             await self.focus_status(app, pilot)
-            for _ in range(4):   # prereqs, manager, access, engineer -> git
+            for _ in range(5):   # prereqs, manager, tls, access, engineer -> git
                 await pilot.press('down')
             await pilot.pause()
             self.assertEqual(app.focused.current_key, 'git')
@@ -2243,6 +2595,53 @@ class StatusFocusTests(SlateCase):
             await pilot.press('end')
             await pilot.pause()
             self.assertEqual(app.focused.current_key, 'lazydocker')
+
+
+class SnapshotToolTests(SlateCase):
+    """docs/installer-tui/tools/snapshots.py draws FIXTURE screens: its result scenes must never run the real
+    readers of the VM (`sudo -n cat` of the setup code, `openssl` on the certificate, `setup-tls.sh --primary`),
+    because a rerun on a development VM with passwordless sudo would write the live setup code into the
+    committed snapshots."""
+
+    def refusing(self, name):
+        def refuse(*args, **kwargs):
+            raise AssertionError(f'snapshots.py reached the real exposure.{name}')
+        return refuse
+
+    async def shoot_results(self, out):
+        argv = ['snapshots.py', str(out), '--only=result-partial', '--only=result-completed']
+        with contextlib.ExitStack() as stack:
+            for name in ('facts', 'primary', 'read_setup_code'):
+                stack.enter_context(patch.object(exposure, name, self.refusing(name)))
+            stack.enter_context(patch.object(sys, 'argv', argv))
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            await snapshots.main()
+        return sorted(out.glob('result-*.svg'))
+
+    async def test_the_result_scenes_stub_every_reader_of_the_vm(self):
+        files = await self.shoot_results(self.root / 'snapshots')
+        self.assertEqual(len(files), 6, files)
+
+    async def test_the_result_scenes_show_the_fixture_code_and_the_fixture_address_only(self):
+        files = await self.shoot_results(self.root / 'snapshots')
+        text = (self.root / 'snapshots' / 'result-completed-160x50.svg').read_text()
+        flat = re.sub(r'<[^>]+>', '', text).replace('&#160;', ' ')
+        self.assertIn('abcdef-ghjkmn-pqrstu-vwxy23', flat)
+        self.assertIn('vm1.example.edu', flat)
+        self.assertNotIn('127.0.0.1:8081', flat, 'the verification outcome is the HTTPS address')
+        for svg in files:
+            self.assertNotIn('sudo -n', svg.read_text())
+
+    async def test_the_readers_are_restored_after_the_tool_ran(self):
+        guards = {name: self.refusing(name) for name in ('facts', 'primary', 'read_setup_code')}
+        with contextlib.ExitStack() as stack:
+            for name, guard in guards.items():
+                stack.enter_context(patch.object(exposure, name, guard))
+            stack.enter_context(patch.object(sys, 'argv', ['snapshots.py', str(self.root / 'later'), '--only=result-partial']))
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            await snapshots.main()
+            for name, guard in guards.items():
+                self.assertIs(getattr(exposure, name), guard, name)
 
 
 if __name__ == '__main__':

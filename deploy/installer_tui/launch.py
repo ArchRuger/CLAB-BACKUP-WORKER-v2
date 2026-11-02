@@ -1,6 +1,7 @@
 """Entry point of the full-screen installer, run by bootstrap.launch() with the private
 environment's Python in isolated mode (-I). Exits 75 if it cannot start; nothing has
 been changed at that point, so install-manager.py may offer the plain menu instead."""
+import shlex
 import sys
 from pathlib import Path
 
@@ -11,7 +12,8 @@ try:
     from installer_tui.app import main
 except Exception as error:  # missing or broken packages: report, change nothing
     sys.stderr.write(f'The full-screen installer cannot start ({type(error).__name__}: {error}).\n'
-                     'Repair it with:  bash deploy/install.sh --setup-tui\n')
+                     'Repair it with:  bash ' + shlex.quote(str(Path(__file__).resolve().parents[1] / 'install.sh'))
+                     + ' --setup-tui\n')
     sys.exit(75)
 
 sys.exit(main(sys.argv[1:]))

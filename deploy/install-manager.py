@@ -11,13 +11,14 @@ from pathlib import Path
 import platform
 import re
 import shlex
+import ssl
 import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
 import time
-from urllib.request import ProxyHandler, build_opener
+from urllib.request import HTTPSHandler, ProxyHandler, build_opener
 
 SOURCE = Path(__file__).resolve().parents[1]
 APT_LOCK_SCRIPT = SOURCE / 'deploy/apt_lock.py'
@@ -49,9 +50,16 @@ def confirm(prompt):
 
 
 def environment(account):
-    return {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-            'HOME': account.pw_dir, 'USER': account.pw_name, 'LOGNAME': account.pw_name,
-            'LANG': 'C.UTF-8', 'TERM': os.environ.get('TERM', 'dumb')}
+    env = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+           'HOME': account.pw_dir, 'USER': account.pw_name, 'LOGNAME': account.pw_name,
+           'LANG': 'C.UTF-8', 'TERM': os.environ.get('TERM', 'dumb')}
+    # The one thing of this SSH session the firewall step needs: its server port, so that the script
+    # can refuse a rule set that would lock this very session out (EXPOSURE.md 5.2). Only the sshd
+    # shape is carried; sudo does not pass it on by itself (firewall_command does).
+    connection = exposure().ssh_connection()
+    if connection:
+        env['SSH_CONNECTION'] = connection
+    return env
 
 
 def run(args, env, capture=False, tee=False):
@@ -97,6 +105,11 @@ def compose(*args, sudo=('sudo',)):
             '-f', str(SOURCE / 'clab-backup-ui/compose.yml'), *args]
 
 
+def exposure():
+    """installer_tui/exposure.py: the facts about the HTTPS door, shared with the full-screen installer."""
+    return tui_package().exposure
+
+
 def health_url(command):
     if not isinstance(command, list) or not all(isinstance(item, str) for item in command):
         raise ValueError('Unexpected manager startup command. Check Compose configuration.')
@@ -110,15 +123,30 @@ def health_url(command):
         raise ValueError('Cannot determine the manager bind address/port from its running container.') from error
     if not 1 <= port <= 65535:
         raise ValueError('The configured manager port is outside 1-65535.')
+    if '--ssl-certfile' not in command:
+        raise ValueError('The manager is configured without TLS; rebuild it with Install/update.')
     if address.is_unspecified:
         address = ipaddress.ip_address('::1' if address.version == 6 else '127.0.0.1')
     hostname = f'[{address}]' if address.version == 6 else str(address)
-    return f'http://{hostname}:{port}/api/state'
+    return f'https://{hostname}:{port}/api/health'
+
+
+def tls_context(cafile):
+    """A client context that trusts exactly the manager's installed certificate (a public file,
+    mode 0644). The host name is not checked: the certificate names the VM's addresses and this
+    check asks 127.0.0.1 or [::1], which is safe because the pinned file is the only trust anchor."""
+    try:
+        return exposure().pinned_context(cafile)
+    except (OSError, ssl.SSLError) as error:
+        raise ValueError(f'The manager certificate {cafile} cannot be used ({type(error).__name__}). '
+                         'Choose Install/update to create it, or run: sudo bash '
+                         + shlex.quote(str(SOURCE / 'deploy/setup-tls.sh'))) from error
 
 
 def check_manager(env, version, wait_seconds=45, say=print, sudo=('sudo',)):
-    """Running container, matching version, then HTTP /api/state with that version.
-    Returns the VM-local manager address; raises ValueError with the next step otherwise."""
+    """Running container, matching version, then HTTPS /api/health with the pinned certificate.
+    Returns the VM-local manager address; raises ValueError with the next step otherwise. The
+    version proof is the container's own (`compose exec`); `/api/health` is only readiness."""
     ident = output(compose('ps', '--status', 'running', '--quiet', 'backup-ui', sudo=sudo), env)
     if not re.fullmatch(r'[0-9a-f]{12,64}', ident):
         raise ValueError('The Compose manager is not running. Choose Install/update, or inspect the launcher error.')
@@ -130,25 +158,26 @@ def check_manager(env, version, wait_seconds=45, say=print, sudo=('sudo',)):
                                  'inspect', '--format', '{{json .Config.Cmd}}', ident], env))
     url = health_url(command)
     # Ignore workstation/terminal proxy settings for this VM-local readiness test.
-    opener = build_opener(ProxyHandler({}))
+    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=tls_context(exposure().TLS_DIR / 'cert.pem')))
     deadline = time.monotonic() + wait_seconds
     while True:
         try:
             with opener.open(url, timeout=3) as response:
-                data = response.read(8 * 1024 * 1024 + 1)
-                if response.status == 200 and len(data) <= 8 * 1024 * 1024:
+                data = response.read(65536 + 1)
+                if response.status == 200 and len(data) <= 65536:
                     body = json.loads(data)
-                    if isinstance(body, dict) and body.get('version') == version:
-                        address = url.removesuffix('/api/state') + '/'
-                        say(f'Manager {version}: running; HTTP and version checks passed.')
+                    if isinstance(body, dict) and body.get('ready') is True:
+                        address = url.removesuffix('/api/health') + '/'
+                        say(f'Manager {version}: running; HTTPS and version checks passed.')
                         say('VM-local address: ' + address)
+                        say(exposure().certificate_sentence(exposure().facts(exposure().TLS_DIR)))
                         say('From your workstation use the VM address and this port, not workstation 127.0.0.1.')
                         return address
         except (OSError, ValueError):
             pass
         if time.monotonic() >= deadline:
-            raise ValueError('Manager HTTP/version check did not pass. Inspect Compose logs and bind/port settings; '
-                             'use Check installation to retry without rebuilding.')
+            raise ValueError('Manager HTTPS/version check did not pass. Inspect Compose logs and bind/port/certificate '
+                             'settings; use Check installation to retry without rebuilding.')
         time.sleep(2)
 
 
@@ -243,14 +272,15 @@ def lock_recovery(env):
 
 def default_env_choice():
     """Standard path: no bind/port menu. An existing .env is retained unchanged; a missing one
-    gets the documented defaults (all VM interfaces, port 8081) with no file written here."""
+    gets the documented defaults (all VM interfaces, TLS port 8443, plain-HTTP redirect on 8081) with
+    no file written here."""
     target = SOURCE / 'clab-backup-ui/.env'
     if target.is_symlink():
         raise ValueError('The source .env is a symlink. Use a regular settings file before setup.')
     if target.exists():
         print('Existing clab-backup-ui/.env will be retained unchanged.')
     else:
-        print('No existing clab-backup-ui/.env: using the defaults (all VM interfaces, port 8081).')
+        print('No existing clab-backup-ui/.env: using the defaults (all VM interfaces, TLS port 8443, plain-HTTP redirect on 8081).')
     return None
 
 
@@ -261,7 +291,7 @@ def choose_env_copy():
     if target.exists():
         print('Existing clab-backup-ui/.env will be retained unchanged.')
         return None
-    choice = menu('Manager bind/port settings', [('1', 'Use defaults: all VM interfaces, port 8081'),
+    choice = menu('Manager bind/port settings', [('1', 'Use defaults: all VM interfaces, TLS port 8443, plain-HTTP redirect on 8081'),
                   ('2', 'Copy .env from a previous source folder'), ('3', 'Back')])
     if choice == '3':
         raise Cancelled()
@@ -290,6 +320,26 @@ def copy_env(path):
     with os.fdopen(fd, 'wb') as stream:
         stream.write(data)
     print('Previous .env copied with private permissions; its contents were retained.')
+
+
+def write_ports(source=SOURCE, say=print):
+    """Advanced option (1) of EXPOSURE.md 7.4: TLS on 8443 and the plain-HTTP redirect on the operator's
+    current 8081. Two lines in the checkout's .env through the capture setup's own writer (every other
+    line kept, private mode, a symlink refused), and only while the settings still collide."""
+    target = Path(source) / 'clab-backup-ui/.env'
+    if target.is_symlink():
+        raise ValueError('The source .env is a symlink. Use a regular settings file before setup.')
+    if not exposure().ports_collide(source):
+        say('Manager ports: the settings no longer collide; nothing to change.')
+        return
+    spec = importlib.util.spec_from_file_location('setup_capture_writer', SOURCE / 'deploy/setup_capture.py')
+    writer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(writer)
+    path, old, metadata = writer.read_env(target)
+    lines = writer.without(old.splitlines(), ['UI_PORT', 'UI_HTTP_PORT'])
+    lines.extend(['UI_PORT=8443', 'UI_HTTP_PORT=8081'])
+    writer.write_env(path, lines, metadata)
+    say('Manager ports: TLS on 8443, plain-HTTP redirect on 8081 (written to clab-backup-ui/.env).')
 
 
 def git_setup(env):
@@ -508,14 +558,21 @@ class Options:
     """The install choices, decided before anything runs. The standard path fixes them
     (A2); --advanced asks for each in the plain menu, and the full-screen installer shows
     the same choices on its settings screen. `git_now` is the advanced "Next step"
-    choice, which the plain menu asks after the manager is ready."""
+    choice, which the plain menu asks after the manager is ready. `firewall` and
+    `ssh_hardening` default to on (the standard path runs them, EXPOSURE.md 5.2 and 5.4);
+    `ports` is None (leave the settings alone), 'redirect' (write UI_PORT=8443 and
+    UI_HTTP_PORT=8081) or 'keep' (TLS stays on the current 8081, no redirect)."""
 
-    def __init__(self, env_source=None, operations='1', engineer='1', repair=True, git_now=True):
+    def __init__(self, env_source=None, operations='1', engineer='1', repair=True, git_now=True,
+                 firewall=True, ssh_hardening=True, ports=None):
         self.env_source = env_source
         self.operations = operations
         self.engineer = engineer if operations == '1' else '2'
         self.repair = repair
         self.git_now = git_now
+        self.firewall = firewall
+        self.ssh_hardening = ssh_hardening
+        self.ports = ports
 
 
 class Step:
@@ -541,12 +598,19 @@ class Step:
         self.visible = visible
 
 
-def ask_install_options(env, advanced=False):
+def ask_install_options(env, advanced=False, no_firewall=False, no_ssh_hardening=False):
     # Standard path: the routine choices are automatic (A2). --advanced restores every
-    # question, including copying .env from a previous source folder.
+    # question, including copying .env from a previous source folder. --no-firewall and
+    # --no-ssh-hardening (advanced only, EXPOSURE.md 5.2 and 5.4) answer their own question for the person.
     if not advanced:
         return Options(env_source=default_env_choice())
     env_source = choose_env_copy()
+    ports = None
+    if exposure().ports_collide(SOURCE, env_path=env_source):
+        # EXPOSURE.md 7.4: an explicit UI_PORT=8081 now serves HTTPS, so the old address no longer redirects.
+        ports = {'1': 'redirect', '2': 'keep'}[menu('Manager ports', [
+            ('1', 'TLS on 8443 and plain-HTTP redirect on your current 8081 (recommended)'),
+            ('2', 'TLS on your current 8081, no redirect')], default='1')]
     operations = menu('Lab operation access', [('1', 'Enable reviewed lab operations (standard standalone setup)'),
                      ('2', 'Discovery/import only; retain any previously enabled operations'), ('3', 'Back')])
     if operations == '3':
@@ -558,14 +622,56 @@ def ask_install_options(env, advanced=False):
         engineer = menu('VS Code / Containerlab extension access for ' + env['USER'],
                         [('1', 'Set up now: docker and clab_admins groups, group-writable lab folders, containerlab SUID (standard)'),
                          ('2', 'Skip; the manager does not need it')])
+    firewall = not no_firewall and menu('Firewall (ufw)', [
+        ('1', 'Set up: allow SSH and the manager ports, deny other incoming (standard)'),
+        ('2', 'Skip; I manage the firewall myself')]) == '1'
+    ssh_hardening = not no_ssh_hardening and menu('SSH hardening', [
+        ('1', 'Apply a conservative sshd drop-in: only settings still at their defaults are written (standard)'),
+        ('2', 'Skip; I manage sshd myself')]) == '1'
     repair = confirm('Back up and disable obsolete installation-media APT entries if present?')
-    return Options(env_source, operations, engineer, repair)
+    return Options(env_source, operations, engineer, repair, firewall=firewall, ssh_hardening=ssh_hardening, ports=ports)
+
+
+def tls_plan_line():
+    """What the TLS step will do, from the installed certificate when there is one (EXPOSURE.md 7.1)."""
+    certificate = exposure().facts(exposure().TLS_DIR)
+    if certificate and certificate['mode'] == 'provided':
+        return f'TLS: keep the provided certificate (expires {certificate["expires"]}).'
+    names = [entry for entry in ([*certificate['addresses'], *certificate['names']] if certificate else [])
+             if entry not in ('127.0.0.1', '::1', 'localhost')]
+    return (f'TLS: self-signed certificate for {", ".join(names) or "this VM" + chr(39) + "s addresses and names"} in '
+            f'{exposure().TLS_DIR} (kept if one exists).')
+
+
+def manager_ports(options):
+    """(TLS port, plain-HTTP redirect port or 0) the manager will have once this installation has run, from the
+    settings it will have then: the previous file about to be copied, or the checkout's own, and the person's
+    answer to the port question. A colliding UI_PORT=8081 keeps HTTPS on 8081 with no redirect (setup-tls.sh
+    writes UI_HTTP_PORT=0), 'redirect' moves HTTPS to 8443 and the redirect to 8081 (write_ports)."""
+    ex = exposure()
+    tls_port, redirect = ex.ports(SOURCE, env_path=options.env_source)
+    if options.ports == 'redirect':
+        return ex.DEFAULT_TLS_PORT, ex.DEFAULT_HTTP_PORT
+    if ex.ports_collide(SOURCE, env_path=options.env_source):
+        return tls_port, 0
+    return tls_port, redirect
+
+
+def firewall_plan_line(options):
+    """What setup-firewall.sh will open: every port sshd listens on (the script reads sshd -T, not this
+    session), the TLS port and the redirect port when there is one."""
+    ports = []
+    for port in manager_ports(options):
+        if port and port not in ports:
+            ports.append(port)
+    allowed = ', '.join(['SSH (every port sshd listens on)', *(str(port) for port in ports)])
+    return f'Firewall: ufw allow {allowed}; deny other incoming.'
 
 
 def plan_lines(env, version, options):
     """The installation plan as the plain menu prints it; the full-screen review shows the same lines."""
     operations, engineer, env_source = options.operations, options.engineer, options.env_source
-    return [
+    lines = [
         'Source: ' + str(SOURCE) + ' (' + version + ')',
         'Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.',
         'Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.',
@@ -573,18 +679,43 @@ def plan_lines(env, version, options):
         'Prepare persistent storage and restricted clab-discovery password/helpers.',
         'Existing password/data retained; first setup asks you to create the password.',
         'Rebuild/recreate only the manager; existing lab containers remain in place.',
+        tls_plan_line(),
         'Lab operations: ' + ('enabled with default trusted roots' if operations == '1' else 'existing permissions retained'),
         'Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).',
+        firewall_plan_line(options) if options.firewall else 'Firewall: not selected.',
+        ('SSH: conservative sshd drop-in (LoginGraceTime 30, PerSourceMaxStartups 8, and PermitRootLogin no unless root '
+         'logs in with a key); a setting you already changed is kept.') if options.ssh_hardening else 'SSH hardening: not selected.',
         'Engineer access: ' + ('set up for ' + env['USER'] + ' (VS Code, Containerlab extension)' if engineer == '1' else 'not selected'),
         'Settings: ' + ('copy ' + str(env_source) if env_source else 'retain current .env or use defaults'),
+    ]
+    if options.ports == 'redirect':
+        lines.append('Manager ports: TLS on 8443, plain-HTTP redirect on 8081 (written to clab-backup-ui/.env).')
+    elif options.ports == 'keep':
+        lines.append('Manager ports: TLS stays on your current 8081; there is no plain-HTTP redirect.')
+    elif exposure().ports_collide(SOURCE, env_path=env_source):
+        lines.append('Manager ports: your .env sets UI_PORT=8081, so HTTPS stays on 8081 with no plain-HTTP redirect '
+                     '(Advanced settings can move it to 8443).')
+    else:
+        # The common upgrade (no UI_PORT in the settings): the student address changes from plain HTTP to HTTPS,
+        # which the person is told before it happens, not only in the closing lines.
+        tls, redirect = manager_ports(options)
+        lines.append(f'Manager ports: HTTPS on {tls}' + (f'; plain HTTP on {redirect} redirects there.' if redirect
+                                                           else '; no plain-HTTP redirect.'))
+    lines += [
         'Installation-media APT repair: ' + ('enabled with backup' if options.repair else 'not selected'),
         'lazydocker: install or update for ' + env['USER'] + ' (never fails the installation).',
-        'Check running version/HTTP, then set up Git under ' + env['USER'] + '.',
+        'Check running version and HTTPS /api/health, then set up Git under ' + env['USER'] + '.',
+        'Sign-on: the first administrator is created in the browser with a setup code printed at the very end.',
     ]
+    return lines
 
 
-def prerequisites_command(repair):
+def prerequisites_command(repair, firewall=False):
+    """`firewall` adds --firewall: ufw is installed only for a person who chose the firewall step, because it
+    conflicts with iptables-persistent and netfilter-persistent, which a VM that opted out may use."""
     command = ['sudo', 'bash', str(SOURCE / 'deploy/install-prerequisites.sh'), '--docker', '--containerlab']
+    if firewall:
+        command.append('--firewall')
     if repair:
         command.append('--repair-install-media')
     return command
@@ -598,36 +729,69 @@ def launch_command(operations):
     return command
 
 
+def firewall_command(env):
+    """setup-firewall.sh as root. sudo resets the environment, so the session's SSH_CONNECTION is passed
+    explicitly: the script refuses to enable rules that would not allow this session's own port."""
+    command = ['sudo']
+    connection = exposure().ssh_connection(env)
+    if connection:
+        command += ['env', 'SSH_CONNECTION=' + connection]
+    return [*command, 'bash', str(SOURCE / 'deploy/setup-firewall.sh')]
+
+
+def ssh_hardening_command():
+    return ['sudo', 'bash', str(SOURCE / 'deploy/setup-ssh-hardening.sh')]
+
+
 def engineer_command(env):
     return ['sudo', 'bash', str(SOURCE / 'deploy/setup-engineer-access.sh'), '--owner', env['USER']]
 
 
 def install_steps(env, version, options):
     """Every phase of Install/update, in order, with the plain menu's titles and actions."""
-    total = '6' if options.engineer == '1' else '5'
-    prereqs = prerequisites_command(options.repair)
+    numbered = 5 + sum(1 for chosen in (options.firewall, options.ssh_hardening, options.engineer == '1') if chosen)
+    count = iter(range(1, numbered + 1))
+    total = str(numbered)
+
+    def title(text):
+        return f'{next(count)}/{total} {text}'
+    prereqs = prerequisites_command(options.repair, options.firewall)
     # A separate phase so a failed image pull is retried on its own instead of repeating the
     # password, helper and image-build step.
     launch = launch_command(options.operations)
+    firewall = firewall_command(env)
+    hardening = ssh_hardening_command()
     steps = [
-        Step('admin', '1/' + total + ' Administrator access and settings',
+        Step('admin', title('Administrator access and settings'),
              lambda: command_step(['sudo', '-v'], env), argv=['sudo', '-v'], interactive='auth'),
         Step('settings', 'Copy previous settings', lambda: copy_env(options.env_source),
              bare=True, visible=options.env_source is not None),
-        Step('prereqs', '2/' + total + ' VM prerequisites', lambda: command_step(prereqs, env, tee=True),
+        # EXPOSURE.md 7.4: written after the chosen settings file is in place and before start-manager.sh
+        # runs, so setup-tls.sh then finds no collision and writes nothing of its own.
+        Step('ports', 'Manager ports', lambda: write_ports(), bare=True, visible=options.ports == 'redirect'),
+        Step('prereqs', title('VM prerequisites'), lambda: command_step(prereqs, env, tee=True),
              argv=prereqs, tee=True),
-        Step('launch', '3/' + total + ' Password, helpers, image and manager',
+        Step('launch', title('Password, helpers, image and manager'),
              lambda: command_step(launch, env), argv=launch, interactive='password'),
-        Step('capture', '4/' + total + ' Browser Wireshark capture stack', lambda: capture_stack(env),
+        Step('capture', title('Browser Wireshark capture stack'), lambda: capture_stack(env),
              argv=stack_command('setup-capture.sh')),
-        Step('verify', '5/' + total + ' Running manager verification', lambda: verify_manager(env, version)),
+        Step('verify', title('Running manager verification'), lambda: verify_manager(env, version)),
+        # After the verification (the firewall allows the session's own SSH port first, 5.2) and before
+        # anything that restarts nothing: neither touches the manager.
+        Step('firewall', title('Firewall') if options.firewall else 'Firewall',
+             lambda: command_step(firewall, env), argv=firewall, visible=options.firewall),
+        Step('sshd', title('SSH hardening') if options.ssh_hardening else 'SSH hardening',
+             lambda: command_step(hardening, env), argv=hardening, visible=options.ssh_hardening),
     ]
     if options.engineer == '1':
-        steps.append(Step('engineer', '6/6 Engineer access for VS Code', lambda: engineer_access(env),
+        steps.append(Step('engineer', title('Engineer access for VS Code'), lambda: engineer_access(env),
                           argv=engineer_command(env)))
     steps.append(Step('lazydocker', 'lazydocker (optional)', lambda: setup_lazydocker(env), bare=True, post=True))
     steps.append(Step('git', 'Git setup under ' + env['USER'], lambda: git_setup(env), argv=git_command(),
                       interactive='always', bare=True, post=True, visible=options.git_now))
+    # Last of all (REVIEW U13): a restart in setup mode makes a new code, so the code printed is the one
+    # the file holds when the installer ends. The full-screen installer reads it again when it shows its summary.
+    steps.append(Step('signon', 'Setup code', lambda: show_setup_code(env), bare=True, post=True))
     return steps
 
 
@@ -650,8 +814,36 @@ def action_steps(action, env, version, options=None):
     raise ValueError('Unknown setup action: ' + str(action))
 
 
-def install(env, version, advanced=False):
-    options = ask_install_options(env, advanced)
+def access_lines():
+    """The closing lines about the address and the certificate (EXPOSURE.md 7.1): the HTTPS address
+    first, the certificate's fingerprint (or the provided certificate's HSTS note) after it."""
+    tls_port, redirect = exposure().ports(SOURCE)
+    certificate = exposure().facts(exposure().TLS_DIR)
+    urls = exposure().access_urls(exposure().primary(SOURCE), certificate, tls_port)
+    clause, hsts = exposure().redirect_notes(urls, certificate, tls_port, redirect)
+    line = 'Open the manager at ' + ', '.join(urls) + (f' ({clause})' if clause else '') + '.'
+    return [line, *([hsts] if hsts else []),
+            exposure().certificate_sentence(certificate, SOURCE / 'deploy/setup-tls.sh')]
+
+
+def show_setup_code(env, say=print, sudo=('sudo',), interactive=True):
+    """The last step of an installation: read the code file now (sudo; the data folder is 0700 uid 10001)
+    and print the setup URL and code, or the sign-in line when an administrator exists. The code goes to the
+    operator's terminal only. Returns 'open', 'absent' or 'unreadable'."""
+    ex = exposure()
+    reading = ex.read_setup_code(cwd=str(SOURCE), sudo=sudo, interactive=interactive)
+    certificate = ex.facts(ex.TLS_DIR)
+    base = ex.access_urls(ex.primary(SOURCE), certificate, ex.ports(SOURCE)[0])[0]
+    for line in ex.setup_lines(reading, base):
+        say(line)
+    return reading[0]
+
+
+OPT_OUT_FLAGS = {'firewall': '--no-firewall', 'sshd': '--no-ssh-hardening'}
+
+
+def install(env, version, advanced=False, no_firewall=False, no_ssh_hardening=False):
+    options = ask_install_options(env, advanced, no_firewall=no_firewall, no_ssh_hardening=no_ssh_hardening)
     print('\nInstallation plan')
     for line in plan_lines(env, version, options):
         print('  ' + line)
@@ -660,25 +852,72 @@ def install(env, version, advanced=False):
             raise Cancelled()
     else:
         print('Starting now; the standard path runs these steps without further confirmation.')
-    for step in install_steps(env, version, options):
-        if step.key == 'git':
-            continue  # the plain menu decides Git after the summary below, as it always has
-        if step.bare:
-            step.action()
-        else:
-            phase(step.title, step.action, env)
+    verified = False
+    running = None
+    try:
+        for step in install_steps(env, version, options):
+            if step.key in ('git', 'signon'):
+                continue  # the plain menu decides Git after the summary below, as it always has; the code is last of all
+            if not step.visible:
+                continue
+            running = step.key
+            if step.bare:
+                step.action()
+            else:
+                phase(step.title, step.action, env)
+            if step.key == 'verify':
+                verified = True
+    except BaseException as error:
+        # A returned step (Cancelled), Ctrl+C, end of input or a crash: nothing after this point runs.
+        if verified:
+            # The manager answers over HTTPS and is in setup mode on every interface by now: a firewall or SSH
+            # step the person returned from must not leave them without the address and the code, which the
+            # full-screen installer's summary shows in the same situation.
+            print('\nThe installation did not finish. The manager itself is verified and running; the steps after '
+                  'the one you stopped at were not run. Run the installer again to finish them.')
+            way_out = OPT_OUT_FLAGS.get(running) if isinstance(error, Cancelled) else None
+            if way_out:
+                # The refusal of these two steps can be a condition the operator chose on purpose, so running
+                # the installer again meets it again: name the one way that finishes the rest without the step.
+                print('To finish without this step: ' + shlex.join(['bash', str(SOURCE / 'deploy/install.sh'),
+                                                                     '--advanced', way_out]))
+            closing_after_stop(env)
+        raise
     print('\nManager installation is ready. Git is a separate setup step under your ordinary account.')
     print('Wireshark opens from the map (Capture packets).')
-    if advanced:
-        # Item 1 says "then set up Git"; the standard path always runs it, the advanced
-        # path keeps the choice of doing it now or later.
-        if menu('Next step', [('1', 'Set up or repair Git now'), ('2', 'Finish; set up Git later')]) == '1':
+    for line in access_lines():
+        print(line)
+    try:
+        if advanced:
+            # Item 1 says "then set up Git"; the standard path always runs it, the advanced
+            # path keeps the choice of doing it now or later.
+            if menu('Next step', [('1', 'Set up or repair Git now'), ('2', 'Finish; set up Git later')]) == '1':
+                git_setup(env)
+        else:
             git_setup(env)
-    else:
-        git_setup(env)
+    except BaseException:
+        # Ctrl+C or the end of input in the Git dialogue (or a crash in it): the manager is verified and waiting
+        # for its first administrator, so the code is printed before the stop continues.
+        print('\nThe Git setup did not finish. The manager is installed and verified; run Git setup again later '
+              'from the installer.')
+        closing_after_stop(env, address=False)
+        raise
     print('In VM connection use clab-discovery and the password you created. Verify the host fingerprint.')
     print('After browser setup, run the full installation health report (without sudo):\n  '
           + shlex.join(['bash', str(SOURCE / 'deploy/check-install.sh')]))
+    show_setup_code(env)
+
+
+def closing_after_stop(env, address=True):
+    """The address (unless it was printed already) and the setup code after a stop that came once the manager
+    was verified. A second Ctrl+C while the code is read (sudo may be asking for a password) ends the read,
+    not the traceback."""
+    for line in access_lines() if address else ():
+        print(line)
+    try:
+        show_setup_code(env)
+    except (KeyboardInterrupt, EOFError):
+        print('The setup code was not read. On the VM, run: ' + exposure().SETUP_CODE_COMMAND)
 
 
 TUI_UNAVAILABLE = 75  # the full-screen installer exits with this only before it has changed anything
@@ -692,6 +931,7 @@ def tui_package():
         sys.path.insert(0, deploy)
     import installer_tui.bootstrap
     import installer_tui.core
+    import installer_tui.exposure
     return installer_tui
 
 
@@ -718,7 +958,8 @@ def tui_available(env):
 def run_tui(env, args):
     """Start the full-screen installer in its own process; returns its exit status."""
     bootstrap = tui_package().bootstrap
-    extra = [flag for flag, wanted in (('--git', args.git), ('--advanced', args.advanced)) if wanted]
+    extra = [flag for flag, wanted in (('--git', args.git), ('--advanced', args.advanced),
+                                       ('--no-firewall', args.no_firewall), ('--no-ssh-hardening', args.no_ssh_hardening)) if wanted]
     return bootstrap.launch(env, extra)
 
 
@@ -729,8 +970,14 @@ def main(argv=None):
     parser.add_argument('--git', action='store_true', help='Open Git setup directly (manager already installed)')
     parser.add_argument('--advanced', action='store_true',
                         help='Ask every setup question again (bind/port, lab operations, VS Code access, '
-                             'APT installation-media repair, plan confirmation, Git now/later) instead of '
-                             'the standard defaults.')
+                             'firewall, SSH hardening, APT installation-media repair, plan confirmation, '
+                             'Git now/later) instead of the standard defaults.')
+    parser.add_argument('--no-firewall', action='store_true',
+                        help='With --advanced: skip the firewall (ufw) step without being asked; you manage the '
+                             'firewall yourself.')
+    parser.add_argument('--no-ssh-hardening', action='store_true',
+                        help='With --advanced: skip the conservative sshd drop-in without being asked; you manage '
+                             'sshd yourself.')
     front = parser.add_mutually_exclusive_group()
     front.add_argument('--tui', action='store_true',
                        help='Use the full-screen installer; sets up its pinned packages first if needed, '
@@ -740,6 +987,9 @@ def main(argv=None):
                        help='Download and verify the full-screen installer\'s pinned packages into a private '
                             'virtual environment for this account, then exit. Nothing on the VM is changed.')
     args = parser.parse_args(argv)
+    if (args.no_firewall or args.no_ssh_hardening) and not args.advanced:
+        parser.error('--no-firewall and --no-ssh-hardening are advanced choices: add --advanced '
+                     '(the standard path runs both steps).')
     if sys.platform != 'linux' or os.geteuid() == 0:
         raise ValueError('Run on the Ubuntu VM as its ordinary account, without sudo.')
     import pwd
@@ -795,7 +1045,8 @@ def main(argv=None):
             # failure or cancellation keeps today's behaviour: retained work, the
             # Recovery menu inside phase(), and this Setup menu.
             if choice == '1':
-                install(env, version, advanced=args.advanced)
+                install(env, version, advanced=args.advanced, no_firewall=args.no_firewall,
+                        no_ssh_hardening=args.no_ssh_hardening)
                 return 0
             elif choice == '2':
                 if git_setup(env) == 0:
