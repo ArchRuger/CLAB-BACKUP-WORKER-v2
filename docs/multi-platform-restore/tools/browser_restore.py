@@ -272,8 +272,7 @@ def main():
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
-        context = browser.new_context(viewport=VIEWPORTS[args.viewport], ignore_https_errors=True)   # fresh context: no cached assets; the manager's own certificate is pinned by the helper
-        context.add_cookies([http.playwright_cookie()])
+        context = manager_http.playwright_context(browser, http, viewport=VIEWPORTS[args.viewport])   # fresh context: no cached assets; an unknown certificate is accepted only on this machine
         page = context.new_page()
         errors, broken = [], []
         page.on('pageerror', lambda e: errors.append(str(e)))

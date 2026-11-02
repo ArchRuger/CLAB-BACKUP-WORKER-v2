@@ -36,6 +36,11 @@ def make_certificate(directory, name, san):
     return cert, key
 
 
+def http_cookie(name, value):
+    import http.cookiejar
+    return http.cookiejar.Cookie(0, name, value, None, False, '127.0.0.1', False, False, '/', True, True, None, True, None, None, {})
+
+
 def make_chain(directory):
     """A CA-issued installation, as `setup-tls.sh --cert` installs it: root -> intermediate -> two leaves (the manager's and
     another one, `evil`, from the same CA). Returns paths: `leaf` and `evil` (certificate, key) pairs, `fullchain` (leaf +
@@ -335,6 +340,30 @@ class ManagerHttpTests(unittest.TestCase):
         self.assertEqual((cookie['name'], cookie['value'], cookie['url']), ('clab_session', 'sid1', self.fake.base))
         self.assertTrue(cookie['httpOnly'] and cookie['secure'])
         self.assertEqual(cookie['sameSite'], 'Strict')
+
+    def test_a_browser_that_carries_the_session_cookie_ignores_certificate_errors_only_for_this_machine(self):
+        # The cookie is a full session of CLAB_USER. The helper's pin protects the helper's own connection, not Chromium's: for a
+        # manager at another address Chromium must verify the certificate itself, or an on-path server gets the cookie.
+        self.assertTrue(manager_http.browser_ignores_certificate_errors('https://127.0.0.1:8443'))
+        self.assertTrue(manager_http.browser_ignores_certificate_errors('https://localhost:8443'))
+        self.assertTrue(manager_http.browser_ignores_certificate_errors('https://[::1]:8443'))
+        for base in ('https://192.0.2.7:8443', 'https://manager.example', 'https://127.0.0.1.evil.example:8443', 'https://10.0.0.5'):
+            self.assertFalse(manager_http.browser_ignores_certificate_errors(base), base)
+
+        class Context:
+            def add_cookies(self, cookies): pass
+        class Browser:
+            options = None
+            def new_context(self, **options):
+                self.options = options
+                return Context()
+        remote = Browser()
+        manager = self.manager()
+        manager.base = 'https://192.0.2.7:8443'
+        manager._signed_in = True
+        manager.jar.set_cookie(http_cookie('clab_session', 'sid1'))
+        manager_http.playwright_context(remote, manager, ignore_https_errors=True, viewport={'width': 1, 'height': 1})
+        self.assertIs(remote.options['ignore_https_errors'], False, 'a caller cannot switch the verification back off for a remote manager')
 
     def test_from_args_reads_the_manager_environment_variable_for_the_base(self):
         parser = manager_http.argument_parser()

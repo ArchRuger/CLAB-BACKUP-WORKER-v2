@@ -190,11 +190,20 @@ class Manager:
     def delete(self, path, body=None, **kwargs): return self.request('DELETE', path, body, **kwargs)
 
 
+def browser_ignores_certificate_errors(base):
+    """True only when `base` is this machine (127.0.0.1, ::1, localhost). The helper pins the manager's certificate for its own
+    requests, but Chromium does not know that certificate; accepting any certificate is tolerable only on the loopback address,
+    where no one is on the path. For any other address Chromium keeps verifying (a self-signed manager is then refused by the
+    browser: trust its certificate in the system store, or run the tool on the VM), because the browser carries the session cookie
+    and an on-path server that Chromium accepted would receive it."""
+    return (urllib.parse.urlsplit(base or '').hostname or '').lower() in ('127.0.0.1', '::1', 'localhost')
+
+
 def playwright_context(browser, manager, **options):
-    """A Playwright browser context that shares `manager`'s session (it signs in when needed) and accepts the manager's own
-    certificate, which Chromium does not know: `ignore_https_errors` is set because the helper already pinned that certificate for
-    its own requests and a live tool runs on the same VM. `options` go to `browser.new_context` (viewport, ...)."""
-    context = browser.new_context(**dict(options, ignore_https_errors=True))
+    """A Playwright browser context that shares `manager`'s session (it signs in when needed). `ignore_https_errors` is set by
+    `browser_ignores_certificate_errors(manager.base)` and cannot be overridden by `options`, which go to `browser.new_context`
+    (viewport, ...)."""
+    context = browser.new_context(**dict(options, ignore_https_errors=browser_ignores_certificate_errors(manager.base)))
     context.add_cookies([manager.playwright_cookie()])
     return context
 

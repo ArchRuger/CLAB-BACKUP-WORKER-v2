@@ -22,9 +22,8 @@ lab_id = sys.argv[1]
 out = sys.argv[2] if len(sys.argv) > 2 else '.'
 with sync_playwright() as pw:
     browser = pw.chromium.launch()
-    # The browser shares the helper's session (CLAB_USER and CLAB_PASSWORD, or a prompt) and accepts the manager's own certificate.
-    context = browser.new_context(viewport={'width': 1440, 'height': 900}, ignore_https_errors=True)
-    context.add_cookies([manager_http.Manager(BASE).playwright_cookie()])
+    # The browser shares the helper's session (CLAB_USER and CLAB_PASSWORD, or a prompt); it accepts an unknown certificate only on this machine.
+    context = manager_http.playwright_context(browser, manager_http.Manager(BASE), viewport={'width': 1440, 'height': 900})
     page = context.new_page()
     errors = []
     page.on('pageerror', lambda e: errors.append(str(e)))

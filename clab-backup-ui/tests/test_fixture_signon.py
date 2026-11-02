@@ -163,6 +163,17 @@ class FixtureSignOnTests(unittest.TestCase):
         self.assertIn('already', done.stdout + done.stderr)
         self.assertNotIn('fixture manager ready', done.stdout, 'it stops before it builds anything')
 
+    def test_no_vm_leaves_the_lab_vm_unconfigured_and_the_default_has_one(self):
+        self.assertTrue(self.default.call('GET', '/api/state')[1]['discovery']['configured'])
+        running = Running('--signed-out', '--no-vm')
+        self.addCleanup(running.stop)
+        found = running.credentials()['operator']
+        status, body, headers = running.call('POST', '/api/session', {'username': found['name'], 'password': found['password']})
+        self.assertEqual(status, 200, body)
+        status, state, _ = running.call('GET', '/api/state', cookie=cookie_of(headers))
+        self.assertEqual(status, 200)
+        self.assertFalse(state['discovery']['configured'])
+
     def test_no_password_is_written_into_the_repository_source(self):
         text = FIXTURE.read_text()
         for found in (self.default.credentials(), self.out.credentials()):

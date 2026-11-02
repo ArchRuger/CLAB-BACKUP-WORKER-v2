@@ -12,7 +12,11 @@ import sys
 
 from playwright.sync_api import sync_playwright
 
-BASE = os.environ.get('MANAGER', 'http://127.0.0.1:8081')
+import pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[6] / 'sign-on' / 'tools'))
+import manager_http  # noqa: E402
+
+BASE = os.environ.get('MANAGER', manager_http.DEFAULT_BASE).rstrip('/')
 lab_id, out = sys.argv[1], sys.argv[2]
 folder = sys.argv[3] if len(sys.argv) > 3 else 'git-redesign'
 note = sys.argv[4] if len(sys.argv) > 4 else 'first save of the whole lab'
@@ -25,7 +29,8 @@ def trim(text, limit=700):
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch()
-    page = browser.new_page(viewport={'width': 1440, 'height': 900})
+    # Signs in with CLAB_USER and CLAB_PASSWORD (or a prompt); unknown certificates are accepted only on this machine.
+    page = manager_http.playwright_context(browser, manager_http.Manager(BASE), viewport={'width': 1440, 'height': 900}).new_page()
     page.on('response', lambda r: log.append((r.request.method, r.url.replace(BASE, ''), r.request.post_data or '', r.status, trim(r.text() if 'json' in (r.headers.get('content-type') or '') else ''))) if '/api/' in r.url and r.request.method != 'GET' else None)
     errors = []
     page.on('pageerror', lambda e: errors.append(str(e)))

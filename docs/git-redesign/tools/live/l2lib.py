@@ -38,9 +38,10 @@ class Live(Session):
     """A Session on the real manager: lab ids come from /api/state, not from a fixture."""
 
     def __init__(self, base=BASE, viewport=(1440, 900), headed=False):
-        # The browser shares the session of the helper (CLAB_USER and CLAB_PASSWORD or a prompt) and accepts the manager's own
-        # certificate, which the helper pins for its own requests.
-        super().__init__(base, headed, viewport, cookies=[mgr.client().playwright_cookie()], ignore_https_errors=True)
+        # The browser shares the session of the helper (CLAB_USER and CLAB_PASSWORD or a prompt). It accepts a certificate it does
+        # not know only on this machine: for another address Chromium verifies (the cookie is a full session).
+        super().__init__(base, headed, viewport, cookies=[mgr.client().playwright_cookie()],
+                         ignore_https_errors=mgr.manager_http.browser_ignores_certificate_errors(base))
         self.failed = []
         self.page.on('response', self._failed)
 

@@ -1313,6 +1313,7 @@ def main(argv=None):
     parser.add_argument('--keep', action='store_true', help='reuse the data directory instead of starting fresh')
     parser.add_argument('--classic', action='store_true', help='seed only the labs and the Course-Labs repository the first fixture had')
     parser.add_argument('--capture', action='store_true', help='C07: a scripted browser-Wireshark stack (discovery from the fixture labs, a session service with a cap of 4)')
+    parser.add_argument('--no-vm', action='store_true', help='sign-on: leave the lab VM unconfigured (the first-run state)')
     parser.add_argument('--signed-out', action='store_true', help='sign-on: add no session to requests; sign in through the real pages with the credentials file')
     parser.add_argument('--role', choices=('admin', 'operator'), default='admin', help='sign-on: whose session the wrapper adds to a request that has none (default admin)')
     parser.add_argument('--credentials-file', default=os.environ.get('FIXTURE_CREDENTIALS', ''), help='sign-on: write the fixture credentials here as JSON (mode 0600); default <data directory>/fixture-credentials.json. They are never printed')
@@ -1328,6 +1329,10 @@ def main(argv=None):
         shutil.rmtree(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
     app = build(data_dir, args.port, classic=args.classic, capture=args.capture)
+    if args.no_vm:     # the seeding above needs a host; `--no-vm` then leaves the lab VM unconfigured (sign-on REVIEW R13)
+        with app.state.store.lock:
+            app.state.store.state.pop('host', None)
+            app.state.store.save()
     credentials = app.state.fixture_credentials
     credentials_path = Path(args.credentials_file) if args.credentials_file else data_dir / 'fixture-credentials.json'
     write_credentials(credentials_path, credentials)

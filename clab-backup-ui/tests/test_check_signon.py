@@ -103,6 +103,32 @@ class OccupiedPortTests(unittest.TestCase):
         self.assertEqual(self.foreign.asked, [], 'nothing was sent to the other server')
 
 
+class UntilTests(unittest.TestCase):
+    def test_until_returns_true_as_soon_as_the_condition_holds_and_false_at_the_timeout(self):
+        ticks = []
+        original = check_signon.pause
+        check_signon.pause = ticks.append
+        try:
+            calls = iter([False, False, True])
+            self.assertTrue(check_signon.until(lambda: next(calls), timeout=5, step=0.5))
+            self.assertEqual(ticks, [0.5, 0.5])
+            ticks.clear()
+            self.assertFalse(check_signon.until(lambda: False, timeout=1.0, step=0.5))
+            self.assertEqual(ticks, [0.5, 0.5], 'it gives up when the time is up, not before')
+        finally:
+            check_signon.pause = original
+
+
+class ScenarioListTests(unittest.TestCase):
+    def test_every_row_of_the_ui_check_table_has_a_scenario(self):
+        names = [name for name, _ in check_signon.SCENARIOS]
+        for needed in ('sign-in and next', 'operator', 'throttle', 'people (administrator)', 'forced password change', 'cross-site arrival', 'sign-out',
+                       'open redirect', 'session ends in a dialog', 'session ends in the save panel', 'session ends under a running operation',
+                       'terminal pop-up', 'operator and the VM', 'student guide'):
+            self.assertIn(needed, names)
+        self.assertEqual(len(names), len(set(names)))
+
+
 class MonitorTests(unittest.TestCase):
     def test_an_unlisted_error_response_fails_the_run(self):
         monitor = Monitor()
@@ -128,6 +154,20 @@ class MonitorTests(unittest.TestCase):
         monitor.response(403, 'GET', 'http://h/api/session')       # another status
         monitor.response(401, 'GET', 'http://h/api/state')         # another path
         self.assertEqual(len(monitor.findings()['failed_requests']), 3)
+
+    def test_a_request_the_check_blocked_itself_is_expected_only_for_that_method_and_path(self):
+        monitor = Monitor(blocked=[('DELETE', r'/api/session$')])
+        monitor.request_failed('DELETE', 'http://h/api/session', 'net::ERR_FAILED')
+        monitor.console('error', 'Failed to load resource: net::ERR_FAILED', 'http://h/api/session')
+        found = monitor.findings()
+        self.assertEqual((found['failed_requests'], found['console_errors']), ([], []))
+        self.assertEqual(len(found['expected']), 1)
+        other = Monitor(blocked=[('DELETE', r'/api/session$')])
+        other.request_failed('GET', 'http://h/api/session', 'net::ERR_FAILED')          # another method
+        other.request_failed('DELETE', 'http://h/api/state', 'net::ERR_FAILED')         # another path
+        other.console('error', 'Failed to load resource: net::ERR_FAILED', 'http://h/api/state')
+        self.assertEqual(len(other.findings()['failed_requests']), 2)
+        self.assertEqual(len(other.findings()['console_errors']), 1)
 
     def test_the_query_string_does_not_hide_the_path(self):
         monitor = Monitor(allow=[(401, 'GET', r'/api/session$')])
