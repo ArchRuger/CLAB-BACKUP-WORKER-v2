@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.32.0'
+VERSION = '1.32.1'
 LIMIT = 1024 * 1024
 # `containerlab inspect --all` runs a Docker inspection per container: several labs or a busy daemon take
 # well over the short bound of the other commands. The same bounds as discovery's copy of this command
@@ -1093,17 +1093,34 @@ class HostOperations:
                     for command in steps or [argv]:
                         if '--max-workers' not in self.help(command[1]): raise ValueError('Installed ' + command[1] + ' command lacks this option.' if steps else 'Installed command lacks --max-workers.')
                         command.extend(['--max-workers', str(options['max_workers'])])
+                # Clean up is never passed to a destroy (or a redeploy, whose own command and fallback both destroy first)
+                # of a lab with no deployed containers: with no containers for --name, containerlab 0.79.0 removed another
+                # clab-* folder in the topology's directory (a running lab's) and exited 0 (observed live, 2026-11-02, the
+                # sign-on VM pass; upstream's no-container branch of destroy). The review says so; the digest binds the
+                # final argv. Known limit: a lab emptied by hand between the re-plan and the run is not protected.
+                # Only a directory that holds another clab-* folder is at risk: alone, --cleanup can at most remove this
+                # lab's own stale folder, which is what the person asked for.
+                orphan_cleanup = False
+                if options.get('cleanup') and action in ('destroy', 'redeploy') and not rows:
+                    try:
+                        with os.scandir(path.parent) as listing:
+                            siblings = sorted(e.name for e in listing if e.name.startswith('clab-') and e.name != 'clab-' + name and e.is_dir(follow_symlinks=False))
+                    except OSError:
+                        siblings = None   # unreadable: assume the worst and keep the flag out
+                    orphan_cleanup = siblings is None or bool(siblings)
+                    if siblings: extra['sibling_dirs'] = siblings
                 for flag in ('skip_post_deploy', 'cleanup', 'graceful', 'keep_mgmt_net'):
                     if options.get(flag):
                         if flag == 'cleanup' and action not in ('deploy', 'redeploy', 'destroy'): raise ValueError('Cleanup is only available for lifecycle recreation/removal.')
                         dashed = '--' + flag.replace('_', '-')
+                        skip = flag == 'cleanup' and orphan_cleanup   # checked like any flag, then left out
                         if steps:
                             step = steps[1] if flag == 'skip_post_deploy' else steps[0]
                             if dashed not in self.help(step[1]): raise ValueError('Installed ' + step[1] + ' command lacks this option.')
-                            step.append(dashed)
+                            if not skip: step.append(dashed)
                         else:
                             if dashed not in help_text: raise ValueError('Installed command lacks ' + dashed + '.')
-                            argv.append(dashed)
+                            if not skip: argv.append(dashed)
                 if action == 'inspect': argv += ['--format', 'json']
                 if action == 'apply':
                     # The plan inside the apply review (section 2.6): the dry run reads the live lab, so its result
@@ -1118,7 +1135,11 @@ class HostOperations:
                     # a warning would only duplicate that for the one action (deploy) that never reaches
                     # this branch. redeploy/apply act on an already-running lab, so they keep the warning.
                     warnings.append('Runs this trusted topology with host privileges, including its configured hooks, mounts and image pulls.')
-                if options.get('cleanup'):
+                if orphan_cleanup:
+                    warnings.append("No deployed devices were found for this lab, so the lab's generated folder is not removed: with no containers, "
+                                    "containerlab would remove another lab's generated folder in the same directory" + (' (' + ', '.join(extra['sibling_dirs']) + ')' if extra.get('sibling_dirs') else '') + '. The folder '
+                                    + str(path.parent / ('clab-' + name)) + ', if it exists, is left in place: destroy again once this lab\'s devices run, or remove it on the VM.')
+                elif options.get('cleanup'):
                     directories = sorted({str(r.get('labdir') or (r.get('labels') or {}).get('clab-node-lab-dir') or path.parent / ('clab-' + name)) for r in rows}) or [str(path.parent / ('clab-' + name))]
                     warnings.append('Cleanup removes generated lab artifacts. Expected lab directory: ' + ', '.join(directories) + '. Check any custom lab directory configured on the VM.')
             else: raise ValueError('Unknown lab operation.')

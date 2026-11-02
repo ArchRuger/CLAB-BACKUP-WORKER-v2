@@ -2456,6 +2456,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .banner { flex-direction: column; align-items: flex-start; }
   .banner-actions { margin-left: 0; }
   #lab-banner > div { flex: none; }   /* column direction: the 320px row basis would become a 320px-tall box */
+  #session-banner > div, #session-banner-dialog > div { flex: none; }   /* same for the session-ended banner: its text and its three actions would each become a 320px-tall box */
   input[type=search] { width: 100%; }
   .table-wrap table { min-width: 730px; }
   .table-wrap thead th { position: relative; }   /* not sticky on a narrow screen, but still the containing block of its hidden header text */

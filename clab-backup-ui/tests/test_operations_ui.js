@@ -1371,3 +1371,30 @@ test('S10a: a poll kept for a closed output dialog is not revived into the dialo
  assert.deepEqual(asked,['/operations/B'],'only the job the dialog shows is polled');
  assert.equal(timers.length,1,'one chain drives the dialog');
 });
+
+test('the review\'s folder clause follows the reviewed command, not the requested option (1.32.1)',async()=>{
+ const run=async(preview,request)=>{
+  const elements=new Map(),el=()=>({value:'',onclick:null,addEventListener(){},querySelector:()=>({textContent:''}),querySelectorAll:()=>[],hidden:false});
+  let html='';
+  const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs:[],operations:[],git_jobs:[]},activeId:'',console,
+   document:{body:{insertAdjacentHTML(){}},querySelectorAll:()=>[],getElementById:()=>null,createElement:()=>el()},
+   location:{pathname:'/'},sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},setTimeout:()=>0,clearTimeout(){},notify(){},refresh:async()=>{},current:()=>null,busy:()=>false,rememberJobRequest:()=>true,
+   json:async()=>({name:'demo',path:'/etc/containerlab/demo.clab.yaml',token:'a'.repeat(32),warnings:[],affected:[],argv:[],steps:[],diff:'',...preview})});
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+  c.opDialog=(id,title,h)=>{html=h;for(const m of h.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],el());return {id,open:true,close(){},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]};};
+  await c.opReview(request);
+  return {html,c};
+ };
+ const argvWith=['/usr/bin/containerlab','destroy','-t','/etc/containerlab/demo.clab.yaml','--name','demo','--cleanup'],argvWithout=argvWith.slice(0,-1);
+ const kept=await run({action:'destroy',argv:argvWith},{action:'destroy',lab_id:'lab',options:{cleanup:true}});
+ assert.match(kept.html,/and the lab's generated folder is deleted/,'the flag in the reviewed argv: the folder clause is shown');
+ const dropped=await run({action:'destroy',argv:argvWithout},{action:'destroy',lab_id:'lab',options:{cleanup:true}});
+ assert.doesNotMatch(dropped.html,/generated folder is deleted/,'the helper left --cleanup out: no promise of a removal that does not happen');
+ const redo=await run({action:'redeploy',argv:[],steps:[argvWith,['/usr/bin/containerlab','deploy','-t','/etc/containerlab/demo.clab.yaml']]},{action:'redeploy',lab_id:'lab',options:{cleanup:true}});
+ assert.match(redo.html,/cleared as well/,'redeploy fallback: the destroy step carries the flag');
+ const redoDropped=await run({action:'redeploy',argv:[],steps:[argvWithout,['/usr/bin/containerlab','deploy','-t','/etc/containerlab/demo.clab.yaml']]},{action:'redeploy',lab_id:'lab',options:{cleanup:true}});
+ assert.doesNotMatch(redoDropped.html,/cleared as well/);
+ const {c}=kept;
+ assert.equal(c.opReviewedCleanup({argv:argvWith}),true);assert.equal(c.opReviewedCleanup({argv:argvWithout}),false);
+ assert.equal(c.opReviewedCleanup({steps:[argvWithout,argvWith]}),true);assert.equal(c.opReviewedCleanup({}),false);assert.equal(c.opReviewedCleanup(null),false);
+});

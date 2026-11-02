@@ -320,6 +320,20 @@ class UsersRouteTests(unittest.TestCase):
         self.assertEqual((mine['sessions'], mine['created_by']), (1, 'setup')); self.assertIsNotNone(mine['last_signin'])
         for secret in ('"password"', 'known_sources', 'scrypt$'): self.assertNotIn(secret, listed.text)
 
+    def test_common_fires_alone_for_a_long_variant_of_the_deny_list(self):
+        """DESIGN 4.3: in the list, in the list without trailing digits/punctuation, no letter at all, or a product name inside."""
+        common = ('password12345', 'qwertyuiop12', 'qwertyuiop!!', 'iloveyou1234', 'PassWord12345', '123456789012', '1234-5678-9012',
+                  '1234567890!!', 'containerlab', 'containerlab1', 'mycontainerlab2026', 'MyClab-Manager99', 'administrator1', 'changeme-please',
+                  'admin1234567', 'Root-2026!!!', 'student12345', 'clab@123!!!!', 'welcome2026!', 'password 1234', 'admin 2026 !!')
+        for password in common:
+            self.assertEqual(accounts.check_password('kim', password), ['common'], password)
+            response = self.client.post('/api/users', json={'name': 'kim', 'role': 'operator', 'password': password})
+            self.assertEqual(response.status_code, 422, password)
+            self.assertEqual(response.json()['detail']['reasons'], ['common'], password)
+            self.assertEqual(response.json()['detail']['message'], 'That password is too common. Choose another.', password)
+        for password in ('a password nobody guesses', 'x' * 12, 'correct horse 2026', '            ', 'Tr0ub4dor&3-horse', 'monkeybusiness'):
+            self.assertEqual(accounts.check_password('kim', password), [], password)
+
     def test_every_4xx_of_the_users_routes_carries_its_sentence(self):
         self.create('olivia')
         cases = [
@@ -349,9 +363,9 @@ class UsersRouteTests(unittest.TestCase):
         self.assertIn('olivia', self.app.state.store.state['users'])
 
     def test_the_last_admin_stays_through_the_route(self):
-        self.create('second', role='admin', password='another administrator one')
-        second = SignedInClient(self.app, name='second', password='another administrator one'); self.addCleanup(second.close)
-        changed = second.post('/api/session/password', json={'current': 'another administrator one', 'password': 'another administrator two'})
+        self.create('second', role='admin', password='the other admin passphrase')
+        second = SignedInClient(self.app, name='second', password='the other admin passphrase'); self.addCleanup(second.close)
+        changed = second.post('/api/session/password', json={'current': 'the other admin passphrase', 'password': 'the other admin renewed'})
         self.assertEqual(changed.status_code, 200, changed.text)
         # Two admins: each may demote the other only while the other is not the last one. `second` demotes tester;
         # now `second` is the last admin and tester, an operator, is refused everything admin-only.
@@ -369,7 +383,7 @@ class UsersRouteTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/state').status_code, 401, 'disabled: every session ended')
         self.assertEqual(second.request('DELETE', f'/api/users/{NAME}', json={}).json(), {'deleted': True})
         self.assertNotIn(NAME, self.app.state.store.state['users'])
-        assert_not_logged(self.app, PASSWORD, 'another administrator one', 'another administrator two', second.cookies.get('clab_session'))
+        assert_not_logged(self.app, PASSWORD, 'the other admin passphrase', 'the other admin renewed', second.cookies.get('clab_session'))
 
     def test_an_admin_reset_restricts_the_user_and_an_operator_is_refused_everything_here(self):
         self.create('olivia')

@@ -161,6 +161,11 @@ COMMON_PASSWORDS = frozenset((
     'biteme', 'matthew', 'access', 'yankees', '987654321', 'dallas', 'austin', 'thunder', 'taylor', 'matrix',
     'minecraft',
 ))
+# Product names: a password that contains one is common (DESIGN 4.3); kept apart so COMMON_PASSWORDS stays the published list.
+# Default account names and vendor defaults that the top-100 list does not hold; they take part in rules (i) and (ii) only.
+BASE_WORDS = frozenset(('admin', 'root', 'clab', 'student', 'manager', 'secret', 'welcome', 'admin@123', 'clab@123', 'nokiasrl1!'))
+PRODUCT_NAMES = ('containerlab', 'clab-manager', 'clabmanager', 'clab-backup', 'clabbackup', 'nodemanager', 'labmanager',
+                 'administrator', 'changeme')
 REASON_ORDER = ('too_short', 'too_long', 'equals_name', 'common')
 REASON_SENTENCES = {
     'too_short': 'Use at least 12 characters.',
@@ -175,6 +180,16 @@ def check_name(name):
     return isinstance(name, str) and NAME.fullmatch(name) is not None
 
 
+def _is_common(lowered):
+    """DESIGN 4.3, casefolded after NFKC: in the list (or a default account name); the same without trailing digits,
+    punctuation and symbols; digits, punctuation and symbols only (no letter, not just whitespace); or containing a product name."""
+    if lowered in COMMON_PASSWORDS or lowered in BASE_WORDS: return True
+    stripped = lowered.rstrip(''.join(c for c in set(lowered) if c.isspace() or unicodedata.category(c)[0] in 'NPS'))
+    if stripped and (stripped in COMMON_PASSWORDS or stripped in BASE_WORDS): return True
+    if any(not c.isspace() for c in lowered) and all(c.isspace() or unicodedata.category(c)[0] in 'NPS' for c in lowered): return True
+    return any(product in lowered for product in PRODUCT_NAMES)
+
+
 def check_password(name, password):
     """The reason codes of DESIGN 4.3 in the order of 7.4; empty when the password is acceptable."""
     normal = unicodedata.normalize('NFKC', password)
@@ -183,7 +198,7 @@ def check_password(name, password):
     if len(normal) > MAX_LENGTH: reasons.append('too_long')
     lowered = normal.casefold(); lowered_name = (name or '').casefold()
     if lowered_name and (lowered == lowered_name or lowered_name in lowered): reasons.append('equals_name')
-    if lowered in COMMON_PASSWORDS: reasons.append('common')
+    if _is_common(lowered): reasons.append('common')
     return reasons
 
 

@@ -230,17 +230,20 @@ def subject_names(addresses, hostname, allowed, names):
 
 
 def primary_name(allowed, names, addresses, hostname):
-    """The primary name: the first UI_ALLOWED_HOSTS name, else the first tls/names entry that is a name,
-    else the first IPv4 certificate address, else the host name."""
+    """The primary name: the first UI_ALLOWED_HOSTS name, else the first tls/names entry that is a name the
+    manager answers to (allowed_hosts.outside_dns_free: a single-label, .local or localhost name; a longer name
+    is refused with 403 unless UI_ALLOWED_HOSTS lists it, so --name alone adds a SAN and never the printed
+    address), else the first IPv4 certificate address, else the host name."""
     for name in allowed:
         return _plain(name)
     for name in names:
-        if not _is_ip(name):
+        if not _is_ip(name) and allowed_hosts.outside_dns_free(name):
             return name
     for address in addresses:
         if ipaddress.ip_address(address).version == 4:
             return address
-    return (hostname or '').strip().lower() or 'localhost'
+    host = (hostname or '').strip().lower()
+    return host if host and allowed_hosts.outside_dns_free(host) else 'localhost'
 
 
 def common_name(plan):

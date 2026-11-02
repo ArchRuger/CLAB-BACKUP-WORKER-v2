@@ -1,3 +1,55 @@
+## Changes in 1.32.1
+
+The live VM pass of the sign-on release (`docs/sign-on/PICKUP.md` section 3 item 6, which 1.32.0's record listed as not
+run): an upgrade from 1.31.7 through the installer on the development VM, the firewall and the SSH drop-in on a real
+host, a provided certificate, sign-ins from other addresses, the browser against the live manager, and every feature
+under sign-on. The evidence is in `clab-backup-ui/VALIDATION.md` (1.32.1). The sign-on design held; what the pass
+found is fixed here.
+
+- **A certificate change is now served.** `deploy/recreate-manager.sh` passes `--force-recreate` to `docker compose up`
+  for the manager and the redirect listener. A certificate change (`setup-tls.sh --renew`, `--name`, `--cert`,
+  `--self-signed`) alters only files inside the bind-mounted `tls` directory, which compose does not count as a change,
+  so before this both containers were left running on the old certificate while the script printed "Manager
+  recreated"; the health check then reported `tls.listener FAIL`. `test_recreate_manager.py` pins the flag. The script
+  therefore always restarts both containers (every session ends): run it between operations, not during a backup, a
+  save or a Load.
+- **The printed address is one the manager answers to.** `setup-tls.sh --primary` (used by `manager-recover-admin.sh`,
+  the installer's closing lines and the health check) uses a `tls/names` entry only when the manager would accept it
+  without `UI_ALLOWED_HOSTS` (single-label, `.local`, `localhost`); a multi-label `--name` is a SAN only until it is also
+  listed. Before, after `--name manager.example.test` the recovery command printed an address that answered 403.
+- **Refused WebSocket handshakes no longer reach the container log.** uvicorn's `--no-access-log` does not cover its
+  WebSocket layer or the websockets library, which logged every handshake at INFO (the client address, the
+  caller-chosen path and query, open, closed, rejected) through the `uvicorn.error` logger, unbounded on a scanned VM.
+  `app/log_hygiene.py` installs a filter on that logger from `create_app` that drops those INFO-and-below records;
+  WARNING and above and the start-up lines pass. The manager container's log is bounded as well (json-file, 10 MB by 3,
+  in both compose files, pinned by `test_release_consistency.py`). On the wire a socket closed 1008 before accept is an
+  HTTP 403 (uvicorn's rendering); the documents say so now.
+- **The common-password rule fires on its own.** Every entry of the built-in list was shorter than the 12-character
+  minimum, so `common` could never be the reason alone and `password12345`, `qwertyuiop12`, `123456789012` and
+  `containerlab` were accepted. After NFKC and casefold a password is now refused as too common when it is on the list
+  or is a default account name (`admin`, `root`, `clab`, `student`, …), is one of those with trailing digits,
+  punctuation or symbols added, has no letter at all, or contains a product name (`containerlab`, `clab-manager`,
+  `administrator`, `changeme`, …). The list itself is unchanged (`accounts.PRODUCT_NAMES`, `BASE_WORDS`,
+  `_is_common()`; DESIGN.md 4.3, UI.md 2.3, `docs/ACCOUNTS.md`).
+- **The session-ended banner keeps its height at phone widths.** At 760 px and narrower the banner grew to about 694 px
+  (the narrow-width column rule gave its children a 320 px flex basis as a height) and pushed the dialog's fields below
+  the fold; it now takes what its text and three buttons need (about 123 px at 760, 199 px at 390), the same opt-out
+  `#lab-banner` already had (`style.css`).
+- **Destroy of a lab with no containers never passes `--cleanup`** (also the destroy step of Redeploy). With no
+  containers for the lab's name, containerlab 0.79.0 removed another lab's generated `clab-*` folder in the same
+  directory, a running lab's included, and exited 0, so the manager reported success and the review had named a
+  different folder. The helper (`host_operations.py`) now leaves the flag out in that case and the review says why and
+  that the lab's own folder, if any, is left in place; the page's folder clause follows the reviewed command
+  (`opReviewedCleanup` in `operations.js`). Not a sign-on defect; found while destroying throw-away labs.
+  Known limit: a lab emptied by hand between the review's re-plan and the run is not protected.
+- Documents: `docs/INSTALL.md` (what `--name` prints), `docs/sign-on/EXPOSURE.md` (3.2, 4.1 as built, 7.4, 8.1),
+  `DESIGN.md` 4.3 and 6.4, `UI.md` 2.3, `docs/ACCOUNTS.md`, `docs/LAB-OPERATIONS.md`.
+- Open after the pass (`docs/sign-on/PICKUP.md` section 3): the other banners keep the narrow-width defect the session
+  banner had (`#home-banner` measured 732 px at 760); request-time events `job.queued`, `capture.launch` and
+  `git.connect` carry the actor `-`; the forced password change accepts the administrator-set password unchanged;
+  `GET /api/audit` ignores a `since` that is not a date; `PATCH /api/users` accepts a string as `disabled`; the
+  last-administrator refusal is unreachable through sequential requests; the earlier open points stand.
+
 ## Changes in 1.32.0
 
 Sign-on and internet exposure (`docs/sign-on/`; the owner's decisions D1 to D3 in `PROMPT.md`): the manager requires

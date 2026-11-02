@@ -1,3 +1,161 @@
+# The live VM pass of the sign-on release, and its fixes — 1.32.1
+
+Branch `claude/signon-vm-pass` from `main` at `9f8b62c` (release 1.32.0). Session on the development VM `dev2`
+(Ubuntu 24.04, 24 CPUs, 72 GB; 192.168.132.134; reached over SSH from the owner's workstation), 2026-11-02. This is the
+VM pass that 1.32.0's record listed as not run: an upgrade from 1.31.x through the installer, the firewall and the SSH
+drop-in on a real host, a provided certificate, sign-ins from another address, the browser against the live manager.
+Nothing below is fixture evidence unless it says so. No secret (password, setup or recovery code, cookie, session id)
+was written into a report; the evidence scripts and screenshots stayed in the session's scratch folder.
+
+**Upgrade and first run (live, the lead).** The VM ran 1.31.7 (plain HTTP 8081, no accounts, ufw inactive, sshd at its
+defaults, no `tls` folder). `git pull --ff-only` to 9f8b62c, then `bash deploy/install.sh --plain`, menu 1, the standard
+path, driven under a pty because the installer refuses a piped stdin. The plan printed the 1.32.0 lines (TLS, firewall,
+SSH, "Manager ports: HTTPS on 8443; plain HTTP on 8081 redirects there", the setup code "printed at the very end");
+step 3 made a self-signed ECDSA certificate for `192.168.132.134, 127.0.0.1, ::1, localhost, dev2` only (no Docker
+bridge), verified the helpers at 1.32.0 and rebuilt the image; step 4 rebuilt the capture service without restarting the
+manager; step 5 "Manager 1.32.0: running; HTTPS and version checks passed"; step 6 ufw: 22, 8443, 8081 allowed, deny
+incoming, our SSH session kept, lab containers kept egress and reachability; step 7 the sshd drop-in (30, 8,
+`PermitRootLogin no`, root's `authorized_keys` being empty); then the Git step re-registered the checkout and the setup
+code was printed last and equalled the file's. The manager command carried the TLS files, `--no-proxy-headers`,
+`--no-server-header` and `--no-access-log`; the container log named the file and the command, never the code; in setup
+mode an API client got 503 `setup_required` and a browser 302 `/setup` (DESIGN 9.3). The first run through the real
+setup page in headless Chromium (1440 and 390): the page's own four sentences, the manager's wrong-code 401 and its
+sentence, the account created, the file deleted, `/setup` 404, `POST /api/setup` 404 `setup_closed`, the audit's `setup`
+event without a code. The operator and a second administrator were created through `POST /api/users` and their forced
+first-sign-in change proved (403 `password_change_required` until `POST /api/session/password`).
+
+**Nine parallel domains against the live manager** (one worker each; every non-note finding re-run by an independent
+refuter before it was accepted):
+- *Gate, sessions, cookies, guard, Host check* (24 checks, 23 held): the exempt list exactly; every page 302 to
+  `/login?next=<path+query>`, every API 401 `signed_out`; the cookie `HttpOnly; Secure; SameSite=Strict; Path=/;
+  Max-Age=604800`; polls do not renew, a page load, a HEAD or a POST does; the guard's 413 for a missing body and 403 for
+  a foreign Origin behind the gate; a bad Host 403 signed in or out; `X-Forwarded-Host` and `-Proto` ignored on both
+  listeners; a terminal ticket works once and only for the session that minted it, an open terminal closes 1008
+  `signed_out` within a second of sign-out; a password change rotates the cookie and ends the user's other sessions;
+  deactivation ends sessions at once; HTTP refusals wrote nothing to the container log.
+- *Roles and People routes* (33 checks, 26 held, 1 not run): all 10 `require_admin` routes 403 `admin_required` for the
+  operator; the operator keeps every lab route; `/api/users` carries no hash; the restricted state admits only the exempt
+  set and the change route; reset and own change end the right sessions; own-row protections (409 `self_change`); a
+  disabled, deleted or unknown name answers like a wrong password in the same time; the audit API matches DESIGN 10. The
+  live `last_admin` 409 is unreachable through sequential requests (unit evidence only).
+- *Throttling and audit* (9 checks, 8 held; every failed attempt from throw-away containers, sources 172.17.0.2–.9):
+  per name-and-address the 6th wrong password gets 429 `retry_after` 30, doubling to the 900 s cap, the right password
+  refused during the block and accepted after it; per address after 100 failures over 25 names, another container not
+  held; per name after 10 failures from unfamiliar sources, the familiar loopback source still signs in; an unknown name
+  answers the same body in the same time (median 62 ms against 61); `audit.jsonl` and `audit-failures.jsonl` as
+  DESIGN 10.1–10.2; no password, hash, cookie or code in either file or the container log.
+- *TLS, redirect, exposure facts* (26 checks, 24 held): files, owners and modes; ECDSA P-256, 730 days, the SANs,
+  the fingerprint equal to the installer's; TLS 1.2 and 1.3 only; the security headers and HSTS 15552000; the 8081
+  listener's 301 with path and query kept for every accepted Host, 400 for a refused one, 405 for other methods, no body,
+  no cookie, no HSTS, no log lines; only 22, 8443 and 8081 listen beyond loopback; `dev2` and `localhost` open the
+  manager, a multi-label name is refused until `UI_ALLOWED_HOSTS` lists it.
+- *Health check* (195 checks in 18 s: 149 PASS, 4 WARN, 42 INFO, 0 FAIL; exit 2 for the WARNs): every id of
+  EXPOSURE.md 6.2 that applies (tls.files, tls.cert, tls.names, tls.bind, tls.listener, http.redirect, http.hsts,
+  firewall, exposure.listeners, exposure.ports, signon.bootstrap, ssh.hardening PASS; ssh.bruteforce WARN for the
+  missing fail2ban); no check needed a sign-in; no code, password or hash in the report; `tls.hsts-scope` appears only
+  in provided mode (seen later).
+- *Browser against the live manager* (Playwright, 1440/1280/760/390; 151 assertions, 2 product findings): the sign-in
+  page's layout, focus, Tab order and sentences; `next=` including the open-redirect cases; the account name under
+  Manager; sign-out and Back; the operator's menu (People and Diagnostics hidden, two items "Administrators only",
+  ArrowDown skips them); the session-ended banner with polling stopped and typed text kept, Try again both ways; the
+  forced-change view; the People page's add, role change, reset, deactivate and audit rows; the own-password dialog;
+  every standalone page's 302 and return; the student guide (302 signed out, PDF signed in).
+- *Features under sign-on* (19 checks, 18 held; the lab VM connection kept over the upgrade and its fingerprint equal to
+  the VM's ED25519 key; helpers 1.32.0): as the operator, upload and deploy a lab, open a terminal (ticket + socket),
+  take a backup and download it, open browser Wireshark through the relay (101 ICMP frames in the viewer), the first
+  save to the registered checkout (not uploaded), and sign out: `end-all` before `DELETE /api/session`, the capture
+  session gone, the capture cookie cleared; Debug and Diagnostics refused the operator.
+- *Migrated tools* (29 checks, all held): `manager_http.py` CLI and API with `--pin`, `--cafile`, a wrong pin refused
+  before sign-in, `http://` refused, one sign-in attempt on a wrong password, a mid-run `signed_out` re-signed once;
+  `playwright_context` shares the session and ignores certificate errors for loopback only; `mgr.py`,
+  `scaffold-lab.py` and `manager_restore.py` sign in; nine sign-on test files green.
+- *Regression on this VM* (unit, static, fixture): the Python suite 3843 OK (2 skipped), the browser files 1433 of
+  1433, the stdlib CI group 1216, `verify-release.py`, the link check, every syntax check, `node build.mjs --check`
+  (the committed bundle matches, Node 24), `check_signon.py` 374 checks 0 failed, `run_regression.sh` 107 of 107 at
+  three viewports and 45 of 45. The real-packet capture smoke refuses a host with a capture stack (by design); the
+  live relay capture above is this VM's real-packet evidence.
+
+**Serial host steps (live, the lead).** `setup-firewall.sh` again: "Already allowed", no duplicate; `--remove` deletes
+8443 and 8081 and keeps the SSH rule with its sentence, the health check then WARNs `firewall ... not allowed: 8443,
+8081`, a re-run restores the three rules; `setup-ssh-hardening.sh --remove` restores 120 / without-password / none, a
+re-run writes the drop-in again, sshd accepted a new connection at every step; lab traffic unaffected throughout.
+`setup-tls.sh` (ensure) keeps the certificate; `--name manager.example.test` writes `tls/names` and a certificate with
+the extra SAN; `--cert/--key` with a throw-away CA's leaf-first chain: mode `provided`, `curl --cacert ca.pem` 200 on
+both addresses, the health check `tls.cert WARN` (29 days left), `tls.hsts-scope INFO`, `tls.names WARN` for the names
+entry absent from the provided certificate, ensure "Provided certificate kept", `manager_http --pin fullchain.pem`
+accepted and `--pin ca.pem` refused as TOOLS.md says; `--self-signed` and `--renew` each make a new certificate.
+A real recreate ended every session (a held cookie answered 401 `signed_out`), kept the users and did not regenerate a
+setup code. `manager-recover-admin.sh`: the code and the 15-minute sentence, the health check "A recovery is open",
+the recovery page through Chromium (the recovery title and lead, an existing name 409 with its sentence and the name
+kept, a wrong code 401, the code accepted upper-cased without dashes, the new administrator signed in, the existing
+administrator untouched, `/setup` 404 and the file gone, the audit `setup` event with detail `recover`); a code left
+unused and aged 16 minutes: "expired unused", `/setup` 404 and the file removed; a second run issues a new code.
+
+**Found by this pass, fixed in this release** (each fix built by a worker on its own files, reviewed read-only by
+`risk-reviewer` or `clab-ui-reviewer`, then the whole diff by `/clab-review-changes`: 16 confirmed items, the four
+must-fix ones test pins that the fixes had moved, all answered; the fixes are listed in `docs/CHANGELOG.md`):
+- `recreate-manager.sh` did not recreate after a certificate change (the served fingerprint stayed the old one after
+  `--name`, `--cert` and `--self-signed`; the health check reported `tls.listener FAIL`); the pass continued with a
+  forced recreate by hand.
+- After `--name manager.example.test`, `manager-recover-admin.sh` printed an address the manager refuses with 403.
+- Refused WebSocket handshakes wrote two INFO lines each (client address, caller-chosen path) to the container log,
+  found by three domains independently; the log had no size cap.
+- The common-password rule never fired alone (`password12345`, `containerlab`, `123456789012` accepted), found by
+  two domains; the first run of this pass itself created the first administrator with `password12345` through the
+  real page before moving it to its intended password.
+- The session-ended banner was 694 px tall at 760 and 390 wide.
+- A destroy of a lab with no containers removed another lab's `clab-*` folder (containerlab 0.79.0, reproduced with
+  containerlab alone), reported as a success; a sibling folder of a running lab was lost twice during the pass.
+
+**Unit and static on the release tree** (this VM, the venv; the full suites run three times, the last on the release
+tree after the review's fixes): the Python suite `unittest discover` 3855 tests OK (2 skipped), the browser files
+`node --test tests/*.js` 1434 of 1434, the stdlib CI group file by file with the system `python3` (each exit 0), `verify-release.py` both halves, `check_links.py` 0 problems, `git diff --check`, `node --check` on
+every page script, `bash -n` on every deploy script and `sh -n` on the gateway; the new `test_log_hygiene.py` is in the
+CI list. Each fix came with a test that failed before it: `test_recreate_manager.py`, `test_setup_tls.py`,
+`test_log_hygiene.py`, `test_release_consistency.py` (the logging block and the forced recreate), `test_users.py`,
+`test_setup.py` (rewritten pin: `root` is now also common), `test_lab_operations.py` (two tests), and the node test of
+`opReviewedCleanup` in `test_operations_ui.js`; the banner fix was measured on the fixture at the four widths
+(115/115/694/694 before, 115/115/123/199 after; the in-dialog clone, the page-level banner shares the rule). (from the fix round)
+
+**Live re-check after the upgrade to 1.32.1 (this VM, the lead).** The same installer path took the VM from 1.32.0 to
+1.32.1 with its accounts: the plan named the kept certificate ("Self-signed certificate kept: it names …"), the firewall
+and SSH steps reported "Already allowed" and rewrote the drop-in, the Git step re-registered the checkout, and the
+closing line was "An administrator exists; sign in at https://192.168.132.134:8443/" (no setup code, `/setup` 404, the
+operator signed in afterwards, the helpers at 1.32.1, the manager's `LogConfig` now `max-size 10m, max-file 3`, the
+certificate's fingerprint unchanged). Then each fix against the live manager:
+- `setup-tls.sh --renew` alone: a new file, "Container … Recreate", the served certificate equal to the new file, the
+  held session answered 401 `signed_out` (the recreate is real now).
+- Two refused WebSocket handshakes (no session; a foreign Origin) and a 401 over HTTP added no line to the container
+  log; the two start-up lines are still there. The one line that still grows per request is uvicorn's
+  `WARNING: Invalid HTTP request received.` for bytes that are not HTTP over an established TLS connection (not for a
+  plain-HTTP request to 8443, which gets no HTTP answer); it is an error-class line, now bounded by the log cap.
+- `POST /api/users` with `password12345`, `admin2026!!!`, `containerlab-lab`, `123456789012` and `password 1234` each
+  answered 422 `weak_password` with `reasons: ["common"]` and the sentence; a long passphrase 200 (deleted again).
+- With `tls/names` still holding `manager.example.test`, `manager-recover-admin.sh` printed
+  `https://192.168.132.134:8443/setup?recover=1` and `setup-tls.sh --primary` the address; the unused recovery was
+  closed by aging the file (`/setup` 404).
+- The session-ended banner in the open import dialog, measured in headless Chromium against the live manager with
+  the refuter's script: 115 px at 1440, 123 at 760 and 199 at 390 (694 before), the dialog's name field in the
+  viewport at every width.
+- The destroy scenario, two one-node labs deployed through the page into the shared projects folder: the first destroy
+  of `rf1b` ran with `--cleanup` and named `clab-rf1b`; the second (no containers) ran without it, its review said
+  "No deployed devices were found for this lab, so the lab's generated folder is not removed … (clab-rf1a) …" and
+  carried `sibling_dirs: ["clab-rf1a"]`, and `clab-rf1a` with its running container survived; both labs, files and
+  containers were removed afterwards through the manager's own operations.
+- The final `check-install.sh --require-git`: 149 PASS, 4 WARN (fail2ban missing; 10 of 12 nodes of the old labs not
+  running; the folder-coverage and Git-registration limits of 20), 0 FAIL, exit 2.
+
+**Open.** `docs/sign-on/PICKUP.md` section 3, items 6 to 12 (the other banners' narrow-width rule, the request-time
+events' actor, the forced change accepting the same password, four small contract gaps, the unreachable
+`last_admin` refusal, the housekeeping left on the development VM).
+
+**Not run.** *Start fresh* on the live manager (it would drop the owner's lab records on this shared development
+manager; unit evidence covers "users and the audit survive"); the `UI_PORT=8081` upgrade variant of the Ports table;
+a sign-in from a second physical machine (container sources on the Docker bridge and the LAN address stood in); the
+`last_admin` refusal (unreachable sequentially); the idle and absolute session limits (no time control on a live
+manager); the console protocol's ticket (no console-capable node running); the full-screen installer (the plain menu
+was driven; the Textual front end has its own 146 tests).
+
 # Sign-on and internet exposure — 1.32.0
 
 Branch `claude/wizardly-davinci-vejmya`, restarted from `main` at `1aa2219` (release 1.31.9, which carried the sign-on

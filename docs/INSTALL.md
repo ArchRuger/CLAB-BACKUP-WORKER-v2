@@ -50,7 +50,7 @@ GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.32.0 — guided setup
+Containerlab Node Manager 1.32.1 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -143,7 +143,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The verification phase prints `Manager 1.32.0: running; HTTPS and version checks passed.`,
+The verification phase prints `Manager 1.32.1: running; HTTPS and version checks passed.`,
 the VM-local address and the certificate's SHA-256 fingerprint. After the last step
 (Git setup included) the installer prints the address to open, one or more
 `https://…` addresses, and **the setup code, last of all**: a restart of the manager
@@ -297,8 +297,11 @@ sudo bash "$HOME/projects/clab-manager/deploy/setup-tls.sh" --name 203.0.113.7 -
 The names you give replace the earlier list (`--name ''` removes it). A value must be a host
 name without port or scheme, or an IP address without brackets or `%zone`. The command then
 makes a new self-signed certificate when one of the names is missing and recreates the
-manager. `setup-tls.sh` is also what you run after you change `UI_ALLOWED_HOSTS` or the VM's
-address: `recreate-manager.sh` reloads the settings but only checks the certificate files, it
+manager. `--name` adds a name to the certificate only: the address the tools print (the installer's
+access lines, the health check, `manager-recover-admin.sh`) keeps using the VM's address until
+the name is also in `UI_ALLOWED_HOSTS`, because the manager refuses a name with dots that is
+not listed there (a single-label or `.local` name is answered without being listed). `setup-tls.sh` is also
+what you run after you change `UI_ALLOWED_HOSTS` or the VM's address: `recreate-manager.sh` reloads the settings but only checks the certificate files, it
 never makes a certificate, and the certificate is made at an installation or upgrade or by
 this command.
 

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Recreate the manager container with the current settings, without rebuilding the
 # image: the capture setup calls this after changing settings. Saved data and the
-# VM password are retained. Works from any directory.
+# VM password are retained. Works from any directory. Every call restarts the manager
+# and the redirect listener (--force-recreate: a certificate change is invisible to
+# compose), so every session ends and queued work is marked interrupted: run it between
+# operations, not during a backup, a save or a Load.
 #
 # Detects a prepared-image installation: when deploy/image.env exists and sets
 # MANAGER_IMAGE, and either the existing container already runs that image or no
@@ -44,6 +47,8 @@ echo "Recreating the manager from $route."
 # start-manager.sh's ensure); on a pre-TLS installation this stops with the launcher named.
 bash "$script_dir/setup-tls.sh" --prepare --route "$route_name"
 # Both services read the settings: the manager its TLS files and environment, the redirect its ports.
-"${compose[@]}" up -d --no-build --no-deps backup-ui http-redirect
+# --force-recreate: a new certificate only changes files inside the bind-mounted tls directory, so compose
+# sees an unchanged configuration ("Running") and would leave uvicorn serving the certificate it loaded at start.
+"${compose[@]}" up -d --no-build --no-deps --force-recreate backup-ui http-redirect
 "${compose[@]}" ps
 echo 'Manager recreated with the current settings, and the redirect listener with it; saved data and the VM password are retained.'

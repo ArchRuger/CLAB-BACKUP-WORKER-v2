@@ -502,7 +502,7 @@ can before sending, so the common mistakes never reach the manager:
 | Length ≥ 12 and ≤ 128 | page and manager | *Use at least 12 characters.* |
 | The two entries match | page | *The two passwords are not the same.* |
 | Not equal to the username, case-insensitive, and the username is not inside it | page and manager | *Choose a password that is not your username.* |
-| Not in the manager's short deny-list (about 100 entries: `password`, `12345678…`, `containerlab`, `admin1234`, the product name) | manager only | *That password is too common. Choose another.* |
+| Not common: not in the manager's short deny-list (about 100 entries plus the product names), not that list with trailing digits or punctuation added (`password12345`), not digits and punctuation only, and not containing a product name (`containerlab`, `clab-manager`) | manager only | *That password is too common. Choose another.* |
 | No composition rule (no required digit, symbol or case) | both | none; the help sentence says so |
 
 The deny-list stays on the manager: sending it to the browser would publish it on the exposed
