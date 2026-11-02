@@ -11,7 +11,7 @@ sequence that turns a topology file into a usable lab, and which module owns wha
 flowchart LR
     B["Browser on your workstation"]
     subgraph VM["Lab VM · Ubuntu 24.04"]
-        M["Node Manager container<br/>FastAPI + vanilla JS · port 8081<br/>host network · UID 10001 · no Docker socket"]
+        M["Node Manager container<br/>FastAPI + vanilla JS · port 8443 TLS<br/>(8081 redirect) · host network · UID 10001 · no Docker socket"]
         D[("Persistent data<br/>/srv/containerlab-node-manager/data<br/>state.enc · state.key · backups/ · events.jsonl")]
         G["sshd · Match User clab-discovery<br/>ForceCommand clab-manager-gateway"]
         H["Root helpers via sudoers<br/>clab-manager-inspect · -operate · -git"]
@@ -21,7 +21,7 @@ flowchart LR
         K[("Registered Git checkout<br/>owned by a VM account")]
     end
     R[("Git remote<br/>GitHub over HTTPS")]
-    B -- "HTTP + WebSocket" --> M
+    B -- "HTTPS + WSS, signed in" --> M
     M --- D
     M -- "SSH, password, pinned host key" --> G --> H
     H --> C --> N
@@ -146,17 +146,35 @@ document sits under one reentrant lock, the runner is a one-worker pool, and
 `LabOperations.operation_busy` is the shared guard that backups, Git saves, restores, discovery imports
 and removal all consult. Startup marks queued and running work *interrupted*. There is no multi-instance
 coordination, so never start a second manager against the same data directory. A request is admitted
-only after the `Host` check (`allowed_hosts.py`, outermost) and the same-origin guard in `main.py`; the
-two WebSockets (terminals, capture) check `Origin` themselves.
+only after the `Host` check (`allowed_hosts.py`, outermost), then the session gate (`sessions.SessionGate`,
+directly inside it), then the same-origin guard in `main.py`; the two WebSockets (terminals, capture) check
+`Origin` themselves and a terminal ticket is bound to the session that minted it.
+
+**Transport.** The manager serves TLS itself: uvicorn runs with `--ssl-certfile`/`--ssl-keyfile` on `UI_PORT`
+(default 8443) and `--no-proxy-headers`, so the ASGI scope's scheme is the truth and nothing reads
+`X-Forwarded-*`; `origin.scheme(scope)` is the one place that asks, and `security_headers()` in
+`app/headers.py` adds HSTS (180 days, no `includeSubDomains`) on an HTTPS request. A reverse proxy is not
+needed. A second container of the same image, `http-redirect` (`python -m app.redirect`, `UI_HTTP_PORT`,
+default 8081, `0` turns it off), listens for plain HTTP. `app/redirect.py` is the one listener outside the gate
+and the guard: it holds no data and answers 301 to the manager's own HTTPS origin after `host_allowed`, 400 for a
+refused Host or a request target that is not a path, 405 for any method but GET and HEAD, closes a socket 1008,
+and nothing else. The certificate is made by `deploy/setup-tls.sh` (see [Install](INSTALL.md)); the accounts,
+sessions and recovery are described for people in [Accounts and sign-in](ACCOUNTS.md).
 
 ## Module map
 
 | Module | Responsibility |
 |---|---|
-| `app/main.py` | Application factory (`create_app` builds one `Store`, then the services in dependency order and lets each install its own routes), security headers and CSP, inventory, credential profiles, jobs and downloads, the public view of a lab |
+| `app/main.py` | Application factory (`create_app` builds one `Store`, then the services in dependency order and lets each install its own routes), the same-origin guard, inventory, credential profiles, jobs and downloads, the public view of a lab |
 | `app/allowed_hosts.py` | The outermost ASGI layer against DNS rebinding: refuses every HTTP request and WebSocket handshake whose `Host` is missing, repeated, malformed or a name outside DNS could control (IP literals, `localhost`, single-label and `.local` names pass; other names only when listed in `UI_ALLOWED_HOSTS`; `X-Forwarded-Host` is never read), before the same-origin guard in `main.py` and the WebSocket Origin checks, which all derive the manager's own origin from `Host` |
+| `app/accounts.py` | The account model and its HTTP routes: the `users` record (`admin` or `operator`, a name of 2 to 32 lowercase characters), `scrypt` password hashes verified on a four-thread executor, the password policy (12 to 128 characters, not the name, a short deny-list of well-known passwords), the last-administrator rule, the setup code file `<DATA_DIR>/setup-code`, and the admin-only `/api/users` and `/api/audit` routes. `public_user` is the only copy that reaches a browser |
+| `app/sessions.py` | The sign-in routes, `SessionGate` and `require_admin`: sessions in memory only (cookie `clab_session`, idle 12 hours renewed by an act of the person, 7 days absolute), the user index the gate reads without the store lock, the three-level sign-in throttle, the exempt route list and the failure buckets that feed `audit-failures.jsonl` |
+| `app/origin.py`, `app/headers.py` | `scheme(scope)`: the one rule for "own origin", read from the ASGI scope only. `security_headers(scope, status=…, refusal=…)`: the fixed security headers, CSP and `Cache-Control` of every response, with HSTS on HTTPS, used by the host check, the gate, the guard and the redirect |
+| `app/recover.py` | `python -m app.recover`, run inside the container by `deploy/manager-recover-admin.sh`: writes a 15-minute `mode=recover` setup code and an audit line, prints the code, changes no account |
+| `app/probe.py` | `python -m app.probe <name>`: read-only facts for the health check (`design-engine`, `capture`, `vm-connection`, `browse`, `git-registry`), one line of JSON each, run through `docker exec` so the health check never needs a session |
+| `app/redirect.py` | The plain-HTTP redirect listener described above; imports only `allowed_hosts` and `headers` |
 | `app/downloads.py` | Download names, short device names, UTC timestamps, safe lookup of a job's snapshot files, ZIP and manifest assembly, legacy metadata backfill ([download names](../clab-backup-ui/NODE-FEATURES.md#backup-download-names)) |
-| `app/store.py` | Encrypted state file, atomic saves, bounded audit log, reset journal |
+| `app/store.py` | Encrypted state file, atomic saves, bounded event log, the two audit files (`audit.jsonl`, `audit-failures.jsonl`; admin-only, they survive *Start fresh*), reset journal that keeps `users` |
 | `app/discovery.py`, `app/vm_files.py`, `app/host_files.py` | VM connection, 30-second inspection loop, address reconciliation (the one container-name formula covers the default, custom, empty and `__lab-name` prefixes; a container with only an IPv6 address is matched too), lab file bundles and import; `host_files.py` is the helper installed on the VM |
 | `app/lab_operations.py`, `app/host_operations.py` | Reviewed containerlab commands with preview tokens and persistent output (including the node-scoped `restart-node`, `stop-node` and `start-node` actions behind *Restart device…*, *Stop device…* and *Start device…*: the manager resolves one device to its topology node and container, the helper binds that one container into the review), run options (chosen devices, worker count and the like, each offered only when the installed containerlab lists the flag), stopping a running operation, topology browser and editor, diagram layout API; `host_operations.py` runs on the VM |
 | `app/impairments.py` | Link impairments and the pending-changes plan: the lab-wide read, set, reset and Clear of a running device's data interface (delay, jitter, loss, rate, corruption) through the helper's `netem-show-all`, `netem-set` and `netem-reset`, and the dry-run `apply-plan` behind an *Apply topology changes* review. The browser sends the lab id, device, interface and the container id it was shown; the manager derives the rest and runs every mutating call in `LabOperations.impairing()` |

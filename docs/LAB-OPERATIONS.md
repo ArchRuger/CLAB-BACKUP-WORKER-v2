@@ -15,7 +15,8 @@ sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" 
 The launcher first checks source release consistency, refreshes and verifies the
 host helpers, refreshes the browser Wireshark stack, builds the manager
 image without cache and recreates the manager. Open `https://VM_IP:8443` and sign
-in. Linux host networking uses this port directly, without `-p` forwarding.
+in (the first time, as the administrator you create with the setup code; see
+[Accounts and sign-in](ACCOUNTS.md)). Linux host networking uses this port directly, without `-p` forwarding.
 Data stays in `/srv/containerlab-node-manager/data` (UID/GID 10001, mode 700).
 
 See [VM connection setup and recovery](VM-CONNECTION.md) and the
@@ -38,8 +39,13 @@ operation is running, the lab has no topology file on the VM). The **Manager ▾
 the top bar holds the actions that are not about one lab: **Deploy a new lab…**,
 **Running labs on the VM…**, **Operation history…**, **Manager settings…**,
 **Browser preferences…**, a **Help** group (**Keyboard shortcuts…** and links to the
-containerlab documentation, which open in a new tab) and **Diagnostics**. See
-[Help, keyboard shortcuts and browser preferences](#help-keyboard-shortcuts-and-browser-preferences).
+containerlab documentation, which open in a new tab) and **Diagnostics**. At the bottom of the menu your name and
+role are shown, with **People and sign-ins…** (administrators only), **Change password…** and **Sign out**. An
+operator can use everything about labs, devices, saving, loading and Wireshark; the **VM connection…** and
+**Manager settings…** items are disabled for an operator with the reason *Administrators only*, and **Diagnostics**
+is not shown (an operator sees *ask an administrator to check Diagnostics* where an administrator sees *see Diagnostics*).
+See [Help, keyboard shortcuts and browser preferences](#help-keyboard-shortcuts-and-browser-preferences) and
+[Accounts and sign-in](ACCOUNTS.md).
 
 | Action | Behaviour |
 |---|---|
@@ -183,7 +189,7 @@ container from the lab's deployment name and refuses a container that is not lab
 
 All three live in the **Manager ▾** menu in the top bar and send nothing to the manager.
 
-**Help.** **Help** is a group at the bottom of the Manager menu, just above **Diagnostics**. It is
+**Help.** **Help** is a group near the bottom of the Manager menu, above **Diagnostics** (administrators) and your account. It is
 folded every time the menu opens: click it, or press Enter, Space or ArrowRight, to unfold it, and
 ArrowLeft to fold it again. It holds **Keyboard shortcuts…** and four links that open in a new tab
 (they leave the manager, so a classroom without internet access sees the browser's own error):
@@ -471,8 +477,9 @@ Offline users can copy complete lab projects into a trusted root and browse them
 Delete undeployed VM YAML preserves a copy in `.clab-manager-history` next to the
 original file. Its operation result records the exact recovery path. Restore it
 manually on the VM if needed. **Remove from this manager** (Advanced › Danger zone) and
-**Start fresh** (Manager ▾ › Manager settings…) have different, manager-only scope;
-neither deletes original VM sources or deployment containers.
+**Start fresh** (Manager ▾ › Manager settings…, administrators only) have different, manager-only scope;
+neither deletes original VM sources or deployment containers. *Start fresh* keeps the accounts and the sign-in
+audit log: nobody is signed out of their account by it and the manager does not return to first-run setup.
 
 If discovery works but commands fail, repair the operations gateway and permissions
 using [VM-CONNECTION.md](VM-CONNECTION.md). A stale image-only upgrade does not
