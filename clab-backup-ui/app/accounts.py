@@ -71,6 +71,9 @@ def parse_hash(text):
     n, r, p = (int(part) for part in parts[1:4])
     if not (N_RANGE[0] <= n <= N_RANGE[1]) or n & (n - 1): return None
     if not (R_RANGE[0] <= r <= R_RANGE[1]) or not (P_RANGE[0] <= p <= P_RANGE[1]): return None
+    # scrypt needs 128*r*(n+p+2) bytes (OpenSSL's bound, which hashlib enforces as ValueError above maxmem): a string
+    # inside the ranges but above MAXMEM cannot be verified, so it is malformed here, a bad_record, never a 500.
+    if 128 * r * (n + p + 2) > MAXMEM: return None
     salt = _unb64(parts[4]); digest = _unb64(parts[5])
     if salt is None or digest is None: return None
     if not (SALT_RANGE[0] <= len(salt) <= SALT_RANGE[1]) or len(digest) != DKLEN: return None
@@ -341,6 +344,16 @@ def delete_setup_code(root):
     (Path(root)/SETUP_FILE).unlink(missing_ok=True)
 
 
+def drop_stale_setup_code(root):
+    """Removes a `mode=setup` file that exists while users do (a restored /data, an unlink that failed after the
+    save): setup is closed once the first administrator exists, and the file would otherwise serve the setup page
+    and accept its code again. A `recover` file is left alone. True when a file was removed."""
+    found = read_setup_code(root)
+    if found is None or found[0] != 'setup': return False
+    delete_setup_code(root)
+    return True
+
+
 def read_setup_code(root, on_expired=None):
     """(mode, code) from <root>/setup-code, read on every request (no code is kept in memory). None when the file is
     absent, a symlink, not a regular file, wider than 0600, malformed, or a `recover` file older than RECOVER_TTL,
@@ -440,8 +453,16 @@ class Accounts:
         install(app)
 
     def read_setup_code(self, root=None):
+        """(mode, code) of a file that is valid now: an expired recovery file is deleted and audited (9.5), and a
+        `mode=setup` file beside existing users is stale, deleted and reported as absent (9.4: setup is closed)."""
         root = self.store.root if root is None else root
-        return read_setup_code(root, on_expired=lambda: self.store.audit('recover.expired', actor='-', source='-', outcome='ok'))
+        found = read_setup_code(root, on_expired=lambda: self.store.audit('recover.expired', actor='-', source='-', outcome='ok'))
+        if found is not None and found[0] == 'setup' and self._users_exist():
+            delete_setup_code(root); return None
+        return found
+
+    def _users_exist(self):
+        return not self.sessions.setup_mode() if self.sessions is not None and hasattr(self.sessions, 'setup_mode') else bool(self.users())
 
     def users(self):
         return self.store.state.get('users', {})
@@ -481,13 +502,19 @@ class Accounts:
             self.store.audit('user.created', actor=actor, source=source, outcome='ok', target=name, detail=f'role={role}')
             return record
 
-    def complete_setup(self, name, hash_string, *, mode, source, prefix):
+    def complete_setup(self, name, hash_string, *, code, mode, source, prefix):
         """POST /api/setup in setup (`mode='setup'`) or recovery (`'recover'`) mode: one new admin who chose their own
-        password; an existing name answers 409 exists and writes nothing (REVIEW R11). Save, index, delete the file
-        and audit run in one locked block; a failed save leaves the file and raises OSError (the route's 500)."""
+        password; an existing name answers 409 exists and writes nothing (REVIEW R11). The file is read again under
+        store.lock and must still exist, still hold `code` and still say `mode` (and a setup file beside existing
+        users is no file at all): a second submit of a used code, inside the hash window of the first, is refused
+        404 setup_closed, so one code creates one administrator (9.2, 9.5). Save, index, delete the file and audit
+        run in one locked block; a failed save leaves the file and raises OSError (the route's 500)."""
         if not check_name(name): raise AccountError(422, 'invalid_name')
         with self.store.lock:
             users = self._writable_users()
+            found = self.read_setup_code()
+            if found is None or found[0] != mode or not code_matches(found[1], code):
+                raise AccountError(404, 'setup_closed', 'POST /api/setup')
             if name in users: raise AccountError(409, 'exists', 'POST /api/setup')
             record = users[name] = new_record(name, 'admin', hash_string, created_by=mode, must_change_password=False,
                                               known_sources=[prefix] if prefix else [])
@@ -563,6 +590,10 @@ class Accounts:
         with self.store.lock:
             record = self.record(name)
             if record is None: raise AccountError(404, 'user_not_found')
+            # The session must still be there to rotate: a second submit of the same change (the first rotated the
+            # id) or a session an admin ended meanwhile is refused signed_out before anything is written; otherwise
+            # `rotate` would answer None and `end_user(keep=None)` would end the rotated session too.
+            if self.sessions and self.sessions.get(session_id) is None: raise AccountError(401, 'signed_out')
             prior = dict(record)
             record['password'] = hash_string; record['password_changed'] = now(); record['must_change_password'] = False
             self._save_or_restore(record, prior)

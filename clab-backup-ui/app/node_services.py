@@ -49,26 +49,48 @@ class SocketSession:
         self.checked = time.monotonic()      # the gate resolved the session at the handshake
         self.touched = None
 
+    def resolve(self):
+        """The session behind this socket, or None once it ended. The own change rotates the session's id and keeps
+        the session (DESIGN 5.5): a socket authenticated at its handshake follows to the new id (`sessions.follow`,
+        11.3), where a request with the old cookie finds nothing."""
+        session = self.sessions.resolve(self.id)
+        if session is None:
+            successor = self.sessions.follow(self.id) if hasattr(self.sessions, 'follow') else None
+            if successor and successor != self.id:
+                session = self.sessions.resolve(successor)
+                if session is not None: self.id = successor
+        if session is None: self.gone = True
+        return session
+
     def alive(self):
         if self.gone: return False
         current = time.monotonic()
         if current - self.checked < SOCKET_CHECK: return True
         self.checked = current
-        if self.sessions.resolve(self.id) is None: self.gone = True
+        self.resolve()
         return not self.gone
 
     def input(self):
         if self.gone: return
         current = self.sessions.clock()
         if self.touched is not None and current - self.touched < SOCKET_TOUCH: return
-        if self.sessions.resolve(self.id) is None:
-            self.gone = True; return
+        if self.resolve() is None: return
         self.touched = current
         self.sessions.touch(self.id)
 
     async def ended(self):
         """Returns once the session is gone: a task to race against a relay."""
         while self.alive(): await asyncio.sleep(SOCKET_CHECK / 4)
+
+
+def actor_of(watch):
+    """The actor of an event a socket writes (DESIGN 10.3): its user, '-' when there is no SocketSession."""
+    return (watch.name if watch is not None else '') or '-'
+
+
+def request_actor(request):
+    user = getattr(getattr(request, 'state', None), 'user', None)
+    return user['name'] if isinstance(user, dict) and user.get('name') else '-'
 
 
 async def close_signed_out(ws):
@@ -366,7 +388,7 @@ class NodeServices:
                 first = b''
             if not first:
                 raise ConsoleBusy(CONSOLE_HELD.format(device=device))
-            self.store.event('console.open', 'Serial console opened', lab_id=lab_id, node=name)
+            self.store.event('console.open', 'Serial console opened', lab_id=lab_id, node=name, actor=actor_of(watch))
             opened = True
             await ws.send_json({'type': 'status', 'message': 'Connected'})
             codec = TelnetCodec()
@@ -450,7 +472,7 @@ class NodeServices:
                 if reserved and self.consoles.get(key) is record:
                     self.consoles.pop(key)
             if opened:
-                self.store.event('console.close', 'Serial console closed', lab_id=lab_id, node=name)
+                self.store.event('console.close', 'Serial console closed', lab_id=lab_id, node=name, actor=actor_of(watch))
             if writer is not None:
                 try:
                     await asyncio.wait_for(writer.wait_closed(), 2)
@@ -506,7 +528,7 @@ class NodeServices:
             return {'status': 'reachable', 'at': now(), 'message': REACHABLE_MESSAGE}
         return {'status': 'booting', 'at': now(), 'message': BOOTING_MESSAGE if monitored else BOOTING_UNMONITORED_MESSAGE}
 
-    def run_bulk_check(self, lab_id, name, node, creds, monitored=False):
+    def run_bulk_check(self, lab_id, name, node, creds, monitored=False, actor='-'):
         """One node's login test from ssh-check-all's bounded pool; stores exactly what
         the per-node route stores, and never raises (one node's failure never stops the rest)."""
         key = (lab_id, name)
@@ -530,16 +552,16 @@ class NodeServices:
                 self.checking.discard(key)
         with self.lock:
             self.checks[key] = result
-        self.store.event('ssh.check', result['message'], lab_id=lab_id, node=name)
+        self.store.event('ssh.check', result['message'], lab_id=lab_id, node=name, actor=actor)
 
-    def run_bulk_checks(self, lab_id, targets, monitored=False):
+    def run_bulk_checks(self, lab_id, targets, monitored=False, actor='-'):
         """Run every target through the bounded pool (never more than BULK_CHECK_WORKERS
         SSH sessions from this call at once), then clear the lab-wide debounce flag."""
         futures = []
         try:
             for name, node, creds in targets:
                 try:
-                    futures.append(self.bulk_pool.submit(self.run_bulk_check, lab_id, name, node, creds, monitored))
+                    futures.append(self.bulk_pool.submit(self.run_bulk_check, lab_id, name, node, creds, monitored, actor))
                 except RuntimeError:
                     break   # the pool is closing; the remaining nodes are simply not probed
             for future in futures:
@@ -581,7 +603,7 @@ class NodeServices:
                 return {'nodes': rows}
 
         @app.post('/api/labs/{lab_id}/ssh-check')
-        def check(lab_id: str, data: NodeRequest):
+        def check(lab_id: str, data: NodeRequest, request: Request):
             node, creds = self.node(lab_id, data.name)
             if not creds.get('username'):
                 raise HTTPException(400, 'Assign SSH credentials to this node first.')
@@ -599,11 +621,11 @@ class NodeServices:
                     self.checking.discard(key)
             with self.lock:
                 self.checks[key] = result
-            self.store.event('ssh.check', result['message'], lab_id=lab_id, node=data.name)
+            self.store.event('ssh.check', result['message'], lab_id=lab_id, node=data.name, actor=request_actor(request))
             return result
 
         @app.post('/api/labs/{lab_id}/ssh-check-all')
-        def check_all(lab_id: str):
+        def check_all(lab_id: str, request: Request):
             with self.store.lock:
                 lab = self.store.lab(lab_id)
                 if not lab:
@@ -621,7 +643,7 @@ class NodeServices:
                 return {'started': 0, 'skipped': skipped, 'at': at}
             # Started in the background: the route answers at once, and the browser's
             # existing 4 s poll picks up each node's result from /api/state as it lands.
-            threading.Thread(target=self.run_bulk_checks, args=(lab_id, targets, bool(lab.get('deployment_name'))), daemon=True).start()
+            threading.Thread(target=self.run_bulk_checks, args=(lab_id, targets, bool(lab.get('deployment_name')), request_actor(request)), daemon=True).start()
             return {'started': len(targets), 'skipped': skipped, 'at': at}
 
         @app.post('/api/labs/{lab_id}/terminal-ticket')
@@ -686,7 +708,7 @@ class NodeServices:
                 await asyncio.to_thread(connect, client, node, creds)
                 channel = await asyncio.to_thread(client.invoke_shell, term='xterm-256color', width=100, height=30)
                 channel.settimeout(5)
-                self.store.event('terminal.open', 'Interactive SSH session opened', lab_id=lab_id, node=name)
+                self.store.event('terminal.open', 'Interactive SSH session opened', lab_id=lab_id, node=name, actor=actor_of(watch))
                 opened = True
                 await ws.send_json({'type': 'status', 'message': 'Connected'})
                 started = last_input = time.monotonic()
@@ -741,7 +763,7 @@ class NodeServices:
                 if client is not None:
                     self.release(client)
                 if opened:
-                    self.store.event('terminal.close', 'Interactive SSH session closed', lab_id=lab_id, node=name)
+                    self.store.event('terminal.close', 'Interactive SSH session closed', lab_id=lab_id, node=name, actor=actor_of(watch))
                 if signed_out:
                     await close_signed_out(ws)
                 else:

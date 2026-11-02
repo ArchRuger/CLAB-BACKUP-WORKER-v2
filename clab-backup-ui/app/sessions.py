@@ -134,9 +134,10 @@ class Sessions:
         self.on_end = []                      # callables(session_id), run after a session ends
         self.queue = []                       # audit entries collected under the lock, written by sweep
         self.buckets = FailureBuckets()
-        self.pairs = {}                       # L1: (source key, name) → {'failures', 'last'}
-        self.sources = {}                     # L2: source key → {'window': deque[(time, name)], 'delay', 'last'}
-        self.names = {}                       # L3: name → {'tokens', 'updated'}
+        self.pairs = {}                       # L1: (source key, name) → {'failures', 'last', 'inflight', 'unfamiliar'}
+        self.sources = {}                     # L2: source key → {'window': deque[(time, name)], 'delay', 'last', 'inflight'}
+        self.names = {}                       # L3: name → {'tokens', 'updated', 'inflight'}
+        self.rotated = {}                     # old id → its successor after an own change, for open sockets only (11.3)
         self.last_sweep = None
 
     # ---- the user index (5.5) ----
@@ -234,14 +235,30 @@ class Sessions:
             if session: session['last_seen'] = self.clock()
 
     def rotate(self, session_id, password_changed):
-        """The own change: a new id for the kept record, which takes the new stamp before the index does (5.5)."""
+        """The own change: a new id for the kept record, which takes the new stamp before the index does (5.5). The
+        old id is remembered as rotated so that a socket opened under it follows (`follow`); a request does not."""
         new_id = secrets.token_urlsafe(32)
         with self.lock:
             session = self.sessions.pop(session_id, None)
             if session is None: return None
             session['password_changed'] = password_changed
             self.sessions[new_id] = session
+            for old, successor in list(self.rotated.items()):
+                if successor == session_id: self.rotated[old] = new_id      # a chain stays one step long
+            self.rotated[session_id] = new_id
+            while len(self.rotated) > PER_PROCESS * 4: self.rotated.pop(next(iter(self.rotated)))
         return new_id
+
+    def follow(self, session_id):
+        """For an open socket (node_services.SocketSession), never for a request: the id the session of `session_id`
+        lives under now, the same id while it lives, its successor after an own change, None once it ended."""
+        if not session_id or not isinstance(session_id, str): return None
+        with self.lock:
+            if session_id in self.sessions: return session_id
+            successor = self.rotated.get(session_id)
+            if successor is not None and successor not in self.sessions:
+                del self.rotated[session_id]; successor = None
+            return successor
 
     def end(self, session_id, reason):
         with self.lock:
@@ -286,6 +303,7 @@ class Sessions:
             entries, self.queue = self.queue, []
             flushed = self.buckets.flush()
             self._prune(now)
+            for old in [old for old, successor in self.rotated.items() if successor not in self.sessions]: del self.rotated[old]
             self.last_sweep = now
         self._write(entries); write_failure_entries(self.store, flushed); self._ended(expired)
 
@@ -319,6 +337,9 @@ class Sessions:
                 table.pop(min(table, key=lambda k: table[k][field]))
 
     def _prune(self, now):
+        # A reservation does not pin an entry: a source with an empty window and a full name bucket go, so a
+        # reservation a caller never settled heals at the next sweep; an attempt still in flight is then simply
+        # not counted by that level until it settles, and `_settle` tolerates the missing entry.
         for key in [k for k, pair in self.pairs.items() if now - pair['last'] > PAIR_IDLE]: del self.pairs[key]
         for key, source in list(self.sources.items()):
             self._trim(source, now)
@@ -327,49 +348,90 @@ class Sessions:
             self._refill(bucket, now)
             if bucket['tokens'] >= L3_TOKENS: del self.names[key]
 
+    # An attempt that passed `check` is *in flight* until `failure`, `success` or `release` settles it, and every
+    # level counts it as the failure it may become: the verify is awaited for 50 to 110 ms, and attempts sent at once
+    # would otherwise all pass the levels before the first one is counted (verification finding on 8.2). The
+    # reservation lives on the pair (`inflight`, and `unfamiliar` for the L3 tokens it holds), on the source and on
+    # the name, so that `success`, which does not know whether the source was familiar, can settle it from the pair.
+    def _pair(self, key_source, name, now):
+        return self.pairs.setdefault((key_source, name), {'failures': 0, 'last': now, 'inflight': 0, 'unfamiliar': 0})
+
+    def _source(self, key_source, now):
+        return self.sources.setdefault(key_source, {'window': deque(), 'delay': 0, 'last': now, 'inflight': 0})
+
+    def _name(self, name, now):
+        return self.names.setdefault(name, {'tokens': float(L3_TOKENS), 'updated': now, 'inflight': 0})
+
+    @staticmethod
+    def _settle(pair, source, bucket, held):
+        """Drops one reservation of the pair (`held`: its L3 token too); tolerates a settle without a reservation."""
+        if pair and pair['inflight'] > 0: pair['inflight'] -= 1
+        if source and source['inflight'] > 0: source['inflight'] -= 1
+        if held and pair and pair['unfamiliar'] > 0:
+            pair['unfamiliar'] -= 1
+            if bucket and bucket['inflight'] > 0: bucket['inflight'] -= 1
+
     def check(self, source, name, familiar):
-        """0 when an attempt may proceed, else `retry_after` in seconds (the largest of the refusing levels); a
-        refused attempt is recorded as `signin.throttled` with the level's reason and changes no counter."""
+        """0 when an attempt may proceed, which reserves it as in flight on every level until it is settled, else
+        `retry_after` in seconds (the largest of the refusing levels); a refused attempt is recorded as
+        `signin.throttled` with the level's reason and changes no counter."""
         key_source = source_key(source); now = self.clock(); delays = {}
         with self.lock:
             pair = self.pairs.get((key_source, name))
-            if pair and pair['failures'] >= L1_FREE:
-                remaining = min(DELAY_CAP, FIRST_DELAY * 2 ** (pair['failures'] - L1_FREE)) - (now - pair['last'])
+            if pair and pair['failures'] + pair['inflight'] >= L1_FREE:
+                remaining = min(DELAY_CAP, FIRST_DELAY * 2 ** (pair['failures'] + pair['inflight'] - L1_FREE)) - (now - pair['last'])
                 if remaining > 0: delays['pair'] = remaining
             entry = self.sources.get(key_source)
             if entry:
                 self._trim(entry, now)
-                if len(entry['window']) < L2_THRESHOLD: entry['delay'] = 0
-                elif entry['delay']:
-                    remaining = entry['delay'] - (now - entry['last'])
+                if len(entry['window']) + entry['inflight'] < L2_THRESHOLD: entry['delay'] = 0
+                else:
+                    remaining = (entry['delay'] or FIRST_DELAY) - (now - entry['last'])
                     if remaining > 0: delays['source'] = remaining
             if not familiar:
                 bucket = self.names.get(name)
                 if bucket:
                     self._refill(bucket, now)
-                    if bucket['tokens'] < 1: delays['name'] = (1 - bucket['tokens']) * L3_REFILL
-            if not delays: return 0
+                    free = bucket['tokens'] - bucket['inflight']
+                    if free < 1: delays['name'] = min(L3_REFILL, (1 - free) * L3_REFILL)
+            if not delays:
+                # The reservation moves no `last`: a delay counts from the last failure, and a reservation that is
+                # released (busy) must not restart one.
+                pair = self._pair(key_source, name, now); pair['inflight'] += 1
+                entry = self._source(key_source, now); entry['inflight'] += 1
+                if not familiar:
+                    pair['unfamiliar'] += 1; self._name(name, now)['inflight'] += 1
+                self._bound()
+                return 0
             reason = max(delays, key=delays.get); retry = max(1, math.ceil(max(delays.values())))
             actor = name if name in self.users else '-'
             entries = self.buckets.add('signin.throttled', key_source, actor, reason, retry_after=retry) + self.buckets.flush()
         write_failure_entries(self.store, entries)
         return retry
 
+    def release(self, source, name, familiar):
+        """Settles a reservation of `check` for an attempt that ran no verify after all (the executor's `busy`
+        refusal, a refused name or password on the setup route): every counter is as if `check` had not been called."""
+        key_source = source_key(source)
+        with self.lock:
+            self._settle(self.pairs.get((key_source, name)), self.sources.get(key_source), self.names.get(name), not familiar)
+
     def failure(self, source, name, familiar, reason, event='signin.failed'):
-        """An attempt that ran the verify and did not succeed: the L1 pair, the L2 window and, from an unfamiliar
-        source, an L3 token; recorded as `event` (None: counters only, the caller audits)."""
+        """An attempt that ran the verify and did not succeed: settles its reservation and counts the L1 pair, the L2
+        window and, from an unfamiliar source, an L3 token; recorded as `event` (None: counters only, the caller
+        audits). The effective count of every level is the same before and after: the attempt was already counted."""
         key_source = source_key(source); now = self.clock()
         with self.lock:
-            pair = self.pairs.setdefault((key_source, name), {'failures': 0, 'last': now})
+            pair = self._pair(key_source, name, now); entry = self._source(key_source, now)
+            bucket = self._name(name, now) if not familiar else self.names.get(name)
+            self._settle(pair, entry, bucket, not familiar)
             pair['failures'] += 1; pair['last'] = now
-            entry = self.sources.setdefault(key_source, {'window': deque(), 'delay': 0, 'last': now})
             self._trim(entry, now)
             entry['window'].append((now, name)); entry['last'] = now
             while len(entry['window']) > L2_RECORDS: entry['window'].popleft()
             if len(entry['window']) >= L2_THRESHOLD:
                 entry['delay'] = FIRST_DELAY if not entry['delay'] else min(DELAY_CAP, entry['delay'] * 2)
             if not familiar:
-                bucket = self.names.setdefault(name, {'tokens': float(L3_TOKENS), 'updated': now})
                 self._refill(bucket, now); bucket['tokens'] = max(0.0, bucket['tokens'] - 1)
             self._bound()
             entries = []
@@ -379,15 +441,20 @@ class Sessions:
         write_failure_entries(self.store, entries)
 
     def success(self, source, name):
-        """Clears the pair and removes only this pair's records from the source's window; L3 is left alone."""
+        """Settles every reservation of the pair, clears it and removes only this pair's records from the source's
+        window; L3 is left alone (the tokens the pair held in flight are given back, none is refilled)."""
         key_source = source_key(source)
         with self.lock:
-            self.pairs.pop((key_source, name), None)
+            pair = self.pairs.pop((key_source, name), None)
             entry = self.sources.get(key_source)
+            if pair:
+                if entry: entry['inflight'] = max(0, entry['inflight'] - pair['inflight'])
+                bucket = self.names.get(name)
+                if bucket: bucket['inflight'] = max(0, bucket['inflight'] - pair['unfamiliar'])
             if entry:
                 entry['window'] = deque(record for record in entry['window'] if record[1] != name)
-                if len(entry['window']) < L2_THRESHOLD: entry['delay'] = 0
-                if not entry['window']: del self.sources[key_source]
+                if len(entry['window']) + entry['inflight'] < L2_THRESHOLD: entry['delay'] = 0
+                if not entry['window'] and not entry['inflight']: del self.sources[key_source]
 
 
 # ---- the gate (6) ----
@@ -551,10 +618,14 @@ def install(app, sessions, accounts_):
         elif record.get('disabled'): hash_string, reason = None, 'disabled'
         elif accounts.parse_hash(record.get('password')) is None: hash_string, reason = record.get('password'), 'bad_record'
         else: hash_string, reason = record['password'], 'invalid_credentials'
+        # From here the attempt is in flight on every level (8.2) until failure, success or release settles it.
         try: ok = await accounts_.averify(hash_string, data.password)
         except Busy:
+            await run_in_threadpool(sessions.release, address, name, familiar)
             await run_in_threadpool(sessions.record_failure, 'signin.throttled', source_key(address), sessions.actor(name), 'busy', retry_after=2)
             raise throttled(2)
+        except BaseException:
+            await run_in_threadpool(sessions.release, address, name, familiar); raise
         if not ok or hash_string is None:
             await run_in_threadpool(sessions.failure, address, name, familiar, reason)
             raise HTTPException(401, detail(401, 'invalid_credentials', 'POST /api/session'))
@@ -599,8 +670,11 @@ def install(app, sessions, accounts_):
         if retry: raise throttled(retry)
         try: ok = await accounts_.averify(record.get('password'), data.current)
         except Busy:
+            await run_in_threadpool(sessions.release, address, name, familiar)
             await run_in_threadpool(sessions.record_failure, 'signin.throttled', source_key(address), name, 'busy', retry_after=2)
             raise throttled(2)
+        except BaseException:
+            await run_in_threadpool(sessions.release, address, name, familiar); raise
         if not ok:
             def wrong():
                 sessions.failure(address, name, familiar, 'invalid_credentials', event=None)
@@ -628,22 +702,33 @@ def install(app, sessions, accounts_):
         if not accounts.code_matches(code, data.code):
             await run_in_threadpool(sessions.failure, address, name, False, 'invalid_code', event='setup.failed')
             raise HTTPException(401, detail(401, 'invalid_code', 'POST /api/setup'))
+        # The code was right: whatever refuses from here ran no verify and releases the reservation of `check`.
+        async def refused(reason, retry_after=0):
+            await run_in_threadpool(sessions.release, address, name, False)
+            event = 'signin.throttled' if reason == 'busy' else 'setup.failed'
+            await run_in_threadpool(sessions.record_failure, event, key_source, sessions.actor(name), reason, retry_after=retry_after)
         if not accounts.check_name(name):
-            await run_in_threadpool(sessions.record_failure, 'setup.failed', key_source, sessions.actor(name), 'invalid_name')
+            await refused('invalid_name')
             raise HTTPException(422, detail(422, 'invalid_name'))
         reasons = accounts.check_password(name, data.password)
         if reasons:
-            await run_in_threadpool(sessions.record_failure, 'setup.failed', key_source, sessions.actor(name), 'weak_password')
+            await refused('weak_password')
             raise HTTPException(422, detail(422, 'weak_password', reasons=reasons))
         try: hash_string = await accounts_.ahash(data.password)
         except Busy:
-            await run_in_threadpool(sessions.record_failure, 'signin.throttled', key_source, sessions.actor(name), 'busy', retry_after=2)
+            await refused('busy', retry_after=2)
             raise throttled(2)
-        try: record = await run_in_threadpool(accounts_.complete_setup, name, hash_string, mode=mode, source=address, prefix=source_prefix(address))
+        except BaseException:
+            await run_in_threadpool(sessions.release, address, name, False); raise
+        # complete_setup reads the file again under store.lock: a second submit of a used code, a replaced file or a
+        # setup file beside existing users is refused setup_closed there, so one code creates one administrator (9.2, 9.5).
+        try: record = await run_in_threadpool(accounts_.complete_setup, name, hash_string, code=data.code, mode=mode, source=address, prefix=source_prefix(address))
         except AccountError as exc:
-            await run_in_threadpool(sessions.record_failure, 'setup.failed', key_source, sessions.actor(name), exc.code)
+            await refused(exc.code)
             raise HTTPException(exc.status, exc.detail)
-        except OSError: raise HTTPException(500, 'Could not save the administrator; nothing was changed. Check manager storage and retry.')
+        except OSError:
+            await run_in_threadpool(sessions.release, address, name, False)
+            raise HTTPException(500, 'Could not save the administrator; nothing was changed. Check manager storage and retry.')
         await run_in_threadpool(sessions.success, address, name)
         return await run_in_threadpool(signed_in, request, record, address)
 

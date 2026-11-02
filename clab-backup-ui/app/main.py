@@ -32,7 +32,7 @@ from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
 from .diagnostics import Diagnostics
 from .allowed_hosts import HostCheck, configured_hosts, host_name
-from .accounts import Accounts, write_setup_code, setup_log_line
+from .accounts import Accounts, write_setup_code, setup_log_line, drop_stale_setup_code
 from .sessions import Sessions, SessionGate, require_admin, install as install_sessions, client_address
 from .headers import security_headers
 from .origin import scheme
@@ -44,6 +44,9 @@ from .design_apply import DesignApply, public_job as public_design_job
 APP=Path(__file__).parent
 
 GUIDE_NAME = 'Containerlab_Node_Manager_Student_Quick_Start.pdf'
+# The API rows the guard answers while a storage reset is pending (none of them writes a user record).
+RESET_EXEMPT = frozenset({('POST', '/api/session'), ('GET', '/api/session'), ('HEAD', '/api/session'), ('DELETE', '/api/session'),
+                          ('GET', '/api/health'), ('HEAD', '/api/health')})
 
 
 def guide_path(root):
@@ -72,6 +75,10 @@ def create_app(data_dir=None):
         # names the file and the command, never the code (REVIEW R22a).
         write_setup_code(store.root, 'setup')
         logging.getLogger(__name__).warning(setup_log_line(store.root, os.environ.get('UI_PORT') or '8443', first_allowed_host(os.environ.get('UI_ALLOWED_HOSTS'))))
+    else:
+        # Setup is closed once users exist (DESIGN 9.4): a `mode=setup` file left beside them (a restored /data, an
+        # unlink that failed after the save) would serve the setup page and create administrators again.
+        drop_stale_setup_code(store.root)
     migrate_download_metadata(store)
     migrate_retired_telemetry(store)
     runner=Runner(store)
@@ -155,7 +162,12 @@ def create_app(data_dir=None):
             own=f"{scheme(request.scope)}://{request.headers.get('host','')}"
             if request.headers.get('sec-fetch-site') == 'cross-site' or (origin and origin.rstrip('/') != own):
                 return refusal(403,'Use this manager from its own browser page.')
-            if store.reset_pending and request.url.path != '/api/manager/reset':
+            # While a reset is pending the state must not be written (the retried reset applies its journal over it),
+            # but signing in, out and asking for the session must still answer, or no admin could come back to retry
+            # Start fresh (a sign-in's own save of last_signin is one the journal may lose without harm). The own
+            # change and the setup route write a password the journal would overwrite, so they stay refused.
+            unlocked = (request.method, request.url.path) in RESET_EXEMPT
+            if store.reset_pending and not unlocked and request.url.path != '/api/manager/reset':
                 return refusal(503,'A storage reset did not finish. Retry Start fresh to complete it. A manager restart completes only a reset that was fully prepared; otherwise the labs, credentials and backups stay as they were and Start fresh must be chosen again.')
             if request.method in ('POST','PUT','PATCH','DELETE'):
                 try: size=int(request.headers.get('content-length','0'))
