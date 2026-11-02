@@ -28,6 +28,7 @@ import copy
 import os
 import secrets
 import shutil
+import socket
 import sys
 import threading
 import time
@@ -1286,12 +1287,15 @@ class FixtureWrapper:
 # ===================================================== end of the sign-on block ===============================================
 
 
-def print_credentials(credentials, args):
-    """These are the fixture's own credentials, random per run and valid only for this scratch data directory."""
+def print_credentials(credentials, args, path):
+    """The fixture's accounts are random per run and valid only for this scratch data directory. The output names the accounts
+    and the private file that holds their passwords; it never prints a password (BUILD.md section 1), so a log, a CI capture or
+    a failure message cannot carry one."""
     mode = 'signed out' if args.signed_out else f'signed in as the {args.role}'
     print(f'  sign-on: requests are {mode}; the fixture accounts (random for this run, scratch data only):', flush=True)
     for name, entry in credentials.items():
-        print(f"    {entry['role']:<8} {name}  password {entry['password']}", flush=True)
+        print(f"    {entry['role']:<8} {name}", flush=True)
+    print(f'  sign-on: the passwords are in {path} (mode 0600, JSON {{role: {{name, password}}}})', flush=True)
 
 
 def write_credentials(path, credentials):
@@ -1309,10 +1313,14 @@ def main(argv=None):
     parser.add_argument('--keep', action='store_true', help='reuse the data directory instead of starting fresh')
     parser.add_argument('--classic', action='store_true', help='seed only the labs and the Course-Labs repository the first fixture had')
     parser.add_argument('--capture', action='store_true', help='C07: a scripted browser-Wireshark stack (discovery from the fixture labs, a session service with a cap of 4)')
-    parser.add_argument('--signed-out', action='store_true', help='sign-on: add no session to requests; sign in through the real pages with the printed credentials')
+    parser.add_argument('--signed-out', action='store_true', help='sign-on: add no session to requests; sign in through the real pages with the credentials file')
     parser.add_argument('--role', choices=('admin', 'operator'), default='admin', help='sign-on: whose session the wrapper adds to a request that has none (default admin)')
-    parser.add_argument('--credentials-file', default=os.environ.get('FIXTURE_CREDENTIALS', ''), help='sign-on: also write the fixture credentials here as JSON (mode 0600)')
+    parser.add_argument('--credentials-file', default=os.environ.get('FIXTURE_CREDENTIALS', ''), help='sign-on: write the fixture credentials here as JSON (mode 0600); default <data directory>/fixture-credentials.json. They are never printed')
     args = parser.parse_args(argv)
+    with socket.socket() as probe:     # a typo or a leftover must never make a check drive some other server on this port
+        probe.settimeout(1)
+        if probe.connect_ex(('127.0.0.1', args.port)) == 0:
+            sys.exit(f'fixture_manager: port {args.port} on 127.0.0.1 is already in use by another server; choose a free port.')
     if args.capture:     # C07: create_app reads these; the scripted stack replaces the service object right after
         os.environ.update(CAPTURE_PROVIDER='edgeshark', CAPTURE_EDGESHARK_URL='http://127.0.0.1:5001', CAPTURE_SESSION_TOKEN=CAPTURE_FIXTURE_TOKEN)
     data_dir = Path(args.data) if args.data else Path(os.environ.get('TMPDIR', '/tmp')) / 'clab-fixture-manager'
@@ -1321,9 +1329,9 @@ def main(argv=None):
     data_dir.mkdir(parents=True, exist_ok=True)
     app = build(data_dir, args.port, classic=args.classic, capture=args.capture)
     credentials = app.state.fixture_credentials
-    print_credentials(credentials, args)
-    if args.credentials_file:
-        write_credentials(Path(args.credentials_file), credentials)
+    credentials_path = Path(args.credentials_file) if args.credentials_file else data_dir / 'fixture-credentials.json'
+    write_credentials(credentials_path, credentials)
+    print_credentials(credentials, args, credentials_path)
     served = FixtureWrapper(app, credentials, role=args.role, signed_out=args.signed_out)
     import uvicorn
     uvicorn.run(served, host='127.0.0.1', port=args.port, log_level='warning')

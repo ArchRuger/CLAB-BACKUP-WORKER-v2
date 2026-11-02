@@ -37,6 +37,19 @@ if [ ! -x "$python" ]; then
     exit 2
 fi
 
+# A server already on the port is never "the fixture": a typo such as 8081 on a VM would point a run that deploys and saves at a
+# real manager. Refuse before anything starts, and below confirm the answer comes from the fixture's own control route.
+if "$python" - "$port" <<'PY'
+import socket, sys
+with socket.socket() as probe:
+    probe.settimeout(1)
+    sys.exit(0 if probe.connect_ex(('127.0.0.1', int(sys.argv[1]))) == 0 else 1)
+PY
+then
+    echo "run_regression: port $port on 127.0.0.1 is already in use by another server; choose a free port. Nothing was started." >&2
+    exit 2
+fi
+
 data="$(mktemp -d)"
 work="$(mktemp -d)"
 log="$work/fixture.log"
@@ -63,7 +76,9 @@ for _ in $(seq 1 240); do
     if "$python" - "$base" <<'PY' 2>/dev/null
 import sys, urllib.request
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-sys.exit(0 if opener.open(sys.argv[1] + '/api/health', timeout=2).status == 200 else 1)
+import json
+found = json.loads(opener.open(sys.argv[1] + '/__fixture/requests', timeout=2).read().decode())
+sys.exit(0 if isinstance(found, dict) and isinstance(found.get('requests'), list) and isinstance(found.get('counts'), dict) else 1)
 PY
     then ready=1; break; fi
     sleep 0.5

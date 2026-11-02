@@ -11,10 +11,16 @@ here is the machinery that decides pass or fail, so a regression in it cannot hi
 """
 import importlib.util
 import json
+import os
 import re
+import socket
 import stat
+import subprocess
+import sys
 import tempfile
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -31,6 +37,70 @@ LOG = f'''fixture manager ready on http://127.0.0.1:8871/  data=/tmp/x
     admin    admin  password SECRET-ONE-aaaaaaaaaaaaaaaa
     operator student  password SECRET-TWO-bbbbbbbbbbbbbbbb
 '''
+
+
+class Foreign:
+    """Some other HTTP server on a port: answers 200 `{}` to everything, like a real manager's /api/health would, and records
+    what it was asked. Neither the fixture nor a regression run may take it for their own."""
+    def __init__(self, fixture_shape=False):
+        self.asked = []
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                outer.asked.append(self.path)
+                raw = json.dumps({'requests': [], 'counts': {}} if fixture_shape and self.path == '/__fixture/requests' else {}).encode()
+                self.send_response(200); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(raw)))
+                self.end_headers(); self.wfile.write(raw)
+            def log_message(self, *args): pass
+
+        self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        self.port = self.server.server_address[1]
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def stop(self):
+        self.server.shutdown(); self.server.server_close()
+
+
+class OccupiedPortTests(unittest.TestCase):
+    """A server that is already on the port must never be taken for the fixture (a typo such as 8081 on a VM points the
+    regression, which deploys and saves, at a real manager)."""
+
+    def setUp(self):
+        self.foreign = Foreign()
+        self.addCleanup(self.foreign.stop)
+
+    def test_a_port_that_is_listening_is_in_use_and_a_free_one_is_not(self):
+        self.assertTrue(check_signon.port_in_use(self.foreign.port))
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1', 0))
+            free = sock.getsockname()[1]
+        self.assertFalse(check_signon.port_in_use(free))
+
+    def test_the_fixture_is_recognised_by_its_own_control_route_not_by_a_health_answer(self):
+        self.assertFalse(check_signon.is_fixture('http://127.0.0.1:%d' % self.foreign.port), 'a server that answers 200 {} to everything')
+        shaped = Foreign(fixture_shape=True)
+        self.addCleanup(shaped.stop)
+        self.assertTrue(check_signon.is_fixture('http://127.0.0.1:%d' % shaped.port))
+
+    def test_check_signon_refuses_to_start_on_a_port_that_is_listening_and_starts_no_process(self):
+        fixture = check_signon.Fixture(self.foreign.port)
+        self.addCleanup(fixture.stop)
+        with self.assertRaises(RuntimeError) as raised:
+            fixture.start(5)
+        self.assertIn('already', str(raised.exception))
+        self.assertIsNone(fixture.process)
+        self.assertEqual(self.foreign.asked, [], 'the refusal does not even talk to the other server')
+
+    def test_run_regression_refuses_a_port_that_is_listening_and_runs_no_check(self):
+        script = ROOT/'docs'/'sign-on'/'tools'/'run_regression.sh'
+        done = subprocess.run(['bash', str(script), str(self.foreign.port)], capture_output=True, text=True, timeout=60,
+                              env=dict(os.environ, CLAB_PYTHON=sys.executable))
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn('already', done.stderr)
+        self.assertNotIn('verify_after', done.stdout + done.stderr)
+        self.assertNotIn('fixture up', done.stdout)
+        self.assertEqual(self.foreign.asked, [], 'nothing was sent to the other server')
 
 
 class MonitorTests(unittest.TestCase):

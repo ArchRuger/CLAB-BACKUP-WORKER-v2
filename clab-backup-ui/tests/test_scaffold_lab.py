@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-from test_manager_http import FakeManager, make_certificate, PASSWORD as SIGNON_PASSWORD, USER as SIGNON_USER
+from test_manager_http import FakeManager, make_certificate, make_chain, PASSWORD as SIGNON_PASSWORD, USER as SIGNON_USER
 
 spec = importlib.util.spec_from_file_location('scaffold_lab', Path(__file__).resolve().parents[2] / 'deploy/scaffold-lab.py')
 scaffold = importlib.util.module_from_spec(spec)
@@ -554,6 +554,19 @@ class SignOnTests(unittest.TestCase):
         self.assertIn('certificate', str(stop.exception))
         self.assertIn('--cafile', str(stop.exception))
         self.assertEqual(self.fake.seen, [], 'nothing is sent over a connection that was not trusted')
+
+    def test_a_ca_issued_chain_is_pinned_by_its_leaf_not_trusted_as_a_store(self):
+        chain = make_chain(self.dir.name)
+        genuine, impostor = FakeManager(chain['fullchain'], chain['leaf_key']), FakeManager(chain['evil_fullchain'], chain['evil_key'])
+        self.addCleanup(genuine.stop); self.addCleanup(impostor.stop)
+        for pin in (chain['fullchain'], chain['bundle']):
+            with self.subTest(pin=pin.name):
+                with patch.dict(scaffold.SETTINGS, {'cafile': str(pin)}), patch.dict(scaffold.LINKS, clear=True):
+                    self.assertEqual(scaffold.api(genuine.base, '/state')[0], 200, 'its own leaf, with or without the root in the file')
+                with patch.dict(scaffold.SETTINGS, {'cafile': str(pin)}), patch.dict(scaffold.LINKS, clear=True), self.assertRaises(SystemExit) as stop:
+                    scaffold.api(impostor.base, '/state')
+                self.assertIn('certificate', str(stop.exception))
+        self.assertEqual(impostor.seen, [], 'no password reaches a server that is not the pinned one')
 
     def test_plain_http_is_refused_except_to_this_machine(self):
         with self.assertRaises(SystemExit) as stop:

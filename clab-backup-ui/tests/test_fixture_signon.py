@@ -2,8 +2,8 @@
 
 `docs/redesign/tools/fixture_manager.py` is started as a real process on a scratch data directory, as the
 Playwright checks start it, in its three modes: signed in as the fixture admin (default), `--signed-out`,
-and `--role operator`. The credentials it prints are random per run and are read back from the file named by
-`--credentials-file`. Nothing here touches live data and nothing is added to `app/`.
+and `--role operator`. Its credentials are random per run, are never printed, and are read back from the file named by
+`--credentials-file` (default <data directory>/fixture-credentials.json). Nothing here touches live data and nothing is added to `app/`.
 
 Needs the application's virtual environment (FastAPI), so it is a venv test, not one of the stdlib deploy tests.
 """
@@ -33,7 +33,7 @@ def free_port():
 
 class Running:
     """One fixture process: its port, its credentials and its printed output."""
-    def __init__(self, *flags):
+    def __init__(self, *flags, credentials=True):
         self.dir = tempfile.TemporaryDirectory()
         self.port = free_port()
         self.base = f'http://127.0.0.1:{self.port}'
@@ -43,7 +43,7 @@ class Running:
         env.pop('FIXTURE_PORT', None)
         self.output = open(self.output_path, 'wb')
         self.process = subprocess.Popen(
-            [sys.executable, str(FIXTURE), '--port', str(self.port), '--credentials-file', str(self.credentials_path), *flags],
+            [sys.executable, str(FIXTURE), '--port', str(self.port), *(['--credentials-file', str(self.credentials_path)] if credentials else []), *flags],
             stdout=self.output, stderr=subprocess.STDOUT, env=env, cwd=self.dir.name)
         deadline = time.time() + 120
         while time.time() < deadline:
@@ -129,14 +129,39 @@ class FixtureSignOnTests(unittest.TestCase):
         self.assertNotEqual(first['admin']['password'], second['admin']['password'], 'a fixed password would repeat')
         self.assertNotEqual(first['operator']['password'], second['operator']['password'])
 
-    def test_the_credentials_file_is_private_and_the_run_prints_the_credentials(self):
+    def test_the_credentials_file_is_private_and_the_run_prints_the_account_names_and_the_file_but_no_password(self):
+        # was: the run printed the passwords. BUILD.md section 1 says never to print a password, in tests' output either; the
+        # private file named by --credentials-file is the channel, and the output only names the accounts and the file.
         mode = stat.S_IMODE(self.default.credentials_path.stat().st_mode)
         self.assertEqual(mode, 0o600)
         found, text = self.default.credentials(), self.default.text()
-        self.assertIn(found['admin']['password'], text)
-        self.assertIn(found['operator']['password'], text)
+        self.assertNotIn(found['admin']['password'], text)
+        self.assertNotIn(found['operator']['password'], text)
+        self.assertNotRegex(text, r'(?i)password\s+\S')
         self.assertIn('admin', text)
         self.assertIn('student', text)
+        self.assertIn(str(self.default.credentials_path), text)
+
+    def test_without_a_credentials_file_option_the_file_is_in_the_data_directory_and_private(self):
+        running = Running(credentials=False)
+        self.addCleanup(running.stop)
+        path = Path(running.dir.name)/'data'/'fixture-credentials.json'
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        found = json.loads(path.read_text())
+        self.assertEqual(found['admin']['name'], 'admin')
+        self.assertNotIn(found['admin']['password'], running.text())
+        self.assertIn(str(path), running.text())
+
+    def test_a_fixture_on_a_port_that_is_listening_exits_at_once_and_says_so(self):
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1', 0)); sock.listen()
+            port = sock.getsockname()[1]
+            with tempfile.TemporaryDirectory() as data:
+                done = subprocess.run([sys.executable, str(FIXTURE), '--port', str(port)], capture_output=True, text=True, timeout=60,
+                                      env=dict(os.environ, FIXTURE_DATA=data), stdin=subprocess.DEVNULL)
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn('already', done.stdout + done.stderr)
+        self.assertNotIn('fixture manager ready', done.stdout, 'it stops before it builds anything')
 
     def test_no_password_is_written_into_the_repository_source(self):
         text = FIXTURE.read_text()

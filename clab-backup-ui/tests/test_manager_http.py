@@ -36,6 +36,33 @@ def make_certificate(directory, name, san):
     return cert, key
 
 
+def make_chain(directory):
+    """A CA-issued installation, as `setup-tls.sh --cert` installs it: root -> intermediate -> two leaves (the manager's and
+    another one, `evil`, from the same CA). Returns paths: `leaf` and `evil` (certificate, key) pairs, `fullchain` (leaf +
+    intermediate, the file of `tls/cert.pem`), `bundle` (leaf + intermediate + root), `evil_fullchain`."""
+    d = Path(directory)
+    def run(*args, **kwargs): subprocess.run(args, check=True, capture_output=True, **kwargs)
+    def request(name, subject):
+        run('openssl', 'req', '-new', '-newkey', 'rsa:2048', '-nodes', '-subj', f'/CN={subject}', '-keyout', str(d/f'{name}.key'), '-out', str(d/f'{name}.csr'))
+    def sign(name, issuer, extensions):
+        (d/f'{name}.ext').write_text(extensions)
+        run('openssl', 'x509', '-req', '-in', str(d/f'{name}.csr'), '-CA', str(d/f'{issuer}.pem'), '-CAkey', str(d/f'{issuer}.key'),
+            '-CAcreateserial', '-days', '2', '-extfile', str(d/f'{name}.ext'), '-out', str(d/f'{name}.pem'))
+    run('openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '2', '-subj', '/CN=root', '-addext', 'basicConstraints=critical,CA:TRUE',
+        '-addext', 'keyUsage=critical,keyCertSign,cRLSign', '-keyout', str(d/'root.key'), '-out', str(d/'root.pem'))
+    request('inter', 'inter')
+    sign('inter', 'root', 'basicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\n')
+    for name, san in (('leaf', 'IP:127.0.0.1,DNS:manager.example'), ('evil', 'IP:127.0.0.1,DNS:evil.example')):
+        request(name, name)
+        sign(name, 'inter', f'basicConstraints=CA:FALSE\nsubjectAltName={san}\n')
+    join = lambda out, *names: (d/out).write_text(''.join((d/f'{n}.pem').read_text() for n in names))
+    join('fullchain.pem', 'leaf', 'inter'); join('bundle.pem', 'leaf', 'inter', 'root'); join('evil_fullchain.pem', 'evil', 'inter')
+    join('evil_bundle.pem', 'evil', 'inter', 'root')
+    return {key: d/name for key, name in (('leaf', 'leaf.pem'), ('leaf_key', 'leaf.key'), ('evil', 'evil.pem'), ('evil_key', 'evil.key'),
+                                           ('fullchain', 'fullchain.pem'), ('bundle', 'bundle.pem'), ('evil_fullchain', 'evil_fullchain.pem'),
+                                           ('evil_bundle', 'evil_bundle.pem'), ('root', 'root.pem'))}
+
+
 class FakeManager:
     """The manager as the helper sees it: sessions in a set, a log of what arrived."""
     def __init__(self, cert, key):
@@ -138,6 +165,22 @@ class ManagerHttpTests(unittest.TestCase):
         self.addCleanup(named.stop)
         status, body = manager_http.Manager(named.base, pin=str(self.named_cert)).get('/api/state')
         self.assertEqual(status, 200, body)
+
+    def test_a_ca_issued_chain_is_pinned_by_its_leaf_not_trusted_as_a_store(self):
+        # setup-tls.sh --cert installs the full chain, leaf first. The pin is the leaf (the first certificate of the file):
+        # the chain file must work, and a CA bundle that also holds the root must not trust the CA's other certificates.
+        chain = make_chain(self.dir.name)
+        genuine, impostor = FakeManager(chain['fullchain'], chain['leaf_key']), FakeManager(chain['evil_fullchain'], chain['evil_key'])
+        self.addCleanup(genuine.stop); self.addCleanup(impostor.stop)
+        self.assertEqual(manager_http.Manager(genuine.base, pin=str(chain['fullchain'])).get('/api/state')[0], 200,
+                         'leaf + intermediate (no self-signed root in the file) must be accepted for its own leaf')
+        self.assertEqual(manager_http.Manager(genuine.base, pin=str(chain['bundle'])).get('/api/state')[0], 200)
+        for pin in (chain['fullchain'], chain['bundle']):
+            with self.subTest(pin=pin.name), self.assertRaises(manager_http.ManagerError) as raised:
+                manager_http.Manager(impostor.base, pin=str(pin)).get('/api/state')
+            self.assertIn('certificate', str(raised.exception).lower())
+        self.assertEqual(impostor.seen, [], 'no password reaches a server that is not the pinned one')
+        self.assertEqual(impostor.signins, 0)
 
     def test_cafile_checks_the_name_but_a_matching_certificate_passes(self):
         self.assertEqual(self.manager(pin=None, cafile=str(self.cert)).get('/api/state')[0], 200)

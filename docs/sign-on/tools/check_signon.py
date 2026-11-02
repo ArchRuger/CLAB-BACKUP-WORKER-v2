@@ -24,6 +24,7 @@ import re
 import secrets
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -62,6 +63,25 @@ def scrub(text, secrets_list=()):
 def scrub_log(text):
     """The fixture prints its random passwords; the saved copy of its log does not keep them."""
     return '\n'.join(re.sub(r'(?i)(password)\s+\S+', r'\1 ***', line) for line in str(text).splitlines()) + '\n'
+
+
+def port_in_use(port):
+    """True when something already listens on 127.0.0.1:<port>."""
+    with socket.socket() as probe:
+        probe.settimeout(1)
+        return probe.connect_ex(('127.0.0.1', port)) == 0
+
+
+def is_fixture(base):
+    """True only when the server at `base` is a fixture_manager.py: it answers its own control route with the request log
+    ({requests, counts}). /api/health proves nothing, any manager answers it."""
+    try:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(base + '/__fixture/requests', timeout=2) as response:
+            found = json.loads(response.read().decode() or 'null')
+    except (OSError, ValueError):
+        return False
+    return isinstance(found, dict) and isinstance(found.get('requests'), list) and isinstance(found.get('counts'), dict)
 
 
 def throttle_sentence(text):
@@ -261,6 +281,8 @@ class Fixture:
         self.process = None
 
     def start(self, timeout):
+        if port_in_use(self.port):
+            raise RuntimeError(f'port {self.port} is already in use by another server; this check starts its own fixture and drives nothing else. Choose a free --port.')
         env = dict(os.environ, FIXTURE_DATA=str(self.data))
         log = open(self.log_path, 'w')
         self.process = subprocess.Popen([sys.executable, str(FIXTURE), '--port', str(self.port), '--signed-out', '--credentials-file', str(self.credentials_path)],
@@ -271,7 +293,7 @@ class Fixture:
             if self.process.poll() is not None:
                 raise RuntimeError('the fixture exited before it was ready:\n' + scrub_log(self.log_text())[-1500:])
             try:
-                if opener.open(self.base + '/api/health', timeout=2).status == 200 and self.credentials_path.exists():
+                if opener.open(self.base + '/api/health', timeout=2).status == 200 and self.credentials_path.exists() and is_fixture(self.base):
                     return
             except OSError:
                 pass

@@ -14,8 +14,9 @@ against `http://127.0.0.1:8081` uses this instead:
 What it does, and what it never does:
 
 * The base URL is `https://`; plain `http://` is refused (the fixture needs no helper: it signs requests in itself).
-* Trust. `--pin cert.pem` trusts exactly that certificate and does not compare the name, as the health check does
-  (the manager's certificate names the VM's addresses, and a tool often reaches it as 127.0.0.1). `--cafile CA.pem`
+* Trust. `--pin cert.pem` trusts exactly the first certificate of that file (the leaf of a CA-issued chain, leaf first,
+  as `setup-tls.sh --cert` installs it; the rest of the file is never trusted) and does not compare the name, as the health
+  check does (the manager's certificate names the VM's addresses, and a tool often reaches it as 127.0.0.1). `--cafile CA.pem`
   verifies the chain and the name. With neither, the installed `/srv/containerlab-node-manager/tls/cert.pem` is pinned
   when it is readable, otherwise the system store decides (and a self-signed certificate fails). `CLAB_PIN` and
   `CLAB_CAFILE` name the files for a tool that has no option.
@@ -36,6 +37,7 @@ import http.client
 import http.cookiejar
 import json
 import os
+import re
 import ssl
 import sys
 import urllib.error
@@ -46,6 +48,27 @@ from pathlib import Path
 DEFAULT_BASE = 'https://127.0.0.1:8443'
 INSTALLED_CERTIFICATE = Path('/srv/containerlab-node-manager/tls/cert.pem')
 SESSION_COOKIE = 'clab_session'
+
+
+def pinned_context(path):
+    """A client context that accepts exactly one certificate: the FIRST certificate of `path` (a self-signed one, or the leaf of a
+    CA-issued `tls/cert.pem`, which holds the full chain, leaf first). Only that leaf is the trust anchor (the partial-chain flag
+    lets a leaf be one), never the intermediates or the root that follow it in the file: a CA bundle must not make every other
+    certificate of the same CA trustworthy, and a leaf-plus-intermediate file has no self-signed root and must still work. The name
+    is not compared (a tool often reaches the manager as 127.0.0.1); validity and the signature of the handshake are checked."""
+    try:
+        text = Path(path).read_text(encoding='ascii', errors='ignore')
+    except OSError as error:
+        raise ManagerError('Cannot read the certificate file %s (%s).' % (path, error.strerror or error))
+    block = re.search(r'-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\s]+?-----END CERTIFICATE-----', text)
+    if block is None:
+        raise ManagerError('The file %s holds no PEM certificate.' % path)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.load_verify_locations(cadata=ssl.PEM_cert_to_DER_cert(block[0]))
+    context.verify_flags |= getattr(ssl, 'VERIFY_X509_PARTIAL_CHAIN', 0)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_REQUIRED
+    return context
 
 
 class ManagerError(Exception):
@@ -78,11 +101,7 @@ class Manager:
         if pin is None and cafile is None and INSTALLED_CERTIFICATE.is_file() and os.access(INSTALLED_CERTIFICATE, os.R_OK):
             pin = str(INSTALLED_CERTIFICATE)
         if pin:
-            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            context.load_verify_locations(cafile=pin)
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_REQUIRED
-            return context
+            return pinned_context(pin)
         return ssl.create_default_context(cafile=cafile)
 
     @classmethod
