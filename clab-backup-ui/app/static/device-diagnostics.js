@@ -307,6 +307,8 @@ async function diagRun(name,replace){
  catch(e){result={ok:false,status:e&&e.status?e.status:0,message:e&&e.status&&e.message?e.message:e&&e.name==='TypeError'||!e||!e.message?DIAG_OFFLINE:e.message};}
  sec.flight=false;
  if(epoch!==diagEpoch)return;
+ // A session end (UI 3.3): nothing was sent. No failure is planned and nothing is said; the section resumes through sessionRetry().
+ if(!result.ok&&typeof sessionEnded==='function'&&sessionEnded()){sec.flight=false;const again=replace||!!(sec.queued&&sec.queued.replace);sec.queued=null;sessionOnResume(()=>diagRun(name,again));return;}
  if(token===sec.token){
   if(result.ok){
    if(name==='interfaces')diagApplyInterfaces(result.data,!!replace);else diagApplyLogsAnswer(result.data,!!replace);

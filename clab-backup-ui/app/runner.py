@@ -417,7 +417,7 @@ class Runner:
         self.update(job_id,status='running',message='Opening NOS CLI sessions over SSH',started=now(),
                     nodes=[{'name':n['name'],'status':'queued'} for n in nodes])
         outcomes=[]
-        secrets_to_hide=[self.store.token]
+        secrets_to_hide=[]   # the legacy ui.token is no longer read (sign-on DESIGN.md 12.2); device secrets follow
         for n in nodes:
             c=effective_credentials(lab,n)
             secrets_to_hide.extend(c.get(k,'') for k in ('password','passphrase','private_key','enable_password'))

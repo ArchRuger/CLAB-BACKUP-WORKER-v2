@@ -294,9 +294,12 @@ other package sources and validation settings intact.
 | GitHub account | Authorizes HTTPS access to the remote repository | Owner's configured Git credential helper |
 | Commit name/email | Records authorship; does not log in to GitHub | Repository `.git/config` when the wizard supplies it |
 | `clab-discovery` password | Connects the manager to the VM's restricted gateway | VM hash in `/etc/shadow`; manager copy encrypted in its persistent data |
+| Manager account (administrator or operator) | Signs a person in to the manager; unrelated to GitHub, to the VM account and to a device login | A `scrypt` hash in the manager's encrypted state ([Accounts and sign-in](ACCOUNTS.md)) |
 
 GitHub does not accept a website password for HTTPS Git push. The wizard uses
 GitHub CLI and [configures its credential helper](https://cli.github.com/manual/gh_auth_setup-git).
+Any signed-in manager account, administrator or operator, can use **Save**, **Upload** and **Load** on a lab; Git
+still runs on the VM as the account that owns the registered checkout, never as the manager account.
 The manager never collects GitHub tokens. GitHub CLI uses a system credential
 store when available; on a headless VM it may report storing credentials in the
 owner's configuration file. Keep that home directory private and on persistent

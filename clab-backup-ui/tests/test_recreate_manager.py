@@ -29,6 +29,10 @@ case "$*" in
 esac
 exit 0
 """
+FAKE_SETUP_TLS = """#!/usr/bin/env bash
+echo "$@" >> "$TLS_LOG"
+exit "$TLS_EXIT"
+"""
 
 
 class RecreateManagerRoutingTests(unittest.TestCase):
@@ -54,9 +58,15 @@ class RecreateManagerRoutingTests(unittest.TestCase):
         docker.write_text(FAKE_DOCKER)
         docker.chmod(docker.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
         self.docker_log = self.base / 'docker.log'
+        # setup-tls.sh --prepare settles the ports and checks the TLS files of the chosen route before `up`;
+        # its own logic is test_setup_tls.py's, so a fake records the call here.
+        setup_tls = self.base / 'deploy/setup-tls.sh'
+        setup_tls.write_text(FAKE_SETUP_TLS)
+        setup_tls.chmod(0o755)
+        self.tls_log = self.base / 'tls.log'
         self.env = {**os.environ, 'PATH': str(bin_dir) + os.pathsep + os.environ.get('PATH', ''),
                    'DOCKER_LOG': str(self.docker_log), 'EXISTING_ID': '', 'RUNNING_IMAGE': '',
-                   'LOCAL_SOURCE_IMAGE_ID': ''}
+                   'LOCAL_SOURCE_IMAGE_ID': '', 'TLS_LOG': str(self.tls_log), 'TLS_EXIT': '0'}
 
     def write_image_env(self, manager_image):
         (self.base / 'deploy/image.env').write_text(f'MANAGER_IMAGE={manager_image}\n')
@@ -130,6 +140,35 @@ class RecreateManagerRoutingTests(unittest.TestCase):
         self.assertTrue(recreate_calls)
         for call in recreate_calls:
             self.assertIn('compose.image.yml', call)
+
+    def tls_calls(self):
+        return self.tls_log.read_text().splitlines() if self.tls_log.exists() else []
+
+    def test_the_tls_step_runs_for_the_chosen_route_before_up_and_a_failure_stops_the_recreate(self):
+        # A pre-TLS installation after `git pull`, or an operator who set UI_PORT=8081 by hand and recreates: the
+        # ports are settled and the TLS files checked for the route that `up` will use, never for the other one.
+        result = self.run_script(EXISTING_ID='abc123')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.tls_calls(), ['--prepare --route source'])
+        self.assertLess(result.stdout.index('source-build installation'), result.stdout.index('Manager recreated'))
+        self.write_image_env('registry.example/clab-backup:9.9.9')
+        self.tls_log.unlink()
+        result = self.run_script(EXISTING_ID='abc123', RUNNING_IMAGE='registry.example/clab-backup:9.9.9', LOCAL_SOURCE_IMAGE_ID='')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.tls_calls(), ['--prepare --route image'])
+        self.docker_log.unlink()
+        self.tls_log.unlink()
+        (self.base / 'deploy/image.env').unlink()
+        result = self.run_script(EXISTING_ID='abc123', TLS_EXIT='1')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(self.tls_calls(), ['--prepare --route source'])
+        self.assertFalse([call for call in self.docker_calls() if 'up -d' in call], 'nothing is recreated when the TLS step refuses')
+        self.assertNotIn('Manager recreated', result.stdout)
+
+    def test_no_existing_container_never_runs_the_tls_step(self):
+        result = self.run_script(EXISTING_ID='')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.tls_calls(), [])
 
     def test_syntax(self):
         subprocess.run(['bash', '-n', str(SCRIPT)], check=True)

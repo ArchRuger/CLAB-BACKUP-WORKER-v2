@@ -395,6 +395,9 @@ as `design_jobs`; the intent, the generations and the ownership ledger never app
 
 ## Security boundary
 
+- Every network-design route needs a signed-in manager session (the gate) and none of them is administrator-only:
+  an operator can design, generate and apply as an administrator can. The action log records each request
+  with the signed-in name as its `actor`; work done in the background writes `-` ([Accounts and sign-in](ACCOUNTS.md)).
 - Design YAML is never netlab project content: the manager builds the topology itself from an
   allowlist. `--defaults`, `-s`, `--plugin`, `-o <expression>`, `plugin`, `defaults.*`, `_include`,
   `config`, `tools`, `validate`, the auto-merged defaults files and `NETLAB_*` variables are all out

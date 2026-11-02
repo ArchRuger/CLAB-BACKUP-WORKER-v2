@@ -9,16 +9,22 @@ into a folder named after the lab and prints the refusal. Writes screenshots to 
 Never works around the refusal; it changes nothing on the VM when the refusal happens.
 """
 import os
+import pathlib
 import sys
 
 from playwright.sync_api import sync_playwright
 
-BASE = os.environ.get('MANAGER', 'http://127.0.0.1:8081')
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3] / 'sign-on' / 'tools'))
+import manager_http  # noqa: E402
+
+BASE = os.environ.get('MANAGER', manager_http.DEFAULT_BASE).rstrip('/')
 lab_id = sys.argv[1]
 out = sys.argv[2] if len(sys.argv) > 2 else '.'
 with sync_playwright() as pw:
     browser = pw.chromium.launch()
-    page = browser.new_page(viewport={'width': 1440, 'height': 900})
+    # The browser shares the helper's session (CLAB_USER and CLAB_PASSWORD, or a prompt); it accepts an unknown certificate only on this machine.
+    context = manager_http.playwright_context(browser, manager_http.Manager(BASE), viewport={'width': 1440, 'height': 900})
+    page = context.new_page()
     errors = []
     page.on('pageerror', lambda e: errors.append(str(e)))
     page.goto(f'{BASE}/#lab={lab_id}&view=progress')

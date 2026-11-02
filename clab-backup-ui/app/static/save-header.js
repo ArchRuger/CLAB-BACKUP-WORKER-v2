@@ -487,7 +487,10 @@ async function saveRename(job,value){
    now.value=String(next.note||'');if(now.dataset)now.dataset.dirty='';
    if(at&&typeof now.setSelectionRange==='function'){try{now.setSelectionRange(at[0],at[1]);}catch{}}}
   saveSay('Renamed.');return next;
- }catch(error){saveHeader.error=lab?{lab:lab.id,text:String(error&&error.message||'The name could not be changed.')}:null;return null;}
+ }catch(error){
+  // Signed out: no stale error; the name is sent once after a successful Try again.
+  if(error&&error.sessionEnded){if(typeof sessionOnResume==='function')sessionOnResume(()=>saveRename(job,value));return null;}
+  saveHeader.error=lab?{lab:lab.id,text:String(error&&error.message||'The name could not be changed.')}:null;return null;}
  finally{saveHeader.renaming='';const now=saveEl('save-name');if(now)now.readOnly=false;renderSaveHeader();}
 }
 // The upload of the waiting saves again (after the repository's owner combined both sides on the VM, or after an upload the VM

@@ -4,11 +4,27 @@ let debugSnapshot=null,debugProbe=null;
 function debugText(tag,text,className=''){
  const element=document.createElement(tag);element.textContent=text;if(className)element.className=className;return element;
 }
+// A refusal's own sentence: the sign-on answers carry {detail:{code,message}} (REVIEW U11); older routes a plain string.
+function debugDetail(body){
+ const detail=body&&body.detail;
+ if(typeof detail==='string')return {text:detail,sentence:false};
+ if(detail&&typeof detail==='object'&&typeof detail.message==='string'&&detail.message)return {text:detail.message,sentence:true};
+ return {text:'',sentence:false};
+}
 async function debugFetch(path,options={}){
+ // Nothing leaves a page that is signed out (REVIEW U8); session.js is absent in the harnesses of other pages.
+ if(typeof sessionEnded==='function'&&sessionEnded()&&typeof sessionEndedError==='function')throw sessionEndedError();
  const response=await fetch('/api/debug'+path,options);
  if(!response.ok){
-  let detail='';try{const body=await response.json();if(typeof body?.detail==='string')detail=body.detail;}catch{detail='';}
-  throw new Error(detail?'The manager answered HTTP '+response.status+': '+detail:'The manager did not answer (HTTP '+response.status+'). Refresh to try again.');
+  let body=null;try{body=await response.json();}catch{body=null;}
+  if(response.status===401&&typeof sessionLost==='function'&&sessionLost(401,body)){
+   // The page holds nothing typed: leave at once, with this page as `next`.
+   if(typeof sessionMark==='function')sessionMark();
+   if(typeof sessionGo==='function')sessionGo('ended');
+   throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});
+  }
+  const detail=debugDetail(body);
+  throw new Error(detail.sentence?detail.text:detail.text?'The manager answered HTTP '+response.status+': '+detail.text:'The manager did not answer (HTTP '+response.status+'). Refresh to try again.');
  }
  return response.json();
 }

@@ -14,7 +14,48 @@ let builderUnstored=null;
 // shortcuts work on the whole document, so the overlay alone does not stop them).
 let builderPaused=null;
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6000);}
-async function api(path,options={}){let response;try{response=await fetch('/api'+path,options);}catch{throw Object.assign(new Error('The manager did not answer. Check that it is running and that this computer can reach it.'),{network:true});}if(!response.ok){const value=await response.json().catch(()=>({}));throw Object.assign(new Error(value.detail||'Request failed.'),{status:response.status});}return response;}
+// A refusal's own sentence: the sign-on answers carry {detail:{code,message}} (REVIEW U11), older routes a plain string.
+function builderDetail(value){const d=value&&value.detail;return typeof d==='string'?d:d&&typeof d==='object'&&typeof d.message==='string'?d.message:'';}
+const BUILDER_SESSION_TEXT='Your session ended. Your drawing is still on this page, not stored in this browser. Sign in in a new tab, then choose Try again.';
+const BUILDER_SESSION_YAML_TEXT='Your session ended. The YAML you typed is still in the YAML panel, not applied; Download this version holds the drawing, not that text. Sign in in a new tab, then choose Try again.';
+// The reaction to a lost session (UI 3.5). A drawing that is stored in this browser loses nothing by a redirect; one the browser could not
+// store is held by the page (builderUnstored), so the problem overlay pauses editing until a request succeeds again. Marks the page once.
+function builderYamlHeld(){const panel=typeof builderYamlPanelState==='function'?builderYamlPanelState():null;return !!panel&&(panel.dirty||panel.applying);}
+function builderSignedOut(){
+ if(typeof sessionMark==='function'&&!sessionMark())return;
+ // What only this page holds: a drawing the browser could not store, or YAML typed in the panel and not applied. A redirect would lose both.
+ const panel=typeof builderYamlPanelState==='function'?builderYamlPanelState():null,typed=!!panel&&(panel.dirty||panel.applying);
+ if(builderUnstored===null&&!typed){if(typeof sessionGo==='function')sessionGo('ended');return;}
+ if(builderPaused&&builderPaused.code==='signed_out')return;
+ // A storage pause that is already up gives way to the session sentence; Download and the storage retry stay on the overlay.
+ const wasStorage=!!builderPaused&&builderPaused.code==='storage';builderPaused=null;
+ builderProblem(builderUnstored!==null?BUILDER_SESSION_TEXT:BUILDER_SESSION_YAML_TEXT,'signed_out');
+ $('builder-problem-retry').hidden=!wasStorage;
+ if(typeof sessionOnResume==='function')sessionOnResume(builderResume);
+}
+// Registered with sessionRetry(): the retry's own request (the page's refresh()) succeeded, so lift the pause. The drawing the browser could
+// not store is written again; builderStoreAgain() reloads on success and shows the storage problem when it still fails.
+function builderResume(){
+ if(!builderPaused||builderPaused.code!=='signed_out')return;
+ builderPaused=null;$('root').inert=false;$('builder-problem').hidden=true;builderRenderBar();
+ // Typed YAML that is not applied lives only in the panel: the drawing is stored without the reload that would lose it.
+ if(builderUnstored)builderStoreAgain(builderYamlHeld());
+}
+// Try again: sessionRetry() clears the flag, repeats the state request and, unless that was refused again, runs builderResume().
+async function builderTryAgain(){
+ if(typeof sessionRetry==='function')await sessionRetry();else builderResume();
+}
+async function api(path,options={}){
+ // Nothing leaves a page that is signed out (REVIEW U8).
+ if(typeof sessionEnded==='function'&&sessionEnded()&&typeof sessionEndedError==='function')throw sessionEndedError();
+ let response;try{response=await fetch('/api'+path,options);}catch{throw Object.assign(new Error('The manager did not answer. Check that it is running and that this computer can reach it.'),{network:true});}
+ if(!response.ok){
+  const value=await response.json().catch(()=>({}));
+  if(response.status===401&&typeof sessionLost==='function'&&sessionLost(401,value)){builderSignedOut();throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+  throw Object.assign(new Error(builderDetail(value)||'Request failed.'),{status:response.status});
+ }
+ return response;
+}
 async function json(path,method,data){
  const value=await(await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();
  // The review's own answer says whether the save met a deployed lab (operations.js does not hand it back).
@@ -315,7 +356,18 @@ function builderRenderBar(){
  $('builder-line').hidden=!line&&!review;
 }
 function builderHint(){const hint=$('builder-hint');if(hint)hint.hidden=!builderMounted||!!document.querySelector('.react-flow__node');}
-function builderProblem(message,code){builderPaused=builderPaused||Object.assign(new Error(message),{code});$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem-retry').hidden=code!=='storage';$('builder-problem').hidden=false;$('builder-problem-download').focus();builderRenderBar();}
+// The controls follow the pause that is up, not the incoming code: a storage message under a signed-out pause is added to the session
+// sentence, and Sign in, Try again and the storage retry all stay, so the overlay keeps saying what is true.
+function builderProblem(message,code){
+ const retry=$('builder-problem-retry'),retryShown=!retry.hidden;
+ builderPaused=builderPaused||Object.assign(new Error(message),{code});
+ const active=builderPaused.code,out=active==='signed_out',first=builderPaused.message;
+ const text=out&&code!=='signed_out'&&message&&!first.includes(message)?first+' '+message:out?first:message;
+ $('root').inert=true;$('builder-problem-text').textContent=text;
+ retry.hidden=!(active==='storage'||(out&&(code==='storage'||retryShown)));
+ $('builder-problem-signin').hidden=$('builder-problem-again').hidden=!out;
+ $('builder-problem').hidden=false;$('builder-problem-download').focus();builderRenderBar();
+}
 // The editor's side of the page (see lab-builder/src/main.tsx).
 const builderPage={
  // Throws when the pair could not be stored; the editor then reports the edit as failed and the page
@@ -596,7 +648,7 @@ function builderYamlOptions(editor){return {editor,getDraftYaml:builderYamlDraft
 function builderDownload(){if(builderDraft)builderDownloadDraft({...builderDraft,...(builderUnstored||{})});}
 function builderDownloadDraft(draft){const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([draftExport(draft)],{type:'application/json'}));link.download=draft.name+'.lab-draft.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
 // Storing again what the editor holds; the editor itself restarts from the stored draft.
-function builderStoreAgain(){if(!builderDraft)return;try{builderDraft=draftWrite(builderStore,builderNamed({...builderDraft,...(builderUnstored||{})}),builderDraft.revision);builderUnstored=null;location.reload();}catch(e){builderProblem(e.message,e.code);}}
+function builderStoreAgain(keep){if(!builderDraft)return;try{builderDraft=draftWrite(builderStore,builderNamed({...builderDraft,...(builderUnstored||{})}),builderDraft.revision);builderUnstored=null;if(keep)builderRenderBar();else location.reload();}catch(e){builderProblem(e.message,e.code);}}
 function builderSame(a,b){return !!a&&!!b&&a.yaml===b.yaml&&(a.annotations||'')===(b.annotations||'');}
 // The manager answers a missing file and an unreachable VM with the same status; the helper's wording for
 // a missing path is the difference (tests/test_lab_operations.py pins it).
@@ -843,7 +895,7 @@ async function builderConnect(){
 async function builderStart(){
  const params=new URLSearchParams(location.hash.slice(1));
  builderLabId=params.get('lab')||'';
- for(const [id,fn] of [['builder-save',()=>opTask(null,builderSave)],['builder-yaml',()=>builderYamlPanelToggle()],['builder-undo',()=>builderHistoryStep('undo')],['builder-redo',()=>builderHistoryStep('redo')],['builder-download',builderDownload],['builder-drafts',builderDraftsDialog],['builder-welcome-new',()=>builderNewDialog(params.get('root')||opBuilderRoot('',builderCaps?.roots))],['builder-welcome-drafts',builderDraftsDialog],['builder-drop-pick',()=>$('builder-drop-file').click()],['builder-problem-reload',()=>location.reload()],['builder-problem-download',builderDownload],['builder-problem-retry',builderStoreAgain],['builder-note-retry',()=>opTask(null,builderConnect)]])$(id).onclick=fn;
+ for(const [id,fn] of [['builder-save',()=>opTask(null,builderSave)],['builder-yaml',()=>builderYamlPanelToggle()],['builder-undo',()=>builderHistoryStep('undo')],['builder-redo',()=>builderHistoryStep('redo')],['builder-download',builderDownload],['builder-drafts',builderDraftsDialog],['builder-welcome-new',()=>builderNewDialog(params.get('root')||opBuilderRoot('',builderCaps?.roots))],['builder-welcome-drafts',builderDraftsDialog],['builder-drop-pick',()=>$('builder-drop-file').click()],['builder-problem-reload',()=>location.reload()],['builder-problem-download',builderDownload],['builder-problem-retry',builderStoreAgain],['builder-problem-again',builderTryAgain],['builder-note-retry',()=>opTask(null,builderConnect)]])$(id).onclick=fn;
  builderDropWire();
  $('root').insertAdjacentHTML('afterend',builderYamlPanelMarkup());builderYamlPanelInit(builderYamlOptions(null));
  builderRenderBar();

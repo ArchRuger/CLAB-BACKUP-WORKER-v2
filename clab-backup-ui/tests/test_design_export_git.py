@@ -27,6 +27,7 @@ from unittest.mock import patch
 
 import yaml
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app.main import create_app
 from app.git_progress import job_destination, host_identity, digest as gp_digest
@@ -128,7 +129,7 @@ class DesignExportGitTestCase(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.app = create_app(self.tmp)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.addCleanup(self.client.close)
         self.addCleanup(self.app.state.git_progress.close)
         self.addCleanup(self.app.state.restore.close)

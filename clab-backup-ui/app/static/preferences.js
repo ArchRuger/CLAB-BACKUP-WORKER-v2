@@ -9,9 +9,9 @@
 // and each cited line (row or exclusion) to be a keydown site, so a stale cite fails.
 const SHORTCUT_EXCLUSIONS=[
  {source:'home.js:124',reason:'Escape in Find a lab only cancels the browser’s own clearing of a search field: the term is kept, Clear empties it.'},
- {source:'lab-builder-page.js:490',reason:'Enter in the new-lab name field submits a form field: a browser default.'},
+ {source:'lab-builder-page.js:542',reason:'Enter in the new-lab name field submits a form field: a browser default.'},
  {source:'save-drawers.js:1020',reason:'The save drawer’s keydown delegate carries the folder chooser rows and Enter on a form control.'},
- {source:'save-header.js:667',reason:'The Save chip panel’s keydown delegate carries the folder chooser rows and Enter on a form control.'}];
+ {source:'save-header.js:670',reason:'The Save chip panel’s keydown delegate carries the folder chooser rows and Enter on a form control.'}];
 
 const PREFS_FONT_SIZES=[11,12,13,14,15,16,17,18],PREFS_FONT_DEFAULT=14;
 const PREFS_STATUS_KEPT='This browser does not let the page keep this setting.';

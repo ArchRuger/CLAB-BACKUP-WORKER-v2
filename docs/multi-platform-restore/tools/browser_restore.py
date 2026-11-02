@@ -31,16 +31,18 @@ virtual environment on the development VM).
 """
 import argparse
 import json
+import os
 import pathlib
 import re
 import subprocess
 import sys
 import time
-import urllib.request
 
 from playwright.sync_api import sync_playwright
 
 from manager_restore import build_identity, readback
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3] / 'docs/sign-on/tools'))
+import manager_http  # noqa: E402
 
 LAB = 'restore-square'
 ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -78,7 +80,9 @@ def drift(nodes):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--base', default='http://127.0.0.1:8081')
+    parser.add_argument('--base', default=None, help='manager base URL, https (default $MANAGER, else https://127.0.0.1:8443)')
+    parser.add_argument('--cafile', default=None, help='CA file for the manager certificate')
+    parser.add_argument('--pin', default=None, help='trust exactly this certificate (default: the installed cert.pem)')
     parser.add_argument('--row', default='Latest')
     parser.add_argument('--via', choices=['row', 'view'], default='row')
     parser.add_argument('--nodes', nargs='*', default=[])
@@ -95,7 +99,10 @@ def main():
     parser.add_argument('--shots')
     parser.add_argument('--timeout', type=int, default=900, help='seconds to wait for the job to end')
     args = parser.parse_args()
-    version = json.load(urllib.request.urlopen(args.base + '/api/state', timeout=20))['version']
+    args.base = (args.base or os.environ.get('MANAGER') or manager_http.DEFAULT_BASE).rstrip('/')
+    # Signs in with CLAB_USER and CLAB_PASSWORD (or a prompt); the browser gets the same session as a cookie.
+    http = manager_http.Manager(args.base, cafile=args.cafile, pin=args.pin)
+    version = http.get('/api/state', timeout=20)[1]['version']
     record = {'manager_version': version, 'build': build_identity(), 'viewport': args.viewport, 'row': args.row, 'via': args.via,
               'nodes': args.nodes, 'started_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'runs': []}
     wanted = ['clab-%s-%s' % (LAB, n) for n in args.nodes]
@@ -265,7 +272,8 @@ def main():
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
-        page = browser.new_context(viewport=VIEWPORTS[args.viewport]).new_page()   # fresh context: no cached assets
+        context = manager_http.playwright_context(browser, http, viewport=VIEWPORTS[args.viewport])   # fresh context: no cached assets; an unknown certificate is accepted only on this machine
+        page = context.new_page()
         errors, broken = [], []
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.on('console', lambda m: errors.append(m.text) if m.type == 'error' and 'Failed to load resource' not in m.text else None)

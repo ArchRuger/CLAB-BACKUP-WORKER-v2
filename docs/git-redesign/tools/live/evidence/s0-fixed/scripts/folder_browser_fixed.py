@@ -8,7 +8,11 @@ import sys
 
 from playwright.sync_api import sync_playwright
 
-BASE = os.environ.get('MANAGER', 'http://127.0.0.1:8081')
+import pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[6] / 'sign-on' / 'tools'))
+import manager_http  # noqa: E402
+
+BASE = os.environ.get('MANAGER', manager_http.DEFAULT_BASE).rstrip('/')
 lab_id, out = sys.argv[1], sys.argv[2]
 log = []
 
@@ -46,7 +50,8 @@ def new_folder(page, name, parent_label):
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch()
-    page = browser.new_page(viewport={'width': 1440, 'height': 1000})
+    # Signs in with CLAB_USER and CLAB_PASSWORD (or a prompt); unknown certificates are accepted only on this machine.
+    page = manager_http.playwright_context(browser, manager_http.Manager(BASE), viewport={'width': 1440, 'height': 1000}).new_page()
     page.on('response', lambda r: log.append((r.request.method, r.url.replace(BASE, ''), r.request.post_data or '', r.status, r.text()[:200])) if '/api/' in r.url and r.request.method != 'GET' else None)
     page.goto(f'{BASE}/#lab={lab_id}&view=progress')
     page.wait_for_timeout(4000)

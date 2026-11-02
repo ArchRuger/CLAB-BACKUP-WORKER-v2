@@ -2,7 +2,7 @@
 """Reusable live-failure triggers for *Replace running configuration*, and their evidence.
 
 Every subcommand submits a REAL restore job against the running manager (``--url``, default
-``http://127.0.0.1:8081``) and a REAL restore-square node, and disrupts only what the check asks
+``$MANAGER`` or ``https://127.0.0.1:8443``, through docs/sign-on/tools/manager_http.py: CLAB_USER and CLAB_PASSWORD, never an option) and a REAL restore-square node, and disrupts only what the check asks
 for: a host ``iptables OUTPUT`` rule against that one node's management address (always removed in
 a ``finally`` block, and its absence is asserted before exit), or the manager container itself
 (``docker restart``, never rebuilt, and never run unless the caller explicitly asks for the
@@ -54,6 +54,7 @@ strings and the scrubbed messages the manager's own API already returns.
 """
 import argparse
 import json
+import os
 import socket
 import struct
 import subprocess
@@ -407,7 +408,9 @@ SUBCOMMANDS = {'submit-cut': submit_cut, 'armed-cut': armed_cut, 'restart-confir
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('subcommand', choices=sorted(SUBCOMMANDS))
-    parser.add_argument('--url', default='http://127.0.0.1:8081')
+    parser.add_argument('--url', default=None)
+    parser.add_argument('--cafile', default=None, help='CA file for the manager certificate')
+    parser.add_argument('--pin', default=None, help='trust exactly this certificate (default: the installed cert.pem)')
     parser.add_argument('--node', required=True, choices=sorted(NODES))
     parser.add_argument('--backup'); parser.add_argument('--folder')
     parser.add_argument('--commit'); parser.add_argument('--path')
@@ -416,7 +419,7 @@ def main():
     parser.add_argument('--saved', help='a saved folder of the repository checkout, for readback.py --saved')
     parser.add_argument('--evidence', required=True)
     args = parser.parse_args()
-    manager = mr.Manager(args.url)
+    manager = mr.Manager(args.url or os.environ.get('MANAGER') or mr.manager_http.DEFAULT_BASE, cafile=args.cafile, pin=args.pin)
     try:
         record = SUBCOMMANDS[args.subcommand](args, manager)
     finally:

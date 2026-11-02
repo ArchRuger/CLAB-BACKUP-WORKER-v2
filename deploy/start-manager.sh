@@ -22,6 +22,10 @@ docker compose version >/dev/null
 docker info >/dev/null
 # The data directory must exist before setup-discovery writes the one-time VM connection seed into it.
 bash "$script_dir/setup-vm.sh"
+# The TLS files must exist before the image is built or pulled: uvicorn reads /tls at start. Ensure
+# semantics: an existing valid certificate is kept; a provided one is never touched. The ports are
+# settled in clab-backup-ui/.env, the file the compose command below reads (the source route).
+bash "$script_dir/setup-tls.sh" --no-recreate --route source
 bash "$script_dir/setup-discovery.sh" "${password_args[@]}" --data-dir /srv/containerlab-node-manager/data
 # Fail before recreation if the installed helper cannot return file-transfer data.
 # Only the version is printed: its response may contain inventory credentials.
@@ -60,7 +64,7 @@ fi
 # image build, and again below after the new manager is up, since the old manager's own
 # background loop can recreate its data folder while it is still running.
 env_file="$repo_dir/clab-backup-ui/.env"
-env_value() { local value=''; if [[ -f "$env_file" ]]; then value=$(grep -E "^$1=" "$env_file" | tail -n 1 | cut -d= -f2- || true); fi; printf '%s' "$value"; }
+env_value() { local value=''; if [[ -f "$env_file" ]]; then value=$(grep -E "^(export )?$1=" "$env_file" | tail -n 1 | cut -d= -f2- || true); fi; printf '%s' "$value"; }
 if ! $manager_only; then
   if [[ $(env_value CAPTURE_PROVIDER) == disabled ]]; then
     echo 'Browser capture is disabled in clab-backup-ui/.env; its stack is left alone (sudo bash deploy/setup-capture.sh re-enables it).'
@@ -98,9 +102,18 @@ docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
 # reappears after the early call above. Idempotent: a no-op once nothing of the old stack remains.
 bash "$script_dir/retire-telemetry.sh" --no-recreate
 docker compose -f clab-backup-ui/compose.yml ps
-echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and existing discovery password are retained.'
+# The address students use: the certificate's primary name and the ports of clab-backup-ui/.env.
+primary=$(bash "$script_dir/setup-tls.sh" --primary 2>/dev/null || true); [[ -n "$primary" ]] || primary='<VM address>'
+ui_port=$(env_value UI_PORT); [[ -n "$ui_port" ]] || ui_port=8443
+http_port=$(env_value UI_HTTP_PORT); [[ -n "$http_port" ]] || http_port=8081
+if [[ "$ui_port" == 443 ]]; then address="https://$primary/"; else address="https://$primary:$ui_port/"; fi
+if [[ "$http_port" == 0 ]]; then redirect='there is no plain-HTTP redirect'; else redirect="plain HTTP on port $http_port redirects there"; fi
+echo "Open the manager at $address ($redirect). Saved data and the existing discovery password are retained."
+fingerprint=$(bash "$script_dir/setup-tls.sh" --fingerprint 2>/dev/null || true)
+[[ -z "$fingerprint" ]] || echo "Certificate fingerprint (SHA-256), shown by the browser's certificate viewer: $fingerprint"
 $manager_only || echo 'Wireshark opens from the map (Capture packets).'
 printf 'Optional Git setup: as your ordinary VM account, run (without sudo):\n  bash %q\n' "$script_dir/setup-git.sh"
 echo 'Use the guided prompts to configure commit name/email and GitHub login, then register. See docs/GIT-SETUP.md.'
-echo 'The UI opens directly without a login. VM and device SSH credentials remain in persistent storage.'
+echo 'Sign-on: the first administrator is created in the browser with the setup code. On the VM: sudo cat /srv/containerlab-node-manager/data/setup-code'
+echo 'VM and device SSH credentials remain in persistent storage.'
 printf 'After configuring the VM connection, run the full health report as your ordinary account:\n  bash %q\n' "$script_dir/check-install.sh"

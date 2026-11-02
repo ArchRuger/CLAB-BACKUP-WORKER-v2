@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import stat
 import subprocess
 import sys
@@ -33,7 +34,7 @@ DEPLOY = REPO / 'deploy'
 if str(DEPLOY) not in sys.path:
     sys.path.insert(0, str(DEPLOY))
 
-from installer_tui import bootstrap, core, engine, probes, sanitize  # noqa: E402
+from installer_tui import bootstrap, core, engine, exposure, probes, sanitize  # noqa: E402
 
 spec = importlib.util.spec_from_file_location('install_manager_for_tui_core', DEPLOY / 'install-manager.py')
 install = importlib.util.module_from_spec(spec)
@@ -432,6 +433,11 @@ class InstallerLockTests(IsolatedCase):
 
     def test_root_takes_over_a_lock_file_owned_by_another_account(self):
         self.path.write_text('')
+        if os.geteuid() == 0:
+            # Run as root (a cloud session, a container), the file just written is root's own: give it to an
+            # unprivileged account (nobody) so the condition under test holds whatever account runs the suite.
+            os.chown(self.path, 65534, 65534)
+        self.assertNotEqual(self.path.stat().st_uid, 0, 'the lock file must belong to a non-root account')
         before = self.path.stat().st_ino
         # The file belongs to an unprivileged account (anything but uid 0): root swaps in a file it owns, so
         # that account can neither remove it nor squat the name again.
@@ -1112,11 +1118,13 @@ class ProbeTests(IsolatedCase):
             target.write_text(text)
         return root
 
-    def test_env_settings_reads_only_the_three_keys_never_the_token(self):
-        root = self.source('UI_BIND=10.0.0.5\nUI_PORT=9001\nCAPTURE_PROVIDER=edgeshark\n'
+    def test_env_settings_reads_only_the_four_keys_never_the_token(self):
+        # UI_HTTP_PORT joined the keys with the TLS listener (EXPOSURE 7.1); the token stays unread.
+        root = self.source('UI_BIND=10.0.0.5\nUI_PORT=9001\nUI_HTTP_PORT=9002\nCAPTURE_PROVIDER=edgeshark\n'
                            'CAPTURE_SESSION_TOKEN=secret\nOTHER=value\n# UI_PORT=1\n')
         values = probes.env_settings(root)
-        self.assertEqual(values, {'UI_BIND': '10.0.0.5', 'UI_PORT': '9001', 'CAPTURE_PROVIDER': 'edgeshark'})
+        self.assertEqual(values, {'UI_BIND': '10.0.0.5', 'UI_PORT': '9001', 'UI_HTTP_PORT': '9002',
+                                  'CAPTURE_PROVIDER': 'edgeshark'})
         self.assertNotIn('secret', repr(values))
         self.assertNotIn('secret', json.dumps(values))
         self.assertNotIn('CAPTURE_SESSION_TOKEN', values)
@@ -1132,27 +1140,177 @@ class ProbeTests(IsolatedCase):
     def test_env_settings_refuses_a_symlinked_env_and_an_oversized_one(self):
         root = self.source('UI_PORT=9001\nCAPTURE_SESSION_TOKEN=secret\n', symlink=True)
         self.assertEqual(probes.env_settings(root), {})
-        self.assertEqual(probes.manager_address(root), ('http://127.0.0.1:8081/', 8081))
+        self.assertEqual(probes.manager_address(root), ('https://127.0.0.1:8443/', 8443))
         root = self.source('UI_PORT=9001\n' + '#' * 70000)
         self.assertEqual(probes.env_settings(root), {})
 
     def test_manager_address_mapping(self):
+        # The manager serves HTTPS now (EXPOSURE 7.1): the scheme and the default port changed; the bind
+        # mapping and the fallback on a bad port are the claims this test keeps.
         cases = [
-            (None, ('http://127.0.0.1:8081/', 8081)),
-            ('UI_BIND=0.0.0.0\nUI_PORT=8099\n', ('http://127.0.0.1:8099/', 8099)),
-            ('UI_BIND=::\n', ('http://[::1]:8081/', 8081)),
-            ('UI_BIND=localhost\n', ('http://127.0.0.1:8081/', 8081)),
-            ('UI_BIND=\n', ('http://127.0.0.1:8081/', 8081)),
-            ('UI_BIND=fd00::5\nUI_PORT=9000\n', ('http://[fd00::5]:9000/', 9000)),
-            ('UI_BIND=[fd00::5]\n', ('http://[fd00::5]:8081/', 8081)),
-            ('UI_BIND=10.1.2.3\n', ('http://10.1.2.3:8081/', 8081)),
-            ('UI_PORT=not-a-number\n', ('http://127.0.0.1:8081/', 8081)),
-            ('UI_PORT=\n', ('http://127.0.0.1:8081/', 8081)),
-            ('UI_PORT=80.5\n', ('http://127.0.0.1:8081/', 8081)),
+            (None, ('https://127.0.0.1:8443/', 8443)),
+            ('UI_BIND=0.0.0.0\nUI_PORT=8099\n', ('https://127.0.0.1:8099/', 8099)),
+            ('UI_BIND=::\n', ('https://[::1]:8443/', 8443)),
+            ('UI_BIND=localhost\n', ('https://127.0.0.1:8443/', 8443)),
+            ('UI_BIND=\n', ('https://127.0.0.1:8443/', 8443)),
+            ('UI_BIND=fd00::5\nUI_PORT=9000\n', ('https://[fd00::5]:9000/', 9000)),
+            ('UI_BIND=[fd00::5]\n', ('https://[fd00::5]:8443/', 8443)),
+            ('UI_BIND=10.1.2.3\n', ('https://10.1.2.3:8443/', 8443)),
+            ('UI_PORT=not-a-number\n', ('https://127.0.0.1:8443/', 8443)),
+            ('UI_PORT=\n', ('https://127.0.0.1:8443/', 8443)),
+            ('UI_PORT=80.5\n', ('https://127.0.0.1:8443/', 8443)),
         ]
         for text, expected in cases:
             with self.subTest(text=text):
                 self.assertEqual(probes.manager_address(self.source(text)), expected)
+
+    def test_the_tls_row_follows_the_manager_row_and_the_last_row_is_unchanged(self):
+        keys = [key for key, _ in probes.COMPONENTS]
+        self.assertEqual(keys[keys.index('manager') + 1], 'tls')
+        self.assertEqual(keys[-1], 'lazydocker')
+        self.assertIn('tls', probes.PROBES)
+
+    def manager_context(self, text=None):
+        return probes.Context(self.env, self.source(text), '1.32.0')
+
+    def test_manager_ready_over_https_reads_its_version_with_sudo_n_docker_exec(self):
+        ctx = self.manager_context('UI_PORT=9443\n')
+        calls = []
+
+        def capture(argv, env, cwd, timeout=10):
+            calls.append(argv)
+            return 0, '1.32.0'
+        with patch.object(probes.exposure, 'health_ready', return_value=True) as ready, \
+                patch.object(core, 'run_capture', side_effect=capture):
+            state, summary, detail, value = probes.probe_manager(ctx)
+        self.assertEqual((state, value), (probes.READY, '1.32.0'))
+        self.assertIn('Running 1.32.0 on port 9443', summary)
+        self.assertIn('https://127.0.0.1:9443/', detail)
+        self.assertEqual(ready.call_args.args[0], 'https://127.0.0.1:9443/')
+        self.assertEqual(ready.call_args.args[1], probes.exposure.TLS_DIR / 'cert.pem')
+        command = calls[0]
+        self.assertEqual(command[:6], ['sudo', '-n', 'docker', '--host', 'unix:///var/run/docker.sock', 'compose'])
+        self.assertIn('exec', command)
+        self.assertIn('from app import __version__; print(__version__)', command)
+
+    def test_manager_ready_but_version_needing_sudo_is_needs_authentication(self):
+        ctx = self.manager_context()
+        with patch.object(probes.exposure, 'health_ready', return_value=True), \
+                patch.object(core, 'run_capture', return_value=(1, 'sudo: a password is required')):
+            result = probes.probe_manager(ctx)
+        self.assertEqual(result[0], probes.NEEDS_AUTH)
+        self.assertIn('answering on port 8443; version needs sudo', result[1].lower())
+        self.assertEqual(len(result), 3, 'no version value is claimed')
+
+    def test_manager_ready_with_another_version_is_attention_with_that_version(self):
+        ctx = self.manager_context()
+        with patch.object(probes.exposure, 'health_ready', return_value=True), \
+                patch.object(core, 'run_capture', return_value=(0, '1.31.7')):
+            state, summary, detail, value = probes.probe_manager(ctx)
+        self.assertEqual((state, value), (probes.ATTENTION, '1.31.7'))
+        self.assertIn('this checkout is 1.32.0', summary)
+
+    def test_manager_ready_with_an_unreadable_version_is_unavailable_not_absent(self):
+        ctx = self.manager_context()
+        with patch.object(probes.exposure, 'health_ready', return_value=True), \
+                patch.object(core, 'run_capture', return_value=(1, 'docker: error')):
+            result = probes.probe_manager(ctx)
+        self.assertEqual(result[0], probes.UNAVAILABLE)
+
+    def test_manager_that_does_not_answer_over_https_falls_back_to_the_container_state(self):
+        ctx = self.manager_context()
+        for failure in (OSError('refused'), ValueError('bad json'), probes.ssl.SSLError('certificate verify failed')):
+            with self.subTest(failure=type(failure).__name__), \
+                    patch.object(probes.exposure, 'health_ready', side_effect=failure), \
+                    patch.object(core, 'run_capture', return_value=(0, 'a' * 12)):
+                result = probes.probe_manager(ctx)
+            self.assertEqual(result[0], probes.ATTENTION)
+            self.assertIn('no HTTP answer on port 8443', result[1].replace('HTTPS', 'HTTP'))
+
+    def test_a_running_container_with_an_older_version_and_no_https_is_the_version_mismatch_not_starting(self):
+        # An upgrade from plain HTTP: the old manager runs, there is no TLS door yet, and 'still starting'
+        # would never resolve. The row says what runs, as it did before the HTTPS door.
+        ctx = self.manager_context()
+        answers = iter([(0, 'a' * 12), (0, '1.31.7')])
+        with patch.object(probes.exposure, 'health_ready', side_effect=OSError('refused')), \
+                patch.object(core, 'run_capture', side_effect=lambda *a, **k: next(answers)):
+            state, summary, detail, value = probes.probe_manager(ctx)
+        self.assertEqual((state, value), (probes.ATTENTION, '1.31.7'))
+        self.assertEqual(summary, 'Running 1.31.7; this checkout is 1.32.0')
+        self.assertIn('Install/update rebuilds it from this checkout', detail)
+        self.assertNotIn('still starting', summary + detail)
+
+    def test_a_running_container_of_this_release_without_https_may_still_be_starting_and_names_the_repair(self):
+        ctx = self.manager_context()
+        answers = iter([(0, 'a' * 12), (0, '1.32.0')])
+        with patch.object(probes.exposure, 'health_ready', side_effect=OSError('refused')), \
+                patch.object(core, 'run_capture', side_effect=lambda *a, **k: next(answers)):
+            state, summary, detail, value = probes.probe_manager(ctx)
+        self.assertEqual((state, value), (probes.ATTENTION, '1.32.0'))
+        self.assertIn('no HTTPS answer on port 8443', summary)
+        self.assertIn('Install/update sets up HTTPS', detail)
+
+    def test_a_running_container_whose_version_cannot_be_read_keeps_the_starting_wording(self):
+        ctx = self.manager_context()
+        answers = iter([(0, 'a' * 12), (1, 'docker: error')])
+        with patch.object(probes.exposure, 'health_ready', side_effect=OSError('refused')), \
+                patch.object(core, 'run_capture', side_effect=lambda *a, **k: next(answers)):
+            result = probes.probe_manager(ctx)
+        self.assertEqual(result[0], probes.ATTENTION)
+        self.assertEqual(result[1], 'Container running but no HTTPS answer on port 8443')
+        self.assertEqual(result[2], 'It may still be starting; refresh shortly.')
+
+    def test_manager_not_ready_and_no_docker_says_not_installed(self):
+        ctx = self.manager_context()
+        with patch.object(probes.exposure, 'health_ready', return_value=False), \
+                patch.object(probes, 'DATA_DIR', self.tmp / 'no-data'), patch.object(probes.shutil, 'which', return_value=None):
+            self.assertEqual(probes.probe_manager(ctx)[0], probes.NOT_INSTALLED)
+
+    def tls_ctx(self):
+        # A certificate file must exist for the row to ask openssl about it; `facts` is patched per test.
+        folder = self.tmp / 'tls-present'
+        folder.mkdir(exist_ok=True)
+        (folder / 'cert.pem').write_text('placeholder')
+        patcher = patch.object(probes.exposure, 'TLS_DIR', folder)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return probes.Context(self.env, self.tmp, '1.32.0')
+
+    def test_tls_row_self_signed_and_provided(self):
+        facts = {'mode': 'self-signed', 'fingerprint': 'AB:CD', 'expires': '2099-01-01', 'addresses': [], 'names': []}
+        with patch.object(probes.exposure, 'facts', return_value=facts):
+            state, summary, detail = probes.probe_tls(self.tls_ctx())
+        self.assertEqual((state, summary), (probes.READY, 'Self-signed, expires 2099-01-01'))
+        self.assertIn('AB:CD', detail)
+        with patch.object(probes.exposure, 'facts', return_value=dict(facts, mode='provided')):
+            state, summary, detail = probes.probe_tls(self.tls_ctx())
+        self.assertEqual((state, summary), (probes.READY, 'Provided, expires 2099-01-01'))
+
+    def test_tls_row_advice_for_an_unreadable_certificate_names_the_script_by_absolute_path(self):
+        ctx = self.tls_ctx()
+        with patch.object(probes.exposure, 'facts', return_value=None):
+            state, summary, detail = probes.probe_tls(ctx)
+        self.assertEqual(state, probes.UNAVAILABLE)
+        self.assertIn(f'bash {self.tmp / "deploy/setup-tls.sh"} --show', detail)
+        self.assertNotRegex(detail, r'bash deploy/')
+
+    def test_tls_row_warns_inside_thirty_days_and_after_expiry(self):
+        from datetime import date, timedelta
+        soon = (date.today() + timedelta(days=10)).isoformat()
+        gone = (date.today() - timedelta(days=2)).isoformat()
+        for expires, word in ((soon, 'expires'), (gone, 'expired')):
+            facts = {'mode': 'self-signed', 'fingerprint': 'AB:CD', 'expires': expires, 'addresses': [], 'names': []}
+            with self.subTest(expires=expires), patch.object(probes.exposure, 'facts', return_value=facts):
+                state, summary, detail = probes.probe_tls(self.tls_ctx())
+            self.assertEqual(state, probes.ATTENTION)
+            self.assertIn(word, summary.lower())
+
+    def test_tls_row_without_a_certificate_is_not_installed_and_unreadable_is_unavailable(self):
+        ctx = probes.Context(self.env, self.tmp, '1.32.0')
+        with patch.object(probes.exposure, 'TLS_DIR', self.tmp / 'no-tls'):
+            self.assertEqual(probes.probe_tls(ctx)[0], probes.NOT_INSTALLED)
+        with patch.object(probes.exposure, 'facts', return_value=None):
+            self.assertEqual(probes.probe_tls(self.tls_ctx())[0], probes.UNAVAILABLE)
 
     def test_sudo_refused_only_with_the_sudo_signature(self):
         self.assertTrue(probes._sudo_refused(1, 'sudo: a password is required'))
@@ -1202,6 +1360,467 @@ class ProbeTests(IsolatedCase):
         placeholders = probes.placeholder()
         self.assertEqual(set(placeholders), {key for key, _ in probes.COMPONENTS + probes.EXTRA})
         self.assertTrue(all(result.state == probes.NOT_CHECKED for result in placeholders.values()))
+
+
+# ---------------------------------------------------------------------------------------------
+# 8b. exposure: the HTTPS door's facts, shared by the plain menu and the full-screen installer
+# ---------------------------------------------------------------------------------------------
+GOOD_CODE = 'abcdef-ghjkmn-pqrstu-vwxy23'
+
+
+def completed(stdout='', returncode=0, stderr=''):
+    return subprocess.CompletedProcess([], returncode, stdout=stdout, stderr=stderr)
+
+
+class ExposureSettingsTests(IsolatedCase):
+    def source(self, text=None, symlink=False):
+        root = self.tmp / 'checkout'
+        (root / 'clab-backup-ui').mkdir(parents=True, exist_ok=True)
+        target = root / 'clab-backup-ui' / '.env'
+        if target.exists() or target.is_symlink():
+            target.unlink()
+        if symlink:
+            other = self.tmp / 'elsewhere.env'
+            other.write_text(text)
+            os.symlink(other, target)
+        elif text is not None:
+            target.write_text(text)
+        return root
+
+    def test_ports_default_to_tls_8443_and_redirect_8081(self):
+        self.assertEqual(exposure.ports(self.source(None)), (8443, 8081))
+        self.assertEqual(exposure.ports(self.source('UI_BIND=0.0.0.0\n')), (8443, 8081))
+
+    def test_ports_read_both_keys_and_zero_means_no_redirect(self):
+        self.assertEqual(exposure.ports(self.source('UI_PORT=9001\nUI_HTTP_PORT=9002\n')), (9001, 9002))
+        self.assertEqual(exposure.ports(self.source('UI_PORT=8081\nUI_HTTP_PORT=0\n')), (8081, 0))
+
+    def test_ports_fall_back_on_nonsense(self):
+        for text in ('UI_PORT=not-a-number\n', 'UI_PORT=\n', 'UI_PORT=80.5\n', 'UI_PORT=99999\n', 'UI_PORT=0\n'):
+            with self.subTest(text=text):
+                self.assertEqual(exposure.ports(self.source(text))[0], 8443)
+        self.assertEqual(exposure.ports(self.source('UI_HTTP_PORT=oops\n'))[1], 8081)
+
+    def test_a_symlinked_or_oversized_env_answers_the_defaults(self):
+        self.assertEqual(exposure.ports(self.source('UI_PORT=9001\n', symlink=True)), (8443, 8081))
+        self.assertEqual(exposure.ports(self.source('UI_PORT=9001\n' + '#' * 70000)), (8443, 8081))
+
+    def read_with_deadline(self, path, seconds=3):
+        """env_file_values on a worker thread: a read that blocks fails the test instead of hanging the suite."""
+        answer = []
+        worker = threading.Thread(target=lambda: answer.append(exposure.env_file_values(path, ('UI_PORT',))), daemon=True)
+        worker.start()
+        worker.join(seconds)
+        return answer[0] if answer else None
+
+    def test_a_named_pipe_is_never_read_and_never_blocks(self):
+        # The full-screen settings screen reads the typed path on every keystroke, on the event loop.
+        fifo = self.tmp / 'pipe.env'
+        os.mkfifo(fifo)
+        released = []
+
+        def release():
+            # Unblock a reader that wrongly waits for a writer, so a failure here cannot hang the run.
+            if not released:
+                released.append(True)
+                try:
+                    descriptor = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+                    os.write(descriptor, b'UI_PORT=9001\n')
+                    os.close(descriptor)
+                except OSError:
+                    pass
+        self.addCleanup(release)
+        self.assertEqual(self.read_with_deadline(fifo), {}, 'a FIFO answers nothing and the read returns at once')
+
+    def test_a_character_device_and_a_directory_answer_nothing_without_reading(self):
+        # /dev/zero has st_size 0, so a size check alone lets read_text() consume memory without end.
+        self.assertEqual(self.read_with_deadline('/dev/zero'), {})
+        self.assertEqual(self.read_with_deadline(self.tmp), {})
+        self.assertEqual(self.read_with_deadline('/dev/null'), {})
+
+    def test_the_read_never_passes_the_size_limit_even_when_the_size_lies(self):
+        # Boundary: exactly 64 KiB is read, one byte more answers nothing.
+        head = b'UI_PORT=9001\n'
+        exact = self.tmp / 'exact.env'
+        exact.write_bytes(head + b'#' * (exposure.MAX_ENV_BYTES - len(head)))
+        self.assertEqual(exposure.env_file_values(exact, ('UI_PORT',)), {'UI_PORT': '9001'})
+        over = self.tmp / 'over.env'
+        over.write_bytes(head + b'#' * (exposure.MAX_ENV_BYTES - len(head) + 1))
+        self.assertEqual(exposure.env_file_values(over, ('UI_PORT',)), {})
+
+    def test_a_symlink_and_a_path_with_a_null_byte_answer_nothing(self):
+        real = self.tmp / 'real.env'
+        real.write_text('UI_PORT=9001\n')
+        link = self.tmp / 'link.env'
+        os.symlink(real, link)
+        self.assertEqual(exposure.env_file_values(link, ('UI_PORT',)), {})
+        self.assertEqual(exposure.env_file_values(str(real) + '\0x', ('UI_PORT',)), {})
+        self.assertEqual(exposure.env_file_values(real, ('UI_PORT',)), {'UI_PORT': '9001'})
+
+    def test_only_the_named_keys_are_read_never_the_token(self):
+        root = self.source('UI_PORT=9001\nCAPTURE_SESSION_TOKEN=secret\n')
+        values = exposure.env_values(root, ('UI_PORT',))
+        self.assertEqual(values, {'UI_PORT': '9001'})
+        self.assertNotIn('secret', repr(values))
+
+    def test_a_previous_settings_file_about_to_be_copied_is_judged_instead_of_the_checkout(self):
+        old = self.tmp / 'old.env'
+        old.write_text('UI_PORT=8081\n')
+        root = self.source(None)
+        self.assertTrue(exposure.ports_collide(root, env_path=old))
+        self.assertEqual(exposure.ports(root, env_path=old), (8081, 8081))
+        self.assertFalse(exposure.ports_collide(root))
+        old.write_text('UI_PORT=8081\nUI_HTTP_PORT=0\n')
+        self.assertFalse(exposure.ports_collide(root, env_path=old))
+        self.assertEqual(exposure.env_file_values(self.tmp / 'missing.env', ('UI_PORT',)), {})
+
+    def test_the_port_question_is_asked_only_for_an_explicit_8081_without_a_redirect_port(self):
+        cases = [(None, False), ('UI_BIND=0.0.0.0\n', False), ('UI_PORT=8081\n', True), ('UI_PORT="8081"\n', True),
+                 ('UI_PORT=8081\nUI_HTTP_PORT=0\n', False), ('UI_PORT=8081\nUI_HTTP_PORT=8082\n', False),
+                 ('UI_PORT=9000\n', False), ('UI_PORT=8443\n', False), ('UI_PORT=oops\n', False)]
+        for text, expected in cases:
+            with self.subTest(text=text):
+                self.assertIs(exposure.ports_collide(self.source(text)), expected)
+
+    def test_the_settings_reader_reads_as_setup_tls_and_compose_do(self):
+        # deploy/setup_tls.py (env_values) and Compose read the same file: an `export ` prefix is ignored, an
+        # unquoted value ends at a space followed by `#`, quotes are removed, nothing is evaluated.
+        cases = [('export UI_PORT=9001\n', {'UI_PORT': '9001'}),
+                 ('  export   UI_PORT = 9001\n', {'UI_PORT': '9001'}),
+                 ('UI_PORT=9001 # the TLS port\n', {'UI_PORT': '9001'}),
+                 ('UI_PORT=9001\t# tab\n', {'UI_PORT': '9001\t# tab'}),   # Compose: only a space starts a comment
+                 ('UI_PORT="9001" # quoted\n', {'UI_PORT': '9001'}),
+                 ("UI_PORT='9001'\n", {'UI_PORT': '9001'}),
+                 ('UI_PORT="90 #01"\n', {'UI_PORT': '90 #01'}),
+                 ('export UI_PORT=8081 # tls\nUI_PORT=9002\n', {'UI_PORT': '9002'}),
+                 ('# UI_PORT=1\nexportUI_PORT=2\n', {})]
+        for text, expected in cases:
+            with self.subTest(text=text):
+                self.assertEqual(exposure.env_values(self.source(text), ('UI_PORT',)), expected)
+        self.assertEqual(exposure.ports(self.source('export UI_PORT=9001 # tls\nexport UI_HTTP_PORT=9002 # redirect\n')),
+                         (9001, 9002))
+
+    def test_the_settings_reader_reads_the_values_exactly_as_docker_compose_config_does(self):
+        # Verified with `docker compose config` (Compose v5.6.1) on a scratch project: a comment starts only at a
+        # SPACE followed by `#` inside an unquoted value; a value that begins with `#` after `=` is the value, a tab
+        # does not start a comment, and a `#` inside a word stays.
+        cases = [('A= # note', '# note'), ('C=\t# tab note', '# tab note'), ('E=8443\t# tab', '8443\t# tab'),
+                 ('D=8443 # tls', '8443'), ('G= "q" # c', 'q'), ('K=va#lue', 'va#lue'), ('H=  spaced  ', 'spaced'),
+                 ('Q="a # b"', 'a # b'), ("R='x' # c", 'x'), ('S=a  # two spaces', 'a'), ('T=#hash', '#hash')]
+        keys = tuple(line.split('=')[0] for line, _ in cases)
+        text = ''.join(line + '\n' for line, _ in cases)
+        values = exposure.env_values(self.source(text), keys)
+        for line, expected in cases:
+            with self.subTest(line=line):
+                self.assertEqual(values.get(line.split('=')[0]), expected)
+
+    def test_a_comment_only_port_is_not_a_number_so_the_plan_keeps_the_default(self):
+        # Compose would hand uvicorn `--port "# note"`; the TLS tool refuses that line with a sentence before anything
+        # starts, so the installer's plan (the default port) is not acted on: it reads the line as no usable port.
+        root = self.source('UI_PORT= # note\nUI_HTTP_PORT= # note\n')
+        self.assertEqual(exposure.env_values(root, ('UI_PORT',)), {'UI_PORT': '# note'})
+        self.assertEqual(exposure.ports(root), (8443, 8081))
+
+    def test_an_empty_value_means_the_default_not_an_explicit_setting(self):
+        self.assertEqual(exposure.env_values(self.source('UI_PORT=\nUI_HTTP_PORT=   \nUI_BIND=\n'),
+                                             ('UI_PORT', 'UI_HTTP_PORT')), {})
+        root = self.source('UI_HTTP_PORT=0\nUI_HTTP_PORT=\n')   # the last line wins, and it is empty
+        self.assertEqual(exposure.ports(root), (8443, 8081))
+        self.assertEqual(exposure.ports(self.source('UI_PORT=\nUI_HTTP_PORT=\n')), (8443, 8081))
+
+    def test_port_8081_with_an_empty_redirect_port_is_still_the_collision(self):
+        for text in ('UI_PORT=8081\nUI_HTTP_PORT=\n', 'export UI_PORT=8081 # tls\nexport UI_HTTP_PORT=\n',
+                     'export UI_PORT=8081 # tls\n'):
+            with self.subTest(text=text):
+                root = self.source(text)
+                self.assertTrue(exposure.ports_collide(root))
+                self.assertEqual(exposure.ports(root), (8081, 8081))
+        self.assertFalse(exposure.ports_collide(self.source('UI_PORT=8081\nUI_HTTP_PORT=0\n')))
+
+
+class ExposureCertificateTests(IsolatedCase):
+    OPENSSL = ('sha256 Fingerprint=A5:45:86:46:30:8F:E9:5E:D7:4B:79:7E:6E:CE:AE:32:C9:67:33:7A:E8:3B:CC:66:AA:06:97:29:2F:96:52:0D\n'
+               'notAfter=Oct 31 22:19:35 2028 GMT\n'
+               'X509v3 Subject Alternative Name: \n'
+               '    IP Address:192.0.2.10, IP Address:127.0.0.1, IP Address:0:0:0:0:0:0:0:1, DNS:localhost, DNS:vm1\n')
+
+    def tls(self, mode='self-signed'):
+        folder = self.tmp / 'tls'
+        folder.mkdir(exist_ok=True)
+        if mode is not None:
+            (folder / 'mode').write_text(mode + '\n')
+        return folder
+
+    def test_facts_parse_the_openssl_output_and_read_the_mode_file(self):
+        seen = []
+
+        def run(argv, **kwargs):
+            seen.append(argv)
+            return completed(self.OPENSSL)
+        facts = exposure.facts(self.tls('provided'), run=run)
+        self.assertEqual(facts['mode'], 'provided')
+        self.assertEqual(facts['expires'], '2028-10-31')
+        self.assertTrue(facts['fingerprint'].startswith('A5:45:86:'))
+        self.assertEqual(facts['addresses'], ['192.0.2.10', '127.0.0.1', '::1'])
+        self.assertEqual(facts['names'], ['localhost', 'vm1'])
+        self.assertEqual(seen[0][:3], ['openssl', 'x509', '-in'])
+        self.assertEqual(seen[0][3], str(self.tmp / 'tls' / 'cert.pem'))
+        self.assertNotIn('sudo', seen[0], 'the certificate is public: no privilege is used to read it')
+        self.assertFalse(any('key' in part for part in seen[0]), 'the private key is never named')
+
+    def test_a_missing_or_unknown_mode_is_unknown_and_a_failed_openssl_is_none(self):
+        self.assertEqual(exposure.facts(self.tls(None), run=lambda argv, **kw: completed(self.OPENSSL))['mode'], 'unknown')
+        self.assertEqual(exposure.facts(self.tls('weird'), run=lambda argv, **kw: completed(self.OPENSSL))['mode'], 'unknown')
+        self.assertIsNone(exposure.facts(self.tls(), run=lambda argv, **kw: completed('', 1)))
+        self.assertIsNone(exposure.facts(self.tls(), run=lambda argv, **kw: completed('garbage')))
+
+        def missing(argv, **kwargs):
+            raise FileNotFoundError('openssl')
+        self.assertIsNone(exposure.facts(self.tls(), run=missing))
+
+    def test_the_expiry_is_a_date_and_days_left_counts_from_it(self):
+        self.assertEqual(exposure._expiry('Nov  1 12:00:00 2028 GMT'), '2028-11-01')
+        self.assertEqual(exposure._expiry('not a date'), 'not a date')
+        from datetime import date
+        self.assertEqual(exposure.days_left('2028-11-01', today=date(2028, 10, 1)), 31)
+        self.assertEqual(exposure.days_left('2028-11-01', today=date(2028, 11, 3)), -2)
+        self.assertIsNone(exposure.days_left('not a date'))
+
+    def test_primary_is_the_single_line_of_setup_tls_primary(self):
+        seen = []
+
+        def run(argv, **kwargs):
+            seen.append(argv)
+            return completed('vm1.example.edu\n')
+        self.assertEqual(exposure.primary(self.tmp, run=run), 'vm1.example.edu')
+        self.assertEqual(seen[0], ['bash', str(self.tmp / 'deploy/setup-tls.sh'), '--primary'])
+        for bad in (completed('', 1), completed('two\nlines\n'), completed('has space\n'), completed('x' * 300 + '\n'),
+                    completed('$(reboot)\n'), completed('')):
+            with self.subTest(bad=bad.stdout[:12]):
+                self.assertIsNone(exposure.primary(self.tmp, run=lambda argv, **kw: bad))
+
+        def missing(argv, **kwargs):
+            raise OSError('no bash')
+        self.assertIsNone(exposure.primary(self.tmp, run=missing))
+
+    def test_urls_put_the_primary_first_then_each_other_certificate_address_up_to_three(self):
+        certificate = {'addresses': ['192.0.2.10', '127.0.0.1', '::1', 'fe80::1', '198.51.100.7', '203.0.113.9', '2001:db8::5']}
+        self.assertEqual(exposure.access_urls('vm1.example.edu', certificate, 8443),
+                         ['https://vm1.example.edu:8443/', 'https://192.0.2.10:8443/', 'https://198.51.100.7:8443/'])
+        self.assertEqual(exposure.access_urls('192.0.2.10', certificate, 8443),
+                         ['https://192.0.2.10:8443/', 'https://198.51.100.7:8443/', 'https://203.0.113.9:8443/'])
+
+    def test_urls_bracket_ipv6_omit_port_443_and_fall_back_to_a_placeholder(self):
+        self.assertEqual(exposure.host_url('2001:db8::5', 8443), 'https://[2001:db8::5]:8443/')
+        self.assertEqual(exposure.host_url('vm1', 443), 'https://vm1/')
+        self.assertEqual(exposure.host_url('vm1', 8443, '/setup'), 'https://vm1:8443/setup')
+        self.assertEqual(exposure.access_urls(None, None, 8443), ['https://<VM address>:8443/'])
+        self.assertEqual(exposure.access_urls(None, {'addresses': ['127.0.0.1', '::1']}, 8443), ['https://<VM address>:8443/'])
+
+    def test_the_certificate_sentence_names_the_fingerprint_or_the_provided_certificate(self):
+        selfsigned = {'mode': 'self-signed', 'fingerprint': 'AB:CD', 'expires': '2028-01-01'}
+        self.assertEqual(exposure.certificate_sentence(selfsigned),
+                         'The certificate is self-signed: the browser warns once; its SHA-256 fingerprint is AB:CD.')
+        provided = dict(selfsigned, mode='provided')
+        sentence = exposure.certificate_sentence(provided)
+        self.assertIn('the one you provided (expires 2028-01-01)', sentence)
+        self.assertIn('HSTS', sentence)
+        self.assertIn('by IP address', sentence)
+        self.assertIn('setup-tls.sh --show', exposure.certificate_sentence(None))
+
+    def test_the_unreadable_certificate_advice_names_setup_tls_by_absolute_path(self):
+        sentence = exposure.certificate_sentence(None)
+        self.assertIn(f'bash {DEPLOY / "setup-tls.sh"} --show', sentence)
+        self.assertTrue(exposure.SETUP_TLS_SCRIPT.is_absolute())
+        explicit = exposure.certificate_sentence(None, Path('/opt/my checkout/deploy/setup-tls.sh'))
+        self.assertIn("bash '/opt/my checkout/deploy/setup-tls.sh' --show", explicit)
+        self.assertNotRegex(sentence, r'bash deploy/')
+
+    def test_the_redirect_clause_of_a_self_signed_certificate_is_the_plain_one(self):
+        selfsigned = {'mode': 'self-signed', 'fingerprint': 'AB:CD', 'expires': '2028-01-01'}
+        urls = ['https://lab.example:8443/', 'https://192.0.2.10:8443/']
+        self.assertEqual(exposure.redirect_notes(urls, selfsigned, 8443, 8081), ('plain HTTP on 8081 redirects there', ''))
+        self.assertEqual(exposure.redirect_notes(urls, selfsigned, 8443, 0), ('', ''))
+        self.assertEqual(exposure.redirect_notes(urls, None, 8443, 8081)[1], '')
+
+    def test_a_provided_certificate_limits_the_redirect_to_the_ip_urls_and_warns_about_the_name(self):
+        provided = {'mode': 'provided', 'fingerprint': 'AB:CD', 'expires': '2028-01-01'}
+        urls = ['https://lab.example:8443/', 'https://192.0.2.10:8443/']
+        clause, sentence = exposure.redirect_notes(urls, provided, 8443, 8081)
+        self.assertEqual(clause, 'plain HTTP on 8081 redirects to the IP address URLs')
+        self.assertIn('http://lab.example:8081 is never reached by name', sentence)
+        self.assertIn('retype old links by name as https://lab.example:8443', sentence)
+        self.assertTrue(sentence.endswith('Links by IP address keep redirecting.'))
+        # a name on its own: nothing is redirected by IP in the line, but the sentence about links by name stands
+        clause, sentence = exposure.redirect_notes(['https://lab.example:8443/'], provided, 443, 80)
+        self.assertEqual(clause, '')
+        self.assertIn('http://lab.example is never reached by name', sentence)
+        self.assertIn('retype old links by name as https://lab.example', sentence)
+        # addresses only (or the <VM address> placeholder): no link by name exists to warn about
+        self.assertEqual(exposure.redirect_notes(['https://192.0.2.10:8443/', 'https://[2001:db8::1]:8443/'], provided, 8443, 8081),
+                         ('plain HTTP on 8081 redirects to the IP address URLs', ''))
+        self.assertEqual(exposure.redirect_notes(['https://<VM address>:8443/'], provided, 8443, 8081), ('', ''))
+        self.assertEqual(exposure.redirect_notes(urls, provided, 8443, 0), ('', ''))
+
+    def test_the_session_ssh_port_is_the_server_port_of_a_well_formed_ssh_connection(self):
+        self.assertEqual(exposure.session_ssh_port({'SSH_CONNECTION': '198.51.100.7 51234 192.0.2.10 2222'}), '2222')
+        self.assertEqual(exposure.session_ssh_port({'SSH_CONNECTION': '2001:db8::7 51234 2001:db8::1 22'}), '22')
+        for bad in ('', 'junk', '1.2.3.4 1 5.6.7.8', '1.2.3.4 1 5.6.7.8 22; reboot', '1.2.3.4 1 5.6.7.8 22 extra'):
+            with self.subTest(bad=bad):
+                self.assertIsNone(exposure.ssh_connection({'SSH_CONNECTION': bad}))
+        self.assertIsNone(exposure.ssh_connection({}))
+
+    @unittest.skipUnless(shutil.which('openssl'), 'openssl is needed to make a real certificate')
+    def test_a_real_certificate_is_read_and_a_real_tls_server_is_reached_by_pinning_it(self):
+        folder = self.tmp / 'real'
+        folder.mkdir()
+        subprocess.run(['openssl', 'req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes',
+                        '-sha256', '-days', '730', '-subj', '/CN=192.0.2.10', '-addext',
+                        'subjectAltName=IP:192.0.2.10,IP:127.0.0.1,IP:::1,DNS:localhost',
+                        '-addext', 'basicConstraints=critical,CA:FALSE', '-addext', 'keyUsage=digitalSignature',
+                        '-addext', 'extendedKeyUsage=serverAuth', '-keyout', str(folder / 'key.pem'),
+                        '-out', str(folder / 'cert.pem')], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        (folder / 'mode').write_text('self-signed\n')
+        facts = exposure.facts(folder)
+        self.assertEqual(facts['mode'], 'self-signed')
+        self.assertIn('192.0.2.10', facts['addresses'])
+        self.assertRegex(facts['fingerprint'], r'^[0-9A-F]{2}(:[0-9A-F]{2}){31}$')
+        self.assertRegex(facts['expires'], r'^\d{4}-\d\d-\d\d$')
+        self.assertGreater(exposure.days_left(facts['expires']), 700)
+
+        import http.server
+        import ssl
+        import threading
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            body = b'{"ready": true}'
+
+            def do_GET(self):
+                found = self.path == '/api/health'
+                self.send_response(200 if found else 404)
+                self.send_header('Content-Length', str(len(self.body) if found else 0))
+                self.end_headers()
+                if found:
+                    self.wfile.write(self.body)
+
+            def log_message(self, *args):
+                pass
+        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(folder / 'cert.pem', folder / 'key.pem')
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        url = f'https://127.0.0.1:{server.server_address[1]}/'
+        # The certificate names 127.0.0.1 here, but the host name is deliberately not what is pinned.
+        self.assertTrue(exposure.health_ready(url, folder / 'cert.pem'))
+        # Another certificate is not trusted.
+        other = self.tmp / 'other'
+        other.mkdir()
+        subprocess.run(['openssl', 'req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes',
+                        '-days', '2', '-subj', '/CN=other', '-keyout', str(other / 'key.pem'),
+                        '-out', str(other / 'cert.pem')], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        with self.assertRaises(OSError):
+            exposure.health_ready(url, other / 'cert.pem')
+        # A body that is not {"ready": true} is not ready.
+        Handler.body = b'{"ready": false}'
+        self.assertFalse(exposure.health_ready(url, folder / 'cert.pem'))
+        Handler.body = b'{"version": "1.0.0"}'
+        self.assertFalse(exposure.health_ready(url, folder / 'cert.pem'))
+
+
+class ExposureSetupCodeTests(IsolatedCase):
+    def test_parse_accepts_the_two_line_file_in_either_mode(self):
+        self.assertEqual(exposure.parse_setup_code(f'mode=setup\ncode={GOOD_CODE}\n'), ('setup', GOOD_CODE))
+        self.assertEqual(exposure.parse_setup_code(f'mode=recover\ncode={GOOD_CODE}'), ('recover', GOOD_CODE))
+
+    def test_parse_refuses_anything_else(self):
+        for text in ('', 'junk', f'mode=other\ncode={GOOD_CODE}\n', 'mode=setup\ncode=short\n', 'mode=setup\n',
+                     f'code={GOOD_CODE}\n', 'mode=setup\ncode=ABCDEF-GHJKMN-PQRSTU-VWXY23\n',
+                     f'mode=setup\ncode={GOOD_CODE}\x1b[31m\n', None):
+            with self.subTest(text=text):
+                self.assertIsNone(exposure.parse_setup_code(text))
+
+    def test_read_uses_cat_through_the_given_sudo_and_no_stdin_when_not_interactive(self):
+        seen = {}
+
+        def run(argv, **kwargs):
+            seen.update(argv=argv, kwargs=kwargs)
+            return completed(f'mode=setup\ncode={GOOD_CODE}\n')
+        reading = exposure.read_setup_code(cwd='/x', sudo=('sudo', '-n'), interactive=False, run=run)
+        self.assertEqual(reading, ('open', 'setup', GOOD_CODE))
+        self.assertEqual(seen['argv'], ['sudo', '-n', 'cat', '/srv/containerlab-node-manager/data/setup-code'])
+        self.assertIs(seen['kwargs']['stdin'], subprocess.DEVNULL)
+        self.assertEqual(seen['kwargs']['cwd'], '/x')
+        self.assertNotIn('shell', seen['kwargs'])
+        exposure.read_setup_code(run=lambda argv, **kw: seen.update(kwargs=kw) or completed(f'mode=setup\ncode={GOOD_CODE}'))
+        self.assertIsNone(seen['kwargs']['stdin'], 'the plain menu lets sudo ask on the terminal')
+
+    def test_an_absent_file_means_an_administrator_exists(self):
+        run = lambda argv, **kw: completed('', 1, 'cat: /srv/containerlab-node-manager/data/setup-code: No such file or directory')
+        self.assertEqual(exposure.read_setup_code(run=run), ('absent', None, None))
+
+    def test_the_missing_file_is_recognised_whatever_the_operators_locale(self):
+        # The plain menu inherits the login environment. A German `cat` says "Datei oder Verzeichnis nicht gefunden":
+        # the reader runs with a fixed C locale so an administrator who exists is never told to cat a missing file.
+        def localised(argv, **kwargs):
+            language = (kwargs.get('env') or os.environ).get('LC_ALL') or os.environ.get('LC_ALL', 'de_DE.UTF-8')
+            message = ('No such file or directory' if language == 'C'
+                       else 'Datei oder Verzeichnis nicht gefunden')
+            return completed('', 1, 'cat: /srv/containerlab-node-manager/data/setup-code: ' + message)
+        with patch.dict(os.environ, {'LC_ALL': 'de_DE.UTF-8', 'LANGUAGE': 'de'}):
+            self.assertEqual(exposure.read_setup_code(run=localised), ('absent', None, None))
+
+    def test_every_reader_that_runs_a_program_hands_it_the_c_locale_and_keeps_the_rest_of_the_environment(self):
+        seen = []
+
+        def record(argv, **kwargs):
+            seen.append((argv[0], kwargs.get('env')))
+            return completed('', 1)
+        with patch.dict(os.environ, {'LC_ALL': 'de_DE.UTF-8', 'LANGUAGE': 'de', 'SUDO_ASKPASS': '/bin/askpass'}):
+            exposure.read_setup_code(run=record)
+            exposure.facts(self.tmp, run=record)
+            exposure.primary(self.tmp, run=record)
+        self.assertEqual([name for name, _ in seen], ['sudo', 'openssl', 'bash'])
+        for name, env in seen:
+            with self.subTest(program=name):
+                self.assertEqual(env['LC_ALL'], 'C')
+                self.assertNotIn('LANGUAGE', env)
+                self.assertEqual(env['SUDO_ASKPASS'], '/bin/askpass', 'sudo and the terminal still work')
+                self.assertEqual(env['PATH'], os.environ['PATH'])
+
+    def test_every_other_failure_is_unreadable_and_never_carries_text(self):
+        for result in (completed('', 1, 'sudo: a password is required'), completed('', 1, 'cat: Permission denied'),
+                       completed('not the two-line form', 0), completed('', 0)):
+            with self.subTest(result=result.stderr or result.stdout):
+                self.assertEqual(exposure.read_setup_code(run=lambda argv, **kw: result), ('unreadable', None, None))
+
+        def timeout(argv, **kwargs):
+            raise subprocess.TimeoutExpired(argv, 30)
+
+        def missing(argv, **kwargs):
+            raise OSError('no sudo')
+        self.assertEqual(exposure.read_setup_code(run=timeout), ('unreadable', None, None))
+        self.assertEqual(exposure.read_setup_code(run=missing), ('unreadable', None, None))
+
+    def test_lines_for_an_open_setup_print_the_url_the_code_and_the_command(self):
+        lines = exposure.setup_lines(('open', 'setup', GOOD_CODE), 'https://vm1:8443/')
+        self.assertEqual(lines, [f'Open https://vm1:8443/setup and enter this setup code: {GOOD_CODE}',
+                                 'It is also readable on the VM with: sudo cat /srv/containerlab-node-manager/data/setup-code'])
+
+    def test_lines_for_a_recovery_use_the_recover_url_and_the_window(self):
+        lines = exposure.setup_lines(('open', 'recover', GOOD_CODE), 'https://vm1:8443')
+        self.assertEqual(lines[0], f'Open https://vm1:8443/setup?recover=1 within 15 minutes and enter this recovery code: {GOOD_CODE}')
+
+    def test_lines_without_a_code_never_invent_one(self):
+        self.assertEqual(exposure.setup_lines(('absent', None, None), 'https://vm1:8443/'),
+                         ['An administrator exists; sign in at https://vm1:8443/'])
+        lines = exposure.setup_lines(('unreadable', None, None), 'https://vm1:8443/')
+        self.assertEqual(lines, ['The setup code could not be read here. On the VM, run: '
+                                 'sudo cat /srv/containerlab-node-manager/data/setup-code'])
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1280,7 +1899,7 @@ class FakeInstall:
         if self.check_error:
             raise ValueError(self.check_error)
         say('Manager running')
-        return 'http://127.0.0.1:8081/'
+        return 'https://127.0.0.1:8443/'
 
     def setup_lazydocker(self, env, say=print):
         say('lazydocker output')
@@ -1691,7 +2310,7 @@ class EngineRunTests(EngineCase):
     def test_verify_phase_reports_the_manager_address_and_failures(self):
         steps = [install.Step('verify', 'Verify', None)]
         run = self.go(steps)
-        self.assertEqual(run.phase('verify').outcome, 'http://127.0.0.1:8081/')
+        self.assertEqual(run.phase('verify').outcome, 'https://127.0.0.1:8443/')
         self.assertEqual(self.fake.check_args, ('1.2.3', ('sudo', '-n')))
         self.assertEqual(self.bridge.lines['verify'], ['Manager running'])
         steps = [install.Step('verify', 'Verify', None)]
@@ -1714,6 +2333,64 @@ class EngineRunTests(EngineCase):
         steps = [install.Step('settings', 'Copy', failing, bare=True)]
         self.go(steps, FakeBridge(recover=[engine.RETURN]))
         self.assertEqual(self.bridge.recovers[0][1], 'settings')
+
+    def test_ports_phase_runs_its_write_and_says_which_file_never_its_contents(self):
+        written = []
+        steps = [install.Step('ports', 'Manager ports', lambda: written.append('done'), bare=True)]
+        run = self.go(steps)
+        self.assertEqual(written, ['done'])
+        self.assertEqual(run.phase('ports').state, engine.COMPLETED)
+        self.assertIn('clab-backup-ui/.env', run.phase('ports').note)
+
+        def failing():
+            raise ValueError('The source .env is a symlink.')
+        self.go([install.Step('ports', 'Manager ports', failing, bare=True)], FakeBridge(recover=[engine.RETURN]))
+        self.assertEqual(self.bridge.recovers[0][1], 'settings')
+
+    def test_signon_phase_reads_the_code_with_sudo_n_and_keeps_it_out_of_every_field_and_the_record(self):
+        steps = [install.Step('signon', 'Setup code', None, bare=True, post=True)]
+        seen = {}
+
+        def reading(**kwargs):
+            seen.update(kwargs)
+            return 'open', 'setup', 'abcdef-ghjkmn-pqrstu-vwxy23'
+        with patch.object(engine.exposure, 'read_setup_code', side_effect=reading):
+            run = self.go(steps)
+        self.assertEqual(seen, {'cwd': str(self.source), 'sudo': ('sudo', '-n'), 'interactive': False})
+        phase = run.phase('signon')
+        self.assertEqual((phase.state, phase.outcome), (engine.COMPLETED, 'open'))
+        everything = json.dumps(run.record()) + repr(vars(phase)) + json.dumps(self.bridge.lines)
+        self.assertNotIn('abcdef', everything)
+        self.assertNotIn('ghjkmn', everything)
+        self.assertEqual(run.outcome, 'completed')
+        self.assertIn('summary', phase.note)
+
+    def test_signon_phase_completes_when_an_administrator_exists_or_the_file_cannot_be_read(self):
+        for reading, outcome, words in ((('absent', None, None), 'absent', 'administrator exists'),
+                                        (('unreadable', None, None), 'unreadable', 'sudo cat /srv/containerlab-node-manager/data/setup-code')):
+            with self.subTest(outcome=outcome), patch.object(engine.exposure, 'read_setup_code', return_value=reading):
+                run = self.go([install.Step('signon', 'Setup code', None, bare=True, post=True)])
+            self.assertEqual((run.phase('signon').state, run.phase('signon').outcome), (engine.COMPLETED, outcome))
+            self.assertIn(words, run.phase('signon').note)
+            self.assertEqual(run.outcome, 'completed', 'the setup code never changes the installation outcome')
+
+    def test_signon_phase_never_asks_for_a_password_and_a_refusing_sudo_only_makes_the_code_unreadable(self):
+        # Rewritten with the review of the installer slice. The old claim, "needs administrator access and never reads
+        # without it", made an expired sudo timestamp after a long installation turn a finished manager into a
+        # 'returned' run. The read itself uses `sudo -n` and answers 'unreadable' when sudo refuses; the summary then
+        # prints the `sudo cat` sentence. The step never prompts and never changes the outcome.
+        with patch.object(engine, 'credentials_cached', return_value=False), \
+                patch.object(engine.exposure, 'read_setup_code', return_value=('unreadable', None, None)) as read:
+            bridge = FakeBridge(handoff=[1], recover=[engine.RETURN])
+            run = self.go([install.Step('signon', 'Setup code', None, bare=True, post=True)], bridge)
+        read.assert_called_once()
+        self.assertEqual(read.call_args.kwargs['sudo'], ('sudo', '-n'))
+        self.assertEqual(self.bridge.recovers, [], 'no recovery question: the step cannot fail')
+        self.assertEqual(self.bridge.handoffs, [], 'the terminal is never handed over for sudo')
+        phase = run.phase('signon')
+        self.assertEqual((phase.state, phase.outcome), (engine.COMPLETED, 'unreadable'))
+        self.assertIn('sudo cat /srv/containerlab-node-manager/data/setup-code', phase.note)
+        self.assertEqual(run.outcome, 'completed', 'a finished installation is never reported as returned')
 
     def test_an_internal_error_is_a_recoverable_failure_not_a_dead_run(self):
         steps = [install.Step('weird', 'No argv and no special key', None)]
@@ -2216,7 +2893,8 @@ class PlanParityTests(unittest.TestCase):
     VERSION = '1.30.35'
 
     def plain_sequence(self, options, advanced):
-        """What install() really runs, as [('run', argv, tee) | ('settings', path) | ('verify',) | ('lazydocker',)]."""
+        """What install() really runs, as [('run', argv, tee) | ('settings', path) | ('verify',) | ('lazydocker',)
+        | ('ports',) | ('signon',)]."""
         sequence = []
 
         def fake_run(args, env, capture=False, tee=False):
@@ -2228,6 +2906,9 @@ class PlanParityTests(unittest.TestCase):
                 patch.object(install, 'copy_env', side_effect=lambda path: path is not None and sequence.append(('settings', path))), \
                 patch.object(install, 'verify_manager', side_effect=lambda env, version: sequence.append(('verify',))), \
                 patch.object(install, 'setup_lazydocker', side_effect=lambda env, say=print: sequence.append(('lazydocker',))), \
+                patch.object(install, 'write_ports', side_effect=lambda *a, **k: sequence.append(('ports',))), \
+                patch.object(install, 'show_setup_code', side_effect=lambda env, **k: sequence.append(('signon',))), \
+                patch.object(install, 'access_lines', return_value=[]), \
                 patch.object(install, 'run', side_effect=fake_run), patch('sys.stdout', new=io.StringIO()):
             install.install(self.ENV, self.VERSION, advanced=advanced)
         return sequence
@@ -2241,8 +2922,10 @@ class PlanParityTests(unittest.TestCase):
                 sequence.append(('run', list(step.argv), step.tee))
             elif step.key == 'settings':   # (plain install() also calls copy_env(None), a no-op, when invisible)
                 sequence.append(('settings', options.env_source))
-            elif step.key in ('verify', 'lazydocker'):
+            elif step.key in ('verify', 'lazydocker', 'ports'):
                 sequence.append((step.key,))
+            elif step.key == 'signon':
+                sequence.append(('signon',))
             else:
                 self.fail(f'unexpected step {step.key}')
         return sequence
@@ -2270,26 +2953,32 @@ class PlanParityTests(unittest.TestCase):
     def test_standard_options_match_the_plain_standard_path(self):
         steps = self.assert_plan_matches_plain(install.Options(), advanced=False)
         self.assertEqual([s.key for s in steps if s.visible],
-                         ['admin', 'prereqs', 'launch', 'capture', 'verify', 'engineer', 'lazydocker', 'git'])
+                         ['admin', 'prereqs', 'launch', 'capture', 'verify', 'firewall', 'sshd', 'engineer', 'lazydocker',
+                          'git', 'signon'])
 
     def test_every_advanced_combination_matches_the_plain_advanced_path(self):
         count = 0
-        for operations, engineer, repair, git_now, env_source in itertools.product(
-                ('1', '2'), ('1', '2'), (True, False), (True, False), (None, Path('/home/owner/old/clab-backup-ui/.env'))):
-            options = install.Options(env_source, operations, engineer, repair, git_now)
+        for operations, engineer, repair, git_now, env_source, firewall, hardening, ports in itertools.product(
+                ('1', '2'), ('1', '2'), (True, False), (True, False), (None, Path('/home/owner/old/clab-backup-ui/.env')),
+                (True, False), (True, False), (None, 'redirect', 'keep')):
+            options = install.Options(env_source, operations, engineer, repair, git_now, firewall, hardening, ports)
             with self.subTest(operations=operations, engineer=engineer, repair=repair, git_now=git_now,
-                              env_source=str(env_source)):
+                              env_source=str(env_source), firewall=firewall, hardening=hardening, ports=ports):
                 steps = self.assert_plan_matches_plain(options, advanced=True)
                 keys = [s.key for s in steps if s.visible]
                 self.assertEqual('git' in keys, git_now)
                 self.assertEqual('settings' in keys, env_source is not None)
                 self.assertEqual('engineer' in keys, options.engineer == '1')
+                self.assertEqual('firewall' in keys, firewall)
+                self.assertEqual('sshd' in keys, hardening)
+                self.assertEqual('ports' in keys, ports == 'redirect')
+                self.assertEqual(keys[-1], 'signon', 'the setup code is the last step of every installation')
                 launch = next(s for s in steps if s.key == 'launch')
                 self.assertEqual('--enable-operations' in launch.argv, operations == '1')
                 prereqs = next(s for s in steps if s.key == 'prereqs')
                 self.assertEqual('--repair-install-media' in prereqs.argv, repair)
                 count += 1
-        self.assertEqual(count, 32)
+        self.assertEqual(count, 32 * 2 * 2 * 3)
 
     def test_step_actions_run_the_same_commands_as_the_steps_declare(self):
         options = install.Options(env_source=None, operations='1', engineer='1', repair=True, git_now=True)
@@ -2371,13 +3060,20 @@ class SourceScanTests(unittest.TestCase):
                 self.assertIsNone(re.search(r'\.(?:terminate|kill)\s*\(', text))
                 self.assertIsNone(re.search(r'\bsend_signal\s*\(', text))
 
+    def test_no_file_lists_the_vm_addresses_from_the_interface_list(self):
+        # REVIEW R18: that list holds docker0 and every containerlab bridge, the very addresses the
+        # certificate never names; the addresses people open come from the certificate itself.
+        for path in self.FILES:
+            with self.subTest(file=path.name):
+                self.assertIsNone(re.search(r"hostname['\"]?,\s*['\"]-I|hostname -I|def vm_addresses", path.read_text()))
+
     def test_no_file_runs_a_shell_with_a_string_command(self):
         for path in self.FILES:
             with self.subTest(file=path.name):
                 self.assertIsNone(re.search(r'shell\s*=\s*True|os\.system\s*\(|os\.popen\s*\(', path.read_text()))
 
     def test_standard_library_modules_do_not_import_textual_or_rich(self):
-        for name in ('sanitize', 'core', 'bootstrap', 'probes', 'engine'):
+        for name in ('sanitize', 'core', 'bootstrap', 'probes', 'engine', 'exposure'):
             text = (DEPLOY / 'installer_tui' / f'{name}.py').read_text()
             with self.subTest(module=name):
                 self.assertIsNone(re.search(r'^\s*(?:import|from)\s+(?:textual|rich)\b', text, re.M))

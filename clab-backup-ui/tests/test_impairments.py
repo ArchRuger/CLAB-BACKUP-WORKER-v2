@@ -85,9 +85,9 @@ class ImpairmentBase(unittest.TestCase):
 
     def modes(self): return [r['mode'] for r, _ in self.requests]
 
-    def get(self, path, **params): return self.client.get('/api/operations/' + path, headers=self.auth, params=params)
+    def get(self, path, **params): return self.client.get('/api/operations/' + path, params=params)
 
-    def post(self, path, body, **kwargs): return self.client.post('/api/operations/impairments/' + path, headers=self.auth, json=body, **kwargs)
+    def post(self, path, body, **kwargs): return self.client.post('/api/operations/impairments/' + path, json=body, **kwargs)
 
     def events(self):
         path = Path(self.tmp.name) / 'events.jsonl'
@@ -243,7 +243,7 @@ class SetTests(ImpairmentBase):
     def test_a_cross_origin_post_is_403_and_nothing_reaches_the_helper(self):
         self.start(); self.ok_answer()
         for path, body in (('set', self.set_body()), ('reset', self.reset_body()), ('clear', {'lab_id': self.lab_id})):
-            response = self.client.post('/api/operations/impairments/' + path, headers={**self.auth, 'Origin': 'https://other.example'}, json=body)
+            response = self.client.post('/api/operations/impairments/' + path, headers={'Origin': 'https://other.example'}, json=body)
             self.assertEqual(response.status_code, 403, path)
         self.assertEqual(self.requests, [])
 
@@ -298,14 +298,14 @@ class BusyTests(ImpairmentBase):
         worker.start(); self.assertTrue(entered.wait(5))
         try:
             calls = len(self.requests)
-            preview = self.client.post('/api/operations/preview', headers=self.auth, json={'action': 'inspect-all'})
+            preview = self.client.post('/api/operations/preview', json={'action': 'inspect-all'})
             self.assertEqual((preview.status_code, preview.json()['detail']), (409, BUSY_SENTENCE))
             token = 'a' * 32
             self.app.state.operations.previews[token] = {'request': {}, 'digest': 'x', 'revision': self.store.state.get('host', {}).get('revision'), 'lab_id': '', 'expires': time.monotonic() + 60}
-            confirm = self.client.post('/api/operations/confirm', headers=self.auth, json={'token': token})
+            confirm = self.client.post('/api/operations/confirm', json={'token': token})
             self.assertEqual((confirm.status_code, confirm.json()['detail']), (409, BUSY_SENTENCE)); self.assertEqual(len(self.requests), calls, 'the helper was not asked')
             self.assertEqual(self.post('set', self.set_body()).json()['detail'], imp.CHANGE_IN_PROGRESS, 'a second change on the lab hears the lab sentence')
-            other = self.client.post('/api/operations/impairments/set', headers=self.auth, json=self.set_body(lab_id='other'))
+            other = self.client.post('/api/operations/impairments/set', json=self.set_body(lab_id='other'))
             self.assertEqual(other.status_code, 409)
         finally: release.set(); worker.join(10)
         self.assertEqual(self.results[0].status_code, 200); self.assertEqual(self.store.state['operations'], [])
@@ -511,7 +511,7 @@ class PlanTests(ImpairmentBase):
         with patch.object(self.app.state.discovery, 'refresh'), patch('app.discovery.discovery_fresh', return_value=True), \
              patch('app.vm_files.prepare_lab', side_effect=lambda bundle, name, lab: dict(lab)):
             self.app.state.discovery.sources['training'] = {'files': {}}
-            response = self.client.post('/api/labs/' + self.lab_id + '/sync', headers=self.auth, json={})
+            response = self.client.post('/api/labs/' + self.lab_id + '/sync', json={})
         self.assertEqual(response.status_code, 200, response.text); self.assertNotIn(self.lab_id, operations.plan_cache)
 
 

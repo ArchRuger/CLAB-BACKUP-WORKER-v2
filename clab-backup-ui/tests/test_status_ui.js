@@ -763,3 +763,12 @@ test('C09: textMatch is the one text matcher: trimmed, case-insensitive substrin
  assert.equal(m('r1 ceos',['r1','ceos']),true,'the substring spans a boundary only through the single joining space');assert.equal(m('r1ceos',['r1','ceos']),false);
  assert.equal(m('r*',['r1']),false,'no wildcards');assert.equal(m('x',undefined),false);assert.equal(m('1',[1]),true,'numbers are matched as text');
 });
+
+// REVIEW U5: a sentence that sends a person to Diagnostics must not send an Operator to a page that refuses them.
+test('diagnosticsAdvice: see Diagnostics for an administrator, ask an administrator for an operator, the administrator wording when the role is unknown',()=>{
+ const c=makeContext();
+ assert.equal(c.diagnosticsAdvice('admin'),'see Diagnostics');
+ assert.equal(c.diagnosticsAdvice('operator'),'ask an administrator to check Diagnostics');
+ assert.equal(c.diagnosticsAdvice(''),'see Diagnostics');
+ assert.equal(c.diagnosticsAdvice(undefined),'see Diagnostics');
+});

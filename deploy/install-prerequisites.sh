@@ -8,16 +8,19 @@ unset DOCKER_CONTEXT DOCKER_HOST DOCKER_TLS_VERIFY DOCKER_CERT_PATH
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 docker_requested=false
 clab_requested=false
+firewall_requested=false
 repair_media=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --docker) docker_requested=true;;
     --containerlab) clab_requested=true;;
+    --firewall) firewall_requested=true;;
     --repair-install-media) repair_media=true;;
     --help|-h)
-      echo 'Usage: sudo bash deploy/install-prerequisites.sh [--docker] [--containerlab] [--repair-install-media]'
+      echo 'Usage: sudo bash deploy/install-prerequisites.sh [--docker] [--containerlab] [--firewall] [--repair-install-media]'
       echo 'Ubuntu 24.04 amd64/arm64 only. Installs missing basic tools and starts SSH.'
       echo 'Optional Docker/Compose and containerlab are installed only when missing.'
+      echo 'ufw is installed only with --firewall (it conflicts with iptables-persistent and netfilter-persistent).'
       echo 'Media repair backs up APT files and disables only active installation-media entries.'
       exit 0;;
     *) echo "Unknown prerequisite option: $1" >&2; exit 64;;
@@ -109,12 +112,19 @@ apt_install() {
     -o Dpkg::Options::=--force-confold install "$@" || fail 'Package installation failed. Resolve the APT error above, then rerun the installer. Existing configuration files are retained.'
 }
 basics=()
-for package in git curl ca-certificates openssh-server; do
+for package in git curl ca-certificates openssh-server openssl; do
   installed "$package" || basics+=("$package")
 done
 apt_install "${basics[@]}"
 if $repair_media; then apt_update; fi
 systemctl enable --now ssh || fail 'SSH could not start. Check sudo systemctl status ssh and the SSH configuration before continuing.'
+if $firewall_requested && ! installed ufw; then
+  # Only for a person who chose the firewall step: ufw breaks iptables-persistent and netfilter-persistent, and
+  # --no-remove makes APT refuse rather than remove them. It runs after the basics and the SSH start, so a refusal leaves them done.
+  apt_update
+  DEBIAN_FRONTEND=noninteractive apt-get -y --no-remove --no-upgrade \
+    -o Dpkg::Options::=--force-confold install ufw || fail "ufw could not be installed. If this VM uses iptables-persistent or netfilter-persistent, keep it and finish without the firewall step: bash $(printf '%q' "$script_dir/install.sh") --advanced --no-firewall"
+fi
 
 if $docker_missing || $compose_missing; then
   source_file=/etc/apt/sources.list.d/clab-manager-docker.sources

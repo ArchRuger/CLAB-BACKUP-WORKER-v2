@@ -34,11 +34,15 @@ def arguments(description=''):
 class Session:
     """One browser page with error collection, a click counter and the fixture's control routes."""
 
-    def __init__(self, base, headed=False, viewport=(1440, 900)):
+    def __init__(self, base, headed=False, viewport=(1440, 900), cookies=None, ignore_https_errors=False):
+        # The fixture signs requests in itself (docs/redesign/tools/fixture_manager.py). A live manager needs a session:
+        # the live pass hands in the cookie of a manager_http session (`cookies`) and accepts the manager's own certificate.
         self.base = base.rstrip('/')
         self._pw = sync_playwright().start()
         self.browser = self._pw.chromium.launch(headless=not headed)
-        self.context = self.browser.new_context(viewport={'width': viewport[0], 'height': viewport[1]})
+        self.context = self.browser.new_context(viewport={'width': viewport[0], 'height': viewport[1]}, ignore_https_errors=ignore_https_errors)
+        if cookies:
+            self.context.add_cookies(cookies)
         self.page = self.context.new_page()
         self.errors = []
         self.allowed = []          # (status, url regex) a step expects

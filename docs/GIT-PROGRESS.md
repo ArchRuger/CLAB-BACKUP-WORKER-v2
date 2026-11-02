@@ -18,7 +18,10 @@ Start, Broken and Final states for their students: [Lab states for a course](COU
 `view=progress` or `view=git` opens the lab's first tab (Topology) with the chip panel open, once, and the
 address is rewritten to that tab. `view=save-location` and `view=save-settings` open **Save settings**;
 `view=saved-versions` and `view=versions` open **All versions**. A lab without a save location gets the
-first-save view in the chip panel.
+first-save view in the chip panel. A bookmark opened while you are signed out goes through the sign-in page and
+then lands on the same lab, tab and device. Saving, uploading and loading are open to every signed-in account,
+administrator or operator; the Git history names the checkout's commit identity, and the manager's action log
+(`GET /api/logs`) records each request with the signed-in account as its `actor`.
 
 ## What a save is
 
@@ -870,10 +873,10 @@ running Git. Git uses the owner's HOME, author configuration and credential help
 container neither mounts the owner's checkout nor needs the token. The existing restricted VM SSH
 gateway stays in place.
 
-The browser has no account login in this release. **The registered owner is the VM execution owner**,
-not a signed-in web user. People with access to this manager share its authority over the registered
-repositories. Use one trusted operator per VM, or a group deliberately sharing that authority. Separate
-browser permissions are not implemented by registering two Linux owners.
+**The registered owner is the VM execution owner**, not the signed-in person. Every signed-in account,
+operator or administrator, shares the registered owner's Git authority over the registered repositories;
+there is no per-lab or per-account authorization. Use one trusted group per VM that deliberately shares
+that authority. Separate browser permissions are not implemented by registering two Linux owners.
 
 | Data | Location / recovery requirement |
 |---|---|

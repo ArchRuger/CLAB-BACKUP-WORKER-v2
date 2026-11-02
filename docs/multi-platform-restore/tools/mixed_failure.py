@@ -19,31 +19,42 @@ The evidence also records whether the other nodes overlapped (their `[connecting
 """
 import argparse
 import json
+import os
 import pathlib
 import subprocess
 import sys
 import threading
 import time
-import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 TOOLS = pathlib.Path(__file__).resolve().parent
 PYTHON = str(ROOT / 'clab-backup-ui/.venv/bin/python')
 sys.path.insert(0, str(TOOLS))
+sys.path.insert(0, str(ROOT / 'docs/sign-on/tools'))
+import manager_http  # noqa: E402
 NODES = ['ceos', 'cjunosevolved', 'vjunos-switch', 'xrv9k']
 VICTIM = 'xrv9k'
 FOREIGN = ['configure', 'interface Loopback778', 'description foreign pending change', 'root', 'commit confirmed 120']
 # The other user then stays in their session, as a person would. (Leaving it asks "You are exiting after a 'commit
 # confirm' with an active rollback session ... Do you wish to exit? [no]:" and, answered yes, rolls back at once.)
-BASE = 'http://127.0.0.1:8081'
+_MANAGER = []   # one signed-in client for the whole run (MANAGER, CLAB_USER, CLAB_PASSWORD, CLAB_PIN as in manager_http)
+
+
+def get(path):
+    if not _MANAGER:
+        _MANAGER.append(manager_http.Manager(os.environ.get('MANAGER', manager_http.DEFAULT_BASE)))
+    status, answer = _MANAGER[0].get(path, timeout=30)
+    if status != 200:
+        raise RuntimeError('GET %s answered HTTP %s' % (path, status))
+    return answer
 
 
 def state():
-    return json.load(urllib.request.urlopen(BASE + '/api/state', timeout=30))
+    return get('/api/state')
 
 
 def restore_job(job_id):
-    return json.load(urllib.request.urlopen(BASE + '/api/restore/jobs/' + job_id, timeout=30))
+    return get('/api/restore/jobs/' + job_id)
 
 
 def victim_target(job):

@@ -8,6 +8,7 @@ import argparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
+import http.client
 import importlib.util
 import json
 import os
@@ -15,15 +16,18 @@ from pathlib import Path
 import re
 import shlex
 import signal
+import ssl
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from urllib.error import HTTPError
-from urllib.request import Request, ProxyHandler, HTTPRedirectHandler, build_opener
+from urllib.request import Request, ProxyHandler, HTTPRedirectHandler, HTTPSHandler, build_opener
 
 SOURCE = Path(__file__).resolve().parents[1]
 MIB = 1024 * 1024
+TLS_DIR = Path('/srv/containerlab-node-manager/tls')
 PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 STATUSES = ('PASS', 'FAIL', 'WARN', 'SKIP', 'INFO')
 
@@ -76,10 +80,15 @@ class Context:
         self.deadline = time.monotonic() + args.deadline
         self.base_url = ''
         self.container = ''
+        self.manager_running = False
+        self.probe_blocked = None
         self.host = {}
+        self.tls_context = None
+        self.manager_command = None
         self.trusted_helpers = {'inspect': False, 'operate': False, 'git': False}
         self.manual = [
-            'From the workstation: open the manager using the VM LAN address and configured port. '
+            'From the workstation: open the manager at https://<VM address>:8443 (the configured UI_PORT) and accept or '
+            'verify the self-signed certificate by its fingerprint (setup-tls.sh --show prints it). '
             'A DNS name (other than a single-label or .local name) is refused until it is listed in '
             'UI_ALLOWED_HOSTS in clab-backup-ui/.env (deploy/image.env for a prepared release image).',
             'WinSCP: authenticate as the normal VM user, upload and download a small file; '
@@ -98,7 +107,7 @@ class Context:
     def progress(self, text):
         print(text, file=sys.stderr, flush=True)
 
-    def run(self, args, input_text=None, timeout=15, limit=MIB, privileged=False):
+    def run(self, args, input_text=None, timeout=15, limit=MIB, privileged=False, capture_stderr=False):
         if privileged and not self.privileged:
             return Result(reason='administrator access unavailable')
         remaining = self.deadline - time.monotonic()
@@ -114,6 +123,8 @@ class Context:
                'LC_ALL': 'C.UTF-8', 'SYSTEMD_PAGER': '', 'GIT_TERMINAL_PROMPT': '0'}
         process = None
         expired = threading.Event()
+        # A temporary file, not a pipe: a chatty child can never block on a full stderr pipe while stdout is read.
+        errors = tempfile.TemporaryFile() if capture_stderr else None
 
         def stop():
             if process is not None:
@@ -132,7 +143,7 @@ class Context:
             # make sudo -n reject an otherwise valid sudo -v authentication.
             # A separate process group still lets the watchdog stop descendants.
             process = subprocess.Popen(args, stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
-                                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                       stdout=subprocess.PIPE, stderr=errors or subprocess.DEVNULL,
                                        env=env, process_group=0)
             timer = threading.Timer(duration + (2 if privileged and os.geteuid() != 0 else 0), expire)
             timer.start()
@@ -145,9 +156,15 @@ class Context:
                     stop()
                     return Result(reason='response exceeded size limit')
                 code = process.wait()
-                return Result(code, raw.decode('utf-8', errors='replace'),
+                text = ''
+                if errors is not None:
+                    errors.seek(0)
+                    text = errors.read(4096).decode('utf-8', errors='replace')
+                return Result(code, raw.decode('utf-8', errors='replace'), stderr=text,
                               reason='command timed out' if expired.is_set() else '')
             finally:
+                if errors is not None:
+                    errors.close()
                 timer.cancel()
                 stop()
                 process.wait()
@@ -157,8 +174,83 @@ class Context:
         except OSError:
             return Result(reason='command unavailable or could not run')
 
+    def module(self, name):
+        """A sibling script of deploy/ loaded by name; mockable like ctx.http (check_exposure loads setup_tls with it)."""
+        return module(name)
+
+    def pin_certificate(self, path=None):
+        """Trust exactly the installed certificate for the one HTTPS request. The name check is off on purpose: a PASS
+        proves the listener serves that file, and whether its names fit is the separate tls.names finding.
+        A provided certificate is installed with its chain, leaf first: only that first certificate becomes the trust
+        anchor (the partial-chain flag lets a leaf be one), never an intermediate behind it, so another leaf of the
+        same issuer, such as the old one after a renewal that was not followed by recreate-manager.sh, is refused.
+        Without a readable certificate tls_context stays None and nothing is sent over HTTPS."""
+        self.tls_context = None
+        try:
+            with open(path or TLS_DIR / 'cert.pem', encoding='ascii', errors='ignore') as handle:
+                text = handle.read(1024 * 1024)
+            block = re.search(r'-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\s]+?-----END CERTIFICATE-----', text)
+            if block is None:
+                return
+            value = ssl.create_default_context(cadata=ssl.PEM_cert_to_DER_cert(block[0]))
+            value.check_hostname = False
+            value.verify_flags |= getattr(ssl, 'VERIFY_X509_PARTIAL_CHAIN', 0)
+            self.tls_context = value
+        except (OSError, ssl.SSLError, ValueError):
+            self.tls_context = None
+
+    def opener(self, url):
+        handlers = [ProxyHandler({}), NoRedirect()]
+        if url.startswith('https:'):
+            if self.tls_context is None:
+                return None
+            handlers.append(HTTPSHandler(context=self.tls_context))
+        return build_opener(*handlers)
+
+    def tls_base(self):
+        """The manager address, but only when it is an https:// one: a question put to the manager's own address is a
+        claim about TLS, so a plain address is never used for it (an explicit base= is a deliberate plain probe)."""
+        return self.base_url if self.base_url.startswith('https://') else ''
+
+    def head(self, path, base=None):
+        """GET without following a redirect: (status, lower-case headers), or (None, {}) when nothing answered or the
+        answer was not HTTP. No body is read. Used for exactly three questions (EXPOSURE 6.1 rule 1)."""
+        if not base and not self.tls_base():
+            return None, {}
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            return None, {}
+        url = (base or self.base_url) + path
+        opener = self.opener(url)
+        if opener is None:
+            return None, {}
+        try:
+            with opener.open(Request(url), timeout=max(.001, min(5, remaining))) as response:
+                return response.status, {key.lower(): value for key, value in response.headers.items()}
+        except HTTPError as error:
+            return error.code, {key.lower(): value for key, value in error.headers.items()}
+        except (OSError, ValueError, http.client.HTTPException):
+            return None, {}
+
+    def probe(self, name, *args):
+        """Run `python -m app.probe name args` inside the manager container (EXPOSURE 6.1 rule 2). Returns (value, missing):
+        the one JSON object the probe printed (an {"error": ...} line arrives with exit status 1), or None; missing is
+        true when the running image has no app.probe yet (an upgrade in progress)."""
+        docker = ['docker', '--host', 'unix:///var/run/docker.sock']
+        result = self.run([*docker, 'exec', self.container, 'python', '-m', 'app.probe', name, *args],
+                          privileged=True, timeout=30, capture_stderr=True)
+        if 'No module named app.probe' in result.stderr:
+            return None, True
+        if result.reason:
+            return None, False
+        try:
+            value = json.loads(result.stdout)
+        except ValueError:
+            return None, False
+        return (value if isinstance(value, dict) else None), False
+
     def http(self, path, payload=None, limit=8*MIB, base=None):
-        if not base and not self.base_url:
+        if not base and not self.tls_base():
             return Result(reason='manager HTTP unavailable'), None
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
@@ -166,7 +258,9 @@ class Context:
         data = None if payload is None else json.dumps(payload).encode()
         request = Request((base or self.base_url) + path, data=data,
                           headers={'Content-Type': 'application/json'} if data else {})
-        opener = build_opener(ProxyHandler({}), NoRedirect())
+        opener = self.opener(request.full_url)
+        if opener is None:
+            return Result(reason='the installed certificate could not be read'), None
         until = min(self.deadline, time.monotonic() + 20)
         try:
             with opener.open(request, timeout=max(.001, until - time.monotonic())) as response:
@@ -198,7 +292,7 @@ class Context:
             # Do not include error bodies: host messages and proxy URLs can
             # include private paths, contents or configuration values.
             return Result(error.code, reason='HTTP ' + str(error.code)), None
-        except (OSError, ValueError):
+        except (OSError, ValueError, http.client.HTTPException):
             return Result(reason='HTTP unavailable, timed out or invalid JSON'), None
 
     def repair(self, script, *args):
@@ -236,6 +330,16 @@ def check_source(ctx):
 
 
 def check_docker(ctx):
+    inspect_manager(ctx)
+    # Independent of HTTP: the probe runs inside the container (a SKIP when there is none).
+    check_design_engine(ctx)
+
+
+def inspect_manager(ctx):
+    # The installed certificate is read from its file, whether or not the manager runs or has an address: the
+    # listener checks then name the real cause (a stopped manager, a plain-HTTP start) instead of blaming the file.
+    ctx.pin_certificate()
+    ctx.manager_running = False  # true only once the Running state was read below: the probes run inside the container
     docker = ['docker', '--host', 'unix:///var/run/docker.sock']
     result = ctx.run([*docker, 'info', '--format', '{{json .ServerVersion}}'], privileged=True)
     if not result.ok:
@@ -263,10 +367,12 @@ def check_docker(ctx):
     if not isinstance(details, dict):
         ctx.add('manager', 'FAIL', 'Manager container', 'Container inspection returned no valid metadata.')
         return
+    ctx.manager_command = details.get('command') if isinstance(details.get('command'), list) else None
     if not isinstance(details.get('state'), dict) or details['state'].get('Running') is not True:
         ctx.add('manager', 'FAIL', 'Manager container', 'The manager container is not running.',
                 'Inspect sudo docker compose -f clab-backup-ui/compose.yml logs --tail=80 backup-ui locally.')
         return
+    ctx.manager_running = True
     ctx.add('manager', 'PASS', 'Manager container', 'The backup-ui container is running.')
     ctx.add('restart', 'PASS' if details.get('restart') in ('unless-stopped', 'always') else 'WARN',
             'Restart policy', 'Automatic restart configured.' if details.get('restart') in ('unless-stopped', 'always')
@@ -280,20 +386,41 @@ def check_docker(ctx):
             'Running application version', 'Matches this source release.' if result.ok and version_matches(ctx, result.stdout.strip())
             else 'Running application version does not match this source checkout.', 'Rebuild using ' + ctx.command('install.sh') + '.')
     check_storage(ctx, docker, details.get('mounts'))
+    plain_start = ctx.manager_command is not None and '--ssl-certfile' not in ctx.manager_command
+    plain_fix = 'Start the manager with TLS: ' + ctx.repair('start-manager.sh') + '.'
+    plain_text = 'The manager was started as plain HTTP (no --ssl-certfile), so no HTTPS readiness question was sent.'
     try:
         url = module('install-manager').health_url(details.get('command'))
-        ctx.base_url = url.removesuffix('/api/state')
+        ctx.base_url = re.sub(r'/api/(?:health|state)$', '', url)
     except (ValueError, TypeError):
-        ctx.add('http', 'FAIL', 'Manager HTTP', 'Could not determine its actual configured bind address and port.')
+        if plain_start:
+            ctx.add('http', 'FAIL', 'Manager HTTP', plain_text, plain_fix)
+        else:
+            ctx.add('http', 'FAIL', 'Manager HTTP', 'Could not determine its actual configured bind address and port.')
         return
-    result, state = ctx.http('/api/state')
-    if not result.ok or not isinstance(state, dict) or not version_matches(ctx, state.get('version')):
-        ctx.add('http', 'FAIL', 'Manager HTTP', 'HTTP/version readiness failed: ' + (result.reason or 'unexpected version/response'),
-                'Check the running image, UI_BIND/UI_PORT and local service logs.')
+    if not ctx.base_url.startswith('https://'):
+        # A builder that still answers http:// must not become a "pinned TLS" PASS. The plain-HTTP sentence is true only
+        # when the command has no --ssl-certfile; for a TLS command the builder is what is wrong (an old checkout).
+        if plain_start:
+            ctx.add('http', 'FAIL', 'Manager HTTP', plain_text, plain_fix)
+        else:
+            ctx.add('http', 'FAIL', 'Manager HTTP', "install-manager.py's address builder returned no https:// address (an incomplete checkout), "
+                    'so no HTTPS readiness question was sent.', 'Update the checkout and rebuild using ' + ctx.command('install.sh') + '.')
         ctx.base_url = ''
         return
-    ctx.add('http', 'PASS', 'Manager HTTP', 'Version response passed at ' + ctx.base_url + '. Workstation access is a separate check.')
-    check_design_engine(ctx)
+    # The one HTTP question of the health check: GET /api/health over TLS with the installed certificate pinned.
+    if ctx.tls_context is None:
+        ctx.add('http', 'SKIP', 'Manager HTTP', 'The installed certificate could not be read, so the manager was not asked over HTTPS.',
+                ctx.repair('setup-tls.sh'))
+        ctx.base_url = ''
+        return
+    result, health = ctx.http('/api/health')
+    if not result.ok or not isinstance(health, dict) or health.get('ready') is not True:
+        ctx.add('http', 'FAIL', 'Manager HTTP', 'HTTPS readiness failed: ' + (result.reason or 'unexpected response'),
+                'Check the running image, UI_BIND/UI_PORT, the TLS files and local service logs.')
+        return
+    ctx.add('http', 'PASS', 'Manager HTTP', 'Readiness answered over TLS with the installed certificate pinned at ' + ctx.base_url
+            + '. Workstation access is a separate check.')
 
 
 STORAGE_PROBE = '''import json, os
@@ -315,16 +442,47 @@ print(json.dumps(r))
 
 def check_design_engine(ctx):
     """The pinned network design engine inside the running image: available, and the version the manager expects."""
-    result, engine = ctx.http('/api/design/engine')
-    if not result.ok or not isinstance(engine, dict):
-        ctx.add('design-engine', 'WARN', 'Network design engine', 'The manager did not answer /api/design/engine: ' + (result.reason or 'unexpected response'),
-                'Rebuild the image with ' + ctx.command('install.sh') + '; planning stays unavailable until then.')
+    title = 'Network design engine'
+    if not ctx.manager_running:
+        ctx.add('design-engine', 'SKIP', title, 'Manager container unavailable; the design engine could not be queried.')
+        return
+    engine, missing = ctx.probe('design-engine')
+    if missing:
+        skip_old_image(ctx, 'design-engine', title)
+        return
+    if not isinstance(engine, dict) or 'error' in engine:
+        ctx.add('design-engine', 'WARN', title, 'The design engine could not be queried: ' + probe_error(engine),
+                'Rebuild the image with ' + ctx.command('install.sh') + '; planning stays unavailable until then. Every other feature keeps working.')
         return
     if engine.get('available'):
-        ctx.add('design-engine', 'PASS', 'Network design engine', 'netlab ' + str(engine.get('version') or '?') + ' inside the image; planning and Apply to devices are available.')
+        ctx.add('design-engine', 'PASS', title, 'netlab ' + str(engine.get('version') or '?') + ' inside the image; planning and Apply to devices are available.')
     else:
-        ctx.add('design-engine', 'WARN', 'Network design engine', 'Unavailable: ' + str(engine.get('diagnostic') or engine.get('message') or 'no diagnostic')[:200],
+        ctx.add('design-engine', 'WARN', title, 'Unavailable: ' + str(engine.get('diagnostic') or engine.get('message') or 'no diagnostic')[:200],
                 'Rebuild the image with ' + ctx.command('install.sh') + '. Every other feature keeps working.')
+
+
+STATE_SENTENCES = ('state unreadable', 'reset pending')
+
+
+def probe_error(value):
+    """The sentence of an {"error": ...} answer, or the reason there was none. Probes scrub their own sentences."""
+    if isinstance(value, dict) and isinstance(value.get('error'), str):
+        return safe_text(value['error'], 300)
+    return 'the probe printed no answer'
+
+
+def state_error(value):
+    return isinstance(value, dict) and value.get('error') in STATE_SENTENCES
+
+
+def skip_old_image(ctx, ident, title):
+    ctx.add(ident, 'SKIP', title, "The running manager predates this check's probe; rebuild it.", ctx.repair('start-manager.sh'))
+
+
+def skip_state(ctx, ident, title, value, where):
+    ctx.add(ident, 'SKIP', title, f'The saved state could not be read without the manager ({value["error"]}); {where}.',
+            'Open Manager \u25be \u203a Diagnostics, which runs the same check.' if ident != 'git-http'
+            else "Open a lab's Save \u25be drawer: its folder chooser lists the repositories through the same request.")
 
 
 def check_storage(ctx, docker, mounts):
@@ -486,25 +644,37 @@ def check_helpers(ctx):
 
 
 def check_manager_routes(ctx):
-    if not ctx.base_url:
-        ctx.add('vm-connection', 'SKIP', 'Saved VM connection', 'Manager HTTP is unavailable; saved-connection tests could not run.')
+    """The saved VM connection and the topology browser, read through the manager's own probes (EXPOSURE 6.1)."""
+    if not ctx.manager_running:
+        ctx.add('vm-connection', 'SKIP', 'Saved VM connection', 'Manager container unavailable; saved-connection tests could not run.')
         return
-    result, discovery = ctx.http('/api/discovery')
-    if not result.ok or not isinstance(discovery, dict):
-        ctx.add('vm-connection', 'FAIL', 'Saved VM connection', 'Manager discovery status is unavailable or malformed.')
+    discovery, missing = ctx.probe('vm-connection')
+    if missing:
+        ctx.probe_blocked = 'missing'  # check_git_route says the same thing, with the same fix, instead of a generic guard
+        skip_old_image(ctx, 'vm-connection', 'Saved VM connection')
+        skip_old_image(ctx, 'http-browse', 'Topology browser over saved SSH connection')
+        return
+    if state_error(discovery):
+        ctx.probe_blocked = discovery
+        skip_state(ctx, 'vm-connection', 'Saved VM connection', discovery, "the manager's own page runs this check")
+        skip_state(ctx, 'http-browse', 'Topology browser over saved SSH connection', discovery, "the manager's own page runs this check")
+        return
+    if not isinstance(discovery, dict) or 'error' in discovery:
+        ctx.add('vm-connection', 'FAIL', 'Saved VM connection', 'Manager discovery status is unavailable or malformed: ' + probe_error(discovery))
         return
     host = discovery.get('host') or {}
     if not isinstance(host, dict):
         ctx.add('vm-connection', 'FAIL', 'Saved VM connection', 'Manager discovery settings are malformed.')
         return
     ctx.host = host
-    configured = discovery.get('configured') is True and host.get('enabled') is True and bool(host.get('fingerprint'))
+    # The probe prints whether a host fingerprint is saved, never the fingerprint.
+    configured = discovery.get('configured') is True and host.get('enabled') is True and host.get('fingerprint_saved') is True
     if not configured:
         ctx.add('vm-connection', 'WARN', 'Saved VM connection', 'Enabled VM connection and saved host fingerprint are not ready.',
                 'In VM connection, enter the clab-discovery password, Save and test, then verify the saved host fingerprint.')
         ctx.add('http-browse', 'SKIP', 'Topology browser over saved SSH connection', 'Complete VM connection setup before this check can run.')
         return
-    ctx.add('vm-connection', 'PASS', 'Saved VM connection settings', 'An enabled connection and host fingerprint are saved; no password was read or printed.')
+    ctx.add('vm-connection', 'PASS', 'Saved VM connection settings', 'An enabled connection and host fingerprint are saved; no password or fingerprint was read or printed.')
     local = host.get('address') in ('localhost', '127.0.0.1', '::1')
     if not local:
         addresses = parse_json(ctx.run(['ip', '-j', 'address'], limit=MIB))
@@ -523,12 +693,19 @@ def check_manager_routes(ctx):
                 'Refresh discovery and inspect VM connection settings. The live operations check below is separate.')
     else:
         ctx.add('discovery-status', 'PASS', 'Last discovery result', 'The manager reports discovery connected.')
+    title = 'Topology browser over saved SSH connection'
     if ctx.trusted_helpers.get('operate') is not True:
-        ctx.add('http-browse', 'INFO' if ctx.discovery_only else 'SKIP', 'Topology browser over saved SSH connection',
+        ctx.add('http-browse', 'INFO' if ctx.discovery_only else 'SKIP', title,
                 'Repair the local operations helper files before submitting SSH requests.', ctx.repair('setup-operations.sh'))
         return
-    result, roots = ctx.http('/api/operations/browse', {'path': ''})
-    if not result.ok or not isinstance(roots, dict) or not isinstance(roots.get('entries'), list):
+    roots, missing = ctx.probe('browse', '')
+    if missing:
+        skip_old_image(ctx, 'http-browse', title)
+        return
+    if state_error(roots):
+        skip_state(ctx, 'http-browse', title, roots, "the manager's own page runs this check")
+        return
+    if not isinstance(roots, dict) or not isinstance(roots.get('entries'), list):
         connected = discovery.get('connected') is True
         # Discovery uses the same account, password and gateway as operations. When
         # discovery is connected but this browse fails, the password is not the cause:
@@ -538,11 +715,11 @@ def check_manager_routes(ctx):
                         + ctx.repair('start-manager.sh', '--enable-operations')
                         + ' from matching source and recreate the manager.') if connected else \
                        ' If local helper checks pass, verify the VM password and host fingerprint.'
-        ctx.add('http-browse', 'INFO' if ctx.discovery_only else 'FAIL', 'Topology browser over saved SSH connection',
-                'The uncached browser request failed: ' + (result.reason or 'invalid response'),
+        ctx.add('http-browse', 'INFO' if ctx.discovery_only else 'FAIL', title,
+                'The uncached browser request failed: ' + probe_error(roots),
                 ctx.repair('setup-operations.sh') + ', reconnect, then close and reopen the failed folder.' + gateway_hint)
         return
-    ctx.add('http-browse', 'PASS', 'Topology browser over saved SSH connection',
+    ctx.add('http-browse', 'PASS', title,
             'An uncached request reached the operations helper using the manager saved SSH connection.')
     queue = list(ctx.lab_paths)
     for entry in roots['entries']:
@@ -554,11 +731,11 @@ def check_manager_routes(ctx):
         if path in seen:
             continue
         seen.add(path)
-        result, value = ctx.http('/api/operations/browse', {'path': path}, limit=3*MIB)
-        valid = result.ok and isinstance(value, dict) and value.get('path') == path and isinstance(value.get('entries'), list)
+        value, _ = ctx.probe('browse', path)
+        valid = isinstance(value, dict) and value.get('path') == path and isinstance(value.get('entries'), list)
         ctx.add('folder-' + str(len(seen)), 'PASS' if valid else 'FAIL', 'Browse folder: ' + path,
                 f"{len(value['entries'])} visible entry/entries; empty folders are valid." if valid
-                else 'The actual folder request failed: ' + (result.reason or 'invalid response'),
+                else 'The actual folder request failed: ' + (probe_error(value) if isinstance(value, dict) and 'error' in value else 'invalid response'),
                 'Confirm the folder exists within a trusted root, has no symlink components, and is accessible. '
                 'If the helper checks failed, first run ' + ctx.repair('setup-operations.sh') if not valid else '')
         if valid:
@@ -579,33 +756,53 @@ def check_manager_routes(ctx):
 
 
 def check_git_route(ctx):
-    if not ctx.base_url or not ctx.host.get('enabled') or not ctx.host.get('fingerprint'):
-        ctx.add('git-http', 'SKIP', 'Git registry through saved SSH connection', 'A working manager and saved VM connection are required.')
+    title = 'Git registry through saved SSH connection'
+    if ctx.probe_blocked == 'missing':
+        skip_old_image(ctx, 'git-http', title)
+        return
+    if state_error(ctx.probe_blocked):
+        skip_state(ctx, 'git-http', title, ctx.probe_blocked, 'a lab\'s save drawer lists the registry')
+        return
+    if not ctx.manager_running or not ctx.host.get('enabled') or not ctx.host.get('fingerprint_saved'):
+        ctx.add('git-http', 'SKIP', title, 'A working manager and saved VM connection are required.')
         return
     if ctx.trusted_helpers.get('git') is not True:
-        ctx.add('git-http', 'SKIP' if ctx.require_git else 'INFO', 'Git registry through saved SSH connection',
+        ctx.add('git-http', 'SKIP' if ctx.require_git else 'INFO', title,
                 'Local Git helper files are missing or unverified; the SSH request was skipped.')
         return
-    result, repositories = ctx.http('/api/git/repositories')
-    if result.ok and isinstance(repositories, dict) and isinstance(repositories.get('repositories'), list) \
-            and repositories.get('protocol') == 'clab-manager-git-v1' and version_matches(ctx, repositories.get('version')):
-        ctx.add('git-http', 'PASS', 'Git registry through saved SSH connection',
-                f"{len(repositories['repositories'])} registration(s) listed; no checkout was changed.")
+    repositories, missing = ctx.probe('git-registry')
+    if missing:
+        skip_old_image(ctx, 'git-http', title)
+        return
+    if state_error(repositories):
+        skip_state(ctx, 'git-http', title, repositories, 'a lab\'s save drawer lists the registry')
+        return
+    count = repositories.get('repositories') if isinstance(repositories, dict) else None
+    if isinstance(count, int) and not isinstance(count, bool) and repositories.get('protocol') == 'clab-manager-git-v1' \
+            and version_matches(ctx, repositories.get('version')):
+        bound = repositories.get('bound_labs')
+        ctx.add('git-http', 'PASS', title, f'{count} registration(s) listed; '
+                + (f'{bound} lab(s) connected to a repository; ' if isinstance(bound, int) and not isinstance(bound, bool) else '')
+                + 'no checkout was changed.')
     else:
-        ctx.add('git-http', 'FAIL' if ctx.require_git else 'WARN', 'Git registry through saved SSH connection',
-                'Git registry could not be listed through the manager.',
+        reason = (' ' + probe_error(repositories)) if isinstance(repositories, dict) and 'error' in repositories else ''
+        ctx.add('git-http', 'FAIL' if ctx.require_git else 'WARN', title,
+                'Git registry could not be listed through the manager.' + reason,
                 'Run ' + ctx.command('install.sh', '--git') + ' as the ordinary checkout owner.')
 
 
 def check_capture(ctx):
-    """Read-only Edgeshark discovery and browser-session/image readiness."""
+    """Read-only Edgeshark discovery and browser-session/image readiness, from one probe inside the manager container."""
     title = 'Browser Wireshark capture'
-    if not ctx.base_url:
-        ctx.add('capture', 'SKIP', title, 'Manager HTTP is unavailable; the capture provider could not be queried.')
+    if not ctx.manager_running:
+        ctx.add('capture', 'SKIP', title, 'Manager container unavailable; the capture provider could not be queried.')
         return
-    result, status = ctx.http('/api/capture/status')
-    if not result.ok or not isinstance(status, dict):
-        ctx.add('capture', 'WARN', title, 'The manager did not report a capture provider status.',
+    status, missing = ctx.probe('capture')
+    if missing:
+        skip_old_image(ctx, 'capture', title)
+        return
+    if not isinstance(status, dict) or 'error' in status:
+        ctx.add('capture', 'WARN', title, 'The manager did not report a capture provider status: ' + probe_error(status),
                 'Update to a release with packet capture (1.20.0 or later) and rerun.')
         return
     if not status.get('enabled'):
@@ -613,19 +810,18 @@ def check_capture(ctx):
                 + safe_text(status.get('message') or '', 300),
                 'Run ' + ctx.repair('setup-capture.sh') + ': it sets CAPTURE_PROVIDER, starts the browser session service and recreates the manager. See docs/CAPTURE.md.')
         return
-    result, targets = ctx.http('/api/capture/targets', limit=4 * MIB)
-    if result.ok and isinstance(targets, dict) and isinstance(targets.get('targets'), list):
-        ready_result, ready = ctx.http('/api/capture/health')
-        if not ready_result.ok or not isinstance(ready, dict) or ready.get('ready') is not True:
+    targets = status.get('targets')
+    if isinstance(targets, int) and not isinstance(targets, bool):
+        if status.get('ready') is not True:
             ctx.add('capture', 'FAIL', title, 'Edgeshark discovery works, but the browser session service or its pinned Wireshark image is unavailable.',
                     'Run ' + ctx.repair('setup-capture.sh') + ' (it recreates the manager), then check: ' + ctx.compose('capture') + ' logs --tail=80 sessions')
             return
-        ctx.add('capture', 'PASS', title, f"Edgeshark discovery through the manager listed {len(targets['targets'])} capture target(s); "
+        ctx.add('capture', 'PASS', title, f'Edgeshark discovery through the manager listed {targets} capture target(s); '
                 'the browser session service and pinned image are ready. No capture was started.')
         ctx.manual.append('Wireshark: start a browser capture, confirm live packets, save in /pcaps, download the archive and end the session.')
         return
     ctx.add('capture', 'FAIL', title, 'The capture provider is enabled but discovery through the manager failed: '
-            + (result.reason or 'invalid response') + '.',
+            + (safe_text(status.get('diagnostic') or '', 300) or 'no diagnostic') + '.',
             'Inspect ' + ctx.compose('capture') + ' ps and curl --fail http://127.0.0.1:5001/version; verify CAPTURE_EDGESHARK_URL in '
             + str(ctx.source / 'clab-backup-ui/.env') + ', then run ' + ctx.repair('setup-capture.sh') + '.')
 
@@ -756,7 +952,9 @@ def main(argv=None):
         ctx.add('owner', 'WARN', 'Normal VM account', 'Account-specific SSH/SFTP checks need a normal account.',
                 'Run without sudo as your ordinary account, or supply --owner YOUR_VM_USER.')
     groups = [('Source release', check_source), ('Ubuntu, clock and SSH/SFTP', lambda c: module('check_host').check_host(c)),
-              ('Docker, manager and persistent storage', check_docker), ('Containerlab', check_containerlab),
+              ('Docker, manager and persistent storage', check_docker),
+              ('TLS, firewall and exposure', lambda c: module('check_exposure').check_exposure(c)),
+              ('Containerlab', check_containerlab),
               ('Installed helper files and sudoers', check_helper_files), ('Restricted helper execution', check_helpers),
               ('Manager SSH and topology folders', check_manager_routes), ('Git helper over saved SSH', check_git_route),
               ('Registered Git checkouts', lambda c: module('check_git').check_git(c)),

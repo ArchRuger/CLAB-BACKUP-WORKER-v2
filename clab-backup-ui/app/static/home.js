@@ -13,7 +13,7 @@ function homeSavedLine(lab){
 }
 function homeStartReason(lab,quick){
  if(quick&&quick.reason)return quick.reason;const discovery=state.discovery||{};
- if(!discovery.connected)return 'Connect the VM first';if(typeof busy==='function'&&busy())return 'Wait for the current operation to finish';
+ if(!discovery.connected)return typeof state==='object'&&state&&state.user&&state.user.role==='operator'?'Ask an administrator to connect the VM':'Connect the VM first';if(typeof busy==='function'&&busy())return 'Wait for the current operation to finish';
  if(!(lab.vm_project_path||lab.vm_source?.files?.definition?.path))return 'This lab has no topology file on the VM (Advanced › Deployment details)';
  return 'Lab status is unknown — refresh the lab list';
 }

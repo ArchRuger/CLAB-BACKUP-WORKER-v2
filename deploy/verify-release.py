@@ -16,7 +16,8 @@ written as ``since 1.19.3`` or ``1.22.0 or later``, which is allowed anywhere; t
 ``docs/archive/``, the design notes under ``docs/redesign/``, the per-release review log under
 ``docs/ui-review-001/`` and the acceptance records under ``docs/multi-platform-restore/``, ``docs/save-location-fix/`` and the student quick start under
 ``docs/student-quick-start/`` (its guide states the release it was tested with) and the technical audit under ``docs/technical-audit/`` may name any release. A third-party version that shares the manager's major
-number (xterm, for example) is recognised by the component name before it.
+number (xterm, for example) is recognised by the component name before it. A living guide may not send a
+reader to ``http://…:8081``: the manager serves HTTPS on 8443 and 8081 only redirects.
 
 ``python3 deploy/verify-release.py`` runs both checks (CI does the same);
 ``python3 deploy/set-release.py NEW`` moves every marker to the next release.
@@ -37,7 +38,8 @@ FIELDS = {
     # Footer fallback shown before the first /api/state response arrives.
     'clab-backup-ui/app/static/app.js': r"state\.version\|\|'([^']+)'",
 }
-for name in ('index.html', 'terminal.html', 'workspace.html', 'vm-connection.html', 'debug.html', 'capture-setup.html', 'capture-session.html', 'lab-builder.html', 'map-editor.html'):
+for name in ('index.html', 'terminal.html', 'workspace.html', 'vm-connection.html', 'debug.html', 'capture-setup.html', 'capture-session.html', 'lab-builder.html', 'map-editor.html',
+             'login.html', 'setup.html', 'users.html'):
     FIELDS['clab-backup-ui/app/static/' + name] = r'/static/[^"\s?]+\?v=([^"\s]+)'
 
 # Living documentation: what a user or an agent reads for the current release.
@@ -47,7 +49,8 @@ DOC_ROOTS = ('README.md', 'docs', 'deploy', 'clab-backup-ui/README.md', 'clab-ba
 HISTORY_FILES = ('docs/CHANGELOG.md', 'clab-backup-ui/VALIDATION.md', 'agent instructions.md')
 HISTORY_DIRS = ('docs/archive/', 'docs/redesign/', 'docs/ui-review-001/', 'docs/multi-platform-restore/', 'docs/save-location-fix/', 'docs/ui-ux-cleanup/',
                 'docs/student-quick-start/', 'docs/technical-audit/', 'docs/netlab-integration/', 'docs/netlab-ui-qa/',
-                'docs/ui-ux-changes-2/', 'docs/uiux-email-2026-10-03/', 'docs/git-redesign/', 'docs/parity-campaign/')
+                'docs/ui-ux-changes-2/', 'docs/uiux-email-2026-10-03/', 'docs/git-redesign/', 'docs/parity-campaign/', 'docs/sign-on/',
+                'docs/lab-builder/')
 # Where the current release must be named first, and how.
 LEADS = {
     'README.md': r'Current release: \*\*(\d+\.\d+\.\d+)\*\*',
@@ -67,6 +70,14 @@ THIRD_PARTY = re.compile(r'(?:xterm|addon-fit|novnc|packetflix|edgeshark|gostwir
                          r'paramiko|websockify|cshargextcap|plugin|archive/)[^\n]{0,40}$', re.I)
 VERSIONED_PATH = re.compile(r'projects/v\d+\.\d+\.\d+')
 VERSIONED_IMAGE = re.compile(r'clab-(?:backup|capture-service):\d+\.\d+\.\d+')
+# The manager serves HTTPS on 8443; 8081 only redirects. A living guide that sends a reader to
+# http://<anything>:8081 describes the manager before TLS (docs/sign-on/EXPOSURE.md 8.1, E-Q6). The host
+# is either bracketed (an IPv6 literal with any zone, or a bracketed `<placeholder>`, spaces included:
+# anything but `]` up to 80 characters) or a run of `<placeholder>`s (spaces allowed inside the angle
+# brackets), `{{ template }}`s, `${shell variables}` and ordinary host characters in any mix
+# (`<host>.example.edu`, `manager-<n>.example.edu`); the scheme matches in any case (HTTP://, Http://).
+PLAIN_MANAGER_URL = re.compile(r'http://(?:\[[^\]\n]{1,80}\]|(?:<[^<>\n]{1,80}>|\{\{[^{}\n]{1,80}\}\}|\$\{[^}\n]{1,80}\}|[^\s`"\'<>(){}\[\]])+)'
+                               r':8081(?!\d)', re.I)
 
 
 def read_version(root):
@@ -143,6 +154,9 @@ def verify_docs(root):
                 problems.append(f'{rel}:{number}: versioned source folder; the guides use ~/projects/clab-manager')
             if VERSIONED_IMAGE.search(line):
                 problems.append(f'{rel}:{number}: versioned image tag; refer to the release in clab-backup-ui/VERSION instead')
+            if PLAIN_MANAGER_URL.search(line):
+                problems.append(f'{rel}:{number}: plain-HTTP manager URL on port 8081; the manager serves https://<address>:8443 '
+                                '(8081 only redirects), so write the HTTPS address, or describe the redirect without a URL')
     for rel, pattern in LEADS.items():
         match = re.search(pattern, (root / rel).read_bytes().decode('utf-8'), re.MULTILINE)
         if not match:

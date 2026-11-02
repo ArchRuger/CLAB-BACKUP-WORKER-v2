@@ -926,12 +926,12 @@ function designViewedGeneration(view){
  if(designState.viewing){const found=generations.find(g=>g.id===designState.viewing);if(found)return found;}
  return generations.length?generations[generations.length-1]:null;
 }
-let designWatch=null,designWatchTimer=null;
+let designWatch=null,designWatchTimer=null,designWatchGen=0;
 function designCurrentIntent(view){
  if(designState.draft&&designState.draft.intent)return designState.draft.intent;
  return (view&&view.intent)||designEmptyIntent();
 }
-function designStopWatch(){clearTimeout(designWatchTimer);designWatch=null;}
+function designStopWatch(){clearTimeout(designWatchTimer);designWatch=null;designWatchGen++;}
 function designNewestGeneration(view){const g=(view&&view.generations)||[];return g.length?g[g.length-1]:null;}
 function designApplyDraft(labId,view){
  designState.draftDiscarded=false;
@@ -1005,14 +1005,14 @@ function designMaybeStartWatch(){
  // deliberate step: Generate plan again, or opening the tab again, both of which load the design afresh.
  if(designState.pollGaveUp){designStopWatch();return;}
  if(designWatch===designState.labId)return;
- designStopWatch();designWatch=designState.labId;
+ designStopWatch();designWatch=designState.labId;const gen=designWatchGen;
  const labId=designState.labId;let failures=0;
  const poll=async()=>{
-  if(designWatch!==labId)return;
+  if(designWatch!==labId||designWatchGen!==gen)return;
   const seq=designViewRequest();
   try{
    const view=await(await api('/labs/'+encodeURIComponent(labId)+'/design')).json();
-   if(designWatch!==labId||designState.labId!==labId)return;
+   if(designWatch!==labId||designWatchGen!==gen||designState.labId!==labId)return;
    if(!view||typeof view!=='object'||!Array.isArray(view.generations))throw new Error('The manager answered with something that is not a design.');
    if(!designViewFresh(labId,seq)){designWatchTimer=setTimeout(poll,2000);return;}
    designState.view=view;failures=0;designState.pollProblem='';
@@ -1027,7 +1027,9 @@ function designMaybeStartWatch(){
   }catch(error){
    // A failed poll (a lost connection, a 500, a bad answer) is retried a bounded number of times with the
    // student told so; after that the watch stops and the state says the progress is unknown, with a way out.
-   if(designWatch!==labId||designState.labId!==labId)return;
+   if(designWatch!==labId||designWatchGen!==gen||designState.labId!==labId)return;
+   // A session end (UI 3.3): nothing was sent. No retry is spent and nothing is said; designWatch stays set, so a render does not start a second watch.
+   if(typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(poll);return;}
    failures++;
    if(failures<=DESIGN_POLL_RETRIES){
     designState.pollProblem='Could not check the plan\'s progress (attempt '+failures+' of '+DESIGN_POLL_RETRIES+'): '+(error&&error.message||'no answer')+'. Trying again…';
@@ -1697,7 +1699,7 @@ async function designViewFile(node,index,generationId){
 // review,requestId,jobId,job}. requestId is generated once per dialog open so a retry after a network
 // error resubmits the same idempotent request.
 let designApplyState={labId:'',step:'choose',generationId:'',nodes:{},selected:new Set(),takeover:new Set(),review:null,requestId:'',jobId:'',job:null,reviewJobId:'',reviewJob:null,reviewStages:{},starting:false};
-let designApplyWatch=null,designApplyWatchTimer=null;
+let designApplyWatch=null,designApplyWatchTimer=null,designApplyGen=0;
 function designApplyJobsOf(labId){return ((typeof state!=='undefined'&&state.design_jobs)||[]).filter(j=>j.lab_id===labId);}
 function designApplyNewestJob(labId){const jobs=designApplyJobsOf(labId);return jobs.length?jobs[jobs.length-1]:null;}
 function designApplyDefaultSelection(nodes){
@@ -1758,10 +1760,11 @@ function designApplyChooseSelection(){
 }
 // The review is a job: POST returns {review_job} at once, and the dialog follows GET .../review-jobs/{id} (about every
 // 1.5 s) until it settles. Closing the dialog only stops following; nothing here cancels or says it cancelled.
-let designReviewWatch=null,designReviewTimer=null,designReviewSeq=0;
+let designReviewWatch=null,designReviewTimer=null,designReviewSeq=0,designReviewGen=0;
 let designReviewKnown={labId:'',jobId:'',status:''},designReviewRequest={sig:'',id:'',retry:false};
 const DESIGN_REVIEW_POLL_MS=1500,DESIGN_REVIEW_QUIET_MS=4000,DESIGN_REVIEW_RETRIES=5;
-function designReviewStopWatch(){clearTimeout(designReviewTimer);designReviewWatch=null;}
+// Every stop moves the generation: a poll kept in the resume set by an earlier start (same job id) is stale and ends itself.
+function designReviewStopWatch(){clearTimeout(designReviewTimer);designReviewWatch=null;designReviewGen++;}
 function designReviewMatches(labId,jobId){return designApplyState.labId===labId&&designApplyState.reviewJobId===jobId;}
 function designApplyReviewRunning(){return !!designApplyState.starting||!!(designApplyState.reviewJob&&designApplyState.reviewJob.status==='running');}
 // The Review button stays disabled while a job runs and says how many devices; the button itself is aria-busy.
@@ -1838,13 +1841,13 @@ function designReviewSettled(job){
 }
 // quiet=true follows a job with the dialog closed (the plan card's "Review running…" line), slower and without painting the dialog.
 function designReviewStartWatch(labId,jobId,quiet,delay){
- designReviewStopWatch();designReviewWatch=jobId;
+ designReviewStopWatch();designReviewWatch=jobId;const gen=designReviewGen;
  let failures=0;
  const poll=async()=>{
-  if(designReviewWatch!==jobId)return;
+  if(designReviewWatch!==jobId||designReviewGen!==gen)return;
   try{
    const job=await(await api('/labs/'+encodeURIComponent(labId)+'/design/review-jobs/'+encodeURIComponent(jobId))).json();
-   if(designReviewWatch!==jobId)return;
+   if(designReviewWatch!==jobId||designReviewGen!==gen)return;
    failures=0;
    if(quiet){
     if(designReviewKnown.jobId===jobId)designReviewKnow(job);
@@ -1856,7 +1859,9 @@ function designReviewStartWatch(labId,jobId,quiet,delay){
    if(job.status==='running')designReviewTimer=setTimeout(poll,DESIGN_REVIEW_POLL_MS);
    else{designReviewStopWatch();designReviewSettled(job);}
   }catch(error){
-   if(designReviewWatch!==jobId)return;
+   if(designReviewWatch!==jobId||designReviewGen!==gen)return;
+   // A session end (UI 3.3): before the 404 branch and the retry count; the watch stays set.
+   if(typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(poll);return;}
    if(error&&error.status===404){
     designReviewStopWatch();
     if(designReviewKnown.jobId===jobId)designReviewForget();
@@ -2004,16 +2009,16 @@ async function designApplySubmit(){
 // The follow line belongs to one job; it is dropped when another job is shown or following restarts.
 let designApplyFollow={jobId:'',problem:'',gaveUp:false};
 function designApplyRenderProgress(){setMarkup($('design-apply-progress-body'),designApplyProgressMarkup(designApplyState.job,designApplyFollow.jobId===designApplyState.jobId?designApplyFollow:null));}
-function designApplyStopWatch(){clearTimeout(designApplyWatchTimer);designApplyWatch=null;}
+function designApplyStopWatch(){clearTimeout(designApplyWatchTimer);designApplyWatch=null;designApplyGen++;}
 function designApplyStartWatch(jobId){
- if(designApplyWatch===jobId)return;designApplyStopWatch();designApplyWatch=jobId;
+ if(designApplyWatch===jobId)return;designApplyStopWatch();designApplyWatch=jobId;const gen=designApplyGen;
  designApplyFollow={jobId,problem:'',gaveUp:false};
  let failures=0;
  const poll=async()=>{
-  if(designApplyWatch!==jobId)return;
+  if(designApplyWatch!==jobId||designApplyGen!==gen)return;
   try{
    const job=await(await api('/design/apply/jobs/'+encodeURIComponent(jobId))).json();
-   if(designApplyWatch!==jobId)return;
+   if(designApplyWatch!==jobId||designApplyGen!==gen)return;
    failures=0;designApplyFollow={jobId,problem:'',gaveUp:false};
    designApplyState.job=job;
    if(designApplyState.jobId===jobId&&designApplyState.step==='progress')designApplyRenderProgress();
@@ -2029,7 +2034,9 @@ function designApplyStartWatch(jobId){
    // told so; after that following stops, the table says it is the last answer, and Check again polls afresh.
    // Whether the job is still running is not known here (after a manager restart it is "interrupted"): its real
    // state is on the manager, which Check again and the Last apply line under Generated plan read.
-   if(designApplyWatch!==jobId)return;
+   if(designApplyWatch!==jobId||designApplyGen!==gen)return;
+   // A session end (UI 3.3): nothing was sent; no retry, no problem line; designApplyWatch stays set.
+   if(typeof sessionEnded==='function'&&sessionEnded()){sessionOnResume(poll);return;}
    failures++;
    const why=error&&error.message||'no answer';
    if(failures<=DESIGN_POLL_RETRIES){

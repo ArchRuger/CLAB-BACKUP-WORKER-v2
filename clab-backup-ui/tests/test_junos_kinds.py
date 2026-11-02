@@ -13,6 +13,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app.discovery import parse_definition
 from app.git_progress import captured_snapshot, decoded_snapshot
@@ -311,7 +312,7 @@ class JunosKindAppTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.store = self.app.state.store
         self.lab = {'id': 'junos-lab', 'name': 'Junos lab', 'profiles': [], 'defaults': {},
                     'interval': 0, 'nodes': [node(platform, name) for platform, name in

@@ -704,3 +704,36 @@ test('S11-14 while the manager is still busy after a load (its check backup), Un
  assert.match(q.body(),/<span class="save-dot busy" aria-hidden="true"><\/span>Final can be loaded in a moment\.<\/p><p class="save-sub" id="load-wait-why">Wait for the active backup, Git save, restore or lab operation to finish\.<\/p><div class="save-row"><button[^>]*data-load-action="again"[^>]*>Try again</);
  assert.doesNotMatch(q.body(),/cannot be loaded|was not loaded/);
 });
+
+// ---- Sign-on S10a (docs/sign-on/UI.md 3.3; REVIEW U8): the Load watch --------------------------------------------------------------
+// session.js does not load here: stand-ins with the exact contract of UI 3.2 (sessionEnded, sessionOnResume, sessionEndedError).
+function signonLoadPage(job){
+ const p=page({state:{restore_jobs:[job]},gets:()=>job}),resume=new Set();let ended=false,sent=0,mode='ok';
+ Object.assign(p.c,{
+  sessionEnded:()=>ended,sessionOnResume:fn=>{if(typeof fn==='function')resume.add(fn);},
+  sessionEndedError:()=>Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true}),
+  api:async()=>{
+   if(ended)throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401,sessionEnded:true});
+   sent++;
+   if(mode==='401'){ended=true;throw Object.assign(new Error('Your session ended. Sign in again.'),{status:401});}
+   return {json:async()=>job};
+  }});
+ return {p,resume,sent:()=>sent,set mode(v){mode=v;},
+  async retry(){ended=false;const fns=[...resume];resume.clear();for(const fn of fns)fn();await settle();}};
+}
+test('S10a: the Load watch stops at the first 401 without a paused state, is not re-armed by the render path, and resumes after sessionRetry()',async()=>{
+ const job={id:'job7',lab_id:'lab',status:'applying',source:{type:'backup',backup_job_id:'b'},targets:[{name:'clab-BGP-ceos',status:'applying',stage:'applying'}]};
+ const h=signonLoadPage(job),p=h.p;
+ p.c.loadWatch(job);assert.equal(p.timers.length,1);
+ h.mode='401';await p.timers.shift()();await settle();
+ assert.equal(h.sent(),1);assert.equal(p.timers.length,0,'no further poll is scheduled');
+ assert.equal(vm.runInContext('loadWatching',p.c),null,'the watch is stopped');
+ assert.ok(!vm.runInContext('loadPaused',p.c),'a sign-out is not a paused state');assert.doesNotMatch(p.c.loadJobMarkup(job),/Status updates paused/);
+ assert.equal(h.resume.size,1,'the resume is registered');
+ // renderSaveHeader() re-arms the watch on every render (the refuter\'s finding): while signed out it starts nothing.
+ p.c.loadRender();p.c.loadRender();p.c.loadWatch(job);
+ assert.equal(p.timers.length,0,'no timer from the render path');assert.equal(h.sent(),1,'no request');assert.equal(vm.runInContext('loadWatching',p.c),null);
+ h.mode='ok';await h.retry();
+ assert.equal(vm.runInContext('loadWatching',p.c),'job7','sessionRetry() follows the load again');assert.equal(p.timers.length,1);
+ await p.timers.shift()();await settle();assert.equal(h.sent(),2);
+});
