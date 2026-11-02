@@ -303,7 +303,9 @@ asking to confirm it; it asks only for two passwords:
 
 | Prompt or setting | What happens |
 |---|---|
-| Manager bind/port settings | With no existing `.env`, defaults are all VM interfaces and port **8081**; there is no port prompt |
+| Manager bind/port settings | With no existing `.env`, defaults are all VM interfaces, HTTPS on port **8443** and a plain-HTTP redirect on port **8081**; there is no port prompt |
+| TLS certificate | A self-signed certificate is made if none exists; the installer prints its SHA-256 fingerprint ([TLS and the certificate](INSTALL.md#tls-and-the-certificate)) |
+| Firewall and SSH | `ufw` allows SSH, 8443 and 8081 and denies other incoming traffic; a conservative `sshd` drop-in is written ([Firewall and SSH](INSTALL.md#firewall-and-ssh)) |
 | Lab operation access | Reviewed lab operations are enabled |
 | VS Code / Containerlab extension access | Set up for your account (docker and clab_admins groups, writable lab folders, containerlab SUID); the VS Code block in step 7 then needs no command |
 | Obsolete installation-media APT entries | Backed up and disabled if present (the common leftover ISO/CD-ROM source); network sources are retained |
@@ -581,23 +583,28 @@ channel must also be enabled; if enabled after boot, a full VM shutdown/start
 may be needed. It helps Proxmox guest integration but is not a manager dependency.
 [Proxmox guest-agent documentation](https://github.com/proxmox/pve-docs/blob/master/qm.adoc)
 
-Allow your workstation to reach the VM's SSH port and manager port **8081**.
-Check the Proxmox firewall, VLAN/routing and Ubuntu firewall according to your
-network policy. If UFW is already enabled, add rules scoped to your actual
-workstation address, replacing the placeholder:
+Allow your workstation to reach the VM's SSH port and the manager port **8443**
+(HTTPS); port **8081** only redirects old links to it. Check the Proxmox firewall,
+VLAN/routing and Ubuntu firewall according to your network policy. The installer sets
+up `ufw` itself ([Firewall and SSH](INSTALL.md#firewall-and-ssh)): it allows every
+port `sshd` listens on, 8443 and 8081 from anywhere, denies other incoming traffic,
+keeps rules you already had and refuses when enabling it could lock out your session. It
+configures no network routes, no Proxmox firewall and no router, so a rule scoped to your
+workstation is still your decision. To narrow the manager ports to one workstation
+instead, replace the installer's rules with your own, replacing the placeholder, and
+check with `sudo ufw status`:
 
 ```bash
 sudo ufw status
 sudo ufw allow from WORKSTATION_IP to any port 22 proto tcp
-sudo ufw allow from WORKSTATION_IP to any port 8081 proto tcp
+sudo ufw allow from WORKSTATION_IP to any port 8443 proto tcp
 ```
 
-Do not enable a firewall blindly during a remote session. The installer does
-not configure network routes or firewall rules. From Windows PowerShell, test:
+Do not enable a firewall blindly during a remote session. From Windows PowerShell, test:
 
 ```powershell
 Test-NetConnection 10.150.2.213 -Port 22
-Test-NetConnection 10.150.2.213 -Port 8081
+Test-NetConnection 10.150.2.213 -Port 8443
 ```
 
 Use the VM's LAN address in your workstation browser. `127.0.0.1` on Windows is
@@ -640,7 +647,14 @@ topology before deployment.
 ## 10. Open the manager and connect it to the VM
 
 On the **workstation**, open `https://10.150.2.213:8443/`, replacing the address
-and any customized port. There is no separate manager UI account setup.
+and any customized port. The browser warns once about the self-signed certificate:
+compare the fingerprint it shows with the one the installer printed, then continue.
+The manager shows *Create the first administrator*: enter the setup code printed in the
+installer's last lines (also readable on the VM with
+`sudo cat /srv/containerlab-node-manager/data/setup-code`), choose a username and a
+password of at least 12 characters, and press **Create account and sign in**
+([Finish in the browser](INSTALL.md#finish-in-the-browser) has the detail and the
+recovery command for a lost administrator password).
 
 The **VM connection** dialog opens by itself, already filled in by the installer
 (notice *Prepared by VM setup*, see [VM-CONNECTION.md](VM-CONNECTION.md#the-prefilled-vm-connection));
@@ -1055,7 +1069,7 @@ Retry the same installation step only after APT succeeds.
 | Optional administrative WinSCP access | Paste-in sudoers rule and matching WinSCP setting in step 7; not added by the installer |
 | VS Code Remote - SSH and the Containerlab extension | Installer option (VS Code / Containerlab extension access) or `setup-engineer-access.sh` in step 7; reapplied by the launcher |
 | Full installation report after browser VM/Git setup | Second script `deploy/check-install.sh` in step 12; explicit service/helper/folder/Git results and recovery, with manual transfer/backup/push still required |
-| QEMU guest agent and firewall/network access | Step 8; outside the manager installer |
+| QEMU guest agent, Proxmox firewall and network routes | Step 8; outside the manager installer (which sets up only the VM's own `ufw` rules and `sshd` drop-in) |
 | Vendor images, topology upload and lab deployment | Steps 9 and 11; your chosen lab |
 | VM host trust, device credentials, lab/Git selection and first push | Browser workflow in steps 10–12 |
 | Backup records and persistence confirmation | Step 13 |
