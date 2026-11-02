@@ -52,7 +52,8 @@ All manager installation and maintenance commands run in the **Ubuntu VM** unles
 
 ```text
 Engineer workstation
-  Browser -------- TCP 8081 --------> Node Manager container
+  Browser ---- HTTPS, TCP 8443 ----> Node Manager container (signed-in session)
+  Browser ---- HTTP, TCP 8081 -----> redirect container (301 to the HTTPS address)
                                         | /data bind mount
                                         +--> /srv/containerlab-node-manager/data
                                         |
@@ -69,7 +70,7 @@ Proxmox --> Ubuntu VM --> Docker / Containerlab --> training devices
 
 The manager keeps running when a lab is stopped or destroyed. Deployed labs remain on the VM; importing a lab creates a saved manager workspace. The two have different lifecycles.
 
-> **Access model:** 1.12.0 and later open directly without a UI login. Give access to TCP 8081 only to the intended engineers. VM discovery authentication and device SSH credentials are still required and are stored in the persistent manager data.
+> **Access model:** the manager serves HTTPS itself on TCP 8443 and every page and API route needs a signed-in account (administrator or operator). The first administrator is created in the browser with a setup code, see [Accounts and sign-in](ACCOUNTS.md). Plain HTTP on TCP 8081 only redirects to the HTTPS address. Give network access to TCP 8443 only to the intended engineers. VM discovery authentication and device SSH credentials are still required and are stored in the persistent manager data.
 {.is-warning}
 
 ## Page contents
@@ -719,10 +720,11 @@ sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" 
 curl -fsSk -o /dev/null -w 'HTTP %{http_code}\n' https://127.0.0.1:8443/api/health
 ```
 
-Expect the release number and **HTTP 200**. Optional `UI_BIND` and `UI_PORT` settings belong
+Expect the release number and **HTTP 200**. Optional `UI_BIND`, `UI_PORT` (the HTTPS port, default 8443) and `UI_HTTP_PORT` (the plain-HTTP redirect port,
+default 8081, `0` turns the redirect off) settings belong
 in `clab-backup-ui/.env`; retain that file across source-folder upgrades and use
 your chosen port in browser and health checks. To open the manager by a DNS name
-(for example `manager.example.edu` or a reverse proxy's name), also add the optional
+(for example `manager.example.edu`), also add the optional
 `UI_ALLOWED_HOSTS=<names>` line there: the manager refuses any name outside DNS could
 control that is not listed (an IP address, `localhost`, single-label and `.local` names
 need nothing). See [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name).
@@ -750,8 +752,15 @@ the default source-build Compose file.
 
 # Part 11 — Connect the UI to the VM {#part-11}
 
-On your workstation, open **`https://VM_IP:8443`** and sign in with your manager account.
-The **VM connection** dialog opens by itself while no connection exists; later, open
+On your workstation, open **`https://VM_IP:8443`**. The manager's certificate is self-signed
+by default, so the browser warns once; compare the fingerprint that `start-manager.sh` printed (or
+`bash "$HOME/projects/clab-manager/deploy/setup-tls.sh" --fingerprint`) and continue. A new manager
+shows **Create the first administrator**: enter the setup code (the installer's last lines, or
+`sudo cat /srv/containerlab-node-manager/data/setup-code`), a username and a password of at
+least 12 characters, then click **Create account and sign in**. Later visits show **Sign in**.
+[Accounts and sign-in](ACCOUNTS.md) explains roles, adding people and recovering a lost administrator password.
+
+The **VM connection** dialog (administrators only) opens by itself while no connection exists; later, open
 **Manager ▾ › VM connection…**. Enter:
 
 | Field | Value for this deployment |
@@ -773,23 +782,26 @@ Later host-key changes need explicit verification and acceptance in the UI.
 ## Why there is no Docker port mapping
 
 This deployment uses Linux **host networking**. The manager listens directly on
-the VM's TCP port 8081 and can reach the lab management addresses on that VM.
+the VM's TCP port 8443 (HTTPS; the plain-HTTP redirect uses 8081) and can reach the lab management addresses on that VM.
 `127.0.0.1` in VM connection therefore reaches the VM's SSH service.
-Do not add `-p 8081:8081`: Docker ignores published ports in host mode.
+Do not add `-p 8443:8443`: Docker ignores published ports in host mode.
 [Docker host networking documentation](https://docs.docker.com/engine/network/drivers/host/).
 
 Your workstation's `127.0.0.1` is your workstation, so use the **VM's reachable
 IP** in the browser. If the VM sits behind hypervisor NAT, configure a hypervisor
-forward from your chosen workstation/host port to **VM port 8081**, or use a
+forward from your chosen workstation/host port to **VM port 8443**, or use a
 reachable bridged VM address. This is separate from Docker port publishing. Whatever
 address the browser uses is what the manager checks: an IP address always works, but a
-DNS name (for example the hypervisor host's or a reverse proxy's) is refused until it is
+DNS name (for example the hypervisor host's) is refused until it is
 listed in `UI_ALLOWED_HOSTS`; see [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name).
 
-If a VM firewall is active, permit TCP 8081 from the intended workstation/network.
+The installer sets up `ufw` with `deploy/setup-firewall.sh`: it allows the SSH ports, the HTTPS port
+(`UI_PORT`) and the redirect port (`UI_HTTP_PORT`) and denies other incoming traffic. For a firewall you
+manage yourself, permit TCP 8443 (and 8081 for the redirect) from the intended workstation/network.
 For example, after substituting the actual workstation address on an existing UFW setup:
 
 ```bash
+sudo ufw allow from WORKSTATION_IP to any port 8443 proto tcp
 sudo ufw allow from WORKSTATION_IP to any port 8081 proto tcp
 ```
 
@@ -1396,7 +1408,7 @@ VM's Linux account database; account recovery is a separate step above.
 | MANAGER_IMAGE is required / image not found | Set the exact local repository:tag in deploy/image.env; confirm with docker image ls. |
 | Bind source path does not exist | Run setup-vm.sh; verify the exact persistent path. |
 | Permission denied writing /data | Verify 10001:10001 ownership and mode 700. For migrated data, check ownership of existing files too; setup-vm repairs the directory, not every old file. |
-| Address already in use | Check `sudo ss -lntp` for port 8081 and stop a duplicate manager, or change UI_PORT and recreate the service. |
+| Address already in use | Check `sudo ss -lntp` for ports 8443 and 8081 and stop a duplicate manager, or change UI_PORT and recreate the service. |
 | Local HTTP 200 but workstation cannot open UI | Check VM IP, UI_BIND, firewall and hypervisor NAT forwarding. Docker -p is not used with host networking. |
 | UI opens but discovery cannot connect | Check SSH service/port, clab-discovery username and saved password; rerun the matching password setup if SSH policy is wrong. |
 | Shell denied during manual SSH testing | Expected for the restricted account. Use the manager's connection test. |
@@ -1411,7 +1423,7 @@ For fingerprint changes, password recovery, key migration and helper repair, use
 
 | Symptom | Check / fix |
 |---|---|
-| Cannot reach the UI | Check Compose status and logs. Browse VM_IP:8081, and check VM firewall/NAT forwarding for TCP 8081. |
+| Cannot reach the UI | Check Compose status and logs. Browse `https://VM_IP:8443` (the browser warns about the self-signed certificate), and check VM firewall/NAT forwarding for TCP 8443. |
 | VM connection refused or timed out | Verify the address and SSH port; run `sudo systemctl status ssh` and `sudo ss -lntp`. Supplied host-network Compose can use 127.0.0.1; bridge containers cannot use that address to reach the VM. |
 | Authentication failed | Use username clab-discovery and the password created during host setup. Reset it with setup-discovery.sh --reset-password if needed, then update VM connection. |
 | An interactive SSH test refuses a shell | Expected for the helper account. It only accepts fixed discovery/operation requests; use Save and test connection. |
@@ -1440,7 +1452,8 @@ For fingerprint changes, password recovery, key migration and helper repair, use
 | `docker build` requires an argument | Include the build context: `./clab-backup-ui` from the repo root or `.` from its Dockerfile folder. |
 | `[1]+ Stopped less ...` | Ctrl+Z suspended the viewer. Run `fg`, then press `q`. |
 | Lab discovered but upload is still manual | Verify both installed helpers match the image; image replacement alone does not update host file-transfer support. |
-| Old instructions request a UI access token | That login is long gone (since 1.12.0). Check the actual running version instead of searching for a new token. |
+| Old instructions request a UI access token | That token is long gone (since 1.12.0). The manager now has accounts: sign in, or create the first administrator with the setup code ([Accounts and sign-in](ACCOUNTS.md)). |
+| Lost the only administrator password | On the VM run `sudo bash "$HOME/projects/clab-manager/deploy/manager-recover-admin.sh"` and open the address it prints ([Accounts and sign-in](ACCOUNTS.md#recovering-a-lost-administrator-password)). |
 | Map layout or right-click behavior looks like the old version | Verify the running image, refresh browser assets and reimport original map files if earlier imports discarded metadata. |
 | Clock is stuck after a Proxmox snapshot rollback | Run the Step 1.2 clock block; otherwise the time service corrects it only at its next scheduled poll. |
 | WinSCP reports `sudo: a password is required`, or **Permission denied** under `/etc/containerlab` | Run the Part 5 administrative SFTP paste-in block as the same account WinSCP uses, keep the WinSCP SFTP server set to `sudo -n /usr/lib/openssh/sftp-server`, and reconnect. |
@@ -1499,14 +1512,22 @@ sudo docker run --rm --entrypoint python "clab-backup:$release" \
 ```
 
 Expect the release number. Complete Parts 7–9 from the transferred source, including
-the interactive password prompt. Then:
+the interactive password prompt. The compose file mounts the certificate folder read-only, so
+make the certificate first (it prints the fingerprint; no manager exists yet to recreate):
+
+```bash
+sudo bash "$HOME/projects/clab-manager/deploy/setup-tls.sh" --route image --no-recreate
+```
+
+Then:
 
 ```bash
 cd "$HOME/projects/clab-manager"
 cat > deploy/image.env <<EOF
 MANAGER_IMAGE=clab-backup:$release
 UI_BIND=0.0.0.0
-UI_PORT=8081
+UI_PORT=8443
+UI_HTTP_PORT=8081
 EOF
 sudo docker compose --env-file deploy/image.env -f deploy/compose.image.yml config
 sudo docker compose --env-file deploy/image.env -f deploy/compose.image.yml \
@@ -1569,7 +1590,7 @@ those lines in `deploy/image.env` rather than appending a second copy. Then run 
 
 ## Completion checklist
 
-- [ ] Workstation reaches Ubuntu over SSH and the manager at TCP 8081.
+- [ ] Workstation reaches Ubuntu over SSH and the manager at TCP 8443 (HTTPS).
 - [ ] Nested KVM works if required by the training devices.
 - [ ] Root filesystem has the intended capacity.
 - [ ] Docker, Compose and Containerlab work on the VM.

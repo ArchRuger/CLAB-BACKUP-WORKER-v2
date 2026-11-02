@@ -86,8 +86,15 @@ command in this project works from any directory; the guides keep the source in
    installer command to be asked every setup question; [Guided installation](docs/INSTALL.md)
    describes the full-screen and the plain menu.
 
-3. Open `https://VM_IP:8443`. The VM connection dialog opens on its own: enter the
-   `clab-discovery` password and click **Save and test connection**.
+3. Open `https://VM_IP:8443`. The installer's last lines print the address and a setup code. The
+   manager serves its own TLS with a self-signed certificate, so the browser warns once; compare
+   the fingerprint the installer printed and continue. Plain HTTP on port 8081 only redirects to
+   this address. The manager needs a sign-in: the *Create the first administrator* page asks for
+   the setup code (also in `sudo cat /srv/containerlab-node-manager/data/setup-code`), a username
+   and a password of at least 12 characters. After that the VM connection dialog opens on its
+   own: enter the `clab-discovery` password and click **Save and test connection**. The
+   [accounts guide](docs/ACCOUNTS.md) covers roles, adding people, sessions and recovering a lost
+   administrator password.
 
 4. On Home, under **Deploy › Choose a file on the lab VM…**, expand `/etc/containerlab`, pick a `.clab.yaml` and
    choose **Deploy lab**. The lab appears under My labs at once; its header reads
@@ -122,7 +129,7 @@ The [quick install](docs/QUICK-INSTALL.md) lists the same route step by step, th
 flowchart LR
     B["Browser on your workstation"]
     subgraph VM["Lab VM · Ubuntu 24.04"]
-        M["Node Manager container<br/>FastAPI · port 8081 · host network · no Docker socket"]
+        M["Node Manager container<br/>FastAPI · port 8443 TLS · 8081 redirect · host network · no Docker socket"]
         D[("Persistent data<br/>/srv/containerlab-node-manager/data")]
         G["clab-discovery SSH account<br/>forced-command gateway"]
         H["Root helpers via sudoers<br/>inspect · operate · git"]
@@ -131,7 +138,7 @@ flowchart LR
         W["Browser capture stack<br/>Edgeshark · session service · Wireshark containers"]
     end
     R[("Git remote")]
-    B -- "HTTP + WebSocket" --> M
+    B -- "HTTPS + WSS, signed in" --> M
     M --- D
     M -- "SSH" --> G --> H --> C --> N
     M -- "SSH terminals · login probes · Ansible" --> N
@@ -155,6 +162,7 @@ and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | [Quick install](docs/QUICK-INSTALL.md) | Follow the shortest route: paste, type, click |
 | [Fresh VM guide](docs/FRESH-VM-GUIDE-V2.md) | Build a VM from Proxmox settings to the first Git save, with recovery steps |
 | [Guided installation](docs/INSTALL.md) | Understand the installer's menu and phases, upgrades and the capture stack |
+| [Accounts and sign-in](docs/ACCOUNTS.md) | Create the first administrator, add people, change a password, read the sign-in audit, recover a lost administrator password |
 | [VM connection](docs/VM-CONNECTION.md) | Set up or repair the `clab-discovery` account and password |
 | [Lab operations](docs/LAB-OPERATIONS.md) | Start, stop, redeploy and destroy labs, edit the map, read device readiness |
 | [Lab builder](docs/LAB-BUILDER.md) | Draw a new lab in the browser, save it to the VM and deploy it, or edit the topology of a lab that is not deployed |

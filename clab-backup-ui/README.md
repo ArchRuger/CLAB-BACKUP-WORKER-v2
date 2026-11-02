@@ -11,6 +11,7 @@ Dockerfile, the Compose file and the test suites.
 - Architecture and module map: [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
 - What was tested for each release: [VALIDATION.md](VALIDATION.md)
 - Node-level behaviour (SSH, backups, map, exports): [NODE-FEATURES.md](NODE-FEATURES.md)
+- Accounts, roles, sessions, the sign-in audit and recovery: [../docs/ACCOUNTS.md](../docs/ACCOUNTS.md)
 
 Run the tests from this folder. The `PATH` prefix matters: the runner starts `ansible-playbook` by
 bare name and `tests/test_app.py` drives that real pipeline:
@@ -21,6 +22,12 @@ python3 -m venv .venv
 PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests
 node --test tests/*.js
 ```
+
+The manager has no anonymous mode: every route but the sign-in and setup pages needs a session. A Python test
+that calls the application builds it with `create_app(<temporary directory>)` and signs in through the helpers in
+`tests/session_fixture.py` (the real setup and sign-in routes, never a bypass inside `app/`); a test never points
+a `Store` at `/srv/containerlab-node-manager/data`. The manager listens on HTTPS (`UI_PORT`, default 8443) and a
+second container, `python -m app.redirect`, answers on `UI_HTTP_PORT` (default 8081) with a redirect only.
 
 CI names each test file explicitly in `.github/workflows/release-check.yml`; a new test file
 that is not added there does not run in CI.

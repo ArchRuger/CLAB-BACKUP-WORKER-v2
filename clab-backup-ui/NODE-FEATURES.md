@@ -204,19 +204,25 @@ interactive; the terminal does not run the backup driver's automatic enable step
 Use **Disconnect** or close the tab to end it; **Reconnect** starts a new session.
 Disconnected shells are not resumed. Resize and standard terminal keys are supported.
 
-The terminal opens directly, without a UI login. The server still requires a
-short-lived, single-use terminal ticket and checks the WebSocket origin. Device
-SSH credentials are looked up in encrypted manager storage. Closing the terminal
-tab or restarting the manager ends the connection.
+The terminal needs a signed-in manager session like every other page. The browser also needs a
+short-lived (30 seconds), single-use terminal ticket, and the ticket is bound to the session that
+minted it: another browser, another account or a later session that presents it is refused and the
+ticket is spent. The server checks the WebSocket origin against the HTTPS origin the page was
+served from. Device SSH credentials are looked up in encrypted manager storage. Closing the terminal
+tab or restarting the manager ends the connection. A terminal also closes when its manager session
+ends (sign-out, expiry, a deactivated or deleted account, or a password change) with the reason
+`signed_out`; typing in it counts as an act of the person and keeps the session from going idle.
+Operators and administrators can both open terminals; the roles differ only for the VM connection,
+Diagnostics, Manager settings and the people page (see [Accounts and sign-in](../docs/ACCOUNTS.md)).
 
 Only session open/close and login-check results enter action logs (a close is logged only
 for a session whose open was logged; a ticket that is refused or a login that fails before
 the shell starts leaves neither). Keystrokes,
 terminal output, and credentials are not recorded there. SSH host keys retain the
 existing trusted-lab policy (unknown keys are accepted). Use this on your trusted
-lab network. Use HTTPS/WSS when accessed over an untrusted network; a proxy must
-forward WebSocket Upgrade, preserve Host, and correctly convey the external scheme
-from a trusted proxy address. The shipped Compose setup serves HTTP.
+lab network. The manager serves HTTPS and WSS itself, so no proxy is needed; if you
+nevertheless put one in front, it must forward WebSocket Upgrade and preserve Host, and the manager
+does not read forwarded headers (see [Opening the manager by a name](../docs/INSTALL.md#opening-the-manager-by-a-name)).
 
 The frontend vendors xterm.js and its fit addon with their licences under
 `app/static/vendor/`; there is no runtime CDN or frontend build step. Only the
@@ -252,7 +258,7 @@ configuration mode keeps holding the device's configuration: a later Load refuse
 configuration mode or log out of the console. The toolbar (font size,
 Copy, Clear, Save) is the one of the SSH page; saved files carry `console` in their names. The manager connects to the
 container's discovered management address and the kind's port; the browser sends only the lab, the device and the word
-`console`. It uses the same single-use ticket and WebSocket origin rules as SSH, but not Paramiko or a saved login:
+`console`. It uses the same single-use, session-bound ticket and WebSocket origin rules as SSH, and closes with the session, but not Paramiko or a saved login:
 **no credentials are sent**, the device prompts for its own. A serial console has no window size, so a resize is
 ignored, and the device pages long output as on a real console (Junos shows `---(more)---`: press Enter or the space bar,
 or set `set cli screen-length 0` for the session; the manager never types that for you).
