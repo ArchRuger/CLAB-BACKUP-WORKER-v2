@@ -1367,6 +1367,16 @@ class ProvidedTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'ends with a slash|trailing slash|not a directory') as error:
             service.install_provided(cert, str(self.source / 'plain.pem') + '/')
         self.assertFalse((self.tmp / 'tls/key.pem').exists())
+        # pathlib drops a trailing `.` too, while the kernel says ENOTDIR for key.pem/. : refused like the slash.
+        with self.assertRaisesRegex(ValueError, 'ends with a slash') as error:
+            service.install_provided(cert, str(self.source / 'plain.pem') + '/.')
+        self.assertIn(str(self.source / 'plain.pem') + '/.', str(error.exception))
+        self.assertFalse((self.tmp / 'tls/key.pem').exists())
+        with self.assertRaisesRegex(ValueError, 'No key path was given'):
+            service.install_provided(cert, '')
+        with self.assertRaisesRegex(ValueError, 'No certificate path was given'):
+            service.install_provided('', key)
+        self.assertFalse((self.tmp / 'tls/cert.pem').exists())
         with self.assertRaisesRegex(ValueError, r'\.\.'):
             service.install_provided(str(self.source / 'sub' / '..' / cert.name), key)
         self.assertFalse((self.tmp / 'tls/cert.pem').exists())
@@ -1399,6 +1409,22 @@ class ProvidedTests(unittest.TestCase):
         self.assertIn(str(link), str(error.exception))
         self.assertNotIn('Errno', str(error.exception))
         self.assertFalse((self.tmp / 'tls/key.pem').exists())
+        # The link replaced by a regular file at that moment: the reopen succeeds on a file the walk cannot read
+        # through an O_PATH descriptor (a raw "[Errno 9] Bad file descriptor" reached the person).
+        _other_cert, other_key = make_pair(self.source, 'other')
+
+        def replaced(path, flags, *args, **kwargs):
+            if path == link.name and flags & os.O_PATH and 'dir_fd' in kwargs and link.is_symlink():
+                link.unlink()
+                shutil.copyfile(other_key, link)
+            return real_open(path, flags, *args, **kwargs)
+        with unittest.mock.patch('os.open', replaced):
+            with self.assertRaisesRegex(ValueError, 'changed while it was being checked') as error:
+                service.install_provided(cert, link)
+        self.assertIn(str(link), str(error.exception))
+        self.assertNotIn('Errno', str(error.exception))
+        self.assertFalse((self.tmp / 'tls/key.pem').exists())
+        self.assertFalse(link.is_symlink(), 'the swap did happen')
 
     def test_a_combined_certificate_and_key_file_given_as_the_certificate_is_refused(self):
         # cert.pem is 0644 and readable by every VM account: a private key must never be copied into it.

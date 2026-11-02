@@ -898,8 +898,11 @@ class Tls:
         container reads it. The bytes come from the descriptor the walk opened (at most MAX_FILE), and the
         callers hand openssl staged copies of those bytes, never the person's path again."""
         text = os.fsdecode(os.fspath(path))
-        if text.endswith('/') and text.strip('/'):
-            raise ValueError(f'The {what} {path} ends with a slash, which names a directory; give the file itself.')
+        if not text:
+            raise ValueError(f'No {what} path was given.')
+        if (text.endswith(('/', '/.')) and text.strip('/.')) or text == '.':
+            # pathlib drops a trailing `/` or `/.` that the kernel refuses with ENOTDIR on a file.
+            raise ValueError(f'The {what} {path} ends with a slash (or "/."), which names a directory; give the file itself.')
         # Joined onto the working directory without collapsing: os.path.abspath would fold `lnk/../x` by text while
         # the kernel resolves the link first, so a `..` component is refused rather than guessed.
         given = Path(text if text.startswith('/') else os.path.join(os.getcwd(), text))
@@ -931,6 +934,7 @@ class Tls:
                 if last:
                     self.before_open(here)
                 flags = (os.O_RDONLY | os.O_NONBLOCK if last else os.O_PATH) | os.O_NOFOLLOW | os.O_CLOEXEC
+                reopened = False
                 try:
                     child = os.open(name, flags, dir_fd=directory)
                 except FileNotFoundError:
@@ -945,7 +949,14 @@ class Tls:
                     except OSError as again:
                         raise ValueError(f'The {what} {path} changed while it was being checked ({here} was a symlink a moment ago; '
                                          f'now: {again.strerror or again}). Give the file itself and rerun.') from None
+                    reopened = True
                 found = os.fstat(child)
+                if reopened and not stat.S_ISLNK(found.st_mode):
+                    # The link was replaced between the failed open and this reopen: an O_PATH descriptor of whatever
+                    # is there now cannot be read, and what is there now was not what was judged.
+                    os.close(child)
+                    raise ValueError(f'The {what} {path} changed while it was being checked ({here} was a symlink a moment ago and is '
+                                     'not one now). Give the file itself and rerun.')
                 if stat.S_ISLNK(found.st_mode):
                     hops += 1
                     if hops > 40:

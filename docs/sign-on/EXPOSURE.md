@@ -312,7 +312,7 @@ alone, and a path through any link must end at a root-owned regular file under `
 `live/NAME/*.pem` layout). Every other link is refused before anything is installed, with the offending link and the
 real path named: a student-owned link in front of certbot's own, a root-owned link to a root-owned key outside the
 archive (an SSH host key), a dangling link, a chain of more than 40 links. The installed files are regular files with
-the modes of 3.3. A path that ends in `/` or contains a `..` component is refused with a sentence (the kernel resolves
+the modes of 3.3. A path that is empty, ends in `/` or `/.`, or contains a `..` component is refused with a sentence (the kernel resolves
 `..` through the links before it, a text rule would not); a relative path names a file under the working directory.
 
 ### 3.5 Rotation of a self-signed certificate
