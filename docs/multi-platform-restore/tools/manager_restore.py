@@ -11,20 +11,23 @@ holds no configuration text or secrets (that is the API's contract), so the file
     manager_restore.py --commit SHA --path labs/x/latest ...   (saved Git version source)
     manager_restore.py --backup-now                     (just run a normal backup and print its id)
 
-Stdlib only; the manager is addressed at --url (default http://127.0.0.1:8081) with its own Origin.
+Stdlib only; the manager is addressed at --url (default $MANAGER or https://127.0.0.1:8443) through the sign-on helper
+docs/sign-on/tools/manager_http.py: it signs in with CLAB_USER and CLAB_PASSWORD (or a prompt), keeps the session cookie and
+sends the manager's own Origin. --cafile / --pin name the certificate to trust (default: the installed cert.pem).
 """
 import argparse
 import json
+import os
 import pathlib
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 TOOLS = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / 'docs/sign-on/tools'))
+import manager_http  # noqa: E402
 VENV_PYTHON = ROOT / 'clab-backup-ui/.venv/bin/python'
 CONTAINER = 'containerlab-node-manager-backup-ui-1'
 
@@ -33,18 +36,13 @@ ENDED = ('succeeded', 'partial', 'needs_attention', 'failed', 'preflight_failed'
 
 
 class Manager:
-    def __init__(self, url):
-        self.url = url.rstrip('/')
+    def __init__(self, url, cafile=None, pin=None):
+        self.http = manager_http.Manager(url, cafile=cafile, pin=pin)
+        self.url = self.http.base
 
     def call(self, path, body=None, timeout=300):
-        request = urllib.request.Request(self.url + '/api' + path, method='POST' if body is not None else 'GET',
-                                         data=json.dumps(body).encode() if body is not None else None,
-                                         headers={'Origin': self.url, 'Content-Type': 'application/json'})
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                return response.status, json.load(response)
-        except urllib.error.HTTPError as error:
-            return error.code, json.loads(error.read() or b'{}')
+        """POST when a body is given, else GET; (status, parsed answer). `path` is below /api."""
+        return self.http.call('POST' if body is not None else 'GET', '/api' + path, body, timeout)
 
     def lab(self):
         _, state = self.call('/state')
@@ -94,7 +92,8 @@ def readback(nodes, saved=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--url', default='http://127.0.0.1:8081')
+    manager_http.add_arguments(parser)
+    parser.add_argument('--url', default=None, help='same as --base')
     parser.add_argument('--backup'); parser.add_argument('--folder'); parser.add_argument('--commit'); parser.add_argument('--path')
     parser.add_argument('--backup-now', action='store_true')
     parser.add_argument('--nodes', nargs='*', default=[])
@@ -105,7 +104,7 @@ def main():
     parser.add_argument('--saved', help='with --readback: a saved folder of the repository checkout holding the same state, for an '
                                         'independent whole-configuration comparison after the restore')
     args = parser.parse_args()
-    manager = Manager(args.url)
+    manager = Manager(args.url or args.base or os.environ.get('MANAGER') or manager_http.DEFAULT_BASE, cafile=args.cafile, pin=args.pin)
     version, lab = manager.lab()
     if args.backup_now:
         job = manager.backup(lab['id'])

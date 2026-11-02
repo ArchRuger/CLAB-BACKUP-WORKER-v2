@@ -1,9 +1,12 @@
 """Orchestration tests for deploy/scaffold-lab.py (the manager API is mocked)."""
+import contextlib
 import http.client
 import importlib.util
 import io
 import json
 import os
+import shutil
+import tempfile
 import threading
 import unittest
 import urllib.error
@@ -11,6 +14,8 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from unittest.mock import patch
+
+from test_manager_http import FakeManager, make_certificate, PASSWORD as SIGNON_PASSWORD, USER as SIGNON_USER
 
 spec = importlib.util.spec_from_file_location('scaffold_lab', Path(__file__).resolve().parents[2] / 'deploy/scaffold-lab.py')
 scaffold = importlib.util.module_from_spec(spec)
@@ -345,7 +350,7 @@ class ScaffoldLabTests(unittest.TestCase):
                     raise urllib.error.HTTPError(request.full_url, status, 'x', {}, io.BytesIO(json.dumps(reply).encode()))
                 return Answer(json.dumps(reply).encode())
         patch.object(scaffold, 'api', self.real_api).start()
-        patch.object(scaffold, 'DIRECT', Transport()).start()
+        patch.object(scaffold, 'opener_for', lambda manager: Transport()).start()   # was: patch.object(scaffold, 'DIRECT', Transport())
         return seen
 
     def snapshot_text(self):
@@ -362,10 +367,12 @@ class ScaffoldLabTests(unittest.TestCase):
                 class Transport:
                     def open(transport, request, timeout=None, error=error):
                         raise error
-                patch.object(scaffold, 'DIRECT', Transport()).start()
+                # was: patch.object(scaffold, 'DIRECT', Transport()); the transport is now chosen per manager (HTTPS, a pinned
+                # certificate and a session cookie jar), so the test replaces the function that returns it.
+                patch.object(scaffold, 'opener_for', lambda manager: Transport()).start()
                 with self.assertRaises(SystemExit) as stop:
-                    self.real_api('http://m', '/state')
-                self.assertTrue(str(stop.exception).startswith('Cannot reach the manager at http://m ('), str(stop.exception))
+                    self.real_api('http://127.0.0.1:9', '/state')
+                self.assertTrue(str(stop.exception).startswith('Cannot reach the manager at http://127.0.0.1:9 ('), str(stop.exception))
                 self.assertIn('Is it running?', str(stop.exception))
 
     def test_snapshot_whose_save_answer_is_lost_before_the_manager_acted_rebinds_to_work(self):
@@ -485,6 +492,118 @@ class ApiProxyTests(unittest.TestCase):
         self.assertEqual((status, body), (200, {'labs': []}))
         self.assertEqual(proxy_hits, [])
         self.assertEqual(manager_hits, ['/api/state'])
+
+
+@unittest.skipUnless(shutil.which('openssl'), 'needs the openssl command')
+class SignOnTests(unittest.TestCase):
+    """The manager answers HTTPS only and needs a session: api() pins the installed certificate, signs in with
+    CLAB_USER and CLAB_PASSWORD (or a prompt) when the manager says signed_out, and keeps the cookie."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = tempfile.TemporaryDirectory()
+        cls.cert, cls.key = make_certificate(cls.dir.name, 'scaffold', 'IP:127.0.0.1')
+        cls.other, _ = make_certificate(cls.dir.name, 'other', 'IP:127.0.0.1')
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dir.cleanup()
+
+    def setUp(self):
+        self.fake = FakeManager(self.cert, self.key)
+        self.addCleanup(self.fake.stop)
+        env = patch.dict(os.environ, {'CLAB_USER': SIGNON_USER, 'CLAB_PASSWORD': SIGNON_PASSWORD})
+        env.start(); self.addCleanup(env.stop)
+        links = patch.dict(scaffold.LINKS, clear=True); links.start(); self.addCleanup(links.stop)
+        cafile = patch.dict(scaffold.SETTINGS, {'cafile': str(self.cert)}); cafile.start(); self.addCleanup(cafile.stop)
+
+    def test_the_default_manager_is_the_https_listener_with_the_installed_certificate_as_its_ca_file(self):
+        self.assertEqual(scaffold.DEFAULT_MANAGER, 'https://127.0.0.1:8443')
+        self.assertEqual(scaffold.INSTALLED_CERTIFICATE, '/srv/containerlab-node-manager/tls/cert.pem')
+        defaults = scaffold.argument_parser().parse_args(['init', 'bgp-core'])
+        self.assertEqual(defaults.manager, 'https://127.0.0.1:8443')
+        self.assertEqual(defaults.cafile, None, 'None means: the installed certificate when it is readable')
+        self.assertEqual(scaffold.argument_parser().parse_args(['--cafile', '/x/cert.pem', 'init', 'a']).cafile, '/x/cert.pem')
+
+    def test_api_signs_in_when_the_manager_says_signed_out_keeps_the_cookie_and_sends_the_origin(self):
+        status, body = scaffold.api(self.fake.base, '/state')
+        self.assertEqual(status, 200)
+        status, body = scaffold.api(self.fake.base, '/labs/x/git/save', 'POST', {'a': 1})
+        self.assertEqual((status, body['echo']), (200, {'a': 1}))
+        self.assertEqual(self.fake.signins, 1, 'one sign-in for the whole run')
+        sent = [seen for seen in self.fake.seen if seen['path'] != '/api/session' and seen['cookie']]
+        self.assertEqual({seen['cookie'] for seen in sent}, {'sid1'})
+        self.assertTrue(all(seen['origin'] == self.fake.base for seen in self.fake.seen))
+        signin = next(seen for seen in self.fake.seen if seen['path'] == '/api/session')
+        self.assertEqual(json.loads(signin['body']), {'username': SIGNON_USER, 'password': SIGNON_PASSWORD})
+
+    def test_a_request_without_a_body_that_changes_something_sends_an_empty_object(self):
+        scaffold.api(self.fake.base, '/labs/x/git/something', 'POST')
+        mutating = [seen for seen in self.fake.seen if seen['path'].endswith('/something') and seen['cookie']]
+        self.assertEqual([json.loads(seen['body']) for seen in mutating], [{}])
+
+    def test_a_session_that_ended_signs_in_once_more(self):
+        scaffold.api(self.fake.base, '/state')
+        self.fake.drop_next = True
+        self.assertEqual(scaffold.api(self.fake.base, '/state')[0], 200)
+        self.assertEqual(self.fake.signins, 2)
+
+    def test_the_certificate_is_pinned_and_another_one_is_refused_with_the_way_out(self):
+        with patch.dict(scaffold.SETTINGS, {'cafile': str(self.other)}), self.assertRaises(SystemExit) as stop:
+            scaffold.api(self.fake.base, '/state')
+        self.assertIn('certificate', str(stop.exception))
+        self.assertIn('--cafile', str(stop.exception))
+        self.assertEqual(self.fake.seen, [], 'nothing is sent over a connection that was not trusted')
+
+    def test_plain_http_is_refused_except_to_this_machine(self):
+        with self.assertRaises(SystemExit) as stop:
+            scaffold.api('http://192.0.2.7:8081', '/state')
+        self.assertIn('https', str(stop.exception))
+
+    def test_a_refused_sign_in_stops_with_the_managers_sentence_and_never_the_password(self):
+        secret = 'a password that is wrong and secret'
+        with patch.dict(os.environ, {'CLAB_PASSWORD': secret}), self.assertRaises(SystemExit) as stop:
+            scaffold.api(self.fake.base, '/state')
+        self.assertIn('Wrong username or password', str(stop.exception))
+        self.assertNotIn(secret, str(stop.exception))
+
+    def test_without_credentials_and_without_a_terminal_it_says_what_to_set(self):
+        with patch.dict(os.environ, {'CLAB_USER': '', 'CLAB_PASSWORD': ''}), patch.object(scaffold.sys.stdin, 'isatty', return_value=False), \
+                self.assertRaises(SystemExit) as stop:
+            scaffold.api(self.fake.base, '/state')
+        self.assertIn('CLAB_USER', str(stop.exception))
+        self.assertIn('CLAB_PASSWORD', str(stop.exception))
+        self.assertEqual(self.fake.signins, 0)
+
+    def test_the_password_is_asked_for_on_the_terminal_when_the_environment_has_none(self):
+        with patch.dict(os.environ, {'CLAB_USER': '', 'CLAB_PASSWORD': ''}), patch.object(scaffold.sys.stdin, 'isatty', return_value=True), \
+                patch('builtins.input', return_value=SIGNON_USER), patch.object(scaffold.getpass, 'getpass', return_value=SIGNON_PASSWORD) as asked:
+            self.assertEqual(scaffold.api(self.fake.base, '/state')[0], 200)
+        asked.assert_called_once()
+
+    def test_there_is_no_password_or_user_option(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            scaffold.argument_parser().parse_args(['--password', 'x', 'init', 'a'])
+        help_text = scaffold.argument_parser().format_help()
+        self.assertNotIn('--password', help_text)
+        self.assertIn('CLAB_PASSWORD', help_text)
+
+    def test_a_gate_refusal_reaches_the_callers_as_the_managers_sentence_not_as_a_dictionary(self):
+        # The gate's error bodies are {detail: {code, message}}; the commands read `detail` as text.
+        status, body = scaffold.api(self.fake.base, '/state')
+        self.assertEqual(status, 200)
+        self.fake.sessions.clear()
+        with patch.dict(os.environ, {'CLAB_PASSWORD': 'wrong again'}), self.assertRaises(SystemExit):
+            scaffold.api(self.fake.base, '/state')
+        self.assertIsInstance(scaffold.error_text({'detail': {'code': 'signed_out', 'message': 'Sign in.'}}), str)
+        self.assertEqual(scaffold.error_text({'detail': {'code': 'signed_out', 'message': 'Sign in.'}}), 'Sign in.')
+        self.assertEqual(scaffold.error_text({'detail': 'plain'}), 'plain')
+        self.assertEqual(scaffold.error_text({}), '')
+
+    def test_https_loopback_manager_url_ignores_the_proxy_environment(self):
+        env = {'https_proxy': 'http://127.0.0.1:9', 'HTTPS_PROXY': 'http://127.0.0.1:9', 'no_proxy': '', 'NO_PROXY': ''}
+        with patch.dict(os.environ, env):
+            self.assertEqual(scaffold.api(self.fake.base, '/state')[0], 200)
 
 
 if __name__ == '__main__':

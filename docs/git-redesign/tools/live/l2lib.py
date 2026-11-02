@@ -21,7 +21,7 @@ import l1lib  # noqa: E402
 from l1lib import (mgr, sh, gh, gh_tree, github, checkout, vmgit, trim, set_description, description_of, descriptions,  # noqa: E402,F401
                    show_descriptions, containers_up, cli, IFACE, DEVICES, CONTAINERS, REPO, CHECKOUT, now)
 
-BASE = 'http://127.0.0.1:8081'
+BASE = mgr.BASE   # $MANAGER, else https://127.0.0.1:8443 (the manager answers HTTPS only and needs a session)
 ROOT_BINDING = None
 
 
@@ -38,7 +38,9 @@ class Live(Session):
     """A Session on the real manager: lab ids come from /api/state, not from a fixture."""
 
     def __init__(self, base=BASE, viewport=(1440, 900), headed=False):
-        super().__init__(base, headed, viewport)
+        # The browser shares the session of the helper (CLAB_USER and CLAB_PASSWORD or a prompt) and accepts the manager's own
+        # certificate, which the helper pins for its own requests.
+        super().__init__(base, headed, viewport, cookies=[mgr.client().playwright_cookie()], ignore_https_errors=True)
         self.failed = []
         self.page.on('response', self._failed)
 

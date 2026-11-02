@@ -21,21 +21,35 @@ header and goes up with the next upload of the repository.
 Prerequisites: the lab is deployed and reachable, and it is already connected to the target
 repository in the manager (press Save in the lab header and paste its HTTPS address, or open Save settings from the chip). See docs/NAMING.md
 and deploy/lab-template/README.md.
+
+The manager answers HTTPS on port 8443 and needs a sign-in. This tool trusts the installed certificate
+(/srv/containerlab-node-manager/tls/cert.pem, readable by any account on the VM; --cafile names another file) and
+signs in with the environment variables CLAB_USER and CLAB_PASSWORD, or asks for them on the terminal. There is no
+option for a user name or a password: a value on the command line would sit in the process list and the shell history.
+The standard library only; the same logic as docs/sign-on/tools/manager_http.py, which a deploy script cannot import.
 """
 import argparse
+import getpass
 import http.client
+import http.cookiejar
 import json
+import os
 import re
+import ssl
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 
-DEFAULT_MANAGER = 'http://127.0.0.1:8081'
+DEFAULT_MANAGER = 'https://127.0.0.1:8443'
+INSTALLED_CERTIFICATE = '/srv/containerlab-node-manager/tls/cert.pem'
+SETTINGS = {'cafile': None}      # set by main() from --cafile; None means the installed certificate when it is readable
+LINKS = {}                       # manager base URL -> its opener (certificate, no proxy, cookie jar) and sign-in state
+LOOPBACK = ('127.0.0.1', '::1', 'localhost')
 DEFAULT_STATES = 'start,solution,broken-01'
 NAME = re.compile(r'[a-z0-9][a-z0-9-]{0,62}')          # lab slug and state names
-DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 GIT_ACTIVE = {'queued', 'capturing', 'exporting', 'pushing'}
 GIT_REVIEWABLE = {'review_pending', 'committed', 'unchanged'}   # saved on the VM, upload not done yet
 CHANGED_MEANWHILE = 'Another save was made in this repository'    # the manager's answer when the reviewed HEAD moved
@@ -46,24 +60,101 @@ class ManagerLost(SystemExit):
     this is not a refusal: the change may or may not have happened."""
 
 
-def api(manager, path, method='GET', body=None):
-    data = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(manager.rstrip('/') + '/api' + path, data=data, method=method,
-                                     headers={'Content-Type': 'application/json'} if data else {})
+def error_text(answer):
+    """The sentence of an error answer. Most routes answer {detail: text}; the sign-in gate and the sign-on routes answer
+    {detail: {code, message}}; the commands below read `detail` as text."""
+    detail = (answer or {}).get('detail', '') if isinstance(answer, dict) else ''
+    if isinstance(detail, dict):
+        return str(detail.get('message') or detail.get('code') or '')
+    return detail if isinstance(detail, str) else ''
+
+
+def opener_for(manager):
+    """The opener of one manager: no proxy from the environment, the manager's certificate pinned for HTTPS (the chain is
+    checked against the installed `cert.pem`, or --cafile; the name is not compared, as the health check does, because the
+    certificate names the VM's addresses and this tool is usually run on the VM as 127.0.0.1), and a cookie jar."""
+    link = LINKS.get(manager)
+    if link is not None:
+        return link['opener']
+    parts = urllib.parse.urlsplit(manager)
+    if parts.scheme == 'https' and parts.hostname:
+        cafile = SETTINGS['cafile']
+        if cafile is None and os.access(INSTALLED_CERTIFICATE, os.R_OK):
+            cafile = INSTALLED_CERTIFICATE
+        if cafile:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            try:
+                context.load_verify_locations(cafile=cafile)
+            except (OSError, ssl.SSLError) as error:
+                die('cannot read the certificate file %s (%s).' % (cafile, error.strerror or error))
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_REQUIRED
+        else:
+            context = ssl.create_default_context()
+        handlers = [urllib.request.HTTPSHandler(context=context)]
+    elif parts.scheme == 'http' and parts.hostname in LOOPBACK:
+        handlers = []     # a plain-HTTP listener on this machine (the browser-test fixture); nothing is signed
+    else:
+        die('the manager address must be https://host:port (it answers HTTPS only), not %r.' % manager)
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(jar), *handlers)
+    LINKS[manager] = {'opener': opener, 'jar': jar}
+    return opener
+
+
+def sign_in(manager):
+    """Signs in with CLAB_USER and CLAB_PASSWORD, else asks on the terminal. Never prints, logs or returns the password."""
+    user, password = os.environ.get('CLAB_USER') or '', os.environ.get('CLAB_PASSWORD') or ''
+    if (not user or not password) and sys.stdin.isatty():
+        if not user:
+            user = input('Manager user name: ').strip()
+        if not password:
+            password = getpass.getpass('Manager password for %s: ' % user)
+    if not user or not password:
+        die('the manager needs a sign-in. Set CLAB_USER and CLAB_PASSWORD in the environment, or run this on a terminal to be '
+            'asked. A password is never taken from the command line.')
+    status, answer, _ = send(manager, '/session', 'POST', {'username': user, 'password': password})
+    if status != 200:
+        die('sign-in as %s was refused (HTTP %s): %s' % (user, status, error_text(answer) or 'no reason given.'))
+    if ((answer or {}).get('user') or {}).get('must_change_password'):
+        die('the account %s must change its password first: sign in on the manager\'s page once.' % user)
+
+
+def send(manager, path, method='GET', body=None):
+    """One request, no sign-in handling. (status, answer, code): an error answer is {'detail': <sentence>} and `code` is the
+    machine code of a {detail: {code, message}} body ('' otherwise)."""
+    origin = manager.rstrip('/')
+    data = json.dumps({} if body is None else body).encode() if method != 'GET' else None
+    request = urllib.request.Request(origin + '/api' + path, data=data, method=method,
+                                     headers={'Origin': origin, 'Content-Type': 'application/json'} if data is not None else {'Origin': origin})
     try:
-        # The manager is on this VM: no proxy from the environment (http_proxy) may sit in between.
-        with DIRECT.open(request, timeout=180) as response:
-            return response.status, json.loads(response.read().decode() or '{}')
+        with opener_for(manager).open(request, timeout=180) as response:
+            return response.status, json.loads(response.read().decode() or '{}'), ''
     except urllib.error.HTTPError as error:
         try:
-            detail = json.loads(error.read().decode() or '{}').get('detail', '')
+            answer = json.loads(error.read().decode() or '{}')
         except Exception:
-            detail = ''
-        return error.code, {'detail': detail}
+            answer = {}
+        detail = answer.get('detail') if isinstance(answer, dict) else None
+        return error.code, {'detail': error_text(answer)}, (str(detail.get('code') or '') if isinstance(detail, dict) else '')
     except (OSError, http.client.HTTPException) as error:
         # urllib wraps only the connect: RemoteDisconnected (the manager restarts mid-request), a read timeout and
         # a reset raised while the answer is read come out as they are. HTTPError is caught above (it is an OSError).
-        raise ManagerLost('Cannot reach the manager at %s (%s). Is it running?' % (manager, error or type(error).__name__))
+        reason = getattr(error, 'reason', error)
+        hint = ''
+        if isinstance(reason, ssl.SSLError):
+            hint = ' Its certificate was not accepted: name the installed certificate with --cafile %s.' % INSTALLED_CERTIFICATE
+        raise ManagerLost('Cannot reach the manager at %s (%s). Is it running?%s' % (manager, error or type(error).__name__, hint))
+
+
+def api(manager, path, method='GET', body=None):
+    """(status, answer) with the session of this run: when the manager answers `signed_out` this signs in (once) and repeats
+    the request. The answer of an error is {'detail': <sentence>}."""
+    status, answer, code = send(manager, path, method, body)
+    if status == 401 and code == 'signed_out' and path != '/session':
+        sign_in(manager)
+        status, answer, code = send(manager, path, method, body)
+    return status, answer
 
 
 def die(message):
@@ -296,9 +387,11 @@ def cmd_snapshot(args):
     print('Captured the running configuration into %s and %s. Lab rebound to %s.' % (reference, where, work))
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description='Scaffold a lab state library in the connected Git repository.')
-    parser.add_argument('--manager', default=DEFAULT_MANAGER, help='manager base URL (default %(default)s)')
+def argument_parser():
+    parser = argparse.ArgumentParser(description='Scaffold a lab state library in the connected Git repository.',
+                                     epilog='Sign-in: set CLAB_USER and CLAB_PASSWORD, or be asked on the terminal. There is no option for them.')
+    parser.add_argument('--manager', default=DEFAULT_MANAGER, help='manager base URL, https (default %(default)s)')
+    parser.add_argument('--cafile', default=None, help='the manager certificate to trust (default: %s when readable)' % INSTALLED_CERTIFICATE)
     parser.add_argument('--lab', default='', help='lab name or id (default: the only lab)')
     sub = parser.add_subparsers(dest='command', required=True)
     p_init = sub.add_parser('init', help='create the reference/{...} and work folders and bind saves to work')
@@ -310,7 +403,12 @@ def main(argv=None):
     p_snap.add_argument('state')
     p_snap.add_argument('--yes', action='store_true', help='upload without asking: states that you reviewed what this state contains')
     p_snap.set_defaults(func=cmd_snapshot)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv=None):
+    args = argument_parser().parse_args(argv)
+    SETTINGS['cafile'] = args.cafile
     args.func(args)
 
 
