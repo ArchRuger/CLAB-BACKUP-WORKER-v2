@@ -281,10 +281,48 @@ HTTPS with a pinned certificate and never takes a password on the command line; 
 that talks HTTP with its status; `check_signon.py` exercises sign-in, the restricted change, sign-out, the
 cross-site link and an operator at 1440, 1280, 760 and 390 px.
 
+### S12a documentation: install and operate
+
+Owner of `docs/INSTALL.md`, `docs/HEALTH-CHECK.md`, `docs/STANDALONE-SETUP.md`, `docs/FRESH-VM-GUIDE-V2.md`,
+`docs/QUICK-INSTALL.md`, `docs/VM-CONNECTION.md`, `deploy/lab-template/README.md` and the text of
+`clab-backup-ui/app/static/vm-connection.html` and `capture-setup.html`. Design: EXPOSURE 8.1 (each row for these files),
+2.3, 3, 4.2, 5, 6, 7; DESIGN 9 (bootstrap), 10 (recovery), 12; UI 4 to 6 for the wording the person sees. The code of
+S1a, S1b and S2 is not merged yet: read it in `/home/user/CLAB-BACKUP-WORKER-v2/.claude/worktrees/core` (read only);
+everything else is in your worktree.
+
+Acceptance: every row of EXPOSURE 8.1 for these files is done (INSTALL: *Opening the manager by a name* rewritten, the
+new *TLS and the certificate*, *Firewall and SSH* with the fail2ban recommendation the health check points to, *Ports*
+with the upgrade table and its HSTS row, *Finish in the browser* with the first administrator, the setup code and the
+recovery command); no sentence that says the manager has no login, or that opens it over `http://`, remains; every
+command, flag, path, port, default, file mode and message the guides quote exists in the code as quoted; commands work
+from any directory (`bash "$HOME/projects/clab-manager/deploy/…"`); no example carries a real-looking password, setup
+code, cookie, key or fingerprint (placeholders only); no release is named except by a relational phrase; the student
+guide is not touched.
+
+### S12b documentation: reference and architecture
+
+Owner of `README.md`, `docs/WIKI-MASTER-GUIDE.md`, `docs/ARCHITECTURE.md`, `docs/CAPTURE.md`, `docs/LAB-OPERATIONS.md`,
+`docs/TOUR.md`, `docs/DEBUG-PANEL.md`, `docs/GIT-SETUP.md`, `docs/GIT-PROGRESS.md`, `docs/NETWORK-DESIGN.md`,
+`clab-backup-ui/README.md`, `clab-backup-ui/NODE-FEATURES.md`, `docs/maintenance-audit/AUDIT.md` and the new
+`docs/ACCOUNTS.md`. Design: EXPOSURE 8.1 (each row for these files), 4.1; DESIGN 2 to 11 and 14; UI 3 to 9; REVIEW R19.
+Core code as for S12a.
+
+Acceptance: every row of EXPOSURE 8.1 for these files is done (README 89 and 125 with the diagram's *port 8443 TLS ·
+8081 redirect*; each WIKI line the row names; ARCHITECTURE's transport paragraph with the one redirect sentence of 4.1
+verbatim, and module-map rows for `accounts`, `sessions`, `origin`, `headers`, `recover`, `probe`, `redirect`; CAPTURE
+236-243 and 280-287); the guides that describe the Manager ▾ menu, Diagnostics, terminals or tickets describe the
+account group, the operator's limits and the session binding as built; `docs/ACCOUNTS.md` is the person's guide to
+accounts and roles, the first administrator, signing in and the required password change, password rules, sessions
+(lifetimes, renewal, sign-out, a restart signs everyone out), throttling as the person meets it, the Users page, the
+audit (what it records and never records) and recovery, linked from `README.md`; `AUDIT.md`'s workflow table gains the
+sign-on rows with their real evidence kinds; the same code-truth, placeholder, release-name and any-directory rules as
+S12a.
+
 ## 5. Worktrees and integration
 
 Base commit of every slice worktree: `a9e3608` (the final design, 2026-11-01). Worktrees, each on the
 branch `signon/<name>`: `core` (S1a, S1b, S2), `probe` (S3), `tls` (S4), `doors` (S5a), `installer`
 (S5b), `health` (S6), `pages` (S7), `appsession` (S8), `people` (S9), `features` (S10a), `standalone`
-(S10b). S11 and S12 get theirs from the integrated commit. Each slice's merge commit and the full-suite
+(S10b). S11 and S12 get theirs from the integrated commit (S12a and S12b: `docs-a`, `docs-b`, from `7a9ec17` plus
+this section). Each slice's merge commit and the full-suite
 result on the merged tree are recorded here as they land.
