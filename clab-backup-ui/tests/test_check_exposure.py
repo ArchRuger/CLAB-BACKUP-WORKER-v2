@@ -129,8 +129,10 @@ LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:* users:(("systemd-resolve",pid=600,fd=14
 LISTEN 0 4096 [::1]:631 [::]:* users:(("cupsd",pid=700,fd=7))
 '''
 
-SSHD_GOOD = 'port 22\npermitrootlogin no\nmaxauthtries 4\nlogingracetime 30\nforcecommand none\n'
-SSHD_DEFAULTS = 'port 22\npermitrootlogin without-password\nmaxauthtries 6\nlogingracetime 120\nforcecommand none\n'
+# As built (S5a) setup-ssh-hardening.sh writes PermitRootLogin, LoginGraceTime and PerSourceMaxStartups only, so a
+# hardened VM still shows OpenSSH's own maxauthtries 6 (the old fixture's `maxauthtries 4` is no longer a requirement).
+SSHD_GOOD = 'port 22\npermitrootlogin no\nmaxauthtries 6\nlogingracetime 30\npersourcemaxstartups 8\nforcecommand none\n'
+SSHD_DEFAULTS = 'port 22\npermitrootlogin without-password\nmaxauthtries 6\nlogingracetime 120\npersourcemaxstartups none\nforcecommand none\n'
 
 DOCKER_PS_HEALTHY = 'clab-backup-ui-http-redirect-1\t\nclab-sessions\t127.0.0.1:5801->5801/tcp\nclab-edgeshark\t127.0.0.1:5001->5001/tcp\n'
 
@@ -380,6 +382,30 @@ class FileTests(unittest.TestCase):
             with self.subTest(name):
                 self.assertEqual(by_id(run_group(fixture=fixture), 'tls.files')['status'], 'FAIL')
 
+    def test_an_unregistered_pair_names_the_register_and_the_replace_commands(self):
+        # As built (S4): a plain setup-tls.sh run never regenerates a certificate it did not make, so the Next line names
+        # `--cert PATH --key PATH` (register it) or `--self-signed` (replace it), not a plain rerun.
+        unregistered = {k: v for k, v in files().items() if not k.endswith('/mode')}
+        row = by_id(run_group(fixture=Fixture(files=unregistered, mode='')), 'tls.files')
+        self.assertEqual(row['status'], 'FAIL')
+        self.assertIn('mode file', row['detail'])
+        self.assertRegex(row['fix'], r'setup-tls\.sh --cert PATH --key PATH')
+        self.assertRegex(row['fix'], r'setup-tls\.sh --self-signed')
+        self.assertIn('register', row['fix'])
+        self.assertIn('replace', row['fix'])
+        self.assertNotRegex(row['fix'], r'setup-tls\.sh\s*$', 'not a plain rerun')
+
+    def test_the_other_tls_files_failures_keep_the_plain_fix(self):
+        cases = {'no certificate at all': {k: v for k, v in files().items() if not k.endswith('/cert.pem') and not k.endswith('/mode')},
+                 'a missing key beside a mode file': {k: v for k, v in files().items() if not k.endswith('key.pem')},
+                 'a wider key': files(key_mode=0o644)}
+        for name, record in cases.items():
+            with self.subTest(name):
+                row = by_id(run_group(fixture=Fixture(files=record)), 'tls.files')
+                self.assertEqual(row['status'], 'FAIL')
+                self.assertNotIn('--cert PATH', row['fix'])
+                self.assertIn('setup-tls.sh', row['fix'])
+
     def test_the_names_file_is_checked_when_it_exists(self):
         self.assertEqual(by_id(run_group(fixture=Fixture(files=files(names=True), names='manager.example.edu\n')), 'tls.files')['status'], 'PASS')
         bad = files(names=True)
@@ -617,6 +643,50 @@ class FirewallAndListenerTests(unittest.TestCase):
                  '1:65535/udp                ALLOW IN    Anywhere\n')
         self.assertEqual(by_id(run_group(fixture=Fixture(ufw=UFW_ACTIVE + quiet)), 'firewall')['status'], 'PASS')
 
+    def test_an_operators_narrowed_ssh_allow_counts_as_allowed(self):
+        # As built (S5a): setup-firewall.sh keeps an operator's own rule for a needed port, so the health check accepts it.
+        header = UFW_ACTIVE.split('22/tcp ')[0]
+        tail = '8443/tcp                   ALLOW IN    Anywhere\n8081/tcp                   ALLOW IN    Anywhere\n'
+        narrowed = {'from a network': '22/tcp                     ALLOW IN    10.0.0.0/8\n',
+                    'from one address': '22/tcp                     ALLOW IN    203.0.113.7\n',
+                    'on an interface': '22/tcp on eth0              ALLOW IN    Anywhere\n',
+                    'on an interface from a network': '22/tcp on eth0              ALLOW IN    10.0.0.0/8\n',
+                    'rate limited from a network': '22/tcp                     LIMIT IN    10.0.0.0/8\n',
+                    'through the profile, IPv6 only': '22/tcp (OpenSSH (v6))      ALLOW IN    2001:db8::/32\n'}
+        for name, rule in narrowed.items():
+            with self.subTest(name):
+                row = by_id(run_group(fixture=Fixture(ufw=header + rule + tail)), 'firewall')
+                self.assertEqual(row['status'], 'PASS', row)
+                self.assertNotIn('not allowed', row['detail'])
+
+    def test_a_deny_on_a_manager_port_warns_and_names_the_rule(self):
+        for name, rule, port in (('the sign-on port', '8443/tcp                   DENY IN     Anywhere\n', '8443'),
+                                 ('the redirect port', '8081/tcp                   DENY IN     Anywhere\n', '8081'),
+                                 ('a rejected port', '8443/tcp                   REJECT IN   Anywhere\n', '8443'),
+                                 ('a port in a denied range', '8000:8100/tcp             DENY IN     Anywhere\n', '8081'),
+                                 ('on an interface', '8443/tcp on eth0          DENY IN     Anywhere\n', '8443'),
+                                 ('from a network', '8443/tcp                   DENY IN     203.0.113.0/24\n', '8443'),
+                                 ('IPv6', '8443/tcp (v6)              DENY IN     Anywhere (v6)\n', '8443')):
+            with self.subTest(name):
+                row = by_id(run_group(fixture=Fixture(ufw=UFW_ACTIVE + rule)), 'firewall')
+                self.assertEqual(row['status'], 'WARN', row)
+                self.assertIn('denies', row['detail'])
+                self.assertIn(rule.split('  ')[0].strip(), row['detail'], 'the detail quotes the rule')
+                self.assertIn('DENY' if 'DENY' in rule else 'REJECT', row['detail'])
+                self.assertIn(port, row['detail'])
+                self.assertIn('setup-firewall.sh', row['fix'])
+
+    def test_a_deny_on_a_port_that_is_not_a_manager_port_is_not_a_finding(self):
+        quiet = ('5432/tcp                   DENY IN     Anywhere\n'
+                 '8081/udp                   DENY IN     Anywhere\n'
+                 '8443/tcp                   DENY OUT    Anywhere\n'
+                 '3306/tcp                   REJECT IN   203.0.113.0/24\n')
+        self.assertEqual(by_id(run_group(fixture=Fixture(ufw=UFW_ACTIVE + quiet)), 'firewall')['status'], 'PASS')
+
+    def test_a_deny_on_the_redirect_port_is_ignored_when_the_redirect_is_off(self):
+        fixture = Fixture(env={'clab-backup-ui/.env': 'UI_HTTP_PORT=0\n'}, ufw=UFW_ACTIVE + '8081/tcp                   DENY IN     Anywhere\n')
+        self.assertEqual(by_id(run_group(fixture=fixture), 'firewall')['status'], 'PASS')
+
     def test_ufw_not_installed_fails(self):
         row = by_id(run_group(fixture=Fixture(ufw_installed=False)), 'firewall')
         self.assertEqual(row['status'], 'FAIL')
@@ -762,15 +832,69 @@ class BootstrapTests(unittest.TestCase):
 
 class SshTests(unittest.TestCase):
     def test_defaults_warn_and_name_which_directive(self):
+        # Rewritten for S5a: the drop-in manages LoginGraceTime and PerSourceMaxStartups (WARN at their defaults, named);
+        # PermitRootLogin at its default is INFO (next test) and maxauthtries is not checked at all.
         row = by_id(run_group(fixture=Fixture(sshd=SSHD_DEFAULTS)), 'ssh.hardening')
         self.assertEqual(row['status'], 'WARN')
-        for word in ('permitrootlogin', 'maxauthtries', 'logingracetime'):
+        for word in ('logingracetime', 'persourcemaxstartups'):
             self.assertIn(word, row['detail'])
+        self.assertNotIn('maxauthtries', row['detail'])
+        self.assertNotIn('permitrootlogin', row['detail'])
         self.assertIn('setup-ssh-hardening.sh', row['fix'])
-        partly = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD.replace('maxauthtries 4', 'maxauthtries 6'))), 'ssh.hardening')
+        partly = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD.replace('logingracetime 30', 'logingracetime 120'))), 'ssh.hardening')
         self.assertEqual(partly['status'], 'WARN')
-        self.assertIn('maxauthtries', partly['detail'])
-        self.assertNotIn('permitrootlogin', partly['detail'])
+        self.assertIn('logingracetime', partly['detail'])
+        self.assertNotIn('persourcemaxstartups', partly['detail'])
+        other = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD.replace('persourcemaxstartups 8', 'persourcemaxstartups none'))), 'ssh.hardening')
+        self.assertEqual(other['status'], 'WARN')
+        self.assertIn('persourcemaxstartups', other['detail'])
+        self.assertNotIn('logingracetime', other['detail'])
+
+    def test_maxauthtries_is_not_checked(self):
+        for value in ('2', '4', '6', '10'):
+            with self.subTest(value):
+                row = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD.replace('maxauthtries 6', 'maxauthtries ' + value))), 'ssh.hardening')
+                self.assertEqual(row['status'], 'PASS', row)
+                self.assertNotIn('maxauthtries', row['detail'])
+        no_line = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD.replace('maxauthtries 6\n', ''))), 'ssh.hardening')
+        self.assertEqual(no_line['status'], 'PASS', no_line)
+
+    def test_the_gate_limits_are_30_seconds_and_a_per_source_limit_that_is_set(self):
+        for value, status in (('30', 'PASS'), ('29', 'PASS'), ('31', 'WARN'), ('120', 'WARN'), ('0', 'WARN')):  # 0 is OpenSSH's "no time limit"
+            with self.subTest(grace=value):
+                row = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD.replace('logingracetime 30', 'logingracetime ' + value))), 'ssh.hardening')
+                self.assertEqual(row['status'], status, row)
+        for value in ('8', '10:30:100', '1'):
+            with self.subTest(per_source=value):
+                row = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD.replace('persourcemaxstartups 8', 'persourcemaxstartups ' + value))), 'ssh.hardening')
+                self.assertEqual(row['status'], 'PASS', row)
+        missing = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD.replace('persourcemaxstartups 8\n', ''))), 'ssh.hardening')
+        self.assertEqual(missing['status'], 'WARN')
+        self.assertIn('persourcemaxstartups', missing['detail'])
+
+    def test_permitrootlogin_at_its_default_is_info_with_the_reason_and_no_is_part_of_pass(self):
+        for default in ('without-password', 'prohibit-password'):
+            with self.subTest(default):
+                row = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD.replace('permitrootlogin no', 'permitrootlogin ' + default))), 'ssh.hardening')
+                self.assertEqual(row['status'], 'INFO', row)
+                self.assertIn('setup-ssh-hardening.sh leaves it there whenever root may log in with a key', row['detail'])
+                self.assertIn('permitrootlogin', row['detail'])
+        passed = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD)), 'ssh.hardening')
+        self.assertEqual(passed['status'], 'PASS')
+        self.assertIn('permitrootlogin no', passed['detail'])
+        self.assertNotIn('maxauthtries', passed['detail'])
+
+    def test_one_row_and_the_warn_names_only_the_weak_directives(self):
+        ctx = run_group(fixture=Fixture(sshd=SSHD_DEFAULTS))
+        self.assertEqual(len([r for r in ctx.checks if r['id'] == 'ssh.hardening']), 1)
+        self.assertEqual(by_id(ctx, 'ssh.hardening')['status'], 'WARN')
+
+    def test_a_permitrootlogin_that_is_neither_no_nor_a_default_warns(self):
+        for value in ('yes', 'forced-commands-only'):
+            with self.subTest(value):
+                row = by_id(run_group(fixture=Fixture(sshd=SSHD_GOOD.replace('permitrootlogin no', 'permitrootlogin ' + value))), 'ssh.hardening')
+                self.assertEqual(row['status'], 'WARN', row)
+                self.assertIn('permitrootlogin', row['detail'])
 
     def test_sshd_that_cannot_be_read_skips(self):
         self.assertEqual(by_id(run_group(fixture=Fixture(sshd=None)), 'ssh.hardening')['status'], 'SKIP')
