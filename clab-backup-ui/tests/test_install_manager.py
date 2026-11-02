@@ -1981,7 +1981,7 @@ class AdvancedQuestionsTests(unittest.TestCase):
         # `UI_PORT=8081` with `UI_HTTP_PORT=` (and the export/comment forms Compose reads) is the collision; the
         # question is judged from the real reader on the file that will be copied, not from a stub.
         import tempfile
-        for text in ('UI_PORT=8081\nUI_HTTP_PORT=\n', 'export UI_PORT=8081 # tls\nexport UI_HTTP_PORT= # none\n'):
+        for text in ('UI_PORT=8081\nUI_HTTP_PORT=\n', 'export UI_PORT=8081 # tls\nexport UI_HTTP_PORT=\n'):   # a comment after an empty `=` is Compose's value, not empty
             with self.subTest(text=text), tempfile.TemporaryDirectory() as folder:
                 old = Path(folder) / '.env'
                 old.write_text(text)
