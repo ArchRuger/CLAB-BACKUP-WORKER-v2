@@ -14,6 +14,7 @@ The `ip -j` fixture below (IP_ADDRESS, IP_ROUTE4, IP_ROUTE6) is shared with test
 docker0, br-*, veth*, virbr*, cni*, clab*, loopback and link-local addresses never are.
 """
 import contextlib
+import errno
 import fcntl
 import importlib.util
 import io
@@ -111,14 +112,21 @@ class Runner:
 
 
 class Chown:
+    """A double for os.chown (by path) and os.fchown (by descriptor; the name is read from /proc)."""
+
     def __init__(self):
         self.calls = []
+        self.descriptors = 0
 
     def __call__(self, path, uid, gid):
         # Files are owned while still under their temporary name (.key.pem-abc123) and moved afterwards.
         name = Path(path).name
         match = re.fullmatch(r'\.([a-z.]+)-[A-Za-z0-9_]+', name)
         self.calls.append((match.group(1) if match else name, uid, gid))
+
+    def descriptor(self, fd, uid, gid):
+        self.descriptors += 1
+        self(os.readlink(f'/proc/self/fd/{fd}'), uid, gid)
 
 
 def tls(tmp, runner=None, allowed='', image_env=None, hostname='archtop', **kw):
@@ -131,6 +139,8 @@ def tls(tmp, runner=None, allowed='', image_env=None, hostname='archtop', **kw):
     if image_env is not None:
         (repo / 'deploy/image.env').write_text(image_env)
     kw.setdefault('chown', Chown())
+    if isinstance(kw['chown'], Chown):
+        kw.setdefault('fchown', kw['chown'].descriptor)
     return setup_tls.Tls(tls_dir=Path(tmp) / 'tls', repo=repo, run=runner or Runner(), hostname=lambda: hostname, **kw)
 
 
@@ -275,27 +285,33 @@ class NamesTests(unittest.TestCase):
             self.assertEqual(values['CAPTURE_SESSION_TOKEN'], 't#1')
             self.assertEqual(values['CAPTURE_EDGESHARK_URL'], 'http://127.0.0.1:5001/#frag', 'a # without a space before it is part of the value')
 
-    def test_an_empty_value_before_an_inline_comment_is_empty_the_way_compose_and_the_installer_read_it(self):
-        # `UI_PORT= # note`: Compose starts the comment at " #" and reads an empty value (the default); the installer
-        # does the same. _env_value stripped first, read "# note" as the value and refused it as a port, so a
-        # .env the installer accepted stopped setup-tls.sh.
-        self.assertEqual(setup_tls._env_value(' # note'), '')
-        self.assertEqual(setup_tls._env_value('# note'), '# note', 'a # without whitespace before it is the value, as Compose reads it')
-        self.assertEqual(setup_tls._env_value(''), '')
-        self.assertEqual(setup_tls._env_value('   '), '')
-        self.assertEqual(setup_tls._env_value('  8443  # tls '), '8443')
+    def test_env_values_read_an_inline_comment_exactly_as_docker_compose_config_does(self):
+        # Verified against `docker compose config` (Compose v5.6.1) on a scratch project with these very lines: a
+        # comment starts at a space followed by `#`, not at a tab and not at the value's first character, and a
+        # quoted value ends at its closing quote. `UI_PORT= # note` is therefore the value "# note", which Compose
+        # would hand uvicorn as --port, so setup_tls refuses it as a port instead of reading it as the default.
+        readings = {'A= # note': '# note', 'C=\t# tab note': '# tab note', 'E=8443\t# tab': '8443\t# tab', 'D=8443 # tls': '8443',
+                    'G= "q" # c': 'q', 'H=': '', 'I=#x': '#x'}
         with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / '.env'
+            path.write_text('\n'.join(readings) + '\n')
+            values = setup_tls.env_values(path)
+            for line, expected in readings.items():
+                with self.subTest(line=line):
+                    self.assertEqual(values[line.split('=', 1)[0]], expected)
             repo = Path(tmp) / 'repo'
             (repo / 'clab-backup-ui').mkdir(parents=True)
-            (repo / 'clab-backup-ui/.env').write_text('UI_PORT= # note\nUI_HTTP_PORT=\t# set after the upgrade\n')
+            (repo / 'clab-backup-ui/.env').write_text('UI_PORT= # note\n')
             service = setup_tls.Tls(tls_dir=Path(tmp) / 'tls', repo=repo, run=Runner(), chown=Chown())
-            lines = []
-            service.out = lines.append
-            self.assertIsNone(service.settle_ports('source'), 'both ports are the defaults, 8443 and 8081: nothing to settle')
-            self.assertEqual(lines, [])
-            self.assertEqual(setup_tls._port(setup_tls.env_values(repo / 'clab-backup-ui/.env'), 'UI_PORT', 8443), (8443, False))
-            self.assertEqual(setup_tls._port(setup_tls.env_values(repo / 'clab-backup-ui/.env'), 'UI_HTTP_PORT', 8081), (8081, False))
-            self.assertEqual((repo / 'clab-backup-ui/.env').read_text(), 'UI_PORT= # note\nUI_HTTP_PORT=\t# set after the upgrade\n', 'the file is left as it was')
+            service.out = lambda line: None
+            with self.assertRaisesRegex(ValueError, 'not a port number') as error:
+                service.settle_ports('source')
+            self.assertIn("UI_PORT='# note'", str(error.exception))
+            (repo / 'clab-backup-ui/.env').write_text('UI_PORT=\nUI_HTTP_PORT=8443 # the same\n')
+            with self.assertRaisesRegex(ValueError, 'UI_HTTP_PORT'):
+                service.settle_ports('source')
+            (repo / 'clab-backup-ui/.env').write_text('UI_PORT=\nUI_HTTP_PORT=\n')
+            self.assertIsNone(service.settle_ports('source'), 'an empty value is the default')
 
     def test_openssl_argv_is_exact(self):
         argv = setup_tls.openssl_argv('192.0.2.10', ['IP:192.0.2.10', 'DNS:localhost'], Path('/t/key.pem'), Path('/t/cert.pem'))
@@ -851,11 +867,17 @@ class SelfSignedTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(other.stat().st_mode), 0o644, 'fchmod never ran on an inode with another name')
         lock.unlink()
         other.unlink()
+        lock.mkdir()
+        with self.assertRaisesRegex(ValueError, 'not a regular file') as error:
+            service.ensure()
+        self.assertIn(f'sudo rm -rf {lock}', str(error.exception), 'a directory needs rm -rf')
+        lock.rmdir()
         lock.touch(mode=0o666)
         as_created = stat.S_IMODE(lock.stat().st_mode)   # 0o666 less the umask
         self.assertNotEqual(as_created, 0o600)
-        service.lock_owner = lambda path, st: 65534
-        with self.assertRaisesRegex(ValueError, 'belongs to uid 65534') as error:
+        other = os.geteuid() + 1   # whoever runs the suite, this is somebody else
+        service.lock_owner = lambda path, st: other
+        with self.assertRaisesRegex(ValueError, f'belongs to uid {other}') as error:
             service.ensure()
         self.assertIn(removal, str(error.exception))
         self.assertEqual(stat.S_IMODE(lock.stat().st_mode), as_created, "another account's file is not chmod'ed")
@@ -866,6 +888,78 @@ class SelfSignedTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(lock.stat().st_mode), 0o600)
         self.assertEqual(os.stat(lock).st_nlink, 1)
         self.assertTrue(pair_matches(tls_dir))
+
+    def test_a_tls_directory_owned_by_another_account_is_refused_before_the_lock_is_opened(self):
+        # A pre-existing tls/ owned by another account was kept (chmod 0755, never re-owned) and root's .lock, cert.pem,
+        # key.pem and mode were written inside it: that account could mv over key.pem, replace .lock and race the
+        # mode repair. It is refused now, before the lock is opened, and never re-owned (a planted pair with a mode
+        # file saying self-signed would otherwise be kept and served).
+        tls_dir = self.tmp / 'tls'
+        tls_dir.mkdir(mode=0o700)
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        other = os.geteuid() + 1
+        service.directory_owner = lambda path, st: other
+        cert, key = make_pair(self.tmp, 'given')
+        steps = (service.ensure, service.prepare, service.renew, service.self_signed, lambda: service.set_names(['x.example.edu']),
+                 lambda: service.names_mode(['x.example.edu']), lambda: service.install_provided(cert, key))
+        for step in steps:
+            with self.assertRaisesRegex(ValueError, f'belongs to uid {other}') as error:
+                step()
+            message = str(error.exception)
+            self.assertIn(str(tls_dir), message)
+            self.assertIn(f'sudo chown root:root {tls_dir}', message)
+            self.assertIn('check', message.lower(), 'the sentence says to check the files inside')
+        self.assertEqual(sorted(p.name for p in tls_dir.iterdir()), [], 'no lock and no file was made')
+        self.assertEqual(stat.S_IMODE(tls_dir.stat().st_mode), 0o700, "the directory is neither re-owned nor chmod'ed")
+        self.assertEqual(service.primary(), '192.0.2.10', 'the read-only modes do not look at the directory owner')
+        service.directory_owner = lambda path, st: st.st_uid
+        self.assertEqual(service.ensure(), 'no certificate: cert.pem is missing')
+        self.assertEqual(stat.S_IMODE(tls_dir.stat().st_mode), 0o755)
+        self.assertEqual(setup_tls.Tls().directory_owner(tls_dir, os.lstat(tls_dir)), os.geteuid(), 'the shipped seam reads the owner of the lstat')
+
+    def test_repair_modes_judges_and_changes_each_file_on_a_descriptor_and_never_follows_a_link(self):
+        # repair_modes lstat'ed a file and then chmod'ed and chown'ed it by path: a link swapped in between made a
+        # root 0600 file elsewhere 0644. Each file is opened O_NOFOLLOW once now and judged and changed on that
+        # descriptor; a link at one of the names is left alone.
+        chown = Chown()
+        service = tls(self.tmp, chown=chown)
+        service.out = lambda line: None
+        service.ensure()
+        tls_dir = self.tmp / 'tls'
+        secret = self.tmp / 'secret'
+        secret.write_text('s\n')
+        secret.chmod(0o600)
+        (tls_dir / 'names').symlink_to(secret)
+        (tls_dir / 'key.pem').chmod(0o644)
+        (tls_dir / 'cert.pem').chmod(0o600)
+        chown.calls.clear()
+        real_chmod, real_chown = os.chmod, os.chown
+
+        def chmod_by_path_refused(path, mode, *args, **kwargs):
+            if not isinstance(path, int) and Path(path).parent == tls_dir:
+                raise AssertionError(f'repair_modes chmod\'ed {path} by path')
+            return real_chmod(path, mode, *args, **kwargs)
+
+        def chown_by_path_refused(path, uid, gid, *args, **kwargs):
+            if not isinstance(path, int) and Path(path).parent == tls_dir:
+                raise AssertionError(f'repair_modes chown\'ed {path} by path')
+            return real_chown(path, uid, gid, *args, **kwargs)
+        with unittest.mock.patch('os.chmod', chmod_by_path_refused), unittest.mock.patch('os.chown', chown_by_path_refused):
+            repaired = service.repair_modes()
+        # Run as root the two files with wrong modes are repaired; run as another account every file is also
+        # re-owned (the fake fchown leaves the real owner), so the list is checked for what it must and must not hold.
+        self.assertIn('cert.pem', repaired)
+        self.assertIn('key.pem', repaired)
+        self.assertNotIn('names', repaired, 'the link is left alone')
+        self.assertEqual(stat.S_IMODE((tls_dir / 'key.pem').stat().st_mode), 0o640)
+        self.assertEqual(stat.S_IMODE((tls_dir / 'cert.pem').stat().st_mode), 0o644)
+        self.assertEqual(stat.S_IMODE(secret.stat().st_mode), 0o600, 'the link target is never touched')
+        self.assertTrue((tls_dir / 'names').is_symlink())
+        self.assertIn(('cert.pem', 0, 0), chown.calls)
+        self.assertIn(('key.pem', 0, 10001), chown.calls)
+        self.assertNotIn('names', [name for name, _uid, _gid in chown.calls])
+        self.assertEqual(chown.descriptors, len(chown.calls), 'every change went through fchown on the open descriptor')
 
     def test_the_names_mode_holds_one_lock_from_the_names_write_through_ensure(self):
         # main() ran set_names and then ensure as two lock sections: another writer could take the lock in
@@ -1253,6 +1347,59 @@ class ProvidedTests(unittest.TestCase):
         self.assertTrue(pair_matches(self.tmp / 'tls'))
         self.assertEqual(service.certificate_facts()['sans'], {'DNS:other.example.edu'})
 
+    def test_a_dot_dot_component_a_trailing_slash_and_a_relative_path_are_read_the_way_the_kernel_reads_them(self):
+        # os.path.abspath collapsed `dir/lnk/../plain.pem` by text to dir/plain.pem while the kernel reads sub/plain.pem
+        # through the link, and dropped the trailing slash of `plain.pem/` which the kernel refuses (ENOTDIR). Both are
+        # refused with a sentence now; a relative path is joined onto the working directory without collapsing.
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        cert, key = make_pair(self.source, 'good')
+        other_cert, other_key = make_pair(self.source, 'other')
+        sub = self.source / 'sub'
+        sub.mkdir()
+        shutil.copyfile(other_key, sub / 'plain.pem')
+        shutil.copyfile(key, self.source / 'plain.pem')
+        (self.source / 'lnk').symlink_to(sub)
+        with self.assertRaisesRegex(ValueError, r'\.\.') as error:
+            service.install_provided(cert, self.source / 'lnk' / '..' / 'plain.pem')
+        self.assertIn(str(self.source / 'lnk' / '..' / 'plain.pem'), str(error.exception))
+        self.assertFalse((self.tmp / 'tls/key.pem').exists())
+        with self.assertRaisesRegex(ValueError, 'ends with a slash|trailing slash|not a directory') as error:
+            service.install_provided(cert, str(self.source / 'plain.pem') + '/')
+        self.assertFalse((self.tmp / 'tls/key.pem').exists())
+        with self.assertRaisesRegex(ValueError, r'\.\.'):
+            service.install_provided(str(self.source / 'sub' / '..' / cert.name), key)
+        self.assertFalse((self.tmp / 'tls/cert.pem').exists())
+        here = os.getcwd()
+        os.chdir(self.source)
+        try:
+            service.install_provided(cert.name, 'plain.pem')
+        finally:
+            os.chdir(here)
+        self.assertTrue(pair_matches(self.tmp / 'tls'))
+        self.assertEqual((self.tmp / 'tls/key.pem').read_bytes(), key.read_bytes(), 'a relative path names the file in the working directory')
+
+    def test_a_link_that_vanishes_between_its_detection_and_its_inspection_gives_a_sentence(self):
+        # The open with O_NOFOLLOW failed with ELOOP and the O_PATH reopen that reads the link's owner raced whoever
+        # owns the directory: its failure reached the person as a raw OSError. It is a sentence now.
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        cert, key = make_pair(self.source, 'good')
+        link = self.source / 'link.pem'
+        link.symlink_to(key)
+        real_open = os.open
+
+        def vanishing(path, flags, *args, **kwargs):
+            if path == link.name and flags & os.O_PATH and 'dir_fd' in kwargs:
+                raise OSError(errno.EBADF, 'Bad file descriptor')
+            return real_open(path, flags, *args, **kwargs)
+        with unittest.mock.patch('os.open', vanishing):
+            with self.assertRaisesRegex(ValueError, 'changed while it was being checked') as error:
+                service.install_provided(cert, link)
+        self.assertIn(str(link), str(error.exception))
+        self.assertNotIn('Errno', str(error.exception))
+        self.assertFalse((self.tmp / 'tls/key.pem').exists())
+
     def test_a_combined_certificate_and_key_file_given_as_the_certificate_is_refused(self):
         # cert.pem is 0644 and readable by every VM account: a private key must never be copied into it.
         cert, key = make_pair(self.source, 'good')
@@ -1472,6 +1619,7 @@ DRIVER = '''import importlib.util
 import os
 import sys
 os.chown = lambda path, uid, gid, *args, **kwargs: None
+os.fchown = lambda descriptor, uid, gid: None
 spec = importlib.util.spec_from_file_location('setup_tls', sys.argv[1])
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)

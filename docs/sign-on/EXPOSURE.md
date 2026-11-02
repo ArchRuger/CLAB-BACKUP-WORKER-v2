@@ -273,6 +273,13 @@ opened with `O_NOFOLLOW|O_NONBLOCK` and judged on the open descriptor before any
 hard link or another account's file at that name is refused with a sentence that names the file and
 `sudo rm -f /srv/containerlab-node-manager/tls/.lock`. The names mode holds this one lock from its `tls/names` write
 through the certificate check that follows.
+The directory `/srv/containerlab-node-manager/tls/` is created root:root 0755 by `setup-tls.sh` and is never taken over:
+a pre-existing directory that belongs to another account is refused by every writing mode before the lock is opened,
+without re-owning it or writing anything into it, with a sentence that names the directory, says to check the files
+inside it, and gives `sudo chown root:root /srv/containerlab-node-manager/tls` (or removing it) and rerunning. The mode
+repair opens each file once with `O_NOFOLLOW` and judges and changes it on that descriptor (`fstat`, `fchmod`,
+`fchown`); a link found at one of the names is left alone. A `.env` value is read exactly as `docker compose config`
+reads it (a comment starts at a space followed by `#`), so `UI_PORT= # note` is refused as not a port number.
 
 ### 3.4 A provided certificate
 
@@ -305,7 +312,8 @@ alone, and a path through any link must end at a root-owned regular file under `
 `live/NAME/*.pem` layout). Every other link is refused before anything is installed, with the offending link and the
 real path named: a student-owned link in front of certbot's own, a root-owned link to a root-owned key outside the
 archive (an SSH host key), a dangling link, a chain of more than 40 links. The installed files are regular files with
-the modes of 3.3.
+the modes of 3.3. A path that ends in `/` or contains a `..` component is refused with a sentence (the kernel resolves
+`..` through the links before it, a text rule would not); a relative path names a file under the working directory.
 
 ### 3.5 Rotation of a self-signed certificate
 

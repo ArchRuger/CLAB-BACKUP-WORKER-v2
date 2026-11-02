@@ -267,7 +267,9 @@ class ReleaseConsistencyTests(unittest.TestCase):
                                                  'Placeholder label: http://<host>.example.edu:8081/.\n'
                                                  'Placeholder inside a label: http://manager-<n>.example.edu:8081\n'
                                                  'Template: http://{{ host }}:8081/ and `http://{{manager_host}}:8081`.\n'
-                                                 'Zone: http://[fe80::1%eth0]:8081/.\n', encoding='utf-8')
+                                                 'Zone: http://[fe80::1%eth0]:8081/.\n'
+                                                 'Bracketed placeholder with a space: http://[<VM address>]:8081/.\n'
+                                                 'Shell variable: http://${VM}:8081 and `http://${MANAGER_HOST}:8081/`.\n', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'disagrees') as error:
             release.verify_docs(self.root)
         message = str(error.exception)
@@ -281,7 +283,9 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertIn('docs/GUIDE.md:9: plain-HTTP manager URL', message, 'a <placeholder> inside a label is a manager URL too')
         self.assertIn('docs/GUIDE.md:10: plain-HTTP manager URL', message, 'a {{ template }} host is a manager URL too')
         self.assertIn('docs/GUIDE.md:11: plain-HTTP manager URL', message, 'a bracketed literal with a non-hex zone is a manager URL too')
-        self.assertEqual(message.count('plain-HTTP manager URL'), 10, 'one report per line, each line once')
+        self.assertIn('docs/GUIDE.md:12: plain-HTTP manager URL', message, 'a bracketed <placeholder> with a space is a manager URL too')
+        self.assertIn('docs/GUIDE.md:13: plain-HTTP manager URL', message, 'a ${shell variable} host is a manager URL too')
+        self.assertEqual(message.count('plain-HTTP manager URL'), 12, 'one report per line, each line once')
         self.assertIn('https://', message, 'the message says what to write instead')
         self.assertNotIn('archive', message)
         self.assertNotIn('CHANGELOG', message)
