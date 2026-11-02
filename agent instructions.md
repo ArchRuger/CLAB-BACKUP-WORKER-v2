@@ -10,15 +10,15 @@ The evidence is in `clab-backup-ui/VALIDATION.md` (1.31.9). Preserve:
    end. The two tests after Q390-01 in `tests/test_save_header_ui.js` pin both sides.
 2. **The chip toggles.** A click on the chip of an open panel closes it, and Playwright's `to_be_enabled` does not
    wait for visibility: a browser check that clicks the chip must know whether the panel is open.
-3. **Merging into `main`.** `main` carries the sign-on work (pull request 80) merged but not released, still under
-   1.31.8; its release step is 1.32.0 (`docs/sign-on/PICKUP.md`). A merge of this release conflicts where sign-on
-   changed the marker lines too (the pages, `app.js`, `INSTALL.md`, `QUICK-INSTALL.md`) and in `preferences.js`.
-   Proven on a scratch copy of `main` (`750accc`): keep `main`'s side of every file `set-release.py` lists, `VERSION`
-   included; set the `SHORTCUT_EXCLUSIONS` citation of the panel's `keydown` line to `save-header.js:680` (the
-   reverse pin in `test_shell_ui.js` checks it); run `python3 deploy/set-release.py 1.31.9` once (26 files, with
-   sign-on's three new pages). `verify-release.py` then passes and `node --test tests/*.js` reports 1432 of 1432. The
-   note in `docs/sign-on/TOOLS.md` that `save_flow.py` stops at `#save-see` is then out of date.
-4. Everything the 1.31.8 section below preserves.
+3. **This release carries sign-on unreleased.** It was cut from `fac28de` and then merged with `main` at `0d793b5`
+   (pull requests 80 and 81): main's side of every file `set-release.py` lists, then the tool once; the
+   `SHORTCUT_EXCLUSIONS` citation of the panel's `keydown` line is `save-header.js:680`. The sign-on stream's notes stay
+   under 1.31.8 until its own release, 1.32.0 (`docs/sign-on/PICKUP.md`), moves them into its section and writes the
+   `CLAUDE.md` sign-in invariant; until then `CLAUDE.md`'s "There is no login" line is stale.
+4. **Never parse a name in OpenSSL's default format.** It differs by release (3.0 prints `CN = name`, newer releases
+   `CN=name`); `setup_tls.py` asks for `-nameopt oneline`, and `test_setup_tls.py` stands in for the newer default
+   with a hook.
+5. Everything the 1.31.8 section below preserves.
 
 # vJunos-router as a supported kind — 1.31.8
 

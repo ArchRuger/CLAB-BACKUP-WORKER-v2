@@ -1,7 +1,8 @@
 # A save's end the person already saw stays closed — 1.31.9
 
-Branch `claude/wizardly-davinci-vejmya` from `fac28de` (release 1.31.8, before the sign-on merge). Cloud session, run as
-root; no VM. Evidence by kind:
+Branch `claude/wizardly-davinci-vejmya`, cut from `fac28de` (release 1.31.8, before the sign-on merge) and then merged
+with `main` at `0d793b5` (pull requests 80 and 81), with the TLS fix on top; the merged tree's evidence is its own
+paragraph below. Cloud session, run as root; no VM. Evidence by kind:
 
 **Diagnosis (fixture).** `docs/git-redesign/tools/integration/save_flow.py` on a fresh fixture stopped as reported: 47
 PASS, then the click on `#save-see` timed out (the element was not visible). A copy of its steps that recorded the
@@ -42,12 +43,29 @@ conditions only. On the release tree: `save_flow.py` 105 checks, 0 failed, at 14
 `save_flow.py` 105 checks, 0 failed, against the fixture that signs requests in as its administrator; a scratch merge of
 this release into it is described in the handoff section (item 3).
 
-**Not run.** No VM, live device, Docker build or image; `evidence_pass.py`. CI runs on the push; its result is not
-recorded in this section.
+**The merged tree** (`main` at `0d793b5` merged in, the TLS fix on top). `main`'s own CI had stopped at the stdlib
+group since pull request 80: first an import error that pull request 81 fixed, then two `test_setup_tls.py` tests that
+read the certificate subject in OpenSSL's default name format, which the runner's newer OpenSSL prints differently
+(CI run 41381752310). The new test there failed with that CI message on this session's OpenSSL 3.0.13 before the fix
+and passes after; `risk-reviewer` (read-only) found nothing to fix. Every step of `.github/workflows/release-check.yml`
+that this container can run, run in order from the workflow file: the release and link checks, the stdlib group (1214
+tests), shell and script syntax, the Textual installer tests (146), Junos kinds (21), operations and lab actions
+(1738), the backup pipeline (124), network design (659), the browser files (1432 of 1432), the capture provider (83)
+and `docker compose … config`, each exit 0. `save_flow.py` against the fixture, which now signs requests in as its
+administrator: 105 checks, 0 failed, at 1440×900 and at 390×844; `drawers_flow.py` 48 of 48, `folder_flow.py` 135 of
+135, `load_flow.py` 72 of 72, `page_fixes.py` 22 of 22, `old_addresses.py` 25 of 25.
+
+**Not run.** No VM, live device, Docker build or image; `evidence_pass.py`; on the merged tree the editor bundle
+rebuild (Node 24; no editor file changed) and the capture smoke with real packets (no Docker daemon here), which CI
+runs. CI runs on the push; its result is not recorded in this section.
 
 **Open.** A retried upload that fails again with the same status does not open the panel by itself: `saveHeader.opened`
 is keyed by job and status (HEADER.md 2.5 condition 4), unchanged since 1.31.0. An older save's end that lands between
 the paint and the close clears `watched`, so that close marks nothing; it needs one refresh to outlast a whole save.
+
+# vJunos-router as a supported kind — 1.31.8
+
+Branch `claude/vjunos-router-supported` from the merged `main` (pull request 78). Evidence by kind:
 
 **Static.** `python3 deploy/verify-release.py`, `python3 docs/maintenance-audit/tools/check_links.py`, `git diff --check`.
 
