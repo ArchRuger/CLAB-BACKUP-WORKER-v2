@@ -38,9 +38,10 @@ removed again, so the directory never holds a certificate without its key, a pai
 a mode that describes another pair. Every writing mode holds an exclusive ``flock`` on ``tls/.lock``
 (root's, 0600, never removed) from its first read of the directory through its last move, so two runs
 at once never mix two key pairs or overwrite a provided pair while it is being installed; a second run
-waits up to a minute, then refuses with a sentence. The lock file itself must be a plain file with one
-name, owned by the account running the tool (root); anything else at that name is refused with the
-removal command. A given --cert or --key path is walked from / through directory descriptors and
+waits up to a minute, then refuses with a sentence. The directory itself must be root's: one that belongs
+to another account is refused before any lock is opened and never re-owned. The lock file must be a plain
+file with one name, owned by the account running the tool (root); anything else at that name is refused
+with the removal command. The mode repair judges and changes each file on an O_NOFOLLOW descriptor. A given --cert or --key path is walked from / through directory descriptors and
 opened exactly once: every symlink on the way must be root's in a directory root alone writes, a path
 through any link must end in certbot's archive at a root-owned file, and openssl reads staged copies of
 the opened bytes, never the person's path (``Tls._regular_file``). A cert.pem that carries a PRIVATE KEY block is
@@ -280,13 +281,15 @@ ENV_LINE = re.compile(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$')
 
 
 def _env_value(raw):
-    """The value as docker compose (and the installer) reads it: quotes removed, an unquoted value ends at a
-    `#` that follows whitespace (so `KEY= # note` is the empty value, the default), nothing evaluated."""
+    """The value as `docker compose config` reads it (checked against Compose v5.6.1): quotes removed; an
+    unquoted value ends at a space followed by `#`, never at a tab and never at the value's first character
+    (`KEY= # note` and `KEY=\t# note` are the values "# note", `KEY=8443\t# tab` keeps its tab); nothing
+    evaluated."""
     stripped = raw.strip()
     if stripped[:1] in ('"', "'"):
         end = stripped.find(stripped[0], 1)
         return stripped[1:end] if end > 0 else stripped[1:]
-    return re.split(r'\s+#', raw, maxsplit=1)[0].strip()
+    return stripped.split(' #', 1)[0].rstrip()
 
 
 def env_values(path):
@@ -319,11 +322,12 @@ def note(text):
 
 class Tls:
     def __init__(self, tls_dir=TLS_DIR, repo=REPO, run=subprocess.run, chown=os.chown, hostname=socket.gethostname, out=print,
-                 replace=os.replace, err=note):
+                 replace=os.replace, err=note, fchown=os.fchown):
         self.tls_dir = Path(tls_dir)
         self.repo = Path(repo)
         self.run = run
         self.chown = chown
+        self.fchown = fchown
         self.hostname = hostname
         self.out = out
         self.err = err
@@ -335,6 +339,7 @@ class Tls:
         # owner of tls/.lock (tests cannot make files that belong to another account).
         self.before_open = lambda path: None
         self.lock_owner = lambda path, found: found.st_uid
+        self.directory_owner = lambda path, found: found.st_uid
 
     # -- one writer at a time
     @contextlib.contextmanager
@@ -363,11 +368,14 @@ class Tls:
         except OSError as error:
             if error.errno == errno.ELOOP:
                 raise ValueError(f'{lock} is a symlink; the lock file must be a plain file. {removal}') from None
+            if error.errno == errno.EISDIR:
+                raise ValueError(f'{lock} is not a regular file (a directory is there); the lock file must be a plain file. '
+                                 f'Remove it with: sudo rm -rf {lock}, then rerun.') from None
             raise ValueError(f'{lock} cannot be opened ({error.strerror or error}). {removal}') from None
         try:
             found = os.fstat(descriptor)
             if not stat.S_ISREG(found.st_mode):
-                raise ValueError(f'{lock} is not a regular file (a FIFO, a device or a directory is there); the lock file must be a plain file. {removal}')
+                raise ValueError(f'{lock} is not a regular file (a FIFO or a device is there); the lock file must be a plain file. {removal}')
             if found.st_nlink != 1:
                 raise ValueError(f'{lock} is a hard link ({found.st_nlink} names share it); the lock file must have one name. {removal}')
             owner = self.lock_owner(lock, found)
@@ -433,10 +441,24 @@ class Tls:
             raise ValueError(f'Refusing a symlink at {self.tls_dir}.')
 
     def prepare_directory(self):
+        """The tls directory exists, is root's and is 0755 (EXPOSURE.md 3.3). A directory that belongs to another
+        account is refused, before any lock is opened and without re-owning it: that account could move its own
+        files over the pair, replace the lock and race the mode repair, and a planted pair with a mode file saying
+        self-signed would be kept and served if the directory were simply taken over."""
         self.check_directory()
-        if not self.tls_dir.is_dir():
+        try:
+            found = os.lstat(self.tls_dir)
+        except FileNotFoundError:
             self.tls_dir.mkdir(mode=0o755)
             self.chown(self.tls_dir, 0, 0)
+            found = os.lstat(self.tls_dir)
+        if not stat.S_ISDIR(found.st_mode):
+            raise ValueError(f'{self.tls_dir} is not a directory; move it away and rerun.')
+        owner = self.directory_owner(self.tls_dir, found)
+        if owner != os.geteuid():
+            raise ValueError(f'{self.tls_dir} belongs to uid {owner}, not to the account running setup-tls.sh (uid {os.geteuid()}), and '
+                             'nothing is written into another account\'s directory. Check the files inside it, then either give it to '
+                             f'root with: sudo chown root:root {self.tls_dir}, or remove it with: sudo rm -rf {self.tls_dir}, and rerun.')
         os.chmod(self.tls_dir, 0o755)
 
     def set_owner(self, path, mode, gid):
@@ -502,6 +524,10 @@ class Tls:
                     pass
             raise
 
+    @staticmethod
+    def _holds_a_key(head):
+        return re.search(rb'-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----', head) is not None
+
     def certificate_holds_a_key(self):
         """True when cert.pem carries a PRIVATE KEY block (a combined file copied in by hand): such a file
         is never widened to 0644, because every VM account can read cert.pem."""
@@ -510,26 +536,32 @@ class Tls:
                 head = stream.read(MAX_FILE + 1)
         except OSError:
             return False
-        return re.search(rb'-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----', head) is not None
+        return self._holds_a_key(head)
 
     def repair_modes(self):
         """Give every file of the directory its owner and mode of EXPOSURE.md 3.3 again; returns the
         names that needed it. Content is never touched: a wrong mode is no reason for a new fingerprint.
-        A cert.pem that holds a private key is left as it is (pair_problem refuses it)."""
+        Each file is opened once (O_NOFOLLOW, non-blocking) and judged and changed on that descriptor, so a
+        link swapped in for a name is left alone instead of followed by a chmod by path. A cert.pem that
+        holds a private key is left as it is (pair_problem refuses it)."""
         repaired = []
         for name, (mode, gid) in FILES.items():
-            path = self.path(name)
             try:
-                existing = os.lstat(path)
+                descriptor = os.open(self.path(name), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
             except OSError:
                 continue
-            if not stat.S_ISREG(existing.st_mode):
-                continue
-            if name == 'cert.pem' and self.certificate_holds_a_key():
-                continue
-            if stat.S_IMODE(existing.st_mode) != mode or existing.st_uid != 0 or existing.st_gid != gid:
-                self.set_owner(path, mode, gid)
-                repaired.append(name)
+            try:
+                existing = os.fstat(descriptor)
+                if not stat.S_ISREG(existing.st_mode):
+                    continue
+                if name == 'cert.pem' and self._holds_a_key(os.pread(descriptor, MAX_FILE + 1, 0)):
+                    continue
+                if stat.S_IMODE(existing.st_mode) != mode or existing.st_uid != 0 or existing.st_gid != gid:
+                    os.fchmod(descriptor, mode)
+                    self.fchown(descriptor, 0, gid)
+                    repaired.append(name)
+            finally:
+                os.close(descriptor)
         if repaired:
             self.out('File modes repaired: ' + ', '.join(repaired) + '.')
         return repaired
@@ -865,7 +897,15 @@ class Tls:
         otherwise carry any root-owned key on the host, such as an SSH host key, into tls/key.pem where the
         container reads it. The bytes come from the descriptor the walk opened (at most MAX_FILE), and the
         callers hand openssl staged copies of those bytes, never the person's path again."""
-        given = Path(os.path.abspath(path))
+        text = os.fsdecode(os.fspath(path))
+        if text.endswith('/') and text.strip('/'):
+            raise ValueError(f'The {what} {path} ends with a slash, which names a directory; give the file itself.')
+        # Joined onto the working directory without collapsing: os.path.abspath would fold `lnk/../x` by text while
+        # the kernel resolves the link first, so a `..` component is refused rather than guessed.
+        given = Path(text if text.startswith('/') else os.path.join(os.getcwd(), text))
+        if '..' in given.parts:
+            raise ValueError(f'The {what} {path} contains a ".." component, which the kernel resolves through the links before it; '
+                             'give the path without "..".')
         archive = Path(os.path.realpath(self.archive))
         pending = list(given.parts[1:])
         resolved = []
@@ -900,7 +940,11 @@ class Tls:
                 except OSError as error:
                     if error.errno not in (errno.ELOOP, errno.ENOTDIR):
                         raise ValueError(f'The {what} {path} cannot be opened ({error.strerror or error}).') from None
-                    child = os.open(name, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory)
+                    try:
+                        child = os.open(name, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory)
+                    except OSError as again:
+                        raise ValueError(f'The {what} {path} changed while it was being checked ({here} was a symlink a moment ago; '
+                                         f'now: {again.strerror or again}). Give the file itself and rerun.') from None
                 found = os.fstat(child)
                 if stat.S_ISLNK(found.st_mode):
                     hops += 1
