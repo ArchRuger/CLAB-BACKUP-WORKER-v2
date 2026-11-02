@@ -590,15 +590,24 @@ up `ufw` itself ([Firewall and SSH](INSTALL.md#firewall-and-ssh)): it allows eve
 port `sshd` listens on, 8443 and 8081 from anywhere, denies other incoming traffic,
 keeps rules you already had and refuses when enabling it could lock out your session. It
 configures no network routes, no Proxmox firewall and no router, so a rule scoped to your
-workstation is still your decision. To narrow the manager ports to one workstation
-instead, replace the installer's rules with your own, replacing the placeholder, and
-check with `sudo ufw status`:
+workstation is still your decision. Adding a scoped allow does not narrow anything by itself:
+the installer's allows from anywhere stay and still decide. To narrow the manager ports to one
+workstation instead, add your own rules first, then remove the installer's, replacing the
+placeholder:
 
 ```bash
-sudo ufw status
 sudo ufw allow from WORKSTATION_IP to any port 22 proto tcp
 sudo ufw allow from WORKSTATION_IP to any port 8443 proto tcp
+sudo bash "$HOME/projects/clab-manager/deploy/setup-firewall.sh" --remove
+sudo ufw delete allow 22/tcp
+sudo ufw status
 ```
+
+`--remove` deletes the installer's rules for 8443 and 8081 and keeps its SSH allow while `ufw`
+denies other incoming traffic, because deleting that one first would block new SSH logins. Run
+the last `delete` only after `sudo ufw show added` lists your own SSH rule (use the scoped rule above: a plain `ufw allow 22/tcp` would take the installer's rule over
+instead of being kept apart from it). The redirect on 8081 then stops answering unless you add a rule for it.
+Later upgrades keep a narrowed rule.
 
 Do not enable a firewall blindly during a remote session. From Windows PowerShell, test:
 

@@ -176,6 +176,9 @@ are removed during the upgrade; download saved captures first. A release that ad
 sign-in also changes the address from plain HTTP to HTTPS: read [Ports](#ports) for what
 happens to your settings, and expect the first start to have no accounts
 ([Finish in the browser](#finish-in-the-browser)).
+The standard upgrade also sets up `ufw`: it allows SSH, the TLS port and the redirect port and
+denies all other incoming traffic ([Firewall and SSH](#firewall-and-ssh)). To keep managing the
+firewall yourself, run `bash "$HOME/projects/clab-manager/deploy/install.sh" --advanced --no-firewall`.
 
 The launcher alone does the same when run by hand and is what the installer calls:
 
@@ -337,7 +340,12 @@ sudo bash "$HOME/projects/clab-manager/deploy/setup-tls.sh" --self-signed
 **HSTS covers every port of a name.** Every HTTPS answer carries
 `Strict-Transport-Security: max-age=15552000` (180 days), without `includeSubDomains` or
 `preload`. A browser keeps it only from a connection whose certificate it trusts, so under a
-self-signed certificate it keeps nothing. Under a provided certificate on a **name**, after
+self-signed certificate it keeps nothing until you import that certificate
+([below](#trusting-the-certificate-on-managed-workstations)); a workstation that imported it
+stores the header for a **name** like any other trusted certificate, and after a new
+self-signed certificate (the VM's address changed, or `setup-tls.sh --renew`) that browser
+shows a certificate error without a click-through for the name, and for the redirect on port
+8081 by that name, until the new file is imported. Under a provided certificate on a **name**, after
 the first HTTPS visit the browser rewrites a plain-HTTP address on that name, whatever its
 port, to `https://` for 180 days: the redirect on port 8081 is reached by IP address or
 before that first visit, and a plain-HTTP lab service on that name is opened by its IP
@@ -356,7 +364,7 @@ scp YOUR_VM_USER@VM_ADDRESS:/srv/containerlab-node-manager/tls/cert.pem manager-
 ```
 
 The 730-day validity keeps it importable on Apple systems, which refuse server certificates
-valid longer than 825 days. Import the new file again after every renewal. The manager does not depend on it.
+valid longer than 825 days. Import the new file again after every renewal, and before you reopen a name the browser stored HSTS for (see above). The manager does not depend on it.
 
 ### A reverse proxy
 
@@ -447,7 +455,7 @@ not SSH.
 | Port | What | Setting in `clab-backup-ui/.env` (`deploy/image.env` for a prepared release image) |
 |---|---|---|
 | 8443 | The manager over HTTPS | `UI_PORT` |
-| 8081 | A listener that only redirects: it answers `301` to the manager's HTTPS address and nothing else, and holds no data | `UI_HTTP_PORT`; `0` turns it off |
+| 8081 | `app/redirect.py`, the one listener outside the gate and the guard: it holds no data and answers 301 to the manager's own HTTPS origin after `host_allowed`, 400 for a refused Host or a request target that is not a path, 405 for any method but GET and HEAD, closes a socket 1008, and nothing else | `UI_HTTP_PORT`; `0` turns it off |
 | 5001, 5801 | Browser Wireshark, bound to localhost only | `CAPTURE_*` settings written by `setup-capture.sh`; not opened to the network |
 
 `UI_PORT` and `UI_HTTP_PORT` must differ. Unlisted, they take the defaults above; the

@@ -129,14 +129,15 @@ The manager has a sign-in, and the report has no account, so it asks the running
 **one** HTTP question: `GET /api/health` over TLS, with the installed
 `/srv/containerlab-node-manager/tls/cert.pem` as the only certificate it trusts (the host
 name is not compared; whether the certificate carries the right names is the separate
-`tls.names` check). It makes three more plain requests that read no page, for the TLS
-listener, the redirect port and the HSTS header (below). Every other fact about the
+`tls.names` check). It makes two more requests that read no page: a plain-HTTP `GET /` on the redirect port,
+which must answer `301`, and a plain-HTTP `GET /` on the TLS port, which must fail. The TLS
+listener and HSTS checks read the same pinned HTTPS answer (below). Every other fact about the
 manager (the design engine, the capture provider, the saved VM connection, the topology
 browser and the Git registry) comes from a read-only probe, `docker exec … python -m
 app.probe NAME`, run inside the manager container. A probe reads its environment, a loopback
 service or the manager's saved state read-only, never writes and never prints a value.
 
-You may meet these **SKIP** results, none of which is a pass:
+You may meet these **SKIP** results (the reasons below are the common ones; each is worded as the report prints it), none of which is a pass:
 
 | SKIP reason | What it means and what to do |
 |---|---|
@@ -144,6 +145,13 @@ You may meet these **SKIP** results, none of which is a pass:
 | *The saved state could not be read without the manager (…); the manager's own page runs this check.* | The probe could not open the saved state. Open **Manager ▾ › Diagnostics** after signing in as an administrator, which runs the same check. |
 | *… a lab's save drawer lists the registry.* | The same, for the Git registry: open a lab's **Save ▾** drawer, whose folder chooser lists the repositories through the same request. |
 | *The installed certificate could not be read, so the manager was not asked over HTTPS.* | `cert.pem` is missing or unreadable; run the `setup-tls.sh` command shown. |
+| *Docker access is required for this check.* | The account running the report cannot use Docker; run it as an account that can, or with `sudo`. |
+| *The manager start command could not be read.* / *The manager has no usable HTTPS address, so the TLS listener was not probed.* / *The TLS listener did not answer, so the header was not read.* | The manager container is missing or not serving; run the `start-manager.sh` command shown. |
+| *The certificate names could not be read…* / *The certificate rule of setup-tls.sh could not be loaded…* | The names in the certificate were not compared; run the `setup-tls.sh` command shown. |
+| *The listening sockets could not be listed.* / *The running containers could not be listed.* | The exposure check could not read the host's sockets or the container list; nothing was concluded. |
+| *The setup-code file could not be checked…* | Whether a setup or recovery code waits is unknown; check the permissions of the data folder. |
+| *The effective SSH configuration could not be read.* | Run the `setup-ssh-hardening.sh` command shown. |
+| *Manager container unavailable…* | The probe-based facts were not read; start the manager and run the report again. |
 
 ## TLS, firewall and exposure
 
@@ -155,12 +163,12 @@ code, a key or a hash. Their ids appear in `--json`:
 | `tls.files` | The tls folder: directory, `cert.pem`, `key.pem` and `mode` exist with the owners and modes in [TLS and the certificate](INSTALL.md#tls-and-the-certificate), and the mode word is valid | PASS; FAIL names what differs |
 | `tls.cert` | The installed certificate parses; its expiry and SHA-256 fingerprint are printed | PASS; WARN within 30 days of expiry; FAIL expired or unreadable |
 | `tls.hsts-scope` | Only with a provided certificate | INFO: HSTS applies to every port of the name for 180 days |
-| `tls.names` | Every certificate address, listed `UI_ALLOWED_HOSTS` name and `--name` entry is in the certificate | PASS; WARN lists the missing names (`setup-tls.sh`, then `recreate-manager.sh`) |
-| `tls.bind` | The manager's start command carries the TLS arguments and `--no-proxy-headers` | PASS; FAIL if it would serve plain HTTP |
+| `tls.names` | Every certificate address, listed `UI_ALLOWED_HOSTS` name and `--name` entry is in the certificate | PASS; WARN lists the missing names (`setup-tls.sh` regenerates a self-signed certificate and recreates the manager itself; or install a new provided certificate) |
+| `tls.bind` | The manager's start command carries the TLS arguments and `--no-proxy-headers` | PASS; WARN if `--no-proxy-headers` is missing (an older compose file); FAIL if it would serve plain HTTP |
 | `tls.listener` | The manager answers over TLS with the installed certificate pinned | PASS; FAIL names the reason |
 | `http.redirect` | The redirect port answers `301` to the HTTPS address, and the TLS port refuses plain HTTP | PASS; INFO when `UI_HTTP_PORT=0`; WARN if the redirect is down; FAIL when plain HTTP serves a page |
 | `http.hsts` | `Strict-Transport-Security: max-age=15552000` is sent | PASS; WARN absent (an older image) |
-| `firewall` | `ufw` is active, denies incoming traffic by default and allows SSH, the TLS port and the redirect port | PASS; WARN inactive or too narrow; FAIL not installed. A cloud security group is an accepted reason to ignore the warning |
+| `firewall` | `ufw` is active, denies incoming traffic by default and allows SSH, the TLS port and the redirect port | PASS; WARN inactive, too narrow, a deny rule covering a manager port, or a rule that allows every port or more than 1000 ports from anywhere; FAIL not installed. A cloud security group is an accepted reason to ignore the warning |
 | `exposure.listeners` | Only SSH, the TLS port and the redirect port listen beyond loopback | PASS; WARN lists others; FAIL if the capture stack is not loopback-only |
 | `exposure.ports` | No running container publishes a port beyond loopback (a lab topology with `ports:` can) | PASS; WARN lists them |
 | `signon.bootstrap` | Whether a setup or recovery code is waiting; the file is never opened beyond its first line | PASS none waiting; WARN *Setup not completed: no administrator exists* (open the setup page and enter the code from `sudo cat /srv/containerlab-node-manager/data/setup-code`), or a recovery is open or expired ([lost password](INSTALL.md#lost-administrator-password)) |
