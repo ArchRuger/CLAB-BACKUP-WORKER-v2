@@ -176,6 +176,11 @@ def check_files(ctx):
     if records is None:
         ctx.add('tls.files', 'FAIL', title, 'The TLS files could not be inspected.', fix)
         return '', []
+    if records.get(TLS_DIR + '/cert.pem', {}).get('kind') == 'file' and records.get(TLS_DIR + '/mode', {}).get('kind', 'missing') == 'missing':
+        # As built (S4): setup-tls.sh never regenerates a certificate it did not make (cert.pem present, no mode file),
+        # so a plain run changes nothing; the person registers the pair or replaces it.
+        fix = (ctx.repair('setup-tls.sh', '--cert', 'PATH', '--key', 'PATH') + ' (register this certificate) or '
+               + ctx.repair('setup-tls.sh', '--self-signed') + ' (replace it with a self-signed one)')
     problems = []
     for suffix, (kind, uid, gid, wanted) in EXPECTED.items():
         row = records.get(TLS_DIR + suffix, {})
@@ -374,24 +379,27 @@ def port_allowed(rules, port):
     return any(low <= port <= high for low, high in rules)
 
 
-UFW_ACTION = re.compile(r'^(.*?)\s+(?:ALLOW|LIMIT)\s+IN(?:\s+(.*))?$')
+UFW_ACTION = re.compile(r'^(.*?)\s+(ALLOW|LIMIT|DENY|REJECT)\s+IN(?:\s+(.*))?$')
 
 
 def ufw_rules(text):
-    """(rules, broad): the tcp port ranges that ufw allows in, and the descriptions of the blanket allows among
-    them. Only inbound rows count: `ufw status verbose` prints the direction, and an `ALLOW OUT` or `ALLOW FWD` row
-    opens nothing here. The To column may carry an interface (`Anywhere on eth0`, `8443/tcp on eth0`), an
-    application profile (`22/tcp (OpenSSH)`) and `(v6)`. A blanket allow is a rule from anywhere (the source is not
-    limited) to every port or to a tcp range wider than BROAD_RANGE ports, on every interface or on any interface but
-    loopback. A rule limited to a source address does not count as blanket. A destination address in the To column
-    (`192.0.2.10 8443/tcp`, or alone for every port to that address) is dropped and the rest parsed; the address
-    still opens its ports, so it never hides a blanket allow."""
-    rules, broad = [], []
+    """(rules, broad, denies): the tcp port ranges that ufw allows in, the descriptions of the blanket allows among
+    them, and the (rule text, port ranges) of every inbound deny or reject of tcp ports. Only inbound rows count:
+    `ufw status verbose` prints the direction, and an `ALLOW OUT` or `ALLOW FWD` row opens nothing here. The To column
+    may carry an interface (`Anywhere on eth0`, `8443/tcp on eth0`), an application profile (`22/tcp (OpenSSH)`) and
+    `(v6)`. A blanket allow is a rule from anywhere (the source is not limited) to every port or to a tcp range wider
+    than BROAD_RANGE ports, on every interface or on any interface but loopback. A rule limited to a source address
+    does not count as blanket, and an operator's own allow narrowed by source or interface still counts as allowing
+    its port (setup-firewall.sh keeps it). A destination address in the To column (`192.0.2.10 8443/tcp`, or alone
+    for every port to that address) is dropped and the rest parsed; the address still opens its ports, so it never
+    hides a blanket allow."""
+    rules, broad, denies = [], [], []
     for line in text.splitlines():
         match = UFW_ACTION.match(line.rstrip())
         if not match:
             continue
         column = match[1]
+        denied = match[2] in ('DENY', 'REJECT')
         interface = re.search(r'\bon\s+(\S+)', column)
         interface = interface[1] if interface else ''
         column = re.sub(r'\bon\s+\S+', ' ', column)
@@ -416,19 +424,24 @@ def ufw_rules(text):
         if interface == 'lo':
             continue  # loopback is not an opening to the network
         where = (f' to {destination}' if destination else '') + (f' on {interface}' if interface else '')
-        everywhere = (match[2] or '').strip().lower().startswith('anywhere')
+        everywhere = (match[3] or '').strip().lower().startswith('anywhere')
+        found = []
         if spec.lower() == 'anywhere':
-            rules.append((1, 65535))
-            if everywhere:
+            found.append((1, 65535))
+            if everywhere and not denied:
                 broad.append('every port' + where)
-            continue
-        for part in spec.split(','):
-            low, _, high = part.partition(':')
-            if low.isdigit() and (not high or high.isdigit()):
-                rules.append((int(low), int(high or low)))
-                if everywhere and high and int(high) - int(low) + 1 > BROAD_RANGE:
-                    broad.append(f'tcp {low}-{high}' + where)
-    return rules, list(dict.fromkeys(broad))
+        else:
+            for part in spec.split(','):
+                low, _, high = part.partition(':')
+                if low.isdigit() and (not high or high.isdigit()):
+                    found.append((int(low), int(high or low)))
+                    if everywhere and high and not denied and int(high) - int(low) + 1 > BROAD_RANGE:
+                        broad.append(f'tcp {low}-{high}' + where)
+        if denied:
+            denies.append((re.sub(r'\s+', ' ', line).strip(), found))
+        else:
+            rules.extend(found)
+    return rules, list(dict.fromkeys(broad)), denies
 
 
 def check_firewall(ctx, ui_port, http_port, ssh_ports):
@@ -443,7 +456,7 @@ def check_firewall(ctx, ui_port, http_port, ssh_ports):
         return
     text = result.stdout
     needed = [(f'SSH ({port})' if port in ssh_ports else str(port), port) for port in [*ssh_ports, ui_port, *([http_port] if http_port else [])]]
-    rules, broad = ufw_rules(text)
+    rules, broad, denies = ufw_rules(text)
     if not re.search(r'^Status:\s*active', text, re.MULTILINE):
         ctx.add('firewall', 'WARN', title, 'ufw is inactive.' + SECURITY_GROUP, fix)
         return
@@ -454,6 +467,11 @@ def check_firewall(ctx, ui_port, http_port, ssh_ports):
     blocked = [label for label, port in needed if not port_allowed(rules, port)]
     if blocked:
         problems.append('not allowed: ' + ', '.join(blocked))
+    manager_ports = [ui_port, *([http_port] if http_port else [])]
+    for rule, ranges in denies:  # a deny on a manager port is named; one on an SSH port is setup-firewall.sh's refusal, not a finding here
+        hit = sorted({port for port in manager_ports if port_allowed(ranges, port)})
+        if hit:
+            problems.append(f"a rule denies {', '.join(str(port) for port in hit)}: '{rule}', so the manager may not be reachable there")
     if broad:
         problems.append('a rule allows ' + ' and '.join(broad) + ' from anywhere, which opens more than the ports above')
     if problems:
@@ -572,17 +590,28 @@ def check_ssh(ctx, facts):
     if facts is None:
         ctx.add('ssh.hardening', 'SKIP', title, 'The effective SSH configuration could not be read.', ctx.repair('setup-ssh-hardening.sh'))
     else:
+        # As built (S5a): the drop-in manages PermitRootLogin, LoginGraceTime and PerSourceMaxStartups only; MaxAuthTries is
+        # not checked. PermitRootLogin at OpenSSH's default is INFO, because setup-ssh-hardening.sh leaves it there
+        # whenever root may log in with a key; `no` is part of PASS.
         weak = []
-        if facts.get('permitrootlogin') != 'no':
-            weak.append(f"permitrootlogin is {facts.get('permitrootlogin', 'unset')}")
-        for key, limit in (('maxauthtries', 4), ('logingracetime', 30)):
-            value = facts.get(key, '')
-            if not value.isdigit() or int(value) > limit:
-                weak.append(f"{key} is {value or 'unset'} (limit {limit})")
+        grace = facts.get('logingracetime', '')
+        if not grace.isdigit() or int(grace) == 0 or int(grace) > 30:  # 0 is OpenSSH's "no time limit"
+            weak.append(f"logingracetime is {grace or 'unset'} (limit 30)")
+        if facts.get('persourcemaxstartups', 'none') == 'none':
+            weak.append(f"persourcemaxstartups is {facts.get('persourcemaxstartups', 'unset')} (no per-address limit)")
+        root = facts.get('permitrootlogin', '')
+        root_default = root in ('prohibit-password', 'without-password')
+        if root != 'no' and not root_default:
+            weak.append(f"permitrootlogin is {root or 'unset'}")
+        fix = ctx.repair('setup-ssh-hardening.sh')
         if weak:
-            ctx.add('ssh.hardening', 'WARN', title, 'At the OpenSSH default: ' + '; '.join(weak) + '.', ctx.repair('setup-ssh-hardening.sh'))
+            ctx.add('ssh.hardening', 'WARN', title, 'Not hardened: ' + '; '.join(weak) + '.', fix)
+        elif root_default:
+            ctx.add('ssh.hardening', 'INFO', title,
+                    f'logingracetime and persourcemaxstartups are within the hardened limits; permitrootlogin is {root} (the OpenSSH default): '
+                    'setup-ssh-hardening.sh leaves it there whenever root may log in with a key.')
         else:
-            ctx.add('ssh.hardening', 'PASS', title, 'permitrootlogin no, maxauthtries and logingracetime are within the hardened limits.')
+            ctx.add('ssh.hardening', 'PASS', title, 'permitrootlogin no, logingracetime and persourcemaxstartups are within the hardened limits.')
     brute = ctx.run(['systemctl', 'is-active', 'fail2ban'])
     if brute.ok:
         ctx.add('ssh.bruteforce', 'PASS', 'SSH brute-force protection', 'fail2ban is active.')
