@@ -25,6 +25,26 @@
   over a lock file owned by a non-root account: a new inode, the descriptor names the path, a second acquire is
   `Busy`). Test only; `deploy/installer_tui/core.py` and the release markers are unchanged.
 
+### Sign-on merged before its release step, and its first fix (2026-11-02, no release change)
+
+- Pull request 80 merged the sign-on and internet-exposure stream (`docs/sign-on/`) into `main` before its release
+  step: the code is in, the release markers still say 1.31.8, and the stream's release notes, validation record and
+  handoff come with 1.32.0.
+- **Fix: `setup-tls.sh` crashed on that tree.** `deploy/setup_tls.py` and `deploy/check_exposure.py` load
+  `clab-backup-ui/app/allowed_hosts.py` on its own, outside the app package, and the gate slice had given that file a
+  module-level relative import (`from .headers import …`). The TLS tool failed before doing anything (no certificate
+  on an install or upgrade, and a red CI), and the health check fell back silently to a cruder host-name parse that
+  keeps the port of a bracketed IPv6 entry. The import now sits inside the one function that needs it;
+  `test_check_exposure.py` pins both the standalone load and the parse.
+- **Fix: the health check's probes loaded the session gate.** `app/probe.py` imports `app.discovery`, whose
+  module-level import of `require_admin` pulled in `app.sessions`, `app.accounts` and `app.store`, which the probes'
+  isolation test refuses (they read state read-only and never load the manager). The import moved into
+  `Discovery.install()`.
+- **Fix: the installer trusts only the leaf of `tls/cert.pem`** (`pinned_context` in `deploy/installer_tui/exposure.py`),
+  as the health check already did. For a provided certificate the file also holds the intermediate, which made every
+  certificate that CA issued, for any name, pass the installer's readiness check. A certificate block that is not
+  valid PEM now takes the same refusal path as a file without one.
+
 # Changelog
 
 Release notes for every published version, newest first. Links point to the
