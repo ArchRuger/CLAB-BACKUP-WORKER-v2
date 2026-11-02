@@ -40,6 +40,8 @@ jobs:
           python3 -m unittest discover -s tests -p test_setup_ssh_hardening.py -v
           python3 -m unittest discover -s tests -p test_manager_recover_admin.py -v
           python3 -m unittest discover -s tests -p test_setup_tls.py -v
+          python3 -m unittest discover -s tests -p test_manager_http.py -v
+          python3 -m unittest discover -s tests -p test_check_signon.py -v
       - name: Check installer shell syntax
         run: |
           for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh deploy/setup-engineer-access.sh deploy/setup-capture.sh deploy/retire-telemetry.sh deploy/recreate-manager.sh deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-operations.sh deploy/setup-password.sh deploy/migrate-worker-data.sh deploy/setup-firewall.sh deploy/setup-ssh-hardening.sh deploy/manager-recover-admin.sh deploy/setup-tls.sh; do
@@ -122,6 +124,7 @@ jobs:
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_signon_load.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_ticket_binding.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_socket_session.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_fixture_signon.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_telemetry_retirement.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_telemetry_absence.py -v
       - name: Check the backup pipeline, downloads, maps, import confirmation, removal and reset

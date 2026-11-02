@@ -1,8 +1,10 @@
-import os,sys
+import os,sys,pathlib
 from playwright.sync_api import sync_playwright
-BASE='http://127.0.0.1:8081'; lab,out=sys.argv[1],sys.argv[2]
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[6] / 'sign-on' / 'tools'))
+import manager_http
+BASE=os.environ.get('MANAGER', manager_http.DEFAULT_BASE).rstrip('/'); lab,out=sys.argv[1],sys.argv[2]
 with sync_playwright() as pw:
-    b=pw.chromium.launch(); p=b.new_page(viewport={'width':1440,'height':1000})
+    b=pw.chromium.launch(); p=manager_http.playwright_context(b, manager_http.Manager(BASE), viewport={'width':1440,'height':1000}).new_page()
     p.goto(f'{BASE}/#lab={lab}&view=progress'); p.wait_for_timeout(4000)
     if p.locator('#git-change-folder:not([open])').count(): p.locator('#git-change-folder > summary').click(); p.wait_for_timeout(2500)
     def show(label):

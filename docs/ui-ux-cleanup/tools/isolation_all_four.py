@@ -15,6 +15,7 @@ failure_harness.py for the Manager client, the iptables block/unblock helpers an
 """
 import argparse
 import json
+import os
 import pathlib
 import sys
 import time
@@ -34,7 +35,9 @@ def stamp():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--url', default='http://127.0.0.1:8081')
+    ap.add_argument('--url', default=None, help='manager base URL, https (default $MANAGER, else https://127.0.0.1:8443); sign-in: CLAB_USER and CLAB_PASSWORD, see docs/sign-on/tools/manager_http.py')
+    ap.add_argument('--cafile', default=None, help='CA file for the manager certificate')
+    ap.add_argument('--pin', default=None, help='trust exactly this certificate (default: the installed cert.pem)')
     ap.add_argument('--victim', required=True, choices=ALL_NODES)
     ap.add_argument('--commit', required=True)
     ap.add_argument('--path', required=True)
@@ -43,7 +46,7 @@ def main():
     ap.add_argument('--evidence', required=True)
     args = ap.parse_args()
 
-    manager = mr.Manager(args.url)
+    manager = mr.Manager(args.url or os.environ.get('MANAGER') or mr.manager_http.DEFAULT_BASE, cafile=args.cafile, pin=args.pin)
     version, lab = manager.lab()
     victim_name = fh.target_name(args.victim)
     names = [fh.target_name(n) for n in ALL_NODES]
