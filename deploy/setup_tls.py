@@ -38,7 +38,12 @@ removed again, so the directory never holds a certificate without its key, a pai
 a mode that describes another pair. Every writing mode holds an exclusive ``flock`` on ``tls/.lock``
 (root's, 0600, never removed) from its first read of the directory through its last move, so two runs
 at once never mix two key pairs or overwrite a provided pair while it is being installed; a second run
-waits up to a minute, then refuses with a sentence. A cert.pem that carries a PRIVATE KEY block is
+waits up to a minute, then refuses with a sentence. The lock file itself must be a plain file with one
+name, owned by the account running the tool (root); anything else at that name is refused with the
+removal command. A given --cert or --key path is walked from / through directory descriptors and
+opened exactly once: every symlink on the way must be root's in a directory root alone writes, a path
+through any link must end in certbot's archive at a root-owned file, and openssl reads staged copies of
+the opened bytes, never the person's path (``Tls._regular_file``). A cert.pem that carries a PRIVATE KEY block is
 never widened to 0644 and never kept. Nothing here prints a key: errors quote file names, never
 contents. Notes that are not the result (an ignored tls/names line, an ignored UI_ALLOWED_HOSTS entry,
 an env file this account cannot read) go to stderr, so ``primary`` and ``fingerprint`` stay one clean
@@ -47,6 +52,7 @@ setup-tls.sh compares it before and after a writing mode to decide whether the m
 recreated, because a chain repaired behind the same leaf changes the file and not the fingerprint.
 """
 import contextlib
+import errno
 import fcntl
 import hashlib
 import importlib.util
@@ -274,13 +280,13 @@ ENV_LINE = re.compile(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$')
 
 
 def _env_value(raw):
-    """The value as docker compose reads it: quotes removed, an unquoted value ends at a `#` that follows
-    whitespace, nothing evaluated."""
-    raw = raw.strip()
-    if raw[:1] in ('"', "'"):
-        end = raw.find(raw[0], 1)
-        return raw[1:end] if end > 0 else raw[1:]
-    return re.split(r'\s+#', raw, maxsplit=1)[0].rstrip()
+    """The value as docker compose (and the installer) reads it: quotes removed, an unquoted value ends at a
+    `#` that follows whitespace (so `KEY= # note` is the empty value, the default), nothing evaluated."""
+    stripped = raw.strip()
+    if stripped[:1] in ('"', "'"):
+        end = stripped.find(stripped[0], 1)
+        return stripped[1:end] if end > 0 else stripped[1:]
+    return re.split(r'\s+#', raw, maxsplit=1)[0].strip()
 
 
 def env_values(path):
@@ -325,6 +331,10 @@ class Tls:
         self.archive = ARCHIVE
         self.lock_wait = LOCK_WAIT
         self._locks = 0
+        # Test seams: called with the resolved path of a given file just before its one open, and asked for the
+        # owner of tls/.lock (tests cannot make files that belong to another account).
+        self.before_open = lambda path: None
+        self.lock_owner = lambda path, found: found.st_uid
 
     # -- one writer at a time
     @contextlib.contextmanager
@@ -333,7 +343,11 @@ class Tls:
         because unlinking a lock file lets a waiter and a newcomer both win), held from the first read of the
         directory through the last move, so two setup-tls.sh runs at once cannot mix two key pairs or overwrite
         a provided pair while it is being installed. A second run waits up to lock_wait seconds, then refuses.
-        Reentrant within one Tls (the names mode runs set_names and then ensure)."""
+        The lock file must be a regular file with one name, owned by the account running the tool (root: the
+        writing modes refuse any other account in setup-tls.sh); a symlink, a FIFO (opened non-blocking, so it
+        cannot hang the open), a hard link or another account's file is refused with the removal command, and
+        nothing is chmod'ed before those facts are read from the open descriptor. Reentrant within one Tls (the
+        names mode holds one lock across its names write and its ensure)."""
         if self._locks:
             self._locks += 1
             try:
@@ -343,8 +357,23 @@ class Tls:
             return
         self.prepare_directory()
         lock = self.path(LOCK_FILE)
-        descriptor = os.open(lock, os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        removal = f'Remove it with: sudo rm -f {lock}, then rerun.'
         try:
+            descriptor = os.open(lock, os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, 0o600)
+        except OSError as error:
+            if error.errno == errno.ELOOP:
+                raise ValueError(f'{lock} is a symlink; the lock file must be a plain file. {removal}') from None
+            raise ValueError(f'{lock} cannot be opened ({error.strerror or error}). {removal}') from None
+        try:
+            found = os.fstat(descriptor)
+            if not stat.S_ISREG(found.st_mode):
+                raise ValueError(f'{lock} is not a regular file (a FIFO, a device or a directory is there); the lock file must be a plain file. {removal}')
+            if found.st_nlink != 1:
+                raise ValueError(f'{lock} is a hard link ({found.st_nlink} names share it); the lock file must have one name. {removal}')
+            owner = self.lock_owner(lock, found)
+            if owner != os.geteuid():
+                raise ValueError(f'{lock} belongs to uid {owner}, not to the account running setup-tls.sh (uid {os.geteuid()}); '
+                                 f'that account could hold the lock and stop every run. {removal}')
             os.fchmod(descriptor, 0o600)
             deadline = time.monotonic() + self.lock_wait
             while True:
@@ -384,16 +413,19 @@ class Tls:
     def path(self, name):
         return self.tls_dir / name
 
-    def file_owner(self, path):
-        return os.stat(path).st_uid
+    # The owner rules of a given --cert/--key path read their facts from the stat result of the descriptor the
+    # walk holds (never from a second lookup of the path); the path is passed for the message and for tests,
+    # which cannot make files that belong to root or to another account.
+    def file_owner(self, path, found):
+        """The owner of the opened target file."""
+        return found.st_uid
 
-    def link_owner(self, path):
+    def link_owner(self, path, found):
         """The owner of a symlink itself (not of its target)."""
-        return os.lstat(path).st_uid
+        return found.st_uid
 
-    def directory_state(self, path):
-        """(owner, permission bits) of a directory."""
-        found = os.stat(path)
+    def directory_state(self, path, found):
+        """(owner, permission bits) of the directory a symlink sits in."""
         return found.st_uid, stat.S_IMODE(found.st_mode)
 
     def check_directory(self):
@@ -541,6 +573,15 @@ class Tls:
         self.check_directory()
         with self.locked():
             return self._set_names(names)
+
+    def names_mode(self, values, route='source'):
+        """The names mode: write tls/names and run ensure under one lock, so no other writer runs between the
+        names write and the certificate that must carry them. Returns what ensure returns."""
+        names = [validate_name(value) for value in values if (value or '').strip()]
+        self.check_directory()
+        with self.locked():
+            self._set_names(names)
+            return self._ensure(route)
 
     def _set_names(self, names):
         if not names:
@@ -803,38 +844,114 @@ class Tls:
     def self_signed(self):
         self.renew(force=True)
 
+    def _link_refusal(self, what, path, link, resolved):
+        return ValueError(f'The {what} {path} is a symlink or lies behind one ({link}; the real path is {resolved}). A path through a link '
+                          f'is followed only into {self.archive}/ (certbot\'s live/ links) when every link on the way, its directory and '
+                          'the target are owned by root and each such directory is writable by root alone. Give the file itself.')
+
     def _regular_file(self, path, what):
-        """(path, bytes) of a given certificate or key file. The real path (every symlink resolved, in any
-        component) must be the given path itself; otherwise it is followed only when it lies in certbot's
-        archive (``self.archive``, /etc/letsencrypt/archive/, where the documented live/NAME links point),
-        the last component (the link, or the file) and its directory are root's, the directory is writable
-        by root alone and the target is a regular file owned by root. A link anyone else could have planted
-        (in /tmp, in a home directory, or a linked *directory* whose last component is an ordinary file)
-        would otherwise carry any root-owned key on the host, such as an SSH host key, into tls/key.pem
-        where the container reads it."""
+        """(real path, bytes) of a given certificate or key file, read through exactly one open of the file.
+
+        The absolute path is walked from / one component at a time through directory descriptors (``openat``
+        with ``O_NOFOLLOW``), so no component is looked up twice and nothing swapped in under the walk is
+        followed: a FIFO or a device swapped in for the file is opened non-blocking and refused on ``fstat``, a
+        link swapped in is seen as a link, and a directory replaced by a link after it was entered changes
+        nothing, because the descriptor of the directory that was checked is what the next component is opened
+        from. Every symlink met on the way (in any component, including the targets of links) must be owned by
+        root and sit in a directory owned by root and writable by root alone, and when any link was followed
+        the real path must lie in certbot's archive (``self.archive``, /etc/letsencrypt/archive/, where the
+        documented live/NAME links point) and the target must be root's: a link anyone else could have planted
+        (in /tmp, in a home directory, as a linked ancestor directory, or in front of certbot's own links) would
+        otherwise carry any root-owned key on the host, such as an SSH host key, into tls/key.pem where the
+        container reads it. The bytes come from the descriptor the walk opened (at most MAX_FILE), and the
+        callers hand openssl staged copies of those bytes, never the person's path again."""
         given = Path(os.path.abspath(path))
-        real = Path(os.path.realpath(path))
-        if real != given:
-            try:
-                resolved = os.stat(real)
-            except OSError:
-                raise ValueError(f'The {what} {path} is a symlink to {real}, which does not exist; give the file itself.') from None
-            archive = Path(os.path.realpath(self.archive))
-            directory_owner, directory_mode = self.directory_state(given.parent)
-            trusted = ((real == archive or archive in real.parents) and self.link_owner(given) == 0 and directory_owner == 0
-                       and not directory_mode & 0o022 and stat.S_ISREG(resolved.st_mode) and self.file_owner(real) == 0)
-            if not trusted:
-                raise ValueError(f'The {what} {path} is a symlink or lies behind one: its real path is {real}. A path through a link is '
-                                 f'followed only into {self.archive}/ (certbot\'s live/ links) when the link, its directory and its target '
-                                 'are owned by root and the directory is writable by root alone. Give the file itself.')
-            path = real
-        else:
-            path = given
-        if not path.is_file():
-            raise ValueError(f'The {what} {path} is not a regular file.')
-        if path.stat().st_size > MAX_FILE:
-            raise ValueError(f'The {what} {path} is larger than 64 KiB.')
-        return path, path.read_bytes()
+        archive = Path(os.path.realpath(self.archive))
+        pending = list(given.parts[1:])
+        resolved = []
+        linked = False
+        hops = 0
+        directory = os.open('/', os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)
+        try:
+            while True:
+                if not pending:
+                    raise ValueError(f'The {what} {path} is not a regular file (it is a directory).')
+                name = pending.pop(0)
+                if name in ('', '.'):
+                    continue
+                if name == '..':
+                    if resolved:
+                        resolved.pop()
+                        parent = os.open('..', os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC, dir_fd=directory)
+                        os.close(directory)
+                        directory = parent
+                    continue
+                here = Path('/', *resolved, name)
+                last = not pending
+                if last:
+                    self.before_open(here)
+                flags = (os.O_RDONLY | os.O_NONBLOCK if last else os.O_PATH) | os.O_NOFOLLOW | os.O_CLOEXEC
+                try:
+                    child = os.open(name, flags, dir_fd=directory)
+                except FileNotFoundError:
+                    if linked:
+                        raise ValueError(f'The {what} {path} is a symlink or lies behind one, and {here} does not exist; give the file itself.') from None
+                    raise ValueError(f'The {what} {path} does not exist' + ('.' if here == given else f' ({here} is missing).')) from None
+                except OSError as error:
+                    if error.errno not in (errno.ELOOP, errno.ENOTDIR):
+                        raise ValueError(f'The {what} {path} cannot be opened ({error.strerror or error}).') from None
+                    child = os.open(name, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory)
+                found = os.fstat(child)
+                if stat.S_ISLNK(found.st_mode):
+                    hops += 1
+                    if hops > 40:
+                        os.close(child)
+                        raise ValueError(f'The {what} {path} leads through more than 40 symlinks; give the file itself.')
+                    owner, mode = self.directory_state(here.parent, os.fstat(directory))
+                    trusted = self.link_owner(here, found) == 0 and owner == 0 and not mode & 0o022
+                    os.close(child)
+                    if not trusted:
+                        raise self._link_refusal(what, path, f'{here} is a symlink', os.path.realpath(given))
+                    linked = True
+                    target = os.readlink(name, dir_fd=directory)
+                    parts = list(Path(target).parts)
+                    if target.startswith('/'):
+                        os.close(directory)
+                        directory = os.open('/', os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)
+                        resolved = []
+                        parts = parts[1:]
+                    pending = parts + pending
+                    continue
+                if not last:
+                    if not stat.S_ISDIR(found.st_mode):
+                        os.close(child)
+                        raise ValueError(f'The {what} {path} does not exist ({here} is not a directory).')
+                    os.close(directory)
+                    directory = child
+                    resolved.append(name)
+                    continue
+                try:
+                    final = Path('/', *resolved, name)
+                    if not stat.S_ISREG(found.st_mode):
+                        raise ValueError(f'The {what} {path} is not a regular file' + (f' ({final} is not)' if final != given else '') + '.')
+                    if linked and not ((final == archive or archive in final.parents) and self.file_owner(final, found) == 0):
+                        raise self._link_refusal(what, path, 'a link leads outside the archive or to a file that is not root\'s', final)
+                    if found.st_size > MAX_FILE:
+                        raise ValueError(f'The {what} {path} is larger than 64 KiB.')
+                    chunks, size = [], 0
+                    while size <= MAX_FILE:
+                        chunk = os.read(child, MAX_FILE + 1 - size)
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                        size += len(chunk)
+                    if size > MAX_FILE:
+                        raise ValueError(f'The {what} {path} is larger than 64 KiB.')
+                    return final, b''.join(chunks)
+                finally:
+                    os.close(child)
+        finally:
+            os.close(directory)
 
     def install_provided(self, cert_path, key_path):
         self.check_directory()
@@ -853,22 +970,24 @@ class Tls:
             raise ValueError(f'The certificate {cert_path} must hold only CERTIFICATE blocks (the chain, leaf first); found: {found}.')
         if b'ENCRYPTED' in key_bytes[:4096]:
             raise ValueError(f'The key {key_path} is encrypted; decrypt the key first (uvicorn cannot ask for a password at start).')
-        if not self.valid_for(0, cert_path):
-            raise ValueError(f'The certificate {cert_path} has expired or cannot be read.')
-        sans = self.command(['openssl', 'x509', '-in', str(cert_path), '-noout', '-ext', 'subjectAltName'], check=True)
-        names = san_entries(sans.stdout)
-        if not names:
-            raise ValueError(f'The certificate {cert_path} lists no subjectAltName; browsers need at least one name.')
-        matches, problem = self.public_keys_match(cert_path, key_path)
-        if not matches:
-            if 'does not match' in problem:
-                raise ValueError(f'The key {key_path} does not match the certificate {cert_path}.')
-            raise ValueError(f'The key {key_path} cannot be read by openssl; decrypt the key first or check the file.')
+        # openssl and the key-match check read the staged copies of the bytes that were opened above, inside the
+        # locked tls directory (root's, 0755; the staging directory is 0700): the person's path is never read again.
         self.prepare_directory()
         staging = Path(tempfile.mkdtemp(prefix='.tls-', dir=self.tls_dir))
         try:
             cert = self.stage(staging, 'cert.pem', cert_bytes, *FILES['cert.pem'])
             key = self.stage(staging, 'key.pem', key_bytes, *FILES['key.pem'])
+            if not self.valid_for(0, cert):
+                raise ValueError(f'The certificate {cert_path} has expired or cannot be read.')
+            sans = self.command(['openssl', 'x509', '-in', str(cert), '-noout', '-ext', 'subjectAltName'], check=True)
+            names = san_entries(sans.stdout)
+            if not names:
+                raise ValueError(f'The certificate {cert_path} lists no subjectAltName; browsers need at least one name.')
+            matches, problem = self.public_keys_match(cert, key)
+            if not matches:
+                if 'does not match' in problem:
+                    raise ValueError(f'The key {key_path} does not match the certificate {cert_path}.')
+                raise ValueError(f'The key {key_path} cannot be read by openssl; decrypt the key first or check the file.')
             mode = self.stage(staging, 'mode', b'provided\n', *FILES['mode'])
             self.install_files({'cert.pem': cert, 'key.pem': key, 'mode': mode}, staging)
         finally:
@@ -943,8 +1062,7 @@ def main(argv):
         elif mode == 'provided' and len(args) == 2:
             tls.install_provided(args[0], args[1])
         elif mode == 'names':
-            tls.set_names(args)
-            tls.ensure(options['route'])
+            tls.names_mode(args, options['route'])
         elif mode == 'show' and not args:
             tls.show()
         elif mode == 'primary' and not args:

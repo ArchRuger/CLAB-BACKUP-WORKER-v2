@@ -256,7 +256,12 @@ class ReleaseConsistencyTests(unittest.TestCase):
         (self.root / 'docs/GUIDE.md').write_text('Open `http://192.0.2.10:8081/` in a browser.\n\nOr http://VM_IP:8081 and http://localhost:8081/#lab=x.\n'
                                                  'Over IPv6: http://[fd00::10]:8081 or `http://[2001:db8::10]:8081/`.\n'
                                                  'Then open http://<VM address>:8081 (or `http://<vm-ip>:8081/`).\n'
-                                                 'Upper case: HTTP://192.0.2.10:8081 and Http://[2001:DB8::10]:8081/.\n', encoding='utf-8')
+                                                 'Upper case: HTTP://192.0.2.10:8081 and Http://[2001:DB8::10]:8081/.\n'
+                                                 'Bracketed placeholder: http://[<ipv6>]:8081.\n'
+                                                 'Placeholder label: http://<host>.example.edu:8081/.\n'
+                                                 'Placeholder inside a label: http://manager-<n>.example.edu:8081\n'
+                                                 'Template: http://{{ host }}:8081/ and `http://{{manager_host}}:8081`.\n'
+                                                 'Zone: http://[fe80::1%eth0]:8081/.\n', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'disagrees') as error:
             release.verify_docs(self.root)
         message = str(error.exception)
@@ -265,6 +270,12 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertIn('docs/GUIDE.md:4: plain-HTTP manager URL', message, 'an IPv6 literal in brackets is a manager URL too')
         self.assertIn('docs/GUIDE.md:5: plain-HTTP manager URL', message, 'a <placeholder> host is a manager URL too')
         self.assertIn('docs/GUIDE.md:6: plain-HTTP manager URL', message, 'the scheme is matched case-insensitively')
+        self.assertIn('docs/GUIDE.md:7: plain-HTTP manager URL', message, 'a bracketed <placeholder> is a manager URL too')
+        self.assertIn('docs/GUIDE.md:8: plain-HTTP manager URL', message, 'a <placeholder> label among ordinary labels is a manager URL too')
+        self.assertIn('docs/GUIDE.md:9: plain-HTTP manager URL', message, 'a <placeholder> inside a label is a manager URL too')
+        self.assertIn('docs/GUIDE.md:10: plain-HTTP manager URL', message, 'a {{ template }} host is a manager URL too')
+        self.assertIn('docs/GUIDE.md:11: plain-HTTP manager URL', message, 'a bracketed literal with a non-hex zone is a manager URL too')
+        self.assertEqual(message.count('plain-HTTP manager URL'), 10, 'one report per line, each line once')
         self.assertIn('https://', message, 'the message says what to write instead')
         self.assertNotIn('archive', message)
         self.assertNotIn('CHANGELOG', message)

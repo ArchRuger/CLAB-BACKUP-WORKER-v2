@@ -70,9 +70,11 @@ VERSIONED_PATH = re.compile(r'projects/v\d+\.\d+\.\d+')
 VERSIONED_IMAGE = re.compile(r'clab-(?:backup|capture-service):\d+\.\d+\.\d+')
 # The manager serves HTTPS on 8443; 8081 only redirects. A living guide that sends a reader to
 # http://<anything>:8081 describes the manager before TLS (docs/sign-on/EXPOSURE.md 8.1, E-Q6). The host
-# may be a bracketed IPv6 literal, a `<placeholder>` (spaces allowed inside the angle brackets) or any
-# run of host characters; the scheme matches in any case (HTTP://, Http://).
-PLAIN_MANAGER_URL = re.compile(r'http://(?:\[[0-9a-f:.%]+\]|<[^<>\n]{1,80}>|[^\s`"\'<>()\[\]]+):8081(?!\d)', re.I)
+# is either bracketed (an IPv6 literal with any zone, or a bracketed `<placeholder>`: anything but `]` and
+# whitespace) or a run of `<placeholder>`s (spaces allowed inside the angle brackets), `{{ template }}`s and
+# ordinary host characters in any mix (`<host>.example.edu`, `manager-<n>.example.edu`); the scheme matches
+# in any case (HTTP://, Http://).
+PLAIN_MANAGER_URL = re.compile(r'http://(?:\[[^\]\s]+\]|(?:<[^<>\n]{1,80}>|\{\{[^{}\n]{1,80}\}\}|[^\s`"\'<>(){}\[\]])+):8081(?!\d)', re.I)
 
 
 def read_version(root):

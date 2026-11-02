@@ -275,6 +275,28 @@ class NamesTests(unittest.TestCase):
             self.assertEqual(values['CAPTURE_SESSION_TOKEN'], 't#1')
             self.assertEqual(values['CAPTURE_EDGESHARK_URL'], 'http://127.0.0.1:5001/#frag', 'a # without a space before it is part of the value')
 
+    def test_an_empty_value_before_an_inline_comment_is_empty_the_way_compose_and_the_installer_read_it(self):
+        # `UI_PORT= # note`: Compose starts the comment at " #" and reads an empty value (the default); the installer
+        # does the same. _env_value stripped first, read "# note" as the value and refused it as a port, so a
+        # .env the installer accepted stopped setup-tls.sh.
+        self.assertEqual(setup_tls._env_value(' # note'), '')
+        self.assertEqual(setup_tls._env_value('# note'), '# note', 'a # without whitespace before it is the value, as Compose reads it')
+        self.assertEqual(setup_tls._env_value(''), '')
+        self.assertEqual(setup_tls._env_value('   '), '')
+        self.assertEqual(setup_tls._env_value('  8443  # tls '), '8443')
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / 'repo'
+            (repo / 'clab-backup-ui').mkdir(parents=True)
+            (repo / 'clab-backup-ui/.env').write_text('UI_PORT= # note\nUI_HTTP_PORT=\t# set after the upgrade\n')
+            service = setup_tls.Tls(tls_dir=Path(tmp) / 'tls', repo=repo, run=Runner(), chown=Chown())
+            lines = []
+            service.out = lines.append
+            self.assertIsNone(service.settle_ports('source'), 'both ports are the defaults, 8443 and 8081: nothing to settle')
+            self.assertEqual(lines, [])
+            self.assertEqual(setup_tls._port(setup_tls.env_values(repo / 'clab-backup-ui/.env'), 'UI_PORT', 8443), (8443, False))
+            self.assertEqual(setup_tls._port(setup_tls.env_values(repo / 'clab-backup-ui/.env'), 'UI_HTTP_PORT', 8081), (8081, False))
+            self.assertEqual((repo / 'clab-backup-ui/.env').read_text(), 'UI_PORT= # note\nUI_HTTP_PORT=\t# set after the upgrade\n', 'the file is left as it was')
+
     def test_openssl_argv_is_exact(self):
         argv = setup_tls.openssl_argv('192.0.2.10', ['IP:192.0.2.10', 'DNS:localhost'], Path('/t/key.pem'), Path('/t/cert.pem'))
         self.assertEqual(argv, ['openssl', 'req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes', '-sha256',
@@ -794,6 +816,90 @@ class SelfSignedTests(unittest.TestCase):
         self.assertFalse((self.tmp / 'tls/names').exists())
         self.assertIsNone(service.ensure(), 'once the lock is released the next run proceeds')
 
+    def test_a_lock_file_that_is_not_a_plain_file_of_the_running_account_is_refused_with_a_sentence(self):
+        # tls/.lock was accepted whatever it was: a pre-created file owned by another account (that account could
+        # hold the flock and make every writing mode refuse after a minute), a FIFO (os.open blocked for ever), a hard
+        # link (fchmod changed the other file's mode) or a symlink (a raw "[Errno 40] Too many levels of symbolic
+        # links"). Each is refused with a sentence that names the file and how to remove it.
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        service.lock_wait = 0.3
+        tls_dir = self.tmp / 'tls'
+        tls_dir.mkdir()
+        lock = tls_dir / LOCK
+        removal = f'sudo rm -f {lock}'
+        lock.symlink_to(self.tmp / 'elsewhere')
+        with self.assertRaisesRegex(ValueError, 'symlink') as error:
+            service.ensure()
+        self.assertIn(removal, str(error.exception))
+        self.assertNotIn('Errno', str(error.exception))
+        lock.unlink()
+        os.mkfifo(lock)
+        started = time.monotonic()
+        with self.assertRaisesRegex(ValueError, 'not a regular file') as error:
+            service.ensure()
+        self.assertLess(time.monotonic() - started, 10, 'a FIFO at .lock does not block the open')
+        self.assertIn(removal, str(error.exception))
+        lock.unlink()
+        other = tls_dir / 'other'
+        other.write_text('x\n')
+        other.chmod(0o644)
+        os.link(other, lock)
+        with self.assertRaisesRegex(ValueError, 'hard link') as error:
+            service.ensure()
+        self.assertIn(removal, str(error.exception))
+        self.assertEqual(stat.S_IMODE(other.stat().st_mode), 0o644, 'fchmod never ran on an inode with another name')
+        lock.unlink()
+        other.unlink()
+        lock.touch(mode=0o666)
+        as_created = stat.S_IMODE(lock.stat().st_mode)   # 0o666 less the umask
+        self.assertNotEqual(as_created, 0o600)
+        service.lock_owner = lambda path, st: 65534
+        with self.assertRaisesRegex(ValueError, 'belongs to uid 65534') as error:
+            service.ensure()
+        self.assertIn(removal, str(error.exception))
+        self.assertEqual(stat.S_IMODE(lock.stat().st_mode), as_created, "another account's file is not chmod'ed")
+        self.assertFalse((tls_dir / 'cert.pem').exists(), 'no writing mode ran without the lock')
+        service.lock_owner = lambda path, st: st.st_uid
+        lock.unlink()
+        self.assertEqual(service.ensure(), 'no certificate: cert.pem is missing')
+        self.assertEqual(stat.S_IMODE(lock.stat().st_mode), 0o600)
+        self.assertEqual(os.stat(lock).st_nlink, 1)
+        self.assertTrue(pair_matches(tls_dir))
+
+    def test_the_names_mode_holds_one_lock_from_the_names_write_through_ensure(self):
+        # main() ran set_names and then ensure as two lock sections: another writer could take the lock in
+        # between and generate from the file before ensure saw it, or install a provided pair that ensure then
+        # judged. names_mode holds the one lock across both, and main() calls it.
+        runner = Runner()
+        service = tls(self.tmp, runner=runner)
+        service.out = lambda line: None
+        service.ensure()
+        intruder = tls(self.tmp)
+        intruder.out = lambda line: None
+        intruder.lock_wait = 0.2
+        refused = []
+
+        def out(line):
+            if line.startswith('tls/names:'):
+                with self.assertRaisesRegex(ValueError, 'Another setup-tls.sh run'):
+                    intruder.renew()
+                refused.append(line)
+        service.out = out
+        self.assertEqual(service.names_mode(['lab.example.edu'], 'source'), 'missing names: DNS:lab.example.edu')
+        self.assertEqual(len(refused), 1, 'the intruder tried between the names write and ensure and was held off')
+        self.assertIn('DNS:lab.example.edu', service.certificate_facts()['sans'])
+        self.assertEqual(sum(1 for call in runner.calls if call[:2] == ['openssl', 'req']), 2, 'one generation per run, none by the intruder')
+        with self.assertRaisesRegex(ValueError, 'scoped IPv6'):
+            service.names_mode(['fe80::1%eth0'], 'source')
+        self.assertEqual((self.tmp / 'tls/names').read_text(), 'lab.example.edu\n', 'validation runs before the lock and the write')
+        calls = []
+        with unittest.mock.patch.object(setup_tls.Tls, 'names_mode', lambda self, values, route: calls.append((list(values), route))), \
+                unittest.mock.patch.object(setup_tls.Tls, 'set_names', side_effect=AssertionError('two lock sections')), \
+                unittest.mock.patch.object(setup_tls.Tls, 'ensure', side_effect=AssertionError('two lock sections')):
+            setup_tls.main(['--tls-dir', str(self.tmp / 'tls'), '--repo', str(self.tmp / 'repo'), '--route', 'image', 'names', 'a.example.edu', 'b.example.edu'])
+        self.assertEqual(calls, [(['a.example.edu', 'b.example.edu'], 'image')])
+
     def test_show_and_primary(self):
         service = tls(self.tmp, allowed='manager.example.edu')
         lines = []
@@ -890,7 +996,7 @@ class ProvidedTests(unittest.TestCase):
         cert, key = make_pair(self.source, 'plain')
         link = self.source / 'link.pem'
         link.symlink_to(key)
-        service.file_owner = lambda path: 1000   # the link's target belongs to an ordinary account
+        service.file_owner = lambda path, st: 1000 if Path(path) == key else st.st_uid   # the link's target belongs to an ordinary account
         with self.assertRaisesRegex(ValueError, 'symlink'):
             service.install_provided(cert, link)
         self.assertFalse((self.tmp / 'tls/cert.pem').exists())
@@ -959,7 +1065,7 @@ class ProvidedTests(unittest.TestCase):
         (drop / 'k.pem').symlink_to(archive / 'privkey1.pem')
         service = tls(self.tmp)
         service.out = lambda line: None
-        service.file_owner = lambda path: 0
+        service.file_owner = lambda path, st: 0
         service.archive = archive.parent
         cases = {'the link belongs to an ordinary account': (1000, (0, 0o755)),
                  'the directory belongs to an ordinary account': (0, (1000, 0o755)),
@@ -967,15 +1073,15 @@ class ProvidedTests(unittest.TestCase):
                  'the directory is group-writable': (0, (0, 0o775))}
         for label, (link_uid, directory) in cases.items():
             with self.subTest(label=label):
-                service.link_owner = lambda path, uid=link_uid: uid
-                service.directory_state = lambda path, state=directory: state
+                service.link_owner = lambda path, st, uid=link_uid: uid
+                service.directory_state = lambda path, st, state=directory: state
                 with self.assertRaisesRegex(ValueError, 'symlink') as error:
                     service.install_provided(drop / 'c.pem', drop / 'k.pem')
                 self.assertIn('root', str(error.exception))
                 self.assertFalse((self.tmp / 'tls/cert.pem').exists())
                 self.assertFalse((self.tmp / 'tls/key.pem').exists())
-        service.link_owner = lambda path: 0
-        service.directory_state = lambda path: (0, 0o755)
+        service.link_owner = lambda path, st: 0
+        service.directory_state = lambda path, st: (0, 0o755)
         service.install_provided(drop / 'c.pem', drop / 'k.pem')
         self.assertTrue(pair_matches(self.tmp / 'tls'))
 
@@ -992,9 +1098,9 @@ class ProvidedTests(unittest.TestCase):
         (live / 'privkey.pem').symlink_to(key)
         service = tls(self.tmp)
         service.out = lambda line: None
-        service.file_owner = lambda path: 0
-        service.link_owner = lambda path: 0
-        service.directory_state = lambda path: (0, 0o755)
+        service.file_owner = lambda path, st: 0
+        service.link_owner = lambda path, st: 0
+        service.directory_state = lambda path, st: (0, 0o755)
         service.archive = archive.parent
         service.install_provided(live / 'fullchain.pem', live / 'privkey.pem')
         self.assertEqual((self.tmp / 'tls/mode').read_text(), 'provided\n')
@@ -1027,9 +1133,9 @@ class ProvidedTests(unittest.TestCase):
         drop.symlink_to(elsewhere)
         service = tls(self.tmp)
         service.out = lambda line: None
-        service.file_owner = lambda path: 0
-        service.link_owner = lambda path: 0
-        service.directory_state = lambda path: (0, 0o755)
+        service.file_owner = lambda path, st: 0
+        service.link_owner = lambda path, st: 0
+        service.directory_state = lambda path, st: (0, 0o755)
         with self.assertRaisesRegex(ValueError, 'symlink') as error:
             service.install_provided(elsewhere / 'cert.pem', drop / 'ssh_host_ecdsa_key')
         self.assertIn(os.path.realpath(elsewhere / 'ssh_host_ecdsa_key'), str(error.exception), 'the refusal names the real path')
@@ -1050,6 +1156,102 @@ class ProvidedTests(unittest.TestCase):
         service.install_provided(linked / acme_cert.name, linked / acme_key.name)
         self.assertEqual(service.certificate_facts()['sans'], {'DNS:linked.example.edu'})
         self.assertTrue(pair_matches(self.tmp / 'tls'))
+
+    def test_a_file_swapped_between_the_path_check_and_the_open_is_refused_or_is_what_gets_installed(self):
+        # The path rule looked the path up once, then is_file(), stat(), read_bytes() and the two openssl calls
+        # each looked it up again: whoever owns the directory named in --key could swap the file for a FIFO (the
+        # read then blocked for ever with tls/.lock held), for a link, or for other bytes between the check and
+        # the read, so the installed bytes were not the checked ones. Each given file is opened exactly once now,
+        # on the walk that checks it; openssl and the key-match check get the staged bytes, never the path.
+        tls_dir = self.tmp / 'tls'
+        runner = Runner()
+        service = tls(self.tmp, runner=runner)
+        service.out = lambda line: None
+        service.link_owner = lambda path, st: 1000
+        cert, key = make_pair(self.source, 'good')
+        other_cert, other_key = make_pair(self.source, 'other')
+
+        def swap_for(make):
+            def hook(path):
+                if Path(path).name == key.name:
+                    key.unlink()
+                    make()
+            return hook
+        service.before_open = swap_for(lambda: os.mkfifo(key))
+        started = time.monotonic()
+        with self.assertRaisesRegex(ValueError, 'not a regular file') as error:
+            service.install_provided(cert, key)
+        self.assertLess(time.monotonic() - started, 10, 'a FIFO swapped in after the check does not block the read')
+        self.assertIn(str(key), str(error.exception))
+        self.assertFalse((tls_dir / 'key.pem').exists())
+        key.unlink()
+        shutil.copyfile(other_key, key)
+        service.before_open = swap_for(lambda: key.symlink_to(other_key))
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            service.install_provided(other_cert, key)
+        self.assertFalse((tls_dir / 'key.pem').exists(), 'a link swapped in after the check is not followed')
+        key.unlink()
+        shutil.copyfile(other_key, key)
+        # Bytes swapped in before the one open are the bytes checked and the bytes installed: the pair that
+        # does not match is refused, the pair that matches is installed, and openssl never saw the person's path.
+        swapped = other_key.read_bytes()
+
+        def rewrite():
+            key.write_bytes(swapped)
+        service.before_open = swap_for(rewrite)
+        shutil.copyfile(cert, key)   # anything else before the swap
+        with self.assertRaisesRegex(ValueError, 'does not match'):
+            service.install_provided(cert, key)
+        self.assertFalse((tls_dir / 'key.pem').exists())
+        runner.calls.clear()
+        service.install_provided(other_cert, key)
+        self.assertEqual((tls_dir / 'key.pem').read_bytes(), swapped, 'the installed bytes are the checked bytes')
+        self.assertTrue(pair_matches(tls_dir))
+        inputs = [Path(call[call.index('-in') + 1]) for call in runner.calls if call[0] == 'openssl' and '-in' in call]
+        self.assertTrue(inputs, 'openssl validated the pair')
+        for given in inputs:
+            self.assertIn(tls_dir.resolve(), given.resolve().parents, f'openssl read {given}, not a staged copy inside the tls directory')
+        self.assertNotIn(str(key), [argument for call in runner.calls for argument in call])
+        self.assertNotIn(str(other_cert), [argument for call in runner.calls for argument in call])
+        self.assertEqual(files(tls_dir), ['cert.pem', 'key.pem', 'mode'], 'the staged copies are gone')
+
+    def test_a_link_owned_by_another_account_among_the_ancestors_is_refused_even_when_it_leads_into_the_archive(self):
+        # /home/<student>/evil -> /etc/letsencrypt/live/<other-domain>, then --key /home/<student>/evil/privkey.pem:
+        # the last component (privkey.pem, certbot's root-owned link) and its resolved directory were root's and the
+        # real path lay in the archive, so the student-owned link at the front passed. Every link on the way, from
+        # the root down, is held to the rule now: root's, in a directory root alone writes.
+        archive = self.archive('other.example.edu')
+        cert, key = make_pair(archive, 'acme', cn='other.example.edu')
+        live = self.source / 'live' / 'other.example.edu'
+        live.mkdir(parents=True)
+        (live / 'fullchain.pem').symlink_to(cert)
+        (live / 'privkey.pem').symlink_to(key)
+        home = self.source / 'home' / 'student'
+        home.mkdir(parents=True)
+        evil = home / 'evil'
+        evil.symlink_to(live)
+        service = tls(self.tmp)
+        service.out = lambda line: None
+        service.archive = archive.parent
+        service.file_owner = lambda path, st: 0
+        cases = {'the ancestor link belongs to the student': (lambda path, st: 1000 if Path(path) == evil else 0,
+                                                             lambda path, st: (0, 0o755)),
+                 "the ancestor link is root's but sits in the student's directory": (lambda path, st: 0,
+                                                                                    lambda path, st: (1000, 0o755) if Path(path) == home else (0, 0o755))}
+        for label, (link_owner, directory_state) in cases.items():
+            with self.subTest(label=label):
+                service.link_owner, service.directory_state = link_owner, directory_state
+                with self.assertRaisesRegex(ValueError, 'symlink') as error:
+                    service.install_provided(live / 'fullchain.pem', evil / 'privkey.pem')
+                self.assertIn(str(evil), str(error.exception), 'the refusal names the link that failed the rule')
+                self.assertFalse((self.tmp / 'tls/key.pem').exists())
+                self.assertFalse((self.tmp / 'tls/cert.pem').exists())
+        # The same shape with every link root's in root-only directories (a linked live/ tree) is followed.
+        service.link_owner = lambda path, st: 0
+        service.directory_state = lambda path, st: (0, 0o755)
+        service.install_provided(evil / 'fullchain.pem', evil / 'privkey.pem')
+        self.assertTrue(pair_matches(self.tmp / 'tls'))
+        self.assertEqual(service.certificate_facts()['sans'], {'DNS:other.example.edu'})
 
     def test_a_combined_certificate_and_key_file_given_as_the_certificate_is_refused(self):
         # cert.pem is 0644 and readable by every VM account: a private key must never be copied into it.
