@@ -13,11 +13,12 @@ function notify(message){$('toast').textContent=message;$('toast').hidden=false;
 const MAP_SESSION_SENTENCE='Your session ended. Sign in in a new tab, then save again.';
 // A refusal's own sentence: the sign-on answers carry {detail:{code,message}} (REVIEW U11), older routes a plain string.
 function mapDetail(body){const d=body&&body.detail;return typeof d==='string'?d:d&&typeof d==='object'&&typeof d.message==='string'?d.message:'';}
-// The one reaction to a lost session. Nothing unsaved: leave for the sign-in page, which brings the person back here.
-// Unsaved changes: stay, pause (the status pill, the toast, the new-tab link) and wait for the next Save, which retries.
+// The one reaction to a lost session. Nothing unsaved and nothing to redo: leave for the sign-in page, which brings the
+// person back here. Unsaved changes or a redo entry: stay, pause (the status pill, the toast, the new-tab link) and wait
+// for the next Save, which retries.
 function mapSignedOut(){
  if(typeof sessionMark==='function'&&!sessionMark())return;
- if(!mapIsDirty(mapBaseline,mapCurrent)){if(typeof sessionGo==='function')sessionGo('ended');return;}
+ if(!mapIsDirty(mapBaseline,mapCurrent)&&mapHistory.index>=mapHistory.entries.length-1){if(typeof sessionGo==='function')sessionGo('ended');return;}
  mapSessionLost=true;notify(MAP_SESSION_SENTENCE);mapRenderBar();
 }
 async function api(path,options={}){

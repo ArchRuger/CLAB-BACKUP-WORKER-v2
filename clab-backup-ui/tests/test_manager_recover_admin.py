@@ -116,6 +116,12 @@ class RecoverAdminTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines()[-1], self.url_line('vm.example.org:9443'))
 
+    def test_an_exported_ui_port_is_read_as_start_manager_reads_it(self):
+        (self.base / 'clab-backup-ui/.env').write_text('export UI_PORT=9443\n')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines()[-1], self.url_line('vm.example.org:9443'))
+
     def test_an_empty_ui_port_means_the_default(self):
         (self.base / 'clab-backup-ui/.env').write_text('UI_PORT=\n')
         result = self.run_script()

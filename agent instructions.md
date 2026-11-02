@@ -1,3 +1,25 @@
+# Sign-on and internet exposure — 1.32.0
+
+The evidence is in `clab-backup-ui/VALIDATION.md` (1.32.0); the designs are `docs/sign-on/DESIGN.md`, `UI.md` and
+`EXPOSURE.md`, the open points `docs/sign-on/PICKUP.md` section 3. Preserve:
+
+1. **The sign-in invariant in `CLAUDE.md`** ("VM boundary and data") is the contract: the exempt list, the gate directly
+   inside `HostCheck`, the cookie and its renewal rule, the guard behind it, tickets bound to their session, the redirect
+   listener as the one exception, admin routes by `Depends(require_admin)`, scrypt in its own executor, the throttle,
+   the setup code and the two audit files. `test_session.py` walks every route: a new route is classified there or the
+   suite fails.
+2. **Nothing logs a refusal.** The manager runs with `--no-access-log` in both compose files and the Dockerfile (pinned by
+   `test_release_consistency.py`), the redirect listener with `access_log=False`; no log holds a password, a code, a
+   session id or a hash.
+3. **The deploy scripts read `.env` as `start-manager.sh` does** (an optional `export ` prefix, the last value wins);
+   `setup-firewall.sh` and `manager-recover-admin.sh` follow it since this release.
+4. **Tools reach the manager through the fixture or `docs/sign-on/tools/manager_http.py`** (`docs/sign-on/TOOLS.md`); the
+   fixture signs in by default (`--signed-out`, `--role operator`), and `check_signon.py` uses its port and the next one.
+5. **Open, none of it blocking:** the gate renews before the guard decides; admin create and reset hash outside the
+   verify bound; a console-only IPv6 VM is warned, not refused, by the firewall step; `check_ui006`'s alignment claim
+   fails since the C04 Console button (1.31.3), not because of sign-on; no VM pass has run.
+6. Everything the 1.31.9 section below preserves.
+
 # A save's end the person already saw stays closed — 1.31.9
 
 The evidence is in `clab-backup-ui/VALIDATION.md` (1.31.9). Preserve:

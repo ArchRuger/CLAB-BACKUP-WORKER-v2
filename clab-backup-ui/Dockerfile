@@ -1,5 +1,5 @@
 FROM python:3.12-slim
-LABEL org.opencontainers.image.version="1.31.9"
+LABEL org.opencontainers.image.version="1.32.0"
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git openssh-client tini \
  && rm -rf /var/lib/apt/lists/*
@@ -23,4 +23,4 @@ EXPOSE 8443 8081
 ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
 # TLS from the read-only /tls mount (setup-tls.sh fills it on the VM): a `docker run` without that
 # mount fails at start instead of serving plain HTTP by accident.
-CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8443", "--workers", "1", "--ssl-certfile", "/tls/cert.pem", "--ssl-keyfile", "/tls/key.pem", "--no-proxy-headers", "--no-server-header"]
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8443", "--workers", "1", "--ssl-certfile", "/tls/cert.pem", "--ssl-keyfile", "/tls/key.pem", "--no-proxy-headers", "--no-server-header", "--no-access-log"]

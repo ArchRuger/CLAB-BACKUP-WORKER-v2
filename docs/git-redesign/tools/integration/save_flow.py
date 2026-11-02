@@ -65,7 +65,9 @@ def main():
     p.keyboard.press('Escape')
     s.equal('A Escape closes the chip panel and focus returns to the chip', s.focused(), 'save-chip')
     s.click('#save-chip', count=False)
-    p.mouse.click(300, 600)
+    # The lab's title: outside the panel and not a control at every width (a fixed point such as (300, 600) lands on a
+    # device at 760x1024 and opens its details drawer, which then holds every later click).
+    p.locator('#title').click()
     s.check('A an outside click closes the chip panel', not s.visible('#save-panel'))
 
     # ---- B: Save with nothing changed --------------------------------------------------------------------------

@@ -55,7 +55,7 @@ docker exec "$existing" python -m app.recover || status=$?
 (( status == 0 )) || exit "$status"
 
 # The env_value reader of start-manager.sh, on the chosen route's file.
-env_value() { local value=''; if [[ -f "$env_file" ]]; then value=$(grep -E "^$1=" "$env_file" | tail -n 1 | cut -d= -f2- || true); fi; printf '%s' "$value"; }
+env_value() { local value=''; if [[ -f "$env_file" ]]; then value=$(grep -E "^(export )?$1=" "$env_file" | tail -n 1 | cut -d= -f2- || true); fi; printf '%s' "$value"; }
 port=$(env_value UI_PORT)
 port=${port:-8443}
 if [[ ! $port =~ ^[0-9]{1,5}$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then

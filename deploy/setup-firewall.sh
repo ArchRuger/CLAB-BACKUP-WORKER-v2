@@ -376,7 +376,8 @@ if $remove; then
   exit 0
 fi
 
-env_value() { local value=''; if [[ -f $1 ]]; then value=$(grep -E "^$2=" "$1" | tail -n 1 | cut -d= -f2- || true); fi; printf '%s' "$value"; }
+# The rule start-manager.sh reads .env with: an optional `export ` prefix, the last value wins.
+env_value() { local value=''; if [[ -f $1 ]]; then value=$(grep -E "^(export )?$2=" "$1" | tail -n 1 | cut -d= -f2- || true); fi; printf '%s' "$value"; }
 env_files=("$repo_dir/clab-backup-ui/.env")
 image_env="$repo_dir/deploy/image.env"
 [[ -n $(env_value "$image_env" MANAGER_IMAGE) ]] && env_files+=("$image_env")

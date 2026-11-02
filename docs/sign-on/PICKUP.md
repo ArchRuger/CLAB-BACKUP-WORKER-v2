@@ -15,12 +15,12 @@ session; rewritten 2026-11-01 by the lead of the second session. Verify Git befo
 | Opus design review | done | `REVIEW.md`: `risk-reviewer` and `clab-ui-reviewer` (40 findings, 8 merged), two Opus refuters per finding (30 stand, U16 refuted), the lead's answers |
 | Answers applied and checked | done | each document amended by a `clab-fable-designer`, checked by a read-only reviewer, misses fixed; then a cross-document check (21 contradictions, all resolved by the documents' precedence). Final design: commit `a9e3608` |
 | Build plan | done | `BUILD.md`: 15 slices, ownership, contracts index, acceptance checks |
-| Build | **in progress** | eleven slice workflows (`signon-slice`), one worktree each, base `a9e3608` (BUILD.md 5) |
-| Tools and fixture (S11), documentation (S12) | not started | after the code slices are integrated |
-| Integration, full verification, release 1.32.0, pull request | not started | section 3 |
+| Build | done | eleven slice workflows (`signon-slice`), merged with pull request 80 (BUILD.md 5) |
+| Tools and fixture (S11), documentation (S12) | done | merged with pull request 80 |
+| Integration, hotfix, full verification, release | done | pull request 80 (integration), 81 (the hotfix), 82 (1.31.9, which carried the code and fixed CI), then release 1.32.0: `clab-backup-ui/VALIDATION.md` 1.32.0 |
 
-The release is still 1.31.8. No VM, browser or live-device validation has happened. No Docker daemon is
-available in the cloud session, so no image was built.
+Released as 1.32.0 (2026-11-02). The evidence is fixture, browser, unit and CI evidence only: no VM, no live device and
+no Docker image build has validated sign-on yet. The open points of the release review are in section 3.
 
 ## 2. What binds
 
@@ -34,28 +34,24 @@ summed per minute (R8); a session renews only on acts of the person (R9); sign-o
 capture sessions and the capture owner identity is per person (R10 and the lead's addendum); the health
 check keeps every check through read-only probes (R16).
 
-## 3. Next steps, in order
+## 3. Open after the release (1.32.0)
 
-1. **Collect the eleven slice workflows.** Each returns `{builds, rounds, open}`: the builders'
-   hand-backs, every verification round (test runs, the Opus attack, the area reviewer's findings) and
-   the problems still open after the fix rounds. A slice with open must-fix problems gets one more fix
-   pass (`resumeFromRunId`, or a direct fixer) before it is merged.
-2. **Integrate.** Merge each `signon/<slice>` branch into `claude/sign-on-and-hardening` with
-   `git merge --no-ff` (the files are disjoint by BUILD.md 2), `core` first. Then the lead's files: the
-   new test files in `.github/workflows/release-check.yml` (Python with `-p`, browser files on the one
-   `node --test` line, new `deploy/*.sh` in the `bash -n` loop), `login.html`, `setup.html` and
-   `users.html` in `deploy/verify-release.py` FIELDS, the new security files in
-   `.claude/rules/routing-privileged-paths.md` (REVIEW R19). Run the full Python and browser suites on the
-   merged tree and fix the cross-slice breaks (`test_page_load_ui.js`, the label-map case of
-   `test_audit.py`, the redirect's import of `app/headers.py`).
-3. **S11 tools and fixture**, then **S12 documentation** (BUILD.md 4), each through the same
-   `signon-slice` workflow on a new worktree from the integrated commit.
-4. **Verify the whole branch:** `/clab-review-changes` on the branch diff; `check_signon.py` and the
-   existing Playwright checks through the fixture at 1440, 1280, 760 and 390 px.
-5. **Release** (`clab-release` skill): `python3 deploy/set-release.py 1.32.0`; CHANGELOG, VALIDATION
-   (what was run, by kind) and the handoff section of `agent instructions.md`; the `CLAUDE.md` invariant of
-   DESIGN 14 and the routing-table row; amendment M of `docs/redesign/DESIGN-SPEC-ADDENDUM.md`; then the
-   pull request through the GitHub MCP tools.
+The release step of the earlier plan is done. What the release review left open, none of it blocking:
+
+1. **Renewal happens before the guard.** `SessionGate` renews on a page load or any request with another method before
+   the guard decides, so a mutating request the guard then refuses (a same-site page on another port of the VM) still
+   resets the idle timer; it never passes the 7-day limit and grants nothing. Move `touch` behind the guard's checks.
+2. **Admin create and reset hash outside the verify bound.** `accounts.py` hashes through
+   `SCRYPT_EXECUTOR.submit(...).result()` for those two admin routes, which skips `VERIFY_LIMIT` and blocks a shared-pool
+   thread while it waits.
+3. **An IPv6-only VM run from the console** with `IPV6` other than `yes` in `/etc/default/ufw` is warned, not refused,
+   by `setup-firewall.sh` (no SSH session to protect); enabling ufw then drops incoming IPv6, SSH included.
+4. **`export MANAGER_IMAGE=`** is read by the firewall (it now accepts the `export ` prefix, as `start-manager.sh`
+   does) but not by `recreate-manager.sh` and `manager-recover-admin.sh`; it can only add ports.
+5. **The People page** goes straight to sign-in on a 401, so an open Add or Reset dialog loses what was typed (UI.md 5.5
+   as written); `account.js` may show "Sign-out did not reach the manager" before going to sign-in.
+6. **A VM pass**: install, upgrade from 1.31.x, the firewall and SSH hardening, a provided certificate and a sign-in
+   from another machine, none of which a cloud session can run.
 
 ## 4. The workflow runs of the second session
 
