@@ -31,7 +31,9 @@ seed, <code>/srv/containerlab-node-manager/data/host-bootstrap.json</code> (mode
 automatic-check choice and the fingerprint of the VM's SSH host key. Setup prints <em>VM connection
 prefilled for the manager</em>. The manager moves the seed into its encrypted settings on its next
 check and deletes the file.</p>
-<p>Open <code>https://VM_IP:8443</code>. <strong>VM connection</strong> opens already filled in, with the
+<p>Open <code>https://VM_IP:8443</code> and sign in first (a new manager asks you to create the first
+administrator with the setup code the installer printed). <strong>VM connection</strong> is for
+administrators and opens already filled in, with the
 notice <em>Prepared by VM setup</em>. The address, SSH port, username, password, inspection method and
 automatic check are <strong>no longer typed</strong>. The one remaining step is the confirmation:
 choose <strong>Save and test connection</strong> once. Until then the manager does not connect, so no

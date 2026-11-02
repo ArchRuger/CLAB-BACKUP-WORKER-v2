@@ -303,7 +303,9 @@ asking to confirm it; it asks only for two passwords:
 
 | Prompt or setting | What happens |
 |---|---|
-| Manager bind/port settings | With no existing `.env`, defaults are all VM interfaces and port **8081**; there is no port prompt |
+| Manager bind/port settings | With no existing `.env`, defaults are all VM interfaces, HTTPS on port **8443** and a plain-HTTP redirect on port **8081**; there is no port prompt |
+| TLS certificate | A self-signed certificate is made if none exists; the installer prints its SHA-256 fingerprint ([TLS and the certificate](INSTALL.md#tls-and-the-certificate)) |
+| Firewall and SSH | `ufw` allows SSH, 8443 and 8081 and denies other incoming traffic; a conservative `sshd` drop-in is written ([Firewall and SSH](INSTALL.md#firewall-and-ssh)) |
 | Lab operation access | Reviewed lab operations are enabled |
 | VS Code / Containerlab extension access | Set up for your account (docker and clab_admins groups, writable lab folders, containerlab SUID); the VS Code block in step 7 then needs no command |
 | Obsolete installation-media APT entries | Backed up and disabled if present (the common leftover ISO/CD-ROM source); network sources are retained |
@@ -317,7 +319,7 @@ up Git now or later) yourself, start the installer with `--advanced`:
 The installer handles missing Git, SSH, Docker/Compose and Containerlab;
 prepares persistent manager storage; installs and verifies helpers; builds and
 starts the manager; installs the browser Wireshark stack; then checks its
-running version and HTTP response. The image build and the capture stack take
+running version and its HTTPS response. The image build and the capture stack take
 several minutes. Keep the terminal open and wait for the result.
 
 Before APT updates, setup displays UTC and NTP status. If a time service is
@@ -338,7 +340,7 @@ If a step fails, read its output. Use **Retry this step** after fixing it, or
 setup, some checks will need attention; repeat it at the step 12 checkpoint.
 Do not continue as though an incomplete install passed.
 
-**Checkpoint:** the terminal reports that the manager is running and its HTTP
+**Checkpoint:** the terminal reports that the manager is running and its HTTPS
 and version checks passed. That check does **not** prove workstation reachability,
 WinSCP transfer, device backup or Git push; the next steps verify those.
 
@@ -581,23 +583,57 @@ channel must also be enabled; if enabled after boot, a full VM shutdown/start
 may be needed. It helps Proxmox guest integration but is not a manager dependency.
 [Proxmox guest-agent documentation](https://github.com/proxmox/pve-docs/blob/master/qm.adoc)
 
-Allow your workstation to reach the VM's SSH port and manager port **8081**.
-Check the Proxmox firewall, VLAN/routing and Ubuntu firewall according to your
-network policy. If UFW is already enabled, add rules scoped to your actual
-workstation address, replacing the placeholder:
+Allow your workstation to reach the VM's SSH port and the manager port **8443**
+(HTTPS); port **8081** only redirects old links to it. Check the Proxmox firewall,
+VLAN/routing and Ubuntu firewall according to your network policy. The installer sets
+up `ufw` itself ([Firewall and SSH](INSTALL.md#firewall-and-ssh)): it allows every
+port `sshd` listens on, 8443 and 8081 from anywhere, denies other incoming traffic,
+keeps rules you already had and refuses when enabling it could lock out your session. It
+configures no network routes, no Proxmox firewall and no router, so a rule scoped to your
+workstation is still your decision. Adding a scoped allow does not narrow anything by itself:
+the installer's allows from anywhere stay and still decide. To narrow the manager ports to one
+workstation instead, add your own rules first, then remove the installer's, replacing the
+placeholder:
+
+WORKSTATION_IP must be the address the VM sees, which behind NAT, a VPN or a jump host is not
+the one you type in your client: read it in your current SSH session with
+`echo $SSH_CONNECTION` (the first field). Keep that session open until the end of this
+section. If `sshd` listens on another port than 22 (`sudo sshd -T | grep -i '^port'`), use that
+port in the first rule.
 
 ```bash
-sudo ufw status
 sudo ufw allow from WORKSTATION_IP to any port 22 proto tcp
+sudo ufw allow from WORKSTATION_IP to any port 8443 proto tcp
 sudo ufw allow from WORKSTATION_IP to any port 8081 proto tcp
+sudo bash "$HOME/projects/clab-manager/deploy/setup-firewall.sh" --remove
+sudo ufw show added
 ```
 
-Do not enable a firewall blindly during a remote session. The installer does
-not configure network routes or firewall rules. From Windows PowerShell, test:
+`--remove` deletes the installer's rules for 8443 and 8081. It keeps the installer's SSH allow
+while `ufw` denies other incoming traffic, because deleting that one first would block new SSH
+logins, and prints the exact `sudo ufw delete …` command for it. Check that `sudo ufw show added`
+lists your own SSH rule from WORKSTATION_IP (the scoped form above: a plain `ufw allow 22/tcp`
+would take the installer's rule over instead of being kept apart from it). Only then run the
+delete command that `--remove` printed; for port 22 over both IPv4 and IPv6 it is:
+
+```bash
+sudo ufw delete allow 22/tcp
+sudo ufw status
+```
+
+Now open a second SSH login from the workstation before you close the first one. A rule that
+does not match the address the VM sees blocks every new login while the current session
+survives; if the second login fails, run `sudo ufw allow 22/tcp` (your `sshd` port) in the
+session that is still open, which allows SSH from anywhere again, and start over with the right
+address. Later upgrades keep all three narrowed rules. Without the 8081 rule the next *Install
+or update* allows 8081 from anywhere again; to have no redirect at all, set `UI_HTTP_PORT=0` in
+`clab-backup-ui/.env` and run `recreate-manager.sh` instead of adding it.
+
+Do not enable a firewall blindly during a remote session. From Windows PowerShell, test:
 
 ```powershell
 Test-NetConnection 10.150.2.213 -Port 22
-Test-NetConnection 10.150.2.213 -Port 8081
+Test-NetConnection 10.150.2.213 -Port 8443
 ```
 
 Use the VM's LAN address in your workstation browser. `127.0.0.1` on Windows is
@@ -640,7 +676,14 @@ topology before deployment.
 ## 10. Open the manager and connect it to the VM
 
 On the **workstation**, open `https://10.150.2.213:8443/`, replacing the address
-and any customized port. There is no separate manager UI account setup.
+and any customized port. The browser warns once about the self-signed certificate:
+compare the fingerprint it shows with the one the installer printed, then continue.
+The manager shows *Create the first administrator*: enter the setup code printed in the
+installer's last lines (also readable on the VM with
+`sudo cat /srv/containerlab-node-manager/data/setup-code`), choose a username and a
+password of at least 12 characters, and press **Create account and sign in**
+([Finish in the browser](INSTALL.md#finish-in-the-browser) has the detail and the
+recovery command for a lost administrator password).
 
 The **VM connection** dialog opens by itself, already filled in by the installer
 (notice *Prepared by VM setup*, see [VM-CONNECTION.md](VM-CONNECTION.md#the-prefilled-vm-connection));
@@ -763,7 +806,7 @@ or lab configuration. Normal request audit logs can still be written.
 `AUTOMATED CHECKS PASSED` means the automated checks passed; your real WinSCP
 transfer, device backup and Git push remain separate evidence. Installer menu
 **5. Check running installation** runs this same report. The initial installation
-checked restricted helper execution and local container/version/HTTP readiness
+checked restricted helper execution and local container/version/HTTPS readiness
 before browser setup; the saved SSH connection is checked here afterwards.
 
 If **Deploy a new lab → Lab folders on the VM** reports **Operations helper is unavailable**,
@@ -1055,7 +1098,7 @@ Retry the same installation step only after APT succeeds.
 | Optional administrative WinSCP access | Paste-in sudoers rule and matching WinSCP setting in step 7; not added by the installer |
 | VS Code Remote - SSH and the Containerlab extension | Installer option (VS Code / Containerlab extension access) or `setup-engineer-access.sh` in step 7; reapplied by the launcher |
 | Full installation report after browser VM/Git setup | Second script `deploy/check-install.sh` in step 12; explicit service/helper/folder/Git results and recovery, with manual transfer/backup/push still required |
-| QEMU guest agent and firewall/network access | Step 8; outside the manager installer |
+| QEMU guest agent, Proxmox firewall and network routes | Step 8; outside the manager installer (which sets up only the VM's own `ufw` rules and `sshd` drop-in) |
 | Vendor images, topology upload and lab deployment | Steps 9 and 11; your chosen lab |
 | VM host trust, device credentials, lab/Git selection and first push | Browser workflow in steps 10–12 |
 | Backup records and persistence confirmation | Step 13 |
