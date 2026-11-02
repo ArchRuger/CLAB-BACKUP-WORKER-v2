@@ -416,6 +416,16 @@ one uvicorn invocation that `health_url` can parse (install-manager.py:100-116).
 (start-manager.sh:75-89) inspects containers that mount the data directory; the redirect service
 mounts nothing, so it is ignored, which is correct.
 
+**As built (S3, the lead's record after three verification rounds).** `app/redirect.py` runs uvicorn with
+`http=DeadlineH11Protocol` (h11 with a 10 s per-connection deadline: a connection that has not sent its request
+within 10 s is aborted), `server_header=False`, `proxy_headers=False`, `workers=1`, `access_log=False` and
+`log_level='error'`. At start it caps the soft descriptor limit at `NOFILE_CEILING = 4096` (raised to it, or lowered to
+it when it starts higher), so held connections bound the listener's memory (about 57 MB at the measured 13.7 kB a
+connection), and asyncio's own error lines are throttled to one a minute. Every answer the listener itself makes has an
+empty body, `security_headers(scope, status=<code>, refusal=True)` and `Content-Length: 0`; answers that uvicorn, h11
+or the websockets library make before the app is called (a malformed request line) keep their own short form. The
+redirect service in both compose files carries `mem_limit: 128m` and a bounded `json-file` log driver.
+
 ### 4.2 HSTS
 
 | Rule | Value |
@@ -623,6 +633,17 @@ only) and never calls `create_app`, `Store()` or any class that takes a `Store`.
 A probe that answers `{"error": …}` for a reason other than the two state sentences (the helper refused,
 the VM did not answer) is a `FAIL` with that sentence, exactly as the failed HTTP request was today
 (check_install.py:494, 541, 595, 627): a reachable manager whose VM path is broken is a finding, not a skip.
+
+**As built (S3).** Every probe runs under an overall deadline of 25 s (`SIGALRM`); when it fires the probe prints
+`{"error": "The probe did not finish within 25 seconds."}` with exit 1, which the health check reports as a FAIL with
+that sentence, and a hard exit follows about 3 s later (`GRACE`), inside the checker's 30 s `docker exec` timeout. The
+deadline runs between Python bytecodes, so a blocking C call (DNS resolution of an unreachable VM name) can delay it up
+to the hard exit. `browse` passes a helper's own error line through `lab_operations.scrub(text, state)` (lines that
+carry `from_helper`) and in the manager's own sentences replaces only the stored secrets; `git-registry` lets the
+fixed `PROBLEM_CODES` sentences and the VM-password setup sentence through as they are and scrubs everything else, as
+`GitProgress.invoke` does. A probe never imports `app.main` or `app.store`, never constructs a `Store`, `Captures` or
+`GitProgress`, sets `sys.dont_write_bytecode`, turns logging off while it runs, and prints any unexpected failure as
+`{"error": "The probe failed unexpectedly."}`, never a traceback.
 
 ### 6.2 The checks
 
