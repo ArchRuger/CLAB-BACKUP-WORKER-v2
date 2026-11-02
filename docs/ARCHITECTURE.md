@@ -158,7 +158,7 @@ needed. A second container of the same image, `http-redirect` (`python -m app.re
 default 8081, `0` turns it off), listens for plain HTTP. `app/redirect.py` is the one listener outside the gate
 and the guard: it holds no data and answers 301 to the manager's own HTTPS origin after `host_allowed`, 400 for a
 refused Host or a request target that is not a path, 405 for any method but GET and HEAD, closes a socket 1008,
-and nothing else. The certificate is made by `deploy/setup-tls.sh` (see [Install](INSTALL.md)); the accounts,
+and nothing else. The certificate is made by `deploy/setup-tls.sh` (see [TLS and the certificate](INSTALL.md#tls-and-the-certificate)); the accounts,
 sessions and recovery are described for people in [Accounts and sign-in](ACCOUNTS.md).
 
 ## Module map

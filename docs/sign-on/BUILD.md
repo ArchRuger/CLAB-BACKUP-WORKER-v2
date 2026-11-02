@@ -326,3 +326,17 @@ branch `signon/<name>`: `core` (S1a, S1b, S2), `probe` (S3), `tls` (S4), `doors`
 (S10b). S11 and S12 get theirs from the integrated commit (S12a and S12b: `docs-a`, `docs-b`, from `7a9ec17` plus
 this section). Each slice's merge commit and the full-suite
 result on the merged tree are recorded here as they land.
+
+| Slice | Merge commits on `claude/sign-on-and-hardening` |
+|---|---|
+| S7 pages, S8 appsession, S9 people, S10a features, S10b standalone | `301fd28`, `ce530a2`, `4f60a33`, `4d5fbad`, `a449ba1`, then the lead's integration commit `34f8c9b` |
+| S6 health (and the follow-up `health2`) | `1fe9501`, `91abbc8` |
+| S3 probe | `710be39` |
+| S5a doors | `a47d843` |
+| S5b installer | `9b5d4d6`, `12fffab` (the `.env` reader as Compose) |
+| S4 tls | `7a9ec17` (with the lead's guide URLs, the redirect's limits and the CI lines), `d300450` (round 5), `b1c5caf` (round 6) |
+| S12a docs-a, S12b docs-b | `5db3b98`, `47c6feb`, then the lead's cross-links |
+| S1a, S1b, S2 core; S11 tools | not merged yet |
+
+The full Python suite on `adbe412` (every slice above but core, tools and the docs): 3534 tests OK, 8 skipped.
+`deploy/lab-template/README.md` (S12a) describes the scaffold of S11: S11 merges before the release.

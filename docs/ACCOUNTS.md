@@ -6,8 +6,9 @@ why a sign-in is sometimes delayed, and what the manager writes down about who d
 on the pages are quoted as they appear.
 
 The manager serves HTTPS itself (`https://VM_ADDRESS:8443` by default). Plain HTTP on port 8081 only
-redirects there. The certificate, the browser warning and the ports are described in the
-[installation guide](INSTALL.md); [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name)
+redirects there. The certificate and the browser warning are described in
+[TLS and the certificate](INSTALL.md#tls-and-the-certificate), the ports in [Ports](INSTALL.md#ports) and the
+host firewall in [Firewall and SSH](INSTALL.md#firewall-and-ssh); [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name)
 lists how a DNS name becomes an address the manager accepts.
 
 ## Accounts and roles
@@ -212,7 +213,8 @@ The command exists only on the VM: nothing on the network can start it. It needs
 
 ## What to read next
 
-- [Installation](INSTALL.md#finish-in-the-browser) for the browser step after an install, and
+- [Installation](INSTALL.md#finish-in-the-browser) for the browser step after an install,
+  [TLS and the certificate](INSTALL.md#tls-and-the-certificate) and
   [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name).
 - [Health report](HEALTH-CHECK.md) for the installation checks, including whether setup is complete.
 - [Diagnostics](DEBUG-PANEL.md) for the administrators' page that checks the VM connection.

@@ -666,7 +666,8 @@ The final terminal checks verify the local manager. On your workstation:
    gets an account from **Manager ▾ › People and sign-ins…**, which only administrators
    see; an administrator can also reset a password there. The first sign-in of an
    account that an administrator made or reset asks that person to choose their own
-   password.
+   password. [Accounts and sign-in](ACCOUNTS.md) describes the two roles, sessions, the
+   People page and the audit.
 3. **The VM connection.** The VM connection dialog (administrators only) opens on its own
    when no connection exists, already filled in by the installer (*Prepared by VM setup*,
    with `clab-discovery` and the password created during setup): press **Save and test
