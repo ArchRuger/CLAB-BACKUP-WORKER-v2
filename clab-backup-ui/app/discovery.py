@@ -19,7 +19,6 @@ from fastapi import Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from .inventory import ALIASES, address, literal, read_data
-from .sessions import require_admin
 
 COMMANDS = {'helper': 'sudo -n /usr/local/sbin/clab-manager-inspect',
             'direct': 'containerlab inspect --all --format json'}
@@ -636,6 +635,9 @@ class Discovery:
                                          imported=name in linked, excluded=name in state.get('ignored_labs', [])) for name,nodes in info.get('labs', {}).items()])
 
     def install(self, app, public_lab):
+        # Imported here, not at the top: the health check's read-only probes (app/probe.py) import this module for
+        # discovery_fresh and vm_password and must not load the session gate, the accounts or the Store.
+        from .sessions import require_admin
         def idle(lab_id=None):
             from .lab_operations import operation_busy
             if operation_busy(self.store.state,lab_id): raise HTTPException(409, 'Wait for the lab operation to finish.')
