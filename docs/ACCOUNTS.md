@@ -200,7 +200,7 @@ sudo bash "$HOME/projects/clab-manager/deploy/manager-recover-admin.sh"
 ```
 
 It prints `Recovery code: …`, says the code is valid for 15 minutes and prints the address
-`https://VM_ADDRESS:8443/setup?recover=1`. Open it and enter the code: the page is *Recovery: create one
+`https://VM_ADDRESS:8443/setup?recover=1`. Open it in a browser that is not signed in to the manager (sign out first, or use a private window): a signed-in browser is sent to Home. Enter the code: the page is *Recovery: create one
 new administrator* (*Existing accounts are not changed.*). Choose a name no account uses, a password and
 sign in. The recovery changes no account and deletes none: use the new administrator to reset or deactivate
 the old one on the People page. The code expires after 15 minutes; an unused one is removed at the next

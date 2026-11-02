@@ -189,7 +189,7 @@ container from the lab's deployment name and refuses a container that is not lab
 
 All three live in the **Manager ▾** menu in the top bar and send nothing to the manager.
 
-**Help.** **Help** is a group at the bottom of the Manager menu, just above **Diagnostics**. It is
+**Help.** **Help** is a group near the bottom of the Manager menu, above **Diagnostics** (administrators) and your account. It is
 folded every time the menu opens: click it, or press Enter, Space or ArrowRight, to unfold it, and
 ArrowLeft to fold it again. It holds **Keyboard shortcuts…** and four links that open in a new tab
 (they leave the manager, so a classroom without internet access sees the browser's own error):
