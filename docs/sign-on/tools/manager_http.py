@@ -171,6 +171,15 @@ class Manager:
     def delete(self, path, body=None, **kwargs): return self.request('DELETE', path, body, **kwargs)
 
 
+def playwright_context(browser, manager, **options):
+    """A Playwright browser context that shares `manager`'s session (it signs in when needed) and accepts the manager's own
+    certificate, which Chromium does not know: `ignore_https_errors` is set because the helper already pinned that certificate for
+    its own requests and a live tool runs on the same VM. `options` go to `browser.new_context` (viewport, ...)."""
+    context = browser.new_context(**dict(options, ignore_https_errors=True))
+    context.add_cookies([manager.playwright_cookie()])
+    return context
+
+
 def add_arguments(parser):
     """The connection options, for a tool that builds its own parser and then calls `Manager.from_args(args)`."""
     parser.add_argument('--base', default=None, help='manager base URL, https only (default: $MANAGER, else %s)' % DEFAULT_BASE)

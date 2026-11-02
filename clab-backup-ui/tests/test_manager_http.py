@@ -274,6 +274,25 @@ class ManagerHttpTests(unittest.TestCase):
         self.assertIn('"path": "/api/state"', out.getvalue())
         self.assertNotIn(PASSWORD, out.getvalue())
 
+    def test_a_browser_context_gets_the_session_cookie_and_accepts_the_managers_own_certificate(self):
+        class Context:
+            cookies = []
+            def add_cookies(self, cookies): self.cookies += cookies
+        class Browser:
+            options = None
+            def new_context(self, **options):
+                self.options = options
+                self.context = Context()
+                return self.context
+        browser = Browser()
+        context = manager_http.playwright_context(browser, self.manager(), viewport={'width': 1440, 'height': 900})
+        self.assertIs(context, browser.context)
+        self.assertEqual(browser.options, {'viewport': {'width': 1440, 'height': 900}, 'ignore_https_errors': True})
+        [cookie] = context.cookies
+        self.assertEqual((cookie['name'], cookie['value'], cookie['url']), ('clab_session', 'sid1', self.fake.base))
+        self.assertTrue(cookie['httpOnly'] and cookie['secure'])
+        self.assertEqual(cookie['sameSite'], 'Strict')
+
     def test_from_args_reads_the_manager_environment_variable_for_the_base(self):
         parser = manager_http.argument_parser()
         with patch.dict(os.environ, {'MANAGER': self.fake.base}):
