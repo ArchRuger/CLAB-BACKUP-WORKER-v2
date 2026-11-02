@@ -24,8 +24,6 @@ with it (audit 2026-10-03 core/repair, M-13).
 import ipaddress
 import re
 
-from .headers import encoded, security_headers
-
 HOST = re.compile(r'(\[[0-9a-f:.]+\]|[a-z0-9_-]+(?:\.[a-z0-9_-]+)*)(?::[0-9]{1,5})?')
 REFUSAL = (b'This manager does not answer to the name in the address bar. Open it by the lab VM\'s IP address, for example '
            b'https://192.0.2.10:8443/. To open it by a name such as manager.example.edu, add that name to '
@@ -35,6 +33,9 @@ REFUSAL = (b'This manager does not answer to the name in the address bar. Open i
 
 def refusal_headers(scope):
     """The fixed security headers of a refusal (app/headers.py, shared with the gate and the guard) plus the body's type and length."""
+    # Imported here, not at the top: deploy/setup_tls.py and deploy/check_exposure.py load this file on its own, outside
+    # the app package, for host_name() and configured_hosts(), where a relative import cannot resolve.
+    from .headers import encoded, security_headers
     headers = security_headers(scope, status=403, refusal=True)
     headers.update({'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': str(len(REFUSAL))})
     return encoded(headers)
