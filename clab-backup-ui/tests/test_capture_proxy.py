@@ -10,6 +10,7 @@ from unittest.mock import patch
 from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.responses import Response
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 from starlette.websockets import WebSocketDisconnect
 import uvicorn
 
@@ -60,7 +61,7 @@ class CaptureProxyTests(unittest.TestCase):
         self.assertTrue(self.server.started)
         self.tmp=tempfile.TemporaryDirectory()
         with patch.dict('os.environ',{'CAPTURE_PROVIDER':'disabled'}):self.app=create_app(self.tmp.name)
-        self.client=TestClient(self.app)
+        self.client=SignedInClient(self.app)
         self.app.state.captures.provider=EdgesharkProvider('http://fixture')
         self.app.state.captures.sessions=BrowserSessions(f'http://127.0.0.1:{self.port}','a'*64)
         self.read=patch('app.capture.read_discovery',return_value=fixture());self.read.start()
@@ -131,7 +132,7 @@ class CaptureProxyTests(unittest.TestCase):
         self.assertIn('wireshark-captures.tar',response.headers['content-disposition'])
         self.empty=True;response=self.client.get(base+'/download')
         self.assertEqual(response.status_code,409);self.assertIn('Save As',response.json()['detail']);self.empty=False
-        with TestClient(self.app) as other:
+        with SignedInClient(self.app) as other:
             self.assertEqual(other.get(base+'/download').status_code,404)
         for path in ('index.html','core/test.html','app/ui.js'):
             self.assertEqual(self.client.get(base+'/assets/'+path).status_code,404)

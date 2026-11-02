@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 from app.main import create_app
 from app.inventory import parse_inventory, PLATFORMS
 from app.runner import make_inventory, normalized, filename
@@ -15,8 +16,7 @@ class LoggingTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory()
         self.app=create_app(self.tmp.name)
         self.store=self.app.state.store
-        self.client=TestClient(self.app)
-        self.auth={'Authorization':'Bearer '+self.store.token}
+        self.client=SignedInClient(self.app)
         self.nodes=[dict(name=kind,address='192.0.2.1',port=30001+i,platform=kind,
                          enabled=True,username='admin',password='login-sensitive',enable_password='enable-sensitive')
                     for i,kind in enumerate(PLATFORMS)]
@@ -43,10 +43,10 @@ class LoggingTests(unittest.TestCase):
         node=parse_inventory(b'all:\n  children:\n    arista_ceos:\n      hosts:\n        sw:\n          ansible_user: admin\n          ansible_password: login-sensitive\n          ansible_become_password: enable-sensitive\n')[0]
         self.assertEqual(node['enable_password'],'enable-sensitive')
         self.lab['nodes']=[node]
-        r=self.client.post('/api/labs/lab/profiles',headers=self.auth,data=dict(label='EOS',platform='arista_ceos',username='admin',password='login-sensitive',enable_password='enable-sensitive'))
+        r=self.client.post('/api/labs/lab/profiles',data=dict(label='EOS',platform='arista_ceos',username='admin',password='login-sensitive',enable_password='enable-sensitive'))
         self.assertEqual(r.status_code,200,r.text)
         self.assertNotIn('enable-sensitive',r.text)
-        self.assertNotIn('enable-sensitive',self.client.get('/api/state',headers=self.auth).text)
+        self.assertNotIn('enable-sensitive',self.client.get('/api/state').text)
         self.assertNotIn('enable-sensitive',(Path(self.tmp.name)/'events.jsonl').read_text())
     def execute_fixture(self, outputs, job_id='run'):
         job=dict(id=job_id,lab_id='lab',operation='backup',status='queued',nodes=[])
@@ -87,7 +87,7 @@ class LoggingTests(unittest.TestCase):
         self.assertTrue(any(e['node']=='arista_ceos' and e['level']=='error' for e in logs))
     def test_api_request_log_is_plain_ascii_with_an_arrow(self):
         # A-001: the audit-log arrow must be a plain '->', never the mojibake it once was.
-        r=self.client.post('/api/labs/lab/profiles',headers=self.auth,
+        r=self.client.post('/api/labs/lab/profiles',
                            data=dict(label='Fixture',platform='arista_ceos',username='admin',password='login-sensitive'))
         self.assertEqual(r.status_code,200,r.text)
         events=[e for e in self.store.events() if e['action']=='api.request']
@@ -102,9 +102,9 @@ class LoggingTests(unittest.TestCase):
     def test_log_auth_filters_and_restart_persistence(self):
         self.store.event('fixture','failure',lab_id='lab',job_id='run',node='SW1',level='error')
         self.assertEqual(self.client.get('/api/logs', headers={'Origin':'https://other.example'}).status_code,403)
-        r=self.client.get('/api/logs?lab_id=lab&job_id=run&node=sw&level=error',headers=self.auth)
+        r=self.client.get('/api/logs?lab_id=lab&job_id=run&node=sw&level=error')
         self.assertEqual(len(r.json()['events']),1)
-        self.assertEqual(self.client.get('/api/logs?limit=9999',headers=self.auth).status_code,422)
+        self.assertEqual(self.client.get('/api/logs?limit=9999').status_code,422)
         reopened=Store(self.tmp.name)
         self.assertEqual(len(reopened.events(job_id='run')),1)
     def test_rotation_retains_recent_events(self):

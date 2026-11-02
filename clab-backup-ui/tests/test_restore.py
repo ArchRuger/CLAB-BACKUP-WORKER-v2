@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app.store import Store
 from app.restore import (RestoreService, compare_states, mask_line, set_lines,
@@ -135,7 +136,7 @@ class RestoreServiceTests(unittest.TestCase):
         self.backup = self.make_source_backup()
         self.app = FastAPI()
         self.svc.install(self.app)
-        self.client = TestClient(self.app)
+        self.client = TestClient(self.app)   # a bare FastAPI with the restore routes only: no gate, so no sign-in (the create_app sites below use SignedInClient)
 
     def node(self, name, platform='juniper_cjunosevolved'):
         return {'name': name, 'platform': platform, 'address': '172.20.20.2', 'port': 22,
@@ -1458,7 +1459,7 @@ class RestoreServiceTests(unittest.TestCase):
                     {'name': 'PTX1', 'status': 'interrupted', 'stage': 'verifying', '_token': 'clabmgr-1a2b3c4d',
                      'timeline': {'queued': 1, 'verifying': 2}}]))
                 store.save()
-            client = TestClient(app, base_url='http://testserver')
+            client = SignedInClient(app, base_url='http://testserver')
             response = client.request('DELETE', '/api/labs/labX', json={'name': 'busy-lab'},
                                       headers={'Origin': 'http://testserver'})
             self.assertEqual(response.status_code, 409, response.text)
@@ -1527,7 +1528,7 @@ class RestoreServiceTests(unittest.TestCase):
                 store.state.setdefault('restore_jobs', []).append(dict(id='r1', lab_id='labX', status='confirming', targets=[]))
                 store.save()
             self.assertIn('confirming', RESTORE_BUSY)
-            client = TestClient(app, base_url='http://testserver')
+            client = SignedInClient(app, base_url='http://testserver')
             response = client.request('DELETE', '/api/labs/labX', json={'name': 'busy-lab'},
                                       headers={'Origin': 'http://testserver'})
             # get_lab() consults operation_busy, which counts a restore in RESTORE_BUSY: a lab whose device may

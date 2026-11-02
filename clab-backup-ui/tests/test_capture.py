@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient, NAME
 from app.main import create_app
 from app.capture import (CaptureError, EdgesharkProvider, MAX_RESPONSE, MAY_HAVE_STARTED, NOT_ATTEMPTED, NoRedirect, PRUNE_GRACE_SECONDS,
                          configured_provider, normalize_targets, read_discovery, service_url)
@@ -133,7 +134,7 @@ class CaptureAPITests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         with patch.dict('os.environ',{'CAPTURE_PROVIDER':'disabled'}): self.app=create_app(self.tmp.name)
-        self.client=TestClient(self.app)
+        self.client=SignedInClient(self.app)
         self.captures=self.app.state.captures
         self.lab={'id':'lab','name':'demo','deployment_name':'demo','container_prefix':'clab',
                   'nodes':[{'name':'r1','definition_node':'r1'}]}
@@ -267,8 +268,12 @@ class CaptureAPITests(unittest.TestCase):
         self.assertEqual(len(rows),2);self.assertNotEqual(rows[0]['id'],rows[1]['id'])
 
 
-WHO='b'*64
-OTHER='d'*64
+# The browser's clab_capture_owner cookies, and the owners the capture service sees for the signed-in 'tester':
+# sha256(cookie + newline + user) since the sign-on release (DESIGN.md 11.2). ScriptedService rows carry the owner.
+WHO_COOKIE='b'*64
+OTHER_COOKIE='d'*64
+WHO=hashlib.sha256((WHO_COOKIE+'\n'+'tester').encode()).hexdigest()
+OTHER=hashlib.sha256((OTHER_COOKIE+'\n'+'tester').encode()).hexdigest()
 SLOTS='All browser capture slots are in use. End a session or wait for expiry.'
 LOST='Cannot reach the browser capture service. Check Capture setup and retry.'
 STARTED='Wireshark session started on the VM. Open the browser viewer to inspect packets.'
@@ -323,7 +328,7 @@ class CaptureSetTests(unittest.TestCase):
     def setUp(self):
         CaptureAPITests.setUp(self)
         self.service=ScriptedService();self.captures.sessions=self.service
-        self.client.cookies.set('clab_capture_owner',WHO)
+        self.client.cookies.set('clab_capture_owner',WHO_COOKIE)
         self.rid='e'*64
         self.r1=CaptureAPITests.selection(self)['target_id']
         self.host=next(t['id'] for t in self.client.get('/api/capture/targets').json()['targets'] if t['name']=='init')
@@ -626,14 +631,14 @@ class CaptureSetTests(unittest.TestCase):
 
     def test_known_is_pruned_per_browser_and_both_maps_are_capped(self):
         a=self.launch((self.r1,['eth2']),rid='1'*64).json()['sessions'][0]['id']
-        self.client.cookies.set('clab_capture_owner',OTHER)
+        self.client.cookies.set('clab_capture_owner',OTHER_COOKIE)
         b=self.launch((self.r1,['eth2']),rid='2'*64).json()['sessions'][0]['id']
         self.assertEqual(set(self.captures.known),{a,b})
         del self.service.rows[b]
         later=time.time()+PRUNE_GRACE_SECONDS+1  # records younger than the grace are kept
         with patch('app.capture.time.time',return_value=later):self.client.get('/api/capture/sessions')  # browser OTHER lists: only its own records are pruned
         self.assertEqual(set(self.captures.known),{a})
-        self.client.cookies.set('clab_capture_owner',WHO)
+        self.client.cookies.set('clab_capture_owner',WHO_COOKIE)
         with patch('app.capture.time.time',return_value=later):self.client.get('/api/capture/sessions')
         self.assertEqual(set(self.captures.known),{a})
         for n in range(80):
@@ -669,13 +674,22 @@ class CaptureSetTests(unittest.TestCase):
                          ('Ended 2 browser Wireshark session(s) and removed their temporary files; 1 could not be ended.','warning'))
         self.assertNotIn(ids[0],self.captures.known);self.assertIn(ids[1],self.captures.known)
 
+    def test_ending_a_session_names_the_person_on_the_event(self):
+        # Sign-on DESIGN 10.3: the actor wherever a request is in hand; End session and End all my sessions are route handlers.
+        first=[s['id'] for s in self.launch((self.r1,['eth2']),(self.host,['ens18'])).json()['sessions']]
+        self.assertEqual(self.client.post('/api/capture/sessions/'+first[0]+'/end',json={}).status_code,200)
+        self.assertEqual([(e['message'],e['actor']) for e in self.events('capture.end')],
+                         [('Ended browser Wireshark session and removed its temporary files.',NAME)])
+        self.assertEqual(self.client.post('/api/capture/sessions/end-all',json={}).json(),{'ended':1,'failed':[]})
+        self.assertEqual([e['actor'] for e in self.events('capture.end_all')],[NAME])
+
     def test_end_all_needs_the_cookie_the_origin_and_a_body(self):
         self.launch((self.r1,['eth2']),(self.host,['ens18']))
-        stranger=TestClient(self.app)
+        stranger=SignedInClient(self.app)
         try:
             r=stranger.post('/api/capture/sessions/end-all',json={})
             self.assertEqual((r.status_code,r.json()['detail']),(404,'Capture session not found in this browser.'))
-            stranger.cookies.set('clab_capture_owner',OTHER)
+            stranger.cookies.set('clab_capture_owner',OTHER_COOKIE)
             self.assertEqual(stranger.post('/api/capture/sessions/end-all',json={}).json(),{'ended':0,'failed':[]})
         finally:stranger.close()
         self.assertEqual(len(self.service.rows),2)
@@ -701,5 +715,5 @@ class CaptureSetTests(unittest.TestCase):
         self.launch((self.r1,['eth2']),(self.host,['ens18']))
         self.client.get('/api/capture/sessions');self.client.post('/api/capture/sessions/end-all',json={})
         text=json.dumps(self.app.state.store.events())
-        for needle in ('PRIVATE','viewer_password','packetflix',WHO):self.assertNotIn(needle,text)
+        for needle in ('PRIVATE','viewer_password','packetflix',WHO,WHO_COOKIE):self.assertNotIn(needle,text)
         self.assertEqual(self.app.state.store.state,self.before)

@@ -114,6 +114,14 @@ jobs:
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_vm_files.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_probe.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_redirect.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_password.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_users.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_audit.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_setup.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_session.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_signon_load.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_ticket_binding.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_socket_session.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_telemetry_retirement.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_telemetry_absence.py -v
       - name: Check the backup pipeline, downloads, maps, import confirmation, removal and reset

@@ -15,10 +15,11 @@ import uuid
 from datetime import datetime, timezone
 
 import paramiko
-from fastapi import File, Form, HTTPException, UploadFile
+from fastapi import Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from .inventory import ALIASES, address, literal, read_data
+from .sessions import require_admin
 
 COMMANDS = {'helper': 'sudo -n /usr/local/sbin/clab-manager-inspect',
             'direct': 'containerlab inspect --all --format json'}
@@ -654,7 +655,8 @@ class Discovery:
         def status(): return self.public()
 
         @app.put('/api/host')
-        def save_host(data: HostSettings):
+        def save_host(data: HostSettings, user: dict = Depends(require_admin)):
+            # Admin-only (sign-on DESIGN.md 7.2, D2): the VM connection, including the host-key reset, is an installation fact.
             try:
                 if data.auth != 'password': raise ValueError('VM connections require password authentication')
                 if data.command_mode not in COMMANDS: raise ValueError('Choose a valid inspection mode')

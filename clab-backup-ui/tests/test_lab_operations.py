@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 import threading
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 import app.host_operations as host_operations
 import app.lab_operations as lab_operations
@@ -817,19 +818,19 @@ class OperationAPITests(unittest.TestCase):
             if req['mode']=='preview':
                 affected=[dict(name=req['options']['container'],id='c1',state='running')] if req['action'] in lab_operations.NODE_ACTIONS else []
                 return dict(action=req['action'],name=req['name'],path=req['path'],source_hash=hashlib.sha256(self.raw).hexdigest(),digest=digest(req),warnings=[],affected=affected,argv=[],steps=[])
-            if req['mode']=='run':args[0]('first line\nhost-secret\npassword: should-not-persist\n'+self.store.token+'\n');return dict(exit_code=0)
+            if req['mode']=='run':args[0]('first line\nhost-secret\npassword: should-not-persist\n');return dict(exit_code=0)
             return {}
         return patch('app.lab_operations.remote',side_effect=remote)
 
     def preview(self,action='deploy',**extra):
-        response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action=action,lab_id=self.lab_id,**extra))
+        response=self.client.post('/api/operations/preview',json=dict(action=action,lab_id=self.lab_id,**extra))
         self.assertEqual(response.status_code,200,response.text);return response.json()
-    def confirm(self,token):return self.client.post('/api/operations/confirm',headers=self.auth,json={'token':token})
+    def confirm(self,token):return self.client.post('/api/operations/confirm',json={'token':token})
 
     def test_parse_yaml_places_nodes_from_the_annotations_file_and_falls_back_to_the_grid(self):
         annotations=json.dumps({'nodeAnnotations':[{'id':'r1','position':{'x':380,'y':360}},{'id':'r2','position':{'x':520,'y':340}}]})
         def parse(**options):
-            response=self.client.post('/api/operations/parse-yaml',headers=self.auth,json={'options':{'text':YAML.decode(),**options}})
+            response=self.client.post('/api/operations/parse-yaml',json={'options':{'text':YAML.decode(),**options}})
             self.assertEqual(response.status_code,200,response.text);return response.json()
         placed=parse(annotations=annotations)
         self.assertTrue(placed['annotations_used']);self.assertTrue(placed['drawing']['placed'])
@@ -838,13 +839,13 @@ class OperationAPITests(unittest.TestCase):
         extra=parse(annotations=json.dumps({'nodeAnnotations':[{'id':'r1','position':{'x':1,'y':2}},{'id':'ghost','position':{'x':9,'y':9}}]}))
         self.assertEqual({n['id']:n['in_topology'] for n in extra['drawing']['nodes']},{'r1':True,'ghost':False,'r2':True},'a device only the map file names is marked so')
         lab=self.register()
-        self.assertNotIn('in_topology',self.client.get('/api/labs/'+lab['id']+'/topology',headers=self.auth).json()['nodes'][0],'a lab\'s own map keeps its inventory binding instead')
+        self.assertNotIn('in_topology',self.client.get('/api/labs/'+lab['id']+'/topology').json()['nodes'][0],'a lab\'s own map keeps its inventory binding instead')
         self.assertEqual(len(placed['drawing']['links']),1,'the wiring still comes from the YAML')
         for options in ({},{'annotations':''},{'annotations':'{not json'},{'annotations':'{"other":1}'}):
             grid=parse(**options)
             self.assertFalse(grid['annotations_used']);self.assertFalse(grid['drawing']['placed'])
             self.assertEqual([(n['x'],n['y']) for n in grid['drawing']['nodes']],[(0,0),(160,0)])
-        response=self.client.post('/api/operations/parse-yaml',headers=self.auth,json={'options':{'text':'not: [a topology','annotations':annotations}})
+        response=self.client.post('/api/operations/parse-yaml',json={'options':{'text':'not: [a topology','annotations':annotations}})
         self.assertEqual(response.status_code,400)
 
     def test_auth_review_cancel_and_single_use_confirmation(self):
@@ -857,7 +858,7 @@ class OperationAPITests(unittest.TestCase):
 
     def test_builder_save_is_checked_by_the_manager_before_the_helper_sees_it(self):
         built='name: built\ntopology:\n  nodes:\n    r1:\n      kind: linux\n'; layout='{"nodeAnnotations":[{"id":"r1","position":{"x":1,"y":2}}]}'
-        post=lambda **body:self.client.post('/api/operations/preview',headers=self.auth,json=body)
+        post=lambda **body:self.client.post('/api/operations/preview',json=body)
         with self.fixture() as remote,patch.object(self.app.state.operations.pool,'submit') as submit:
             remote.side_effect=(lambda inner:lambda host,req,*a:{**inner(host,req,*a),'path':'/srv/labs/built/built.clab.yml'} if req['mode']=='preview' and req['action']=='publish' else inner(host,req,*a))(remote.side_effect)
             for text,reason in (('name: built\ntopology:\n  nodes: {}\n','at least one device'),('a: &x 1\nb: *x\n','cannot read'),('name: bad name\ntopology:\n  nodes:\n    r1: {}\n','cannot read')):
@@ -879,7 +880,7 @@ class OperationAPITests(unittest.TestCase):
     def test_create_carries_an_uploaded_map_file_through_the_manager_route_untouched(self):
         layout=json.dumps({'nodeAnnotations':[{'id':'r1'}]})
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
-            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='create',lab_id='',
+            response=self.client.post('/api/operations/preview',json=dict(action='create',lab_id='',
                 path='/srv/containerlab-node-manager/projects/new.clab.yaml',
                 options={'text':'name: new\ntopology:\n  nodes:\n    r1: {kind: linux}\n','annotations':layout}))
             self.assertEqual(response.status_code,200,response.text)
@@ -898,14 +899,14 @@ class OperationAPITests(unittest.TestCase):
             return {}
         self.host(); self.store.state['host']['fingerprint'] = 'SHA256:fixture'
         with patch('app.lab_operations.remote', side_effect=remote):
-            images = self.client.get('/api/operations/images', headers=self.auth)
+            images = self.client.get('/api/operations/images')
             self.assertEqual(images.status_code, 200, images.text)
             answer = images.json()
             self.assertEqual((answer['available'], answer['images']), (True, ['ceos:4.35.0F', 'n24l/cisco_xrv9k:24.3.1']), 'the reference list the lab builder reads: strings only, in order')
             self.assertEqual(set(answer), {'available', 'images', 'details', 'used_by', 'missing'}, 'the images page fields ride along (device_diagnostics owns the route)')
-            self.client.get('/api/operations/images', headers=self.auth)
+            self.client.get('/api/operations/images')
             self.assertEqual(asked.count('images'), 1, 'the VM image list is cached')
-            check = lambda refs: self.client.post('/api/operations/image-check', headers=self.auth, json={'references': refs})
+            check = lambda refs: self.client.post('/api/operations/image-check', json={'references': refs})
             first = check(['ceos:4.35.0F', 'vrnetlab/cisco_xrv9k:24.3.1', 'ghcr.io/srl-labs/network-multitool:latest'])
             self.assertEqual(first.status_code, 200, first.text)
             rows = first.json()['images']
@@ -917,7 +918,7 @@ class OperationAPITests(unittest.TestCase):
             self.assertEqual(asked.count('image-check'), 2, 'only the image not yet answered goes to the helper')
             for bad in ([], ['x'] * 17):
                 self.assertEqual(check(bad).status_code, 422, str(bad))
-            self.assertEqual(self.client.post('/api/operations/image-check', headers=self.auth, json={'references': ['alpine:3'], 'pull': True}).status_code, 422)
+            self.assertEqual(self.client.post('/api/operations/image-check', json={'references': ['alpine:3'], 'pull': True}).status_code, 422)
             invalid = check(['-rm', 'a b', 'Alpine:3', 'ceos:4.35.0F', 'alpine\n'])
             self.assertEqual(invalid.status_code, 200, invalid.text)
             self.assertEqual([(r['reference'], r['registry']) for r in invalid.json()['images']], [('-rm', 'invalid'), ('a b', 'invalid'), ('Alpine:3', 'invalid'), ('ceos:4.35.0F', 'skipped'), ('alpine\n', 'invalid')], 'a name that is no reference is answered, not refused, and never sent')
@@ -932,7 +933,7 @@ class OperationAPITests(unittest.TestCase):
             self.raw = YAML.replace(b'    kind: cisco_xrv9k\n', b'    kind: cisco_xrv9k\n    image: n24l/cisco_xrv9k:24.3.1\n')
             self.assertEqual(self.preview()['images'], [{'reference': 'n24l/cisco_xrv9k:24.3.1', 'kind': 'cisco_xrv9k', 'nodes': ['r1', 'r2']}], 'the default image reaches every node without one, listed once with both devices')
             text = 'name: built\ntopology:\n  defaults:\n    image: site/default:1\n  kinds:\n    linux:\n      image: alpine:3\n  nodes:\n    a:\n      kind: linux\n    b:\n      kind: linux\n      image: "{{ templated }}"\n    c:\n      kind: arista_ceos\n      image: ceos:4.35.0F\n    d:\n      kind: arista_ceos\n      image: ceos:4.35.0F\n    e:\n      kind: cisco_xrv9k\n'
-            publish = self.client.post('/api/operations/preview', headers=self.auth, json=dict(action='publish', options={'text': text, 'annotations': '{}'}))
+            publish = self.client.post('/api/operations/preview', json=dict(action='publish', options={'text': text, 'annotations': '{}'}))
             self.assertEqual(publish.status_code, 200, publish.text)
             self.assertEqual(publish.json()['images'], [{'reference': 'alpine:3', 'kind': 'linux', 'nodes': ['a']}, {'reference': 'ceos:4.35.0F', 'kind': 'arista_ceos', 'nodes': ['c', 'd']}, {'reference': 'site/default:1', 'kind': 'cisco_xrv9k', 'nodes': ['e']}])
             self.assertNotIn('images', self.preview('stop'), 'only the reviews that write or deploy a topology name its images')
@@ -956,7 +957,7 @@ class OperationAPITests(unittest.TestCase):
         self.assertEqual(lab_operations.cptx_startup_warnings('not: [yaml'), [])
         self.assertEqual(lab_operations.cptx_startup_warnings('name: t\ntopology:\n  nodes:\n    a:\n      kind: juniper_cjunosevolved\n      startup-config: a.cfg\n'), [])
         with self.fixture():
-            publish = self.client.post('/api/operations/preview', headers=self.auth, json=dict(action='publish', options={'text': text, 'annotations': '{}'}))
+            publish = self.client.post('/api/operations/preview', json=dict(action='publish', options={'text': text, 'annotations': '{}'}))
             self.assertEqual(publish.status_code, 200, publish.text)
             self.assertIn(warn('inherited'), publish.json()['warnings'])
             self.assertNotIn('cleanup', ' '.join(w for w in publish.json()['warnings'] if 'CPTX' in w).lower(), 'shown with the visible warnings, not the technical ones')
@@ -967,18 +968,18 @@ class OperationAPITests(unittest.TestCase):
     def test_known_images_come_from_the_labs_already_registered(self):
         with self.fixture():
             self.store.lab(self.lab_id)['definition_yaml']='name: t\ntopology:\n  defaults:\n    kind: arista_ceos\n  kinds:\n    arista_ceos:\n      image: site/ceos:1\n  nodes:\n    a: {}\n    b:\n      image: site/ceos:2\n    c:\n      kind: linux\n      image: "{{ templated }}"\n    d:\n      kind: linux\n      image: alpine:3\n    e: {}\n'
-            found=self.client.get('/api/operations/known-images',headers=self.auth).json()['images']
+            found=self.client.get('/api/operations/known-images').json()['images']
         self.assertEqual(found,{'arista_ceos':['site/ceos:1','site/ceos:2'],'linux':['alpine:3']})
 
     def test_builder_revision_keeps_the_lab_name_and_shows_what_changes(self):
         with self.fixture():
-            renamed=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':YAML.decode().replace('name: training','name: other',1),'base':{'yaml':'x'}}))
+            renamed=self.client.post('/api/operations/preview',json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':YAML.decode().replace('name: training','name: other',1),'base':{'yaml':'x'}}))
             self.assertEqual(renamed.status_code,400,renamed.text);self.assertIn('cannot change',renamed.json()['detail'])
             changed=YAML.decode()+'# a student change\n'
-            review=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':changed,'base':{'yaml':hashlib.sha256(YAML).hexdigest()}}))
+            review=self.client.post('/api/operations/preview',json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':changed,'base':{'yaml':hashlib.sha256(YAML).hexdigest()}}))
             self.assertEqual(review.status_code,200,review.text);self.assertIn('+# a student change',review.json()['diff'])
             # A list of differences that is cut short says so instead of ending in the middle of a line.
-            long=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':YAML.decode()+''.join('# line %d\n'%i for i in range(30000)),'base':{'yaml':hashlib.sha256(YAML).hexdigest()}}))
+            long=self.client.post('/api/operations/preview',json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':YAML.decode()+''.join('# line %d\n'%i for i in range(30000)),'base':{'yaml':hashlib.sha256(YAML).hexdigest()}}))
             self.assertEqual(long.status_code,200,long.text);self.assertIn('not shown',long.json()['diff'][-120:])
 
     def test_host_revision_expiry_and_backup_conflicts(self):
@@ -991,11 +992,11 @@ class OperationAPITests(unittest.TestCase):
     def test_pending_operation_blocks_changes_and_backup(self):
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit'):
             self.confirm(self.preview()['token'])
-            response=self.client.request('DELETE','/api/labs/'+self.lab_id,headers=self.auth,json={'name':'training'})
+            response=self.client.request('DELETE','/api/labs/'+self.lab_id,json={'name':'training'})
             self.assertEqual(response.status_code,409)
-            response=self.client.post('/api/lab-definitions',headers=self.auth,files={'definition':('x.yaml',YAML)})
+            response=self.client.post('/api/lab-definitions',files={'definition':('x.yaml',YAML)})
             self.assertEqual(response.status_code,409)
-            response=self.client.put('/api/labs/'+self.lab_id+'/operations-settings',headers=self.auth,json={'favorite':True})
+            response=self.client.put('/api/labs/'+self.lab_id+'/operations-settings',json={'favorite':True})
             self.assertEqual(response.status_code,409)
             with self.assertRaisesRegex(ValueError,'operation'):self.app.state.runner.submit(self.lab_id,'backup')
 
@@ -1038,21 +1039,21 @@ class OperationAPITests(unittest.TestCase):
                                  (dict(action='restart-node',lab_id=self.lab_id,node=node,options={'node':'r2'}),400),(dict(action='restart',lab_id=self.lab_id,node=node),400),
                                  (dict(action='restart-node',lab_id=self.lab_id,node=node,options={'cleanup':True}),400),(dict(action='restart-node',node=node),400),
                                  (dict(action='deploy',lab_id=self.lab_id,options={'container':'clab-training-r1'}),400)):
-                response=self.client.post('/api/operations/preview',headers=self.auth,json=payload)
+                response=self.client.post('/api/operations/preview',json=payload)
                 self.assertEqual(response.status_code,code,response.text)
             self.assertFalse(any(c.args[1]['mode']=='preview' for c in remote.call_args_list[calls:]),'nothing reached the helper')
             # A device the manager cannot match to the topology file is refused, never guessed.
             lab['nodes'][1].update(definition_node='',short_name='')
-            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='restart-node',lab_id=self.lab_id,node='clab-training-r2'))
+            response=self.client.post('/api/operations/preview',json=dict(action='restart-node',lab_id=self.lab_id,node='clab-training-r2'))
             self.assertEqual(response.status_code,409);self.assertIn('cannot match',response.text)
             # Confirm: the job carries the device; the device reads as restarting and its CLI closes while the job is queued.
             job=self.confirm(preview['token']).json()
             self.assertEqual((job['action'],job['node'],job['node_label']),('restart-node','clab-training-r1','r1'))
-            public=next(l for l in self.client.get('/api/state',headers=self.auth).json()['labs'] if l['id']==self.lab_id)
+            public=next(l for l in self.client.get('/api/state').json()['labs'] if l['id']==self.lab_id)
             r1,r2=public['nodes']
             self.assertEqual(r1['nos_login']['status'],'restarting');self.assertFalse(r1['ssh_ready'])
             self.assertNotEqual(r2['nos_login']['status'],'restarting','the other device keeps its own state')
-            self.assertEqual(self.client.get('/api/operations',headers=self.auth).json()[0]['node_label'],'r1')
+            self.assertEqual(self.client.get('/api/operations').json()[0]['node_label'],'r1')
             # Running it drops the device's proven login before and after the helper call.
             readiness=self.app.state.readiness;key=(self.lab_id,node)
             with self.app.state.node_services.lock:self.app.state.node_services.checks[key]={'status':'reachable','at':'then','message':'ok'}
@@ -1182,7 +1183,7 @@ class OperationAPITests(unittest.TestCase):
             try:
                 stale=self.confirm(second['token']);self.assertEqual(stale.status_code,409);self.assertIn('ran after this review',stale.text)
                 self.assertNotIn('Wait for the current',stale.text);self.assertEqual(len(self.store.state['operations']),1)
-                busy=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='restart-node',lab_id=self.lab_id,node=node))
+                busy=self.client.post('/api/operations/preview',json=dict(action='restart-node',lab_id=self.lab_id,node=node))
                 self.assertEqual(busy.status_code,409);self.assertIn('Wait for the current lab operation',busy.text)
             finally:
                 operations.active.discard(job['id'])
@@ -1199,16 +1200,16 @@ class OperationAPITests(unittest.TestCase):
                     self.store.state['operations'].append(dict(id='b',lab_id=self.lab_id,name='training',action='restart',path='',created=stamp(),status='succeeded',output='',message='',exit_code=0))
                 return inner(host,req,*a)
             remote.side_effect=during_plan
-            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='restart-node',lab_id=self.lab_id,node=node))
+            response=self.client.post('/api/operations/preview',json=dict(action='restart-node',lab_id=self.lab_id,node=node))
             self.assertEqual(response.status_code,409,response.text);self.assertIn('while this review was being prepared',response.text)
             remote.side_effect=inner
             # And a page-supplied path is refused for this action: the lab's own topology file is the only one.
-            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='restart-node',lab_id=self.lab_id,node=node,path='/etc/containerlab/other.clab.yaml'))
+            response=self.client.post('/api/operations/preview',json=dict(action='restart-node',lab_id=self.lab_id,node=node,path='/etc/containerlab/other.clab.yaml'))
             self.assertEqual(response.status_code,400)
 
     def test_last_deployed_is_the_real_time_of_a_succeeded_deploy_and_never_invented(self):
         from app.lab_operations import last_deployed
-        public=lambda:next(l for l in self.client.get('/api/state',headers=self.auth).json()['labs'] if l['id']==self.lab_id)
+        public=lambda:next(l for l in self.client.get('/api/state').json()['labs'] if l['id']==self.lab_id)
         def run(action,exit_code=0):
             with self.fixture() as remote,patch.object(self.service,'refresh'),patch.object(self.app.state.operations.pool,'submit') as submit:
                 remote.side_effect=(lambda inner:lambda host,req,*a:dict(exit_code=exit_code) if req['mode']=='run' else inner(host,req,*a))(remote.side_effect)
@@ -1231,7 +1232,7 @@ class OperationAPITests(unittest.TestCase):
             args[0](*args[1:])
             saved=self.store.state['operations'][0];self.assertEqual(saved['status'],'succeeded');self.assertIn('first line',saved['output'])
             for secret in ('host-secret','should-not-persist'):self.assertNotIn(secret,saved['output'])
-            self.assertNotIn('output',self.client.get('/api/state',headers=self.auth).json()['operations'][0])
+            self.assertNotIn('output',self.client.get('/api/state').json()['operations'][0])
             self.assertEqual(Store(self.tmp.name).state['operations'][0]['status'],'succeeded')
             saved['status']='running';self.store.save()
             second=LabOperations(self.store,self.service);second.close();self.assertEqual(saved['status'],'interrupted')
@@ -1246,14 +1247,14 @@ class OperationAPITests(unittest.TestCase):
     def test_layout_drawio_favorite_and_no_vm_mutation(self):
         with self.fixture():
             lab=self.store.lab(self.lab_id);alias=lab['drawing']['nodes'][0]['alias']
-            response=self.client.put('/api/labs/'+self.lab_id+'/layout',headers=self.auth,json={'positions':{alias:[600,300]}})
+            response=self.client.put('/api/labs/'+self.lab_id+'/layout',json={'positions':{alias:[600,300]}})
             self.assertEqual(response.status_code,200,response.text)
             for layout in ('interactive','map&theme=manager'):
-                response=self.client.get('/api/labs/'+self.lab_id+'/drawio?layout='+layout,headers=self.auth)
+                response=self.client.get('/api/labs/'+self.lab_id+'/drawio?layout='+layout)
                 self.assertEqual(response.status_code,200);root=ET.fromstring(response.content)
                 self.assertEqual(len(root.findall('.//mxCell[@id="node-0"]')),1)
                 self.assertEqual(len(root.findall('.//mxCell[@id="link-0"]')),1)
-            response=self.client.put('/api/labs/'+self.lab_id+'/operations-settings',headers=self.auth,json={'favorite':True})
+            response=self.client.put('/api/labs/'+self.lab_id+'/operations-settings',json={'favorite':True})
             self.assertEqual(response.status_code,200);self.assertTrue(Store(self.tmp.name).lab(self.lab_id)['favorite'])
             self.assertEqual(self.store.state['operations'],[])
 
@@ -1278,7 +1279,7 @@ class OperationAPITests(unittest.TestCase):
             with patch.object(self.store, 'save', side_effect=record), patch.object(lab_operations, 'time', SimpleNamespace(monotonic=lambda: next(clock))):
                 args[0](*args[1:])
         saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
-        view = self.client.get('/api/operations/' + job['id'], headers=self.auth); self.assertEqual(view.status_code, 200, view.text)
+        view = self.client.get('/api/operations/' + job['id']); self.assertEqual(view.status_code, 200, view.text)
         disk = next(j for j in Store(self.tmp.name).state['operations'] if j['id'] == job['id'])
         self.assertEqual(saved['status'], 'succeeded'); self.assertEqual(json.loads(view.text)['output'], saved['output']); self.assertEqual(disk['output'], saved['output'])
         self.assertGreater(len(published), len(chunks), 'the job published after every chunk')
@@ -1394,7 +1395,7 @@ class OperationAPITests(unittest.TestCase):
         with self.fixture() as remote:
             url='/api/labs/'+self.lab_id+'/map-document'
             lab=self.store.lab(self.lab_id);yaml_before=lab['definition_yaml'];ids=[n['id'] for n in lab['drawing']['nodes']]
-            opened=self.client.get(url,headers=self.auth);self.assertEqual(opened.status_code,200,opened.text);opened=opened.json()
+            opened=self.client.get(url);self.assertEqual(opened.status_code,200,opened.text);opened=opened.json()
             self.assertEqual(opened['yaml'],yaml_before);self.assertEqual(sorted(a['id'] for a in json.loads(opened['annotations'])['nodeAnnotations']),sorted(ids),'a lab with only a drawing opens with a document written from it')
             document={'nodeAnnotations':[{'id':ids[0],'position':{'x':400,'y':120},'groupId':'core','futureField':{'kept':True}},{'id':ids[1],'position':{'x':40,'y':60}}],
                       'groupStyleAnnotations':[{'id':'core','name':'Core','parentId':'site','level':'2','position':{'x':300,'y':60},'width':300,'height':200,'backgroundColor':'#ffeecc'}],
@@ -1404,44 +1405,44 @@ class OperationAPITests(unittest.TestCase):
                       'viewerSettings':{'gridStyle':'quadratic','linkLabelMode':'on-select'},'somethingNew':[1,2,3]}
             text=json.dumps(document,indent=1)
             calls=remote.call_count
-            saved=self.client.put(url,headers=self.auth,json={'annotations':text,'revision':opened['revision']});self.assertEqual(saved.status_code,200,saved.text)
+            saved=self.client.put(url,json={'annotations':text,'revision':opened['revision']});self.assertEqual(saved.status_code,200,saved.text)
             self.assertEqual(remote.call_count,calls,'a map edit calls no VM helper: nothing is deployed, read or written there')
-            again=self.client.get(url,headers=self.auth).json()
+            again=self.client.get(url).json()
             self.assertEqual(again['annotations'],text,'byte for byte: group membership, nesting, arrows, geo coordinates, widgets and unknown keys are all kept')
             self.assertEqual(again['revision'],saved.json()['revision']);self.assertNotEqual(again['revision'],opened['revision'])
             lab=self.store.lab(self.lab_id);drawing=lab['drawing']
             self.assertEqual({n['id']:(n['x'],n['y']) for n in drawing['nodes']}[ids[0]],(400,120),'the Topology view follows the saved map')
             self.assertEqual(sorted(d['type'] for d in drawing['decorations']),['group','line','text']);self.assertTrue(drawing['placed']);self.assertEqual(drawing['settings']['labelMode'],'on-select')
             self.assertEqual(lab['definition_yaml'],yaml_before,'the topology text is never touched');self.assertEqual(Store(self.tmp.name).lab(self.lab_id)['annotations'],text)
-            public=json.dumps(self.client.get('/api/state',headers=self.auth).json());self.assertNotIn('futureField',public);self.assertNotIn('annotations_for',public)
+            public=json.dumps(self.client.get('/api/state').json());self.assertNotIn('futureField',public);self.assertNotIn('annotations_for',public)
             # refusals change nothing
-            stale=self.client.put(url,headers=self.auth,json={'annotations':text,'revision':opened['revision']});self.assertEqual(stale.status_code,409);self.assertIn('changed since it was opened',stale.text)
+            stale=self.client.put(url,json={'annotations':text,'revision':opened['revision']});self.assertEqual(stale.status_code,409);self.assertIn('changed since it was opened',stale.text)
             for bad,reason in (('[1]','cannot read this map'),('{not json','cannot read this map'),(json.dumps({'nodeAnnotations':[{'id':''}]}),'cannot read this map')):
-                refused=self.client.put(url,headers=self.auth,json={'annotations':bad,'revision':again['revision']});self.assertEqual(refused.status_code,400,bad);self.assertIn(reason,refused.text)
-            self.assertEqual(self.client.put(url,headers=self.auth,json={'annotations':text,'revision':again['revision'],'yaml':'name: other'}).status_code,422,'the request cannot carry a topology')
-            self.assertEqual(self.client.get(url,headers=self.auth).json()['annotations'],text)
+                refused=self.client.put(url,json={'annotations':bad,'revision':again['revision']});self.assertEqual(refused.status_code,400,bad);self.assertIn(reason,refused.text)
+            self.assertEqual(self.client.put(url,json={'annotations':text,'revision':again['revision'],'yaml':'name: other'}).status_code,422,'the request cannot carry a topology')
+            self.assertEqual(self.client.get(url).json()['annotations'],text)
             self.store.state['operations'].append(dict(id='busy',lab_id=self.lab_id,action='deploy',status='running',name='x'))
-            self.assertEqual(self.client.put(url,headers=self.auth,json={'annotations':text,'revision':again['revision']}).status_code,409);self.store.state['operations'].pop()
+            self.assertEqual(self.client.put(url,json={'annotations':text,'revision':again['revision']}).status_code,409);self.store.state['operations'].pop()
             # the older dialog still saves, and its change is never served with the document it did not write
-            moved=self.client.put('/api/labs/'+self.lab_id+'/layout',headers=self.auth,json={'positions':{ids[0]:[5,5]}});self.assertEqual(moved.status_code,200,moved.text)
-            after=json.loads(self.client.get(url,headers=self.auth).json()['annotations'])
+            moved=self.client.put('/api/labs/'+self.lab_id+'/layout',json={'positions':{ids[0]:[5,5]}});self.assertEqual(moved.status_code,200,moved.text)
+            after=json.loads(self.client.get(url).json()['annotations'])
             self.assertEqual(next(a for a in after['nodeAnnotations'] if a['id']==ids[0])['position'],{'x':5,'y':5});self.assertNotIn('somethingNew',after)
             # a lab without a topology text keeps the simple editor
-            lab['definition_yaml']='';none=self.client.get(url,headers=self.auth);self.assertEqual(none.status_code,409);self.assertIn('simple editor',none.text)
+            lab['definition_yaml']='';none=self.client.get(url);self.assertEqual(none.status_code,409);self.assertIn('simple editor',none.text)
 
     def test_an_imported_annotations_file_is_kept_as_it_came(self):
         with self.fixture():
             lab=self.store.lab(self.lab_id);ids=[n['id'] for n in lab['drawing']['nodes']]
             text=json.dumps({'nodeAnnotations':[{'id':i,'position':{'x':10*k,'y':20},'groupId':'g'} for k,i in enumerate(ids)],'groupStyleAnnotations':[{'id':'g','name':'G','position':{'x':0,'y':0},'width':100,'height':80}],'vendorExtension':{'a':1}})
-            sent=self.client.post('/api/labs/'+self.lab_id+'/topology',headers=self.auth,files={'annotations':('lab.annotations.json',text.encode(),'application/json'),'topology':('lab.clab.yaml',lab['definition_yaml'].encode(),'application/x-yaml')})
+            sent=self.client.post('/api/labs/'+self.lab_id+'/topology',files={'annotations':('lab.annotations.json',text.encode(),'application/json'),'topology':('lab.clab.yaml',lab['definition_yaml'].encode(),'application/x-yaml')})
             self.assertEqual(sent.status_code,200,sent.text)
-            self.assertEqual(self.client.get('/api/labs/'+self.lab_id+'/map-document',headers=self.auth).json()['annotations'],text,'Import map keeps the file, not only what the manager draws')
+            self.assertEqual(self.client.get('/api/labs/'+self.lab_id+'/map-document').json()['annotations'],text,'Import map keeps the file, not only what the manager draws')
             from app.layout import keep_document, map_document
             keep_document(lab,b'');self.assertNotIn('annotations',lab);self.assertIn('nodeAnnotations',map_document(lab))
             keep_document(lab,'x'*(1024*1024+1));self.assertNotIn('annotations',lab,'an oversized text is not stored')
 
     def drawio_get(self,query):
-        return self.client.get('/api/labs/'+self.lab_id+'/drawio'+query,headers=self.auth)
+        return self.client.get('/api/labs/'+self.lab_id+'/drawio'+query)
 
     def test_drawio_layouts_and_themes(self):
         with self.fixture():
@@ -1580,7 +1581,7 @@ class OperationStopTests(unittest.TestCase):
         return next(j for j in self.store.state['operations'] if j['id'] == ident)
 
     def stop_route(self, ident, **kwargs):
-        return self.client.post('/api/operations/' + ident + '/cancel', headers=self.auth, json={}, **kwargs)
+        return self.client.post('/api/operations/' + ident + '/cancel', json={}, **kwargs)
 
     def inject(self, action, status='running'):
         job = {'id': action + '-job', 'lab_id': self.lab_id, 'name': 'training', 'action': action, 'path': '/p', 'created': stamp(),
@@ -1761,7 +1762,7 @@ class OperationStopTests(unittest.TestCase):
         with self.fixture(), patch.object(self.service, 'refresh'):
             job, args = self.queued()
             for headers in ({'Origin': 'https://other.example'}, {'Sec-Fetch-Site': 'cross-site'}):
-                response = self.client.post('/api/operations/' + job['id'] + '/cancel', headers={**self.auth, **headers}, json={})
+                response = self.client.post('/api/operations/' + job['id'] + '/cancel', headers={**headers}, json={})
                 self.assertEqual(response.status_code, 403, headers)
                 self.assertEqual(self.record(job['id'])['status'], 'queued'); self.assertNotIn('cancel_requested', self.record(job['id']))
                 self.assertFalse(self.app.state.operations.cancels[job['id']].is_set())
@@ -1773,7 +1774,7 @@ class OperationStopTests(unittest.TestCase):
             try:
                 saved = next(j for j in second.state.store.state['operations'] if j['id'] == job['id'])
                 self.assertEqual(saved['status'], 'interrupted')
-                late = TestClient(second).post('/api/operations/' + job['id'] + '/cancel', headers={'Authorization': 'Bearer ' + second.state.store.token}, json={})
+                late = SignedInClient(second).post('/api/operations/' + job['id'] + '/cancel', json={})
                 self.assertEqual((late.status_code, late.json()['detail']), (409, 'This operation has already finished.'))
             finally:
                 second.state.operations.close(); second.state.git_progress.close(); second.state.discovery.close()
@@ -1816,14 +1817,14 @@ class OperationStopTests(unittest.TestCase):
         with self.fixture(), patch.object(self.service, 'refresh'):
             missing = self.stop_route('nope'); self.assertEqual((missing.status_code, missing.json()['detail']), (404, 'Operation not found.'))
             job, args = self.queued()
-            empty = self.client.post('/api/operations/' + job['id'] + '/cancel', headers=self.auth, content=b'')
+            empty = self.client.post('/api/operations/' + job['id'] + '/cancel', content=b'')
             self.assertEqual(empty.status_code, 413)
             self.assertEqual(self.record(job['id'])['status'], 'queued'); self.assertNotIn('cancel_requested', self.record(job['id']))
             self.assertFalse(self.app.state.operations.cancels[job['id']].is_set())
 
     def test_the_history_shows_the_stop_fields_and_no_output_and_stoppable_matches_the_page_vocabulary(self):
         ident, _ = self.run_stopped()
-        for listing in (self.client.get('/api/operations', headers=self.auth).json(), self.client.get('/api/state', headers=self.auth).json()['operations']):
+        for listing in (self.client.get('/api/operations').json(), self.client.get('/api/state').json()['operations']):
             row = next(j for j in listing if j['id'] == ident)
             self.assertEqual(row['status'], 'cancelled'); self.assertTrue(row['cancel_requested']); self.assertNotIn('output', row)
         source = (Path(__file__).resolve().parents[1] / 'app' / 'static' / 'status.js').read_text()
@@ -1887,7 +1888,7 @@ class NodeActionAndOptionTests(unittest.TestCase):
     tearDown = OperationAPITests.tearDown
 
     def post_preview(self, **body):
-        return self.client.post('/api/operations/preview', headers=self.auth, json=body)
+        return self.client.post('/api/operations/preview', json=body)
 
     def node(self, index=0): return self.store.lab(self.lab_id)['nodes'][index]['name']
 
@@ -1981,7 +1982,7 @@ class NodeActionAndOptionTests(unittest.TestCase):
             for action, status, text in (('start-node', 'starting', 'containerlab start --node'), ('stop-node', 'stopping', 'containerlab stop --node')):
                 job = self.confirm(self.preview(action, node=node)['token']).json()
                 self.assertEqual((job['action'], job['node'], job['node_label'], job['neighbours_absent']), (action, node, 'r1', ['r2']))   # the fixture's r2 is not deployed
-                public = next(l for l in self.client.get('/api/state', headers=self.auth).json()['labs'] if l['id'] == self.lab_id)
+                public = next(l for l in self.client.get('/api/state').json()['labs'] if l['id'] == self.lab_id)
                 row = public['nodes'][0]; self.assertEqual(row['nos_login']['status'], status); self.assertIn(text, row['nos_login']['message']); self.assertFalse(row['ssh_ready'])
                 self.assertEqual(public['nodes'][1]['nos_login']['status'] not in ('starting', 'stopping', 'restarting'), True)
                 self.assertEqual(lab_operations.restarting_nodes(self.store.state, self.lab_id), {node: action})
@@ -2018,7 +2019,7 @@ class NodeActionAndOptionTests(unittest.TestCase):
             node = self.node()
             for action in ('start-node', 'stop-node'):
                 job = self.confirm(self.preview(action, node=node)['token']).json()
-                self.assertEqual(self.client.post('/api/operations/' + job['id'] + '/cancel', headers=self.auth, json={}).status_code, 202)
+                self.assertEqual(self.client.post('/api/operations/' + job['id'] + '/cancel', json={}).status_code, 202)
                 args = submit.call_args.args; args[0](*args[1:])
                 saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
                 self.assertEqual(saved['status'], 'cancelled'); self.assertIn('before it started', saved['message'])
@@ -2069,9 +2070,9 @@ class NodeActionAndOptionTests(unittest.TestCase):
                 saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
                 self.assertEqual((saved['status'], saved['nodes']), ('succeeded', ['r2', 'r1']))
                 self.assertEqual(self.store.lab(self.lab_id).get('last_deployed', ''), '', 'a filtered ' + action + ' never records a deployment')
-                listed = next(j for j in self.client.get('/api/state', headers=self.auth).json()['operations'] if j['id'] == job['id'])
+                listed = next(j for j in self.client.get('/api/state').json()['operations'] if j['id'] == job['id'])
                 self.assertEqual(listed['nodes'], ['r2', 'r1']); self.assertNotIn('output', listed)
-                self.assertEqual(next(j for j in self.client.get('/api/operations', headers=self.auth).json() if j['id'] == job['id'])['nodes'], ['r2', 'r1'])
+                self.assertEqual(next(j for j in self.client.get('/api/operations').json() if j['id'] == job['id'])['nodes'], ['r2', 'r1'])
             plain = self.confirm(self.preview('destroy')['token']).json(); self.assertNotIn('nodes', plain)
             args = submit.call_args.args; args[0](*args[1:])
             with patch('app.lab_operations.lab_status', return_value={'status': 'Not deployed'}):
@@ -2104,7 +2105,7 @@ class NodeActionAndOptionTests(unittest.TestCase):
             self.assertTrue(seen and not any(seen), 'the cache was already empty at every write that showed the job terminal: %r' % seen)
             gen = operations.plan_gen.get(self.lab_id, 0)
             operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})
-            self.assertEqual(self.client.put('/api/labs/' + self.lab_id + '/operations-settings', headers=self.auth, json={'favorite': True}).status_code, 200)
+            self.assertEqual(self.client.put('/api/labs/' + self.lab_id + '/operations-settings', json={'favorite': True}).status_code, 200)
             self.assertIn(self.lab_id, operations.plan_cache, 'a settings change without a path keeps it')
             operations.forget_plan(self.lab_id); self.assertNotIn(self.lab_id, operations.plan_cache); self.assertEqual(operations.plan_gen[self.lab_id], gen + 1)
 
@@ -2123,7 +2124,7 @@ class NodeActionAndOptionTests(unittest.TestCase):
                 return inner(host, req, *args, **kwargs)
             fixture.side_effect = remote
             job = self.confirm(self.preview('apply')['token']).json()
-            if cancel_first: self.assertEqual(self.client.post('/api/operations/' + job['id'] + '/cancel', headers=self.auth, json={}).status_code, 202)
+            if cancel_first: self.assertEqual(self.client.post('/api/operations/' + job['id'] + '/cancel', json={}).status_code, 202)
             real_save = self.store.save
             def watching():
                 if any(j['id'] == job['id'] and j['status'] in ('succeeded', 'failed', 'cancelled', 'interrupted') for j in self.store.state['operations']): seen.append(self.lab_id in operations.plan_cache)
@@ -2164,13 +2165,13 @@ class NodeActionAndOptionTests(unittest.TestCase):
                 if req['mode'] == 'read': operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})   # an answer computed from the old file, stored mid-change
                 return inner(host, req, *args, **kwargs)
             fixture.side_effect = remote
-            response = self.client.put(url, headers=self.auth, json={'path': '/etc/containerlab/other/training.clab.yaml'})
+            response = self.client.put(url, json={'path': '/etc/containerlab/other/training.clab.yaml'})
             self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(self.store.lab(self.lab_id)['vm_project_path'], '/etc/containerlab/other/training.clab.yaml')
         self.assertNotIn(self.lab_id, operations.plan_cache, 'the late answer did not survive the stored path')
         self.assertEqual(operations.plan_gen[self.lab_id], start + 2, 'dropped before the read and again after the path was stored')
         operations.plan_cache[self.lab_id] = (time.monotonic() + 60, {'changed': True})
-        self.assertEqual(self.client.put(url, headers=self.auth, json={'favorite': True}).status_code, 200)
+        self.assertEqual(self.client.put(url, json={'favorite': True}).status_code, 200)
         self.assertIn(self.lab_id, operations.plan_cache, 'a settings change without a path keeps it')
 
     def test_run_options_are_checked_against_the_action_and_an_unknown_status_is_not_called_deployed(self):
@@ -2225,7 +2226,7 @@ class ArrangeTests(unittest.TestCase):
     KEYS = ('drawing', 'annotations', 'annotations_for', 'map_written_at')
 
     def post(self, **body):
-        return self.client.post('/api/labs/' + self.lab_id + '/arrange', headers=self.auth, json=body)
+        return self.client.post('/api/labs/' + self.lab_id + '/arrange', json=body)
 
     def lab(self): return self.store.lab(self.lab_id)
 
@@ -2238,9 +2239,9 @@ class ArrangeTests(unittest.TestCase):
 
     def save_document(self, document):
         url = '/api/labs/' + self.lab_id + '/map-document'
-        opened = self.client.get(url, headers=self.auth).json()
+        opened = self.client.get(url).json()
         text = json.dumps(document, indent=1)
-        saved = self.client.put(url, headers=self.auth, json={'annotations': text, 'revision': opened['revision']})
+        saved = self.client.put(url, json={'annotations': text, 'revision': opened['revision']})
         self.assertEqual(saved.status_code, 200, saved.text)
         return text
 
@@ -2277,7 +2278,7 @@ class ArrangeTests(unittest.TestCase):
             for key in ('groupStyleAnnotations', 'freeShapeAnnotations', 'viewerSettings', 'somethingNew'): self.assertEqual(stored[key], original[key], key)
             reparsed = parse_drawing(lab['annotations'].encode(), lab['definition_yaml'].encode())
             self.assertEqual({n['id']: (n['x'], n['y']) for n in reparsed['nodes']}, {n['id']: (n['x'], n['y']) for n in drawing['nodes']}, 'the document and the drawing agree')
-            self.assertEqual(self.client.get('/api/labs/' + self.lab_id + '/map-document', headers=self.auth).json()['annotations'], lab['annotations'])
+            self.assertEqual(self.client.get('/api/labs/' + self.lab_id + '/map-document').json()['annotations'], lab['annotations'])
             self.assertEqual(remote.call_count, calls, 'arranging calls no VM helper')
             self.assertEqual(self.events('Devices arranged in rows'), ['Devices arranged in rows'])
             disk = json.dumps(Store(self.tmp.name).state, default=str)
@@ -2331,7 +2332,7 @@ class ArrangeTests(unittest.TestCase):
             for change in ('map-document', 'layout'):
                 arranged = self.post(mode='rows', revision=self.rev()).json()
                 if change == 'map-document': self.save_document(self.document(ids))
-                else: self.assertEqual(self.client.put('/api/labs/' + self.lab_id + '/layout', headers=self.auth, json={'positions': {ids[0]: [5, 5]}}).status_code, 200)
+                else: self.assertEqual(self.client.put('/api/labs/' + self.lab_id + '/layout', json={'positions': {ids[0]: [5, 5]}}).status_code, 200)
                 current = copy.deepcopy(self.lab())
                 for revision in (arranged['revision'], self.rev()):
                     response = self.post(undo=True, revision=revision)
@@ -2341,9 +2342,9 @@ class ArrangeTests(unittest.TestCase):
     def test_arrange_undo_after_a_restart_is_refused(self):
         with self.fixture():
             arranged = self.post(mode='rows', revision=self.rev()).json()
-            fresh = create_app(self.tmp.name); client = TestClient(fresh)
+            fresh = create_app(self.tmp.name); client = SignedInClient(fresh)
             try:
-                response = client.post('/api/labs/' + self.lab_id + '/arrange', headers={'Authorization': 'Bearer ' + fresh.state.store.token}, json={'undo': True, 'revision': arranged['revision']})
+                response = client.post('/api/labs/' + self.lab_id + '/arrange', json={'undo': True, 'revision': arranged['revision']})
                 self.assertEqual((response.status_code, response.json()), (412, {'detail': self.STALE, 'reason': 'stale'}), 'the Undo memory does not survive a restart')
             finally:
                 for name in ('git_progress', 'discovery', 'runner', 'node_services', 'operations'): getattr(fresh.state, name).close()
@@ -2371,7 +2372,7 @@ class ArrangeTests(unittest.TestCase):
             self.assertEqual((response.status_code, response.json()['detail']), (400, 'Choose rows, columns or a ring.'))
             for body in ({'mode': 'rows'}, {'mode': 'rows', 'revision': ''}, {'mode': 'rows', 'revision': 'x' * 65}, {'mode': 'rows', 'revision': rev, 'positions': {'r1': [1, 2]}}):
                 self.assertEqual(self.post(**body).status_code, 422, body)
-            self.assertEqual(self.client.post('/api/labs/nope/arrange', headers=self.auth, json={'mode': 'rows', 'revision': rev}).status_code, 404)
+            self.assertEqual(self.client.post('/api/labs/nope/arrange', json={'mode': 'rows', 'revision': rev}).status_code, 404)
             self.assertEqual(self.lab(), before)
             lab = self.lab(); lab['drawing']['nodes'] = lab['drawing']['nodes'][:1]; lab['drawing']['links'] = []
             response = self.post(mode='ring', revision=self.rev())
@@ -2403,8 +2404,8 @@ class ArrangeTests(unittest.TestCase):
             ids = [n['id'] for n in self.lab()['drawing']['nodes']]
             document = dict(self.document(ids), somethingNew=[1] * 160000)
             url = '/api/labs/' + self.lab_id + '/map-document'
-            opened = self.client.get(url, headers=self.auth).json()
-            self.assertEqual(self.client.put(url, headers=self.auth, json={'annotations': json.dumps(document, separators=(',', ':')), 'revision': opened['revision']}).status_code, 200)
+            opened = self.client.get(url).json()
+            self.assertEqual(self.client.put(url, json={'annotations': json.dumps(document, separators=(',', ':')), 'revision': opened['revision']}).status_code, 200)
             self.assertGreater(len(json.dumps(document, indent=2).encode()), MAX_DOCUMENT)
             self.assertEqual(self.post(mode='rows', revision=self.rev()).status_code, 200)
             lab = self.lab()
@@ -2423,13 +2424,13 @@ class ArrangeTests(unittest.TestCase):
                     # A map saved from Edit map first, so the drawing is the one its document parses to (an imported drawing
                     # lacks the editor's per-node defaults, and the first save after it would move the revision anyway).
                     stored = self.document(ids); stored['nodeAnnotations'] += [{'id': i, 'position': {'x': 40, 'y': 300}} for i in ids[1:]]
-                    self.save_document(stored if case == 'stored document' else json.loads(self.client.get(url, headers=self.auth).json()['annotations']))
+                    self.save_document(stored if case == 'stored document' else json.loads(self.client.get(url).json()['annotations']))
                     before = copy.deepcopy(self.lab())
                     arranged = self.post(mode='rows', revision=self.rev()); self.assertEqual(arranged.status_code, 200, arranged.text)
-                    opened = self.client.get(url, headers=self.auth).json()
+                    opened = self.client.get(url).json()
                     for change in ({'somethingElse': {'kept': case}}, {'nodeAnnotations': [dict(entry, groupId='edge', geoCoordinates={'lat': 1.5, 'lng': 2.5}) for entry in json.loads(opened['annotations'])['nodeAnnotations']]}):
-                        document = dict(json.loads(self.client.get(url, headers=self.auth).json()['annotations']), **change)
-                        saved = self.client.put(url, headers=self.auth, json={'annotations': json.dumps(document, indent=2), 'revision': self.rev()})
+                        document = dict(json.loads(self.client.get(url).json()['annotations']), **change)
+                        saved = self.client.put(url, json={'annotations': json.dumps(document, indent=2), 'revision': self.rev()})
                         self.assertEqual(saved.status_code, 200, saved.text)
                     self.assertEqual(self.rev(), arranged.json()['revision'], 'the precondition: the drawing revision did not move')
                     after = copy.deepcopy(self.lab())

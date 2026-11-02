@@ -12,6 +12,7 @@ import zipfile
 import paramiko
 import yaml
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 from app.main import create_app
 from app.inventory import parse_inventory
 from app.runner import make_inventory, APP
@@ -43,14 +44,13 @@ class AppTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.app=create_app(self.tmp.name)
-        self.client=TestClient(self.app)
-        self.auth={'Authorization':'Bearer '+self.app.state.store.token}
+        self.client=SignedInClient(self.app)
     def tearDown(self):
         self.app.state.runner.close()
         self.client.close()
         self.tmp.cleanup()
     def upload(self, content=INVENTORY, lab_id=''):
-        result=self.client.post('/api/inventory',headers=self.auth,
+        result=self.client.post('/api/inventory',
             data={'name':'Example lab','lab_id':lab_id},files={'inventory':('ansible-inventory.yml',content)})
         self.assertEqual(result.status_code,200,result.text)
         return result.json()
@@ -64,7 +64,7 @@ class AppTests(unittest.TestCase):
         self.assertNotIn(b'test-secret',(Path(self.tmp.name)/'state.enc').read_bytes())
     def test_profiles_and_reupload(self):
         lab=self.upload()
-        r=self.client.post(f'/api/labs/{lab["id"]}/profiles',headers=self.auth,
+        r=self.client.post(f'/api/labs/{lab["id"]}/profiles',
             data={'label':'Junos admin','platform':'juniper_cjunosevolved','username':'admin','password':'private-password','make_default':'true'})
         self.assertEqual(r.status_code,200,r.text)
         self.assertNotIn('private-password',r.text)
@@ -74,7 +74,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(next(n for n in replacement['nodes'] if n['name'].endswith('PE1'))['address'],'192.0.2.5')
     def test_import_template_rejected_and_plugins_ignored(self):
         malicious=INVENTORY.replace(b'172.20.20.5',b'"{{ lookup(\'pipe\',\'id\') }}"')
-        r=self.client.post('/api/inventory',headers=self.auth,data={'name':'x'},files={'inventory':('x.yml',malicious)})
+        r=self.client.post('/api/inventory',data={'name':'x'},files={'inventory':('x.yml',malicious)})
         self.assertEqual(r.status_code,400)
         nodes=parse_inventory(INVENTORY.replace(b'ansible_user: clab',b'ansible_connection: local\n        ansible_ssh_common_args: evil\n        ansible_user: clab'))
         node=next(n for n in nodes if n['name'].endswith('PE1'))
@@ -85,7 +85,7 @@ class AppTests(unittest.TestCase):
         self.assertNotIn('ansible_ssh_common_args',actual)
     def test_key_upload(self):
         lab=self.upload(); key=paramiko.RSAKey.generate(2048); buf=io.StringIO();key.write_private_key(buf,password='keyphrase')
-        r=self.client.post(f'/api/labs/{lab["id"]}/profiles',headers=self.auth,
+        r=self.client.post(f'/api/labs/{lab["id"]}/profiles',
             data={'label':'EOS key','platform':'arista_ceos','username':'admin','auth':'key','passphrase':'keyphrase'},
             files={'private_key':('id_rsa',buf.getvalue())})
         self.assertEqual(r.status_code,200,r.text)
@@ -99,7 +99,7 @@ class AppTests(unittest.TestCase):
         with patch.dict('app.inventory.DEFAULT_CREDENTIALS',{},clear=True):
             for endpoint,data in [('schedule',{'interval':60}),('jobs',{'operation':'backup'})]:
                 method=self.client.put if endpoint=='schedule' else self.client.post
-                result=method(f'/api/labs/{lab["id"]}/{endpoint}',headers=self.auth,json=data)
+                result=method(f'/api/labs/{lab["id"]}/{endpoint}',json=data)
                 self.assertEqual(result.status_code,400,result.text)
     # L-19/L-29 (audit 2026-10-03): a rejected connection edit changes nothing and logs no update.
     def test_rejected_node_edit_changes_and_logs_nothing(self):
@@ -109,12 +109,12 @@ class AppTests(unittest.TestCase):
         edit=dict(name=node['name'],address='10.0.0.5',port=2022,platform='cisco_xrv9k',short_name='core1')
         for changes,detail in [({'endpoint_mode':'auto'},'Link a deployed lab'),({'endpoint_mode':'bogus'},'automatic or manual'),
                                ({'short_name':'{{ core1 }}'},'Download device name')]:
-            r=self.client.put(f'/api/labs/{lab["id"]}/node',headers=self.auth,json={**edit,**changes})
+            r=self.client.put(f'/api/labs/{lab["id"]}/node',json={**edit,**changes})
             self.assertEqual(r.status_code,400,r.text); self.assertIn(detail,r.json()['detail'])
             self.assertEqual(store.state,before)
             self.assertNotIn('core1',json.dumps(self.client.get('/api/state').json()))
             self.assertEqual([e for e in store.events() if e['action']=='node.edit'],[])
-        r=self.client.put(f'/api/labs/{lab["id"]}/node',headers=self.auth,json={**edit,'endpoint_mode':'manual'})
+        r=self.client.put(f'/api/labs/{lab["id"]}/node',json={**edit,'endpoint_mode':'manual'})
         self.assertEqual(r.status_code,200,r.text)
         saved=next(n for n in r.json()['nodes'] if n['name']==node['name'])
         self.assertEqual((saved['short_name'],saved['address'],saved['port'],saved['endpoint_mode']),('core1','10.0.0.5',2022,'manual'))
@@ -125,14 +125,14 @@ class AppTests(unittest.TestCase):
         lab=self.upload(); store=self.app.state.store
         node=next(n for n in store.lab(lab['id'])['nodes'] if n['name'].endswith('PE1'))
         requests=[
-            ('credentials.create',lambda:self.client.post(f'/api/labs/{lab["id"]}/profiles',headers=self.auth,
+            ('credentials.create',lambda:self.client.post(f'/api/labs/{lab["id"]}/profiles',
                 data={'label':'Junos admin','platform':'juniper_cjunosevolved','username':'admin','password':'private-password','make_default':'true'})),
-            ('node.edit',lambda:self.client.put(f'/api/labs/{lab["id"]}/node',headers=self.auth,
+            ('node.edit',lambda:self.client.put(f'/api/labs/{lab["id"]}/node',
                 json=dict(name=node['name'],address='10.0.0.5',port=2022,platform='cisco_xrv9k',short_name='core1'))),
-            ('schedule.update',lambda:self.client.put(f'/api/labs/{lab["id"]}/schedule',headers=self.auth,json={'interval':60})),
-            ('inventory.import',lambda:self.client.post('/api/inventory',headers=self.auth,data={'name':'Renamed lab','lab_id':lab['id']},
+            ('schedule.update',lambda:self.client.put(f'/api/labs/{lab["id"]}/schedule',json={'interval':60})),
+            ('inventory.import',lambda:self.client.post('/api/inventory',data={'name':'Renamed lab','lab_id':lab['id']},
                 files={'inventory':('ansible-inventory.yml',INVENTORY.replace(b'172.20.20.5',b'192.0.2.5'))})),
-            ('inventory.import',lambda:self.client.post('/api/inventory',headers=self.auth,data={'name':'Second lab','lab_id':''},
+            ('inventory.import',lambda:self.client.post('/api/inventory',data={'name':'Second lab','lab_id':''},
                 files={'inventory':('ansible-inventory.yml',INVENTORY)}))]
         actions=lambda:[e['action'] for e in store.events(limit=2000)]   # newest first
         for action,request in requests:
@@ -212,9 +212,9 @@ class AppTests(unittest.TestCase):
         self.assertEqual((history/'topology.clab.yml').read_text(),raw['definition_yaml'])
         self.assertIn('topology.clab.yml',subprocess.check_output(['git','-C',str(folder),'ls-files'],text=True))
         self.assertEqual(subprocess.check_output(['git','-C',str(folder),'rev-list','--count','HEAD'],text=True).strip(),'2','the second capture changed latest/ (the topology arrived), so it committed')
-        with zipfile.ZipFile(io.BytesIO(self.client.get('/api/jobs/fixture0/download',headers=self.auth).content)) as z:
+        with zipfile.ZipFile(io.BytesIO(self.client.get('/api/jobs/fixture0/download').content)) as z:
             self.assertEqual(len(z.namelist()),2,z.namelist())
-        response=self.client.get('/api/jobs/fixture1/download',headers=self.auth)
+        response=self.client.get('/api/jobs/fixture1/download')
         self.assertEqual(response.status_code,200,response.text if response.status_code!=200 else '')
         with zipfile.ZipFile(io.BytesIO(response.content)) as z:
             self.assertIn('manifest.json',z.namelist())
@@ -291,11 +291,13 @@ class AppTests(unittest.TestCase):
         self.assertEqual(eos['restore_format'],'eos-running-config')
         self.assertEqual((folder/eos['restore_file']).read_bytes(),(folder/eos['file']).read_bytes())
     def test_persistence_and_empty_image(self):
-        self.assertEqual(self.client.get('/api/state',headers=self.auth).json()['labs'],[])
+        self.assertEqual(self.client.get('/api/state').json()['labs'],[])
         self.upload()
         other=create_app(self.tmp.name)
         self.assertEqual(len(other.state.store.state['labs']),1)
-        self.assertEqual(other.state.store.token,self.app.state.store.token)
+        # There is one credential, the session cookie (sign-on DESIGN.md 12.2): a restart reads the same key file and no token.
+        self.assertFalse(hasattr(other.state.store,'token'))
+        self.assertEqual(other.state.store.cipher.decrypt(other.state.store.path.read_bytes()),self.app.state.store.cipher.decrypt(other.state.store.path.read_bytes()))
         other.state.runner.close()
     def test_state_reflects_storage_without_re_slicing_any_job_list(self):
         # Risk review 2, item 2 (finding 7): jobs/git_jobs/restore_jobs/operations are all bounded
@@ -306,7 +308,7 @@ class AppTests(unittest.TestCase):
         jobs=[dict(id=str(i),lab_id=lab['id'],operation='backup',status='succeeded',nodes=[]) for i in range(5)]
         self.app.state.store.state['jobs']=jobs
         self.app.state.store.save()
-        data=self.client.get('/api/state',headers=self.auth).json()
+        data=self.client.get('/api/state').json()
         self.assertEqual([j['id'] for j in data['jobs']],['0','1','2','3','4'])
     def test_topology_custom_groups_and_alias_rejection(self):
         custom=b'all:\n  children:\n    custom:\n      hosts:\n        router1:\n          ansible_host: 192.0.2.1\n'
@@ -321,7 +323,7 @@ class HostCheckTests(unittest.TestCase):
     def setUp(self, allowed=''):
         self.tmp=tempfile.TemporaryDirectory()
         with patch.dict('os.environ',{'UI_ALLOWED_HOSTS':allowed}): self.app=create_app(self.tmp.name)
-        self.client=TestClient(self.app)
+        self.client=SignedInClient(self.app)
     def tearDown(self):
         self.app.state.runner.close()
         self.client.close()
@@ -361,7 +363,8 @@ class HostCheckTests(unittest.TestCase):
         sessions=MagicMock()
         sessions.headers.side_effect=OSError('relay not reached')
         self.app.state.captures.sessions=sessions
-        cookie={'Cookie':COOKIE+'='+'d'*64}
+        # An explicit Cookie header replaces the jar's (http.cookiejar adds none when one is present), so the session cookie rides along.
+        cookie={'Cookie':COOKIE+'='+'d'*64+'; clab_session='+self.client.cookies.get('clab_session')}
         with self.assertRaises(WebSocketDisconnect):
             with self.client.websocket_connect('/api/capture/sessions/'+'c'*64+'/websockify',headers={**self.EVIL,**cookie}): pass
         sessions.headers.assert_not_called()

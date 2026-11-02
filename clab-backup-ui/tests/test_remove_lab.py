@@ -21,7 +21,7 @@ class RemoveLabTests(unittest.TestCase):
         return self.store.state['labs'][0]
 
     def remove(self, lab, **options):
-        return self.client.request('DELETE', '/api/labs/' + lab['id'], headers=self.auth,
+        return self.client.request('DELETE', '/api/labs/' + lab['id'],
                                    json={'name': lab['name'], **options})
 
     def test_remove_only_manager_workspace_and_history(self):
@@ -142,10 +142,10 @@ class HideLabTests(unittest.TestCase):
         return self.store.state['labs'][0]
 
     def settings(self, lab, **body):
-        return self.client.put('/api/labs/' + lab['id'] + '/operations-settings', headers=self.auth, json=body)
+        return self.client.put('/api/labs/' + lab['id'] + '/operations-settings', json=body)
 
     def public(self, lab):
-        return next(l for l in self.client.get('/api/state', headers=self.auth).json()['labs'] if l['id'] == lab['id'])
+        return next(l for l in self.client.get('/api/state').json()['labs'] if l['id'] == lab['id'])
 
     def test_hide_changes_the_flag_only_and_the_poll_keeps_it(self):
         lab = self.imported()
@@ -187,7 +187,7 @@ class HideLabTests(unittest.TestCase):
     def test_adding_the_lab_again_through_the_topology_browser_shows_it(self):
         lab = self.imported(); self.settings(lab, hidden=True)
         # Choose a file on the lab VM… › Add to My labs / Deploy lab: the same deployment name registers again.
-        response = self.client.post('/api/lab-definitions', headers=self.auth, files={'definition': ('training.clab.yaml', YAML)})
+        response = self.client.post('/api/lab-definitions', files={'definition': ('training.clab.yaml', YAML)})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()['id'], lab['id'], 'the same lab, not a second workspace')
         self.assertNotIn('hidden', self.store.lab(lab['id']))
@@ -196,4 +196,4 @@ class HideLabTests(unittest.TestCase):
     def test_unknown_settings_keys_and_missing_labs_are_refused(self):
         lab = self.imported()
         self.assertEqual(self.settings(lab, hide=True).status_code, 422)
-        self.assertEqual(self.client.put('/api/labs/nope/operations-settings', headers=self.auth, json={'hidden': True}).status_code, 404)
+        self.assertEqual(self.client.put('/api/labs/nope/operations-settings', json={'hidden': True}).status_code, 404)
