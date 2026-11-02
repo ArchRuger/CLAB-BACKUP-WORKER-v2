@@ -947,13 +947,19 @@ class SelfSignedTests(unittest.TestCase):
             return real_chown(path, uid, gid, *args, **kwargs)
         with unittest.mock.patch('os.chmod', chmod_by_path_refused), unittest.mock.patch('os.chown', chown_by_path_refused):
             repaired = service.repair_modes()
-        self.assertEqual(repaired, ['cert.pem', 'key.pem'])
+        # Run as root the two files with wrong modes are repaired; run as another account every file is also
+        # re-owned (the fake fchown leaves the real owner), so the list is checked for what it must and must not hold.
+        self.assertIn('cert.pem', repaired)
+        self.assertIn('key.pem', repaired)
+        self.assertNotIn('names', repaired, 'the link is left alone')
         self.assertEqual(stat.S_IMODE((tls_dir / 'key.pem').stat().st_mode), 0o640)
         self.assertEqual(stat.S_IMODE((tls_dir / 'cert.pem').stat().st_mode), 0o644)
         self.assertEqual(stat.S_IMODE(secret.stat().st_mode), 0o600, 'the link target is never touched')
         self.assertTrue((tls_dir / 'names').is_symlink())
-        self.assertEqual(chown.calls, [('cert.pem', 0, 0), ('key.pem', 0, 10001)])
-        self.assertEqual(chown.descriptors, 2, 'both changes went through fchown on the open descriptor')
+        self.assertIn(('cert.pem', 0, 0), chown.calls)
+        self.assertIn(('key.pem', 0, 10001), chown.calls)
+        self.assertNotIn('names', [name for name, _uid, _gid in chown.calls])
+        self.assertEqual(chown.descriptors, len(chown.calls), 'every change went through fchown on the open descriptor')
 
     def test_the_names_mode_holds_one_lock_from_the_names_write_through_ensure(self):
         # main() ran set_names and then ensure as two lock sections: another writer could take the lock in
