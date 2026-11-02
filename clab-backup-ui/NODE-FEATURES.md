@@ -210,7 +210,7 @@ minted it: another browser, another account or a later session that presents it 
 ticket is spent. The server checks the WebSocket origin against the HTTPS origin the page was
 served from. Device SSH credentials are looked up in encrypted manager storage. Closing the terminal
 tab or restarting the manager ends the connection. A terminal also closes when its manager session
-ends (sign-out, expiry, a deactivated or deleted account, or a password change) with the reason
+ends (sign-out, expiry, a deactivated or deleted account, a password reset, or a password change made in another session) with the reason
 `signed_out`; typing in it counts as an act of the person and keeps the session from going idle.
 Operators and administrators can both open terminals; the roles differ only for the VM connection,
 Diagnostics, Manager settings and the people page (see [Accounts and sign-in](../docs/ACCOUNTS.md)).
@@ -221,8 +221,9 @@ the shell starts leaves neither). Keystrokes,
 terminal output, and credentials are not recorded there. SSH host keys retain the
 existing trusted-lab policy (unknown keys are accepted). Use this on your trusted
 lab network. The manager serves HTTPS and WSS itself, so no proxy is needed; if you
-nevertheless put one in front, it must forward WebSocket Upgrade and preserve Host, and the manager
-does not read forwarded headers (see [Opening the manager by a name](../docs/INSTALL.md#opening-the-manager-by-a-name)).
+nevertheless put one in front, it must forward WebSocket Upgrade, preserve Host and connect to the manager over HTTPS (a plain-HTTP
+upstream is refused), and the manager does not read forwarded headers; the sign-in throttle and the audit
+then see the proxy's address for everyone (see [Opening the manager by a name](../docs/INSTALL.md#opening-the-manager-by-a-name)).
 
 The frontend vendors xterm.js and its fit addon with their licences under
 `app/static/vendor/`; there is no runtime CDN or frontend build step. Only the

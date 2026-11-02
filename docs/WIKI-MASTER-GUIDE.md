@@ -727,7 +727,8 @@ your chosen port in browser and health checks. To open the manager by a DNS name
 (for example `manager.example.edu`), also add the optional
 `UI_ALLOWED_HOSTS=<names>` line there: the manager refuses any name outside DNS could
 control that is not listed (an IP address, `localhost`, single-label and `.local` names
-need nothing). See [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name).
+need nothing). The certificate is built from that list, so afterwards run
+`sudo bash "$HOME/projects/clab-manager/deploy/setup-tls.sh"` for the name to join it. See [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name).
 
 An image-only build needs the final build context argument:
 
@@ -1537,7 +1538,9 @@ sudo docker compose --env-file deploy/image.env -f deploy/compose.image.yml ps
 
 To open the manager by a DNS name rather than its IP address, add an optional
 `UI_ALLOWED_HOSTS=<names>` line (comma-separated, names only) to `deploy/image.env` and
-recreate the container with the `up -d` command above; any other name outside DNS could
+recreate the container with the `up -d` command above, then run
+`sudo bash "$HOME/projects/clab-manager/deploy/setup-tls.sh" --route image` so the name joins the
+certificate; any other name outside DNS could
 control is refused. See [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name).
 
 This Compose file has no build section and uses only the prepared local image.
@@ -1974,10 +1977,11 @@ Keep all of the following when backing up or rebuilding the VM:
   `<checkout>/.git/clab-manager/` recovery journal/transfer snapshots.
 - Ben's external Git credential setup or the means to reauthenticate it.
 
-The manager has no browser login. Registering `ben` selects the Linux execution
-owner; it does not sign Ben into the browser or isolate his repository from other
-people with UI access. Use a trusted operator per VM or deliberately shared
-operator authority. A complete multi-user permission system is separate work.
+Registering `ben` selects the Linux execution owner; it does not sign Ben into the
+browser or isolate his repository from other people who can sign in. Every signed-in
+account, operator or administrator, shares the registered owner's Git authority, and
+there is no per-lab authorization. Use a trusted group per VM that deliberately
+shares that authority.
 
 The release source contains `GIT-PROGRESS.md` with the detailed workflow and
 recovery guide. Check `clab-backup-ui/VALIDATION.md` for the evidence actually

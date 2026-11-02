@@ -47,7 +47,7 @@ that had no accounts.
    sudo cat /srv/containerlab-node-manager/data/setup-code
    ```
 
-   The file has two lines, `mode=setup` and `code=…`, and is readable by root only. The manager never
+   The file has two lines, `mode=setup` and `code=…`, and is readable only by the manager's account (and root, hence `sudo`). The manager never
    writes the code to its log, only the command above. A restart of the manager in setup mode makes a new
    code, so use the latest one. Capitals, missing dashes and spaces between groups are forgiven.
 3. Enter the code, a username and a password twice, and click **Create account and sign in**. This
@@ -83,7 +83,7 @@ sessions.
 - At least 12 and at most 128 characters. Any characters count; length matters more than symbols, and
   there are no required character classes.
 - Not your username, and the username is not allowed inside it.
-- Not one of a short list of the most common passwords (*That password is too common. Choose another.*).
+- Not one of a short built-in list of well-known passwords (*That password is too common. Choose another.*). The list holds only entries shorter than the 12-character minimum, so the length rule refuses them first; this message appears together with *Use at least 12 characters.*
 - No expiry: passwords are never rotated on a schedule. They change when you choose to, or after an
   administrator resets them.
 
@@ -112,8 +112,9 @@ your own account.*); another administrator can reset it.
 - **Sign out** (Manager ▾) ends this session. It also closes this browser's Wireshark sessions (*Signing out
   also closes this browser's Wireshark sessions.*). An expired session closes none: signing in again in the
   same browser finds them.
-- A session ends at once when its account is deactivated, deleted or has its password changed or reset. Its
-  open terminals and consoles close.
+- A session ends at once when its account is deactivated, deleted, has its password reset by an
+  administrator, or has its password changed from another session. Its open terminals and consoles close; a
+  change you make yourself keeps this session and its terminals open.
 - A terminal's one-time ticket (30 seconds, single use) is tied to the session that asked for it, so a ticket
   copied to another browser or another account is refused.
 - Two people sharing one browser do not share Wireshark sessions: the capture owner is derived from the

@@ -873,10 +873,10 @@ running Git. Git uses the owner's HOME, author configuration and credential help
 container neither mounts the owner's checkout nor needs the token. The existing restricted VM SSH
 gateway stays in place.
 
-The browser has no account login in this release. **The registered owner is the VM execution owner**,
-not a signed-in web user. People with access to this manager share its authority over the registered
-repositories. Use one trusted operator per VM, or a group deliberately sharing that authority. Separate
-browser permissions are not implemented by registering two Linux owners.
+**The registered owner is the VM execution owner**, not the signed-in person. Every signed-in account,
+operator or administrator, shares the registered owner's Git authority over the registered repositories;
+there is no per-lab or per-account authorization. Use one trusted group per VM that deliberately shares
+that authority. Separate browser permissions are not implemented by registering two Linux owners.
 
 | Data | Location / recovery requirement |
 |---|---|
