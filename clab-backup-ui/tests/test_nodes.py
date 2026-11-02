@@ -658,7 +658,9 @@ class ConsoleTests(unittest.TestCase):
         result = self.ticket(); self.assertEqual(result.status_code, 200, result.text)
         body = result.json()
         self.assertEqual((body['protocol'], body['endpoint'], body['expires_in']), ('console', f'127.0.0.1:{self.console.port}', 30))
-        self.assertEqual(self.services.tickets[body['ticket']][1:], ('lab', 'r1', 'console'))
+        # The fifth element is the minting session's id (sign-on DESIGN.md 11.1); compared, never printed.
+        self.assertEqual(self.services.tickets[body['ticket']][1:4], ('lab', 'r1', 'console'))
+        self.assertTrue(self.services.tickets[body['ticket']][4] == self.client.session_cookie())
         self.assertIsNone(self.gate())
         # The SSH ticket of the same device still needs credentials, and its body without a protocol is still SSH.
         with patch.dict(node, profile_id='gone'):
@@ -666,7 +668,8 @@ class ConsoleTests(unittest.TestCase):
             self.assertEqual(self.ticket(protocol='ssh').status_code, 400)
         ssh = self.ticket(protocol=''); self.assertEqual(ssh.status_code, 200, ssh.text)
         self.assertEqual((ssh.json()['protocol'], ssh.json()['endpoint']), ('ssh', '127.0.0.1:22'))
-        self.assertEqual(self.services.tickets[ssh.json()['ticket']][1:], ('lab', 'r1', 'ssh'))
+        self.assertEqual(self.services.tickets[ssh.json()['ticket']][1:4], ('lab', 'r1', 'ssh'))
+        self.assertTrue(self.services.tickets[ssh.json()['ticket']][4] == self.client.session_cookie())
         self.assertEqual(self.ticket(protocol='telnet').status_code, 422)
         self.assertEqual(self.ticket(name='missing').status_code, 404)
         self.assertFalse(self.services.clients)
