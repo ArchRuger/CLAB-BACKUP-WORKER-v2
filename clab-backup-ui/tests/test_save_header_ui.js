@@ -754,6 +754,65 @@ test('Q390-01 the view asked for with Show stays: the end of the upload that arr
  g.chip._menuClose(false);assert.equal(g.mem().view,null);
 });
 
+test('a result the person already saw does not open again by itself: the poll painted the end into the open Saving… panel, the person closed it (Not now, Escape), and the watch handed the end over only then',async()=>{
+ const running=more=>waiting({id:'w',status:'capturing',commit:'',created:ago(0),...more});
+ // Save: the panel is on the Saving… view of the save the watch follows. The 4 s poll arrives first and paints the result into it.
+ const done=waiting({id:'w',created:ago(0)});
+ const h=harness({state:{git_jobs:[running(),saved()]},routes:{'/git/compare':review()}});
+ await h.open();assert.equal(h.text('save-panel-title-text'),'Saving…');
+ h.state.git_jobs=[done,saved()];h.render();await h.flush();h.render();
+ assert.equal(h.text('save-panel-title-text'),'Not uploaded yet');assert.equal(h.el('save-upload').disabled,false);
+ await h.press('save-not-now');assert.equal(h.panel.hidden,true);assert.equal(h.document.activeElement,h.chip);
+ // The watch answers 0.1 s later (fixture: save_flow.py, "B Not now"): Not now is not undone, nothing else is said.
+ assert.equal(h.context.saveFinished(done),false,'the result was shown once');assert.equal(h.panel.hidden,true,'the panel the person closed stays closed');
+ assert.equal(h.text('save-chip-text'),'1 save to upload');assert.deepEqual(h.toasts,[]);assert.equal(h.document.activeElement,h.chip);
+ // The chip then opens the waiting view, with See changes one click away (a click on an open panel's chip would close it).
+ await h.open();assert.equal(h.panel.hidden,false);assert.equal(h.text('save-panel-title-text'),'Not uploaded yet');assert.equal(h.el('save-see').disabled,false);
+ // The same for an upload that failed while its Uploading… view was open, and for a save that stopped: closed with Escape.
+ const failed=waiting({id:'w',status:'push_pending',reviewed:ago(1),message:'The remote branch is unavailable. Check connectivity.'});
+ const u=harness({state:{git_jobs:[waiting({id:'w',status:'pushing',reviewed:ago(1)}),saved()]},routes:{'/git/compare':review()}});
+ await u.open();assert.equal(u.text('save-panel-title-text'),'Uploading…');
+ u.state.git_jobs=[failed,saved()];u.render();await u.flush();u.render();assert.equal(u.text('save-panel-title-text'),'Upload failed');
+ u.chip._menuClose(true);assert.equal(u.context.saveFinished(failed),false);assert.equal(u.panel.hidden,true);assert.equal(u.text('save-chip-text'),'Upload failed');
+ const stopped=running({status:'failed',finished:ago(0),message:'The save did not work.'});
+ const c=harness({state:{git_jobs:[running(),saved()]}});await c.open();
+ c.state.git_jobs=[stopped,saved()];c.render();assert.equal(c.text('save-panel-title-text'),'Can’t save');
+ c.chip._menuClose(true);assert.equal(c.context.saveFinished(stopped),false);assert.equal(c.panel.hidden,true);assert.equal(c.text('save-chip-text'),'Can’t save');
+ // A result the person has not seen still opens the panel by itself: closed while the save ran, the poll painted nothing into it.
+ const g=harness({state:{git_jobs:[running(),saved()]},routes:{'/git/compare':review()}});
+ await g.open();g.chip._menuClose(true);g.state.git_jobs=[done,saved()];g.render();
+ assert.equal(g.context.saveFinished(done),true,'a new result opens the panel');assert.equal(g.panel.hidden,false);assert.equal(g.text('save-panel-title-text'),'Not uploaded yet');
+ // And a watch that answers while the painted panel is still open shows that save's view, as before.
+ const k=harness({state:{git_jobs:[running(),saved()]},routes:{'/git/compare':review()}});
+ await k.open();k.state.git_jobs=[done,saved()];k.render();await k.flush();k.render();
+ assert.equal(k.context.saveFinished(done),true);assert.equal(k.panel.hidden,false);assert.deepEqual({...k.mem().view},{lab:'lab',panel:'upload',job:'w'});
+});
+test('the end counts as seen in every save state the poll can paint over the Saving… view (both sides changed, the repository busy, a save interrupted after its commit), never behind a load’s view',async()=>{
+ const running=more=>waiting({id:'w',status:'capturing',commit:'',created:ago(0),...more});
+ const race=async(before,after,lab)=>{const h=harness({state:{git_jobs:[before,saved()]},routes:{'/git/compare':review()}});await h.open();
+  h.state.git_jobs=[after,saved()];if(lab)h.state.labs=[lab];h.render();await h.flush();h.render();const title=h.text('save-panel-title-text');h.chip._menuClose(true);return {h,title};};
+ // An upload refused because both sides changed is the chip's Can't save (Q1440-11): that view names no job, the end is the upload's.
+ const diverged=boundLab({git_status:{checked:true,ready:false,problem:'The remote branch advanced or diverged.',code:'diverged',waiting:1}});
+ const failed=waiting({id:'w',status:'push_pending',reviewed:ago(1)});
+ let r=await race(waiting({id:'w',status:'pushing',reviewed:ago(1)}),failed,diverged);
+ assert.equal(r.title,'Can’t save');assert.equal(r.h.context.saveFinished(failed),false);assert.equal(r.h.panel.hidden,true);
+ // A save that ends waiting while the repository reports a problem: Can't save, the save behind its Also line.
+ const busy=boundLab({git_status:{checked:true,ready:false,problem:'The repository changed since it was selected.',code:'busy',waiting:1}});
+ const done=waiting({id:'w',created:ago(0)});
+ r=await race(running(),done,busy);
+ assert.equal(r.title,'Can’t save');assert.equal(r.h.context.saveFinished(done),false);assert.equal(r.h.panel.hidden,true);
+ // A save interrupted after its commit waits for upload: the poll paints Not uploaded yet, while its end is a Can't save ending.
+ const interrupted=waiting({id:'w',status:'interrupted',created:ago(0),message:'Interrupted by a restart.'});
+ r=await race(running(),interrupted);
+ assert.equal(r.title,'Not uploaded yet');assert.equal(r.h.context.saveFinished(interrupted),false);assert.equal(r.h.panel.hidden,true);
+ // A load's view is not the save's result: a checkpoint kept while the lab runs a loaded state still opens its upload view (HEADER.md 2.5).
+ const load={id:'r',lab_id:'lab',status:'succeeded',created:ago(1),finished:ago(0.5),source:{type:'git',path:'bgp/checkpoints/ospf-up'},targets:[{node:'a',status:'verified'}]};
+ const kept=waiting({id:'k',target:'checkpoint',checkpoint:'ospf-up',captured:false,created:ago(0)});
+ const g=harness({state:{git_jobs:[{...kept,status:'exporting',commit:''},saved()],restore_jobs:[load]},routes:{'/git/compare':review({upload_job:'k'})}});
+ await g.open();assert.equal(g.text('save-panel-title-text'),'Saving…');
+ g.state.git_jobs=[kept,saved()];g.render();assert.equal(g.text('save-chip-text'),'Running ospf-up');assert.equal(g.mem().shown.view,'running');g.chip._menuClose(true);
+ assert.equal(g.context.saveFinished(kept),true);assert.equal(g.panel.hidden,false);assert.equal(g.text('save-panel-title-text'),'Not uploaded yet');
+});
 test('Keep as a checkpoint sends nothing when the save has no capture id (the manager would read the devices again and write latest too)',async()=>{
  const h=harness({state:{git_jobs:[saved()]},routes:{'/git/save':()=>{throw new Error('must not be posted');}}});
  await h.open();const box=h.el('save-keep');assert.equal(box.disabled,false);

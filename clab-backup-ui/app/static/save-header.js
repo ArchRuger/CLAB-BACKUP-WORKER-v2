@@ -7,13 +7,15 @@
 // only place in the static scripts that asks the manager to start an empty repository.
 // Every name of another script is read at call time behind a typeof guard, so this file loads alone in a Node vm context.
 // Page memory. refusal: {lab, message, at}, the refusal of a save this page just sent. placing: the lab whose place request runs.
-// opened: job id → the status the panel opened by itself for. last: lab id → {key, job}, what the live region last knew.
+// opened: job id → the status of an end the panel has shown: one it opened by itself for, or one the person saw and closed before
+// the watch handed it over (savePanelClosed). last: lab id → {key, job}, what the live region last knew.
 // naming: the save being named in this panel session. view: {lab, panel, job}, a view shown instead of the chip's own (the result
 // of a save that just ended, or the state behind an Also line). places: lab id → {status, data, message}. first: the address
 // form. typed: the name typed and not committed. reviewErrors: job id → {key, message}. shown: what the panel body shows now.
 // seen: lab id → the saves (job ids and commits) a review on screen named as part of an upload (saveSeenReview).
-// watched: the lab whose Saving… view the open panel showed last (the poll may repaint the panel before the save's end is handed over).
-const saveHeader={refusal:null,placing:'',connecting:false,opened:new Map(),last:new Map(),naming:'',view:null,places:new Map(),first:{lab:'',url:'',question:null},typed:null,reviewErrors:new Map(),reviewing:new Set(),uploading:'',sent:'',keeping:'',renaming:'',error:null,shown:{lab:'',view:'',job:''},watched:'',seen:new Map()};
+// watched: the lab whose Saving… view the open panel showed last (the poll may repaint the panel before the save's end is handed over),
+// and watchedJob the save that view was about.
+const saveHeader={refusal:null,placing:'',connecting:false,opened:new Map(),last:new Map(),naming:'',view:null,places:new Map(),first:{lab:'',url:'',question:null},typed:null,reviewErrors:new Map(),reviewing:new Set(),uploading:'',sent:'',keeping:'',renaming:'',error:null,shown:{lab:'',view:'',job:''},watched:'',watchedJob:'',seen:new Map()};
 let saveClock;   // the `now` of the render in progress (tests pass one; the page uses the real time)
 const SAVE_EXPOSURE='Saved files can contain passwords or keys.';
 const SAVE_NO_DEVICE='This lab has no device whose configuration can be saved.';
@@ -351,7 +353,7 @@ function renderSaveHeader(now){
  const panel=saveEl('save-panel'),body=saveEl('save-panel-body');
  if(!panel||panel.hidden||!body)return;
  saveHeader.shown={lab:lab.id,view:view.name,job:view.job};
- if(view.name==='saving')saveHeader.watched=lab.id;
+ if(view.name==='saving'){saveHeader.watched=lab.id;if(view.job)saveHeader.watchedJob=view.job;}
  savePanelMarkup(body,view.key,()=>view.html);
  if((view.name==='upload'||view.name==='failed')&&view.job&&typeof gitReviewCached==='function'){const shownJob=saveJobById(view.job);saveSeenReview(lab.id,shownJob,shownJob?gitReviewCached(shownJob):null);}
  if(view.needs&&view.needs.places&&typeof api==='function')saveLoadPlaces(lab.id);
@@ -377,6 +379,8 @@ function saveRefused(labId,error,values){
  if(typeof refresh==='function')Promise.resolve().then(refresh).catch(()=>{});
  return true;
 }
+// The view a save's ending opens the chip panel on: 'failed', 'upload', 'cant', or '' for an ending that opens nothing.
+function saveResultPanel(job){const status=job&&job.status;return status==='push_pending'?'failed':(status==='review_pending'||status==='committed')&&job.commit?'upload':['export_pending','capture_incomplete','failed','interrupted'].includes(status)?'cant':'';}
 // A save of the lab on screen that this page started has ended (called by gitStartWatch). Nothing changed and uploaded are a
 // toast; every other ending opens the chip panel by itself on that save's result, unless a dialog, a drawer or another menu is
 // open, and never twice for the same result. The chip and the live region change either way.
@@ -385,7 +389,7 @@ function saveFinished(job){
  const lab=saveLab(),mine=!!lab&&lab.id===job.lab_id,status=job.status;
  // The panel shows this save: its own view, or the Saving… view it has shown since the click (a poll that arrived first has
  // already repainted it with the chip's state, which is why the view on screen alone cannot tell).
- const watched=mine&&saveHeader.watched===lab.id;if(mine)saveHeader.watched='';
+ const watched=mine&&saveHeader.watched===lab.id;if(mine){saveHeader.watched='';saveHeader.watchedJob='';}
  // An end that arrives late (the watch answers after the person already started the next save of this lab) is not what the
  // open panel shows: the Saving… view on screen belongs to the newer save, and its panel must not be closed by the older one.
  const later=(saveState().git_jobs||[]).some(other=>other.lab_id===job.lab_id&&other.id!==job.id&&other.target!=='update'&&String(other.created||'')>String(job.created||''));
@@ -396,7 +400,7 @@ function saveFinished(job){
   if(shows||sent){saveHeader.view=null;saveHeader.sent='';saveClosePanel(saveFocusInside());}
   renderSaveHeader();return false;
  }
- const panel=status==='push_pending'?'failed':(status==='review_pending'||status==='committed')&&job.commit?'upload':['export_pending','capture_incomplete','failed','interrupted'].includes(status)?'cant':'';
+ const panel=saveResultPanel(job);
  if(!panel||!mine||job.kind==='design'||saveHeader.opened.get(job.id)===status){renderSaveHeader();return false;}
  const chip=saveEl('save-chip'),open=savePanelOpen();
  if(!open&&(typeof panelCanOpen!=='function'||!panelCanOpen(chip))){renderSaveHeader();return false;}
@@ -649,8 +653,14 @@ function savePanelKey(event){
  else if(target.id==='save-url'){event.preventDefault();saveAction('first-connect',null,'panel');}
 }
 // What a closing panel forgets: the refusal, the name being typed, a view shown in place of the chip's own, the place it looked up.
+// What it keeps: the end of the save its Saving… view was about, when the poll painted it before the watch handed it over and the
+// panel showed a save state (Not uploaded yet, Upload failed, Can’t save) when the person closed it (Not now, Escape, a click
+// outside): that end was seen, and it does not open the panel again by itself (saveFinished). A load's view (Running, Partial) is
+// not the save's result, so a save that ended behind it still opens its own view.
 function savePanelClosed(){
- saveHeader.refusal=null;saveHeader.naming='';saveHeader.typed=null;saveHeader.view=null;saveHeader.error=null;saveHeader.watched='';
+ const shown=saveHeader.shown,ended=saveHeader.watched&&shown.lab===saveHeader.watched&&['upload','failed','cant'].includes(shown.view)?saveJobById(saveHeader.watchedJob)||saveJobById(shown.job):null;
+ if(ended&&saveResultPanel(ended))saveHeader.opened.set(ended.id,ended.status);
+ saveHeader.refusal=null;saveHeader.naming='';saveHeader.typed=null;saveHeader.view=null;saveHeader.error=null;saveHeader.watched='';saveHeader.watchedJob='';
  if(saveHeader.first.question&&!saveHeader.placing)saveHeader.first={...saveHeader.first,question:null};   // a closed panel forgets the question (B05): the address can be changed
  for(const [id,entry] of saveHeader.places)if(entry.status!=='loading'&&saveHeader.placing!==id)saveHeader.places.delete(id);
  const body=saveEl('save-panel-body');if(body)body._listKey=undefined;

@@ -1,3 +1,25 @@
+# A save's end the person already saw stays closed — 1.31.9
+
+The evidence is in `clab-backup-ui/VALIDATION.md` (1.31.9). Preserve:
+
+1. **An end is shown once.** `saveHeader.opened` holds the ends the chip panel has shown: those `saveFinished` opened
+   by itself for, and those the person saw and closed before the watch handed them over (`savePanelClosed`: the poll
+   painted the end of `watchedJob` over the *Saving…* view, the panel showed a save state, the person closed it). An
+   end the person has not seen still opens the panel by itself, and a load's view (*Running*, *Partial*) is not the
+   save's result (`docs/git-redesign/design/HEADER.md` 2.5). `saveResultPanel` is the one status-to-view rule of an
+   end. The two tests after Q390-01 in `tests/test_save_header_ui.js` pin both sides.
+2. **The chip toggles.** A click on the chip of an open panel closes it, and Playwright's `to_be_enabled` does not
+   wait for visibility: a browser check that clicks the chip must know whether the panel is open.
+3. **This release carries sign-on unreleased.** It was cut from `fac28de` and then merged with `main` at `0d793b5`
+   (pull requests 80 and 81): main's side of every file `set-release.py` lists, then the tool once; the
+   `SHORTCUT_EXCLUSIONS` citation of the panel's `keydown` line is `save-header.js:680`. The sign-on stream's notes stay
+   under 1.31.8 until its own release, 1.32.0 (`docs/sign-on/PICKUP.md`), moves them into its section and writes the
+   `CLAUDE.md` sign-in invariant; until then `CLAUDE.md`'s "There is no login" line is stale.
+4. **Never parse a name in OpenSSL's default format.** It differs by release (3.0 prints `CN = name`, newer releases
+   `CN=name`); `setup_tls.py` asks for `-nameopt oneline`, and `test_setup_tls.py` stands in for the newer default
+   with a hook.
+5. Everything the 1.31.8 section below preserves.
+
 # vJunos-router as a supported kind — 1.31.8
 
 Read `docs/parity-campaign/PICKUP.md`'s last entry and `DEVICES.md`. Preserve:

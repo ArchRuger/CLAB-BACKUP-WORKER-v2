@@ -50,7 +50,7 @@ GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.31.8 — guided setup
+Containerlab Node Manager 1.31.9 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -143,7 +143,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The verification phase prints `Manager 1.31.8: running; HTTPS and version checks passed.`,
+The verification phase prints `Manager 1.31.9: running; HTTPS and version checks passed.`,
 the VM-local address and the certificate's SHA-256 fingerprint. After the last step
 (Git setup included) the installer prints the address to open, one or more
 `https://…` addresses, and **the setup code, last of all**: a restart of the manager

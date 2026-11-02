@@ -144,7 +144,7 @@ Only these, each against the fixture on a scratch `FIXTURE_DATA` (fixture and br
 confirmed through `/__fixture/requests`), `docs/ui-review-001/tools/check_ui001.py` and `check_ui004.py` (exit 0, from the first
 pass of this slice, not rerun after the second), and `docs/git-redesign/tools/integration/save_flow.py`, which stops at the same
 step (`#save-see` is not visible after the chip is clicked again) on the tree before sign-on as on this one, so it is not caused by
-sign-on. The other fixture rows are classified by reading the tool, not by running it. No migrated live tool was run against a live
+sign-on (since 1.31.9 it passes: the page opened the chip panel again after **Not now**; see `docs/CHANGELOG.md`). The other fixture rows are classified by reading the tool, not by running it. No migrated live tool was run against a live
 manager: there is no VM here; their syntax was checked (`py_compile`) and the helper has its own test
 (`clab-backup-ui/tests/test_manager_http.py`, against a local HTTPS server with a throw-away certificate, including a root,
 intermediate and two leaves for the pin). The four `s0-fixed` scripts were only byte-compiled.

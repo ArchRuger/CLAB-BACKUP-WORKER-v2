@@ -159,7 +159,7 @@ function renderAccount(){
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.31.8';$('app-version').textContent='v'+version;
+ const version=state.version||'1.31.9';$('app-version').textContent='v'+version;
  if($('account-name'))renderAccount();
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();

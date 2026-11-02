@@ -428,7 +428,10 @@ function savePanelMarkup(el,key,build){
    the Network design export never opens a panel, it only changes the chip;
 3. `panelCanOpen($('save-chip'))`: no modal dialog or drawer is open, and no other menu or panel (for
    example the Load panel with a confirmation in it) is open;
-4. it was not already opened for this job id and status (`saveHeader.opened`, in memory).
+4. it was not already opened for this job id and status (`saveHeader.opened`, in memory). Since 1.31.9 an end
+   the person already saw counts as opened too: the poll painted it over the open *Saving…* view before the watch
+   handed it over, the panel then showed a save state (*Not uploaded yet*, *Upload failed* or *Can't save*, not a
+   load's view) and the person closed it (**Not now**, Escape, a click outside).
 
 When a condition fails the chip still changes and the live region announces the new state; nothing is lost,
 the person opens the panel from the chip.

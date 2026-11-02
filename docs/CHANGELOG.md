@@ -1,3 +1,25 @@
+## Changes in 1.31.9
+
+- **A save's end that the person already saw does not open the chip panel again.** After Save, the 4 s state poll can
+  paint a save's end (*Not uploaded yet*, *Upload failed*, *Can’t save*) over the open *Saving…* panel before the
+  save's own watch reports it. A person who closed the panel in that moment (**Not now**, Escape, a click outside) saw
+  it open again by itself about a second later, and their next click on the chip closed it. That end now counts as
+  shown, so the panel stays closed and the chip alone says what waits. An end the person has not seen still opens the
+  panel by itself, as before: the panel was closed while it still showed *Saving…*, or only a load's view (*Running*,
+  *Partial*) was on screen (`save-header.js`: `savePanelClosed`; `saveResultPanel` is the one rule that names the view
+  of an end). The race shipped with the header in 1.31.0 and timing decided whether a run hit it: it is why the fixture
+  check `docs/git-redesign/tools/integration/save_flow.py` stopped after its first **Not now** (`#save-see` not
+  visible). The check was right and is unchanged; `docs/git-redesign/design/HEADER.md` 2.5 now says the same.
+- The keyboard-shortcut exclusion that cites the chip panel's `keydown` line follows the line (`preferences.js`).
+- **`setup-tls.sh` reads a certificate's subject the same way on every OpenSSL.** `certificate_facts` asked `openssl
+  x509` for the subject in OpenSSL's default name format, which differs by release: 3.0 prints `CN = name`, the release
+  on CI's runner `CN=name`, so `main`'s CI stopped at `test_setup_tls.py` once the sign-on hotfix had removed the import
+  error before it. The tool now asks for `-nameopt oneline`, 3.0's own default, so `show` prints the subject as before
+  on every release (`deploy/setup_tls.py`; a test stands in for the newer default).
+- This release also carries the sign-on work that pull requests 80 and 81 merged into `main` before its release step
+  (its notes are under 1.31.8 below). That stream's own release, with its records and the `CLAUDE.md` sign-in
+  invariant, is 1.32.0 (`docs/sign-on/PICKUP.md`).
+
 ## Changes in 1.31.8
 
 - **vJunos-router is a supported kind.** The "blocked on a VM host, derivative only" caveats are gone from the

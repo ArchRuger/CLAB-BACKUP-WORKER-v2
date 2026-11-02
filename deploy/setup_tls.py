@@ -687,8 +687,9 @@ class Tls:
         cert = self.path('cert.pem')
         if not cert.is_file():
             return None
-        result = self.command(['openssl', 'x509', '-in', str(cert), '-noout', '-subject', '-enddate', '-ext', 'subjectAltName',
-                               '-fingerprint', '-sha256'])
+        # The subject in one format on every OpenSSL: 3.0 prints "CN = name" by default, newer releases "CN=name".
+        result = self.command(['openssl', 'x509', '-in', str(cert), '-noout', '-nameopt', 'oneline', '-subject', '-enddate',
+                               '-ext', 'subjectAltName', '-fingerprint', '-sha256'])
         if result.returncode != 0:
             return None
         facts = {'subject': '', 'not_after': '', 'fingerprint': '', 'sans': set()}

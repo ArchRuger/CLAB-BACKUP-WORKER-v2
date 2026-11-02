@@ -373,6 +373,23 @@ class SelfSignedTests(unittest.TestCase):
         self.assertIn(facts['fingerprint'], text)
         self.assertNotIn('PRIVATE KEY', text)
 
+    def test_the_subject_reads_the_same_whatever_name_format_openssl_prints_by_default(self):
+        # OpenSSL 3.0 prints a subject as "CN = name" when no name option is given; the release on CI's runner prints
+        # "CN=name" (CI run 41381752310). The hook stands in for that release: a subject asked for without -nameopt comes
+        # back in its RFC 2253 form, and only the tool's own explicit format keeps the line as `show` prints it.
+        def newer_default(argv):
+            if argv[:2] == ['openssl', 'x509'] and '-subject' in argv and '-nameopt' not in argv:
+                return subprocess.run([*argv, '-nameopt', 'RFC2253'], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            return None
+        service = tls(self.tmp, Runner(openssl_hook=newer_default), allowed='manager.example.edu')
+        lines = []
+        service.out = lines.append
+        service.ensure()
+        self.assertEqual(service.certificate_facts()['subject'], 'CN = manager.example.edu')
+        lines.clear()
+        service.show()
+        self.assertIn('subject: CN = manager.example.edu', lines, 'the line a person reads')
+
     def test_ensure_keeps_a_valid_certificate_and_ignores_excluded_addresses(self):
         service = tls(self.tmp)
         service.out = lambda line: None
