@@ -237,8 +237,8 @@ class CompleteSetupTests(unittest.TestCase):
         return [json.loads(l) for l in path.read_text().splitlines()] if path.exists() else []
 
     def test_setup_creates_the_first_admin_deletes_the_file_and_audits_in_one_block(self):
-        write_setup_code(self.root, 'setup')
-        record = self.accounts.complete_setup('root', HASH, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
+        code = write_setup_code(self.root, 'setup')
+        record = self.accounts.complete_setup('root', HASH, code=code, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
         self.assertEqual((record['role'], record['created_by'], record['must_change_password'], record['known_sources'], record['disabled']),
                          ('admin', 'setup', False, ['203.0.113.0/24'], False))
         self.assertIsNotNone(record['last_signin'], 'the setup sign-in counts')
@@ -250,32 +250,72 @@ class CompleteSetupTests(unittest.TestCase):
         self.assertEqual(Store(self.tmp.name).state['users']['root']['password'], HASH)
 
     def test_recovery_creates_one_new_admin_and_never_overwrites(self):
-        write_setup_code(self.root, 'setup')
-        first = self.accounts.complete_setup('root', HASH, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
-        write_setup_code(self.root, 'recover')
+        code = write_setup_code(self.root, 'setup')
+        first = self.accounts.complete_setup('root', HASH, code=code, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
+        code = write_setup_code(self.root, 'recover')
         with self.assertRaises(AccountError) as refused:
-            self.accounts.complete_setup('root', 'scrypt$other', mode='recover', source='203.0.113.9', prefix='203.0.113.0/24')
+            self.accounts.complete_setup('root', 'scrypt$other', code=code, mode='recover', source='203.0.113.9', prefix='203.0.113.0/24')
         self.assertEqual(refused.exception.status, 409)
         self.assertEqual(refused.exception.detail, {'code': 'exists', 'message': 'That name already exists. Choose a new name for the recovery administrator.'})
         self.assertIs(self.store.state['users']['root'], first); self.assertEqual(first['password'], HASH)
         self.assertTrue((self.root/'setup-code').exists(), 'nothing written: the file stays')
         self.assertEqual([e['event'] for e in self.audit()], ['setup'])
-        second = self.accounts.complete_setup('rescue', HASH, mode='recover', source='198.51.100.7', prefix='198.51.100.0/24')
+        second = self.accounts.complete_setup('rescue', HASH, code=code, mode='recover', source='198.51.100.7', prefix='198.51.100.0/24')
         self.assertEqual((second['role'], second['created_by'], second['must_change_password']), ('admin', 'recover', False))
         self.assertEqual(self.store.state['users']['root'], first, 'existing users are untouched')
         self.assertFalse((self.root/'setup-code').exists())
         self.assertEqual(self.audit()[-1]['detail'], 'recover')
-        with self.assertRaises(AccountError) as bad: self.accounts.complete_setup('Bad Name', HASH, mode='recover', source='x', prefix='y')
+        with self.assertRaises(AccountError) as bad: self.accounts.complete_setup('Bad Name', HASH, code=code, mode='recover', source='x', prefix='y')
         self.assertEqual((bad.exception.status, bad.exception.detail['code']), (422, 'invalid_name'))
 
     def test_a_failed_save_keeps_the_file_and_the_record_out_of_memory(self):
-        write_setup_code(self.root, 'setup')
+        code = write_setup_code(self.root, 'setup')
         with patch.object(self.store, 'atomic', side_effect=OSError('disk fixture')):
             with self.assertRaises(OSError):
-                self.accounts.complete_setup('root', HASH, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
+                self.accounts.complete_setup('root', HASH, code=code, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
         self.assertTrue((self.root/'setup-code').exists())
         self.assertEqual(self.store.state.get('users', {}), {})
         self.assertEqual(self.calls, []); self.assertEqual(self.audit(), [])
+
+    def test_one_code_creates_one_admin_when_two_submits_overlap(self):
+        # Two requests past the route's code check inside the hash window: the second finds the file gone under
+        # store.lock and is refused setup_closed; DESIGN 9.2 (valid until used) and 9.5 (exactly one admin).
+        code = write_setup_code(self.root, 'setup')
+        self.accounts.complete_setup('first', HASH, code=code, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
+        with self.assertRaises(AccountError) as refused:
+            self.accounts.complete_setup('second', HASH, code=code, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
+        self.assertEqual((refused.exception.status, refused.exception.detail),
+                         (404, {'code': 'setup_closed', 'message': 'Setup is closed. Sign in, or ask the VM administrator to run the recovery command.'}))
+        self.assertEqual(sorted(self.store.state['users']), ['first'])
+        self.assertEqual([e['event'] for e in self.audit()], ['setup'])
+        self.assertEqual([c[1] for c in self.calls], ['first'])
+
+    def test_the_code_and_the_mode_are_checked_again_under_the_lock(self):
+        code = write_setup_code(self.root, 'setup')
+        for wrong in (code[:-1] + ('a' if code[-1] != 'a' else 'b'), '', None):
+            with self.assertRaises(AccountError) as refused:
+                self.accounts.complete_setup('root', HASH, code=wrong, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
+            self.assertEqual((refused.exception.status, refused.exception.code), (404, 'setup_closed'))
+        with self.assertRaises(AccountError) as refused:
+            self.accounts.complete_setup('root', HASH, code=code, mode='recover', source='203.0.113.9', prefix='203.0.113.0/24')
+        self.assertEqual(refused.exception.code, 'setup_closed', 'the file says setup; a caller that read recover is stale')
+        self.assertEqual(self.store.state.get('users', {}), {}); self.assertTrue((self.root/'setup-code').exists())
+        self.assertEqual(self.calls, []); self.assertEqual(self.audit(), [])
+        self.accounts.complete_setup('root', HASH, code=code.upper().replace('-', ' '), mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
+        self.assertEqual(sorted(self.store.state['users']), ['root'])
+
+    def test_a_setup_file_left_while_users_exist_creates_nobody(self):
+        code = write_setup_code(self.root, 'setup')
+        self.accounts.complete_setup('root', HASH, code=code, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
+        Store.atomic(self.root/'setup-code', f'mode=setup\ncode={code}\n'.encode('utf8'))   # a restored /data, a failed unlink
+        with self.assertRaises(AccountError) as refused:
+            self.accounts.complete_setup('second', HASH, code=code, mode='setup', source='203.0.113.9', prefix='203.0.113.0/24')
+        self.assertEqual((refused.exception.status, refused.exception.code), (404, 'setup_closed'))
+        self.assertEqual(sorted(self.store.state['users']), ['root'])
+        self.assertIsNone(self.accounts.read_setup_code(), 'the accounts object does not report a setup file once users exist')
+        self.assertFalse((self.root/'setup-code').exists(), 'and removes it')
+        code = write_setup_code(self.root, 'recover')
+        self.assertEqual(self.accounts.read_setup_code(), ('recover', code), 'a recovery file is not stale')
 
 
 class ResetKeepsUsersTests(unittest.TestCase):
@@ -407,6 +447,72 @@ class SetupModeRouteTests(unittest.TestCase):
             response = self.client.post('/api/setup', json={'code': self.code, 'username': 'root', 'password': PASSWORD})
         self.assertEqual((response.status_code, response.headers['retry-after'], response.json()['detail']), (429, '7', {'code': 'throttled', 'retry_after': 7, 'message': 'Too many sign-in attempts. Try again in 7 s.'}))
         self.assertTrue((self.root/'setup-code').exists())
+
+
+class StaleSetupFileTests(unittest.TestCase):
+    """A `mode=setup` file beside existing users (a restored /data, a failed unlink after the save) is removed by the
+    next create_app and ignored, and removed, at run time; it never serves the page or creates an administrator."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name); self.path = self.root/'setup-code'
+        app = create_app(self.tmp.name)
+        self.code = setup_code(app); self.saved = self.path.read_bytes()
+        SignedInClient(app).close(); close_app(app)
+
+    def restore_file(self):
+        self.path.write_bytes(self.saved); self.path.chmod(0o600)
+
+    def test_a_restart_removes_the_leftover_file_and_the_route_stays_closed(self):
+        self.restore_file()
+        with self.assertNoLogs('app.main', level='WARNING'):
+            app = create_app(self.tmp.name)
+        self.addCleanup(close_app, app)
+        self.assertFalse(self.path.exists(), 'a restart with users removes a mode=setup file')
+        self.assertFalse(app.state.sessions.setup_mode())
+        anonymous = TestClient(app); self.addCleanup(anonymous.close)
+        refused = anonymous.post('/api/setup', json={'code': self.code, 'username': 'second', 'password': PASSWORD})
+        self.assertEqual((refused.status_code, refused.json()['detail']['code']), (404, 'setup_closed'))
+        self.assertEqual(anonymous.get('/setup', headers=HTML).status_code, 404)
+        self.assertEqual(sorted(app.state.store.state['users']), [NAME])
+
+    def test_a_file_that_appears_at_run_time_is_ignored_and_removed(self):
+        app = create_app(self.tmp.name); self.addCleanup(close_app, app)
+        anonymous = TestClient(app); self.addCleanup(anonymous.close)
+        self.restore_file()
+        self.assertEqual(anonymous.get('/setup', headers=HTML).status_code, 404)
+        self.assertFalse(self.path.exists())
+        self.restore_file()
+        refused = anonymous.post('/api/setup', json={'code': self.code, 'username': 'second', 'password': PASSWORD})
+        self.assertEqual((refused.status_code, refused.json()['detail']['code']), (404, 'setup_closed'))
+        self.assertFalse(self.path.exists())
+        self.assertEqual(sorted(app.state.store.state['users']), [NAME])
+        self.assertEqual([e for e in (json.loads(l) for l in (self.root/'audit.jsonl').read_text().splitlines()) if e['event'] == 'setup'][1:], [])
+
+    def test_two_overlapping_submits_of_one_code_create_one_admin(self):
+        # Through the route: both pass the first read and the code comparison, the hash is awaited, the second is
+        # refused under store.lock. A fixed name shows the double-click case: one 200, one 404 setup_closed, never 409.
+        import asyncio, httpx
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        app = create_app(tmp.name); self.addCleanup(close_app, app); code = setup_code(app)
+        def client(address):
+            return httpx.AsyncClient(transport=httpx.ASGITransport(app=app, client=(address, 4242)), base_url='http://testserver')
+        async def go(names):
+            async with client('198.51.100.9') as a, client('198.51.100.10') as b:
+                return await asyncio.gather(a.post('/api/setup', json={'code': code, 'username': names[0], 'password': PASSWORD}),
+                                            b.post('/api/setup', json={'code': code, 'username': names[1], 'password': PASSWORD + ' two'}))
+        first, second = asyncio.run(go(('first', 'second')))
+        statuses = sorted((first.status_code, second.status_code))
+        self.assertEqual(statuses, [200, 404], (first.text, second.text))
+        refused = first if first.status_code == 404 else second
+        self.assertEqual(refused.json()['detail']['code'], 'setup_closed')
+        self.assertEqual(len(app.state.store.state['users']), 1, 'one setup code created more than one administrator')
+        self.assertFalse((Path(tmp.name)/'setup-code').exists())
+        entries = [json.loads(l) for l in (Path(tmp.name)/'audit.jsonl').read_text().splitlines()]
+        self.assertEqual([e['event'] for e in entries if e['event'] == 'setup'], ['setup'])
+        app.state.sessions.flush_failures(force=True)
+        failures = Path(tmp.name)/'audit-failures.jsonl'
+        self.assertFalse(failures.exists() and 'exists count=' in failures.read_text(), 'the lost race is not a name collision')
+        assert_not_logged(app, code, PASSWORD, PASSWORD + ' two')
 
 
 class RecoveryRouteTests(unittest.TestCase):

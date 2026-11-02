@@ -20,7 +20,8 @@ HASH = accounts.hash_password('correct horse battery staple', {'n': 2**14, 'r': 
 class FakeSessions:
     """Records the index calls with the facts the design pins: under store.lock, after the save."""
     def __init__(self, store):
-        self.store = store; self.calls = []; self.live = {}
+        self.store = store; self.calls = []; self.live = {}; self.ids = {'old-id'}
+    def get(self, session_id): return {'id': session_id, 'user': 'root'} if session_id in self.ids else None
     def saved_users(self):
         return json.loads(self.store.cipher.decrypt(self.store.path.read_bytes())).get('users', {})
     def _note(self, kind, *args, **kwargs):
@@ -229,6 +230,21 @@ class AccountModelTests(unittest.TestCase):
         entry = self.audit()[-1]
         self.assertEqual((entry['event'], entry['actor'], entry['outcome']), ('password.changed', 'root', 'ok'))
 
+    def test_own_change_refuses_when_its_session_is_already_gone_and_writes_nothing(self):
+        # A double submit: the first request rotated the session, the second still names the old id. Before the
+        # fix the second saved a second hash and ended every session, the rotated one included (keep=None).
+        self.admin()
+        record = self.store.state['users']['root']; before = dict(record)
+        new_hash = accounts.hash_password('another long passphrase', {'n': 2**14, 'r': 8, 'p': 1})
+        self.sessions.calls.clear(); self.sessions.ids.clear()
+        with self.assertRaises(AccountError) as refused:
+            self.accounts.change_password('root', new_hash, session_id='old-id', source='203.0.113.9')
+        self.assertEqual((refused.exception.status, refused.exception.detail), (401, {'code': 'signed_out', 'message': 'Your session ended. Sign in again.'}))
+        self.assertEqual(record, before, 'nothing changed in memory')
+        self.assertEqual(self.sessions.saved_users()['root']['password'], before['password'], 'nothing saved')
+        self.assertEqual(self.sessions.calls, [], 'no rotate, no index refresh, no session ended')
+        self.assertEqual([e['event'] for e in self.audit()], ['user.created'])
+
     def test_record_signin_updates_last_signin_and_known_sources_in_one_save(self):
         record = self.admin()
         self.assertIsNone(record['last_signin'])
@@ -254,7 +270,10 @@ class AccountModelTests(unittest.TestCase):
     def test_no_record_is_ever_overwritten(self):
         record = self.admin()
         with self.assertRaises(AccountError): self.accounts.create('root', 'admin', 'scrypt$other', actor='setup')
-        with self.assertRaises(AccountError): self.accounts.complete_setup('root', 'scrypt$other', mode='recover', source='203.0.113.9', prefix='203.0.113.0/24')
+        code = accounts.write_setup_code(self.store.root, 'recover')
+        with self.assertRaises(AccountError) as refused:
+            self.accounts.complete_setup('root', 'scrypt$other', code=code, mode='recover', source='203.0.113.9', prefix='203.0.113.0/24')
+        self.assertEqual(refused.exception.code, 'exists')
         self.assertIs(self.store.state['users']['root'], record)
         self.assertEqual(record['password'], HASH)
 

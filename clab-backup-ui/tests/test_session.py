@@ -477,6 +477,37 @@ class SignOutEverywhereTests(SessionTestCase):
         self.assertEqual(self.ended(), ['password_changed'] * 3)
         assert_not_logged(self.app, old_id, new_id, 'she chose this one herself', 'another fine passphrase')
 
+    def test_a_double_submit_of_the_own_change_leaves_the_browser_signed_in(self):
+        # Two requests with the same cookie and body at once: the first rotates the session, the second finds its
+        # session gone under store.lock and is refused signed_out before it writes anything. One cookie comes back,
+        # it is signed in, and the other three sessions of the user are the only ones ended.
+        import httpx
+        current = self.browsers[0]; old_id = cookie_of(current)
+        changed_before = len([e for e in self.audit() if e['event'] == 'password.changed'])   # the fixture's forced change
+        body = {'current': 'another fine passphrase', 'password': 'she chose this one herself'}
+        headers = {'cookie': COOKIE + '=' + old_id}
+        async def go():
+            transport = lambda: httpx.ASGITransport(app=self.app, client=('203.0.113.7', 4242))
+            async with httpx.AsyncClient(transport=transport(), base_url='http://testserver') as a, \
+                       httpx.AsyncClient(transport=transport(), base_url='http://testserver') as b:
+                return await asyncio.gather(a.post('/api/session/password', json=body, headers=headers),
+                                            b.post('/api/session/password', json=body, headers=headers))
+        first, second = asyncio.run(go())
+        self.assertEqual(sorted((first.status_code, second.status_code)), [200, 401], (first.text, second.text))
+        refused = first if first.status_code == 401 else second
+        self.assertEqual(refused.json()['detail'], {'code': 'signed_out', 'message': 'Your session ended. Sign in again.'})
+        self.assertNotIn('set-cookie', refused.headers)
+        cookies = [h for r in (first, second) for h in r.headers.get_list('set-cookie') if h.startswith(COOKIE + '=')]
+        self.assertEqual(len(cookies), 1)
+        new_id = cookies[0].split(';')[0].split('=', 1)[1]
+        status, _, _ = raw(self.app, 'GET', '/api/state', [('cookie', COOKIE + '=' + new_id)])
+        self.assertEqual(status, 200, 'the one cookie the browser received is signed in')
+        self.assertEqual(self.sessions.count('olivia'), 1)
+        self.assertEqual(self.ended(), ['password_changed'] * 3)
+        changed = [e['outcome'] for e in self.audit() if e['event'] == 'password.changed'][changed_before:]
+        self.assertEqual(changed, ['ok'], 'one change was written, and the lost race is not a wrong password')
+        assert_not_logged(self.app, old_id, new_id, 'she chose this one herself', 'another fine passphrase')
+
     def test_the_rotated_session_resolves_at_every_step_of_the_own_change(self):
         # R1/R4: the current session resolves before rotate (old id, old stamp) and, under its new id, right after
         # set_user and after end_user. Between rotate and set_user the new id is known to nobody yet (the response
@@ -498,6 +529,29 @@ class SignOutEverywhereTests(SessionTestCase):
         self.assertEqual(cookie_from(changed).value, rotated[-1])
         self.assertIsNone(self.sessions.resolve(old_id))
         self.assertEqual(current.get('/api/state').status_code, 200)
+
+
+class ResetPendingTests(SessionTestCase):
+    def test_sign_in_and_sign_out_answer_while_a_reset_is_pending_and_an_admin_can_retry(self):
+        # A Start fresh that stopped half way leaves `.reset-pending`; the guard's 503 must not lock every admin
+        # out of the retry: the session routes answer (DESIGN 6.3: sign-out always 200), the rest stays refused,
+        # and so does the own change, whose saved password the retried reset would overwrite with the journal.
+        (Path(self.tmp.name)/'.reset-pending').mkdir()
+        anonymous = self.anonymous()
+        self.assertEqual(anonymous.post('/api/session', json={'username': NAME, 'password': PASSWORD}).status_code, 200)
+        self.assertEqual(anonymous.get('/api/session').status_code, 200)
+        self.assertEqual(anonymous.get('/api/health').status_code, 200)
+        self.assertEqual(self.client.get('/api/state').status_code, 503)
+        self.assertEqual(self.client.post('/api/session/password', json={'current': PASSWORD, 'password': 'a brand new passphrase'}).status_code, 503)
+        self.assertEqual(sign_in(self.client)['user']['name'], NAME, 'a sign-in while the reset is pending uses the password the journal holds')
+        signed_out = anonymous.request('DELETE', '/api/session', json={})
+        self.assertEqual((signed_out.status_code, signed_out.json()), (200, {'signed_out': True}))
+        self.assertEqual(sorted(c.key for c in (SimpleCookie(h) for h in signed_out.headers.get_list('set-cookie')) for c in [list(c.values())[0]]), ['clab_capture_owner', 'clab_session'])
+        self.assertEqual(anonymous.get('/api/session').status_code, 401)
+        retried = self.client.post('/api/manager/reset', json={'confirmation': 'RESET'})
+        self.assertEqual(retried.status_code, 200, retried.text)
+        self.assertFalse(self.store.reset_pending)
+        self.assertEqual(self.client.get('/api/state').status_code, 200, 'the admin session survives its own reset')
 
 
 class RecordingLock:
@@ -681,6 +735,22 @@ class SessionsObjectTests(unittest.TestCase):
         with self.sessions.lock: self.assertEqual(self.sessions.sessions[new]['password_changed'], 'new-stamp')
         self.sessions.set_user({**self.record, 'password_changed': 'new-stamp'})
         self.assertIsNotNone(self.sessions.resolve(new))
+
+    def test_follow_gives_an_open_socket_the_rotated_id_and_an_http_request_nothing(self):
+        # 5.5 and 11.3: the current session survives the own change re-stamped, and its open sockets with it; the
+        # old cookie still finds no session. `follow` is for a socket that was authenticated at its handshake.
+        sid, _ = self.sessions.create(self.record, '203.0.113.7')
+        self.assertEqual(self.sessions.follow(sid), sid, 'a live id follows to itself')
+        self.assertIsNone(self.sessions.follow('nope')); self.assertIsNone(self.sessions.follow(None))
+        new = self.sessions.rotate(sid, 'stamp-2'); self.sessions.set_user({**self.record, 'password_changed': 'stamp-2'})
+        self.assertIsNone(self.sessions.resolve(sid), 'an HTTP request with the old cookie is refused')
+        self.assertEqual(self.sessions.follow(sid), new)
+        newer = self.sessions.rotate(new, 'stamp-3'); self.sessions.set_user({**self.record, 'password_changed': 'stamp-3'})
+        self.assertEqual((self.sessions.follow(sid), self.sessions.follow(new), self.sessions.follow(newer)), (newer, newer, newer))
+        self.sessions.end(newer, 'signout')
+        self.assertEqual((self.sessions.follow(sid), self.sessions.follow(new), self.sessions.follow(newer)), (None, None, None))
+        self.sessions.sweep()
+        with self.sessions.lock: self.assertEqual(self.sessions.rotated, {}, 'a successor that ended is forgotten')
 
     def test_touch_and_expiry_on_the_fake_clock(self):
         sid, _ = self.sessions.create(self.record, '203.0.113.7')

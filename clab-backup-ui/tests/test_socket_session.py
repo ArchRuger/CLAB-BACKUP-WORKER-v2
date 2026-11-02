@@ -103,7 +103,13 @@ class TerminalSessionTests(unittest.TestCase):
         self.sessions = self.app.state.sessions
 
     def tearDown(self):
-        wait_for(lambda: not self.services.clients)   # a socket's own clean-up writes terminal.close into the data directory
+        # A socket's own clean-up releases its client and then writes terminal.close into the data directory: wait
+        # for both before the directory goes, or the write races the cleanup (Directory not empty).
+        wait_for(lambda: not self.services.clients)
+        def settled():
+            actions = [e['action'] for e in self.app.state.store.events()]
+            return actions.count('terminal.open') == actions.count('terminal.close')
+        wait_for(settled)
         self.services.close(); self.app.state.runner.close(); self.client.close(); self.tmp.cleanup()
 
     def shell(self, output=b''):
@@ -155,6 +161,37 @@ class TerminalSessionTests(unittest.TestCase):
             clock = Clock(self.sessions); clock.now += IDLE + 1
             self.assert_signed_out(ws, ssh)
         finally: other.close()
+
+    def test_the_own_change_keeps_the_current_sessions_terminal_and_a_later_sign_out_closes_it(self):
+        # DESIGN 5.5: the current session survives the own change re-stamped; its open terminal follows the rotated
+        # id (11.3) instead of dropping as signed out, renews the new session on input, and still closes on sign-out.
+        channel, ssh = self.shell()
+        operator = SignedInClient(self.app, role='operator', name='olga', password='her first passphrase here')
+        try:
+            ws = self.open(operator)
+            changed = operator.post('/api/session/password', json={'current': 'her first passphrase here', 'password': 'the one she chose herself'})
+            self.assertEqual(changed.status_code, 200, changed.text)
+            self.assertEqual(operator.get('/api/session').status_code, 200, 'the rotated cookie works')
+            self.assertFalse(wait_for(lambda: not self.services.clients, 2.5), 'the terminal dropped within 2.5 s of the own change')
+            touches = Touches(self.sessions, operator.session_cookie())
+            ws.send_json({'type': 'input', 'data': 'x'})
+            self.assertTrue(wait_for(lambda: channel.sendall.call_count == 1))
+            self.assertTrue(wait_for(lambda: touches.count == 1), 'input renews the rotated session')
+            self.assertEqual(sign_out(operator).status_code, 200)
+            self.assert_signed_out(ws, ssh)
+        finally: operator.close()
+        assert_not_logged(self.app, 'her first passphrase here', 'the one she chose herself', operator.session_cookie())
+
+    def test_terminal_events_name_the_sockets_user(self):
+        # DESIGN 10.3: the socket knows its user; terminal.open and terminal.close carry it, never '-'.
+        _, ssh = self.shell()
+        operator = SignedInClient(self.app, role='operator', name='olga')
+        try:
+            ws = self.open(operator); sign_out(operator); self.assert_signed_out(ws, ssh)
+        finally: operator.close()
+        self.assertTrue(wait_for(lambda: any(e['action'] == 'terminal.close' for e in self.app.state.store.events())))
+        self.assertEqual([(e['action'], e['actor'], e['node']) for e in reversed(self.app.state.store.events()) if e['action'].startswith('terminal.')],
+                         [('terminal.open', 'olga', 'r1'), ('terminal.close', 'olga', 'r1')])
 
     def test_a_terminal_whose_session_lives_stays_open(self):
         channel, _ = self.shell()
@@ -273,6 +310,18 @@ class ConsoleSessionTests(unittest.TestCase):
         finally: other.close()
         self.assertTrue(wait_for(lambda: self.services.consoles == {}))
         self.assertTrue(wait_for(lambda: 'console.close' in self.client.get('/api/logs').text))
+        self.assertEqual([(e['action'], e['actor'], e['node']) for e in reversed(self.app.state.store.events()) if e['action'].startswith('console.')],
+                         [('console.open', 'tester', 'r1'), ('console.close', 'tester', 'r1')], 'the events name the socket\'s user (10.3)')
+
+    def test_a_login_check_names_the_person_who_asked_for_it(self):
+        node = self.lab['nodes'][1]; node.update(username='user', password='never-log-this')
+        with patch('app.node_services.connect'), patch('app.node_services.cli_answers', return_value=True):
+            self.assertEqual(self.client.post('/api/labs/lab/ssh-check', json={'name': 'ceos'}).json()['status'], 'reachable')
+            self.assertEqual(self.client.post('/api/labs/lab/ssh-check-all', json={}).status_code, 200)
+            self.assertTrue(wait_for(lambda: not self.services.checking_all and not self.services.checking))
+        checks = [(e['node'], e['actor']) for e in reversed(self.app.state.store.events()) if e['action'] == 'ssh.check']
+        self.assertEqual(checks[0], ('ceos', 'tester'), 'the route has the request in hand')
+        self.assertTrue(checks[1:] and all(actor == 'tester' for _, actor in checks[1:]), f'the bulk check carries the actor of the request that started it: {checks}')
 
     def test_console_input_renews_at_most_once_a_minute(self):
         console = self.serve()

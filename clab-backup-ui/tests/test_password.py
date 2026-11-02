@@ -75,6 +75,28 @@ class HashStringTests(unittest.TestCase):
         self.assertIsNotNone(parse_hash(build(salt=accounts._b64(b'x'*16))), 'a 16-byte salt is the lower bound')
         self.assertIsNotNone(parse_hash(build(salt=accounts._b64(b'x'*64))), 'a 64-byte salt is the upper bound')
 
+    def test_parameters_that_exceed_maxmem_are_a_malformed_string_and_never_a_crash(self):
+        # hashlib.scrypt needs 128*r*(n+p+2) bytes and raises ValueError above maxmem; a string inside the ranges of
+        # 4.2 but above that bound would otherwise pass the parser and crash the verify: a 500 that no level counts.
+        good = hash_password('correct horse battery staple', FAST)
+        _, _, _, salt, digest = good.split('$')[1:]
+        def build(n, r, p):
+            return '$'.join(['scrypt', str(n), str(r), str(p), salt, digest])
+        for n, r, p in ((2**16, 8, 1), (2**14, 32, 1), (2**20, 1, 1), (2**19, 1, 1), (2**15, 16, 1)):
+            with self.subTest((n, r, p)):
+                self.assertGreater(128*r*(n+p+2), MAXMEM)
+                self.assertIsNone(parse_hash(build(n, r, p)))
+        for n, r, p in ((2**15, 8, 1), (2**16, 4, 1), (2**14, 31, 1), (2**15, 8, 16)):
+            with self.subTest((n, r, p)):
+                self.assertLessEqual(128*r*(n+p+2), MAXMEM)
+                self.assertIsNotNone(parse_hash(build(n, r, p)))
+        self.assertLessEqual(128*PARAMS['r']*(PARAMS['n']+PARAMS['p']+2), MAXMEM, 'the shipped parameters fit')
+        with patch('app.accounts.hashlib.scrypt', wraps=hashlib.scrypt) as scrypt:
+            self.assertFalse(verify_password(build(2**16, 8, 1), 'correct horse battery staple'))
+            self.assertEqual(scrypt.call_count, 1, 'the dummy is verified instead')
+            self.assertEqual(scrypt.call_args.kwargs['n'], PARAMS['n'])
+        self.assertFalse(needs_rehash(build(2**16, 8, 1)))
+
     def test_a_record_that_does_not_parse_never_verifies_but_still_costs_one_scrypt(self):
         for bad in (None, '', 'scrypt$x', 'plain-text-password', 'scrypt$16384$8$1$$'):
             with patch('app.accounts.hashlib.scrypt', wraps=hashlib.scrypt) as scrypt:
@@ -335,15 +357,21 @@ class SignInRouteTests(unittest.TestCase):
         assert_not_logged(self.app, PASSWORD, 'wrong passphrase', anonymous.cookies.get('clab_session'))
 
     def test_the_21st_queued_verify_is_refused_busy_through_the_route_while_20_are_held(self):
+        # Twenty people, each their own (source, name) pair: the throttle counts an attempt in flight on its pair
+        # (8.2), so twenty held verifies of one pair could never fill the executor; the bound under test is 4.1's.
         gate = threading.Event(); real = accounts.verify_password
         def held(hash_string, password):
             gate.wait(30); return real(hash_string, password)
+        people = [(f'held{i:02d}', 'the held verify passphrase') for i in range(20)]
+        with SignedInClient(self.app) as client:
+            for name, password in people:
+                self.assertEqual(client.post('/api/users', json={'name': name, 'role': 'operator', 'password': password}).status_code, 200)
         with SignedInClient(self.app) as client, patch('app.accounts.verify_password', held):
             browsers = [TestClient(self.app) for _ in range(21)]
             for browser in browsers: browser.portal = client.portal; self.addCleanup(browser.close)
             results = []
-            def attempt(browser): results.append(browser.post('/api/session', json={'username': NAME, 'password': PASSWORD}))
-            threads = [threading.Thread(target=attempt, args=(browser,)) for browser in browsers[:20]]
+            def attempt(browser, name, password): results.append(browser.post('/api/session', json={'username': name, 'password': password}))
+            threads = [threading.Thread(target=attempt, args=(browser, name, password)) for browser, (name, password) in zip(browsers[:20], people)]
             for thread in threads: thread.start()
             for _ in range(500):
                 if accounts.pending >= VERIFY_LIMIT: break
