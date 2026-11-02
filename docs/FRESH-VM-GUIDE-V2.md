@@ -319,7 +319,7 @@ up Git now or later) yourself, start the installer with `--advanced`:
 The installer handles missing Git, SSH, Docker/Compose and Containerlab;
 prepares persistent manager storage; installs and verifies helpers; builds and
 starts the manager; installs the browser Wireshark stack; then checks its
-running version and HTTP response. The image build and the capture stack take
+running version and its HTTPS response. The image build and the capture stack take
 several minutes. Keep the terminal open and wait for the result.
 
 Before APT updates, setup displays UTC and NTP status. If a time service is
@@ -340,7 +340,7 @@ If a step fails, read its output. Use **Retry this step** after fixing it, or
 setup, some checks will need attention; repeat it at the step 12 checkpoint.
 Do not continue as though an incomplete install passed.
 
-**Checkpoint:** the terminal reports that the manager is running and its HTTP
+**Checkpoint:** the terminal reports that the manager is running and its HTTPS
 and version checks passed. That check does **not** prove workstation reachability,
 WinSCP transfer, device backup or Git push; the next steps verify those.
 
@@ -597,27 +597,37 @@ placeholder:
 
 WORKSTATION_IP must be the address the VM sees, which behind NAT, a VPN or a jump host is not
 the one you type in your client: read it in your current SSH session with
-`echo $SSH_CONNECTION` (the first field). Keep that session open.
+`echo $SSH_CONNECTION` (the first field). Keep that session open until the end of this
+section. If `sshd` listens on another port than 22 (`sudo sshd -T | grep -i '^port'`), use that
+port in the first rule.
 
 ```bash
 sudo ufw allow from WORKSTATION_IP to any port 22 proto tcp
 sudo ufw allow from WORKSTATION_IP to any port 8443 proto tcp
 sudo ufw allow from WORKSTATION_IP to any port 8081 proto tcp
 sudo bash "$HOME/projects/clab-manager/deploy/setup-firewall.sh" --remove
+sudo ufw show added
+```
+
+`--remove` deletes the installer's rules for 8443 and 8081. It keeps the installer's SSH allow
+while `ufw` denies other incoming traffic, because deleting that one first would block new SSH
+logins, and prints the exact `sudo ufw delete …` command for it. Check that `sudo ufw show added`
+lists your own SSH rule from WORKSTATION_IP (the scoped form above: a plain `ufw allow 22/tcp`
+would take the installer's rule over instead of being kept apart from it). Only then run the
+delete command that `--remove` printed; for port 22 over both IPv4 and IPv6 it is:
+
+```bash
 sudo ufw delete allow 22/tcp
 sudo ufw status
 ```
 
-`--remove` deletes the installer's rules for 8443 and 8081 and keeps its SSH allow while `ufw`
-denies other incoming traffic, because deleting that one first would block new SSH logins. Run
-the last `delete` only after `sudo ufw show added` lists your own SSH rule (use the scoped rule above: a plain `ufw allow 22/tcp` would take the installer's rule over
-instead of being kept apart from it), and then open a second SSH login from the workstation
-before closing the first: a rule that does not match the address the VM sees blocks every new
-login while the current session survives. If `sshd` listens on another port, use the delete
-command that `--remove` prints for it instead of `22/tcp`. Later upgrades keep all three
-narrowed rules. Without the 8081 rule the next *Install or update* allows 8081 from anywhere
-again; to have no redirect at all, set `UI_HTTP_PORT=0` in `clab-backup-ui/.env` and run
-`recreate-manager.sh` instead of adding it.
+Now open a second SSH login from the workstation before you close the first one. A rule that
+does not match the address the VM sees blocks every new login while the current session
+survives; if the second login fails, run `sudo ufw allow 22/tcp` (your `sshd` port) in the
+session that is still open, which allows SSH from anywhere again, and start over with the right
+address. Later upgrades keep all three narrowed rules. Without the 8081 rule the next *Install
+or update* allows 8081 from anywhere again; to have no redirect at all, set `UI_HTTP_PORT=0` in
+`clab-backup-ui/.env` and run `recreate-manager.sh` instead of adding it.
 
 Do not enable a firewall blindly during a remote session. From Windows PowerShell, test:
 
@@ -796,7 +806,7 @@ or lab configuration. Normal request audit logs can still be written.
 `AUTOMATED CHECKS PASSED` means the automated checks passed; your real WinSCP
 transfer, device backup and Git push remain separate evidence. Installer menu
 **5. Check running installation** runs this same report. The initial installation
-checked restricted helper execution and local container/version/HTTP readiness
+checked restricted helper execution and local container/version/HTTPS readiness
 before browser setup; the saved SSH connection is checked here afterwards.
 
 If **Deploy a new lab → Lab folders on the VM** reports **Operations helper is unavailable**,
