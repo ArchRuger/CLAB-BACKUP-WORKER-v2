@@ -36,9 +36,12 @@ jobs:
           python3 -m unittest discover -s tests -p test_check_host.py -v
           python3 -m unittest discover -s tests -p test_check_git.py -v
           python3 -m unittest discover -s tests -p test_check_exposure.py -v
+          python3 -m unittest discover -s tests -p test_setup_firewall.py -v
+          python3 -m unittest discover -s tests -p test_setup_ssh_hardening.py -v
+          python3 -m unittest discover -s tests -p test_manager_recover_admin.py -v
       - name: Check installer shell syntax
         run: |
-          for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh deploy/setup-engineer-access.sh deploy/setup-capture.sh deploy/retire-telemetry.sh deploy/recreate-manager.sh deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-operations.sh deploy/setup-password.sh deploy/migrate-worker-data.sh; do
+          for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh deploy/setup-engineer-access.sh deploy/setup-capture.sh deploy/retire-telemetry.sh deploy/recreate-manager.sh deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-operations.sh deploy/setup-password.sh deploy/migrate-worker-data.sh deploy/setup-firewall.sh deploy/setup-ssh-hardening.sh deploy/manager-recover-admin.sh; do
             bash -n "$script"
           done
           # The SSH forced command has no .sh extension and its shebang is /bin/sh.
