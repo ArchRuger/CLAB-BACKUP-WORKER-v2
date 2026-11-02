@@ -1,8 +1,12 @@
 """Browser session adapter. Only the separate VM service has Docker access.
 
 The browser receives same-origin URLs, never service credentials or packet URLs.
-Session ownership is browser-cookie isolation within the manager's trusted lab UI,
-not a replacement for user authentication at a shared/public reverse proxy.
+Every route and the socket sit behind the manager's sign-on gate; within a signed-in
+session, desktop ownership is per person per browser: the identity sent to the service
+is sha256(clab_capture_owner cookie + newline + user name) (sign-on DESIGN.md 11.2), so
+a second person in the same browser never reaches the first person's desktops. The
+desktop socket closes 1008 `signed_out` when its manager session ends and renews the
+session only on the person's own viewer input (11.3).
 """
 import asyncio
 import hashlib
@@ -104,19 +108,45 @@ def viewer_asset(path, body):
     return path in VIEWER_ASSETS and hashlib.sha256(body).hexdigest() == VIEWER_ASSETS[path]
 
 
+# RFB client-to-server message types that only a person causes (RFC 6143 7.5: KeyEvent 4, PointerEvent 5,
+# ClientCutText 6; 255 is the QEMU extension noVNC uses for extended key events). noVNC flushes each message as its
+# own WebSocket frame, so the first byte names it. FramebufferUpdateRequest (3), which the viewer sends by itself
+# after every screen update, and the handshake renew nothing (REVIEW R9: no poller keeps a session alive).
+PERSON_INPUT = frozenset({4, 5, 6, 255})
+
+
+def person_input(message):
+    return bool(message) and message[0] in PERSON_INPUT
+
+
+def identity(cookie, user):
+    """The owner the capture service sees: per browser cookie and per person (sign-on DESIGN.md 11.2)."""
+    return hashlib.sha256((cookie + '\n' + user).encode()).hexdigest()
+
+
 def owner(request, response=None):
+    """The owner identity of this person in this browser, for every owner-scoped call and the socket. Reads (and,
+    with `response`, sets) the clab_capture_owner cookie as before; the identity mixes in the signed-in user's name,
+    so the cookie alone reaches nothing. Without a signed-in user (never behind the gate) nothing is owned."""
+    from .origin import scheme   # here, not at the top: the capture service image ships only this module of the manager
+    user = (request.scope.get('state') or {}).get('user')
+    name = user.get('name') if isinstance(user, dict) else None
+    if not name:
+        raise HTTPException(404, 'Capture session not found in this browser.')
     value = request.cookies.get(COOKIE, '')
     if not TOKEN.fullmatch(value):
         if response is None:
             raise HTTPException(404, 'Capture session not found in this browser.')
         value = secrets.token_hex(32)
         response.set_cookie(COOKIE, value, httponly=True, samesite='strict',
-                            secure=request.url.scheme == 'https', path='/api/capture', max_age=86400)
-    return value
+                            secure=scheme(request.scope) == 'https', path='/api/capture', max_age=86400)
+    return identity(value, name)
 
 
-async def relay(ws, upstream):
-    """Bounded binary noVNC bridge; disconnect either end cancels the other."""
+async def relay(ws, upstream, watch=None):
+    """Bounded binary noVNC bridge; disconnect either end cancels the other. With `watch` (the manager's
+    node_services.SocketSession) the bridge also ends when the manager session is gone, and the person's own
+    input renews that session (at most once a minute, `watch.input`)."""
     async def incoming():
         while True:
             event = await ws.receive()
@@ -127,6 +157,8 @@ async def relay(ws, upstream):
                 raise ValueError('Expected binary VNC data')
             if len(message) > 4 * 1024 * 1024:
                 raise ValueError('VNC frame too large')
+            if watch is not None and person_input(message):
+                watch.input()
             await upstream.send(message)
 
     async def outgoing():
@@ -136,6 +168,8 @@ async def relay(ws, upstream):
             await ws.send_bytes(message)
 
     tasks = [asyncio.create_task(incoming()), asyncio.create_task(outgoing())]
+    if watch is not None:
+        tasks.append(asyncio.create_task(watch.ended()))
     try:
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
@@ -183,6 +217,8 @@ class BrowserSessions:
 
 
 def install(app, captures):
+    from .node_services import SocketSession, close_signed_out
+
     def service():
         if not captures.sessions:
             raise HTTPException(503, captures.error or 'Browser capture is disabled. Follow Capture setup.')
@@ -314,10 +350,14 @@ def install(app, captures):
 
     @app.websocket('/api/capture/sessions/{sid}/websockify')
     async def desktop(ws: WebSocket, sid: str):
+        from .origin import scheme
         origin = urlsplit(ws.headers.get('origin', ''))
-        scheme = 'https' if ws.url.scheme == 'wss' else 'http'
-        if origin.scheme != scheme or origin.netloc != ws.url.netloc or not TOKEN.fullmatch(sid):
+        if origin.scheme != scheme(ws.scope) or origin.netloc != ws.url.netloc or not TOKEN.fullmatch(sid):
             await ws.close(code=1008)
+            return
+        watch = SocketSession(ws, getattr(app.state, 'sessions', None))
+        if watch.gone:
+            await close_signed_out(ws)
             return
         try:
             adapter = service()
@@ -327,11 +367,14 @@ def install(app, captures):
                                subprotocols=[VNC_SUBPROTOCOL], proxy=None, max_size=4 * 1024 * 1024,
                                open_timeout=15) as upstream:
                 await ws.accept(subprotocol=VNC_SUBPROTOCOL if VNC_SUBPROTOCOL in ws.scope.get('subprotocols', []) else None)
-                await relay(ws, upstream)
+                await relay(ws, upstream, watch)
         except (HTTPException, OSError, ValueError, WebSocketException, WebSocketDisconnect):
             pass
         finally:
-            try:
-                await ws.close(code=1000)
-            except RuntimeError:
-                pass
+            if watch.gone:
+                await close_signed_out(ws)
+            else:
+                try:
+                    await ws.close(code=1000)
+                except RuntimeError:
+                    pass
