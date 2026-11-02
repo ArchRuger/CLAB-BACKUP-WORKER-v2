@@ -1484,11 +1484,11 @@ class ExposureSettingsTests(IsolatedCase):
 
     def test_the_settings_reader_reads_as_setup_tls_and_compose_do(self):
         # deploy/setup_tls.py (env_values) and Compose read the same file: an `export ` prefix is ignored, an
-        # unquoted value ends at a `#` that follows whitespace, quotes are removed, nothing is evaluated.
+        # unquoted value ends at a space followed by `#`, quotes are removed, nothing is evaluated.
         cases = [('export UI_PORT=9001\n', {'UI_PORT': '9001'}),
                  ('  export   UI_PORT = 9001\n', {'UI_PORT': '9001'}),
                  ('UI_PORT=9001 # the TLS port\n', {'UI_PORT': '9001'}),
-                 ('UI_PORT=9001\t# tab\n', {'UI_PORT': '9001'}),
+                 ('UI_PORT=9001\t# tab\n', {'UI_PORT': '9001\t# tab'}),   # Compose: only a space starts a comment
                  ('UI_PORT="9001" # quoted\n', {'UI_PORT': '9001'}),
                  ("UI_PORT='9001'\n", {'UI_PORT': '9001'}),
                  ('UI_PORT="90 #01"\n', {'UI_PORT': '90 #01'}),
@@ -1500,15 +1500,36 @@ class ExposureSettingsTests(IsolatedCase):
         self.assertEqual(exposure.ports(self.source('export UI_PORT=9001 # tls\nexport UI_HTTP_PORT=9002 # redirect\n')),
                          (9001, 9002))
 
+    def test_the_settings_reader_reads_the_values_exactly_as_docker_compose_config_does(self):
+        # Verified with `docker compose config` (Compose v5.6.1) on a scratch project: a comment starts only at a
+        # SPACE followed by `#` inside an unquoted value; a value that begins with `#` after `=` is the value, a tab
+        # does not start a comment, and a `#` inside a word stays.
+        cases = [('A= # note', '# note'), ('C=\t# tab note', '# tab note'), ('E=8443\t# tab', '8443\t# tab'),
+                 ('D=8443 # tls', '8443'), ('G= "q" # c', 'q'), ('K=va#lue', 'va#lue'), ('H=  spaced  ', 'spaced'),
+                 ('Q="a # b"', 'a # b'), ("R='x' # c", 'x'), ('S=a  # two spaces', 'a'), ('T=#hash', '#hash')]
+        keys = tuple(line.split('=')[0] for line, _ in cases)
+        text = ''.join(line + '\n' for line, _ in cases)
+        values = exposure.env_values(self.source(text), keys)
+        for line, expected in cases:
+            with self.subTest(line=line):
+                self.assertEqual(values.get(line.split('=')[0]), expected)
+
+    def test_a_comment_only_port_is_not_a_number_so_the_plan_keeps_the_default(self):
+        # Compose would hand uvicorn `--port "# note"`; the TLS tool refuses that line with a sentence before anything
+        # starts, so the installer's plan (the default port) is not acted on: it reads the line as no usable port.
+        root = self.source('UI_PORT= # note\nUI_HTTP_PORT= # note\n')
+        self.assertEqual(exposure.env_values(root, ('UI_PORT',)), {'UI_PORT': '# note'})
+        self.assertEqual(exposure.ports(root), (8443, 8081))
+
     def test_an_empty_value_means_the_default_not_an_explicit_setting(self):
-        self.assertEqual(exposure.env_values(self.source('UI_PORT=\nUI_HTTP_PORT=  # nothing\nUI_BIND=\n'),
+        self.assertEqual(exposure.env_values(self.source('UI_PORT=\nUI_HTTP_PORT=   \nUI_BIND=\n'),
                                              ('UI_PORT', 'UI_HTTP_PORT')), {})
         root = self.source('UI_HTTP_PORT=0\nUI_HTTP_PORT=\n')   # the last line wins, and it is empty
         self.assertEqual(exposure.ports(root), (8443, 8081))
         self.assertEqual(exposure.ports(self.source('UI_PORT=\nUI_HTTP_PORT=\n')), (8443, 8081))
 
     def test_port_8081_with_an_empty_redirect_port_is_still_the_collision(self):
-        for text in ('UI_PORT=8081\nUI_HTTP_PORT=\n', 'export UI_PORT=8081 # tls\nexport UI_HTTP_PORT= # none\n',
+        for text in ('UI_PORT=8081\nUI_HTTP_PORT=\n', 'export UI_PORT=8081 # tls\nexport UI_HTTP_PORT=\n',
                      'export UI_PORT=8081 # tls\n'):
             with self.subTest(text=text):
                 root = self.source(text)

@@ -94,14 +94,16 @@ ENV_LINE = re.compile(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$')
 
 
 def _env_value(raw):
-    """The value as deploy/setup_tls.py and docker compose read it (kept equal to its `_env_value`, which is
-    another slice's file, except that `KEY= # note` is empty here): quotes removed, an unquoted value ends at a `#` that follows whitespace, nothing evaluated."""
+    """The value as docker compose reads it, verified with `docker compose config` (Compose v5.6.1) and kept
+    equal to `_env_value` in deploy/setup_tls.py (another slice's file, the same rule): a quoted value ends at its
+    closing quote, an unquoted value ends at a space followed by `#` (not at a tab, not at its first
+    character, not inside a word: `KEY= # note` is `# note`, `KEY=8443<tab># x` keeps the tab text, `KEY=va#lue`
+    keeps `va#lue`), surrounding whitespace is dropped, nothing is evaluated."""
     raw = raw.lstrip()
     if raw[:1] in ('"', "'"):
         end = raw.find(raw[0], 1)
         return raw[1:end] if end > 0 else raw[1:]
-    # `KEY= # note` is an empty value, as Compose reads it (the text after '=' is not stripped before the split)
-    return re.split(r'(?:^|\s)#', raw, maxsplit=1)[0].strip()
+    return raw.strip().split(' #', 1)[0].rstrip()
 
 
 def _port(text, default):
