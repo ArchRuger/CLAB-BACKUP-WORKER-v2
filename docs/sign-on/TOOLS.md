@@ -71,6 +71,27 @@ context = playwright_context(browser, manager, viewport={'width': 1440, 'height'
 * `deploy/scaffold-lab.py` cannot import it (a deploy script stays self-contained), so it carries the same logic in standard
   library code, with `--cafile` and the same environment variables. Its default manager is `https://127.0.0.1:8443`.
 
+## The sign-on check (`docs/sign-on/tools/check_signon.py`)
+
+```
+PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers clab-backup-ui/.venv/bin/python docs/sign-on/tools/check_signon.py [--port 8871] [--out DIR] [--viewport 390 ...] [--only NAME ...]
+```
+
+Starts its own fixture (`--signed-out`, fresh `FIXTURE_DATA`, a private credentials file it removes afterwards), signs in through the real
+pages and stops the fixture. Writes `signon-<width>-<view>.png` screenshots, `report.json` (mode 0600) and the fixture's log with the
+passwords removed into `--out` (default `docs/sign-on/evidence/<date>`). At 1440, 1280, 760 and 390 px it exercises: a signed-out visit of
+a lab and tab (the `/login` address keeps the fragment, sign-in returns to that tab, the account chip at 1440 and 1280 only); a wrong
+password and the Tab order; the open-redirect `next`; the operator's Manager menu (no People, no Diagnostics, VM connection and Manager
+settings disabled with *Administrators only*), its keyboard path and the two refused pages; the throttle sentence and countdown; the
+People page as the administrator (own-row rules, add a person, the audit table) and a new person's forced change on the sign-in page
+(weak password sends nothing, restricted-session answers of the gate, the Current password field after a reload, Sign out from that
+view); arrival from another site with a live session; sign-out, `GET /api/state` 401 and Back. Waits are on UI conditions only (no
+`networkidle`, no fixed delay). Every response of 400 or more, console error, page error and failed request fails the run unless the
+scenario named that exact `(status, method, path)` as expected; a request cancelled by a navigation (`ERR_ABORTED`) is recorded, not failed.
+Exit 0 all held, 1 a failure, 2 the check could not run. The countdown's end (30 s) is checked at 1440 and 390 only. This is fixture
+evidence: no VM, no TLS, no device. Its machinery is tested without a browser by `clab-backup-ui/tests/test_check_signon.py` (standard
+library only).
+
 ## What was run when this table was written
 
 Only these, each against the fixture on a scratch `FIXTURE_DATA` (fixture and browser evidence, no VM, no live device):
