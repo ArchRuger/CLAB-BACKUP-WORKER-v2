@@ -86,7 +86,7 @@ command in this project works from any directory; the guides keep the source in
    installer command to be asked every setup question; [Guided installation](docs/INSTALL.md)
    describes the full-screen and the plain menu.
 
-3. Open `http://VM_IP:8081`. The VM connection dialog opens on its own: enter the
+3. Open `https://VM_IP:8443`. The VM connection dialog opens on its own: enter the
    `clab-discovery` password and click **Save and test connection**.
 
 4. On Home, under **Deploy › Choose a file on the lab VM…**, expand `/etc/containerlab`, pick a `.clab.yaml` and

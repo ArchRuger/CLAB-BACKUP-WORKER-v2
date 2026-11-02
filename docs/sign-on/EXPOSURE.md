@@ -264,10 +264,15 @@ prints a hash of the key: the key's entry is passed with a flag that skips the d
 The key never leaves the VM. `setup-tls.sh --show` prints the certificate's facts, never the key.
 `setup_tls.py` never prints a key path's contents in an error message.
 
-**As built (S4):** the directory also holds `tls/.lock` (root:root, 0600, empty, permanent): every writing mode
-takes an exclusive `fcntl.flock` on it (opened with `O_NOFOLLOW`, never unlinked) from before its first read of the
-directory until its files are installed; a second run waits up to 60 s and then refuses with a sentence that names
-the lock; the read-only modes take no lock.
+**As built (S4, the lead's record after four verification rounds):** the directory also holds `tls/.lock`
+(root:root, 0600, empty, permanent): every writing mode takes an exclusive `fcntl.flock` on it from before its first
+read of the directory until its files are installed; a second run waits up to 60 s and then refuses with a sentence
+that names the lock; the read-only modes take no lock. The lock file must be a regular file with a single name, owned by
+the account that runs the writing modes (root: `setup-tls.sh` refuses a writing mode for any other account). It is
+opened with `O_NOFOLLOW|O_NONBLOCK` and judged on the open descriptor before anything is changed: a symlink, a FIFO, a
+hard link or another account's file at that name is refused with a sentence that names the file and
+`sudo rm -f /srv/containerlab-node-manager/tls/.lock`. The names mode holds this one lock from its `tls/names` write
+through the certificate check that follows.
 
 ### 3.4 A provided certificate
 
@@ -289,14 +294,18 @@ is the documented way to use Let's Encrypt (8.1); certbot in `standalone` mode n
 reachable, which the firewall section (5.2) does not open by default, so the guide states the DNS-01
 alternative. Neither certbot nor any ACME client is installed by the installer.
 
-**As built (S4), rule 1 for symlinks:** a `--cert` or `--key` path is resolved with `realpath` over every
-component. A path that is its own real path is used as is (a regular file of at most 64 KiB). A path whose real path
-differs (a link as its last component, or a linked ancestor directory) is followed only when the real path lies under
-`/etc/letsencrypt/archive/`, the last component (the link or the file) is owned by root, its directory is owned by root
-and writable by root alone, and the target is a regular file owned by root: certbot's `live/NAME/*.pem` layout and
-nothing else. Any other link, including a root-owned link in a root-owned directory to a root-owned key outside the
-archive (an SSH host key), is refused before anything is read into the tls directory, with the real path named; a
-dangling link is refused as such. The copied files are regular files with the modes of 3.3.
+**As built (S4), rule 1, after four verification rounds:** `--cert PATH` and `--key PATH` name files of at most
+64 KiB each. `setup_tls.py` walks each absolute path from `/` one component at a time through directory descriptors and
+opens the file exactly once (`O_RDONLY|O_NOFOLLOW|O_NONBLOCK`). What it checks on that open descriptor (a regular file,
+its size, its owner) is what it reads, and `openssl` and the key-match check are given staged copies of those bytes
+inside `tls/`, never the path again: a file swapped for a FIFO, a device, a link or other bytes during the check is
+refused, or is itself what gets validated. A symlink anywhere on the way (in any component, including inside a link's
+target) is followed only when the link is owned by root and sits in a directory owned by root and writable by root
+alone, and a path through any link must end at a root-owned regular file under `/etc/letsencrypt/archive/` (certbot's
+`live/NAME/*.pem` layout). Every other link is refused before anything is installed, with the offending link and the
+real path named: a student-owned link in front of certbot's own, a root-owned link to a root-owned key outside the
+archive (an SSH host key), a dangling link, a chain of more than 40 links. The installed files are regular files with
+the modes of 3.3.
 
 ### 3.5 Rotation of a self-signed certificate
 

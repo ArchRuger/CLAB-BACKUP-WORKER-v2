@@ -28,7 +28,7 @@ and launch steps do not need repeating after the installer succeeds.
 | VM administrator | `archtop` |
 | Proxmox VM ID | Look up with `qm list`; do not infer it from the hostname |
 | Earlier reference hosts | `clab-1`: `10.150.2.211`; `clab-2`: `10.150.2.212` |
-| Manager UI | `http://10.150.2.213:8081` |
+| Manager UI | `https://10.150.2.213:8443` |
 | Source folder | `/home/archtop/projects/clab-manager/` |
 | Persistent manager data | `/srv/containerlab-node-manager/data/` |
 | Lab projects | `/etc/containerlab/<project>/` |
@@ -716,7 +716,7 @@ with Markdown asterisks, and do not paste Markdown link syntax into the curl URL
 ```bash
 sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" \
   exec backup-ui python -c 'from app import __version__; print(__version__)'
-curl -fsS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:8081/
+curl -fsSk -o /dev/null -w 'HTTP %{http_code}\n' https://127.0.0.1:8443/api/health
 ```
 
 Expect the release number and **HTTP 200**. Optional `UI_BIND` and `UI_PORT` settings belong
@@ -750,7 +750,7 @@ the default source-build Compose file.
 
 # Part 11 — Connect the UI to the VM {#part-11}
 
-On your workstation, open **`http://VM_IP:8081`**. There is no access-token login.
+On your workstation, open **`https://VM_IP:8443`** and sign in with your manager account.
 The **VM connection** dialog opens by itself while no connection exists; later, open
 **Manager ▾ › VM connection…**. Enter:
 
@@ -805,7 +805,7 @@ to the exported device addresses, so those addresses need workstation reachabili
 | Manager → VM discovery and commands | `clab-discovery` + user-created VM password |
 | Manager → lab device | Device username/password or assigned SSH profile |
 
-The browser uses `http://10.150.2.213:8081` in this example; the VM connection form uses `127.0.0.1`. A working VM connection does not prove a router's password is correct.
+The browser uses `https://10.150.2.213:8443` in this example; the VM connection form uses `127.0.0.1`. A working VM connection does not prove a router's password is correct.
 
 ---
 

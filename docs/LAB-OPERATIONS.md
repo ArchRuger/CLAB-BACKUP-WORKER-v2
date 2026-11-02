@@ -14,8 +14,8 @@ sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" 
 
 The launcher first checks source release consistency, refreshes and verifies the
 host helpers, refreshes the browser Wireshark stack, builds the manager
-image without cache and recreates the manager. Open `http://VM_IP:8081`; no UI login
-is required. Linux host networking uses this port directly, without `-p` forwarding.
+image without cache and recreates the manager. Open `https://VM_IP:8443` and sign
+in. Linux host networking uses this port directly, without `-p` forwarding.
 Data stays in `/srv/containerlab-node-manager/data` (UID/GID 10001, mode 700).
 
 See [VM connection setup and recovery](VM-CONNECTION.md) and the

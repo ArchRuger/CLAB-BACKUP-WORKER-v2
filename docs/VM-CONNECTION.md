@@ -38,7 +38,7 @@ open VM connection and choose Save and test connection once.* On its next check 
 and every 30 seconds) the manager moves the seed into its encrypted settings and deletes
 the file.
 
-Open `http://VM_IP:8081`. The **VM connection** dialog opens by itself, already filled
+Open `https://VM_IP:8443`. The **VM connection** dialog opens by itself, already filled
 in, with the notice *Prepared by VM setup* and the key setup recorded. These entries are
 **no longer typed**:
 

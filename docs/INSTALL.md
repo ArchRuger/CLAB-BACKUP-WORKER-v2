@@ -143,7 +143,7 @@ to the Setup menu after a successful path. A failed or cancelled step keeps
 today's behaviour instead: completed work stays in place, the affected phase's
 Recovery menu offers **Retry this step** or **Return to menu**, and a
 **Return to menu** choice reopens the Setup menu shown above. Open
-`http://VM_IP:8081` from your workstation (the VM's LAN address, not the
+`https://VM_IP:8443` from your workstation (the VM's LAN address, not the
 workstation's `127.0.0.1`).
 
 ## Upgrades
@@ -206,15 +206,15 @@ outside DNS server could control: otherwise a web page on such a name could
 re-point it at the VM (DNS rebinding) and act through a student's browser. It
 answers without any setting to:
 
-- an IPv4 address, for example `http://192.0.2.10:8081` (an IPv6 address such as
-  `http://[fd00::10]:8081` passes the name check too, but the manager listens on IPv4
+- an IPv4 address, for example `https://192.0.2.10:8443` (an IPv6 address such as
+  `https://[fd00::10]:8443` passes the name check too, but the manager listens on IPv4
   only unless `UI_BIND` in the same settings file below is set to an IPv6 address such
   as `::`, so on a default installation that address is refused at the socket);
 - `localhost`;
-- a single-label name such as `http://clab-vm:8081` (answered on your own
+- a single-label name such as `https://clab-vm:8443` (answered on your own
   network; an internet DNS server cannot answer the bare name, but see the
   search-suffix residual below);
-- a `.local` name such as `http://clab-vm.local:8081` (mDNS on your own network,
+- a `.local` name such as `https://clab-vm.local:8443` (mDNS on your own network,
   never an internet DNS server).
 
 Any other name, for example `manager.example.edu` or the name of a reverse proxy
@@ -332,7 +332,7 @@ including the `~/.vscode-server` ownership fix.
 
 The final terminal checks verify the local manager. On your workstation:
 
-1. Open `http://VM_ADDRESS:8081` (or the configured port), using the VM's IP
+1. Open `https://VM_ADDRESS:8443` (or the configured port), using the VM's IP
    address; a DNS name works only as described in
    [Opening the manager by a name](#opening-the-manager-by-a-name). The VM connection
    dialog opens on its own when no connection exists, already filled in by the

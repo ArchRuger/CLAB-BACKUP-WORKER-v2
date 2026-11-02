@@ -639,7 +639,7 @@ topology before deployment.
 
 ## 10. Open the manager and connect it to the VM
 
-On the **workstation**, open `http://10.150.2.213:8081/`, replacing the address
+On the **workstation**, open `https://10.150.2.213:8443/`, replacing the address
 and any customized port. There is no separate manager UI account setup.
 
 The **VM connection** dialog opens by itself, already filled in by the installer

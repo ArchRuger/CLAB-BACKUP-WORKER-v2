@@ -86,8 +86,8 @@ sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" 
 sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" logs backup-ui
 ```
 
-Expect the release in `clab-backup-ui/VERSION`. Open `http://VM_ADDRESS:8081`; no UI
-login is required. See [VM connection setup and troubleshooting](VM-CONNECTION.md).
+Expect the release in `clab-backup-ui/VERSION`. Open `https://VM_ADDRESS:8443` and
+sign in. See [VM connection setup and troubleshooting](VM-CONNECTION.md).
 Docker must start at VM boot; `restart: unless-stopped` restarts the manager with
 Docker unless you explicitly stopped it.
 

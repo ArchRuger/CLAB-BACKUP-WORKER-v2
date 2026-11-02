@@ -168,7 +168,7 @@ sudo docker load -i "$HOME/uploads/IMAGE.tar"
 
 ## 9. Connect the manager to the VM
 
-**Browser** on Windows: open `http://VM_IP:8081`. The **VM connection** dialog
+**Browser** on Windows: open `https://VM_IP:8443`. The **VM connection** dialog
 opens by itself the first time, already filled in by the installer (*Prepared by VM
 setup*); check it against the table and only click **Save and test connection**. If a
 field is empty (setup could not hand the password over), type:
