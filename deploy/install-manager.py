@@ -683,8 +683,8 @@ def plan_lines(env, version, options):
         'Lab operations: ' + ('enabled with default trusted roots' if operations == '1' else 'existing permissions retained'),
         'Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).',
         firewall_plan_line(options) if options.firewall else 'Firewall: not selected.',
-        ('SSH: conservative sshd drop-in (PermitRootLogin no, MaxAuthTries 4, LoginGraceTime 30, PerSourceMaxStartups 8, '
-         'X11Forwarding no); a setting you already changed is kept.') if options.ssh_hardening else 'SSH hardening: not selected.',
+        ('SSH: conservative sshd drop-in (LoginGraceTime 30, PerSourceMaxStartups 8, and PermitRootLogin no unless root '
+         'logs in with a key); a setting you already changed is kept.') if options.ssh_hardening else 'SSH hardening: not selected.',
         'Engineer access: ' + ('set up for ' + env['USER'] + ' (VS Code, Containerlab extension)' if engineer == '1' else 'not selected'),
         'Settings: ' + ('copy ' + str(env_source) if env_source else 'retain current .env or use defaults'),
     ]

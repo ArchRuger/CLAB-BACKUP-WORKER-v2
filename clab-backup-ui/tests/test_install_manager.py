@@ -2092,8 +2092,15 @@ class PlanLinesTests(unittest.TestCase):
                       '/srv/containerlab-node-manager/tls (kept if one exists).', lines)
         self.assertIn('Firewall: ufw allow SSH (every port sshd listens on), 8443, 8081; deny other incoming.', lines)
         ssh = next(line for line in lines if line.startswith('SSH: '))
-        for directive in ('PermitRootLogin no', 'MaxAuthTries 4', 'LoginGraceTime 30'):
+        # setup-ssh-hardening.sh (S5a, EXPOSURE.md "As built") writes LoginGraceTime 30, PerSourceMaxStartups 8 and,
+        # unless root may log in with a key, PermitRootLogin no; it never writes MaxAuthTries or X11Forwarding, so
+        # the plan must not promise them.
+        self.assertEqual(ssh, 'SSH: conservative sshd drop-in (LoginGraceTime 30, PerSourceMaxStartups 8, and PermitRootLogin no '
+                              'unless root logs in with a key); a setting you already changed is kept.')
+        for directive in ('LoginGraceTime 30', 'PerSourceMaxStartups 8', 'PermitRootLogin no'):
             self.assertIn(directive, ssh)
+        for never_written in ('MaxAuthTries', 'X11Forwarding'):
+            self.assertNotIn(never_written, ssh)
         self.assertEqual(lines[-2], 'Check running version and HTTPS /api/health, then set up Git under owner.')
         self.assertEqual(lines[-1], 'Sign-on: the first administrator is created in the browser with a setup code printed at the very end.')
 
