@@ -422,6 +422,19 @@ class FileTests(unittest.TestCase):
 
 
 class NamesTests(unittest.TestCase):
+    def test_the_listed_names_come_from_the_managers_own_host_parser_not_the_fallback(self):
+        # check_exposure.py (and deploy/setup_tls.py) load clab-backup-ui/app/allowed_hosts.py on its own, outside the
+        # app package; a module-level relative import there made that load fail, and this reader fell back silently to
+        # a cruder parse that keeps the port of a bracketed IPv6 entry.
+        ctx = SimpleNamespace(source=DEPLOY.parent)
+        self.assertEqual(exposure.listed_names(ctx, '[FD00::10]:8443, Manager.Example.edu:8443'), ['[fd00::10]', 'manager.example.edu'])
+
+    def test_allowed_hosts_loads_on_its_own_outside_the_app_package(self):
+        spec = importlib.util.spec_from_file_location('allowed_hosts_alone', DEPLOY.parent / 'clab-backup-ui/app/allowed_hosts.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)   # an ImportError here breaks setup-tls.sh on every install
+        self.assertEqual(module.host_name('[fd00::10]:8443'), '[fd00::10]')
+
     def test_a_new_address_of_the_uplink_missing_from_the_sans_warns_and_names_it(self):
         addresses = [dict(nic) for nic in ADDRESSES]
         addresses[1] = dict(addresses[1], addr_info=addresses[1]['addr_info'] + [{'family': 'inet', 'local': '198.51.100.7', 'scope': 'global'}])
