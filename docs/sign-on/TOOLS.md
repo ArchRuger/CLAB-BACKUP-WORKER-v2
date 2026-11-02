@@ -95,7 +95,7 @@ library only).
 ## What was run when this table was written
 
 Only these, each against the fixture on a scratch `FIXTURE_DATA` (fixture and browser evidence, no VM, no live device):
-`run_regression.sh` (`verify_after.py` 107 of 107 checks at each of its three viewports, `student_workflow.py` 45 of 45),
+`check_signon.py` (226 checks at the four widths, none failed, no console error and no unexpected failed request), `run_regression.sh` (`verify_after.py` 107 of 107 checks at each of its three viewports, `student_workflow.py` 45 of 45),
 `docs/ui-review-001/tools/check_ui001.py` and `check_ui004.py` (exit 0), and `docs/git-redesign/tools/integration/save_flow.py`,
 which stops at the same step (`#save-see` is not visible after the chip is clicked again) on the tree before sign-on as on this
 one, so it is not caused by sign-on. The other fixture rows are classified by reading the tool, not by running it. No migrated
