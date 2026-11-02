@@ -237,7 +237,7 @@ therefore costs one scrypt whether the user exists or not (8.5).
 | Maximum length | 128 characters | NIST requires at least 64 be accepted; 128 bounds the scrypt input. Longer: the reason `too_long` of the one 422 `weak_password` (7.4). |
 | Composition rules | None | NIST forbids requiring character classes; they shift users to predictable substitutions. |
 | Equal to the user name (case-insensitive), or the user name inside the password | Refused | A credential list pairs them. |
-| Deny-list | The top 100 of a published breached-password list, embedded as a frozen set in `app/accounts.py` with its source and date in a comment | NIST requires a check against known-compromised values; 100 entries cover what a spraying scanner tries first; a larger list is a file the image does not need. |
+| Deny-list | The top 100 of a published breached-password list, embedded as a frozen set in `app/accounts.py` with its source and date in a comment, plus a short list of product names and of default account names (`BASE_WORDS`: `admin`, `root`, `clab`, `student`, …, which take part in rules 1 and 2 only). After NFKC and casefold a password is `common` when it (1) is in the list, (2) is in the list once trailing whitespace, digits, punctuation and symbols are removed (`password12345`, `qwertyuiop!!`), (3) has no letter at all, only digits and punctuation (`123456789012`, `1234-5678-9012`; an all-whitespace password is not caught here, the length rule governs it), or (4) contains a product name (`containerlab`, `clab-manager`, `administrator`, `changeme`, …; `mycontainerlab2026`) | NIST requires a check against known-compromised values; 100 entries cover what a spraying scanner tries first; a larger list is a file the image does not need. |
 | Whitespace | Leading and trailing whitespace is kept (not stripped); an all-whitespace password fails the length rule after NFKC like any other | Stripping would make two passwords equal that the user typed differently. |
 | Expiry | None | NIST forbids periodic rotation; `must_change_password` (3.1) is the only forced change, after an admin set the password. |
 
@@ -523,7 +523,13 @@ and no live tab is ever thrown into the restricted state.
 A refusal for a missing, expired or ended session is **logged nowhere**: not in `events.jsonl`, not in
 the audit files, not in the diagnostics list (REVIEW R8). Every refusal body of the gate carries a
 `message` (7.4; REVIEW U11), so a page script without the 401 hook shows a sentence instead of its
-generic fallback.
+generic fallback. Nor in the container log (since 1.32.1): uvicorn's `--no-access-log` does not cover its WebSocket
+layer or the websockets library, which log every handshake at INFO through the `uvicorn.error` logger (the client
+address, the caller-chosen path and query, open, closed, rejected), so `app/log_hygiene.py` installs a filter on that
+logger from `create_app` that drops INFO-and-below records containing `"WebSocket ` or starting with `connection `;
+WARNING and above and the start-up lines pass, and the manager container's log is bounded as well (json-file, 10 MB
+by 3, in both compose files). On the wire a socket closed 1008 before accept is an HTTP 403 (uvicorn's rendering), so
+the reason reaches only a socket that was already open; the pages mint a ticket first and see the 401 there.
 
 `POST /api/session` with a valid session already present signs in again: the old session is deleted,
 a new one minted (a sign-in always rotates). `GET /api/session` with no session is a 401 like any
@@ -1280,7 +1286,7 @@ the `Sessions`:
 | `public_user(record)` | `dict` | Exactly `name, role, disabled, must_change_password, created, created_by, password_changed, last_signin, sessions`; never `password`, never `known_sources` (3.4). |
 | `read_setup_code(root)` | `(mode: str, code: str) \| None` | The file of 9.2: `None` when absent, a symlink, wider than 0600, malformed, or a `recover` file older than 15 min (which it deletes and audits `recover.expired`). |
 | `normalize_code(text)` | `str` | `strip`, lowercase, dashes and spaces removed (9.2). |
-| constants | | `PARAMS`, `DUMMY_HASH`, `SCRYPT_EXECUTOR`, `VERIFY_LIMIT = 20`, `MESSAGES` (7.4, keyed by `(status, code, route)`), `AUDIT_EVENTS`, `AUDIT_OUTCOMES`, `AUDIT_REASONS` (10.2), `COMMON_PASSWORDS` (4.3), `SETUP_ALPHABET`, `CODE_LENGTH = 24` (9.2). |
+| constants | | `PARAMS`, `DUMMY_HASH`, `SCRYPT_EXECUTOR`, `VERIFY_LIMIT = 20`, `MESSAGES` (7.4, keyed by `(status, code, route)`), `AUDIT_EVENTS`, `AUDIT_OUTCOMES`, `AUDIT_REASONS` (10.2), `COMMON_PASSWORDS`, `BASE_WORDS`, `PRODUCT_NAMES` (4.3; `_is_common()` is the one place the rule lives), `SETUP_ALPHABET`, `CODE_LENGTH = 24` (9.2). |
 
 **`app.state.store`** (the existing `Store`) gains: `event(action, message, *, level='info', lab_id='',
 job_id='', node='', actor='-')` (10.3; `-` is the one value for "nobody"); `events(..., actor='')` (its

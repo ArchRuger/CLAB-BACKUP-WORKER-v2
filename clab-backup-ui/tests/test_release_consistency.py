@@ -148,6 +148,11 @@ class ReleaseConsistencyTests(unittest.TestCase):
                 self.assertIn('max-size: "1m"', logging)
                 self.assertIn('max-file: "3"', logging)
                 self.assertNotIn('volumes:', redirect, 'the redirect listener mounts nothing')
+                # The manager's own log is bounded too: start-up and error lines only (app/log_hygiene.py drops the handshake lines).
+                manager_logging = manager.split('logging:', 1)[1]
+                self.assertIn('driver: json-file', manager_logging)
+                self.assertIn('max-size: "10m"', manager_logging)
+                self.assertIn('max-file: "3"', manager_logging)
                 self.assertNotIn('8081', command, 'the manager command names no plain-HTTP port')
 
     def test_the_dockerfile_command_serves_tls_and_exposes_both_ports(self):
@@ -172,7 +177,7 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertNotIn('without a login', launcher)
         self.assertIn('grep -E "^(export )?$1="', launcher, 'the closing address line reads an exported port the way compose does')
         recreate = (ROOT / 'deploy/recreate-manager.sh').read_text()
-        self.assertIn('up -d --no-build --no-deps backup-ui http-redirect', recreate)
+        self.assertIn('up -d --no-build --no-deps --force-recreate backup-ui http-redirect', recreate, 'a certificate change alters only the bind-mounted tls files, so only a forced recreate makes uvicorn serve it')
         prepare = 'bash "$script_dir/setup-tls.sh" --prepare --route "$route_name"'
         self.assertIn(prepare, recreate, 'recreate-manager.sh settles the ports and checks the TLS files of the route it chose before `up`')
         self.assertLess(recreate.index(prepare), recreate.index('up -d --no-build'))

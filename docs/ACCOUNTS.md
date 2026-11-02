@@ -84,7 +84,10 @@ sessions.
 - At least 12 and at most 128 characters. Any characters count; length matters more than symbols, and
   there are no required character classes.
 - Not your username, and the username is not allowed inside it.
-- Not one of a short built-in list of well-known passwords (*That password is too common. Choose another.*). The list holds only entries shorter than the 12-character minimum, so the length rule refuses them first; this message appears together with *Use at least 12 characters.*
+- Not one of a short built-in list of well-known passwords (*That password is too common. Choose another.*). The
+  check also refuses a listed word or a default account name with trailing digits, punctuation or symbols added
+  (`password12345`, `admin2026!`), a password with no letter at all (`123456789012`) and one that contains a product
+  name (`containerlab`).
 - No expiry: passwords are never rotated on a schedule. They change when you choose to, or after an
   administrator resets them.
 

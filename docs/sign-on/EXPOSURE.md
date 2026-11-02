@@ -236,7 +236,9 @@ addresses the certificate never names, and a URL on one of them would add a name
 self-signed one. That line now prints `https://<primary>:<port>/` from `setup-tls.sh --primary` and the
 certificate addresses (7.1).
 
-The primary name (`CN`) is the first `UI_ALLOWED_HOSTS` name, else the first `tls/names` entry that is a name, else
+The primary name (`CN`) is the first `UI_ALLOWED_HOSTS` name, else the first `tls/names` entry that is a name the
+manager answers to without `UI_ALLOWED_HOSTS` (single-label, `.local` or `localhost`: `allowed_hosts.outside_dns_free`;
+a multi-label `--name` is a SAN only until it is also listed, since 1.32.1), else
 the first IPv4 certificate address, else the host name. The SAN list is what matters; the `CN` is cosmetic.
 `setup-tls.sh --primary` prints it (3.1).
 
@@ -428,7 +430,9 @@ Why a separate container and not a second listener in the manager's process: one
 redirect port must not stall the manager's single event loop, and the manager's command line stays
 one uvicorn invocation that `health_url` can parse (install-manager.py:100-116).
 
-`recreate-manager.sh:41` becomes `up -d --no-build --no-deps backup-ui http-redirect`.
+`recreate-manager.sh:41` becomes `up -d --no-build --no-deps --force-recreate backup-ui http-redirect` (forced since
+1.32.1: a certificate change alters only files inside the bind-mounted `tls` directory, which compose does not count as a
+change, so without the flag both containers were left running on the old certificate while the script said "recreated").
 `start-manager.sh:95` (`up -d --force-recreate`) already recreates every service. The data-owner loop
 (start-manager.sh:75-89) inspects containers that mount the data directory; the redirect service
 mounts nothing, so it is ignored, which is correct.
@@ -441,7 +445,7 @@ it when it starts higher), so held connections bound the listener's memory (abou
 connection), and asyncio's own error lines are throttled to one a minute. Every answer the listener itself makes has an
 empty body, `security_headers(scope, status=<code>, refusal=True)` and `Content-Length: 0`; answers that uvicorn, h11
 or the websockets library make before the app is called (a malformed request line) keep their own short form. The
-redirect service in both compose files carries `mem_limit: 128m` and a bounded `json-file` log driver.
+redirect service in both compose files carries `mem_limit: 128m` and a bounded `json-file` log driver. A WebSocket upgrade sent to the listener (and to the manager's gate) is closed 1008 before accept at the ASGI level, which uvicorn renders as an HTTP 403 with an empty body on the wire; no 1008 frame is ever sent, since no socket was opened (live VM pass, 2026-11-02).
 
 ### 4.2 HSTS
 
@@ -819,7 +823,7 @@ code never appear in stdout or stderr; an unknown name exits 2 with no JSON.
 | `deploy/compose.image.yml` | 11, 19-24, new service | Mirror of the above with `${MANAGER_IMAGE}` for both services. |
 | `clab-backup-ui/Dockerfile` | 22, 24 | `EXPOSE 8443 8081`; `CMD` with the TLS arguments and `--no-proxy-headers --no-server-header`. |
 | `deploy/start-manager.sh` | after 24; 95; 101; 105 | `bash "$script_dir/setup-tls.sh" --no-recreate` after `setup-vm.sh`; `up` unchanged (recreates both services); line 101 → *Open the manager at `https://<primary>:<UI_PORT>` (plain HTTP on <UI_HTTP_PORT> redirects there). Certificate fingerprint: …*, where `<primary>` is `setup-tls.sh --primary` (3.1) and the ports come from `env_value` (62-63); line 105 → *Sign-on: the first administrator is created in the browser with the setup code. On the VM: sudo cat /srv/containerlab-node-manager/data/setup-code* (the `sudo cat` form of REVIEW U13; the script never prints the code itself: the installer prints it last, 7.2). |
-| `deploy/recreate-manager.sh` | 41 | `up -d --no-build --no-deps backup-ui http-redirect`. |
+| `deploy/recreate-manager.sh` | 41 | `up -d --no-build --no-deps --force-recreate backup-ui http-redirect` (the flag since 1.32.1, see 7.4). |
 | `deploy/setup-tls.sh`, `deploy/setup_tls.py` | new | Section 3, with `--name`, `--primary` and the pure `certificate_addresses()` (3.2). |
 | `deploy/setup-firewall.sh` | new | 5.2. |
 | `deploy/setup-ssh-hardening.sh` | new | 5.4. |

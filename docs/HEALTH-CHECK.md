@@ -69,7 +69,7 @@ Containerlab Node Manager - installation health report
 ==============================================================
 FAILURES FOUND
 PASS: 2 | FAIL: 2 | WARN: 1 | SKIP: 0 | INFO: 1
-Source: 1.32.0
+Source: 1.32.1
 
 [PASS] Manager container
   The backup-ui container is running.

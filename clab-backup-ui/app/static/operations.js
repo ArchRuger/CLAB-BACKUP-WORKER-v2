@@ -89,7 +89,7 @@ async function openLabOperations(id=activeId){
  opDialog(dialog.id,lab.name,`<p class="op-path">${path?'Topology file on the VM: '+esc(path):"This lab has no topology file on the VM yet. Import the lab's files (Advanced › Deployment details) to enable these actions."}</p>${problem?`<p class="op-notice">Couldn't check the VM's commands, so every action is shown; some may fail. Details: ${esc(problem)}</p>`:''}
  <div class="op-sections"><section><h3>Deployment</h3><div class="op-grid">${opCommand('deploy','Deploy lab')}${['redeploy','start','stop','restart','apply','inspect','save'].map(a=>opCommand(a)).join('')}</div><p class="form-help">Deploy creates and starts the devices; Start, Stop and Restart act on the running devices. "Save device configurations" uses containerlab's own save (supported device types only); your saves (Save in the lab’s header) are separate.</p></section>
  <section><h3>Lab tools</h3><div class="op-grid"><button class="button secondary" data-local="ssh"><span>Open all CLIs <span aria-hidden="true">↗</span></span></button><button class="button secondary" data-local="interactive">Edit map</button><button class="button secondary" data-local="history">Operation history…</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove from favourites':'Add to favourites'}</button><button class="button secondary" data-local="hide">${lab.hidden?'Show on Home':'Hide from Home'}</button></div><p class="form-help">${opHideHelp(lab)}</p></section>
- <section class="op-danger"><h3>Danger</h3><div class="op-grid">${opCommand('destroy','Destroy lab…',opDestroyOptions())}${cleanup}${opCommand('delete','Delete the topology file from the VM…')}</div><p class="form-help">Destroy removes the running devices and, when the installed containerlab supports cleanup, the lab's generated folder on the VM. Redeploy keeps that folder unless you choose the "clear the lab folder" variant.</p></section></div>`);
+ <section class="op-danger"><h3>Danger</h3><div class="op-grid">${opCommand('destroy','Destroy lab…',opDestroyOptions())}${cleanup}${opCommand('delete','Delete the topology file from the VM…')}</div><p class="form-help">Destroy removes the running devices and, when the installed containerlab supports cleanup, the lab's generated folder on the VM (only while the lab has deployed devices; the review says when it is kept). Redeploy keeps that folder unless you choose the "clear the lab folder" variant.</p></section></div>`);
  dialog.querySelectorAll('[data-op-action]').forEach(b=>b.onclick=()=>{
   const action=b.dataset.opAction,options=JSON.parse(b.dataset.opOptions);
   opTask(dialog,()=>opReview({lab_id:id,action,options}));
@@ -162,7 +162,7 @@ const opReviewCopy={
  'stop-node':{title:(n,v)=>`Stop ${v?.node_label||'this device'}?`,body:v=>`Only ${v.node_label||'this device'} in ${v.name} stops: containerlab stops its container and parks its links (containerlab stop --node). Its CLI sessions drop and traffic through it stops; neighbours lose their adjacencies to it until it starts again. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.`,confirm:'Stop device',danger:true},
  'start-node':{title:(n,v)=>`Start ${v?.node_label||'this device'}?`,body:v=>`Only ${v.node_label||'this device'} in ${v.name} starts: containerlab starts its container and restores the links it parked (containerlab start --node). The device boots and reads Starting until it accepts a login again.`,confirm:'Start device'},
  redeploy:{title:n=>`Redeploy ${n}?`,body:'Devices are destroyed and started again from the topology; unsaved device changes are lost. Save first if you need them.',confirm:'Redeploy lab',danger:true,cleanup:" The lab's generated folder on the VM is cleared as well."},
- destroy:{title:n=>`Destroy ${n}?`,body:v=>`The running devices are removed from the VM${v.options?.cleanup?" and the lab's generated folder is deleted":''}. Configuration changes you have not saved are lost. Your saves, lab states and backups remain.`,confirm:'Destroy lab',danger:true},
+ destroy:{title:n=>`Destroy ${n}?`,body:v=>`The running devices are removed from the VM${opReviewedCleanup(v)?" and the lab's generated folder is deleted":''}. Configuration changes you have not saved are lost. Your saves, lab states and backups remain.`,confirm:'Destroy lab',danger:true},
  apply:{title:n=>`Apply topology changes to ${n}?`,body:'The running lab is updated to match the topology file. Devices removed from the file are destroyed; connectivity may be interrupted.',confirm:'Apply changes',danger:true},
  save:{title:()=>'Save device configurations on the VM?',body:'Each supported device writes its running configuration to its startup configuration on the VM (containerlab save). This is separate from Save in the lab’s header.',confirm:'Save configurations'},
  inspect:{title:n=>`Refresh the device list for ${n}`,body:"Reads the current state of this lab's devices from the VM. Nothing is changed.",confirm:'Show devices',readonly:true},
@@ -334,7 +334,7 @@ async function opReview(request,opener,extra={}){
  const label=opLabels[value.action]||value.action,copy=opReviewCopy[value.action]||{title:()=>label+'?',body:'',confirm:label};
  const lab=typeof current==='function'&&labId&&labId===activeId?current():null;
  const labOf=(state.labs||[]).find(l=>l.id===labId)||lab||null;
- const cleanup=!!request.options?.cleanup;
+ const cleanup=opReviewedCleanup(value);
  const chosen=Array.isArray(request.options?.nodes)?request.options.nodes.map(String):[];
  const chosenText=typeof statusNodeNames==='function'?statusNodeNames(chosen):chosen.join(', ');
  const shownName=value.name||opName(lab)||'this lab';
@@ -1278,3 +1278,6 @@ function opBackToReviewLab(job){return (job&&job.lab_id)||opLabAtPath(opPublishe
 function opBackToReviewHash(job){const id=opBackToReviewLab(job);return id?'/#lab='+encodeURIComponent(id)+'&view=topology&review=apply':'/';}
 function opDeployedSaveMarkup(job){return `<p class="op-notice ok" id="op-published-status" tabindex="-1">Saved to the VM. The running lab is unchanged until you apply the changes.</p><div class="actions"><button class="button primary" id="op-back-review">Back to lab and review changes…</button></div>`;}
 function opBackToReview(job){location.assign(opBackToReviewHash(job));}
+// The folder clause of a review follows the command the helper will run, not the option that was asked for: a lab
+// with no deployed devices keeps its folder (the helper leaves --cleanup out and says why).
+function opReviewedCleanup(v){return !!((Array.isArray(v?.argv)&&v.argv.includes('--cleanup'))||(Array.isArray(v?.steps)&&v.steps.some(s=>Array.isArray(s)&&s.includes('--cleanup'))));}

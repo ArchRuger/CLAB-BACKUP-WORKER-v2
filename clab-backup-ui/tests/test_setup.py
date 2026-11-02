@@ -416,7 +416,8 @@ class SetupModeRouteTests(unittest.TestCase):
         bad_name = self.client.post('/api/setup', json={'code': self.code, 'username': 'Root!', 'password': PASSWORD})
         self.assertEqual((bad_name.status_code, bad_name.json()['detail']['code']), (422, 'invalid_name')); self.assertIn('message', bad_name.json()['detail'])
         weak = self.client.post('/api/setup', json={'code': self.code, 'username': 'root', 'password': 'root'})
-        self.assertEqual((weak.status_code, weak.json()['detail']), (422, {'code': 'weak_password', 'reasons': ['too_short', 'equals_name'], 'message': 'Use at least 12 characters. Choose a password that is not your username.'}))
+        # 'root' is also a default account name (accounts.BASE_WORDS, since 1.32.1), so the deny rule joins the two other reasons.
+        self.assertEqual((weak.status_code, weak.json()['detail']), (422, {'code': 'weak_password', 'reasons': ['too_short', 'equals_name', 'common'], 'message': 'Use at least 12 characters. Choose a password that is not your username. That password is too common. Choose another.'}))
         self.assertEqual(self.client.post('/api/setup', json={'code': self.code, 'username': 'root', 'password': PASSWORD, 'role': 'admin'}).status_code, 422, "extra='forbid'")
         self.assertTrue((self.root/'setup-code').exists(), 'nothing consumed the code')
         typed = ' ' + self.code.upper().replace('-', '') [:12] + ' ' + self.code.upper().replace('-', '')[12:] + '\n'

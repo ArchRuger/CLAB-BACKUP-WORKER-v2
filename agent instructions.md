@@ -1,3 +1,26 @@
+# The live VM pass of the sign-on release — 1.32.1
+
+The first VM pass of sign-on and internet exposure (`clab-backup-ui/VALIDATION.md` 1.32.1; the fixes in
+`docs/CHANGELOG.md`; the open points in `docs/sign-on/PICKUP.md` section 3). Preserve:
+
+1. **`recreate-manager.sh` forces the recreate** (`--force-recreate`, pinned by `test_recreate_manager.py` and
+   `test_release_consistency.py`): a certificate change is invisible to compose. Every call restarts both containers.
+2. **`setup_tls.primary_name()` never returns a name the manager refuses**: a `tls/names` entry counts only when
+   `allowed_hosts.outside_dns_free` accepts it; `UI_ALLOWED_HOSTS` names first, then the first IPv4 address.
+3. **`app/log_hygiene.py` is part of the "logged nowhere" invariant**: `create_app` installs the filter on
+   `uvicorn.error` (`test_log_hygiene.py` pins the install and the dropped lines); the manager's compose services carry a
+   bounded `logging` block. A socket closed 1008 before accept is an HTTP 403 on the wire; do not "fix" that.
+4. **`accounts._is_common()` is the one place the password deny rule lives** (list, `BASE_WORDS`, trailing
+   digits/punctuation/symbols stripped, no letter at all, `PRODUCT_NAMES` inside); `COMMON_PASSWORDS` stays the
+   published 101-entry list (`test_password.py` pins its size).
+5. **`host_operations.plan` never adds `--cleanup` to a destroy or redeploy whose lab has no containers** (`rows`
+   empty); the review sentence says the folder is left in place and `operations.js` reads the reviewed argv, not the
+   requested option (`opReviewedCleanup`). containerlab 0.79.0 deletes a sibling `clab-*` folder otherwise.
+6. **The live facts of the pass** (the installer needs a pty, not a pipe; `--name` adds a SAN only; the health check
+   detects a stale served certificate through its pin; the throttle numbers; the lab VM connection survives the upgrade)
+   are in VALIDATION 1.32.1 and the dev-VM state is in the session memory, not in this file.
+7. Everything the 1.32.0 section below preserves.
+
 # Sign-on and internet exposure — 1.32.0
 
 The evidence is in `clab-backup-ui/VALIDATION.md` (1.32.0); the designs are `docs/sign-on/DESIGN.md`, `UI.md` and
