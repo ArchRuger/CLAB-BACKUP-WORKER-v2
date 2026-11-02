@@ -4,7 +4,7 @@ the manager</strong>. The image build contains no user password. Each VM has its
 user-created password, retained across reboots and manager upgrades.</p>
 <p>The manager connects to the Containerlab VM over SSH using this password. Device
 SSH and backup credentials are configured separately and retain their existing options.</p>
-<p><a href="/static/debug.html">Open Diagnostics</a> to check the manager version and the VM connection.</p><h2>First launch or migration from an SSH key</h2>
+<p>An administrator can <a href="/static/debug.html">open Diagnostics</a> to check the manager version and the VM connection.</p><h2>First launch or migration from an SSH key</h2>
 <p>The guided installer (<code>bash &quot;$HOME/projects/clab-manager/deploy/install.sh&quot;</code>) does all of
 this; the command below is the launcher it runs. Run it in an interactive terminal using your normal VM
 administrator account, from any directory. Docker, Compose, Containerlab, Python 3, sudo and a running
@@ -31,7 +31,9 @@ seed, <code>/srv/containerlab-node-manager/data/host-bootstrap.json</code> (mode
 automatic-check choice and the fingerprint of the VM's SSH host key. Setup prints <em>VM connection
 prefilled for the manager</em>. The manager moves the seed into its encrypted settings on its next
 check and deletes the file.</p>
-<p>Open <code>http://VM_IP:8081</code>. <strong>VM connection</strong> opens already filled in, with the
+<p>Open <code>https://VM_IP:8443</code> and sign in first (a new manager asks you to create the first
+administrator with the setup code the installer printed). <strong>VM connection</strong> is for
+administrators and opens already filled in, with the
 notice <em>Prepared by VM setup</em>. The address, SSH port, username, password, inspection method and
 automatic check are <strong>no longer typed</strong>. The one remaining step is the confirmation:
 choose <strong>Save and test connection</strong> once. Until then the manager does not connect, so no

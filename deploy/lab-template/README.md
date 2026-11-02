@@ -12,8 +12,15 @@ Standardised starting point for a new lab in a single-tenant course. Read
 ## Build a lab's state library
 
 Run these on the build box after the lab's NOS has finished booting. The scaffold talks to the
-local manager API (default `http://127.0.0.1:8081`; `--manager URL` changes it, and `--lab NAME`
+local manager API (default `https://127.0.0.1:8443`; `--manager URL` changes it, and `--lab NAME`
 picks the lab when the manager holds more than one) and drives the same actions as the buttons.
+The manager answers only over HTTPS with its own certificate, and every API
+request needs a signed-in session of an administrator or operator account, exactly like the
+buttons ([TLS and the certificate](../../docs/INSTALL.md#tls-and-the-certificate),
+[Finish in the browser](../../docs/INSTALL.md#finish-in-the-browser)). The scaffold signs in
+with the environment variables `CLAB_USER` and `CLAB_PASSWORD`, or asks for them on the
+terminal (there is no option for the password), and trusts the installed
+`/srv/containerlab-node-manager/tls/cert.pem` (`--cafile PATH` names another certificate file).
 To make a single state by hand instead, use **Save as a lab state…** in the lab header's Save
 panel ([GIT-PROGRESS.md](../../docs/GIT-PROGRESS.md#lab-states) describes it). The commands below
 work from any directory.

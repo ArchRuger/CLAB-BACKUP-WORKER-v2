@@ -155,7 +155,7 @@ function mapToolsReset(){
 }
 function mapToolsLabCheck(){if(mapToolsLab!==activeId){const had=mapToolsLab;mapToolsLab=activeId;if(had!=='' || mapToolsDrawing)mapToolsReset();}}
 function mapLinkSchedule(){
- mapToolsLabCheck();
+ mapToolsLabCheck();if(typeof sessionEnded==='function'&&sessionEnded())return; /* signed out (UI 3.3): topology.js re-arms this on every render */
  const poll=mapLinkPoll;if(poll.inFlight)return;
  const c=mapLinkConditions();
  if(c.kind==='off'){
@@ -186,7 +186,7 @@ async function mapLinkRun(){
  try{result={ok:true,data:await mapLinkFetch(labId)};}
  catch(e){result={ok:false,status:e&&e.status?e.status:0,message:e&&e.message?e.message:''};}
  poll.inFlight=false;
- if(epoch!==poll.epoch||activeId!==labId)return;
+ if(epoch!==poll.epoch||activeId!==labId)return;if(!result.ok&&typeof sessionEnded==='function'&&sessionEnded()){poll.fresh=true;sessionOnResume(mapLinkSchedule);return;} /* signed out: colours stay, no "paused" sentence */
  // A 409 (VM unreachable, a failed listing) is a transient like a 503: the last colours stay and the back-off decides. Colours are off only for a 200 with available:false.
  const next=typeof diagPollNext==='function'?diagPollNext(poll.plan||mapLinkPlan(),result.ok?{ok:true}:{ok:false,status:result.status},Date.now()):{plan:poll.plan,delay:MAP_LINK_INTERVAL,stop:''};
  poll.plan=next.plan;

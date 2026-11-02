@@ -13,7 +13,7 @@ const IMP_PERCENT='Loss and corruption are a percentage from 0 to 100.';
 const IMP_RATE='Rate is a whole number of kbit/s.';
 const IMP_ZERO='Set at least one impairment, or use Reset to remove them.';
 const IMP_BUSY=['Wait for the current lab operation to finish.','Wait for the lab backup or login job to finish.','Another lab operation is running on the VM (it may belong to another lab); try again when it has finished.'];
-const IMP_NO_CAP='Not available on this VM — its containerlab or helper cannot set impairments (see Diagnostics)';
+function impNoCap(role){/* an operator is told to ask an administrator (status.js diagnosticsAdvice); without it the old words stay */ return `Not available on this VM — its containerlab or helper cannot set impairments (${typeof diagnosticsAdvice==='function'?diagnosticsAdvice(role):'see Diagnostics'})`;}
 const IMP_NO_CONTAINER='No container for this device yet.';
 const IMP_NO_LINKS='This device has no lab links.';
 const IMP_PARTIAL='Some devices could not be read; try again.';
@@ -136,7 +136,7 @@ function impRowHtml(row,i){
 }
 function impBodyHtml(){
  const s=imp;
- if(s.noCap)return `<p class="diag-empty">${esc(IMP_NO_CAP)}</p>`;
+ if(s.noCap)return `<p class="diag-empty">${esc(impNoCap(typeof state==='object'&&state&&state.user?state.user.role:''))}</p>`;
  if(!s.answer){
   return s.loading?'<p class="diag-empty">Loading…</p>':'';
  }

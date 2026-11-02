@@ -59,8 +59,10 @@ date -u
 
 ## 4. Answer the installer
 
-The standard path takes every routine choice itself: all VM interfaces and port 8081
-(an existing `.env` is kept), reviewed lab operations on, VS Code access for your account,
+The standard path takes every routine choice itself: all VM interfaces, HTTPS on port 8443
+and a plain-HTTP redirect on 8081 (an existing `.env` is kept), a self-signed certificate,
+reviewed lab operations on, the firewall (`ufw`: SSH, 8443, 8081) and a conservative SSH
+drop-in, VS Code access for your account,
 obsolete installation-media APT entries backed up and disabled, no plan confirmation. Only
 these prompts are left:
 
@@ -73,8 +75,9 @@ these prompts are left:
 Add `--advanced` to the `install.sh` command to be asked those other questions instead
 ([INSTALL.md](INSTALL.md#what-the-full-installation-does)). The browser Wireshark phase runs
 without questions. Wait for
-`Manager 1.31.9: running; HTTP and version checks passed.` The image build and the
-capture stack take several minutes. The Git wizard of step 5 then starts by itself. If a step fails, read the error, fix it in a second
+`Manager 1.31.9: running; HTTPS and version checks passed.` The image build and the
+capture stack take several minutes. The Git wizard of step 5 then starts by itself, and the
+setup code for step 9 is printed after it, last of all. If a step fails, read the error, fix it in a second
 terminal, then type `1` to retry (the default is `2`, return to the menu). A `not valid yet` APT error is the clock:
 redo step 2 in the second terminal, then retry.
 
@@ -168,7 +171,13 @@ sudo docker load -i "$HOME/uploads/IMAGE.tar"
 
 ## 9. Connect the manager to the VM
 
-**Browser** on Windows: open `http://VM_IP:8081`. The **VM connection** dialog
+**Browser** on Windows: open `https://VM_IP:8443`. The browser warns once about the
+self-signed certificate: compare the fingerprint it shows with the one the installer printed
+(`bash "$HOME/projects/clab-manager/deploy/setup-tls.sh" --fingerprint` prints it again), then
+continue. The page *Create the first administrator* asks for the **setup code** the installer
+printed as its very last lines (or `sudo cat /srv/containerlab-node-manager/data/setup-code` on the
+VM), a username and a password of at least 12 characters; press **Create account and sign in**.
+Write the password down. The **VM connection** dialog
 opens by itself the first time, already filled in by the installer (*Prepared by VM
 setup*); check it against the table and only click **Save and test connection**. If a
 field is empty (setup could not hand the password over), type:
@@ -230,3 +239,7 @@ Fix any **FAIL** or **WARN** using its `Next:` line, then rerun. Done.
 - Upgrade: `git -C "$HOME/projects/clab-manager" pull --ff-only`, then step 3's
   last line and step 4 again (existing passwords and settings are kept).
 - Reopen the installer menu: `bash "$HOME/projects/clab-manager/deploy/install.sh"`.
+- Lost the administrator password: `sudo bash "$HOME/projects/clab-manager/deploy/manager-recover-admin.sh"`
+  prints a recovery code and the page to open ([INSTALL.md](INSTALL.md#lost-administrator-password)).
+- Missed the setup code: it is also in `sudo cat /srv/containerlab-node-manager/data/setup-code`
+  until the first administrator exists.

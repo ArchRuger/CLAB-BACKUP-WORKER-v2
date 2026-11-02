@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 import paramiko
 
 from app.main import create_app
@@ -48,7 +49,7 @@ class ManagerBootstrapTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.app = create_app(self.tmp.name)
-        self.client = TestClient(self.app)
+        self.client = SignedInClient(self.app)
         self.store = self.app.state.store
         self.service = self.app.state.discovery
 

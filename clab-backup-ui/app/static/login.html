@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/login.css?v=1.31.9"><script src="/static/login.js?v=1.31.9" defer></script></head>
+<body class="signin"><main class="signin-page">
+<div class="brand"><img class="brandmark" src="/static/fabric-mark.svg" alt="">Containerlab Node Manager</div>
+<section class="signin-card" id="signin-card" aria-labelledby="signin-title">
+<h1 id="signin-title">Sign in</h1>
+<p>Use the account your administrator gave you.</p>
+<p id="signin-checking" class="form-help" role="status">Checking…</p>
+<p id="signin-reason" class="form-help" role="status"></p>
+<form id="signin-form" novalidate hidden>
+<div class="signin-field"><label for="signin-user">Username</label><input id="signin-user" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="32"></div>
+<div class="signin-field"><label for="signin-password">Password</label><div class="signin-password"><input id="signin-password" name="password" type="password" autocomplete="current-password" maxlength="128"><button type="button" class="button secondary" id="signin-show" aria-pressed="false" aria-controls="signin-password">Show</button></div></div>
+<p id="signin-error" class="form-error" role="alert"></p>
+<div class="actions"><button type="submit" class="button primary" id="signin-submit">Sign in</button></div>
+</form>
+<p class="form-help" id="signin-help">Forgot your password? Ask an administrator to reset it.</p>
+</section>
+<section class="signin-card" id="signin-change" aria-labelledby="change-title" hidden>
+<h1 id="change-title">Choose your own password</h1>
+<p>The password you signed in with was set by an administrator. Choose your own before you continue.</p>
+<form id="change-form" novalidate>
+<div class="signin-field" id="change-current-field" hidden><label for="change-current">Current password</label><input id="change-current" name="current" type="password" autocomplete="current-password" maxlength="128"></div>
+<div class="signin-field"><label for="change-new">New password</label><div class="signin-password"><input id="change-new" name="password" type="password" autocomplete="new-password" maxlength="128"><button type="button" class="button secondary" id="change-show" aria-pressed="false" aria-controls="change-new change-confirm">Show</button></div><p class="form-help" id="change-policy">At least 12 characters. Any characters count; length matters more than symbols. Not your username, and not a common password.</p></div>
+<div class="signin-field"><label for="change-confirm">New password again</label><input id="change-confirm" name="confirm" type="password" autocomplete="new-password" maxlength="128"></div>
+<p id="change-error" class="form-error" role="alert"></p>
+<div class="actions"><button type="submit" class="button primary" id="change-submit">Change password and continue</button><button type="button" class="button secondary" id="change-signout">Sign out</button></div>
+</form>
+</section>
+<div id="signin-plain" class="banner warn" role="status" hidden><p>This connection is not encrypted. Your password would travel in clear text. Ask the administrator to enable TLS before signing in from outside the lab network.</p></div>
+</main></body></html>

@@ -1,6 +1,9 @@
 # Diagnostics
 
-Open **Manager ▾ › Diagnostics** in the top bar. It is also linked from the deploy page
+Open **Manager ▾ › Diagnostics** in the top bar. It is for administrators: an operator account does not see
+the menu item, and the page and its two routes (`GET /api/debug`, `POST /api/debug/probe`) answer an operator
+*Administrators only.* An operator whose lab needs a check is told to *ask an administrator to check
+Diagnostics*. It is also linked from the deploy page
 and the VM connection guide. No lab needs to be open. The direct address is
 `/static/debug.html` on your manager (the page was called *Debug panel* before the
 student-centred UI).
@@ -51,8 +54,8 @@ Reports omit credentials, host addresses, usernames, VM paths, file contents,
 headers, request bodies, query strings and raw logs. The optional folder value
 is used for the check but is not included in the report. Diagnostic history is
 in memory and disappears on manager restart; ordinary action logs keep their
-existing retention. The page has the same access policy as this lab manager,
-including its same-origin API checks. It adds no terminal or arbitrary command
+existing retention. The page needs an administrator's sign-in
+and keeps the manager's same-origin API checks. It adds no terminal or arbitrary command
 execution endpoint.
 
 This is application diagnostics, not a replacement for installation checks.

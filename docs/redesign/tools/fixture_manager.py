@@ -26,7 +26,9 @@ a state while it runs. `--classic` seeds only the labs and the Course-Labs repos
 import argparse
 import copy
 import os
+import secrets
 import shutil
+import socket
 import sys
 import threading
 import time
@@ -132,6 +134,7 @@ def build(data_dir, port, classic=False, capture=False):
     store, monitor, discovery, runner, services = (app.state.store, app.state.readiness, app.state.discovery,
                                                    app.state.runner, app.state.node_services)
     client = TestClient(app)   # no lifespan: seeds through the routes before the threads start
+    app.state.fixture_credentials = provision_users(app, client, data_dir)   # sign-on: setup through the real routes; `client` is now the admin
 
     with store.lock:
         store.state['host'] = dict(address='192.0.2.1', port=22, username='clab-discovery', auth='password',
@@ -1111,6 +1114,198 @@ def install_capture(app, control, port):
 # ===================================================== end of the C07 block ===================================================
 
 
+# ===================================================== sign-on: accounts, sessions and the wrapper (S11) =====================
+# The manager has no login-free mode and `app/` has no fixture code (sign-on REVIEW R15, R21). The fixture therefore
+# completes the first-run setup through the real routes with credentials of its own, and serves the app behind a
+# fixture-only ASGI wrapper that adds a session cookie to a request that carries none, so the Playwright checks written
+# before sign-on keep working unchanged. The wrapper also owns the fixture's own routes under /__fixture/.
+FIXTURE_ADMIN = 'admin'
+FIXTURE_OPERATOR = 'student'
+SESSION_COOKIE = 'clab_session'
+
+
+def provision_users(app, client, data_dir):
+    """Completes setup as the fixture admin (`client` keeps that session) and creates the fixture operator through the real
+    routes. A kept data directory already has users: their passwords are replaced in-process, because a per-run random
+    password cannot be known to a previous run. Returns {name: {'role', 'password', 'cookie'}}; passwords are random per run."""
+    sessions, accounts = app.state.sessions, app.state.accounts
+    passwords = {FIXTURE_ADMIN: secrets.token_urlsafe(24), FIXTURE_OPERATOR: secrets.token_urlsafe(24)}
+    result = {}
+
+    def cookie_of(c):
+        value = c.cookies.get(SESSION_COOKIE)
+        assert value, 'sign-in gave no session cookie'
+        return value
+
+    def adopt(name, role):    # kept data: the record exists (or is created) with this run's password, without a forced change
+        from app import accounts as accounts_module
+        hash_string = accounts_module.hash_password(passwords[name])
+        with app.state.store.lock:
+            record = accounts.record(name)
+            if record is None:
+                accounts.create(name, role, hash_string, actor='fixture', created_by='fixture', must_change_password=False)
+            else:
+                record.update(password=hash_string, role=role, disabled=False, must_change_password=False, password_changed=accounts_module.now())
+                app.state.store.save()
+                sessions.set_user(record)
+                sessions.end_user(name, 'password_reset')
+
+    if sessions.setup_mode():
+        found = accounts.read_setup_code()
+        assert found, 'the manager is in setup mode but wrote no setup code'
+        response = client.post('/api/setup', json={'code': found[1], 'username': FIXTURE_ADMIN, 'password': passwords[FIXTURE_ADMIN]})
+        assert response.status_code == 200, f'fixture setup failed: {response.status_code}'
+        response = client.post('/api/users', json={'name': FIXTURE_OPERATOR, 'role': 'operator', 'password': passwords[FIXTURE_OPERATOR]})
+        assert response.status_code == 200, f'fixture operator failed: {response.status_code}'
+        operator = TestClient(app)
+        response = operator.post('/api/session', json={'username': FIXTURE_OPERATOR, 'password': passwords[FIXTURE_OPERATOR]})
+        assert response.status_code == 200, f'fixture operator sign-in failed: {response.status_code}'
+        if response.json()['user']['must_change_password']:    # the forced change, with the same password: the session is then unrestricted
+            response = operator.post('/api/session/password', json={'current': passwords[FIXTURE_OPERATOR], 'password': passwords[FIXTURE_OPERATOR]})
+            assert response.status_code == 200, f'fixture operator change failed: {response.status_code}'
+    else:
+        adopt(FIXTURE_ADMIN, 'admin')
+        adopt(FIXTURE_OPERATOR, 'operator')
+        response = client.post('/api/session', json={'username': FIXTURE_ADMIN, 'password': passwords[FIXTURE_ADMIN]})
+        assert response.status_code == 200, f'fixture sign-in failed: {response.status_code}'
+        operator = TestClient(app)
+        response = operator.post('/api/session', json={'username': FIXTURE_OPERATOR, 'password': passwords[FIXTURE_OPERATOR]})
+        assert response.status_code == 200, f'fixture operator sign-in failed: {response.status_code}'
+    result[FIXTURE_ADMIN] = dict(role='admin', password=passwords[FIXTURE_ADMIN], cookie=cookie_of(client))
+    result[FIXTURE_OPERATOR] = dict(role='operator', password=passwords[FIXTURE_OPERATOR], cookie=cookie_of(operator))
+    return result
+
+
+class FixtureWrapper:
+    """The fixture-only ASGI layer in front of the app (never inside `app/`).
+
+    * Signed in by default: a request with no `clab_session` cookie gets the cookie of the fixture admin (or of the operator
+      with `--role operator`). `signed_out=True` adds nothing, so a browser signs in through the real pages.
+    * `/fixture/...` (the scripted-VM control routes: state, switch, action) and `/__fixture/...` are the fixture's control
+      channel, not the product: they are always reachable, signed as the admin.
+    * `/__fixture/expire` (POST {name, reason}) ends a user's sessions through `app.state.sessions.end_user` and marks the
+      user expired so the wrapper does not sign it in again; `/__fixture/revive` (POST {name}) undoes the mark. A session the
+      wrapper holds that ended another way (a sign-out in a check) is replaced by a new one at the next request.
+    * `/__fixture/requests` (GET) lists the HTTP requests and socket opens seen as "METHOD path", in order, with counts;
+      `/__fixture/requests/reset` (POST) clears them. A check counts requests with it.
+    """
+    LIMIT = 5000
+
+    def __init__(self, app, credentials, role='admin', signed_out=False):
+        self.app = app
+        self.credentials = credentials
+        self.names = {c['role']: n for n, c in credentials.items()}
+        self.default = None if signed_out else self.names[role]
+        self.held = {n: c['cookie'] for n, c in credentials.items()}
+        self.expired = set()
+        self.control_sid = {}
+        self.log = []
+        self.lock = threading.Lock()
+
+    def sid_for(self, name, control=False):
+        """The session id to add for `name`. The control channel keeps its own session once the admin was expired on purpose."""
+        sessions = self.app.state.sessions
+        sid = self.held[name]
+        if sessions.resolve(sid) is not None: return sid
+        if control and name in self.expired: sid = self.control_sid.get(name, '')
+        if sessions.resolve(sid) is not None: return sid
+        record = self.app.state.accounts.record(name)
+        if record is None or (name in self.expired and not control): return sid
+        sid, _ = sessions.create(record, 'fixture')
+        if control and name in self.expired: self.control_sid[name] = sid
+        else: self.held[name] = sid
+        return sid
+
+    @staticmethod
+    def has_cookie(scope):
+        for key, value in scope.get('headers', ()):
+            if key == b'cookie' and any(part.strip().startswith(SESSION_COOKIE.encode() + b'=') for part in value.split(b';')):
+                return True
+        return False
+
+    def signed(self, scope, name, control=False):
+        headers = [(k, v) for k, v in scope.get('headers', ()) if k != b'cookie']
+        existing = [v for k, v in scope.get('headers', ()) if k == b'cookie']
+        value = b'; '.join(existing + [f'{SESSION_COOKIE}={self.sid_for(name, control)}'.encode()])
+        return dict(scope, headers=headers + [(b'cookie', value)])
+
+    def record(self, scope):
+        entry = ('WS ' if scope['type'] == 'websocket' else scope.get('method', 'GET') + ' ') + scope.get('path', '')
+        with self.lock:
+            self.log.append(entry)
+            del self.log[:-self.LIMIT]
+
+    async def reply(self, send, status, body):
+        raw = json.dumps(body).encode()
+        await send({'type': 'http.response.start', 'status': status, 'headers': [(b'content-type', b'application/json'), (b'content-length', str(len(raw)).encode())]})
+        await send({'type': 'http.response.body', 'body': raw})
+
+    async def control(self, scope, receive, send):
+        path, method = scope['path'], scope['method']
+        if path == '/__fixture/requests':
+            if method != 'GET': return await self.reply(send, 405, {'detail': 'GET only'})
+            with self.lock:
+                entries = list(self.log)
+            counts = {}
+            for entry in entries: counts[entry] = counts.get(entry, 0) + 1
+            return await self.reply(send, 200, {'requests': entries, 'counts': counts})
+        if path not in ('/__fixture/expire', '/__fixture/revive', '/__fixture/requests/reset'):
+            return await self.reply(send, 404, {'detail': 'No such fixture route.'})
+        if method != 'POST': return await self.reply(send, 405, {'detail': 'POST only'})
+        body = b''
+        while True:
+            message = await receive()
+            body += message.get('body', b'')
+            if not message.get('more_body'): break
+        try: data = json.loads(body or b'{}')
+        except ValueError: data = None
+        if not isinstance(data, dict): return await self.reply(send, 422, {'detail': 'A JSON object is needed.'})
+        if path == '/__fixture/requests/reset':
+            with self.lock: self.log.clear()
+            return await self.reply(send, 200, {'reset': True})
+        name = data.get('name')
+        if not isinstance(name, str) or not name: return await self.reply(send, 422, {'detail': 'name is needed.'})
+        if path == '/__fixture/expire':
+            reason = data.get('reason') if isinstance(data.get('reason'), str) and data.get('reason') else 'idle'
+            ended = self.app.state.sessions.end_user(name, reason)
+            self.expired.add(name)
+            return await self.reply(send, 200, {'ended': ended})
+        self.expired.discard(name)
+        return await self.reply(send, 200, {'revived': name})
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] not in ('http', 'websocket'):
+            return await self.app(scope, receive, send)
+        path = scope.get('path', '')
+        if scope['type'] == 'http' and path.startswith('/__fixture/'):
+            return await self.control(scope, receive, send)
+        if not path.startswith('/fixture/'): self.record(scope)
+        who = FIXTURE_ADMIN if path.startswith('/fixture/') else self.default
+        if who and who in self.held and not self.has_cookie(scope):
+            scope = self.signed(scope, who, control=path.startswith('/fixture/'))
+        await self.app(scope, receive, send)
+# ===================================================== end of the sign-on block ===============================================
+
+
+def print_credentials(credentials, args, path):
+    """The fixture's accounts are random per run and valid only for this scratch data directory. The output names the accounts
+    and the private file that holds their passwords; it never prints a password (BUILD.md section 1), so a log, a CI capture or
+    a failure message cannot carry one."""
+    mode = 'signed out' if args.signed_out else f'signed in as the {args.role}'
+    print(f'  sign-on: requests are {mode}; the fixture accounts (random for this run, scratch data only):', flush=True)
+    for name, entry in credentials.items():
+        print(f"    {entry['role']:<8} {name}", flush=True)
+    print(f'  sign-on: the passwords are in {path} (mode 0600, JSON {{role: {{name, password}}}})', flush=True)
+
+
+def write_credentials(path, credentials):
+    payload = {entry['role']: dict(name=name, password=entry['password']) for name, entry in credentials.items()}
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, 'w') as handle:
+        json.dump(payload, handle)
+    os.chmod(path, 0o600)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('--port', type=int, default=int(os.environ.get('FIXTURE_PORT', '8090')))
@@ -1118,7 +1313,15 @@ def main(argv=None):
     parser.add_argument('--keep', action='store_true', help='reuse the data directory instead of starting fresh')
     parser.add_argument('--classic', action='store_true', help='seed only the labs and the Course-Labs repository the first fixture had')
     parser.add_argument('--capture', action='store_true', help='C07: a scripted browser-Wireshark stack (discovery from the fixture labs, a session service with a cap of 4)')
+    parser.add_argument('--no-vm', action='store_true', help='sign-on: leave the lab VM unconfigured (the first-run state)')
+    parser.add_argument('--signed-out', action='store_true', help='sign-on: add no session to requests; sign in through the real pages with the credentials file')
+    parser.add_argument('--role', choices=('admin', 'operator'), default='admin', help='sign-on: whose session the wrapper adds to a request that has none (default admin)')
+    parser.add_argument('--credentials-file', default=os.environ.get('FIXTURE_CREDENTIALS', ''), help='sign-on: write the fixture credentials here as JSON (mode 0600); default <data directory>/fixture-credentials.json. They are never printed')
     args = parser.parse_args(argv)
+    with socket.socket() as probe:     # a typo or a leftover must never make a check drive some other server on this port
+        probe.settimeout(1)
+        if probe.connect_ex(('127.0.0.1', args.port)) == 0:
+            sys.exit(f'fixture_manager: port {args.port} on 127.0.0.1 is already in use by another server; choose a free port.')
     if args.capture:     # C07: create_app reads these; the scripted stack replaces the service object right after
         os.environ.update(CAPTURE_PROVIDER='edgeshark', CAPTURE_EDGESHARK_URL='http://127.0.0.1:5001', CAPTURE_SESSION_TOKEN=CAPTURE_FIXTURE_TOKEN)
     data_dir = Path(args.data) if args.data else Path(os.environ.get('TMPDIR', '/tmp')) / 'clab-fixture-manager'
@@ -1126,8 +1329,17 @@ def main(argv=None):
         shutil.rmtree(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
     app = build(data_dir, args.port, classic=args.classic, capture=args.capture)
+    if args.no_vm:     # the seeding above needs a host; `--no-vm` then leaves the lab VM unconfigured (sign-on REVIEW R13)
+        with app.state.store.lock:
+            app.state.store.state.pop('host', None)
+            app.state.store.save()
+    credentials = app.state.fixture_credentials
+    credentials_path = Path(args.credentials_file) if args.credentials_file else data_dir / 'fixture-credentials.json'
+    write_credentials(credentials_path, credentials)
+    print_credentials(credentials, args, credentials_path)
+    served = FixtureWrapper(app, credentials, role=args.role, signed_out=args.signed_out)
     import uvicorn
-    uvicorn.run(app, host='127.0.0.1', port=args.port, log_level='warning')
+    uvicorn.run(served, host='127.0.0.1', port=args.port, log_level='warning')
 
 
 if __name__ == '__main__':

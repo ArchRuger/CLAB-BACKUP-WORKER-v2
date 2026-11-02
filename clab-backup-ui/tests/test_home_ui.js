@@ -304,3 +304,15 @@ test('C09 fixes: a mousedown on the empty part of the filter row keeps the focus
  assert.equal(down(h.field),false);assert.equal(down(h.clear),false);
  h.setActive(null);assert.equal(down(h.row),false,'nothing to protect when the field is not focused');
 });
+
+// REVIEW R13: an Operator cannot connect the VM, so the Start reason says whom to ask.
+test('homeStartReason for an operator with the VM not connected asks an administrator; an administrator still reads Connect the VM first',()=>{
+ const operator=harness({discovery:{connected:false},user:{name:'bob',role:'operator'}});
+ assert.equal(operator.context.homeStartReason(stopped,null),'Ask an administrator to connect the VM');
+ const admin=harness({discovery:{connected:false},user:{name:'ada',role:'admin'}});
+ assert.equal(admin.context.homeStartReason(stopped,null),'Connect the VM first');
+ const unknown=harness({discovery:{connected:false}});
+ assert.equal(unknown.context.homeStartReason(stopped,null),'Connect the VM first','no user known yet: the administrator wording');
+ const connected=harness({discovery:{connected:true},user:{name:'bob',role:'operator'}});
+ assert.equal(connected.context.homeStartReason(stopped,null),'Lab status is unknown — refresh the lab list','a connected VM keeps the other reasons');
+});

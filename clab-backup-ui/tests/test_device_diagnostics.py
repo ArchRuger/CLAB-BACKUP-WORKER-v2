@@ -131,7 +131,7 @@ class DiagnosticsAPITests(unittest.TestCase):
         patcher = patch('app.lab_operations.remote', side_effect=remote); patcher.start(); self.addCleanup(patcher.stop)
 
     def get(self, path, **params):
-        return self.client.get('/api/operations/' + path, headers=self.auth, params=params)
+        return self.client.get('/api/operations/' + path, params=params)
 
     def logs(self, **extra):
         return self.get('logs', lab_id=self.lab_id, node=self.node, **extra)
@@ -222,7 +222,7 @@ class DiagnosticsAPITests(unittest.TestCase):
         self.assertEqual(self.events(), before)
         marker = 'audit-marker-text-qq7'; where = 'distinctive-dir-zz9/notes-ww3.txt'
         self.answers['read'] = {'path': 'p', 'text': marker + '\n', 'sha256': 'x'}
-        response = self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': where})
+        response = self.client.post('/api/operations/view', json={'lab_id': self.lab_id, 'path': where})
         self.assertEqual((response.status_code, response.json()['text']), (200, marker + '\n'))
         added = self.events()[len(before):].decode().strip().splitlines()
         self.assertEqual(len(added), 1, added); self.assertIn('api.request', added[0]); self.assertIn('POST /api/operations/view -> 200', added[0])
@@ -347,7 +347,7 @@ class DiagnosticsAPITests(unittest.TestCase):
         folder = '/etc/containerlab/training/'
         raw = '\x1b[1mhostname r1\x1b[0m\r\nusername admin password 0 s3cret\nsnmp-server community public ro\n'
         self.answers['read'] = lambda req: {'path': req['path'], 'text': raw, 'sha256': 'x'}
-        view = lambda path, lab=None: self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': lab or self.lab_id, 'path': path})
+        view = lambda path, lab=None: self.client.post('/api/operations/view', json={'lab_id': lab or self.lab_id, 'path': path})
         response = view('clab-training/r1/startup-config')
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(self.requests[-1][0], {'mode': 'read', 'path': folder + 'clab-training/r1/startup-config'})
@@ -358,7 +358,7 @@ class DiagnosticsAPITests(unittest.TestCase):
             self.assertEqual(view(bad).status_code, 400, bad)
         self.assertEqual(len(self.requests), before)
         self.assertEqual(view('x', lab='nope').status_code, 404)
-        self.assertEqual(self.client.post('/api/operations/read', headers=self.auth, json={'path': folder + 'training.clab.yaml'}).json()['text'], raw,
+        self.assertEqual(self.client.post('/api/operations/read', json={'path': folder + 'training.clab.yaml'}).json()['text'], raw,
                          '/read is untouched and byte-exact')
         big = ''.join('line %06d filler filler filler filler\n' % i for i in range(16000))   # about 600 KiB
         self.assertGreater(len(big.encode()), 600 * 1024 - 1)
@@ -376,7 +376,7 @@ class DiagnosticsAPITests(unittest.TestCase):
         raw = filler + '-----BEGIN OPENSSH PRIVATE KEY-----\n' + body + '-----END OPENSSH PRIVATE KEY-----\nafter\n'
         self.assertGreater(len(raw.encode()), dd.VIEW_LIMIT + 32 * 1024)
         self.answers['read'] = {'path': 'p', 'text': raw, 'sha256': 'x'}
-        response = self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': 'big.txt'})
+        response = self.client.post('/api/operations/view', json={'lab_id': self.lab_id, 'path': 'big.txt'})
         text = response.json()['text']
         self.assertNotIn('QUJDREVG', text); self.assertNotIn('END OPENSSH', text); self.assertTrue(text.endswith('after\n'))
         self.assertLessEqual(len(text.encode()), dd.VIEW_LIMIT)
@@ -384,34 +384,34 @@ class DiagnosticsAPITests(unittest.TestCase):
     def test_read_keeps_its_old_file_types_so_a_configuration_file_is_only_opened_redacted_by_view(self):
         self.start(); folder = '/etc/containerlab/training/'
         self.answers['read'] = lambda req: {'path': req['path'], 'text': 'username admin password 0 s3cret\n', 'sha256': 'x'}
-        read = lambda name: self.client.post('/api/operations/read', headers=self.auth, json={'path': folder + name})
+        read = lambda name: self.client.post('/api/operations/read', json={'path': folder + name})
         for name in ('clab-training/r1/startup-config', 'README.md', 'clab-training/r1/juniper'):
             response = read(name)
             self.assertEqual((response.status_code, response.json()['detail']), (409, 'This file type cannot be viewed in the manager.'), name)
         self.assertEqual(self.requests, [], 'refused before the helper is asked')
         for name in ('training.clab.yaml', 'a.yml', 'a.json', 'a.drawio', 'a.txt', 'r1.cfg', 'juniper.conf', 'a.set', 'UPPER.YAML'):
             self.assertEqual(read(name).status_code, 200, name)
-        view = self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': 'clab-training/r1/startup-config'})
+        view = self.client.post('/api/operations/view', json={'lab_id': self.lab_id, 'path': 'clab-training/r1/startup-config'})
         self.assertEqual((view.status_code, view.json()['text']), (200, dd.LINE_MASK + '\n'))
 
     def test_view_refuses_a_lab_folder_that_is_a_whole_trusted_root(self):
         self.start(); self.answers['read'] = {'path': 'p', 'text': 'x\n', 'sha256': 'x'}
         self.app.state.operations.cap_cache = ('rev', time.monotonic() + 60, {'roots': ['/etc/containerlab/training']})
-        response = self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': 'other-lab/startup-config'})
+        response = self.client.post('/api/operations/view', json={'lab_id': self.lab_id, 'path': 'other-lab/startup-config'})
         self.assertEqual((response.status_code, response.json()['detail']), (409, dd.NO_FOLDER_SENTENCE)); self.assertEqual(self.requests, [])
         self.app.state.operations.cap_cache = ('rev', time.monotonic() + 60, {'roots': ['/etc/containerlab']})
-        self.assertEqual(self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': 'a.txt'}).status_code, 200)
+        self.assertEqual(self.client.post('/api/operations/view', json={'lab_id': self.lab_id, 'path': 'a.txt'}).status_code, 200)
 
     def test_view_replaces_stored_secrets(self):
         self.start()
         self.answers['read'] = {'path': 'p', 'text': 'login host-secret ok\n', 'sha256': 'x'}
-        response = self.client.post('/api/operations/view', headers=self.auth, json={'lab_id': self.lab_id, 'path': 'a.txt'})
+        response = self.client.post('/api/operations/view', json={'lab_id': self.lab_id, 'path': 'a.txt'})
         self.assertEqual(response.json()['text'], 'login [redacted] ok\n')
 
     def test_browse_without_files_is_the_old_request_and_with_files_copies_entries(self):
         self.start()
         self.answers['browse'] = {'path': '/etc/containerlab', 'parent': '', 'entries': [{'name': 'a', 'path': '/etc/containerlab/a', 'directory': True}], 'x': 1}
-        post = lambda **body: self.client.post('/api/operations/browse', headers=self.auth, json=body)
+        post = lambda **body: self.client.post('/api/operations/browse', json=body)
         response = post(path='/etc/containerlab')
         self.assertEqual(self.requests[-1][0], {'mode': 'browse', 'path': '/etc/containerlab'})
         self.assertEqual(response.json(), self.answers['browse'])
@@ -438,7 +438,7 @@ class DiagnosticsAPITests(unittest.TestCase):
         self.start()
         F = '/etc/containerlab/training'
         self.answers['browse'] = {'path': F, 'parent': '', 'entries': []}
-        post = lambda **body: self.client.post('/api/operations/browse', headers=self.auth, json={'files': True, **body})
+        post = lambda **body: self.client.post('/api/operations/browse', json={'files': True, **body})
         self.assertEqual(post(path=F + '/a/b', lab_id=self.lab_id).status_code, 200)
         self.assertEqual(self.requests[-1][0]['path'], F + '/a/b')
         self.assertEqual(post(path=F, lab_id=self.lab_id).status_code, 200)
@@ -491,7 +491,7 @@ class DiagnosticsAPITests(unittest.TestCase):
 
     def test_the_routes_sit_before_the_job_route_and_guard_the_origin(self):
         self.start(); self.answers['logs'] = {'facts': FACTS, 'text': '', 'truncated': False}
-        response = self.client.get('/api/operations/logs', headers={**self.auth, 'Origin': 'https://other.example'}, params={'lab_id': self.lab_id, 'node': self.node})
+        response = self.client.get('/api/operations/logs', headers={'Origin': 'https://other.example'}, params={'lab_id': self.lab_id, 'node': self.node})
         self.assertEqual(response.status_code, 403)
         self.assertIn('lines', self.logs().json(), '/logs is not taken by GET /api/operations/{job_id}')
         self.assertEqual(self.get('logs').status_code, 422)
@@ -683,7 +683,7 @@ class LinkStateAPITests(unittest.TestCase):
 
     def test_link_state_sits_before_the_job_route_and_guards_the_origin(self):
         self.start(); self.cache(self.CAPS)
-        response = self.client.get('/api/operations/link-state', headers={**self.auth, 'Origin': 'https://other.example'}, params={'lab_id': self.lab_id})
+        response = self.client.get('/api/operations/link-state', headers={'Origin': 'https://other.example'}, params={'lab_id': self.lab_id})
         self.assertEqual(response.status_code, 403)
         self.assertIn('devices', self.link_state(), '/link-state is not taken by GET /api/operations/{job_id}')
 

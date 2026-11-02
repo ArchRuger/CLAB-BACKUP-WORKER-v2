@@ -27,17 +27,23 @@ if [[ -z "$existing" ]]; then
 fi
 
 compose=("${source_compose[@]}")
-route='the source-build installation (clab-backup-ui/compose.yml)'
+route='the source-build installation (clab-backup-ui/compose.yml)'; route_name=source
 if [[ -n "$manager_image" ]]; then
   running_image=$(docker inspect --format '{{.Config.Image}}' "$existing" 2>/dev/null || true)
   source_version=$(tr -d '\r\n' < "$repo_dir/clab-backup-ui/VERSION")
   local_source_image=$(docker images --quiet "clab-backup:$source_version" 2>/dev/null || true)
   if [[ "$running_image" == "$manager_image" || -z "$local_source_image" ]]; then
     compose=(docker compose --env-file "$image_env" -f "$repo_dir/deploy/compose.image.yml")
-    route='the prepared-image installation (deploy/image.env, deploy/compose.image.yml)'
+    route='the prepared-image installation (deploy/image.env, deploy/compose.image.yml)'; route_name=image
   fi
 fi
 echo "Recreating the manager from $route."
-"${compose[@]}" up -d --no-build --no-deps backup-ui
+# The ports of the chosen route's env file settled (UI_PORT and UI_HTTP_PORT must differ) and the TLS
+# files checked before anything is recreated: the manager would otherwise crash-loop on a missing
+# certificate, or the two services would bind one port. Never a new certificate here (that is
+# start-manager.sh's ensure); on a pre-TLS installation this stops with the launcher named.
+bash "$script_dir/setup-tls.sh" --prepare --route "$route_name"
+# Both services read the settings: the manager its TLS files and environment, the redirect its ports.
+"${compose[@]}" up -d --no-build --no-deps backup-ui http-redirect
 "${compose[@]}" ps
-echo 'Manager recreated with the current settings; saved data and the VM password are retained.'
+echo 'Manager recreated with the current settings, and the redirect listener with it; saved data and the VM password are retained.'

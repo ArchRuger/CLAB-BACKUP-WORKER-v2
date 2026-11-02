@@ -8,6 +8,8 @@ const table=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/impairment_
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const HEX='b'.repeat(64);
+// Stand-in for status.js diagnosticsAdvice(role) with the exact contract of docs/sign-on/UI.md 4.5.
+const signonAdvice=role=>role==='operator'?'ask an administrator to check Diagnostics':'see Diagnostics';
 function harness({caps=null,busy='',lab='L1'}={}){
  const els=new Map(),calls=[],doc={activeElement:null},writes={body:0};
  const make=id=>{
@@ -217,10 +219,21 @@ test('capabilities: known lacking hides the section; unknown counts as available
  const have=harness({caps:{actions:{impairments:{available:true}}}});have.render();assert.equal(have.section.hidden,false);
  const unknown=harness();unknown.render();assert.equal(unknown.section.hidden,false);
  unknown.context.opCapabilities=async()=>{unknown.context.opCaps={actions:{}};return unknown.context.opCaps;};
+ // Sign-on UI 4.5: the pinned label is read with an administrator signed in; the operator's form is the sibling test below.
+ unknown.context.diagnosticsAdvice=signonAdvice;unknown.context.state.user={name:'ada',role:'admin'};
  await unknown.open();
  assert.match(unknown.$('imp-body').innerHTML,/Not available on this VM — its containerlab or helper cannot set impairments \(see Diagnostics\)/);
  assert.equal(unknown.section.hidden,false,'the sentence stays for a section the person opened');
  assert.equal(unknown.calls.length,0);
+});
+test('sign-on: the no-capability sentence tells an operator to ask an administrator, and keeps today\'s words where the helper is absent',async()=>{
+ for(const [role,helper,sentence] of [['operator',true,'ask an administrator to check Diagnostics'],['admin',true,'see Diagnostics'],['operator',false,'see Diagnostics']]){
+  const h=harness();h.render();
+  h.context.opCapabilities=async()=>{h.context.opCaps={actions:{}};return h.context.opCaps;};
+  if(helper)h.context.diagnosticsAdvice=signonAdvice;h.context.state.user={name:'u',role};
+  await h.open();
+  assert.match(h.$('imp-body').innerHTML,new RegExp('Not available on this VM — its containerlab or helper cannot set impairments \\('+sentence+'\\)'),role+(helper?'':' without status.js'));
+ }
 });
 test('states: not running, no container, no links, load error with Retry',async()=>{
  const a=harness();a.standard([],{ifs:{facts:{present:true,id:HEX,status:'exited'}}});await a.open();

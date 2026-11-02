@@ -276,3 +276,73 @@ test('device-impairments.js (C05) is listed once after operations.js and device-
  assert.match(fs.readFileSync(path.join(dir,'shell.js'),'utf8'),/resetDeviceImpairments\(\)/);
  for(const file of fs.readdirSync(dir).filter(n=>n.endsWith('.html')&&n!=='index.html'))assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/device-impairments\.js/,file);
 });
+
+// ---- sign-on (docs/sign-on/UI.md 3.2, 3.3, 9.1): session.js and account.js on the whole page ----
+test('session.js is listed between status.js and shell.js, account.js after preferences.js, each once, both with the release query',()=>{
+ for(const name of ['session.js','account.js'])assert.equal(listed.filter(n=>n===name).length,1,name);
+ assert.ok(listed.indexOf('status.js')<listed.indexOf('session.js')&&listed.indexOf('session.js')<listed.indexOf('shell.js'),'status.js, session.js, shell.js');
+ assert.ok(listed.indexOf('preferences.js')<listed.indexOf('account.js'),'account.js after preferences.js');
+ assert.match(html,/<script src="\/static\/session\.js\?v=\d+\.\d+\.\d+" defer><\/script>/);assert.match(html,/<script src="\/static\/account\.js\?v=\d+\.\d+\.\d+" defer><\/script>/);
+});
+test('the names session.js and account.js add are defined once on the loaded page, with no collision',()=>{
+ const page=loadPage();assert.deepEqual(page.failures,[]);
+ for(const name of ['sessionLost','loginUrl','sessionEnded','sessionMark','sessionClear','sessionEndedError','sessionGo','sessionOnResume','sessionRetry','signedOut','sessionRestored','goSignIn','renderSessionBanner','accountOpenPassword','accountSignOut','passwordProblem','roleLabel','renderAccount','diagnosticsAdvice'])
+  assert.equal(typeof get(page.context,name),'function',name);
+});
+const errorOf=(context,code)=>{context.__out=null;return vm.runInContext(`(async()=>{try{await ${code};return "resolved";}catch(e){return {status:e.status,message:e.message,sessionEnded:e.sessionEnded===true};}})()`,context);};
+test('api() on a 401 signed_out answer calls signedOut() and still throws with status 401 and the sentence',async()=>{
+ const page=loadPage(),context=page.context;let signed=0;
+ context.fetch=async()=>({ok:false,status:401,json:async()=>({detail:{code:'signed_out',message:'Your session ended.'}})});
+ context.signedOut=()=>{signed++;return true;};
+ const result=await errorOf(context,'api("/state")');
+ assert.equal(signed,1);assert.equal(result.status,401);assert.equal(result.sessionEnded,false,'a real 401 carries no sessionEnded marker');
+});
+test('api() on any other 401 or 403 does not call signedOut()',async()=>{
+ const page=loadPage(),context=page.context;let signed=0;context.signedOut=()=>{signed++;};
+ for(const body of [{detail:{code:'invalid_credentials',message:'The current password is not right.'}},{detail:'text'},{}]){
+  context.fetch=async()=>({ok:false,status:401,json:async()=>body});await errorOf(context,'api("/x")');
+ }
+ context.fetch=async()=>({ok:false,status:403,json:async()=>({detail:{code:'signed_out'}})});await errorOf(context,'api("/x")');
+ assert.equal(signed,0);
+});
+test('api() throws sessionEnded:true without calling fetch once sessionEnded() is true; refresh() sends nothing either',async()=>{
+ const page=loadPage(),context=page.context;let fetched=0;
+ context.fetch=async()=>{fetched++;return {ok:true,status:200,json:async()=>({labs:[]})};};
+ vm.runInContext('sessionMark()',context);
+ const result=await errorOf(context,'api("/state")');
+ assert.equal(fetched,0);assert.equal(result.sessionEnded,true);assert.equal(result.status,401);assert.equal(result.message,'Your session ended. Sign in again.');
+ await vm.runInContext('refresh()',context);assert.equal(fetched,0,'refresh() returns before any request');
+ vm.runInContext('sessionClear()',context);await vm.runInContext('api("/state")',context);assert.equal(fetched,1,'cleared: requests flow again');
+});
+test('signedOut() with a 401 on the real page: no further request leaves, and sessionRetry() resumes the poll',async()=>{
+ const page=loadPage(),context=page.context;let fetched=0,status=401;
+ context.fetch=async()=>{fetched++;return status===401?{ok:false,status:401,json:async()=>({detail:{code:'signed_out',message:'x'}})}:{ok:true,status:200,json:async()=>({labs:[],jobs:[],git_jobs:[],platforms:{},user:{name:'a',role:'admin'},loaded:true})};};
+ await errorOf(context,'api("/state")');assert.equal(vm.runInContext('sessionEnded()',context),true);
+ const after=fetched;for(let i=0;i<5;i++){await vm.runInContext('refresh()',context);await errorOf(context,'api("/logs")');}
+ assert.equal(fetched,after,'nothing sent after the first 401');
+ status=200;const back=await vm.runInContext('sessionRetry()',context);
+ assert.equal(back,true);assert.equal(vm.runInContext('sessionEnded()',context),false);assert.ok(fetched>after,'the refresh ran');
+});
+test('REVIEW U4 on the real markup: the two settings items carry a .menu-reason child, Diagnostics has an id, the account group and the dialog exist',()=>{
+ for(const id of ['vm-settings','manager-settings'])assert.match(html,new RegExp(`id="${id}"><span>[^<]+</span><small class="menu-reason" hidden></small></button>`),id);
+ for(const id of ['manager-diagnostics','account-chip','account-name','account-role','account-users','account-password','account-signout','account-signout-note','session-banner','session-banner-text','session-banner-caption','session-signin-tab','session-retry','session-signin-here','password-dialog','password-form','password-current','password-new','password-confirm','password-error','password-submit','password-cancel','password-close'])
+  assert.equal((html.match(new RegExp(`id="${id}"`,'g'))||[]).length,1,id+' exists once');
+ assert.match(html,/id="account-users" href="\/static\/users\.html" hidden/);
+ for(const action of ['tab','retry','here'])assert.match(html,new RegExp(`data-session-action="${action}"`));
+ assert.match(html,/id="session-signin-tab"[^>]*rel="noopener noreferrer"/);
+ const dialogAt=html.indexOf('<dialog id="password-dialog"');assert.ok(dialogAt>html.indexOf('</main>'),'the dialog sits after </main>');
+ assert.doesNotMatch(html,/\sstyle="/);
+});
+test('no page other than index.html loads account.js',()=>{
+ for(const file of fs.readdirSync(dir).filter(n=>n.endsWith('.html')&&n!=='index.html'))assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/account\.js/,file);
+});
+test('the sign-on pages (login.html, setup.html, users.html) carry no inline style, and every script and stylesheet they load carries ?v= of VERSION (UI.md 9.1; the favicon carries none, as on index.html)',()=>{
+ const version=fs.readFileSync(path.join(dir,'..','..','VERSION'),'utf8').trim();
+ for(const file of ['login.html','setup.html','users.html']){
+  const page=fs.readFileSync(path.join(dir,file),'utf8');
+  assert.doesNotMatch(page,/\sstyle="/,file+' keeps no inline style');
+  const assets=[...page.matchAll(/(?:src|href)="(\/static\/[^"]+\.(?:js|css)(?:\?[^"]*)?)"/g)].map(m=>m[1]);
+  assert.ok(assets.length>0,file+' loads assets');
+  for(const asset of assets)assert.match(asset,new RegExp('\\?v='+version.replace(/\./g,'\\.')+'$'),file+': '+asset);
+ }
+});

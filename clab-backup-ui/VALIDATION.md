@@ -72,6 +72,46 @@ the paint and the close clears `watched`, so that close marks nothing; it needs 
 
 **Not run.** The manager's Load and Network Design on the published image; a Git save of the B08 lab; the browser.
 
+## Test fix after the release (2026-11-01, no release change)
+
+Branch `claude/elegant-newton-tuulux` from `main` at `fac28de`; only
+`tests/test_install_tui_core.py::InstallerLockTests::test_root_takes_over_a_lock_file_owned_by_another_account` changed.
+
+**Unit, in a cloud container (system `python3`, standard library only).** As root (uid 0): the unchanged test from
+`fac28de` failed (`AssertionError: 640855 == 640855`, the inode was not swapped); the fixed test passed alone, and
+`python3 -m unittest discover -s tests -t tests -p test_install_tui_core.py` ran 177 tests OK (2 skipped, the
+non-root-only cases). As `nobody` (uid 65534, through `setpriv` on a copy of the tree): the same file ran 177 tests OK
+with none skipped. **Static:** `git diff --check`, `python3 deploy/verify-release.py`, `python3
+docs/maintenance-audit/tools/check_links.py`, `test_release_consistency.py`. **Not run:** the other suites, CI.
+
+## Sign-on hotfix after pull request 80 (2026-11-02, no release change)
+
+Branch `claude/sign-on-and-hardening` restarted from `main` at `750accc` (the merge of pull request 80, the sign-on
+stream before its release step). Evidence by kind:
+
+**CI, observed on GitHub.** The release check of pull request 80's head `401e6cd` failed in the stdlib group:
+`test_setup_tls` could not be imported (`ImportError: attempted relative import with no known parent package`, raised
+by `clab-backup-ui/app/allowed_hosts.py` line 27 as loaded by `deploy/setup_tls.py`), which stopped the job before its
+later steps.
+
+**Unit, test first, in a cloud container (Python 3.13).** The two new tests of `test_check_exposure.py` failed on
+`750accc` (an `ImportError`, and the fallback's `[fd00::10]:8443`) and pass with the fix. `test_probe.py`'s isolation
+test failed on the same tree (`app.store`, `app.sessions` and `app.accounts` loaded through `app.discovery`) and passes
+with the import moved into `Discovery.install()`. The installer pin: the S5b fixer's local TLS-server test (leaf B of
+the same intermediate refused) failed against the whole-file code and passes; the lead's corrupt-block case failed
+(`binascii.Error: Incorrect padding`) and passes.
+
+**Every step of `.github/workflows/release-check.yml` that this container can run, read from the workflow and run in
+order** (`run_ci_local.py`, the local `.venv` in place of the CI virtual environment, the full-screen installer's tests in
+a virtual environment built from `requirements.lock`): the release and documentation checks, the link check, the stdlib
+regression group, the shell and script syntax checks, the Textual tests, the Junos, operations, backup and network
+design groups (with the pinned netlab engine), the browser regressions (1430 of 1430) and the capture suites, and
+`docker compose -f deploy/compose.capture.yml config`: every step exited 0, 3984 Python tests in all.
+
+**Not run.** The editor bundle rebuild (needs Node 24; no editor file changed), the browser Wireshark smoke test with
+real packets (no Docker daemon), any VM, browser or live-device check. The sign-on stream's own validation record comes
+with its release, 1.32.0.
+
 # Campaign 2: topology editing, vSRX, Load and Network Design on the Junos VMs, the documentation audit — 1.31.7
 
 Evidence is named by kind. Branch `claude/parity-campaign`; the ledger is `docs/parity-campaign/CAMPAIGN-2.md`, the

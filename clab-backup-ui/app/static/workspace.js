@@ -3,7 +3,54 @@ const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,
 const params=new URLSearchParams(location.hash.slice(1));let activeId=params.get('lab')||'',state={labs:[],jobs:[],operations:[]},toastTimer;
 const current=()=>state.labs.find(l=>l.id===activeId),busy=()=>[...state.jobs,...state.operations].some(j=>['queued','running'].includes(j.status));
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
-async function api(path,options={}){const response=await fetch('/api'+path,options);if(!response.ok){const value=await response.json();throw new Error(value.detail||'Request failed.');}return response;}
+// The sentence of an error answer: detail.message of the sign-on answers ({detail:{code,message}}), a plain string detail of the older ones.
+function workspaceMessage(value){
+ const detail=value&&typeof value==='object'?value.detail:null;
+ if(typeof detail==='string'&&detail)return detail;
+ if(detail&&typeof detail==='object'&&typeof detail.message==='string'&&detail.message)return detail.message;
+ return 'Request failed.';
+}
+// A dialog of this page that holds something the person typed (the new topology file, the download address): the page must not leave under it. Every open dialog counts: the topology browser stays open under the editor.
+function workspaceTyped(){
+ if(typeof document.querySelectorAll!=='function')return false;
+ return [...document.querySelectorAll('dialog[open]')].some(dialog=>dialog&&typeof dialog.querySelectorAll==='function'&&[...dialog.querySelectorAll('textarea,input')].some(f=>!f.readOnly&&!f.disabled&&!['checkbox','radio','hidden','button','submit'].includes(f.type)&&String(f.value||'').trim()!==''));
+}
+// The sentence of a held page: it says how to get back and that the text is kept. It is true for every act (a button, a read that polls on), so it names no button.
+const WORKSPACE_HELD='Your session ended. Sign in again in a new tab, then try again here; what you typed is still here.';
+// Every open dialog shows the sentence in its alert line, so a caller that swallows the error (a poll) still leaves it on screen; `text` '' takes it away again (only where it is still the held sentence).
+function workspaceShowHeld(text){
+ if(typeof document.querySelectorAll!=='function')return;
+ for(const dialog of document.querySelectorAll('dialog[open]')){
+  const line=dialog&&typeof dialog.querySelector==='function'?dialog.querySelector('.form-error'):null;
+  if(!line)continue;
+  if(text)line.textContent=text;else if(line.textContent===WORKSPACE_HELD)line.textContent='';
+ }
+}
+function workspaceHeldError(){workspaceShowHeld(WORKSPACE_HELD);return Object.assign(new Error(WORKSPACE_HELD),{status:401,sessionEnded:true});}
+// No request leaves a signed-out page (REVIEW U8); a 401 signed_out marks the page and leaves for the sign-in page at once, unless an open dialog holds typed text: then the page stays and the dialog's error says what to do. The person's own act (a non-GET) clears the mark once, as Reconnect does on the terminal page, so it is sent after signing in elsewhere and the answer decides; a read never is. The page leaves on the next request after no dialog holds typed text.
+let workspaceHeld=false;
+async function api(path,options={}){
+ if(workspaceHeld&&options.method&&options.method!=='GET'&&typeof sessionEnded==='function'&&sessionEnded()&&workspaceTyped()){
+  // The person's own act: sessionRetry() clears the mark, runs this page's refresh() and the registered resume functions (a job's output poll), and says whether the session is back; the act is sent only then. Without it the mark is only cleared and the answer decides.
+  if(typeof sessionRetry==='function'){if(await sessionRetry())workspaceShowHeld('');else throw workspaceHeldError();}
+  else if(typeof sessionClear==='function')sessionClear();
+ }
+ if(typeof sessionEnded==='function'&&sessionEnded()){
+  if(workspaceHeld&&!workspaceTyped()&&typeof sessionGo==='function'){workspaceHeld=false;sessionGo('ended');}
+  throw workspaceHeld?workspaceHeldError():sessionEndedError();
+ }
+ const response=await fetch('/api'+path,options);
+ if(!response.ok){
+  let value=null;try{value=await response.json();}catch{value=null;}
+  if(typeof sessionLost==='function'&&sessionLost(response.status,value)&&typeof sessionMark==='function'&&sessionMark()){
+   if(workspaceTyped()){workspaceHeld=true;throw workspaceHeldError();}
+   if(typeof sessionGo==='function')sessionGo('ended');
+  }
+  throw Object.assign(new Error(workspaceMessage(value)),{status:response.status});
+ }
+ if(workspaceHeld)workspaceHeld=false;
+ return response;
+}
 async function json(path,method,data){return(await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}
 function attachmentName(response,fallback){const match=(response.headers.get('Content-Disposition')||'').match(/filename\*=UTF-8''([^;]+)/i);return match?decodeURIComponent(match[1]):fallback;}
 async function refresh(){state=await(await api('/state')).json();}
@@ -15,6 +62,8 @@ function workspaceDeviceRow(lab,n,link){
 async function launchWorkspace(){
  try{
   await refresh();$('workspace-message').textContent='';
+  // An operator is not sent into Diagnostics, which is administrators only (REVIEW U5).
+  if($('workspace-links'))$('workspace-links').hidden=!!(state.user&&state.user.role==='operator');
   if(params.get('mode')==='ssh'){
    const lab=current();if(!lab)throw new Error('This lab is no longer in the manager. Go back to My labs.');
    $('workspace-title').textContent='Open CLIs · '+lab.name;document.title='Open CLIs · '+lab.name+' · Containerlab Node Manager';$('workspace-open').hidden=true;

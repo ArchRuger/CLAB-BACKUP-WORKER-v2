@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 
 import paramiko
-from fastapi import File, Form, HTTPException, UploadFile
+from fastapi import Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from .inventory import ALIASES, address, literal, read_data
@@ -635,6 +635,9 @@ class Discovery:
                                          imported=name in linked, excluded=name in state.get('ignored_labs', [])) for name,nodes in info.get('labs', {}).items()])
 
     def install(self, app, public_lab):
+        # Imported here, not at the top: the health check's read-only probes (app/probe.py) import this module for
+        # discovery_fresh and vm_password and must not load the session gate, the accounts or the Store.
+        from .sessions import require_admin
         def idle(lab_id=None):
             from .lab_operations import operation_busy
             if operation_busy(self.store.state,lab_id): raise HTTPException(409, 'Wait for the lab operation to finish.')
@@ -654,7 +657,8 @@ class Discovery:
         def status(): return self.public()
 
         @app.put('/api/host')
-        def save_host(data: HostSettings):
+        def save_host(data: HostSettings, user: dict = Depends(require_admin)):
+            # Admin-only (sign-on DESIGN.md 7.2, D2): the VM connection, including the host-key reset, is an installation fact.
             try:
                 if data.auth != 'password': raise ValueError('VM connections require password authentication')
                 if data.command_mode not in COMMANDS: raise ValueError('Choose a valid inspection mode')

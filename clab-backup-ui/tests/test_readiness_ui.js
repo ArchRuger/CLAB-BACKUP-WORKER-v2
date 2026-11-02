@@ -521,3 +521,14 @@ test('C05: Stop device and Start device buttons and the Save startup configurati
  assert.deepEqual(ran,[['node','stop-node','lab-a','r1',b1],['save','lab-a','r1',b2]]);
  await h.context.handleNodeAction({target:{closest:()=>({disabled:true,dataset:{nodeAction:'stop-node',node:'r1'}})}});assert.equal(ran.length,2,'a disabled button does nothing');
 });
+
+test('lab banner for an unreachable VM: an operator gets no VM connection action, an administrator does, an unknown user keeps it',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id);
+ const lab={id:'lab',name:'L',nodes:[],profiles:[],defaults:{},deployment:{status:'Unknown'},nos_readiness:{status:'idle'}};
+ const paint=user=>vm.runInContext(`state=${JSON.stringify({labs:[lab],jobs:[],platforms:{},...(user?{user}:{})})};activeId='lab';renderLabBanner();`,h.context);
+ paint({name:'bob',role:'operator'});
+ assert.equal(get('lab-banner').hidden,false);assert.equal(get('banner-vm').hidden,true,'an operator cannot open the VM connection');
+ paint({name:'ada',role:'admin'});
+ assert.equal(get('banner-vm').hidden,false);assert.equal(get('banner-vm').textContent,'VM connection…');
+ paint(null);assert.equal(get('banner-vm').hidden,false,'no user in the state: the manager decides');
+});

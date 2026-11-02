@@ -1,6 +1,7 @@
 """Node connection checks and bounded interactive SSH, separate from backups."""
 import asyncio
 import copy
+import hmac
 import io
 import json
 import re
@@ -12,7 +13,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 import paramiko
-from fastapi import HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from .runner import CLI_ERROR, effective_credentials, now
@@ -20,6 +21,82 @@ from .discovery import discovery_fresh, expected_container, node_available
 from .inventory import console_port
 from .lab_operations import restarting_nodes
 from .node_console import TelnetCodec, container_age, health_part, telnet_escape
+from .accounts import detail
+from .origin import scheme
+
+# Sign-on DESIGN.md 11.3, REVIEW R9: an open terminal, console or capture socket asks whether its manager session
+# still resolves at least once a second (the design allows 5 s) and closes 1008 `signed_out` when it is gone;
+# client input renews the session at most once a minute; the socket's own data never renews anything.
+SOCKET_CHECK = 1
+SOCKET_TOUCH = 60
+SIGNED_OUT = 'signed_out'
+
+
+class SocketSession:
+    """The manager session behind one open socket (sign-on DESIGN.md 6.5, 11.3), from the user the gate put on
+    the scope at the handshake. `alive()` resolves the session at most every SOCKET_CHECK seconds (resolve deletes
+    an expired or ended one and queues its audit entry); once gone it stays gone. `input()` is called for an act of
+    the person and renews through `sessions.touch` at most every SOCKET_TOUCH seconds of `sessions.clock`, after a
+    fresh resolve, so input never revives a session that expired between two checks. Neither holds any lock of
+    its own and neither does I/O; the session id is never logged or sent."""
+    def __init__(self, ws, sessions):
+        user = (ws.scope.get('state') or {}).get('user')
+        if not isinstance(user, dict): user = {}
+        self.sessions = sessions
+        self.id = user.get('session_id') or ''
+        self.name = user.get('name') or ''
+        self.gone = not self.id or sessions is None
+        self.checked = time.monotonic()      # the gate resolved the session at the handshake
+        self.touched = None
+
+    def resolve(self):
+        """The session behind this socket, or None once it ended. The own change rotates the session's id and keeps
+        the session (DESIGN 5.5): a socket authenticated at its handshake follows to the new id (`sessions.follow`,
+        11.3), where a request with the old cookie finds nothing."""
+        session = self.sessions.resolve(self.id)
+        if session is None:
+            successor = self.sessions.follow(self.id) if hasattr(self.sessions, 'follow') else None
+            if successor and successor != self.id:
+                session = self.sessions.resolve(successor)
+                if session is not None: self.id = successor
+        if session is None: self.gone = True
+        return session
+
+    def alive(self):
+        if self.gone: return False
+        current = time.monotonic()
+        if current - self.checked < SOCKET_CHECK: return True
+        self.checked = current
+        self.resolve()
+        return not self.gone
+
+    def input(self):
+        if self.gone: return
+        current = self.sessions.clock()
+        if self.touched is not None and current - self.touched < SOCKET_TOUCH: return
+        if self.resolve() is None: return
+        self.touched = current
+        self.sessions.touch(self.id)
+
+    async def ended(self):
+        """Returns once the session is gone: a task to race against a relay."""
+        while self.alive(): await asyncio.sleep(SOCKET_CHECK / 4)
+
+
+def actor_of(watch):
+    """The actor of an event a socket writes (DESIGN 10.3): its user, '-' when there is no SocketSession."""
+    return (watch.name if watch is not None else '') or '-'
+
+
+def request_actor(request):
+    user = getattr(getattr(request, 'state', None), 'user', None)
+    return user['name'] if isinstance(user, dict) and user.get('name') else '-'
+
+
+async def close_signed_out(ws):
+    try: await ws.close(code=1008, reason=SIGNED_OUT)
+    except Exception: pass
+
 
 BULK_CHECK_WORKERS = 4     # ssh-check-all never opens more SSH sessions than this at once
 CHECKING_MESSAGE = 'Testing the SSH login…'
@@ -273,15 +350,18 @@ class NodeServices:
                 raise HTTPException(held[0], held[2])
             return node['discovered_address'], console_port(node.get('kind'))
 
-    async def console_session(self, ws, lab_id, name):
+    async def console_session(self, ws, lab_id, name, watch=None):
         """The console branch of /api/terminal after the ticket was popped (docs/parity-campaign/C04-DESIGN.md §2.3).
 
         asyncio streams, no executor thread: a console is a plain TCP socket. The slot is reserved in one locked block
         (the cap and the per-device key together, no TCP connect for a refusal), the connect takes console_target's
         values only, nothing is written before the device's first byte (a silent console is held by the launcher or
         an outside client and is left within the probe timeout), the idle clock counts browser input only, and the
-        events carry the lab id and the node only. Console bytes are never stored, logged or put in an event."""
+        events carry the lab id and the node only. Console bytes are never stored, logged or put in an event.
+        `watch` is the socket's SocketSession: the loop closes 1008 `signed_out` when the session is gone and renews it
+        on browser input (sign-on DESIGN.md 11.3)."""
         key = (lab_id, name)
+        signed_out = False
         record = {'opened': time.time(), 'writer': None, 'loop': asyncio.get_running_loop()}
         reserved = opened = False
         writer = None
@@ -308,7 +388,7 @@ class NodeServices:
                 first = b''
             if not first:
                 raise ConsoleBusy(CONSOLE_HELD.format(device=device))
-            self.store.event('console.open', 'Serial console opened', lab_id=lab_id, node=name)
+            self.store.event('console.open', 'Serial console opened', lab_id=lab_id, node=name, actor=actor_of(watch))
             opened = True
             await ws.send_json({'type': 'status', 'message': 'Connected'})
             codec = TelnetCodec()
@@ -326,6 +406,9 @@ class NodeServices:
             device_task = asyncio.ensure_future(reader.read(16384))
             browser_task = asyncio.ensure_future(ws.receive_text())
             while True:
+                if watch is not None and not watch.alive():
+                    signed_out = True
+                    break
                 current = time.monotonic()
                 if current - last_input > CONSOLE_IDLE or current - started > CONSOLE_TOTAL:
                     await ws.send_json({'type': 'status', 'message': 'Session timeout. Reconnect to continue.'})
@@ -350,6 +433,7 @@ class NodeServices:
                             raise ValueError('Invalid input')
                         if value:
                             last_input = time.monotonic()
+                            if watch is not None: watch.input()
                             writer.write(telnet_escape(value.encode()))
                             await writer.drain()
                     elif event.get('type') == 'resize':
@@ -388,16 +472,19 @@ class NodeServices:
                 if reserved and self.consoles.get(key) is record:
                     self.consoles.pop(key)
             if opened:
-                self.store.event('console.close', 'Serial console closed', lab_id=lab_id, node=name)
+                self.store.event('console.close', 'Serial console closed', lab_id=lab_id, node=name, actor=actor_of(watch))
             if writer is not None:
                 try:
                     await asyncio.wait_for(writer.wait_closed(), 2)
                 except Exception:
                     pass    # a half-open peer cannot pin the session
-            try:
-                await ws.close()
-            except Exception:
-                pass
+            if signed_out:
+                await close_signed_out(ws)
+            else:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
 
     def bulk_check_targets(self, lab):
         """Split a lab's nodes into (targets, skipped) for ssh-check-all.
@@ -441,7 +528,7 @@ class NodeServices:
             return {'status': 'reachable', 'at': now(), 'message': REACHABLE_MESSAGE}
         return {'status': 'booting', 'at': now(), 'message': BOOTING_MESSAGE if monitored else BOOTING_UNMONITORED_MESSAGE}
 
-    def run_bulk_check(self, lab_id, name, node, creds, monitored=False):
+    def run_bulk_check(self, lab_id, name, node, creds, monitored=False, actor='-'):
         """One node's login test from ssh-check-all's bounded pool; stores exactly what
         the per-node route stores, and never raises (one node's failure never stops the rest)."""
         key = (lab_id, name)
@@ -465,16 +552,16 @@ class NodeServices:
                 self.checking.discard(key)
         with self.lock:
             self.checks[key] = result
-        self.store.event('ssh.check', result['message'], lab_id=lab_id, node=name)
+        self.store.event('ssh.check', result['message'], lab_id=lab_id, node=name, actor=actor)
 
-    def run_bulk_checks(self, lab_id, targets, monitored=False):
+    def run_bulk_checks(self, lab_id, targets, monitored=False, actor='-'):
         """Run every target through the bounded pool (never more than BULK_CHECK_WORKERS
         SSH sessions from this call at once), then clear the lab-wide debounce flag."""
         futures = []
         try:
             for name, node, creds in targets:
                 try:
-                    futures.append(self.bulk_pool.submit(self.run_bulk_check, lab_id, name, node, creds, monitored))
+                    futures.append(self.bulk_pool.submit(self.run_bulk_check, lab_id, name, node, creds, monitored, actor))
                 except RuntimeError:
                     break   # the pool is closing; the remaining nodes are simply not probed
             for future in futures:
@@ -486,7 +573,17 @@ class NodeServices:
             with self.lock:
                 self.checking_all.discard(lab_id)
 
+    def drop_session(self, session_id):
+        """`sessions.on_end`: a ticket outlives neither its 30 s nor the session that minted it (sign-on DESIGN.md 11.1)."""
+        with self.lock:
+            self.tickets = {k: v for k, v in self.tickets.items() if not (len(v) == 5 and v[4] == session_id)}
+
     def install(self, app):
+        def sessions():
+            return getattr(app.state, 'sessions', None)
+        if sessions() is not None and self.drop_session not in sessions().on_end:
+            sessions().on_end.append(self.drop_session)
+
         @app.get('/api/labs/{lab_id}/health')
         def health(lab_id: str):
             with self.store.lock:
@@ -506,7 +603,7 @@ class NodeServices:
                 return {'nodes': rows}
 
         @app.post('/api/labs/{lab_id}/ssh-check')
-        def check(lab_id: str, data: NodeRequest):
+        def check(lab_id: str, data: NodeRequest, request: Request):
             node, creds = self.node(lab_id, data.name)
             if not creds.get('username'):
                 raise HTTPException(400, 'Assign SSH credentials to this node first.')
@@ -524,11 +621,11 @@ class NodeServices:
                     self.checking.discard(key)
             with self.lock:
                 self.checks[key] = result
-            self.store.event('ssh.check', result['message'], lab_id=lab_id, node=data.name)
+            self.store.event('ssh.check', result['message'], lab_id=lab_id, node=data.name, actor=request_actor(request))
             return result
 
         @app.post('/api/labs/{lab_id}/ssh-check-all')
-        def check_all(lab_id: str):
+        def check_all(lab_id: str, request: Request):
             with self.store.lock:
                 lab = self.store.lab(lab_id)
                 if not lab:
@@ -546,11 +643,16 @@ class NodeServices:
                 return {'started': 0, 'skipped': skipped, 'at': at}
             # Started in the background: the route answers at once, and the browser's
             # existing 4 s poll picks up each node's result from /api/state as it lands.
-            threading.Thread(target=self.run_bulk_checks, args=(lab_id, targets, bool(lab.get('deployment_name'))), daemon=True).start()
+            threading.Thread(target=self.run_bulk_checks, args=(lab_id, targets, bool(lab.get('deployment_name')), request_actor(request)), daemon=True).start()
             return {'started': len(targets), 'skipped': skipped, 'at': at}
 
         @app.post('/api/labs/{lab_id}/terminal-ticket')
-        def ticket(lab_id: str, data: TicketRequest):
+        def ticket(lab_id: str, data: TicketRequest, request: Request):
+            # The ticket names the session that minted it (sign-on DESIGN.md 11.1): only a socket of that session may use it.
+            user = getattr(request.state, 'user', None)
+            session_id = user.get('session_id') if isinstance(user, dict) else None
+            if not session_id:
+                raise HTTPException(401, detail(401, SIGNED_OUT))
             if data.protocol == 'console':
                 address, port = self.console_target(lab_id, data.name)   # no credential check: a console has none
                 endpoint = f'{address}:{port}'
@@ -564,17 +666,21 @@ class NodeServices:
                 if len(self.tickets) >= 32:
                     raise HTTPException(429, 'Too many pending terminal sessions')
                 key = secrets.token_urlsafe(32)
-                self.tickets[key] = (time.monotonic() + 30, lab_id, data.name, data.protocol)
+                self.tickets[key] = (time.monotonic() + 30, lab_id, data.name, data.protocol, session_id)
             return {'ticket': key, 'expires_in': 30, 'endpoint': endpoint, 'protocol': data.protocol}
 
         @app.websocket('/api/terminal')
         async def terminal(ws: WebSocket):
             origin = urlsplit(ws.headers.get('origin', ''))
-            expected_scheme = 'https' if ws.url.scheme == 'wss' else 'http'
-            if origin.scheme != expected_scheme or origin.netloc != ws.url.netloc:
+            if origin.scheme != scheme(ws.scope) or origin.netloc != ws.url.netloc:
                 await ws.close(code=1008)
                 return
+            watch = SocketSession(ws, sessions())
+            if watch.gone:
+                await close_signed_out(ws)
+                return
             await ws.accept()
+            signed_out = False
             client = None
             channel = None
             opened = False      # terminal.close is only audited for a session whose terminal.open was
@@ -586,12 +692,14 @@ class NodeServices:
                 auth = json.loads(message)
                 with self.lock:
                     item = self.tickets.pop(auth.get('ticket', ''), None)
-                if not item or item[0] <= time.monotonic():
+                # A ticket of another session is refused like an unknown one, and is spent (it was shown to the wrong socket).
+                if not item or len(item) != 5 or item[0] <= time.monotonic() \
+                        or not isinstance(item[4], str) or not hmac.compare_digest(item[4], watch.id):
                     await ws.close(code=1008)
                     return
-                _, lab_id, name, protocol = item
+                _, lab_id, name, protocol, _ = item
                 if protocol == 'console':
-                    await self.console_session(ws, lab_id, name)
+                    await self.console_session(ws, lab_id, name, watch)
                     return
                 node, creds = self.node(lab_id, name)
                 if not creds.get('username'):
@@ -600,11 +708,14 @@ class NodeServices:
                 await asyncio.to_thread(connect, client, node, creds)
                 channel = await asyncio.to_thread(client.invoke_shell, term='xterm-256color', width=100, height=30)
                 channel.settimeout(5)
-                self.store.event('terminal.open', 'Interactive SSH session opened', lab_id=lab_id, node=name)
+                self.store.event('terminal.open', 'Interactive SSH session opened', lab_id=lab_id, node=name, actor=actor_of(watch))
                 opened = True
                 await ws.send_json({'type': 'status', 'message': 'Connected'})
                 started = last_input = time.monotonic()
                 while not channel.closed:
+                    if not watch.alive():
+                        signed_out = True
+                        break
                     current = time.monotonic()
                     if current - last_input > 900 or current - started > 14400:
                         await ws.send_json({'type': 'status', 'message': 'Session timeout. Reconnect to continue.'})
@@ -630,6 +741,7 @@ class NodeServices:
                             raise ValueError('Invalid input')
                         if value:
                             last_input = time.monotonic()
+                            watch.input()
                             await asyncio.to_thread(channel.sendall, value.encode())
                     elif event.get('type') == 'resize':
                         cols, rows = int(event['cols']), int(event['rows'])
@@ -651,8 +763,11 @@ class NodeServices:
                 if client is not None:
                     self.release(client)
                 if opened:
-                    self.store.event('terminal.close', 'Interactive SSH session closed', lab_id=lab_id, node=name)
-                try:
-                    await ws.close()
-                except Exception:
-                    pass
+                    self.store.event('terminal.close', 'Interactive SSH session closed', lab_id=lab_id, node=name, actor=actor_of(watch))
+                if signed_out:
+                    await close_signed_out(ws)
+                else:
+                    try:
+                        await ws.close()
+                    except Exception:
+                        pass

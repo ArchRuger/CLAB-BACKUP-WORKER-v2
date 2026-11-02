@@ -32,6 +32,7 @@ import unittest
 import uuid
 
 from fastapi.testclient import TestClient
+from session_fixture import SignedInClient
 
 from app import design_adapter as da
 from app import design_capabilities as caps
@@ -476,7 +477,7 @@ class BfdFamilyTests(RoutingFamilyTestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         app = create_app(tmp.name)
-        client = TestClient(app)
+        client = SignedInClient(app)
         client.__enter__()
         self.addCleanup(client.__exit__, None, None, None)
         self.addCleanup(app.state.network_design.close)

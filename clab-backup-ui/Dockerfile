@@ -19,6 +19,8 @@ COPY VERSION ./VERSION
 RUN python -c 'from pathlib import Path; from app import __version__; expected = Path("VERSION").read_text().strip(); assert __version__ == expected, "VERSION and app.__version__ do not match"'
 ENV DATA_DIR=/data PYTHONUNBUFFERED=1 ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
 USER worker
-EXPOSE 8081
+EXPOSE 8443 8081
 ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
-CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8081", "--workers", "1"]
+# TLS from the read-only /tls mount (setup-tls.sh fills it on the VM): a `docker run` without that
+# mount fails at start instead of serving plain HTTP by accident.
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8443", "--workers", "1", "--ssl-certfile", "/tls/cert.pem", "--ssl-keyfile", "/tls/key.pem", "--no-proxy-headers", "--no-server-header"]

@@ -210,3 +210,26 @@ inventory's "must not reappear" line stands); the manager's own `rows`/`columns`
 `layout.arrange()` without the helper, is new and is not that feature. The Tools "Map" card sentence becomes
 "Edit map also downloads the map file. Download picture… and Export to draw.io… are in the Topology tab's More ▾
 menu." (`index.html`; pinned in `tests/test_page_load_ui.js`). Everything else in this addendum still binds.
+
+## M. Amendment of the sign-on stream (with the release that ships sign-on)
+
+Sign-on (`docs/sign-on/UI.md` 3.2; `RECONCILIATION.md` 1, U-C13) adds a second shared script and amends J1's letter,
+"everything that touches `location` lives in `shell.js`":
+
+1. **`app/static/session.js`** is loaded on `index.html` after `status.js` and before `shell.js`, and by every
+   standalone page that sends a request (`workspace`, `debug`, `lab-builder`, `map-editor`, `terminal`,
+   `capture-session`, `users`; `capture-setup` loads it for uniformity and sends nothing). It has **no top-level side
+   effect**, touches no DOM and no browser storage, and its one `location` access is inside `sessionGo()`. Its globals
+   (`sessionLost`, `loginUrl`, `sessionEnded`, `sessionMark`, `sessionClear`, `sessionEndedError`, `sessionGo`,
+   `sessionOnResume`, `sessionRetry`) are the contract of UI.md 3.2; every caller reaches them through
+   `typeof x==='function'` guards, so every node harness that loads `app.js` without it keeps working.
+2. **`app/static/account.js`** is a feature script of `index.html` only (after `preferences.js`); no other page loads
+   it (pinned in `tests/test_page_load_ui.js`).
+3. **The account group** of the Manager ▾ menu (`#account-name`, `#account-role`, `#account-users`,
+   `#account-password`, `#account-signout`), `#account-chip`, `#manager-diagnostics`, the `small.menu-reason` children
+   of `#vm-settings` and `#manager-settings`, `#session-banner` (after `#operation-summary`) and `#password-dialog`
+   (after `</main>`) join J2's load-bearing ids. J3 holds: `render()` sets their text and state, never their markup.
+4. **The exposed pages** (`login.html`, `setup.html`) load `login.css` and their own script only; `style.css` stays
+   behind the gate. `users.html` is a standalone page in `debug.html`'s shape and reuses `style.css` classes only.
+
+Everything else in this addendum still binds.

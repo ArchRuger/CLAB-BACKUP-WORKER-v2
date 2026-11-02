@@ -86,8 +86,12 @@ sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" 
 sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" logs backup-ui
 ```
 
-Expect the release in `clab-backup-ui/VERSION`. Open `http://VM_ADDRESS:8081`; no UI
-login is required. See [VM connection setup and troubleshooting](VM-CONNECTION.md).
+Expect the release in `clab-backup-ui/VERSION`. The launcher makes the self-signed
+certificate first (`setup-tls.sh`; [TLS and the certificate](INSTALL.md#tls-and-the-certificate)).
+Open `https://VM_ADDRESS:8443`, accept the certificate after comparing the fingerprint the
+launcher printed, and create the first administrator with the setup code
+(`sudo cat /srv/containerlab-node-manager/data/setup-code`); every later visit signs in with
+that account ([Finish in the browser](INSTALL.md#finish-in-the-browser)). See [VM connection setup and troubleshooting](VM-CONNECTION.md).
 Docker must start at VM boot; `restart: unless-stopped` restarts the manager with
 Docker unless you explicitly stopped it.
 
@@ -103,13 +107,15 @@ build on a connected build host, then transfer the image with `docker save`/`doc
 After loading it, launch it with `deploy/compose.image.yml` as described in the
 [master guide's airgapped section](WIKI-MASTER-GUIDE.md#part-20).
 
-Host networking shares the VM's network namespace. The UI binds directly to port
-8081, and the manager can reach node addresses that are reachable from the VM.
+Host networking shares the VM's network namespace. The manager binds directly to the
+HTTPS port 8443 (`UI_PORT`) and a second container, `http-redirect`, binds the plain-HTTP
+redirect port 8081 (`UI_HTTP_PORT`, `0` turns it off); both come from the same Compose
+file. The manager can reach node addresses that are reachable from the VM.
 There is no `ports:` mapping and no dependency on a lab Docker network's lifecycle.
-If needed, set `UI_BIND`/`UI_PORT` in `clab-backup-ui/.env` before the launcher runs (`sudo` does not pass shell variables on). To open the
+If needed, set `UI_BIND`, `UI_PORT` and `UI_HTTP_PORT` in `clab-backup-ui/.env` before the launcher runs (`sudo` does not pass shell variables on; [Ports](INSTALL.md#ports)). The TLS files in `/srv/containerlab-node-manager/tls` are mounted read-only at `/tls`, and a manager started any other way (a hand-written `docker run`, which this guide does not cover) needs that mount, the `--ssl-certfile`/`--ssl-keyfile` arguments of `clab-backup-ui/compose.yml` and `-e UI_PORT=<port>`: without the variable the setup log line names 8443, which is right unless the command overrides `--port`. To open the
 manager by a DNS name such as `manager.example.edu` (an IP address, `localhost`, a single-label name and a `.local` name need nothing), add
 `UI_ALLOWED_HOSTS=<names>` (comma-separated, names only) to the same file, or to `deploy/image.env` for a prepared release image: any other
-name is refused. See [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name). Do not run
+name is refused, and each listed name joins the certificate. See [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name). Do not run
 another application on the same listening address/port. Node routing, firewall and
 SSH readiness still apply; deployment status is not proof of a successful NOS login.
 

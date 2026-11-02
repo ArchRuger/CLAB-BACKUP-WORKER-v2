@@ -11,6 +11,7 @@ import importlib.util
 import os
 from pathlib import Path
 import queue
+import shlex
 import signal
 import socket
 import sys
@@ -29,7 +30,7 @@ from textual.screen import ModalScreen, Screen
 from textual.theme import Theme
 from textual.widgets import Button, Checkbox, Input, Label, ListItem, ListView, Log, RadioButton, RadioSet, Static
 
-from . import core, engine, probes, theme
+from . import core, engine, exposure, probes, theme
 from .theme import T
 
 DEPLOY = Path(__file__).resolve().parents[1]
@@ -254,11 +255,14 @@ DETAILS = {
     'install': {
         'title': 'Install or update the manager',
         'changes': ('Installs missing prerequisites (Git, SSH, Docker/Compose, containerlab), prepares persistent '
-                    'storage and the restricted clab-discovery account and helpers, rebuilds the manager image from '
-                    'this checkout and recreates the manager, refreshes Browser Wireshark, verifies the running '
-                    'version over HTTP, then sets up VS Code access, lazydocker and Git as selected.'),
-        'keeps': ('Manager data, saved passwords, the clab-backup-ui/.env settings (or the defaults: all VM '
-                  'interfaces, port 8081) and every lab container.'),
+                    'storage and the restricted clab-discovery account and helpers, makes a self-signed TLS '
+                    'certificate if there is none, rebuilds the manager image from this checkout and recreates the '
+                    'manager, refreshes Browser Wireshark, verifies the running version and HTTPS /api/health, sets up '
+                    'the firewall (ufw) and conservative SSH settings as selected, then VS Code access, lazydocker and '
+                    'Git. The setup code for the first administrator is shown last.'),
+        'keeps': ('Manager data, saved passwords, a certificate that already exists (a provided one is never '
+                  'touched), the clab-backup-ui/.env settings (or the defaults: all VM interfaces, TLS port 8443, '
+                  'plain-HTTP redirect on 8081) and every lab container.'),
         'disruption': ('The manager container is rebuilt and recreated: its web UI is unavailable for a short time '
                        'and terminals or captures open in it end. Lab containers keep running. A first setup asks '
                        'you to create the clab-discovery password in the terminal.'),
@@ -299,9 +303,10 @@ DETAILS = {
     },
     'settings': {
         'title': 'Advanced settings',
-        'changes': ('Changes the Install/update choices: where the bind/port settings come from, lab operation '
-                    'access, VS Code access, the installation-media APT repair, and Git now or later. Standard '
-                    'defaults are preselected.'),
+        'changes': ('Changes the Install/update choices: where the bind/port settings come from, the manager port '
+                    'question when your settings put HTTPS on 8081, lab operation access, VS Code access, the firewall, '
+                    'SSH hardening, the installation-media APT repair, and Git now or later. Standard defaults are '
+                    'preselected.'),
         'keeps': 'Everything: nothing runs until you press Start on the installation plan.',
         'disruption': 'None.',
     },
@@ -315,7 +320,7 @@ DETAILS = {
 
 
 # Which dashboard action addresses each component's status (Enter on a status row opens it).
-FIX_ACTION = {'prereqs': 'install', 'manager': 'install', 'access': 'install', 'engineer': 'engineer',
+FIX_ACTION = {'prereqs': 'install', 'manager': 'install', 'tls': 'install', 'access': 'install', 'engineer': 'engineer',
               'git': 'git', 'capture': 'capture', 'lazydocker': 'install'}
 
 
@@ -604,13 +609,20 @@ class SettingsScreen(Chrome):
                                  classes='field-error')
                 else:
                     with RadioSet(id='env-choice'):
-                        yield RadioButton('Use defaults: all VM interfaces, port 8081', value=options.env_source is None)
+                        yield RadioButton('Use defaults: all VM interfaces, TLS port 8443, plain-HTTP redirect on 8081', value=options.env_source is None)
                         yield RadioButton('Copy .env from a previous source folder', value=options.env_source is not None)
                     yield Input(value=str(options.env_source or ''), placeholder='/home/you/old-checkout/clab-backup-ui/.env',
                                 id='env-path')
                     yield Static(Text('An absolute path to a regular file of at most 64 KiB. Its contents are '
                                       'never displayed; it is copied with private permissions.'), classes='field-help')
                     yield Static('', id='env-error', classes='field-error')
+                yield Static('Manager ports', classes='field-label', id='ports-label')
+                with RadioSet(id='ports'):
+                    yield RadioButton('TLS on 8443 and plain-HTTP redirect on your current 8081 (recommended)',
+                                      value=options.ports != 'keep')
+                    yield RadioButton('TLS on your current 8081, no redirect', value=options.ports == 'keep')
+                yield Static(Text('Your settings put UI_PORT on 8081, which now serves HTTPS. Old http:// links to 8081 '
+                                  'stop working unless the redirect keeps that port.'), classes='field-help', id='ports-help')
                 yield Static('Lab operation access', classes='field-label')
                 with RadioSet(id='operations'):
                     yield RadioButton('Enable reviewed lab operations (standard standalone setup)', value=options.operations == '1')
@@ -621,6 +633,16 @@ class SettingsScreen(Chrome):
                                       'containerlab SUID (standard)', value=options.engineer == '1')
                     yield RadioButton('Skip; the manager does not need it', value=options.engineer != '1')
                 yield Static('', id='engineer-help', classes='field-help')
+                yield Static('Firewall (ufw)', classes='field-label')
+                with RadioSet(id='firewall'):
+                    yield RadioButton('Set up: allow SSH and the manager ports, deny other incoming (standard)',
+                                      value=options.firewall)
+                    yield RadioButton('Skip; I manage the firewall myself', value=not options.firewall)
+                yield Static('SSH hardening', classes='field-label')
+                with RadioSet(id='sshd'):
+                    yield RadioButton('Apply a conservative sshd drop-in: only settings still at their defaults are '
+                                      'written (standard)', value=options.ssh_hardening)
+                    yield RadioButton('Skip; I manage sshd myself', value=not options.ssh_hardening)
                 yield Static('Installation media', classes='field-label')
                 yield Checkbox('Back up and disable obsolete installation-media APT entries if present',
                                value=options.repair, id='repair')
@@ -658,6 +680,27 @@ class SettingsScreen(Chrome):
             self.query_one('#env-path', Input).disabled = not copy
         except Exception:
             pass
+        asked = self.ports_collide()
+        for widget_id in ('#ports-label', '#ports', '#ports-help'):
+            self.query_one(widget_id).display = asked
+
+    def ports_collide(self):
+        """EXPOSURE.md 7.4: the port question is asked only when the settings that will be in force put TLS on
+        the redirect's port: the checkout's own .env, or the previous one that is about to be copied into it."""
+        env_path = None
+        try:
+            if self.query_one('#env-choice', RadioSet).pressed_index == 1:
+                value = self.query_one('#env-path', Input).value.strip()
+                if not value or not Path(value).expanduser().is_absolute():
+                    return False
+                env_path = Path(value).expanduser()
+        except Exception:
+            pass
+        return exposure.ports_collide(self.ctx.source, env_path=env_path)
+
+    @on(Input.Changed, '#env-path')
+    def path_changed(self, event):
+        self.sync_enabled()
 
     @on(RadioSet.Changed)
     def changed(self, event):
@@ -694,7 +737,12 @@ class SettingsScreen(Chrome):
         engineer = '1' if (operations == '1' and self.query_one('#engineer', RadioSet).pressed_index == 0) else '2'
         repair = self.query_one('#repair', Checkbox).value
         git_now = self.query_one('#git-now', RadioSet).pressed_index == 0
-        return ctx.install.Options(env_source, operations, engineer, repair, git_now)
+        firewall = self.query_one('#firewall', RadioSet).pressed_index == 0
+        ssh_hardening = self.query_one('#sshd', RadioSet).pressed_index == 0
+        ports = None
+        if self.ports_collide():
+            ports = 'redirect' if self.query_one('#ports', RadioSet).pressed_index == 0 else 'keep'
+        return ctx.install.Options(env_source, operations, engineer, repair, git_now, firewall, ssh_hardening, ports)
 
     @on(Button.Pressed, '#review')
     def review(self):
@@ -1704,9 +1752,9 @@ class SlateOps(App):
             return rows
         verify = by_key.get('verify')
         if run.action == 'install':
-            manager_steps = [p for p in run.phases if p.key in ('admin', 'settings', 'prereqs', 'launch', 'capture', 'verify')]
+            manager_steps = [p for p in run.phases if p.key in ('admin', 'settings', 'ports', 'prereqs', 'launch', 'capture', 'verify')]
             if verify is not None and verify.state == engine.COMPLETED:
-                rows.append(('Manager', 'Ready', f'{ctx.version} running; HTTP and version checks passed on this VM '
+                rows.append(('Manager', 'Ready', f'{ctx.version} running; HTTPS and version checks passed on this VM '
                                                  f'({verify.outcome or ""}).'))
             else:
                 failed = next((p for p in manager_steps if p.state == engine.FAILED), None)
@@ -1715,15 +1763,17 @@ class SlateOps(App):
                     rows.append(('Manager', 'Failed', f'Stopped at {failed.label}: {detail_of(failed)}'))
                 else:
                     rows.append(('Manager', 'Stopped', f'Not verified; {stopped.label if stopped else "a phase"} did not run.'))
-        names = {'capture': 'Browser Wireshark', 'engineer': 'VS Code access', 'lazydocker': 'lazydocker', 'git': 'Git'}
+        names = {'capture': 'Browser Wireshark', 'firewall': 'Firewall', 'sshd': 'SSH hardening',
+                 'engineer': 'VS Code access', 'lazydocker': 'lazydocker', 'git': 'Git'}
         for key, name in names.items():
             phase = by_key.get(key)
             if phase is None:
-                if run.action == 'install' and key == 'engineer':
+                if run.action == 'install' and key in ('engineer', 'firewall', 'sshd'):
                     rows.append((name, 'Not selected', 'Skipped by the advanced settings.'))
                 if run.action == 'install' and key == 'git':
                     rows.append((name, 'Not selected', 'Chosen for later: Git setup / repair from the dashboard, or '
-                                                       'bash deploy/install.sh --git.'))
+                                                       'bash ' + shlex.quote(str(Path(self.ctx.source) / 'deploy/install.sh'))
+                                                       + ' --git.'))
                 continue
             state = phase.state
             if key == 'git' and state == engine.SKIPPED:
@@ -1741,6 +1791,10 @@ class SlateOps(App):
                           'Not started: the run was stopped before this phase.')
             if not detail and state == engine.COMPLETED and key == 'capture':
                 detail = 'Edgeshark and the capture session service were set up; the manager was recreated.'
+            if not detail and state == engine.COMPLETED and key == 'firewall':
+                detail = 'ufw allows SSH and the manager ports and denies other incoming; Docker-published ports bypass it.'
+            if not detail and state == engine.COMPLETED and key == 'sshd':
+                detail = 'A conservative sshd drop-in was written for the settings still at their defaults.'
             rows.append((name, {'Completed': 'Completed', 'Failed': 'Failed'}.get(state, state), detail))
         return rows
 
@@ -1750,11 +1804,7 @@ class SlateOps(App):
         if run.action == 'install':
             verify = run.phase('verify')
             if verify is not None and verify.state == engine.COMPLETED:
-                _, port = probes.manager_address(ctx.source)
-                addresses = vm_addresses()
-                where = ', '.join(f'http://{address}:{port}/' for address in addresses[:3]) or f'http://<VM address>:{port}/'
-                steps.append(f'From your workstation open the manager at the VM\'s address: {where}. Verified only on '
-                             'this VM; reachability from your workstation depends on your network and firewall.')
+                steps.extend(self.access_steps())
                 steps.append('In VM connection use clab-discovery and the password you created. Verify the host fingerprint.')
         if run.action in ('install', 'engineer'):
             engineer = run.phase('engineer')
@@ -1767,7 +1817,42 @@ class SlateOps(App):
             steps.append('Completed phases are kept. Run the action again from the dashboard: it checks the actual '
                          'system state and repeats only what is needed.')
         steps.append('Full installation health report (without sudo): bash ' + str(Path(ctx.source) / 'deploy/check-install.sh'))
+        if run.action == 'install':
+            verify = run.phase('verify')
+            if verify is not None and verify.state == engine.COMPLETED:
+                steps.extend(self.sign_on_steps())
         return steps
+
+    def access_steps(self):
+        """Where to open the manager and what the certificate is, from the certificate itself (never from
+        the interface list: it holds docker0 and the containerlab bridges the certificate never names, REVIEW R18)."""
+        ctx = self.ctx
+        tls_port, redirect = exposure.ports(ctx.source)
+        certificate = exposure.facts(exposure.TLS_DIR)
+        urls = exposure.access_urls(exposure.primary(ctx.source), certificate, tls_port)
+        where = ', '.join(urls)
+        clause, hsts = exposure.redirect_notes(urls, certificate, tls_port, redirect)
+        return [f"From your workstation open the manager at the VM's address: {where}. Verified only on this VM; "
+                'reachability from your workstation depends on your network and firewall.'
+                + (' ' + clause[0].upper() + clause[1:] + '.' if clause else ''),
+                *([hsts] if hsts else []),
+                exposure.certificate_sentence(certificate, Path(ctx.source) / 'deploy/setup-tls.sh')]
+
+    def sign_on_steps(self):
+        """The last lines, read from the file now, after every phase has run (REVIEW U13). The code is built into
+        text for the screen and the scrollback only: nothing here stores it."""
+        ctx = self.ctx
+        tls_port, _ = exposure.ports(ctx.source)
+        base = exposure.access_urls(exposure.primary(ctx.source), exposure.facts(exposure.TLS_DIR), tls_port)[0].rstrip('/')
+        state, mode, code = exposure.read_setup_code(cwd=str(ctx.source), sudo=('sudo', '-n'), interactive=False)
+        if state == 'open' and mode == 'recover':
+            return [f'Create one new administrator at {base}/setup?recover=1 within 15 minutes with this recovery code: {code}']
+        if state == 'open':
+            return [f'Create the first administrator at {base}/setup with this setup code: {code}  '
+                    'On the VM: ' + exposure.SETUP_CODE_COMMAND]
+        if state == 'absent':
+            return [f'An administrator exists; sign in at {base}/']
+        return ['The setup code could not be read here. On the VM, run: ' + exposure.SETUP_CODE_COMMAND]
 
     def summary_renderable(self, run):
         look = self.ctx.look
@@ -1813,30 +1898,6 @@ class SlateOps(App):
         for step in self.next_steps(run):
             lines.extend(textwrap.wrap(step, columns - 1, initial_indent='  - ', subsequent_indent='    '))
         return lines
-
-
-def vm_addresses():
-    """This VM's non-loopback IPv4 addresses (candidates only; reachability is not verified)."""
-    import subprocess
-    try:
-        result = subprocess.run(['hostname', '-I'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL, text=True, timeout=3)
-        candidates = result.stdout.split()
-    except (OSError, subprocess.SubprocessError):
-        candidates = []
-    import ipaddress
-    addresses = []
-    for value in candidates:
-        try:
-            address = ipaddress.ip_address(value)
-        except ValueError:
-            continue
-        if address.version == 4 and not address.is_loopback and not address.is_link_local:
-            if not str(address).startswith('172.') or not address.is_private:
-                addresses.append(str(address))
-            elif not any(str(address).startswith(prefix) for prefix in ('172.17.', '172.18.', '172.19.', '172.20.')):
-                addresses.append(str(address))
-    return addresses
 
 
 class Bridge:
@@ -1920,12 +1981,30 @@ def detect_look():
     return theme.Look(no_color=no_color, ascii_only=ascii_only)
 
 
-def main(argv=None):
+def parse_args(argv=None):
+    """--no-firewall and --no-ssh-hardening (EXPOSURE.md 5.2 and 5.4) are advanced choices, as in the plain menu."""
     import argparse
     parser = argparse.ArgumentParser(prog='install.sh --tui', description='Full-screen Containerlab Node Manager installer.')
     parser.add_argument('--git', action='store_true')
     parser.add_argument('--advanced', action='store_true')
+    parser.add_argument('--no-firewall', action='store_true')
+    parser.add_argument('--no-ssh-hardening', action='store_true')
     args = parser.parse_args(argv)
+    if (args.no_firewall or args.no_ssh_hardening) and not args.advanced:
+        parser.error('--no-firewall and --no-ssh-hardening are advanced choices: add --advanced.')
+    return args
+
+
+def apply_flags(ctx, args):
+    """Preselect Skip for the questions the flags answer; the Settings screen still shows them."""
+    if args.no_firewall:
+        ctx.options.firewall = False
+    if args.no_ssh_hardening:
+        ctx.options.ssh_hardening = False
+
+
+def main(argv=None):
+    args = parse_args(argv)
     if not (sys.__stdin__ and sys.__stdin__.isatty() and sys.__stderr__ and sys.__stderr__.isatty()
             and sys.__stdout__ and sys.__stdout__.isatty()):
         sys.stderr.write('The full-screen installer needs an interactive terminal on stdin, stdout and stderr.\n')
@@ -1935,6 +2014,7 @@ def main(argv=None):
         look = detect_look()
         theme.apply_palette(theme.color_system(os.environ))
         ctx = Context(install, look)
+        apply_flags(ctx, args)
     except (ValueError, OSError) as error:
         sys.stderr.write(f'Setup stopped: {error}\n')
         return 1
@@ -1976,7 +2056,8 @@ def main(argv=None):
             print('\n'.join(app.summary_plain(run)), flush=True)
         if crashed is not None:
             print(f'The installer screen stopped unexpectedly ({type(crashed).__name__}). Completed phases are kept; '
-                  'rerun bash deploy/install.sh to continue. It was not restarted automatically.', flush=True)
+                  'rerun bash ' + shlex.quote(str(Path(ctx.source) / 'deploy/install.sh'))
+                  + ' to continue. It was not restarted automatically.', flush=True)
     except OSError:
         pass
     if crashed is not None or app.terminal_lost:

@@ -1,5 +1,6 @@
 import copy
 import errno
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -192,6 +193,56 @@ class ManagerResetTests(unittest.TestCase):
         self.assertEqual(float(node.get('x')),900)
         self.assertEqual(self.store.lab(lab['id'])['drawing'],saved)
         self.assertEqual(self.client.post(url,json={'positions':{ident:[True,0]}}).status_code,400)
+
+
+class ResetKeepsUsersTests(unittest.TestCase):
+    """Sign-on (DESIGN.md 3.3): a reset that emptied `users` would reopen setup mode on an exposed address, and an
+    audit log a reset erases is not an audit log. On the Store alone; the route is covered by ManagerResetTests."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.store = Store(self.tmp.name)
+        self.store.state['labs'] = [{'id': 'fixture', 'name': 'Fixture'}]
+        self.store.state['host'] = {'address': '192.0.2.10', 'password': 'host-secret'}
+        self.store.save()
+
+    def test_reset_keeps_users_and_the_audit_files(self):
+        from app import accounts
+        record = accounts.new_record('root', 'admin', 'scrypt$32768$8$1$' + 'A'*43 + '$' + 'B'*43, created_by='setup', must_change_password=False)
+        self.store.state['users'] = {'root': record}; self.store.save()
+        self.store.audit('setup', actor='root', source='203.0.113.9', outcome='ok', detail='setup')
+        self.store.audit_failure('signin.failed', actor='-', source='203.0.113.9', outcome='failed', detail='invalid_credentials count=1')
+        (self.store.root/'audit.jsonl.1').write_text('{"event":"old"}\n')
+        (self.store.root/'backups').mkdir(); (self.store.root/'backups'/'config').write_text('old')
+        self.store.event('old.log', 'old history')
+        self.store.reset()
+        self.assertEqual(self.store.state['labs'], [])
+        self.assertEqual(self.store.state['users'], {'root': record})
+        self.assertEqual(self.store.state['host']['password'], 'host-secret')
+        saved = Store(self.tmp.name)
+        self.assertEqual(saved.state['users'], {'root': record})
+        for name in ('audit.jsonl', 'audit-failures.jsonl', 'audit.jsonl.1'):
+            self.assertTrue((saved.root/name).exists(), name)
+        self.assertEqual(len((saved.root/'audit.jsonl').read_text().splitlines()), 1)
+        self.assertFalse((saved.root/'backups').exists())
+        self.assertNotIn('old history', (saved.root/'events.jsonl').read_text())
+        self.assertFalse((saved.root/'ui.token').exists())
+
+    def test_a_journal_of_an_older_release_applies_without_users(self):
+        # Prepared by a release that did not know `users`: applied as it is; the manager then enters setup mode (DESIGN 12.1).
+        self.store.state['users'] = {'root': {'name': 'root'}}; self.store.save()
+        stage = self.store.root/'.reset-pending'; stage.mkdir(mode=0o700)
+        fresh = {'labs': [], 'jobs': [], 'operations': [], 'git_jobs': [], 'ignored_labs': [], 'host': {}, 'reset_id': 'older-release'}
+        Store.atomic(stage/'new-state.enc', self.store.cipher.encrypt(json.dumps(fresh).encode()))
+        restarted = Store(self.tmp.name)
+        self.assertFalse(restarted.reset_pending)
+        self.assertEqual(restarted.state['labs'], [])
+        self.assertEqual(restarted.state.get('users', {}), {})
+
+    def test_an_old_ui_token_file_is_still_moved_aside_but_never_read(self):
+        (self.store.root/'ui.token').write_text('legacy-token')
+        self.assertFalse(hasattr(Store(self.tmp.name), 'token'), 'the legacy token is out of the read path (DESIGN 12.2)')
+        self.store.reset()
+        self.assertFalse((self.store.root/'ui.token').exists())
 
 
 class DrawioExportTests(unittest.TestCase):

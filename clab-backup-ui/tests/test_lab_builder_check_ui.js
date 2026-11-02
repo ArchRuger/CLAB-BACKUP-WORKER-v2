@@ -53,7 +53,10 @@ test('the script declares no top-level name another lab builder script declares,
  assert.ok(others.includes('lab-builder-page.js')&&others.includes('lab-builder-yaml.js'),others.join(' '));
  const declared=text=>new Set([...text.matchAll(/^(?:async\s+)?(?:function\s*\*?\s*|const\s+|let\s+|var\s+|class\s+)([A-Za-z_$][\w$]*)/gm)].map(m=>m[1]));
  const mine=declared(SOURCE);assert.ok(mine.size>20);
- for(const name of others){const theirs=declared(fs.readFileSync(path.join(STATIC,name),'utf8'));for(const n of mine)assert.ok(!theirs.has(n),n+' is also declared by '+name);}
+ // session.js (S8) is integrated later than this slice: until it exists its documented top-level names (UI 3.2) stand in for it.
+ const SESSION_NAMES='function sessionLost(){}\nfunction loginUrl(){}\nfunction sessionEnded(){}\nfunction sessionMark(){}\nfunction sessionClear(){}\nfunction sessionEndedError(){}\nfunction sessionGo(){}\nfunction sessionOnResume(){}\nfunction sessionRetry(){}\n';
+ const sourceOf=name=>name==='session.js'&&!fs.existsSync(path.join(STATIC,name))?SESSION_NAMES:fs.readFileSync(path.join(STATIC,name),'utf8');
+ for(const name of others){const theirs=declared(sourceOf(name));for(const n of mine)assert.ok(!theirs.has(n),n+' is also declared by '+name);}
  for(const n of mine)assert.match(n,/^(builderCheck|builderSchema|builderKeyHelp|BUILDER_)/,n);
  // The page's own advisory check (S3) is builderCheckStatus: this script leaves that name to it.
  assert.ok(!mine.has('builderCheckStatus'));
