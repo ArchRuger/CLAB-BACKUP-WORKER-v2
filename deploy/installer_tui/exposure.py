@@ -137,14 +137,17 @@ def ports_collide(source, env_path=None):
 
 # ---- the certificate -------------------------------------------------------------------------
 def _first_certificate(path):
-    """The first PEM certificate block of the file as DER; ssl.SSLError when there is none, OSError when the
-    file cannot be read. At most 1 MiB is read."""
+    """The first PEM certificate block of the file as DER; ssl.SSLError when there is none or it is not valid
+    PEM, OSError when the file cannot be read. At most 1 MiB is read."""
     with open(path, 'rb') as handle:
         data = handle.read(1 << 20)
     match = re.search(rb'-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----', data, re.S)
     if not match:
         raise ssl.SSLError('the file has no certificate block')
-    return ssl.PEM_cert_to_DER_cert(match.group(0).decode('ascii', errors='replace'))
+    try:
+        return ssl.PEM_cert_to_DER_cert(match.group(0).decode('ascii', errors='replace'))
+    except ValueError:   # a block whose body is not base64: the same refusal as a file without one
+        raise ssl.SSLError('the certificate block is not valid PEM') from None
 
 
 def pinned_context(cafile):

@@ -1814,6 +1814,12 @@ class PinnedContextTests(IsolatedCase):
             exposure.pinned_context(empty)
         with self.assertRaises(OSError):
             exposure.pinned_context(self.pki / 'missing.pem')
+        # A block whose body is not base64 (a truncated or hand-edited file) takes the same refusal path, never a
+        # bare ValueError that the installer would print without its sentence.
+        broken = self.pki / 'broken.pem'
+        broken.write_text('-----BEGIN CERTIFICATE-----\nnot base64 at all!\n-----END CERTIFICATE-----\n')
+        with self.assertRaises(OSError):
+            exposure.pinned_context(broken)
 
     def test_the_context_keeps_the_partial_chain_flag_and_no_host_name_check(self):
         import ssl
