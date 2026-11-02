@@ -23,8 +23,8 @@ repository in the manager (press Save in the lab header and paste its HTTPS addr
 and deploy/lab-template/README.md.
 
 The manager answers HTTPS on port 8443 and needs a sign-in. This tool trusts the installed certificate
-(/srv/containerlab-node-manager/tls/cert.pem, readable by any account on the VM; --cafile names another file; only the first
-certificate of a file, the leaf, is trusted) and
+(/srv/containerlab-node-manager/tls/cert.pem, readable by any account on the VM; --cafile (alias --pin) names another file; only the first
+certificate of a file is trusted, and the server must present exactly that certificate: a CA first in the file trusts nothing it issued) and
 signs in with the environment variables CLAB_USER and CLAB_PASSWORD, or asks for them on the terminal. There is no
 option for a user name or a password: a value on the command line would sit in the process list and the shell history.
 The standard library only; the same logic as docs/sign-on/tools/manager_http.py, which a deploy script cannot import.
@@ -70,12 +70,9 @@ def error_text(answer):
     return detail if isinstance(detail, str) else ''
 
 
-def pinned_context(path):
-    """A client context that accepts exactly one certificate: the FIRST certificate of `path` (a self-signed one, or the leaf of a
-    CA-issued `tls/cert.pem`, which holds the full chain, leaf first). Only that leaf is the trust anchor (the partial-chain flag
-    lets a leaf be one), never the intermediates or root after it: a CA bundle must not make every other certificate of the same
-    CA trustworthy, and a leaf-plus-intermediate file has no self-signed root and must still work. The name is not compared (the
-    certificate names the VM's addresses and this tool is usually run on the VM as 127.0.0.1); validity is checked."""
+def pinned_certificate(path):
+    """The DER bytes of the FIRST certificate of `path` (a self-signed one, or the leaf of a CA-issued `tls/cert.pem`, which holds
+    the full chain, leaf first). The rest of the file is never read as trust."""
     try:
         with open(path, encoding='ascii', errors='ignore') as handle:
             text = handle.read(1024 * 1024)
@@ -84,9 +81,18 @@ def pinned_context(path):
     block = re.search(r'-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\s]+?-----END CERTIFICATE-----', text)
     if block is None:
         die('the file %s holds no PEM certificate.' % path)
+    return ssl.PEM_cert_to_DER_cert(block[0])
+
+
+def pinned_context(path):
+    """The TLS context of a pin: the certificate is the only trust anchor (the partial-chain flag lets a leaf be one, so a
+    leaf-plus-intermediate file has no self-signed root and still works), the name is not compared (the certificate names the
+    VM's addresses and this tool is usually run on the VM as 127.0.0.1), validity is checked. This alone is not the pin: a CA
+    first in the file would become the anchor of everything it issued, so `PinnedHTTPSHandler` also compares the certificate the
+    server presents with the pinned one, byte for byte."""
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     try:
-        context.load_verify_locations(cadata=ssl.PEM_cert_to_DER_cert(block[0]))
+        context.load_verify_locations(cadata=pinned_certificate(path))
     except (ssl.SSLError, ValueError) as error:
         die('the first certificate of %s cannot be used (%s).' % (path, error))
     context.verify_flags |= getattr(ssl, 'VERIFY_X509_PARTIAL_CHAIN', 0)
@@ -95,9 +101,29 @@ def pinned_context(path):
     return context
 
 
+class PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    """HTTPS that accepts exactly one certificate: the connection is closed, before a byte of the request (so before the
+    password) is sent, unless the certificate the server presents is the pinned one."""
+
+    def __init__(self, path):
+        self.der = pinned_certificate(path)
+        super().__init__(context=pinned_context(path))
+
+    def https_open(self, req):
+        der = self.der
+
+        class PinnedConnection(http.client.HTTPSConnection):
+            def connect(self):
+                super().connect()
+                if self.sock.getpeercert(binary_form=True) != der:
+                    self.close()
+                    raise ssl.SSLCertVerificationError(1, 'the server presented a certificate other than the pinned one')
+        return self.do_open(PinnedConnection, req, context=self._context)
+
+
 def opener_for(manager):
     """The opener of one manager: no proxy from the environment, the manager's certificate pinned for HTTPS (the chain is
-    pinned to the leaf of the installed `cert.pem`, or of --cafile; the name is not compared, as the health check does, because the
+    pinned to the exact certificate (the first of the installed `cert.pem`, or of --cafile); the name is not compared, as the health check does, because the
     certificate names the VM's addresses and this tool is usually run on the VM as 127.0.0.1), and a cookie jar."""
     link = LINKS.get(manager)
     if link is not None:
@@ -108,10 +134,9 @@ def opener_for(manager):
         if cafile is None and os.access(INSTALLED_CERTIFICATE, os.R_OK):
             cafile = INSTALLED_CERTIFICATE
         if cafile:
-            context = pinned_context(cafile)
+            handlers = [PinnedHTTPSHandler(cafile)]
         else:
-            context = ssl.create_default_context()
-        handlers = [urllib.request.HTTPSHandler(context=context)]
+            handlers = [urllib.request.HTTPSHandler(context=ssl.create_default_context())]
     elif parts.scheme == 'http' and parts.hostname in LOOPBACK:
         handlers = []     # a plain-HTTP listener on this machine (the browser-test fixture); nothing is signed
     else:
@@ -411,7 +436,7 @@ def argument_parser():
     parser = argparse.ArgumentParser(description='Scaffold a lab state library in the connected Git repository.',
                                      epilog='Sign-in: set CLAB_USER and CLAB_PASSWORD, or be asked on the terminal. There is no option for them.')
     parser.add_argument('--manager', default=DEFAULT_MANAGER, help='manager base URL, https (default %(default)s)')
-    parser.add_argument('--cafile', default=None, help='the manager certificate to pin: the first certificate of the file, no name check (default: %s when readable)' % INSTALLED_CERTIFICATE)
+    parser.add_argument('--cafile', '--pin', dest='cafile', default=None, help='the manager certificate to pin: the first certificate of the file, and the server must present exactly it; no name check, and a CA does not trust what it issued (default: %s when readable)' % INSTALLED_CERTIFICATE)
     parser.add_argument('--lab', default='', help='lab name or id (default: the only lab)')
     sub = parser.add_subparsers(dest='command', required=True)
     p_init = sub.add_parser('init', help='create the reference/{...} and work folders and bind saves to work')

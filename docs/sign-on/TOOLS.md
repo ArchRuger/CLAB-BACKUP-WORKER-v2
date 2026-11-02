@@ -77,8 +77,10 @@ context = playwright_context(browser, manager, viewport={'width': 1440, 'height'
 
 * `https://` only. `--pin cert.pem` trusts exactly the **first certificate of the file** (the leaf; a self-signed certificate, or a
   CA-issued `tls/cert.pem`, which holds the full chain, leaf first) and nothing after it: the intermediates and the root in the file are
-  not trust anchors, so a CA bundle never makes the CA's other certificates acceptable, and a leaf-plus-intermediate file works
-  although it holds no self-signed root. The name is not compared (the certificate names the VM's addresses and a tool on the VM uses
+  not trust anchors, and after the handshake the tool compares the certificate the server presents with the pinned one **byte for
+  byte** and closes the connection, before the sign-in, on any difference. A file that starts with a CA (an intermediate, the root, a
+  CA bundle) therefore trusts nothing that CA issued, not even the manager's own CA-issued leaf: pin the leaf. A
+  leaf-plus-intermediate file works although it holds no self-signed root. The name is not compared (the certificate names the VM's addresses and a tool on the VM uses
   `127.0.0.1`); validity is. `--cafile` verifies the chain and the name. With neither, the installed
   `/srv/containerlab-node-manager/tls/cert.pem` is pinned when readable.
 * A browser context (`playwright_context`) ignores certificate errors **only for 127.0.0.1, ::1 and localhost**. Its cookie is a
@@ -91,7 +93,7 @@ context = playwright_context(browser, manager, viewport={'width': 1440, 'height'
 * `python docs/sign-on/tools/manager_http.py GET /api/state` is the command line; `docs/git-redesign/tools/live/mgr.py` is a
   thin wrapper that keeps the old `mgr.call(method, path, body, timeout)` signature.
 * `deploy/scaffold-lab.py` cannot import it (a deploy script stays self-contained), so it carries the same logic in standard
-  library code (the same leaf pin, from `--cafile` or the installed certificate) and the same environment variables. Its default manager is `https://127.0.0.1:8443`.
+  library code (the same exact-certificate pin, from `--cafile`, whose alias `--pin` says what it does, or the installed certificate) and the same environment variables. Its default manager is `https://127.0.0.1:8443`.
 
 ## The sign-on check (`docs/sign-on/tools/check_signon.py`)
 

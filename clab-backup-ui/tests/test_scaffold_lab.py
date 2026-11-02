@@ -568,6 +568,20 @@ class SignOnTests(unittest.TestCase):
                 self.assertIn('certificate', str(stop.exception))
         self.assertEqual(impostor.seen, [], 'no password reaches a server that is not the pinned one')
 
+    def test_a_pin_file_that_starts_with_a_ca_trusts_no_certificate_that_ca_issued(self):
+        chain = make_chain(self.dir.name)
+        impostor = FakeManager(chain['evil_fullchain'], chain['evil_key'])
+        genuine = FakeManager(chain['fullchain'], chain['leaf_key'])
+        self.addCleanup(impostor.stop); self.addCleanup(genuine.stop)
+        for pin in ('inter', 'root', 'ca_bundle'):
+            for served in (impostor, genuine):
+                with self.subTest(pin=pin, impostor=served is impostor):
+                    with patch.dict(scaffold.SETTINGS, {'cafile': str(chain[pin])}), patch.dict(scaffold.LINKS, clear=True), self.assertRaises(SystemExit) as stop:
+                        scaffold.api(served.base, '/state')
+                    self.assertIn('certificate', str(stop.exception))
+        self.assertEqual(impostor.seen, [], 'no password reaches a server whose certificate is not the pinned one')
+        self.assertEqual(genuine.seen, [])
+
     def test_plain_http_is_refused_except_to_this_machine(self):
         with self.assertRaises(SystemExit) as stop:
             scaffold.api('http://192.0.2.7:8081', '/state')

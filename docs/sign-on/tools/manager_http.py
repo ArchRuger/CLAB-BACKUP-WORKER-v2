@@ -15,7 +15,8 @@ What it does, and what it never does:
 
 * The base URL is `https://`; plain `http://` is refused (the fixture needs no helper: it signs requests in itself).
 * Trust. `--pin cert.pem` trusts exactly the first certificate of that file (the leaf of a CA-issued chain, leaf first,
-  as `setup-tls.sh --cert` installs it; the rest of the file is never trusted) and does not compare the name, as the health
+  as `setup-tls.sh --cert` installs it; the rest of the file is never trusted): the server must present that very certificate,
+  compared byte for byte after the handshake, so a CA first in the file trusts nothing it issued. The name is not compared, as the health
   check does (the manager's certificate names the VM's addresses, and a tool often reaches it as 127.0.0.1). `--cafile CA.pem`
   verifies the chain and the name. With neither, the installed `/srv/containerlab-node-manager/tls/cert.pem` is pinned
   when it is readable, otherwise the system store decides (and a self-signed certificate fails). `CLAB_PIN` and
@@ -50,12 +51,9 @@ INSTALLED_CERTIFICATE = Path('/srv/containerlab-node-manager/tls/cert.pem')
 SESSION_COOKIE = 'clab_session'
 
 
-def pinned_context(path):
-    """A client context that accepts exactly one certificate: the FIRST certificate of `path` (a self-signed one, or the leaf of a
-    CA-issued `tls/cert.pem`, which holds the full chain, leaf first). Only that leaf is the trust anchor (the partial-chain flag
-    lets a leaf be one), never the intermediates or the root that follow it in the file: a CA bundle must not make every other
-    certificate of the same CA trustworthy, and a leaf-plus-intermediate file has no self-signed root and must still work. The name
-    is not compared (a tool often reaches the manager as 127.0.0.1); validity and the signature of the handshake are checked."""
+def pinned_certificate(path):
+    """The DER bytes of the FIRST certificate of `path` (a self-signed one, or the leaf of a CA-issued `tls/cert.pem`, which holds
+    the full chain, leaf first). The rest of the file is never read as trust."""
     try:
         text = Path(path).read_text(encoding='ascii', errors='ignore')
     except OSError as error:
@@ -63,12 +61,41 @@ def pinned_context(path):
     block = re.search(r'-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\s]+?-----END CERTIFICATE-----', text)
     if block is None:
         raise ManagerError('The file %s holds no PEM certificate.' % path)
+    return ssl.PEM_cert_to_DER_cert(block[0])
+
+
+def pinned_context(path):
+    """The TLS context of a pin: the certificate is the only trust anchor (the partial-chain flag lets a leaf be one, so a
+    leaf-plus-intermediate file has no self-signed root and still works) and the name is not compared (a tool often reaches the
+    manager as 127.0.0.1); validity and the signature of the handshake are checked. This alone is not the pin: a CA first in the
+    file would become the anchor of everything it issued, so `PinnedHTTPSHandler` also compares the certificate the server
+    presents with the pinned one, byte for byte."""
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.load_verify_locations(cadata=ssl.PEM_cert_to_DER_cert(block[0]))
+    context.load_verify_locations(cadata=pinned_certificate(path))
     context.verify_flags |= getattr(ssl, 'VERIFY_X509_PARTIAL_CHAIN', 0)
     context.check_hostname = False
     context.verify_mode = ssl.CERT_REQUIRED
     return context
+
+
+class PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    """HTTPS that accepts exactly one certificate: the handshake is verified by `pinned_context`, and the connection is closed,
+    before a byte of the request (so before any password) is sent, unless the server's own certificate is the pinned one."""
+
+    def __init__(self, path):
+        self.der = pinned_certificate(path)
+        super().__init__(context=pinned_context(path))
+
+    def https_open(self, req):
+        der = self.der
+
+        class PinnedConnection(http.client.HTTPSConnection):
+            def connect(self):
+                super().connect()
+                if self.sock.getpeercert(binary_form=True) != der:
+                    self.close()
+                    raise ssl.SSLCertVerificationError(1, 'the server presented a certificate other than the pinned one')
+        return self.do_open(PinnedConnection, req, context=self._context)
 
 
 class ManagerError(Exception):
@@ -86,14 +113,14 @@ class Manager:
         self._user, self._password = user, password
         self._signed_in = False
         self.jar = http.cookiejar.CookieJar()
-        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=self._context(cafile, pin)),
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), self._handler(cafile, pin),
                                                   urllib.request.HTTPCookieProcessor(self.jar))
 
     def __repr__(self):
         return 'Manager(%r)' % self.base
 
     @staticmethod
-    def _context(cafile, pin):
+    def _handler(cafile, pin):
         cafile = cafile or os.environ.get('CLAB_CAFILE') or None
         pin = pin or os.environ.get('CLAB_PIN') or None
         if cafile and pin:
@@ -101,8 +128,8 @@ class Manager:
         if pin is None and cafile is None and INSTALLED_CERTIFICATE.is_file() and os.access(INSTALLED_CERTIFICATE, os.R_OK):
             pin = str(INSTALLED_CERTIFICATE)
         if pin:
-            return pinned_context(pin)
-        return ssl.create_default_context(cafile=cafile)
+            return PinnedHTTPSHandler(pin)
+        return urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=cafile))
 
     @classmethod
     def from_args(cls, args, **kwargs):

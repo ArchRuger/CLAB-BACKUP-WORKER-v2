@@ -62,10 +62,11 @@ def make_chain(directory):
         sign(name, 'inter', f'basicConstraints=CA:FALSE\nsubjectAltName={san}\n')
     join = lambda out, *names: (d/out).write_text(''.join((d/f'{n}.pem').read_text() for n in names))
     join('fullchain.pem', 'leaf', 'inter'); join('bundle.pem', 'leaf', 'inter', 'root'); join('evil_fullchain.pem', 'evil', 'inter')
-    join('evil_bundle.pem', 'evil', 'inter', 'root')
+    join('evil_bundle.pem', 'evil', 'inter', 'root'); join('ca_bundle.pem', 'inter', 'root')
     return {key: d/name for key, name in (('leaf', 'leaf.pem'), ('leaf_key', 'leaf.key'), ('evil', 'evil.pem'), ('evil_key', 'evil.key'),
                                            ('fullchain', 'fullchain.pem'), ('bundle', 'bundle.pem'), ('evil_fullchain', 'evil_fullchain.pem'),
-                                           ('evil_bundle', 'evil_bundle.pem'), ('root', 'root.pem'))}
+                                           ('evil_bundle', 'evil_bundle.pem'), ('root', 'root.pem'), ('inter', 'inter.pem'),
+                                           ('ca_bundle', 'ca_bundle.pem'))}
 
 
 class FakeManager:
@@ -186,6 +187,22 @@ class ManagerHttpTests(unittest.TestCase):
             self.assertIn('certificate', str(raised.exception).lower())
         self.assertEqual(impostor.seen, [], 'no password reaches a server that is not the pinned one')
         self.assertEqual(impostor.signins, 0)
+
+    def test_a_pin_file_that_starts_with_a_ca_trusts_no_certificate_that_ca_issued(self):
+        # A pin is exactly one certificate. A CA first in the file (an intermediate, the root, a CA bundle) must not become the anchor of
+        # its whole hierarchy: another certificate it issued, for another name, is refused and no password reaches that server.
+        chain = make_chain(self.dir.name)
+        impostor = FakeManager(chain['evil_fullchain'], chain['evil_key'])
+        genuine = FakeManager(chain['fullchain'], chain['leaf_key'])
+        self.addCleanup(impostor.stop); self.addCleanup(genuine.stop)
+        for pin in ('inter', 'root', 'ca_bundle'):
+            for served in (impostor, genuine):
+                with self.subTest(pin=pin, served='impostor' if served is impostor else 'issued by the same CA'), self.assertRaises(manager_http.ManagerError) as raised:
+                    manager_http.Manager(served.base, pin=str(chain[pin])).get('/api/state')
+                self.assertIn('certificate', str(raised.exception).lower())
+        self.assertEqual(impostor.seen, [], 'no password reaches a server whose certificate is not the pinned one')
+        self.assertEqual(impostor.signins, 0)
+        self.assertEqual(genuine.signins, 0)
 
     def test_cafile_checks_the_name_but_a_matching_certificate_passes(self):
         self.assertEqual(self.manager(pin=None, cafile=str(self.cert)).get('/api/state')[0], 200)
