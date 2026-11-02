@@ -508,10 +508,8 @@ wins):
 | Directive | Value | Reason |
 |---|---|---|
 | `PermitRootLogin` | `no` | Root has no password on Ubuntu; this closes the key path too. |
-| `MaxAuthTries` | `4` | Fewer guesses per connection. |
 | `LoginGraceTime` | `30` | Unauthenticated connections are dropped sooner. |
 | `PerSourceMaxStartups` | `8` | Caps unauthenticated connections per source (OpenSSH 8.5+; Ubuntu 24.04 ships 9.6). |
-| `X11Forwarding` | `no` | Not used by anything here. |
 
 Not written: `PasswordAuthentication` (WinSCP users and the engineer's VS Code use passwords,
 INSTALL.md "WinSCP file transfers"; the `Match User clab-discovery` block needs it), `AllowTcpForwarding`
@@ -522,6 +520,29 @@ INSTALL.md and reported by the health check** (`ssh.bruteforce`, WARN when not a
 installed by the installer: its default sshd jail bans the operator's own address after five typos
 within ten minutes, which the installer cannot judge for them. OpenSSH 9.8's `PerSourcePenalties` is
 noted as the built-in replacement for an Ubuntu release that ships it.
+
+**As built (S5a, the lead's record after three verification rounds).** *SSH hardening.* The drop-in can hold three
+directives only, each written only while `sshd -T` (read without the script's own earlier drop-in) shows OpenSSH's
+default: `PermitRootLogin no` (default `prohibit-password` or `without-password`), `LoginGraceTime 30` (default 120)
+and `PerSourceMaxStartups 8` (default none). **MaxAuthTries and X11Forwarding are not managed** (the lead's decisions):
+a limit of 4 refused an engineer's next login whose matching key was fifth in `ssh-agent`, for little gain beside the
+other two limits, and stock Ubuntu's own `X11Forwarding yes` cannot be told from an operator's choice, so that row could
+never change anything. `PermitRootLogin` stays at its default, with the reason printed, whenever root may log in with a
+key: `sshd -T -C user=root,…` cannot show root's settings, it names an `AuthorizedKeysCommand` or `TrustedUserCAKeys`,
+root has a key in a file its `AuthorizedKeysFile` names, a file under `sshd_config.d` cannot be read, or a `Match` block
+that may apply to root and depends on more than the user (an address, a host, a port) sets `AuthorizedKeysFile`,
+`AuthorizedKeysCommand` or `TrustedUserCAKeys`. A kept value is reported as *Kept <Directive> <value>: the SSH
+configuration on this VM sets it.*
+
+*Firewall.* The script refuses, changing nothing, when: an SSH session is connected on a port SSH does not listen on;
+a session is connected over IPv6 while ufw does not filter IPv6 (`IPV6=yes` absent); an operator rule blocks an SSH port
+(in either address family, judged by that family's own rule order); an operator rule admits an SSH port only from some
+addresses or interfaces while ufw is not yet in effect; an operator deny narrowed by interface, destination or source
+port, or one that covers a connected session's address, would take effect when ufw is enabled; or a rules file cannot be
+read. It keeps every operator rule for a needed port (*Kept your own rule for P/tcp: …*; a narrowed one adds that no rule
+open to every address was added; a deny on a manager port adds that the manager is not reachable there). `--remove`
+deletes only the clab-manager tuples, per address family, and keeps an SSH allow while ufw is active and denies other
+incoming traffic, naming the command to replace it.
 
 ## 6. Health check additions
 
@@ -657,11 +678,11 @@ fixed `PROBLEM_CODES` sentences and the VM-password setup sentence through as th
 | `tls.listener` | `ctx.head('/api/health')` over HTTPS with the pinned certificate answers 200 | — | handshake fails against the pinned certificate (the listener serves another certificate), or no answer | `setup-tls.sh --show` then `recreate-manager.sh` |
 | `http.redirect` | `ctx.head('/', base='http://127.0.0.1:<UI_HTTP_PORT>')` answers 301 with `Location` = `https://127.0.0.1:<UI_PORT>/` | `UI_HTTP_PORT` ≠ 0 and the redirect container is not running (`compose ps --status running --quiet http-redirect` empty), or it answers something other than 301 | **plain HTTP serves a page**: any 200 from the redirect port, or a 200 over plain HTTP from the TLS port's address (the check also calls `ctx.head('/', base='http://127.0.0.1:<UI_PORT>')`, the third pair of 6.1 rule 1, and expects a connection or protocol error) | `start-manager.sh`; when `UI_HTTP_PORT=0` the check is `INFO HTTP redirect disabled` |
 | `http.hsts` | the HTTPS `/api/health` response carries `strict-transport-security` with `max-age=15552000` | header absent or another value (an older image) | — | `start-manager.sh` (rebuild) |
-| `firewall` | `ufw status verbose` (privileged) says `Status: active`, default `deny (incoming)`, and the SSH port, `UI_PORT` and `UI_HTTP_PORT` (when ≠ 0) are allowed | ufw inactive, or a needed port not allowed (the detail names it) | `ufw` not installed | `sudo bash …/deploy/setup-firewall.sh`; a cloud security group is accepted as the reason to ignore the WARN, said in the detail |
+| `firewall` | `ufw status verbose` (privileged) says `Status: active`, default `deny (incoming)`, and the SSH port, `UI_PORT` and `UI_HTTP_PORT` (when ≠ 0) are allowed (as built, S5a: an operator's own rule for a needed port counts, a narrowed SSH allow included, because `setup-firewall.sh` keeps it) | ufw inactive, a needed port not allowed, or an operator deny on a manager port (the detail names it) | `ufw` not installed | `sudo bash …/deploy/setup-firewall.sh`; a cloud security group is accepted as the reason to ignore the WARN, said in the detail |
 | `exposure.listeners` | every listening TCP socket (`ss -Hltn`, privileged for process names `-p`) that is not loopback is one of: the SSH port, `UI_PORT`, `UI_HTTP_PORT`; detail lists them with the process name | any other non-loopback listener; detail names port and process | `5001` or `5801` (the capture stack) not loopback-only | *Close or firewall the listed port; the capture stack must stay on 127.0.0.1 (`deploy/compose.capture.yml`).* |
 | `exposure.ports` | no running container publishes a port on `0.0.0.0` or `[::]` (`docker ps --format '{{.Names}}\t{{.Ports}}'`, privileged; the capture stack's `127.0.0.1:` bindings pass) | a container does; detail names container and port (a lab node with `ports:` in its topology) | — | *Remove `ports:` from the topology or bind them to 127.0.0.1; Docker-published ports bypass ufw.* |
 | `signon.bootstrap` | `/srv/containerlab-node-manager/data/setup-code` absent (`test -e`, privileged, as 662-664) | present with `mode=setup`: **Setup not completed: no administrator exists** (D3 point 2); or `mode=recover` and the file's mtime (`stat -c %Y`, privileged) younger than 15 minutes: *A recovery is open (it closes 15 minutes after the recovery command ran)*; or `mode=recover` and the mtime 15 minutes or older: *A recovery code expired unused; the manager removes it at the next /setup request.* (DESIGN.md 9.5: the manager deletes an expired file only when `/setup` or `/api/setup` is next requested, and `read_setup_code` treats it as absent, DESIGN.md 16.1) | — | `mode=setup`: *Open `https://<address>:<port>/setup` and enter the code from `sudo cat /srv/containerlab-node-manager/data/setup-code`.*; `mode=recover`, open: *Open `https://<address>:<port>/setup?recover=1` with the code the recovery command printed, or run `sudo bash …/deploy/manager-recover-admin.sh` again.* (REVIEW R11); `mode=recover`, expired: *Run `sudo bash …/deploy/manager-recover-admin.sh` again and open the URL it prints within 15 minutes.* **The report never prints the code** (HEALTH-CHECK.md "Save a support report": reports are shared). The privileged reads are `head -c 16` of the first line only (`mode=…`) and `stat -c %Y`; the age is `time.time()` minus that mtime, with the same 15-minute limit as `read_setup_code`. |
-| `ssh.hardening` | `sshd -T` (privileged, 100-101) shows `permitrootlogin no`, `maxauthtries ≤ 4`, `logingracetime ≤ 30` | any of them at the OpenSSH default; detail names which | — | `sudo bash …/deploy/setup-ssh-hardening.sh` |
+| `ssh.hardening` | `sshd -T` (privileged, 100-101) shows `logingracetime ≤ 30` and `persourcemaxstartups` set, and `permitrootlogin no` (as built, S5a: `permitrootlogin` at its default is INFO, not WARN, because `setup-ssh-hardening.sh` leaves it there whenever root may log in with a key; `maxauthtries` is not checked) | `logingracetime` or `persourcemaxstartups` at the OpenSSH default; detail names which | — | `sudo bash …/deploy/setup-ssh-hardening.sh` |
 | `ssh.bruteforce` | `systemctl is-active fail2ban` succeeds | not active or not installed; detail: *recommended on an Internet-facing VM; see INSTALL.md* | — | `sudo apt-get install -y fail2ban` (documented, not scripted) |
 
 Semantics: `FAIL` makes the overall result *FAILURES FOUND* (summarize, 677-682) and is reserved for a
