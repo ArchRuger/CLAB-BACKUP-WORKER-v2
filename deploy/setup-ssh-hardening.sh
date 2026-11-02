@@ -14,9 +14,12 @@
 # with a key (one in root's AuthorizedKeysFile other than cloud-init's "Please login as" stub, or an
 # AuthorizedKeysCommand or TrustedUserCAKeys that could admit one), read with sshd -T -C for a root
 # connection so that a Match User root block counts: on a VM reached as root by key it would refuse the
-# operator's next login. When those settings cannot be read it is not written either. The candidate is checked with sshd -t -f, the applied
-# configuration with sshd -t, then sshd is reloaded; any failure restores the previous drop-in (or its
-# absence) and reloads that.
+# operator's next login. Nor is it written while a Match block in sshd_config or sshd_config.d that may
+# apply to root and depends on more than the user (Address, Host, LocalPort, ...) sets AuthorizedKeysFile,
+# AuthorizedKeysCommand or TrustedUserCAKeys: sshd -T -C evaluates one made-up connection only, so such a
+# block can admit root's key from an address it never shows. When those settings cannot be read it is not
+# written either. The candidate is checked with sshd -t -f, the applied configuration with sshd -t, then
+# sshd is reloaded; any failure restores the previous drop-in (or its absence) and reloads that.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
 usage() { echo 'Usage: sudo bash deploy/setup-ssh-hardening.sh [--remove]' >&2; exit 64; }
@@ -114,6 +117,73 @@ root_key_login() {
       return
     done < "$path"
   done
+  match_key_setting
+}
+# Whether the user pattern list $1 of a Match block (comma-separated; * and ? as in sshd; ! negates)
+# matches root. A pattern with [ or \ is literal to sshd and cannot match root.
+root_in_list() {
+  local pattern found=1
+  local -a patterns
+  IFS=, read -ra patterns <<< "$1"
+  for pattern in "${patterns[@]}"; do
+    if [[ $pattern == '!'* ]]; then
+      pattern=${pattern#!}
+      [[ $pattern != *[\[\\]* ]] || continue
+      # shellcheck disable=SC2053 # the pattern is matched as a glob on purpose
+      [[ root != $pattern ]] || return 1
+    else
+      [[ $pattern != *[\[\\]* ]] || continue
+      # shellcheck disable=SC2053
+      [[ root != $pattern ]] || found=0
+    fi
+  done
+  return $found
+}
+# Whether the criteria $1 of a Match line may apply to a connection of root's that sshd -T -C does not
+# show: a User list that cannot match root rules the block out; a block of only User and all criteria
+# is one sshd -T -C evaluated exactly; any other criterion depends on the connection.
+match_may_apply() {
+  local i name other=false
+  local -a words
+  read -ra words <<< "${1//=/ }"
+  for (( i = 0; i < ${#words[@]}; i += 2 )); do
+    name=${words[i],,}
+    case $name in
+      all) i=$((i - 1));;
+      user) root_in_list "${words[i + 1]-}" || return 1;;
+      *) other=true;;
+    esac
+  done
+  $other
+}
+# A Match block in sshd_config or sshd_config.d that may apply to root (match_may_apply) and sets one
+# of the settings that give a user a key: the reason, or nothing. A block runs to the next Match line
+# or the end of its file.
+match_key_setting() {
+  local file line lower inside setting
+  for file in "$config" "$dropin_dir"/*.conf; do
+    [[ -e $file ]] || continue
+    if [[ ! -r $file ]]; then echo "$file could not be read, so a Match block there that gives root a key is not ruled out"; return; fi
+    inside=false
+    while IFS= read -r line || [[ -n $line ]]; do
+      line=${line#"${line%%[![:space:]]*}"}
+      lower=${line,,}
+      if [[ $lower =~ ^match([[:space:]]|=) ]]; then
+        inside=false
+        if match_may_apply "${line:6}"; then inside=true; fi
+        continue
+      fi
+      $inside || continue
+      [[ $lower =~ ^(authorizedkeysfile|authorizedkeyscommand|trustedusercakeys)([[:space:]]|=) ]] || continue
+      case ${BASH_REMATCH[1]} in
+        authorizedkeysfile) setting=AuthorizedKeysFile;;
+        authorizedkeyscommand) setting=AuthorizedKeysCommand;;
+        *) setting=TrustedUserCAKeys;;
+      esac
+      echo "a Match block in $file sets $setting for some addresses, hosts or ports, so root may log in with a key from there"
+      return
+    done < "$file"
+  done
 }
 written=()
 # Directive, the value written, the sshd -T key, then OpenSSH's default as sshd -T prints it.
@@ -137,15 +207,13 @@ consider() {
     written+=("$directive $value")
     return 0
   done
-  # The value may be the operator's or the distribution's (Ubuntu's sshd_config sets X11Forwarding yes);
-  # either way it is not OpenSSH's default, so the drop-in, read first, must not override it.
+  # The value may be the operator's or the distribution's; either way it is not OpenSSH's default, so
+  # the drop-in, read first, must not override it.
   echo "Kept $directive $current: the SSH configuration on this VM sets it."
 }
 consider PermitRootLogin no permitrootlogin prohibit-password without-password
-consider MaxAuthTries 4 maxauthtries 6
 consider LoginGraceTime 30 logingracetime 120
 consider PerSourceMaxStartups 8 persourcemaxstartups none
-consider X11Forwarding no x11forwarding no
 
 if (( ${#written[@]} == 0 )); then
   if $had_dropin; then

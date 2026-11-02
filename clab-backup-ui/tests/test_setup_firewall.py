@@ -55,6 +55,10 @@ families = {'4': (os.path.join(os.environ['UFW_DIR'], 'user.rules'), '0.0.0.0/0'
             '6': (os.path.join(os.environ['UFW_DIR'], 'user6.rules'), '::/0')}
 # A missing file stays missing (the script must notice it, not the fake).
 tuples = {family: open(path).read().splitlines() if os.path.exists(path) else [] for family, (path, _) in families.items()}
+# ufw applies, adds and deletes IPv6 rules only with IPV6=yes and a kernel with IPv6 (backend.use_ipv6).
+defaults = open(os.environ['UFW_DEFAULTS']).read() if os.path.exists(os.environ['UFW_DEFAULTS']) else ''
+use_ipv6 = bool(re.search(r'^IPV6=(yes|YES)$', defaults, re.M)) and os.path.isdir(os.environ['UFW_IPV6_PROC'])
+handled = {family: entry for family, entry in families.items() if family == '4' or use_ipv6}
 
 def save():
     open(rules_path, 'w').write(''.join(line + '\n' for line in rules))
@@ -79,17 +83,39 @@ elif args and args[0] in ('allow', 'deny', 'reject', 'limit'):
         print('Rule added')
     # Each family gets the rule unless it holds the same tuple already (ufw compares the tuple, not
     # the comment), as ufw adds a family that is missing while it skips the other.
-    for family, (_, every) in families.items():
+    for family, (_, every) in handled.items():
         tuple_line = plain(action, spec.split('/')[0], every)
         if not any(line.split(' comment=')[0] == tuple_line for line in tuples[family]):
             tuples[family].append(tuple_line + (f' comment={comment.encode().hex()}' if comment else ''))
+elif args[:1] == ['delete'] and args[2:3] == ['from']:
+    # `ufw delete allow from 0.0.0.0/0 to any port N proto tcp` (or ::/0): that family's tuple only,
+    # whatever its comment (ufw matches the tuple); a real ufw 0.36.2 refuses the ::/0 form with
+    # "ERROR: IPv6 support not enabled" while it does not handle IPv6.
+    action, every, port = args[1], args[3], args[7]
+    if args[4:7] != ['to', 'any', 'port'] or args[8:] != ['proto', 'tcp'] or every not in ('0.0.0.0/0', '::/0'):
+        print('ERROR: fixture knows no such delete', file=sys.stderr)
+        sys.exit(1)
+    family = '4' if every == '0.0.0.0/0' else '6'
+    if family not in handled:
+        print('ERROR: IPv6 support not enabled', file=sys.stderr)
+        sys.exit(1)
+    tuples[family] = [line for line in tuples[family] if line.split(' comment=')[0] != plain(action, port, every)]
+
+    def held(line):
+        match = RULE.match(line)
+        if not match or match.group(1) != action or match.group(2) != f'{port}/tcp':
+            return True
+        suffix = f' comment={match.group(3).encode().hex()}' if match.group(3) else ''
+        return any(line == plain(action, port, each) + suffix for fam, (_, each) in families.items() for line in tuples[fam])
+    rules[:] = [line for line in rules if held(line)]
+    print('Rule deleted')
 elif args[:1] == ['delete']:
     action, spec = args[1], args[2]
     kept = [line for line in rules if not (RULE.match(line) and RULE.match(line).group(1) == action and RULE.match(line).group(2) == spec)]
     if len(kept) == len(rules):
         print('Could not delete non-existent rule')
     rules[:] = kept
-    for family, (_, every) in families.items():
+    for family, (_, every) in handled.items():
         tuples[family] = [line for line in tuples[family] if line.split(' comment=')[0] != plain(action, spec.split('/')[0], every)]
     print('Rule deleted')
 elif args[:1] == ['default']:
@@ -283,6 +309,7 @@ class FirewallCase(unittest.TestCase):
         self.env = {'PATH': f'{self.bin}{os.pathsep}{SYSTEM_PATH}', 'HOME': str(self.base), 'LC_ALL': 'C',
                     'UFW_LOG': str(self.ufw_log), 'OTHER_LOG': str(self.other_log),
                     'UFW_RULES': str(self.rules), 'UFW_STATE': str(self.state), 'UFW_DIR': str(self.ufw_dir),
+                    'UFW_DEFAULTS': str(self.ufw_defaults), 'UFW_IPV6_PROC': str(self.ipv6_proc),
                     'SSHD_PORTS': '22', 'SS_LISTENING': LISTEN_22, 'SS_ESTABLISHED': SESSION_22,
                     'SSH_CONNECTION': '198.51.100.7 53422 192.0.2.10 22'}
 
@@ -300,6 +327,14 @@ class FirewallCase(unittest.TestCase):
                 files[family] += tuple_lines
         (self.ufw_dir / 'user.rules').write_text(''.join(line + '\n' for line in files['4']))
         (self.ufw_dir / 'user6.rules').write_text(''.join(line + '\n' for line in files['6']))
+
+    def set_family_rules(self, added, v4=(), v6=()):
+        """`ufw show added` as `added` lists it, and each family's tuple file in the order given: a
+        rule ufw prepended, or one of a single family, sits where `show added` (IPv4 first) cannot show."""
+        self.rules.write_text(''.join(line + '\n' for line in added))
+        for family, lines in (('4', v4), ('6', v6)):
+            text = ''.join(tuples_of(line, family)[family][0] + '\n' for line in lines)
+            (self.ufw_dir / ('user.rules' if family == '4' else 'user6.rules')).write_text(text)
 
     def tuple_lines(self, family):
         return (self.ufw_dir / ('user.rules' if family == '4' else 'user6.rules')).read_text().splitlines()
@@ -618,6 +653,50 @@ class SetupTests(FirewallCase):
         self.assertIn('IPv6', result.stdout)
         self.assertEqual(self.mutating_calls(), [])
 
+    def test_an_ipv6_source_deny_ufw_put_ahead_of_the_ssh_allow_is_refused_while_ufw_is_inactive(self):
+        # `ufw prepend deny from 2001:db8::/32 to any port 22 proto tcp` sits first in user6.rules, but
+        # `ufw show added` lists every IPv4 rule first, so only IPv6's own order shows it ahead of the allow.
+        allow, deny = 'ufw allow 22/tcp', 'ufw deny from 2001:db8::/32 to any port 22 proto tcp'
+        self.set_family_rules([allow, deny], v4=[allow], v6=[deny, allow])
+        result = self.run_script(SSH_CONNECTION='2001:db8::7 53422 2001:db8::10 22')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("Your ufw rule 'deny from 2001:db8::/32", result.stdout)
+        self.assertIn('which includes 2001:db8::7', result.stdout)
+        self.assertIn('Nothing was changed', result.stdout)
+        self.assertEqual(self.mutating_calls(), [])
+
+    def test_an_ipv6_deny_for_every_address_ufw_put_ahead_of_our_ssh_allow_is_refused(self):
+        # `ufw prepend deny from ::/0 to any port 22 proto tcp` ahead of our allow: `show added` prints it
+        # as `deny 22/tcp` after ours, and ufw would skip adding ours again, so IPv6 SSH stays blocked.
+        ours, deny = "ufw allow 22/tcp comment 'clab-manager'", 'ufw deny 22/tcp'
+        self.set_family_rules([ours, deny], v4=[ours], v6=[deny, ours])
+        result = self.run_script()
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn('blocks the SSH port 22 over IPv6', result.stdout)
+        self.assertIn('Nothing was changed', result.stdout)
+        self.assertEqual(self.mutating_calls(), [])
+
+    def test_an_ipv6_deny_ahead_of_our_manager_allow_is_kept_and_named_with_its_family(self):
+        ours, deny = "ufw allow 8443/tcp comment 'clab-manager'", 'ufw deny 8443/tcp'
+        self.set_family_rules([ours, deny], v4=[ours], v6=[deny, ours])
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('8443/tcp', [call[1] for call in self.allow_calls()])
+        self.assertIn('Kept your own rule for 8443/tcp: deny from ::/0 to ::/0 port 8443 proto tcp.', result.stdout)
+        self.assertIn('The manager is not reachable on port 8443 over IPv6 while that rule stays.', result.stdout)
+
+    def test_an_ipv6_ssh_allow_narrowed_to_some_addresses_is_named_without_the_missing_family_note(self):
+        # IPv6 holds an allow for some addresses only, not no rule: the refusal names that rule, and the
+        # note that the family has no rule at all is given only when it lacks the port's tuple.
+        allow, narrow = 'ufw allow 22/tcp', 'ufw allow from 2001:db8::/32 to any port 22 proto tcp'
+        self.set_family_rules([allow, narrow], v4=[allow], v6=[narrow])
+        result = self.run_script()
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("Your ufw rule 'allow from 2001:db8::/32 to ::/0 port 22 proto tcp' admits SSH port 22 only from some addresses",
+                      result.stdout)
+        self.assertNotIn('it admits no IPv6 address', result.stdout)
+        self.assertEqual(self.mutating_calls(), [])
+
     def test_without_ipv6_in_the_kernel_only_the_ipv4_rules_count_and_no_ipv6_note_is_printed(self):
         # ufw filters IPv6 only with IPV6=yes and /proc/sys/net/ipv6 present (backend.use_ipv6); a
         # kernel booted with ipv6.disable=1 has no IPv6 table and no user6.rules rules apply.
@@ -901,6 +980,49 @@ class RemoveTests(FirewallCase):
         result = self.run_script('--remove', SSHD_T_STATUS='255')
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertEqual(self.mutating_calls(), [])
+
+    def test_remove_deletes_ours_only_in_the_family_whose_comment_is_clab_manager(self):
+        # `ufw delete allow 8443/tcp` would delete the tuple in both families, the operator's
+        # `allow 8443/tcp comment 'mine'` of the other family with it (ufw matches the tuple, not the comment).
+        ours, theirs = "ufw allow 8443/tcp comment 'clab-manager'", "ufw allow 8443/tcp comment 'mine'"
+        for own_family, every in (('4', '0.0.0.0/0'), ('6', '::/0')):
+            with self.subTest(own_family=own_family):
+                self.ufw_log.unlink(missing_ok=True)
+                other = '6' if own_family == '4' else '4'
+                added = [ours, theirs] if own_family == '4' else [theirs, ours]
+                self.set_family_rules(added, **{'v' + own_family: [ours], 'v' + other: [theirs]})
+                result = self.run_script('--remove')
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertEqual(self.mutating_calls(), [['delete', 'allow', 'from', every, 'to', 'any', 'port', '8443',
+                                                          'proto', 'tcp']])
+                self.assertEqual(self.tuple_lines(own_family), [])
+                self.assertEqual(self.tuple_lines(other), tuples_of(theirs, other)[other])
+                self.assertEqual(self.rule_lines(), [theirs])
+                self.assertIn(f'Deleted the clab-manager allow for 8443/tcp over IPv{own_family}', result.stdout)
+
+    def test_remove_names_our_ipv6_copy_that_ufw_cannot_delete_while_it_does_not_handle_ipv6(self):
+        # A real ufw 0.36.2 refuses `delete ... from ::/0 ...` with "IPv6 support not enabled".
+        self.set_rules(*self.OURS)
+        self.ufw_defaults.write_text('IPV6=no\n')
+        result = self.run_script('--remove')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.mutating_calls(), [['delete', 'allow', 'from', '0.0.0.0/0', 'to', 'any', 'port', port, 'proto', 'tcp']
+                                                 for port in ('22', '8443', '8081')])
+        self.assertEqual(self.tuple_lines('4'), [])
+        self.assertEqual(len(self.tuple_lines('6')), 3)
+        self.assertIn('The clab-manager allow for 8443/tcp stays in user6.rules', result.stdout)
+        self.assertIn('IPV6=no', result.stdout)
+
+    def test_the_kept_ssh_allow_of_one_family_names_the_delete_of_that_family(self):
+        self.set_state(active=True, incoming='deny', outgoing='allow')
+        ours, theirs = "ufw allow 22/tcp comment 'clab-manager'", "ufw allow 22/tcp comment 'mine'"
+        self.set_family_rules([ours, theirs], v4=[ours], v6=[theirs])
+        result = self.run_script('--remove')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.mutating_calls(), [])
+        self.assertIn('Kept the SSH allow on 22/tcp', result.stdout)
+        self.assertIn('then: sudo ufw delete allow from 0.0.0.0/0 to any port 22 proto tcp', result.stdout)
+        self.assertNotIn('sudo ufw delete allow 22/tcp', result.stdout)
 
     def test_setup_then_remove_on_an_inactive_firewall_round_trips_to_the_operators_rules(self):
         self.set_rules(*self.THEIRS)

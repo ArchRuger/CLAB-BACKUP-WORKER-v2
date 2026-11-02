@@ -16,8 +16,9 @@ of the shipped script with exactly three lines replaced, the root guard (a no-op
 and root's home (temporary ones); the texts are asserted, so a change fails loudly instead of testing
 stale logic. The fake sshd emulates the include order of Ubuntu (drop-ins first, then the rest of
 sshd_config, the first value wins) over a base of OpenSSH defaults the test chooses; with `-C`
-(`sshd -T -C user=root,...`) it applies the `Match User` and `Match all` blocks that name the user over
-that, as sshd does for one connection. Standard library only.
+(`sshd -T -C user=root,...`) it applies the `Match all` blocks and the blocks whose every criterion holds
+for that one connection (User, Host and Address compared literally) over that, as sshd does. Standard
+library only.
 """
 import os
 import shutil
@@ -77,8 +78,13 @@ if args[:1] == ['-T']:
         block = None  # None: global; True or False: inside a Match block that does or does not apply
         for key, value in lines(path):
             if key == 'match':
-                words = value.split()
-                block = words == ['all'] or (words[0].lower() == 'user' and connection.get('user') in words[1].split(','))
+                # Every criterion must hold for the connection; a value is compared literally (no
+                # networks or wildcards), so a block on another address or host does not apply.
+                words = value.replace('=', ' ').split()
+                pairs = list(zip(words[0::2], words[1::2]))
+                block = words == ['all'] or bool(pairs) and all(
+                    connection.get({'address': 'addr'}.get(name.lower(), name.lower())) in patterns.split(',')
+                    for name, patterns in pairs)
             elif key == 'include':
                 continue
             elif block is None:
@@ -103,7 +109,7 @@ if args[:1] == ['-t']:
     if os.environ.get('SSHD_FAIL_WITHOUT_DROPIN') and not dropin.exists():
         print('sshd: bad configuration', file=sys.stderr)
         sys.exit(255)
-    if os.environ.get('SSHD_FAIL_WITH_NEW_DROPIN') and dropin.exists() and 'MaxAuthTries 4' in dropin.read_text():
+    if os.environ.get('SSHD_FAIL_WITH_NEW_DROPIN') and dropin.exists() and 'LoginGraceTime 30' in dropin.read_text():
         print('sshd: bad configuration', file=sys.stderr)
         sys.exit(255)
     sys.exit(0)
@@ -192,8 +198,7 @@ class SshHardeningTests(unittest.TestCase):
     def test_directives_at_the_openssh_default_are_all_written(self):
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertEqual(self.directives(), ['PermitRootLogin no', 'MaxAuthTries 4', 'LoginGraceTime 30',
-                                             'PerSourceMaxStartups 8', 'X11Forwarding no'])
+        self.assertEqual(self.directives(), ['PermitRootLogin no', 'LoginGraceTime 30', 'PerSourceMaxStartups 8'])
         self.assertEqual(stat.S_IMODE(self.dropin.stat().st_mode), 0o644)
         self.assertEqual(self.leftovers(), [])
         self.assertIn('systemctl reload ssh', self.calls())
@@ -214,11 +219,14 @@ class SshHardeningTests(unittest.TestCase):
         self.assertIn('PermitRootLogin no', self.directives())
 
     def test_an_operators_own_value_is_never_overridden(self):
-        self.set_base(permitrootlogin='yes', maxauthtries='3', x11forwarding='yes', logingracetime='60')
+        # The kept value is named in the output (it used to be MaxAuthTries 3, a row that is gone: with an
+        # agent holding several keys, 4 refused an engineer's next login).
+        self.set_base(permitrootlogin='yes', logingracetime='60')
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual(self.directives(), ['PerSourceMaxStartups 8'])
-        self.assertIn('MaxAuthTries 3', result.stdout)
+        self.assertIn('Kept LoginGraceTime 60', result.stdout)
+        self.assertIn('Kept PermitRootLogin yes', result.stdout)
 
     def test_a_directive_this_sshd_does_not_know_is_not_written(self):
         self.set_base(persourcemaxstartups=None)
@@ -232,14 +240,28 @@ class SshHardeningTests(unittest.TestCase):
         path.write_text(text)
         return path
 
-    def test_stock_ubuntu_x11forwarding_yes_is_kept_and_not_called_the_operators_own(self):
+    def test_stock_ubuntu_x11forwarding_yes_is_left_alone_and_not_called_the_operators_own(self):
+        # Stock Ubuntu's own `X11Forwarding yes` cannot be told from an operator's choice, so under the
+        # never-override rule a row for it could never change anything: the script does not manage it
+        # (it used to print 'Kept X11Forwarding yes'; now it neither writes nor names it).
         self.config.write_text(UBUNTU_SSHD_CONFIG)
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertEqual(self.directives(), ['PermitRootLogin no', 'MaxAuthTries 4', 'LoginGraceTime 30',
-                                             'PerSourceMaxStartups 8'])
-        self.assertIn('Kept X11Forwarding yes', result.stdout)
+        self.assertEqual(self.directives(), ['PermitRootLogin no', 'LoginGraceTime 30', 'PerSourceMaxStartups 8'])
+        self.assertNotIn('x11forwarding', result.stdout.lower())
+        self.assertNotIn('x11forwarding', self.dropin.read_text().lower())
         self.assertNotIn('your own', result.stdout)
+
+    def test_maxauthtries_and_x11forwarding_are_neither_written_nor_mentioned(self):
+        # MaxAuthTries 4 refused an engineer's next login with an agent holding several keys (OpenSSH's
+        # 6 stays); X11Forwarding could never change under the never-override rule. sshd -T prints both.
+        self.assertNotIn('maxauthtries', SCRIPT.read_text().lower())
+        self.assertNotIn('x11forwarding', SCRIPT.read_text().lower())
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        for name in ('maxauthtries', 'x11forwarding'):
+            self.assertNotIn(name, result.stdout.lower())
+            self.assertNotIn(name, self.dropin.read_text().lower())
 
     def test_root_with_an_authorized_key_keeps_its_login_and_the_rest_is_written(self):
         for name in ('.ssh/authorized_keys', '.ssh/authorized_keys2'):
@@ -249,8 +271,7 @@ class SshHardeningTests(unittest.TestCase):
                 path = self.root_keys('# operator key\nssh-ed25519 AAAAC3fixture admin@laptop\n', name)
                 result = self.run_script()
                 self.assertEqual(result.returncode, 0, result.stdout)
-                self.assertEqual(self.directives(), ['MaxAuthTries 4', 'LoginGraceTime 30', 'PerSourceMaxStartups 8',
-                                                     'X11Forwarding no'])
+                self.assertEqual(self.directives(), ['LoginGraceTime 30', 'PerSourceMaxStartups 8'])
                 self.assertIn('Not written: PermitRootLogin', result.stdout)
                 self.assertIn(str(path), result.stdout)
 
@@ -305,12 +326,56 @@ class SshHardeningTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('PermitRootLogin no', self.directives())
 
+    def test_a_match_block_sshd_cannot_evaluate_for_root_that_sets_key_settings_keeps_permitrootlogin(self):
+        # sshd -T -C evaluates Match blocks for one made-up connection (127.0.0.1, localhost) only, so a
+        # block that admits root's key from some address or host is not in its answer: `no` would then
+        # refuse root's next key login from there. Any Match block that could apply to root and sets
+        # AuthorizedKeysFile, AuthorizedKeysCommand or TrustedUserCAKeys keeps PermitRootLogin at its default.
+        keys = self.base / 'rootkeys'
+        keys.mkdir()
+        (keys / 'root').write_text('ssh-ed25519 AAAAC3fixture admin@laptop\n')
+        cases = [('sshd_config', 'Match User root Address 198.51.100.0/24', f'AuthorizedKeysFile {keys}/%u'),
+                 ('sshd_config', 'Match Host admin.example.org', 'AuthorizedKeysCommand /usr/local/bin/keys %u'),
+                 ('sshd_config.d/60-ops.conf', 'Match Address 203.0.113.7', 'TrustedUserCAKeys /etc/ssh/ca.pub'),
+                 ('sshd_config.d/60-ops.conf', 'match user=root,admin address=192.0.2.0/24', f'authorizedkeysfile={keys}/%u'),
+                 ('sshd_config', 'Match User r*t LocalPort 2222', f'AuthorizedKeysFile {keys}/%u')]
+        config = self.config.read_text()
+        for name, match, setting in cases:
+            with self.subTest(match=match, setting=setting):
+                self.dropin.unlink(missing_ok=True)
+                self.config.write_text(config)
+                (self.ssh_dir / 'sshd_config.d/60-ops.conf').unlink(missing_ok=True)
+                path = self.ssh_dir / name
+                path.write_text((path.read_text() if path.exists() else '') + f'{match}\n    {setting}\n')
+                result = self.run_script()
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertNotIn('PermitRootLogin no', self.directives())
+                self.assertEqual(self.directives(), ['LoginGraceTime 30', 'PerSourceMaxStartups 8'])
+                self.assertIn('Not written: PermitRootLogin (a Match block in', result.stdout)
+                self.assertIn(str(path), result.stdout)
+                self.assertIn(setting.replace('=', ' ').split()[0].lower(), result.stdout.lower())
+
+    def test_a_match_block_that_cannot_apply_to_root_or_sets_other_things_still_writes_permitrootlogin(self):
+        for match, setting in (('Match User deploy,!root Address 198.51.100.0/24', 'AuthorizedKeysFile /etc/keys/%u'),
+                               ('Match User admin*', 'TrustedUserCAKeys /etc/ssh/ca.pub'),
+                               ('Match Address 198.51.100.0/24', 'PasswordAuthentication no'),
+                               # A block on the user alone is one sshd -T -C evaluated exactly for root.
+                               ('Match User root', 'AuthorizedKeysFile /nonexistent/%u'),
+                               ('# Match Address 198.51.100.0/24', '#    AuthorizedKeysFile /etc/keys/%u')):
+            with self.subTest(match=match, setting=setting):
+                self.dropin.unlink(missing_ok=True)
+                self.config.write_text('Include /etc/ssh/sshd_config.d/*.conf\nUsePAM yes\n'
+                                       f'{match}\n    {setting}\n')
+                result = self.run_script()
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertIn('PermitRootLogin no', self.directives())
+
     def test_root_settings_that_cannot_be_read_keep_permitrootlogin(self):
         result = self.run_script(SSHD_TC_STATUS='255')
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertNotIn('PermitRootLogin no', self.directives())
         self.assertIn('Not written: PermitRootLogin', result.stdout)
-        self.assertIn('MaxAuthTries 4', self.directives())
+        self.assertIn('LoginGraceTime 30', self.directives())
 
     def test_keys_sshd_finds_elsewhere_keep_permitrootlogin(self):
         for change in ({'authorizedkeyscommand': '/usr/bin/sss_ssh_authorizedkeys'},
@@ -345,9 +410,9 @@ class SshHardeningTests(unittest.TestCase):
 
     def test_an_operator_change_after_the_first_run_is_released_on_the_next(self):
         self.assertEqual(self.run_script().returncode, 0)
-        self.set_base(maxauthtries='3')
+        self.set_base(logingracetime='60')
         self.assertEqual(self.run_script().returncode, 0)
-        self.assertNotIn('MaxAuthTries 4', self.directives())
+        self.assertNotIn('LoginGraceTime 30', self.directives())
 
     def test_failing_sshd_t_after_applying_restores_no_drop_in_and_reloads(self):
         result = self.run_script(SSHD_FAIL_WITH_NEW_DROPIN='1')
@@ -398,8 +463,7 @@ class SshHardeningTests(unittest.TestCase):
         self.assertNotIn('systemctl reload ssh', self.calls())
 
     def test_no_directive_at_the_default_writes_no_drop_in_and_removes_an_old_one(self):
-        self.set_base(permitrootlogin='no', maxauthtries='3', logingracetime='60', persourcemaxstartups='4',
-                      x11forwarding='yes')
+        self.set_base(permitrootlogin='no', logingracetime='60', persourcemaxstartups='4')
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertFalse(self.dropin.exists())
@@ -416,7 +480,7 @@ class SshHardeningTests(unittest.TestCase):
         # PermitRootLogin stays at the default (root has a key) and every other directive is set:
         # "every directive already has a value of your own" would be false for PermitRootLogin.
         self.root_keys('ssh-ed25519 AAAAC3fixture admin@laptop\n')
-        self.set_base(maxauthtries='3', logingracetime='60', persourcemaxstartups='4', x11forwarding='yes')
+        self.set_base(logingracetime='60', persourcemaxstartups='4')
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertFalse(self.dropin.exists())
@@ -424,11 +488,11 @@ class SshHardeningTests(unittest.TestCase):
         self.assertIn('no drop-in was written', result.stdout)
 
     def test_a_directive_an_earlier_drop_in_sets_is_reported_as_not_in_effect(self):
-        (self.ssh_dir / 'sshd_config.d/10-operator.conf').write_text('MaxAuthTries 6\n')
+        (self.ssh_dir / 'sshd_config.d/10-operator.conf').write_text('LoginGraceTime 120\n')
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn('MaxAuthTries 4', self.directives())
-        self.assertIn('Not in effect: MaxAuthTries', result.stdout)
+        self.assertIn('LoginGraceTime 30', self.directives())
+        self.assertIn('Not in effect: LoginGraceTime', result.stdout)
         self.assertIn('In effect: PermitRootLogin no', result.stdout)
 
     def test_a_service_that_is_not_running_gets_the_drop_in_without_a_reload(self):
@@ -473,10 +537,10 @@ class SshHardeningTests(unittest.TestCase):
         self.assertNotIn('systemctl reload ssh', self.calls())
 
     def test_remove_restores_the_drop_in_when_the_result_fails_sshd_t(self):
-        self.dropin.write_text('MaxAuthTries 4\n')
+        self.dropin.write_text('LoginGraceTime 30\n')
         result = self.run_script('--remove', SSHD_FAIL_WITHOUT_DROPIN='1')
         self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertEqual(self.dropin.read_text(), 'MaxAuthTries 4\n')
+        self.assertEqual(self.dropin.read_text(), 'LoginGraceTime 30\n')
         self.assertIn('restored', result.stdout)
         self.assertEqual(self.calls()[-2:], ['sshd -t', 'systemctl reload ssh'])
 

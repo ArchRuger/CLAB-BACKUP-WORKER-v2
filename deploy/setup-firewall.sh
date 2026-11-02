@@ -23,9 +23,13 @@
 # `to any port 22`, an application profile), keeps that port untouched: nothing is added for it, and an
 # operator's allow narrowed to some addresses or an interface is never widened. Whether a rule covers
 # both address families is read from ufw's rule files (user.rules, user6.rules), because `ufw show
-# added` prints `from 0.0.0.0/0` and `from ::/0` exactly like `any`. It never resets ufw's rules and
-# never disables it. --remove deletes only the clab-manager rules, and keeps the SSH one while ufw is
-# active and denies other incoming traffic (deleting it would block new SSH logins).
+# added` prints `from 0.0.0.0/0` and `from ::/0` exactly like `any`, and each family's rules are also
+# read in that family's own order (`show added` lists every IPv4 rule first, so a rule ufw prepended
+# in user6.rules shows only there). It never resets ufw's rules and never disables it. --remove deletes
+# only the clab-manager rules, each in the family whose rule file holds it with that comment (ufw
+# deletes by tuple, whatever the comment, so `ufw delete allow N/tcp` would also take an operator's
+# rule of the same tuple in the other family), and keeps the SSH one while ufw is active and denies
+# other incoming traffic (deleting it would block new SSH logins).
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
 usage() { echo 'Usage: sudo bash deploy/setup-firewall.sh [--remove]' >&2; exit 64; }
@@ -121,6 +125,9 @@ ipv6_filtered=false
 [[ ( $ipv6_value == yes || $ipv6_value == YES ) ]] && $kernel_ipv6 && ipv6_filtered=true
 ipv6_setting="$ufw_defaults does not set IPV6"
 [[ -z $ipv6_value ]] || ipv6_setting="$ufw_defaults sets IPV6=$ipv6_value"
+# The address families whose rules ufw applies (and adds and deletes): IPv4 always, IPv6 when it filters it.
+families_handled=(4)
+! $ipv6_filtered || families_handled+=(6)
 
 if ! $remove; then
   for port in "${session_ports[@]}"; do
@@ -312,24 +319,59 @@ if $remove; then
   status=$(ufw status verbose) || refuse "ufw status failed. $nothing"
   denying=false
   if grep -qx 'Status: active' <<< "$status" && ! grep -Eq '^Default: allow \(incoming\)' <<< "$status"; then denying=true; fi
-  found=false
-  while read -r line; do
-    [[ $line =~ ^ufw\ allow\ ([0-9]+)/tcp\ comment\ \'clab-manager\'$ ]] || continue
-    found=true
-    port=${BASH_REMATCH[1]}
+  # This script's rule in each family's rule file: ufw deletes a rule by its tuple, whatever its
+  # comment, and `ufw delete allow N/tcp` deletes it in both families, so an operator's rule of the same
+  # tuple in the other family is deleted only by the form for one family. ufw handles IPv6 rules (and
+  # deletes them) only while it filters IPv6.
+  declare -A own=()
+  own_ports=()
+  for family in 4 6; do
+    file="$ufw_rules_dir/user.rules"
+    [[ $family == 4 ]] || file="$ufw_rules_dir/user6.rules"
+    if [[ $family == 6 ]] && ! $ipv6_filtered && [[ ! -r $file ]]; then continue; fi
+    [[ -f $file && -r $file ]] || refuse "Could not read $file, ufw's IPv$family rules. $nothing"
+    converted=$(tuple_rules "$file") || refuse "Could not read $file, ufw's IPv$family rules. $nothing"
+    while read -r line; do
+      [[ $line =~ ^ufw\ allow\ ([0-9]+)/tcp\ comment\ \'clab-manager\'$ ]] || continue
+      own[$family:${BASH_REMATCH[1]}]=1
+      contains "${BASH_REMATCH[1]}" "${own_ports[@]}" || own_ports+=("${BASH_REMATCH[1]}")
+    done <<< "$converted"
+  done
+  ipv6_reason=$ipv6_setting
+  $kernel_ipv6 || ipv6_reason='this kernel has no IPv6'
+  for port in "${own_ports[@]}"; do
+    deletable=()
+    for family in "${families_handled[@]}"; do [[ -z ${own[$family:$port]-} ]] || deletable+=("$family"); done
+    if [[ -n ${own[6:$port]-} ]] && ! $ipv6_filtered; then
+      echo "The clab-manager allow for $port/tcp stays in user6.rules: ufw handles no IPv6 rules now ($ipv6_reason), so it cannot delete it. It has no effect until ufw filters IPv6 again; then rerun with --remove."
+    fi
+    (( ${#deletable[@]} )) || continue
+    # Both families hold this script's rule: one delete takes both. Otherwise the one family's form.
+    if [[ ${deletable[*]} == '4 6' ]]; then
+      delete="delete allow $port/tcp"
+    else
+      every=0.0.0.0/0; [[ ${deletable[0]} == 4 ]] || every=::/0
+      delete="delete allow from $every to any port $port proto tcp"
+    fi
     if $denying && { contains "$port" "${ssh_ports[@]}" || contains "$port" "${session_ports[@]}"; }; then
       # ufw takes a plain allow or limit of the same port and protocol over in place of this rule (and
       # drops its comment), so the hint names only forms that ufw keeps as rules of their own.
       example="sudo ufw allow from <your network> to any port $port proto tcp"
       [[ $port != 22 ]] || example="$example or sudo ufw allow OpenSSH"
       echo "Kept the SSH allow on $port/tcp (clab-manager): ufw is active and denies other incoming traffic, so deleting it would block new SSH logins."
-      echo "To replace it, add an SSH rule that ufw keeps apart from this one, for example $example (a plain allow or limit of $port/tcp would take this rule over instead), check with sudo ufw show added that your rule is listed, then: sudo ufw delete allow $port/tcp"
+      echo "To replace it, add an SSH rule that ufw keeps apart from this one, for example $example (a plain allow or limit of $port/tcp would take this rule over instead), check with sudo ufw show added that your rule is listed, then: sudo ufw $delete"
       continue
     fi
-    ufw delete allow "$port/tcp" >/dev/null
-    echo "Deleted the clab-manager allow for $port/tcp."
-  done <<< "$added"
-  $found || echo 'No clab-manager rules to remove.'
+    read -ra words <<< "$delete"
+    ufw "${words[@]}" >/dev/null
+    if [[ ${deletable[*]} == '4 6' ]]; then
+      echo "Deleted the clab-manager allow for $port/tcp."
+    else
+      other=6; [[ ${deletable[0]} == 4 ]] || other=4
+      echo "Deleted the clab-manager allow for $port/tcp over IPv${deletable[0]} only; any IPv$other rule for $port/tcp is left as it is."
+    fi
+  done
+  (( ${#own_ports[@]} )) || echo 'No clab-manager rules to remove.'
   echo 'ufw is otherwise unchanged; this script never disables it.'
   exit 0
 fi
@@ -354,9 +396,8 @@ for port in "${ssh_ports[@]}" "${tls_ports[@]}" "${redirect_ports[@]}"; do
   contains "$port" "${ports[@]}" || ports+=("$port")
 done
 
-# ufw's rules per address family, as the kernel applies them: IPv4 always, IPv6 when ufw filters it.
-families=(4)
-$ipv6_filtered && families+=(6)
+# ufw's rules per address family, as the kernel applies them.
+families=("${families_handled[@]}")
 # shellcheck disable=SC2034 # both are read through the nameref of decide()
 rules4=()
 # shellcheck disable=SC2034
@@ -368,16 +409,38 @@ for family in "${families[@]}"; do
   converted=$(tuple_rules "$file") || refuse "Could not read $file, ufw's IPv$family rules. $nothing"
   [[ -z $converted ]] || mapfile -t "rules$family" <<< "$converted"
 done
-# The families in which the first rule that decides port $1 is not an allow for every address.
-family_gap() {
-  local family gap='' saved_decision=$decision saved_line=$decision_line
-  local -a saved_denies=("${early_denies[@]}")
+# Port $1 as each family's own rules decide it, in that family's order: `ufw show added` lists every
+# IPv4 rule first, so a rule ufw put ahead in user6.rules (ufw prepend, or a rule of one family) is
+# seen only here. Called after decide() of the listed rules, whose result it refines in place: a
+# family's deny or reject for every address makes the port blocked by that rule (family_note names the
+# families), a family's allow for some addresses only makes it narrowed by that rule, a family with no
+# rule that decides the port makes it narrowed with the note that it admits no address of that family
+# (or, when this script's rule is the one that decides, is added again: ufw adds the missing family's
+# copy and skips the other); every family's narrowed denies join early_denies.
+family_check() {
+  local port=$1 family listed=$decision listed_line=$decision_line blocked='' blocked_line='' narrow_line='' missing=''
+  local -a listed_denies=("${early_denies[@]}") family_denies=()
   for family in "${families[@]}"; do
-    decide "$1" "rules$family"
-    [[ $decision == ours || $decision == kept ]] || gap+="${gap:+ and }IPv$family"
+    decide "$port" "rules$family"
+    family_denies+=("${early_denies[@]}")
+    case $decision in
+      blocked) blocked+="${blocked:+ and }IPv$family"; [[ -n $blocked_line ]] || blocked_line=$decision_line;;
+      narrowed) [[ -n $narrow_line ]] || narrow_line=$decision_line;;
+      add) missing+="${missing:+ and }IPv$family";;
+    esac
   done
-  decision=$saved_decision; decision_line=$saved_line; early_denies=("${saved_denies[@]}")
-  printf '%s' "$gap"
+  decision=$listed; decision_line=$listed_line; early_denies=("${listed_denies[@]}" "${family_denies[@]}")
+  family_note=''; note=''
+  if [[ -n $blocked ]]; then
+    decision=blocked; decision_line=$blocked_line; family_note=" over $blocked"
+  elif [[ -n $narrow_line ]]; then
+    decision=narrowed; decision_line=$narrow_line
+  elif [[ -n $missing && $decision == ours ]]; then
+    decision=add
+  elif [[ -n $missing ]]; then
+    decision=narrowed
+    note=" (it admits no $missing address: ufw lists a rule for 0.0.0.0/0 or ::/0 as any, so it can hold one address family only)"
+  fi
 }
 # Whether ufw is active, and whether it denies other incoming traffic already: then the operator's
 # rules are in effect and this script changes nothing for a port it adds nothing for.
@@ -388,22 +451,14 @@ if $active && ! grep -Eq '^Default: allow \(incoming\)' <<< "$status"; then deny
 ufw_state='ufw is not active'
 ! $active || ufw_state='ufw allows other incoming traffic'
 
-decisions=(); lines=(); notes=()
+decisions=(); lines=(); notes=(); family_notes=()
 for port in "${ports[@]}"; do
   decide "$port" rules
-  note=''
-  if [[ $decision == ours || $decision == kept ]]; then
-    gap=$(family_gap "$port")
-    if [[ -n $gap && $decision == ours ]]; then
-      decision=add  # ufw adds the missing family's copy of this script's rule and skips the other
-    elif [[ -n $gap ]]; then
-      decision=narrowed
-      note=" (it admits no $gap address: ufw lists a rule for 0.0.0.0/0 or ::/0 as any, so it can hold one address family only)"
-    fi
-  fi
+  note=''; family_note=''
+  if [[ $decision == ours || $decision == kept ]]; then family_check "$port"; fi
   if contains "$port" "${ssh_ports[@]}"; then
     if [[ $decision == blocked ]]; then
-      refuse "Your ufw rule '${decision_line#ufw }' blocks the SSH port $port. $nothing"
+      refuse "Your ufw rule '${decision_line#ufw }' blocks the SSH port $port$family_note. $nothing"
     fi
     if [[ $decision == narrowed ]] && ! $denying; then
       refuse "Your ufw rule '${decision_line#ufw }' admits SSH port $port only from some addresses or on some interfaces$note. $ufw_state, so that rule is not in effect yet: enabling ufw would block new SSH logins from every other address. Enable ufw yourself once you have checked that your own address is covered, or add an SSH allow for every address, then rerun. $nothing"
@@ -425,12 +480,12 @@ for port in "${ports[@]}"; do
       done
     fi
   fi
-  decisions+=("$decision"); lines+=("$decision_line"); notes+=("$note")
+  decisions+=("$decision"); lines+=("$decision_line"); notes+=("$note"); family_notes+=("$family_note")
 done
 $ipv6_filtered || ! $kernel_ipv6 || echo "Note: $ipv6_setting, so once ufw is enabled it drops all incoming IPv6, SSH and the manager included. Set IPV6=yes there to filter IPv6 with the same rules."
 
 for index in "${!ports[@]}"; do
-  port=${ports[index]}; line=${lines[index]}; note=${notes[index]}
+  port=${ports[index]}; line=${lines[index]}; note=${notes[index]}; family_note=${family_notes[index]}
   case ${decisions[index]} in
     add)
       ufw allow "$port/tcp" comment "$comment" >/dev/null
@@ -440,7 +495,7 @@ for index in "${!ports[@]}"; do
     narrowed) echo "Kept your own rule for $port/tcp: ${line#ufw }. It limits who reaches port $port$note, so no rule open to every address was added.";;
     blocked)
       echo "Kept your own rule for $port/tcp: ${line#ufw }."
-      echo "The manager is not reachable on port $port while that rule stays.";;
+      echo "The manager is not reachable on port $port$family_note while that rule stays.";;
   esac
 done
 ufw default deny incoming >/dev/null
