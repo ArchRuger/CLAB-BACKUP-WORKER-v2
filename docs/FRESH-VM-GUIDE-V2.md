@@ -595,9 +595,14 @@ the installer's allows from anywhere stay and still decide. To narrow the manage
 workstation instead, add your own rules first, then remove the installer's, replacing the
 placeholder:
 
+WORKSTATION_IP must be the address the VM sees, which behind NAT, a VPN or a jump host is not
+the one you type in your client: read it in your current SSH session with
+`echo $SSH_CONNECTION` (the first field). Keep that session open.
+
 ```bash
 sudo ufw allow from WORKSTATION_IP to any port 22 proto tcp
 sudo ufw allow from WORKSTATION_IP to any port 8443 proto tcp
+sudo ufw allow from WORKSTATION_IP to any port 8081 proto tcp
 sudo bash "$HOME/projects/clab-manager/deploy/setup-firewall.sh" --remove
 sudo ufw delete allow 22/tcp
 sudo ufw status
@@ -606,8 +611,13 @@ sudo ufw status
 `--remove` deletes the installer's rules for 8443 and 8081 and keeps its SSH allow while `ufw`
 denies other incoming traffic, because deleting that one first would block new SSH logins. Run
 the last `delete` only after `sudo ufw show added` lists your own SSH rule (use the scoped rule above: a plain `ufw allow 22/tcp` would take the installer's rule over
-instead of being kept apart from it). The redirect on 8081 then stops answering unless you add a rule for it.
-Later upgrades keep a narrowed rule.
+instead of being kept apart from it), and then open a second SSH login from the workstation
+before closing the first: a rule that does not match the address the VM sees blocks every new
+login while the current session survives. If `sshd` listens on another port, use the delete
+command that `--remove` prints for it instead of `22/tcp`. Later upgrades keep all three
+narrowed rules. Without the 8081 rule the next *Install or update* allows 8081 from anywhere
+again; to have no redirect at all, set `UI_HTTP_PORT=0` in `clab-backup-ui/.env` and run
+`recreate-manager.sh` instead of adding it.
 
 Do not enable a firewall blindly during a remote session. From Windows PowerShell, test:
 

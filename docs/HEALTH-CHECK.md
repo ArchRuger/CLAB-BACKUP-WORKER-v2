@@ -145,11 +145,11 @@ You may meet these **SKIP** results (the reasons below are the common ones; each
 | *The saved state could not be read without the manager (…); the manager's own page runs this check.* | The probe could not open the saved state. Open **Manager ▾ › Diagnostics** after signing in as an administrator, which runs the same check. |
 | *… a lab's save drawer lists the registry.* | The same, for the Git registry: open a lab's **Save ▾** drawer, whose folder chooser lists the repositories through the same request. |
 | *The installed certificate could not be read, so the manager was not asked over HTTPS.* | `cert.pem` is missing or unreadable; run the `setup-tls.sh` command shown. |
-| *Docker access is required for this check.* | The account running the report cannot use Docker; run it as an account that can, or with `sudo`. |
+| *Docker access is required for this check.* | Docker or the manager container is not available (the *Docker daemon*, *Docker Compose* and *Manager container* rows say which); follow their `Next:` line. The report already asks Docker through `sudo`. |
 | *The manager start command could not be read.* / *The manager has no usable HTTPS address, so the TLS listener was not probed.* / *The TLS listener did not answer, so the header was not read.* | The manager container is missing or not serving; run the `start-manager.sh` command shown. |
 | *The certificate names could not be read…* / *The certificate rule of setup-tls.sh could not be loaded…* | The names in the certificate were not compared; run the `setup-tls.sh` command shown. |
 | *The listening sockets could not be listed.* / *The running containers could not be listed.* | The exposure check could not read the host's sockets or the container list; nothing was concluded. |
-| *The setup-code file could not be checked…* | Whether a setup or recovery code waits is unknown; check the permissions of the data folder. |
+| *The setup-code file could not be checked…* | Whether a setup or recovery code waits is unknown; rerun the report with administrator access, as its `Next:` line says. |
 | *The effective SSH configuration could not be read.* | Run the `setup-ssh-hardening.sh` command shown. |
 | *Manager container unavailable…* | The probe-based facts were not read; start the manager and run the report again. |
 

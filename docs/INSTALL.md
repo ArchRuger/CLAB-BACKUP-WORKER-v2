@@ -259,8 +259,9 @@ connection is not private*, **Advanced** › *Proceed to …*; Firefox: *Warning
 Security Risk Ahead*, **Advanced…** › *Accept the Risk and Continue*), and again after a
 new certificate. The connection is encrypted either way; what the warning cannot tell the
 browser is that the certificate is *yours*. Compare the SHA-256 fingerprint in the
-browser's certificate viewer with the one the installer printed after the manager
-verification (`Certificate fingerprint (SHA-256) …`), which you can print again, as your
+browser's certificate viewer with the one the installer printed (the closing lines say
+*The certificate is self-signed: … its SHA-256 fingerprint is …*; the launcher's earlier
+output carries a `Certificate fingerprint (SHA-256)` line), which you can print again, as your
 ordinary account:
 
 ```bash
@@ -318,6 +319,12 @@ they were. A path is followed through symbolic links only along certbot's own la
 in a root-owned directory that ends at a root-owned file under `/etc/letsencrypt/archive/`
 (`live/NAME/fullchain.pem` and `privkey.pem` qualify); anything else is refused with the link
 named. The step recreates the manager when either file changed.
+
+**A certificate change restarts the manager.** Every recreation (a new, renewed or regenerated
+certificate, a changed name, a settings reload) signs everyone out, because sessions live in
+memory only, and marks a backup, save, Load or import that is queued or running as
+`interrupted`. Rotate outside teaching hours, and schedule an unattended certbot hook
+accordingly.
 
 A provided certificate is never touched by an installation or upgrade, which only report its
 expiry (and the health check warns from 30 days before it and fails after it). Rotate it by
