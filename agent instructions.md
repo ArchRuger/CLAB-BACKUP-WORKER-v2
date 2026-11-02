@@ -1,3 +1,25 @@
+# A save's end the person already saw stays closed — 1.31.9
+
+The evidence is in `clab-backup-ui/VALIDATION.md` (1.31.9). Preserve:
+
+1. **An end is shown once.** `saveHeader.opened` holds the ends the chip panel has shown: those `saveFinished` opened
+   by itself for, and those the person saw and closed before the watch handed them over (`savePanelClosed`: the poll
+   painted the end of `watchedJob` over the *Saving…* view, the panel showed a save state, the person closed it). An
+   end the person has not seen still opens the panel by itself, and a load's view (*Running*, *Partial*) is not the
+   save's result (`docs/git-redesign/design/HEADER.md` 2.5). `saveResultPanel` is the one status-to-view rule of an
+   end. The two tests after Q390-01 in `tests/test_save_header_ui.js` pin both sides.
+2. **The chip toggles.** A click on the chip of an open panel closes it, and Playwright's `to_be_enabled` does not
+   wait for visibility: a browser check that clicks the chip must know whether the panel is open.
+3. **Merging into `main`.** `main` carries the sign-on work (pull request 80) merged but not released, still under
+   1.31.8; its release step is 1.32.0 (`docs/sign-on/PICKUP.md`). A merge of this release conflicts where sign-on
+   changed the marker lines too (the pages, `app.js`, `INSTALL.md`, `QUICK-INSTALL.md`) and in `preferences.js`.
+   Proven on a scratch copy of `main` (`750accc`): keep `main`'s side of every file `set-release.py` lists, `VERSION`
+   included; set the `SHORTCUT_EXCLUSIONS` citation of the panel's `keydown` line to `save-header.js:680` (the
+   reverse pin in `test_shell_ui.js` checks it); run `python3 deploy/set-release.py 1.31.9` once (26 files, with
+   sign-on's three new pages). `verify-release.py` then passes and `node --test tests/*.js` reports 1432 of 1432. The
+   note in `docs/sign-on/TOOLS.md` that `save_flow.py` stops at `#save-see` is then out of date.
+4. Everything the 1.31.8 section below preserves.
+
 # vJunos-router as a supported kind — 1.31.8
 
 Read `docs/parity-campaign/PICKUP.md`'s last entry and `DEVICES.md`. Preserve:

@@ -1,3 +1,17 @@
+## Changes in 1.31.9
+
+- **A save's end that the person already saw does not open the chip panel again.** After Save, the 4 s state poll can
+  paint a save's end (*Not uploaded yet*, *Upload failed*, *Can’t save*) over the open *Saving…* panel before the
+  save's own watch reports it. A person who closed the panel in that moment (**Not now**, Escape, a click outside) saw
+  it open again by itself about a second later, and their next click on the chip closed it. That end now counts as
+  shown, so the panel stays closed and the chip alone says what waits. An end the person has not seen still opens the
+  panel by itself, as before: the panel was closed while it still showed *Saving…*, or only a load's view (*Running*,
+  *Partial*) was on screen (`save-header.js`: `savePanelClosed`; `saveResultPanel` is the one rule that names the view
+  of an end). The race shipped with the header in 1.31.0 and timing decided whether a run hit it: it is why the fixture
+  check `docs/git-redesign/tools/integration/save_flow.py` stopped after its first **Not now** (`#save-see` not
+  visible). The check was right and is unchanged; `docs/git-redesign/design/HEADER.md` 2.5 now says the same.
+- The keyboard-shortcut exclusion that cites the chip panel's `keydown` line follows the line (`preferences.js`).
+
 ## Changes in 1.31.8
 
 - **vJunos-router is a supported kind.** The "blocked on a VM host, derivative only" caveats are gone from the
