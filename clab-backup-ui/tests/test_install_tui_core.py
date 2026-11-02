@@ -1732,6 +1732,98 @@ class ExposureCertificateTests(IsolatedCase):
         self.assertFalse(exposure.health_ready(url, folder / 'cert.pem'))
 
 
+@unittest.skipUnless(shutil.which('openssl'), 'openssl is needed to make real certificates')
+class PinnedContextTests(IsolatedCase):
+    """The installer pins the FIRST certificate of tls/cert.pem (the leaf) and nothing else: a provided
+    certificate's file is leaf + intermediate, and trusting the whole file would let any certificate the
+    intermediate issued, for any name, pass the readiness check."""
+
+    def openssl(self, *args, **kwargs):
+        subprocess.run(['openssl', *args], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=self.pki, **kwargs)
+
+    def issue(self, name, issuer, ca):
+        self.openssl('req', '-new', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes', '-subj', f'/CN={name}',
+                     '-keyout', f'{name}.key', '-out', f'{name}.csr')
+        (self.pki / f'{name}.ext').write_text(
+            ('basicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\n' if ca else
+             'basicConstraints=critical,CA:FALSE\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\n'
+             'subjectAltName=IP:127.0.0.1,DNS:localhost\n'))
+        self.openssl('x509', '-req', '-in', f'{name}.csr', '-CA', f'{issuer}.pem', '-CAkey', f'{issuer}.key', '-CAcreateserial',
+                     '-days', '30', '-sha256', '-extfile', f'{name}.ext', '-out', f'{name}.pem')
+
+    def setUp(self):
+        super().setUp()
+        self.pki = self.tmp / 'pki'
+        self.pki.mkdir()
+        self.openssl('req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes', '-days', '30',
+                     '-subj', '/CN=root', '-addext', 'basicConstraints=critical,CA:TRUE', '-addext', 'keyUsage=critical,keyCertSign',
+                     '-keyout', 'root.key', '-out', 'root.pem')
+        self.issue('inter', 'root', ca=True)
+        self.issue('leafa', 'inter', ca=False)
+        self.issue('leafb', 'inter', ca=False)
+        for leaf in ('leafa', 'leafb'):
+            (self.pki / f'{leaf}-chain.pem').write_text((self.pki / f'{leaf}.pem').read_text() + (self.pki / 'inter.pem').read_text())
+
+    def serve(self, chain, key):
+        import http.server
+        import ssl
+        import threading
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = b'{"ready": true}'
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(self.pki / chain, self.pki / key)
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return f'https://127.0.0.1:{server.server_address[1]}/'
+
+    def test_a_self_signed_leaf_is_accepted(self):
+        self.openssl('req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes', '-days', '30',
+                     '-subj', '/CN=self', '-addext', 'subjectAltName=IP:127.0.0.1', '-keyout', 'self.key', '-out', 'self.pem')
+        url = self.serve('self.pem', 'self.key')
+        self.assertTrue(exposure.health_ready(url, self.pki / 'self.pem'))
+
+    def test_the_pinned_leaf_with_its_intermediate_is_accepted_by_a_server_presenting_both(self):
+        url = self.serve('leafa-chain.pem', 'leafa.key')
+        self.assertTrue(exposure.health_ready(url, self.pki / 'leafa-chain.pem'))
+
+    def test_another_leaf_of_the_same_intermediate_is_refused(self):
+        # The file holds leaf A + the intermediate; the server presents leaf B + the same intermediate. Only the
+        # first certificate is an anchor, so the shared issuer vouches for nothing.
+        url = self.serve('leafb-chain.pem', 'leafb.key')
+        with self.assertRaises(OSError):
+            exposure.health_ready(url, self.pki / 'leafa-chain.pem')
+
+    def test_a_file_without_a_certificate_block_is_refused_like_an_unreadable_one(self):
+        empty = self.pki / 'empty.pem'
+        empty.write_text('not a certificate\n')
+        with self.assertRaises(OSError):
+            exposure.pinned_context(empty)
+        with self.assertRaises(OSError):
+            exposure.pinned_context(self.pki / 'missing.pem')
+
+    def test_the_context_keeps_the_partial_chain_flag_and_no_host_name_check(self):
+        import ssl
+        context = exposure.pinned_context(self.pki / 'leafa-chain.pem')
+        self.assertFalse(context.check_hostname)
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.verify_flags & ssl.VERIFY_X509_PARTIAL_CHAIN)
+        self.assertFalse(context.verify_flags & ssl.VERIFY_X509_STRICT)
+
+
 class ExposureSetupCodeTests(IsolatedCase):
     def test_parse_accepts_the_two_line_file_in_either_mode(self):
         self.assertEqual(exposure.parse_setup_code(f'mode=setup\ncode={GOOD_CODE}\n'), ('setup', GOOD_CODE))

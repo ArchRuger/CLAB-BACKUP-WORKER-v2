@@ -136,13 +136,26 @@ def ports_collide(source, env_path=None):
 
 
 # ---- the certificate -------------------------------------------------------------------------
+def _first_certificate(path):
+    """The first PEM certificate block of the file as DER; ssl.SSLError when there is none, OSError when the
+    file cannot be read. At most 1 MiB is read."""
+    with open(path, 'rb') as handle:
+        data = handle.read(1 << 20)
+    match = re.search(rb'-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----', data, re.S)
+    if not match:
+        raise ssl.SSLError('the file has no certificate block')
+    return ssl.PEM_cert_to_DER_cert(match.group(0).decode('ascii', errors='replace'))
+
+
 def pinned_context(cafile):
-    """A TLS client context that trusts exactly the manager's own certificate file. The host name
-    is not checked (the installer asks 127.0.0.1 or [::1]; the certificate names the VM's
-    addresses), which is safe because the only trusted certificate is the pinned one. A provided
-    certificate's file is a chain without its root, so a trusted leaf or intermediate must be
-    enough (partial chain); strict mode is off because a self-signed leaf is its own anchor."""
-    context = ssl.create_default_context(cafile=str(cafile))
+    """A TLS client context that trusts exactly one certificate: the FIRST certificate block of the manager's
+    cert.pem (the leaf; a provided certificate's file is the leaf followed by its intermediate, and trusting the
+    whole file would make the intermediate an anchor for every certificate it issued). The host name is not
+    checked (the installer asks 127.0.0.1 or [::1]; the certificate names the VM's addresses), which is safe
+    because the only trusted certificate is the pinned one. The leaf is accepted as its own anchor (partial
+    chain); strict mode is off because a self-signed leaf is not a conforming CA. A file without a
+    certificate block fails like an unreadable one (OSError, ssl.SSLError)."""
+    context = ssl.create_default_context(cadata=_first_certificate(cafile))
     context.check_hostname = False
     context.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
     context.verify_flags &= ~ssl.VERIFY_X509_STRICT
