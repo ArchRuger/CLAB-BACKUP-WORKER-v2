@@ -1286,6 +1286,14 @@ class ProbeTests(IsolatedCase):
             state, summary, detail = probes.probe_tls(self.tls_ctx())
         self.assertEqual((state, summary), (probes.READY, 'Provided, expires 2099-01-01'))
 
+    def test_tls_row_advice_for_an_unreadable_certificate_names_the_script_by_absolute_path(self):
+        ctx = self.tls_ctx()
+        with patch.object(probes.exposure, 'facts', return_value=None):
+            state, summary, detail = probes.probe_tls(ctx)
+        self.assertEqual(state, probes.UNAVAILABLE)
+        self.assertIn(f'bash {self.tmp / "deploy/setup-tls.sh"} --show', detail)
+        self.assertNotRegex(detail, r'bash deploy/')
+
     def test_tls_row_warns_inside_thirty_days_and_after_expiry(self):
         from datetime import date, timedelta
         soon = (date.today() + timedelta(days=10)).isoformat()
@@ -1474,6 +1482,40 @@ class ExposureSettingsTests(IsolatedCase):
             with self.subTest(text=text):
                 self.assertIs(exposure.ports_collide(self.source(text)), expected)
 
+    def test_the_settings_reader_reads_as_setup_tls_and_compose_do(self):
+        # deploy/setup_tls.py (env_values) and Compose read the same file: an `export ` prefix is ignored, an
+        # unquoted value ends at a `#` that follows whitespace, quotes are removed, nothing is evaluated.
+        cases = [('export UI_PORT=9001\n', {'UI_PORT': '9001'}),
+                 ('  export   UI_PORT = 9001\n', {'UI_PORT': '9001'}),
+                 ('UI_PORT=9001 # the TLS port\n', {'UI_PORT': '9001'}),
+                 ('UI_PORT=9001\t# tab\n', {'UI_PORT': '9001'}),
+                 ('UI_PORT="9001" # quoted\n', {'UI_PORT': '9001'}),
+                 ("UI_PORT='9001'\n", {'UI_PORT': '9001'}),
+                 ('UI_PORT="90 #01"\n', {'UI_PORT': '90 #01'}),
+                 ('export UI_PORT=8081 # tls\nUI_PORT=9002\n', {'UI_PORT': '9002'}),
+                 ('# UI_PORT=1\nexportUI_PORT=2\n', {})]
+        for text, expected in cases:
+            with self.subTest(text=text):
+                self.assertEqual(exposure.env_values(self.source(text), ('UI_PORT',)), expected)
+        self.assertEqual(exposure.ports(self.source('export UI_PORT=9001 # tls\nexport UI_HTTP_PORT=9002 # redirect\n')),
+                         (9001, 9002))
+
+    def test_an_empty_value_means_the_default_not_an_explicit_setting(self):
+        self.assertEqual(exposure.env_values(self.source('UI_PORT=\nUI_HTTP_PORT=  # nothing\nUI_BIND=\n'),
+                                             ('UI_PORT', 'UI_HTTP_PORT')), {})
+        root = self.source('UI_HTTP_PORT=0\nUI_HTTP_PORT=\n')   # the last line wins, and it is empty
+        self.assertEqual(exposure.ports(root), (8443, 8081))
+        self.assertEqual(exposure.ports(self.source('UI_PORT=\nUI_HTTP_PORT=\n')), (8443, 8081))
+
+    def test_port_8081_with_an_empty_redirect_port_is_still_the_collision(self):
+        for text in ('UI_PORT=8081\nUI_HTTP_PORT=\n', 'export UI_PORT=8081 # tls\nexport UI_HTTP_PORT= # none\n',
+                     'export UI_PORT=8081 # tls\n'):
+            with self.subTest(text=text):
+                root = self.source(text)
+                self.assertTrue(exposure.ports_collide(root))
+                self.assertEqual(exposure.ports(root), (8081, 8081))
+        self.assertFalse(exposure.ports_collide(self.source('UI_PORT=8081\nUI_HTTP_PORT=0\n')))
+
 
 class ExposureCertificateTests(IsolatedCase):
     OPENSSL = ('sha256 Fingerprint=A5:45:86:46:30:8F:E9:5E:D7:4B:79:7E:6E:CE:AE:32:C9:67:33:7A:E8:3B:CC:66:AA:06:97:29:2F:96:52:0D\n'
@@ -1564,6 +1606,40 @@ class ExposureCertificateTests(IsolatedCase):
         self.assertIn('HSTS', sentence)
         self.assertIn('by IP address', sentence)
         self.assertIn('setup-tls.sh --show', exposure.certificate_sentence(None))
+
+    def test_the_unreadable_certificate_advice_names_setup_tls_by_absolute_path(self):
+        sentence = exposure.certificate_sentence(None)
+        self.assertIn(f'bash {DEPLOY / "setup-tls.sh"} --show', sentence)
+        self.assertTrue(exposure.SETUP_TLS_SCRIPT.is_absolute())
+        explicit = exposure.certificate_sentence(None, Path('/opt/my checkout/deploy/setup-tls.sh'))
+        self.assertIn("bash '/opt/my checkout/deploy/setup-tls.sh' --show", explicit)
+        self.assertNotRegex(sentence, r'bash deploy/')
+
+    def test_the_redirect_clause_of_a_self_signed_certificate_is_the_plain_one(self):
+        selfsigned = {'mode': 'self-signed', 'fingerprint': 'AB:CD', 'expires': '2028-01-01'}
+        urls = ['https://lab.example:8443/', 'https://192.0.2.10:8443/']
+        self.assertEqual(exposure.redirect_notes(urls, selfsigned, 8443, 8081), ('plain HTTP on 8081 redirects there', ''))
+        self.assertEqual(exposure.redirect_notes(urls, selfsigned, 8443, 0), ('', ''))
+        self.assertEqual(exposure.redirect_notes(urls, None, 8443, 8081)[1], '')
+
+    def test_a_provided_certificate_limits_the_redirect_to_the_ip_urls_and_warns_about_the_name(self):
+        provided = {'mode': 'provided', 'fingerprint': 'AB:CD', 'expires': '2028-01-01'}
+        urls = ['https://lab.example:8443/', 'https://192.0.2.10:8443/']
+        clause, sentence = exposure.redirect_notes(urls, provided, 8443, 8081)
+        self.assertEqual(clause, 'plain HTTP on 8081 redirects to the IP address URLs')
+        self.assertIn('http://lab.example:8081 is never reached by name', sentence)
+        self.assertIn('retype old links by name as https://lab.example:8443', sentence)
+        self.assertTrue(sentence.endswith('Links by IP address keep redirecting.'))
+        # a name on its own: nothing is redirected by IP in the line, but the sentence about links by name stands
+        clause, sentence = exposure.redirect_notes(['https://lab.example:8443/'], provided, 443, 80)
+        self.assertEqual(clause, '')
+        self.assertIn('http://lab.example is never reached by name', sentence)
+        self.assertIn('retype old links by name as https://lab.example', sentence)
+        # addresses only (or the <VM address> placeholder): no link by name exists to warn about
+        self.assertEqual(exposure.redirect_notes(['https://192.0.2.10:8443/', 'https://[2001:db8::1]:8443/'], provided, 8443, 8081),
+                         ('plain HTTP on 8081 redirects to the IP address URLs', ''))
+        self.assertEqual(exposure.redirect_notes(['https://<VM address>:8443/'], provided, 8443, 8081), ('', ''))
+        self.assertEqual(exposure.redirect_notes(urls, provided, 8443, 0), ('', ''))
 
     def test_the_session_ssh_port_is_the_server_port_of_a_well_formed_ssh_connection(self):
         self.assertEqual(exposure.session_ssh_port({'SSH_CONNECTION': '198.51.100.7 51234 192.0.2.10 2222'}), '2222')

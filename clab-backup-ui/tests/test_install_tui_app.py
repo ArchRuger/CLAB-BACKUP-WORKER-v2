@@ -54,6 +54,7 @@ from rich.text import Text  # noqa: E402
 from textual.widgets import Button, Checkbox, Input, ListItem, Log, RadioSet, Static  # noqa: E402
 
 import fixture  # noqa: E402
+import snapshots  # noqa: E402
 from installer_tui import app as slate  # noqa: E402
 from installer_tui import core, engine, exposure, probes  # noqa: E402
 
@@ -1717,6 +1718,36 @@ class ResultScreenTests(SlateCase):
             joined = collapse('\n'.join(app.summary_plain(run)))
             self.assertIn(f'Create the first administrator at https://vm1.example.edu:8443/setup with this setup code: {GOOD_CODE}', joined)
 
+    async def test_a_provided_certificate_limits_the_redirect_to_the_ip_urls_and_says_what_hsts_does_to_names(self):
+        # Parity with the plain menu (EXPOSURE.md 7.4, REVIEW R17): http://<name>:8081 is never reached by name.
+        ctx = self.ctx()
+        with patch.object(exposure, 'primary', lambda *a, **k: 'lab.example'), \
+                patch.object(exposure, 'facts', lambda *a, **k: dict(TLS_FACTS, mode='provided')):
+            async with self.running((120, 40), ctx) as (app, pilot):
+                run = full_install_run(ctx, partial=False)
+                joined = collapse('\n'.join(app.summary_plain(run)))
+        self.assertIn('https://lab.example:8443/, https://192.0.2.10:8443/, https://198.51.100.7:8443/', joined)
+        self.assertIn('Plain HTTP on 8081 redirects to the IP address URLs.', joined)
+        self.assertNotIn('redirects there', joined)
+        self.assertIn('http://lab.example:8081 is never reached by name', joined)
+        self.assertIn('retype old links by name as https://lab.example:8443', joined)
+        self.assertIn('Links by IP address keep redirecting.', joined)
+
+    async def test_the_self_signed_summary_keeps_the_plain_redirect_sentence(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            joined = collapse('\n'.join(app.summary_plain(full_install_run(ctx, partial=False))))
+        self.assertIn('Plain HTTP on 8081 redirects there.', joined)
+        self.assertNotIn('never reached by name', joined)
+
+    async def test_the_git_row_chosen_for_later_names_the_installer_by_absolute_path(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = full_install_run(ctx, partial=False)
+            run.phases = [phase for phase in run.phases if phase.key != 'git']
+            rows = collapse(' '.join(str(item) for item in app.outcomes(run)))
+        self.assertIn('bash ' + str(Path(ctx.source) / 'deploy/install.sh') + ' --git.', rows)
+
     async def test_the_code_is_read_again_each_time_the_summary_is_built_never_kept(self):
         self.readings = [('open', 'setup', GOOD_CODE), ('open', 'setup', 'zzzzzz-yyyyyy-xxxxxx-wwwwww')]
         ctx = self.ctx()
@@ -2292,7 +2323,9 @@ class MainReturnCodeTests(unittest.TestCase):
         code, out, err = self.main(behavior)
         self.assertEqual(code, 1)
         self.assertIn('The installer screen stopped unexpectedly (RuntimeError)', out)
-        self.assertIn('rerun bash deploy/install.sh', out)
+        # The advice runs from the operator's own directory: the installer is named by absolute path.
+        self.assertIn('rerun bash ' + str(Path(self.ctx.source) / 'deploy/install.sh'), out)
+        self.assertTrue((Path(self.ctx.source) / 'deploy/install.sh').is_absolute())
         self.assertNotIn('Nothing was changed', err)
 
     def test_return_code_75_after_a_run_is_reported_as_1(self):
@@ -2562,6 +2595,53 @@ class StatusFocusTests(SlateCase):
             await pilot.press('end')
             await pilot.pause()
             self.assertEqual(app.focused.current_key, 'lazydocker')
+
+
+class SnapshotToolTests(SlateCase):
+    """docs/installer-tui/tools/snapshots.py draws FIXTURE screens: its result scenes must never run the real
+    readers of the VM (`sudo -n cat` of the setup code, `openssl` on the certificate, `setup-tls.sh --primary`),
+    because a rerun on a development VM with passwordless sudo would write the live setup code into the
+    committed snapshots."""
+
+    def refusing(self, name):
+        def refuse(*args, **kwargs):
+            raise AssertionError(f'snapshots.py reached the real exposure.{name}')
+        return refuse
+
+    async def shoot_results(self, out):
+        argv = ['snapshots.py', str(out), '--only=result-partial', '--only=result-completed']
+        with contextlib.ExitStack() as stack:
+            for name in ('facts', 'primary', 'read_setup_code'):
+                stack.enter_context(patch.object(exposure, name, self.refusing(name)))
+            stack.enter_context(patch.object(sys, 'argv', argv))
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            await snapshots.main()
+        return sorted(out.glob('result-*.svg'))
+
+    async def test_the_result_scenes_stub_every_reader_of_the_vm(self):
+        files = await self.shoot_results(self.root / 'snapshots')
+        self.assertEqual(len(files), 6, files)
+
+    async def test_the_result_scenes_show_the_fixture_code_and_the_fixture_address_only(self):
+        files = await self.shoot_results(self.root / 'snapshots')
+        text = (self.root / 'snapshots' / 'result-completed-160x50.svg').read_text()
+        flat = re.sub(r'<[^>]+>', '', text).replace('&#160;', ' ')
+        self.assertIn('abcdef-ghjkmn-pqrstu-vwxy23', flat)
+        self.assertIn('vm1.example.edu', flat)
+        self.assertNotIn('127.0.0.1:8081', flat, 'the verification outcome is the HTTPS address')
+        for svg in files:
+            self.assertNotIn('sudo -n', svg.read_text())
+
+    async def test_the_readers_are_restored_after_the_tool_ran(self):
+        guards = {name: self.refusing(name) for name in ('facts', 'primary', 'read_setup_code')}
+        with contextlib.ExitStack() as stack:
+            for name, guard in guards.items():
+                stack.enter_context(patch.object(exposure, name, guard))
+            stack.enter_context(patch.object(sys, 'argv', ['snapshots.py', str(self.root / 'later'), '--only=result-partial']))
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            await snapshots.main()
+            for name, guard in guards.items():
+                self.assertIs(getattr(exposure, name), guard, name)
 
 
 if __name__ == '__main__':

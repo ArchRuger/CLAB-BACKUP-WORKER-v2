@@ -139,7 +139,8 @@ def tls_context(cafile):
         return exposure().pinned_context(cafile)
     except (OSError, ssl.SSLError) as error:
         raise ValueError(f'The manager certificate {cafile} cannot be used ({type(error).__name__}). '
-                         'Choose Install/update to create it, or run: sudo bash deploy/setup-tls.sh') from error
+                         'Choose Install/update to create it, or run: sudo bash '
+                         + shlex.quote(str(SOURCE / 'deploy/setup-tls.sh'))) from error
 
 
 def check_manager(env, version, wait_seconds=45, say=print, sudo=('sudo',)):
@@ -819,10 +820,10 @@ def access_lines():
     tls_port, redirect = exposure().ports(SOURCE)
     certificate = exposure().facts(exposure().TLS_DIR)
     urls = exposure().access_urls(exposure().primary(SOURCE), certificate, tls_port)
-    line = 'Open the manager at ' + ', '.join(urls)
-    if redirect:
-        line += f' (plain HTTP on {redirect} redirects there)'
-    return [line + '.', exposure().certificate_sentence(certificate)]
+    clause, hsts = exposure().redirect_notes(urls, certificate, tls_port, redirect)
+    line = 'Open the manager at ' + ', '.join(urls) + (f' ({clause})' if clause else '') + '.'
+    return [line, *([hsts] if hsts else []),
+            exposure().certificate_sentence(certificate, SOURCE / 'deploy/setup-tls.sh')]
 
 
 def show_setup_code(env, say=print, sudo=('sudo',), interactive=True):
@@ -866,38 +867,57 @@ def install(env, version, advanced=False, no_firewall=False, no_ssh_hardening=Fa
                 phase(step.title, step.action, env)
             if step.key == 'verify':
                 verified = True
-    except Cancelled:
+    except BaseException as error:
+        # A returned step (Cancelled), Ctrl+C, end of input or a crash: nothing after this point runs.
         if verified:
             # The manager answers over HTTPS and is in setup mode on every interface by now: a firewall or SSH
             # step the person returned from must not leave them without the address and the code, which the
             # full-screen installer's summary shows in the same situation.
             print('\nThe installation did not finish. The manager itself is verified and running; the steps after '
-                  'the one you returned from were not run. Run the installer again to finish them.')
-            way_out = OPT_OUT_FLAGS.get(running)
+                  'the one you stopped at were not run. Run the installer again to finish them.')
+            way_out = OPT_OUT_FLAGS.get(running) if isinstance(error, Cancelled) else None
             if way_out:
                 # The refusal of these two steps can be a condition the operator chose on purpose, so running
                 # the installer again meets it again: name the one way that finishes the rest without the step.
                 print('To finish without this step: ' + shlex.join(['bash', str(SOURCE / 'deploy/install.sh'),
                                                                      '--advanced', way_out]))
-            for line in access_lines():
-                print(line)
-            show_setup_code(env)
+            closing_after_stop(env)
         raise
     print('\nManager installation is ready. Git is a separate setup step under your ordinary account.')
     print('Wireshark opens from the map (Capture packets).')
     for line in access_lines():
         print(line)
-    if advanced:
-        # Item 1 says "then set up Git"; the standard path always runs it, the advanced
-        # path keeps the choice of doing it now or later.
-        if menu('Next step', [('1', 'Set up or repair Git now'), ('2', 'Finish; set up Git later')]) == '1':
+    try:
+        if advanced:
+            # Item 1 says "then set up Git"; the standard path always runs it, the advanced
+            # path keeps the choice of doing it now or later.
+            if menu('Next step', [('1', 'Set up or repair Git now'), ('2', 'Finish; set up Git later')]) == '1':
+                git_setup(env)
+        else:
             git_setup(env)
-    else:
-        git_setup(env)
+    except BaseException:
+        # Ctrl+C or the end of input in the Git dialogue (or a crash in it): the manager is verified and waiting
+        # for its first administrator, so the code is printed before the stop continues.
+        print('\nThe Git setup did not finish. The manager is installed and verified; run Git setup again later '
+              'from the installer.')
+        closing_after_stop(env, address=False)
+        raise
     print('In VM connection use clab-discovery and the password you created. Verify the host fingerprint.')
     print('After browser setup, run the full installation health report (without sudo):\n  '
           + shlex.join(['bash', str(SOURCE / 'deploy/check-install.sh')]))
     show_setup_code(env)
+
+
+def closing_after_stop(env, address=True):
+    """The address (unless it was printed already) and the setup code after a stop that came once the manager
+    was verified. A second Ctrl+C while the code is read (sudo may be asking for a password) ends the read,
+    not the traceback."""
+    for line in access_lines() if address else ():
+        print(line)
+    try:
+        show_setup_code(env)
+    except (KeyboardInterrupt, EOFError):
+        print('The setup code was not read. On the VM, run: ' + exposure().SETUP_CODE_COMMAND)
 
 
 TUI_UNAVAILABLE = 75  # the full-screen installer exits with this only before it has changed anything

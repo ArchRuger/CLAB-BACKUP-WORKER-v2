@@ -21,6 +21,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import shlex
 import shutil
 import ssl
 import stat
@@ -198,7 +199,7 @@ def probe_tls(ctx):
         return NOT_INSTALLED, 'No certificate yet', 'Install/update creates a self-signed one.'
     facts = exposure.facts(exposure.TLS_DIR)
     if facts is None:
-        return UNAVAILABLE, 'The certificate could not be read', 'bash deploy/setup-tls.sh --show prints its facts.'
+        return UNAVAILABLE, 'The certificate could not be read', 'bash ' + shlex.quote(str(Path(ctx.source) / 'deploy/setup-tls.sh')) + ' --show prints its facts.'
     kind = {'provided': 'Provided', 'self-signed': 'Self-signed'}.get(facts['mode'], 'Certificate')
     left = exposure.days_left(facts['expires'])
     detail = 'SHA-256 fingerprint ' + facts['fingerprint']

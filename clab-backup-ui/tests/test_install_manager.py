@@ -21,6 +21,7 @@ spec.loader.exec_module(install)
 
 
 _module_patches = []
+REAL_ENV_FILE_VALUES = install.tui_package().exposure.env_file_values
 
 
 def setUpModule():
@@ -1772,6 +1773,42 @@ class HealthOverHttpsTests(unittest.TestCase):
                 _REAL_TLS_CONTEXT(Path(folder) / 'missing.pem')
 
 
+class AdviceNamesAbsolutePathsTests(unittest.TestCase):
+    """Every sentence that tells the operator to run a script prints a path that works from the operator's own
+    working directory, never `deploy/…` relative to a checkout the shell is not in."""
+    DEPLOY = Path(__file__).resolve().parents[2] / 'deploy'
+
+    def test_the_certificate_advice_of_the_wrapped_tls_error_names_the_script_by_absolute_path(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaises(ValueError) as caught:
+                _REAL_TLS_CONTEXT(Path(folder) / 'missing.pem')
+        script = str(install.SOURCE / 'deploy/setup-tls.sh')
+        self.assertTrue(Path(script).is_absolute())
+        self.assertIn('sudo bash ' + script, str(caught.exception))
+        self.assertNotRegex(str(caught.exception), r'bash deploy/')
+
+    def test_the_certificate_sentence_of_the_closing_lines_names_the_script_by_absolute_path(self):
+        with patch.object(exposure(), 'facts', return_value=None):
+            text = '\n'.join(install.access_lines())
+        script = str(install.SOURCE / 'deploy/setup-tls.sh')
+        self.assertIn(f'bash {script} --show', text)
+        self.assertNotRegex(text, r'bash deploy/')
+
+    def test_the_ufw_refusal_names_the_installer_beside_the_script_not_a_relative_path(self):
+        text = (self.DEPLOY / 'install-prerequisites.sh').read_text()
+        self.assertIn('"$script_dir/install.sh"', text)
+        self.assertNotRegex(text, r"bash deploy/install\.sh")
+
+    def test_no_advice_sentence_in_the_installers_prints_a_relative_deploy_path(self):
+        for name in ('install-manager.py', 'install-prerequisites.sh', 'installer_tui/exposure.py', 'installer_tui/probes.py',
+                     'installer_tui/app.py', 'installer_tui/launch.py'):
+            for number, line in enumerate((self.DEPLOY / name).read_text().splitlines(), 1):
+                if 'Usage:' in line:
+                    continue   # a script's own usage line is the one place a relative name is the convention
+                with self.subTest(file=name, line=number):
+                    self.assertNotRegex(line, r"(?:bash|sudo bash|run:|run|rerun bash|Repair it with:) +deploy/", line)
+
+
 class EnvironmentTests(unittest.TestCase):
     ACCOUNT = SimpleNamespace(pw_name='archtop', pw_dir='/home/archtop')
 
@@ -1939,6 +1976,22 @@ class AdvancedQuestionsTests(unittest.TestCase):
             options = install.ask_install_options(OWNER, advanced=True)
         self.assertEqual(collide.call_args.kwargs.get('env_path'), Path('/old/.env'))
         self.assertEqual(options.ports, 'redirect')
+
+    def test_an_empty_redirect_port_with_8081_still_asks_the_port_question_in_advanced_mode(self):
+        # `UI_PORT=8081` with `UI_HTTP_PORT=` (and the export/comment forms Compose reads) is the collision; the
+        # question is judged from the real reader on the file that will be copied, not from a stub.
+        import tempfile
+        for text in ('UI_PORT=8081\nUI_HTTP_PORT=\n', 'export UI_PORT=8081 # tls\nexport UI_HTTP_PORT= # none\n'):
+            with self.subTest(text=text), tempfile.TemporaryDirectory() as folder:
+                old = Path(folder) / '.env'
+                old.write_text(text)
+                with patch.object(install, 'choose_env_copy', return_value=old), \
+                        patch.object(exposure(), 'env_file_values', side_effect=REAL_ENV_FILE_VALUES), \
+                        patch.object(install, 'menu', side_effect=['1', '1', '1', '1', '1']) as menu, \
+                        patch.object(install, 'confirm', return_value=False):
+                    options = install.ask_install_options(OWNER, advanced=True)
+                self.assertEqual(menu.call_args_list[0].args[0], 'Manager ports')
+                self.assertEqual(options.ports, 'redirect')
 
     def test_the_port_question_wording_is_the_one_of_the_upgrade_table(self):
         _, menu = self.ask(['1', '1', '1', '1', '1'], collide=True)
@@ -2180,7 +2233,8 @@ class SetupCodeStepTests(unittest.TestCase):
 
 
 class ClosingLinesTests(unittest.TestCase):
-    def install_run(self, events, options=None, advanced=False, reading=('open', 'setup', GOOD_CODE)):
+    def install_run(self, events, options=None, advanced=False, reading=('open', 'setup', GOOD_CODE), facts=FACTS,
+                    name='vm1.example.edu'):
         options = options or install.Options()
         with patch.object(install, 'ask_install_options', return_value=options), \
                 patch.object(install, 'phase', side_effect=lambda title, action, env=None: events.append(('phase', title))), \
@@ -2188,8 +2242,8 @@ class ClosingLinesTests(unittest.TestCase):
                 patch.object(install, 'git_setup', side_effect=lambda env: events.append(('git',))), \
                 patch.object(install, 'write_ports', side_effect=lambda *a, **k: events.append(('ports',))), \
                 patch.object(exposure(), 'read_setup_code', side_effect=lambda **k: (events.append(('read-code',)), reading)[1]), \
-                patch.object(exposure(), 'primary', return_value='vm1.example.edu'), \
-                patch.object(exposure(), 'facts', return_value=FACTS), \
+                patch.object(exposure(), 'primary', return_value=name), \
+                patch.object(exposure(), 'facts', return_value=facts), \
                 patch.object(exposure(), 'ports', return_value=(8443, 8081)), \
                 patch('sys.stdout', new=io.StringIO()) as printed:
             install.install(OWNER, '1.32.0', advanced=advanced)
@@ -2315,6 +2369,92 @@ class ClosingLinesTests(unittest.TestCase):
     def test_the_sign_in_line_is_printed_on_the_stopped_path_when_an_administrator_exists(self):
         _, lines = self.fail_after_verify('SSH hardening', reading=('absent', None, None))
         self.assertEqual(lines[-1], 'An administrator exists; sign in at https://vm1.example.edu:8443/')
+
+    def test_a_provided_certificate_limits_the_redirect_clause_to_the_ip_urls_and_says_what_hsts_does(self):
+        # EXPOSURE.md 7.4 (REVIEW R17): after a first HTTPS visit http://<name>:8081 is never reached by name.
+        lines = self.install_run([], facts=dict(FACTS, mode='provided'), name='lab.example')
+        text = '\n'.join(lines)
+        self.assertIn('Open the manager at https://lab.example:8443/, https://192.0.2.10:8443/ '
+                      '(plain HTTP on 8081 redirects to the IP address URLs).', lines)
+        self.assertNotIn('(plain HTTP on 8081 redirects there)', text)
+        sentence = next(line for line in lines if 'never reached by name' in line)
+        self.assertIn('http://lab.example:8081', sentence)
+        self.assertIn('retype', sentence)
+        self.assertIn('https://lab.example:8443', sentence)
+        self.assertIn('Links by IP address keep redirecting.', sentence)
+        self.assertLess(text.index('Open the manager at'), text.index('never reached by name'))
+        self.assertLess(text.index('never reached by name'), text.index('In VM connection use clab-discovery'))
+
+    def test_a_self_signed_certificate_keeps_the_plain_redirect_clause_and_says_nothing_about_hsts_by_name(self):
+        text = '\n'.join(self.install_run([]))
+        self.assertIn('(plain HTTP on 8081 redirects there)', text)
+        self.assertNotIn('never reached by name', text)
+
+    def test_a_provided_certificate_on_an_address_only_has_nothing_to_retype(self):
+        # No DNS name is advertised, so there is no link by name to warn about; the IP URLs keep redirecting.
+        text = '\n'.join(self.install_run([], facts=dict(FACTS, mode='provided'), name='192.0.2.10'))
+        self.assertNotIn('never reached by name', text)
+
+    def test_a_provided_certificate_without_a_redirect_port_names_no_redirect_at_all(self):
+        with patch.object(exposure(), 'ports', return_value=(8443, 0)), patch.object(exposure(), 'primary', return_value='lab.example'), \
+                patch.object(exposure(), 'facts', return_value=dict(FACTS, mode='provided')):
+            text = '\n'.join(install.access_lines())
+        self.assertNotIn('redirect', text)
+        self.assertNotIn('never reached by name', text)
+
+    def interrupted_after_verify(self, raiser, advanced=False, answer='1'):
+        """A run in which the Git step raises `raiser` after the manager is verified (Ctrl+C, end of input, a crash)."""
+        printed = io.StringIO()
+        reads = []
+        with patch.object(install, 'ask_install_options', return_value=install.Options()), \
+                patch.object(install, 'phase', side_effect=lambda title, action, env=None: None), \
+                patch.object(install, 'setup_lazydocker'), patch.object(install, 'git_setup', side_effect=raiser), \
+                patch.object(install, 'confirm', return_value=True), patch.object(install, 'menu', return_value=answer), \
+                patch.object(exposure(), 'read_setup_code', side_effect=lambda **k: (reads.append(1), ('open', 'setup', GOOD_CODE))[1]), \
+                patch.object(exposure(), 'primary', return_value='vm1.example.edu'), patch.object(exposure(), 'facts', return_value=FACTS), \
+                patch.object(exposure(), 'ports', return_value=(8443, 8081)), patch('sys.stdout', new=printed):
+            with self.assertRaises(type(raiser)):
+                install.install(OWNER, '1.32.0', advanced=advanced)
+        return reads, printed.getvalue().splitlines()
+
+    def test_ctrl_c_or_end_of_input_in_the_git_step_still_prints_the_setup_code_and_then_stops(self):
+        for raiser in (KeyboardInterrupt(), EOFError(), RuntimeError('crash')):
+            for advanced in (False, True):
+                with self.subTest(raiser=type(raiser).__name__, advanced=advanced):
+                    reads, lines = self.interrupted_after_verify(raiser, advanced=advanced)
+                    self.assertEqual(reads, [1])
+                    self.assertEqual(lines[-2], f'Open https://vm1.example.edu:8443/setup and enter this setup code: {GOOD_CODE}')
+                    self.assertIn('It is also readable on the VM with: sudo cat', lines[-1])
+                    self.assertTrue(any('verified' in line for line in lines), 'the stop is explained')
+
+    def test_ctrl_c_in_a_step_after_verification_still_prints_the_setup_code(self):
+        for failing in ('Firewall', 'SSH hardening'):
+            with self.subTest(failing=failing):
+                printed = io.StringIO()
+
+                def phase(title, action, env=None, _failing=failing):
+                    if _failing in title:
+                        raise KeyboardInterrupt()
+                with patch.object(install, 'ask_install_options', return_value=install.Options()), \
+                        patch.object(install, 'phase', side_effect=phase), patch.object(install, 'git_setup'), \
+                        patch.object(install, 'setup_lazydocker'), \
+                        patch.object(exposure(), 'read_setup_code', return_value=('open', 'setup', GOOD_CODE)) as read, \
+                        patch.object(exposure(), 'primary', return_value='vm1.example.edu'), patch.object(exposure(), 'facts', return_value=FACTS), \
+                        patch.object(exposure(), 'ports', return_value=(8443, 8081)), patch('sys.stdout', new=printed):
+                    with self.assertRaises(KeyboardInterrupt):
+                        install.install(OWNER, '1.32.0')
+                self.assertEqual(read.call_count, 1)
+                self.assertIn(f'enter this setup code: {GOOD_CODE}', printed.getvalue())
+
+    def test_ctrl_c_before_the_manager_is_verified_prints_no_code(self):
+        printed = io.StringIO()
+        with patch.object(install, 'ask_install_options', return_value=install.Options()), \
+                patch.object(install, 'phase', side_effect=KeyboardInterrupt()), \
+                patch.object(exposure(), 'read_setup_code') as read, patch('sys.stdout', new=printed):
+            with self.assertRaises(KeyboardInterrupt):
+                install.install(OWNER, '1.32.0')
+        read.assert_not_called()
+        self.assertNotIn(GOOD_CODE, printed.getvalue())
 
     def test_no_command_the_installer_runs_carries_the_code(self):
         seen = []

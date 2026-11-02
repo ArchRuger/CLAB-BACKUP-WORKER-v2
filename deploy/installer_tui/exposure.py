@@ -16,13 +16,16 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import ssl
 import stat
 import subprocess
 from datetime import date, datetime
+from urllib.parse import urlsplit
 from urllib.request import HTTPSHandler, ProxyHandler, build_opener
 
 TLS_DIR = Path('/srv/containerlab-node-manager/tls')
+SETUP_TLS_SCRIPT = Path(__file__).resolve().parents[1] / 'setup-tls.sh'   # advice names it by absolute path
 SETUP_CODE_FILE = '/srv/containerlab-node-manager/data/setup-code'
 SETUP_CODE_COMMAND = 'sudo cat ' + SETUP_CODE_FILE
 DEFAULT_TLS_PORT = 8443
@@ -79,10 +82,26 @@ def env_file_values(path, keys):
         if descriptor is not None:
             os.close(descriptor)
     for line in data.decode('utf-8', errors='replace').splitlines():
-        name, sep, value = line.partition('=')
-        if sep and name.strip() in keys:
-            values[name.strip()] = value.strip().strip('"\'')
-    return values
+        match = ENV_LINE.match(line)
+        if match and match[1] in keys:
+            values[match[1]] = _env_value(match[2])
+    # An empty value means the default (setup-tls.sh and Compose read UI_HTTP_PORT= that way): it is no
+    # explicit setting, and a later empty line cancels an earlier value because the last line wins.
+    return {key: value for key, value in values.items() if value != ''}
+
+
+ENV_LINE = re.compile(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$')
+
+
+def _env_value(raw):
+    """The value as deploy/setup_tls.py and docker compose read it (kept equal to its `_env_value`, which is
+    another slice's file, except that `KEY= # note` is empty here): quotes removed, an unquoted value ends at a `#` that follows whitespace, nothing evaluated."""
+    raw = raw.lstrip()
+    if raw[:1] in ('"', "'"):
+        end = raw.find(raw[0], 1)
+        return raw[1:end] if end > 0 else raw[1:]
+    # `KEY= # note` is an empty value, as Compose reads it (the text after '=' is not stripped before the split)
+    return re.split(r'(?:^|\s)#', raw, maxsplit=1)[0].strip()
 
 
 def _port(text, default):
@@ -238,17 +257,52 @@ def access_urls(name, certificate, port):
     return urls or [host_url('<VM address>', port)]
 
 
-def certificate_sentence(certificate):
-    """The one sentence about the certificate the closing output and the summary screen carry."""
+def certificate_sentence(certificate, script=None):
+    """The one sentence about the certificate the closing output and the summary screen carry. `script` is
+    the checkout's setup-tls.sh; the advice names it by absolute path because the operator's working
+    directory is not the checkout."""
     if not certificate:
-        return ('The certificate could not be read here; bash deploy/setup-tls.sh --show prints its '
-                'fingerprint.')
+        return ('The certificate could not be read here; bash ' + shlex.quote(str(script or SETUP_TLS_SCRIPT))
+                + ' --show prints its fingerprint.')
     if certificate['mode'] == 'provided':
         return (f'The certificate is the one you provided (expires {certificate["expires"]}). After a first HTTPS '
                 'visit the browser applies HSTS to every port of its name: open plain-HTTP lab services on that '
                 'name by IP address.')
     return ('The certificate is self-signed: the browser warns once; its SHA-256 fingerprint is '
             + certificate['fingerprint'] + '.')
+
+
+def _is_address(host):
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
+
+
+def redirect_notes(urls, certificate, port, redirect):
+    """What the closing lines say about the plain-HTTP redirect: (clause, sentence).
+
+    `clause` goes after the list of addresses, '' when there is no redirect (or none that reaches a listed
+    address). With a self-signed certificate it is the plain 'plain HTTP on N redirects there'. With a
+    provided certificate on a name (EXPOSURE.md 7.4, REVIEW R17) the browser rewrites http://<name>:N to
+    https before any request after a first HTTPS visit, so the clause names only the IP address URLs, and
+    `sentence` says what happens to links by name; it is '' for every other case."""
+    if not redirect:
+        return '', ''
+    if (certificate or {}).get('mode') != 'provided':
+        return f'plain HTTP on {redirect} redirects there', ''
+    hosts = [urlsplit(url).hostname or '' for url in urls]
+    by_address = [host for host in hosts if _is_address(host)]
+    clause = f'plain HTTP on {redirect} redirects to the IP address URLs' if by_address else ''
+    names = [host for host in hosts if host and not _is_address(host) and not host.startswith('<')]
+    if not names:
+        return clause, ''
+    name = names[0]
+    old = 'http://' + name + ('' if redirect == 80 else f':{redirect}')
+    sentence = (f'After a first HTTPS visit the browser applies HSTS to the whole name, so {old} is never reached by '
+                f'name: retype old links by name as {host_url(name, port, "")}. Links by IP address keep redirecting.')
+    return clause, sentence
 
 
 # ---- the session's own SSH port --------------------------------------------------------------

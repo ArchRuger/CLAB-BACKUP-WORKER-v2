@@ -123,7 +123,7 @@ if $firewall_requested && ! installed ufw; then
   # --no-remove makes APT refuse rather than remove them. It runs after the basics and the SSH start, so a refusal leaves them done.
   apt_update
   DEBIAN_FRONTEND=noninteractive apt-get -y --no-remove --no-upgrade \
-    -o Dpkg::Options::=--force-confold install ufw || fail 'ufw could not be installed. If this VM uses iptables-persistent or netfilter-persistent, keep it and finish without the firewall step: bash deploy/install.sh --advanced --no-firewall'
+    -o Dpkg::Options::=--force-confold install ufw || fail "ufw could not be installed. If this VM uses iptables-persistent or netfilter-persistent, keep it and finish without the firewall step: bash $(printf '%q' "$script_dir/install.sh") --advanced --no-firewall"
 fi
 
 if $docker_missing || $compose_missing; then

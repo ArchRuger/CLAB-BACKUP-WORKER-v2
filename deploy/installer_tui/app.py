@@ -11,6 +11,7 @@ import importlib.util
 import os
 from pathlib import Path
 import queue
+import shlex
 import signal
 import socket
 import sys
@@ -1771,7 +1772,8 @@ class SlateOps(App):
                     rows.append((name, 'Not selected', 'Skipped by the advanced settings.'))
                 if run.action == 'install' and key == 'git':
                     rows.append((name, 'Not selected', 'Chosen for later: Git setup / repair from the dashboard, or '
-                                                       'bash deploy/install.sh --git.'))
+                                                       'bash ' + shlex.quote(str(Path(self.ctx.source) / 'deploy/install.sh'))
+                                                       + ' --git.'))
                 continue
             state = phase.state
             if key == 'git' and state == engine.SKIPPED:
@@ -1827,11 +1829,14 @@ class SlateOps(App):
         ctx = self.ctx
         tls_port, redirect = exposure.ports(ctx.source)
         certificate = exposure.facts(exposure.TLS_DIR)
-        where = ', '.join(exposure.access_urls(exposure.primary(ctx.source), certificate, tls_port))
+        urls = exposure.access_urls(exposure.primary(ctx.source), certificate, tls_port)
+        where = ', '.join(urls)
+        clause, hsts = exposure.redirect_notes(urls, certificate, tls_port, redirect)
         return [f"From your workstation open the manager at the VM's address: {where}. Verified only on this VM; "
                 'reachability from your workstation depends on your network and firewall.'
-                + (f' Plain HTTP on {redirect} redirects there.' if redirect else ''),
-                exposure.certificate_sentence(certificate)]
+                + (' ' + clause[0].upper() + clause[1:] + '.' if clause else ''),
+                *([hsts] if hsts else []),
+                exposure.certificate_sentence(certificate, Path(ctx.source) / 'deploy/setup-tls.sh')]
 
     def sign_on_steps(self):
         """The last lines, read from the file now, after every phase has run (REVIEW U13). The code is built into
@@ -2051,7 +2056,8 @@ def main(argv=None):
             print('\n'.join(app.summary_plain(run)), flush=True)
         if crashed is not None:
             print(f'The installer screen stopped unexpectedly ({type(crashed).__name__}). Completed phases are kept; '
-                  'rerun bash deploy/install.sh to continue. It was not restarted automatically.', flush=True)
+                  'rerun bash ' + shlex.quote(str(Path(ctx.source) / 'deploy/install.sh'))
+                  + ' to continue. It was not restarted automatically.', flush=True)
     except OSError:
         pass
     if crashed is not None or app.terminal_lost:
