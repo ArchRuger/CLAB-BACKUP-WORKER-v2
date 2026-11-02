@@ -605,7 +605,9 @@ def pages(r):
     r.shot('61-terminal')
     p.goto(f'{BASE}/static/capture-setup.html'); p.wait_for_timeout(300); r.shot('62-capture-setup')
     p.goto(f'{BASE}/vm-connection-guide'); p.wait_for_timeout(300)
-    r.check('vm guide: Diagnostics link', 'Open Diagnostics' in r.js('() => document.body.textContent'))
+    # Was: 'Open Diagnostics' in the page text. The guide is role-neutral under sign-on (S10b): "An administrator can open Diagnostics to
+    # check ...", so the claim (the guide still links to Diagnostics) is now the link itself.
+    r.check('vm guide: Diagnostics link', r.js('() => { const a = document.querySelector(\'a[href="/static/debug.html"]\'); return !!a && /open Diagnostics/i.test(a.textContent); }'))
     go_home(r)
 
 def run_viewport(browser, vw, vh):
