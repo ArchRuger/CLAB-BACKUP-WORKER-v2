@@ -16,6 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 from .inventory import PLATFORMS, console_port, parse_inventory, literal, address, port
 from .store import Store
 from .runner import Runner, readiness, now, effective_credentials, credential_source
@@ -177,20 +178,27 @@ def create_app(data_dir=None):
         started=time.monotonic()
         response=await call_next(request)
         # The sign-in and setup routes write no api.request event: their outcome is in the audit files only, so a
-        # scanner cannot write two lines per attempt (REVIEW R8). The actor is the session's user, '-' for nobody (10.3).
+        # scanner cannot write two lines per attempt (REVIEW R8). The actor is the session's user (10.3); a mutating
+        # request without one reaches the guard only on an EXEMPT row (the gate refused every other), and such a
+        # request, an unauthenticated DELETE /api/session, writes no event either: nobody acted, and one line per
+        # request would let a scanner rotate the operational log (second verification round). The write waits for
+        # store.lock off the event loop, so a log read or a state save never stalls every other request behind it.
         user=getattr(request.state,'user',None)
         audited_elsewhere=request.method=='POST' and request.url.path in ('/api/session','/api/setup')
-        if request.url.path.startswith('/api/') and not audited_elsewhere and (request.method!='GET' or request.url.path.endswith('/download')):
+        if user and request.url.path.startswith('/api/') and not audited_elsewhere and (request.method!='GET' or request.url.path.endswith('/download')):
             parts=request.url.path.split('/')
             lab_id=parts[3] if len(parts)>3 and parts[2]=='labs' else ''
             job_id=parts[3] if len(parts)>3 and parts[2]=='jobs' else ''
-            if job_id:
-                with store.lock:
-                    matched=next((j for j in store.state['jobs'] if j['id']==job_id),None)
-                    if matched: lab_id=matched['lab_id']
             route=request.scope.get('route')
-            store.event('api.request',f'{request.method} {getattr(route, "path", "/api/unknown")} -> {response.status_code} ({time.monotonic()-started:.3f}s)',
-                        level='error' if response.status_code>=400 else 'info',lab_id=lab_id,job_id=job_id,actor=user['name'] if user else '-')
+            message=f'{request.method} {getattr(route, "path", "/api/unknown")} -> {response.status_code} ({time.monotonic()-started:.3f}s)'
+            level='error' if response.status_code>=400 else 'info'
+            def record(lab_id=lab_id):
+                if job_id:
+                    with store.lock:
+                        matched=next((j for j in store.state['jobs'] if j['id']==job_id),None)
+                        if matched: lab_id=matched['lab_id']
+                store.event('api.request',message,level=level,lab_id=lab_id,job_id=job_id,actor=user['name'])
+            await run_in_threadpool(record)
         # One function for every response: caching, CSP by path and HSTS under TLS (app/headers.py).
         response.headers.update(security_headers(request.scope,status=response.status_code))
         return response

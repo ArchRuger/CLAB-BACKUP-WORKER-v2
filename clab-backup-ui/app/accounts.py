@@ -71,9 +71,11 @@ def parse_hash(text):
     n, r, p = (int(part) for part in parts[1:4])
     if not (N_RANGE[0] <= n <= N_RANGE[1]) or n & (n - 1): return None
     if not (R_RANGE[0] <= r <= R_RANGE[1]) or not (P_RANGE[0] <= p <= P_RANGE[1]): return None
-    # scrypt needs 128*r*(n+p+2) bytes (OpenSSL's bound, which hashlib enforces as ValueError above maxmem): a string
-    # inside the ranges but above MAXMEM cannot be verified, so it is malformed here, a bad_record, never a 500.
+    # scrypt needs 128*r*(n+p+2) bytes (OpenSSL's bound, which hashlib enforces as ValueError above maxmem), and OpenSSL
+    # also refuses N >= 2**(16 r) (its scrypt.c; with r=1 that is every n from 2**16, all under MAXMEM): a string inside
+    # the ranges that hashlib would refuse cannot be verified, so it is malformed here, a bad_record, never a 500.
     if 128 * r * (n + p + 2) > MAXMEM: return None
+    if 16 * r <= 63 and n >= 1 << (16 * r): return None
     salt = _unb64(parts[4]); digest = _unb64(parts[5])
     if salt is None or digest is None: return None
     if not (SALT_RANGE[0] <= len(salt) <= SALT_RANGE[1]) or len(digest) != DKLEN: return None
@@ -100,7 +102,12 @@ def verify_password(hash_string, password):
     parsed = parse_hash(hash_string)
     known = parsed is not None
     if not known: parsed = parse_hash(DUMMY_HASH)
-    digest = _scrypt(password, parsed['salt'], parsed['n'], parsed['r'], parsed['p'])
+    try: digest = _scrypt(password, parsed['salt'], parsed['n'], parsed['r'], parsed['p'])
+    except ValueError:
+        # parse_hash mirrors OpenSSL's rules; should a build refuse more, the string is a bad record all the same:
+        # the refused call did no work, the dummy is verified instead and the attempt still costs one scrypt.
+        parsed = parse_hash(DUMMY_HASH); known = False
+        digest = _scrypt(password, parsed['salt'], parsed['n'], parsed['r'], parsed['p'])
     return hmac.compare_digest(digest, parsed['hash']) and known
 
 

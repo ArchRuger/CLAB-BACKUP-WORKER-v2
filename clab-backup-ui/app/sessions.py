@@ -377,16 +377,22 @@ class Sessions:
         `signin.throttled` with the level's reason and changes no counter."""
         key_source = source_key(source); now = self.clock(); delays = {}
         with self.lock:
+            # An attempt in flight is the failure it may become, dated now: while a level holds a reservation its
+            # delay counts from now, so that after a delay has run out one attempt at a time is in flight and a burst
+            # sent then verifies one, not VERIFY_LIMIT (second verification round on 8.2). `last` itself never moves
+            # here, so a reservation that is released (busy) restarts nothing.
             pair = self.pairs.get((key_source, name))
             if pair and pair['failures'] + pair['inflight'] >= L1_FREE:
-                remaining = min(DELAY_CAP, FIRST_DELAY * 2 ** (pair['failures'] + pair['inflight'] - L1_FREE)) - (now - pair['last'])
+                elapsed = 0 if pair['inflight'] else now - pair['last']
+                remaining = min(DELAY_CAP, FIRST_DELAY * 2 ** (pair['failures'] + pair['inflight'] - L1_FREE)) - elapsed
                 if remaining > 0: delays['pair'] = remaining
             entry = self.sources.get(key_source)
             if entry:
                 self._trim(entry, now)
                 if len(entry['window']) + entry['inflight'] < L2_THRESHOLD: entry['delay'] = 0
                 else:
-                    remaining = (entry['delay'] or FIRST_DELAY) - (now - entry['last'])
+                    elapsed = 0 if entry['inflight'] else now - entry['last']
+                    remaining = (entry['delay'] or FIRST_DELAY) - elapsed
                     if remaining > 0: delays['source'] = remaining
             if not familiar:
                 bucket = self.names.get(name)
@@ -722,9 +728,13 @@ def install(app, sessions, accounts_):
             await run_in_threadpool(sessions.release, address, name, False); raise
         # complete_setup reads the file again under store.lock: a second submit of a used code, a replaced file or a
         # setup file beside existing users is refused setup_closed there, so one code creates one administrator (9.2, 9.5).
+        # That lost race carried the right code and is no failed setup: it is not audited (`setup_closed` is no word of
+        # the vocabulary of 10.2; the `setup ok` entry of the winner is the record), its reservation is released. The
+        # 409 of recovery (`exists`) is a failed setup and is audited.
         try: record = await run_in_threadpool(accounts_.complete_setup, name, hash_string, code=data.code, mode=mode, source=address, prefix=source_prefix(address))
         except AccountError as exc:
-            await refused(exc.code)
+            if exc.code == 'setup_closed': await run_in_threadpool(sessions.release, address, name, False)
+            else: await refused(exc.code)
             raise HTTPException(exc.status, exc.detail)
         except OSError:
             await run_in_threadpool(sessions.release, address, name, False)

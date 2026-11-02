@@ -379,13 +379,19 @@ class AuditRouteTests(unittest.TestCase):
         self.anonymous.request('DELETE', '/api/session', json={})
         self.anonymous.post('/api/session', json={'username': NAME, 'password': 'wrong one here'})
         self.anonymous.post('/api/setup', json={'code': 'x', 'username': NAME, 'password': 'wrong one here'})
-        events = [e for e in self.app.state.store.events() if e['action'] == 'api.request']
+        self.app.state.store.event('readiness.check', 'a background thread has no request in hand')
+        events = [e for e in self.app.state.store.events() if e['action'] in ('api.request', 'readiness.check')]
         messages = [e['message'] for e in events]
         self.assertTrue(any(m.startswith('POST /api/labs/{lab_id}/jobs') for m in messages), messages)
-        self.assertTrue(any(m.startswith('DELETE /api/session') for m in messages), messages)
-        self.assertEqual([m for m in messages if m.startswith('POST /api/session') or m.startswith('POST /api/setup')], [])
-        by_route = {e['message'].split(' -> ')[0]: e['actor'] for e in events}
-        self.assertEqual(by_route['POST /api/labs/{lab_id}/jobs'], NAME); self.assertEqual(by_route['DELETE /api/session'], '-')
+        # An unauthenticated sign-out writes no api.request line either (second verification round: nobody acted, and
+        # one line per request let a scanner rotate the log); '-' stays the actor of what no request made (10.3).
+        self.assertEqual([m for m in messages if m.startswith(('DELETE /api/session', 'POST /api/session', 'POST /api/setup'))], [])
+        by_message = {e['message'].split(' -> ')[0]: e['actor'] for e in events}
+        self.assertEqual(by_message['POST /api/labs/{lab_id}/jobs'], NAME)
+        self.assertEqual(by_message['a background thread has no request in hand'], '-')
         for entry in events:
             self.assertNotIn('source', entry); self.assertEqual(list(entry)[-1], 'actor')
         self.assertEqual(self.app.state.store.events(actor=NAME)[0]['actor'], NAME)
+        self.assertEqual(self.client.request('DELETE', '/api/session', json={}).status_code, 200)
+        self.assertEqual([e['actor'] for e in self.app.state.store.events() if e['message'].startswith('DELETE /api/session')], [NAME],
+                         'a sign-out someone made names them')

@@ -217,7 +217,7 @@ class BrowserSessions:
 
 
 def install(app, captures):
-    from .node_services import SocketSession, close_signed_out
+    from .node_services import SocketSession, close_signed_out, request_actor
 
     def service():
         if not captures.sessions:
@@ -264,7 +264,7 @@ def install(app, captures):
         if ended or failed:
             message = f'Ended {len(ended)} browser Wireshark session(s) and removed their temporary files'
             message += f'; {len(failed)} could not be ended.' if failed else '.'
-            captures.store.event('capture.end_all', message, level='warning' if failed else 'info')
+            captures.store.event('capture.end_all', message, level='warning' if failed else 'info', actor=request_actor(request))
         return {'ended': len(ended), 'failed': failed}
 
     @app.get('/api/capture/sessions/{sid}')
@@ -274,7 +274,7 @@ def install(app, captures):
     @app.post('/api/capture/sessions/{sid}/end')
     def end(sid: str, request: Request):
         result = service().request('POST', session_path(sid) + '/end', owner(request), {})
-        captures.store.event('capture.end', 'Ended browser Wireshark session and removed its temporary files.')
+        captures.store.event('capture.end', 'Ended browser Wireshark session and removed its temporary files.', actor=request_actor(request))
         return result
 
     @app.get('/api/capture/sessions/{sid}/assets/{path:path}')

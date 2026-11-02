@@ -149,8 +149,8 @@ class Store:
 
     def event(self, action, message, *, level='info', lab_id='', job_id='', node='', actor='-'):
         # Callers supply controlled metadata or scrubbed errors, never command output. `actor` is the user
-        # name of the request in hand, or '-' for nobody (a background thread, an exempt route without a
-        # session); never a source address, because GET /api/logs serves this file to every operator (DESIGN.md 10.3).
+        # name of the request in hand, or '-' for nobody (a background thread, a socket without a session);
+        # never a source address, because GET /api/logs serves this file to every operator (DESIGN.md 10.3).
         entry = dict(time=self.now(), action=action,
                      message=str(message)[:4000], level=level, lab_id=lab_id,
                      job_id=job_id, node=node, actor=actor)
