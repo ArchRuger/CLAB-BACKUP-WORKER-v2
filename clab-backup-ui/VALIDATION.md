@@ -107,9 +107,9 @@ must-fix ones test pins that the fixes had moved, all answered; the fixes are li
 - A destroy of a lab with no containers removed another lab's `clab-*` folder (containerlab 0.79.0, reproduced with
   containerlab alone), reported as a success; a sibling folder of a running lab was lost twice during the pass.
 
-**Unit and static on the release tree** (this VM, the venv; the full suites before and after the review's fixes):
-the Python suite 3855 tests OK (2 skipped), the browser files `node --test tests/*.js` all pass, the stdlib CI group
-file by file OK, `verify-release.py` both halves, `check_links.py` 0 problems, `git diff --check`, `node --check` on
+**Unit and static on the release tree** (this VM, the venv; the full suites run three times, the last on the release
+tree after the review's fixes): the Python suite `unittest discover` 3855 tests OK (2 skipped), the browser files
+`node --test tests/*.js` 1434 of 1434, the stdlib CI group file by file with the system `python3` (each exit 0), `verify-release.py` both halves, `check_links.py` 0 problems, `git diff --check`, `node --check` on
 every page script, `bash -n` on every deploy script and `sh -n` on the gateway; the new `test_log_hygiene.py` is in the
 CI list. Each fix came with a test that failed before it: `test_recreate_manager.py`, `test_setup_tls.py`,
 `test_log_hygiene.py`, `test_release_consistency.py` (the logging block and the forced recreate), `test_users.py`,
@@ -117,7 +117,37 @@ CI list. Each fix came with a test that failed before it: `test_recreate_manager
 `opReviewedCleanup` in `test_operations_ui.js`; the banner fix was measured on the fixture at the four widths
 (115/115/694/694 before, 115/115/123/199 after; the in-dialog clone, the page-level banner shares the rule). (from the fix round)
 
-**Live re-check after the upgrade to 1.32.1.** RECHECK-PLACEHOLDER
+**Live re-check after the upgrade to 1.32.1 (this VM, the lead).** The same installer path took the VM from 1.32.0 to
+1.32.1 with its accounts: the plan named the kept certificate ("Self-signed certificate kept: it names …"), the firewall
+and SSH steps reported "Already allowed" and rewrote the drop-in, the Git step re-registered the checkout, and the
+closing line was "An administrator exists; sign in at https://192.168.132.134:8443/" (no setup code, `/setup` 404, the
+operator signed in afterwards, the helpers at 1.32.1, the manager's `LogConfig` now `max-size 10m, max-file 3`, the
+certificate's fingerprint unchanged). Then each fix against the live manager:
+- `setup-tls.sh --renew` alone: a new file, "Container … Recreate", the served certificate equal to the new file, the
+  held session answered 401 `signed_out` (the recreate is real now).
+- Two refused WebSocket handshakes (no session; a foreign Origin) and a 401 over HTTP added no line to the container
+  log; the two start-up lines are still there. The one line that still grows per request is uvicorn's
+  `WARNING: Invalid HTTP request received.` for bytes that are not HTTP over an established TLS connection (not for a
+  plain-HTTP request to 8443, which gets no HTTP answer); it is an error-class line, now bounded by the log cap.
+- `POST /api/users` with `password12345`, `admin2026!!!`, `containerlab-lab`, `123456789012` and `password 1234` each
+  answered 422 `weak_password` with `reasons: ["common"]` and the sentence; a long passphrase 200 (deleted again).
+- With `tls/names` still holding `manager.example.test`, `manager-recover-admin.sh` printed
+  `https://192.168.132.134:8443/setup?recover=1` and `setup-tls.sh --primary` the address; the unused recovery was
+  closed by aging the file (`/setup` 404).
+- The session-ended banner in the open import dialog, measured in headless Chromium against the live manager with
+  the refuter's script: 115 px at 1440, 123 at 760 and 199 at 390 (694 before), the dialog's name field in the
+  viewport at every width.
+- The destroy scenario, two one-node labs deployed through the page into the shared projects folder: the first destroy
+  of `rf1b` ran with `--cleanup` and named `clab-rf1b`; the second (no containers) ran without it, its review said
+  "No deployed devices were found for this lab, so the lab's generated folder is not removed … (clab-rf1a) …" and
+  carried `sibling_dirs: ["clab-rf1a"]`, and `clab-rf1a` with its running container survived; both labs, files and
+  containers were removed afterwards through the manager's own operations.
+- The final `check-install.sh --require-git`: 149 PASS, 4 WARN (fail2ban missing; 10 of 12 nodes of the old labs not
+  running; the folder-coverage and Git-registration limits of 20), 0 FAIL, exit 2.
+
+**Open.** `docs/sign-on/PICKUP.md` section 3, items 6 to 12 (the other banners' narrow-width rule, the request-time
+events' actor, the forced change accepting the same password, four small contract gaps, the unreachable
+`last_admin` refusal, the housekeeping left on the development VM).
 
 **Not run.** *Start fresh* on the live manager (it would drop the owner's lab records on this shared development
 manager; unit evidence covers "users and the audit survive"); the `UI_PORT=8081` upgrade variant of the Ports table;
