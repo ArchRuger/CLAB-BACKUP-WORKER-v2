@@ -211,18 +211,20 @@ inventory's "must not reappear" line stands); the manager's own `rows`/`columns`
 "Edit map also downloads the map file. Download picture… and Export to draw.io… are in the Topology tab's More ▾
 menu." (`index.html`; pinned in `tests/test_page_load_ui.js`). Everything else in this addendum still binds.
 
-## M. Amendment of the sign-on stream (with the release that ships sign-on)
+## M. Amendment of the sign-on stream (1.32.0, the release that ships sign-on)
 
 Sign-on (`docs/sign-on/UI.md` 3.2; `RECONCILIATION.md` 1, U-C13) adds a second shared script and amends J1's letter,
 "everything that touches `location` lives in `shell.js`":
 
-1. **`app/static/session.js`** is loaded on `index.html` after `status.js` and before `shell.js`, and by every
-   standalone page that sends a request (`workspace`, `debug`, `lab-builder`, `map-editor`, `terminal`,
-   `capture-session`, `users`; `capture-setup` loads it for uniformity and sends nothing). It has **no top-level side
-   effect**, touches no DOM and no browser storage, and its one `location` access is inside `sessionGo()`. Its globals
-   (`sessionLost`, `loginUrl`, `sessionEnded`, `sessionMark`, `sessionClear`, `sessionEndedError`, `sessionGo`,
-   `sessionOnResume`, `sessionRetry`) are the contract of UI.md 3.2; every caller reaches them through
-   `typeof x==='function'` guards, so every node harness that loads `app.js` without it keeps working.
+1. **`app/static/session.js`** is a second shared script. On `index.html` it is listed after `status.js` and before
+   `shell.js`; every standalone page that sends a request (`workspace`, `debug`, `lab-builder`, `map-editor`, `terminal`,
+   `capture-session`, `users`) loads it with `?v=` before its own script, and `capture-setup` loads it for uniformity.
+   It has **no top-level side effect** (one file-local flag and one file-local `Set`), touches no DOM and no browser
+   storage, and its one `location` access is inside `sessionGo()`. Its globals (`sessionLost`, `loginUrl`,
+   `sessionEnded`, `sessionMark`, `sessionClear`, `sessionEndedError`, `sessionGo`, `sessionOnResume`, `sessionRetry`)
+   are the contract of UI.md 3.2. Every caller checks a `session.js` global with `typeof` before using it (a call inside a
+   branch guarded on `sessionEnded` counts), so every Node harness that loads `app.js` or a page script without it keeps
+   working.
 2. **`app/static/account.js`** is a feature script of `index.html` only (after `preferences.js`); no other page loads
    it (pinned in `tests/test_page_load_ui.js`).
 3. **The account group** of the Manager ▾ menu (`#account-name`, `#account-role`, `#account-users`,

@@ -50,7 +50,7 @@ GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.31.9 — guided setup
+Containerlab Node Manager 1.32.0 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -143,7 +143,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The verification phase prints `Manager 1.31.9: running; HTTPS and version checks passed.`,
+The verification phase prints `Manager 1.32.0: running; HTTPS and version checks passed.`,
 the VM-local address and the certificate's SHA-256 fingerprint. After the last step
 (Git setup included) the installer prints the address to open, one or more
 `https://…` addresses, and **the setup code, last of all**: a restart of the manager
@@ -381,7 +381,9 @@ tolerated on the same VM: set `UI_BIND=127.0.0.1`, let the proxy connect with HT
 and list that name in `UI_ALLOWED_HOSTS`. The manager then sees `127.0.0.1` as the address
 of every sign-in, so its audit log shows no real source and the sign-in throttle treats all
 people as one source. A proxy that speaks plain HTTP to the manager cannot work, because
-the Compose command always serves TLS.
+the Compose command always serves TLS. The firewall step below opens only SSH, the TLS port
+and the redirect port, so the proxy's own ports need a rule of their own, for example
+`sudo ufw allow 443/tcp`.
 
 ## Firewall and SSH
 
@@ -410,7 +412,12 @@ a port SSH does not listen on, it is connected over IPv6 while `/etc/default/ufw
 set `IPV6=yes`, or a rule of yours denies an SSH port. It needs `ufw`; the standard
 installation installs it when the firewall step is chosen. `--remove` deletes only the
 `clab-manager` rules, and keeps the SSH one while ufw is active and denies other incoming
-traffic, because deleting that would block new SSH logins.
+traffic, because deleting that would block new SSH logins. Because the step sets *deny
+incoming*, any other service on the VM that must stay reachable (a reverse proxy, Cockpit,
+xrdp) needs its own rule, for example `sudo ufw allow 443/tcp`. On a VM where ufw was off before
+this step, `sudo ufw disable` turns it off again (its rules stay stored, so run `--remove` first to
+delete the `clab-manager` ones); where ufw was already on with rules of your own, keep it on and
+adjust those rules instead.
 
 **What the firewall does not cover.** Docker inserts its own rules ahead of ufw's, so a port
 that a container publishes on `0.0.0.0` is reachable whatever ufw says. The capture stack

@@ -453,6 +453,14 @@ class SetupTests(FirewallCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual([call[1] for call in self.allow_calls()], ['22/tcp', '9443/tcp'])
 
+    def test_an_exported_port_in_env_is_read_as_start_manager_reads_it(self):
+        # start-manager.sh and setup_tls.py accept `export UI_PORT=…`; a firewall that read only `UI_PORT=` would open 8443
+        # and then block a manager listening on 9443 (the release review of 1.32.0).
+        self.write_env('clab-backup-ui/.env', 'export UI_PORT=9443\nexport UI_HTTP_PORT=0\n')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual([call[1] for call in self.allow_calls()], ['22/tcp', '9443/tcp'])
+
     def test_the_last_value_in_env_wins_as_start_manager_reads_it_and_empty_means_default(self):
         self.write_env('clab-backup-ui/.env', 'UI_PORT=9000\nUI_PORT=9443\nUI_HTTP_PORT=\n')
         result = self.run_script()

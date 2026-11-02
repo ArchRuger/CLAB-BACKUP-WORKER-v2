@@ -224,6 +224,16 @@ test('signed out, Undo back to the saved map with a redo left: no redirect, the 
  signIn();await h.el('map-save').onclick();await h.flush();
  assert.equal(h.el('map-status').textContent,'Saved in the manager');assert.equal(h.el('map-session').hidden,true);assert.equal(h.moves.length,0);
 });
+test('Undo back to the saved map with a redo left, then a request meets the lost session: the page stays, so the redo is kept (UI.md 3.4, 3.5)',async()=>{
+ const h=harness({session:true,get:url=>url.endsWith('/topology')?lostAnswer:null}),c=h.context;await h.flush();
+ c.labBuilderPage.ready(async()=>{});await h.flush();c.labBuilderPage.persist('name: bgp\n','a');c.labBuilderPage.persist('name: bgp\n','b');
+ c.labBuilderPage.attach({applyAnnotations:async text=>{c.labBuilderPage.persist('name: bgp\n',text);}});
+ await h.el('map-undo').onclick();
+ assert.equal(vm.runInContext('mapDirty()',c),false);assert.equal(h.el('map-redo').disabled,false,'the edit can be redone');
+ await c.mapLinkOpen();await h.flush();   // Link labels is the first request after the session ended
+ assert.equal(h.moves.length,0,'a redo entry is left: leaving would lose it');
+ assert.equal(vm.runInContext('mapSessionLost',c),true);assert.equal(h.el('map-session').hidden,false);assert.equal(h.el('map-redo').disabled,false);
+});
 test('a lost session is not reported as a failed save, and other refusals keep their sentence (REVIEW U11)',async()=>{
  const h=harness({session:true,put:()=>({ok:false,status:403,json:async()=>({detail:{code:'forbidden',message:'Not allowed here.'}})})}),c=h.context;await h.flush();
  c.labBuilderPage.ready(async()=>{});await h.flush();c.labBuilderPage.persist('name: bgp\n','a');c.labBuilderPage.persist('name: bgp\n','b');

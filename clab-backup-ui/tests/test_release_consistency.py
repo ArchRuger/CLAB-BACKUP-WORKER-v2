@@ -124,8 +124,11 @@ class ReleaseConsistencyTests(unittest.TestCase):
                 services = self.services(path)
                 manager, redirect = services['backup-ui'], services['http-redirect']
                 command = next(line for line in manager.splitlines() if line.strip().startswith('command:'))
+                # --no-access-log: a refused request is logged nowhere, not even in the container's log, which an exposed and
+                # scanned VM would otherwise grow without bound (DESIGN.md 14; the release review of 1.32.0).
                 for argument in ('"--ssl-certfile", "/tls/cert.pem"', '"--ssl-keyfile", "/tls/key.pem"', '"--no-proxy-headers"',
-                                 '"--no-server-header"', '"--port", "${UI_PORT:-8443}"', '"--host", "${UI_BIND:-0.0.0.0}"', '"--workers", "1"'):
+                                 '"--no-server-header"', '"--no-access-log"', '"--port", "${UI_PORT:-8443}"', '"--host", "${UI_BIND:-0.0.0.0}"',
+                                 '"--workers", "1"'):
                     self.assertIn(argument, command)
                 self.assertIn('UI_PORT: ${UI_PORT:-8443}', manager)
                 self.assertNotIn('UI_TLS', text, 'uvicorn terminates TLS; no scheme flag exists (RECONCILIATION 4, E-Q1)')
@@ -151,7 +154,7 @@ class ReleaseConsistencyTests(unittest.TestCase):
         dockerfile = (ROOT / 'clab-backup-ui/Dockerfile').read_text(encoding='utf-8')
         command = next(line for line in dockerfile.splitlines() if line.startswith('CMD '))
         for argument in ('"--port", "8443"', '"--ssl-certfile", "/tls/cert.pem"', '"--ssl-keyfile", "/tls/key.pem"', '"--no-proxy-headers"',
-                         '"--no-server-header"'):
+                         '"--no-server-header"', '"--no-access-log"'):
             self.assertIn(argument, command)
         self.assertNotIn('8081', command)
         self.assertIn('EXPOSE 8443 8081', dockerfile)

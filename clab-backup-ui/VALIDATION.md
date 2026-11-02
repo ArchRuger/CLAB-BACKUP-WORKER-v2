@@ -1,3 +1,89 @@
+# Sign-on and internet exposure — 1.32.0
+
+Branch `claude/wizardly-davinci-vejmya`, restarted from `main` at `1aa2219` (release 1.31.9, which carried the sign-on
+code of pull requests 80 and 81). Cloud session, run as root; no VM and no Docker daemon. Evidence by kind:
+
+**Review (read-only).** Three reviews of the integrated boundary on `main`. `risk-reviewer` checked the invariant of
+`docs/sign-on/DESIGN.md` 14 sentence by sentence against the code: every claim held but two. A gate refusal reached the
+container log through uvicorn's access log (fixed here, `--no-access-log`); renewal is decided in the gate, before the
+guard, by method and `Accept` (the `CLAUDE.md` text now states that rule; moving the renewal behind the guard is open).
+It also asked to name the capture service as a second listener outside the gate (on loopback) and the recovery script
+as the supported, not the only, way. A second `risk-reviewer` read the deploy side (firewall, SSH hardening, the TLS
+tool, the installer, recovery): no lockout path and nothing destructive. It found the firewall reading `export UI_PORT=`
+as no setting and two missing sentences in `docs/INSTALL.md` (fixed here, and the fixes reviewed again: no must-fix),
+and a console-only IPv6 VM that is warned rather than refused (open). `clab-ui-reviewer` read the sign-on pages,
+`session.js` and amendment M: no must-fix. It found the map editor losing a redo step to a lost session (fixed here, the
+fix confirmed by the same reviewer) and offered amendment M's item 1 as it now reads.
+
+**Unit.** Each fix came with a test that failed before it and passes after: `test_release_consistency.py` (the three
+manager commands carry `--no-access-log`), `test_setup_firewall.py` and `test_manager_recover_admin.py` (a port written
+`export UI_PORT=9443`), `test_map_editor_ui.js` (Undo back to the saved map with a redo left, then the lost session).
+On the release tree, every step of `.github/workflows/release-check.yml` that this container can run, in order from the
+workflow file, each exit 0: the release and link checks, the stdlib group (1216 tests), shell and script syntax, the
+Textual installer tests (146), Junos kinds (21), operations and lab actions (1738), the backup pipeline (124), network
+design (659), the browser files (1433 of 1433), the capture provider (83) and `docker compose … config`.
+
+**Fixture and browser.** Python Playwright 1.63.0 with Chromium 153.0.8010.12 headless (`/opt/pw-browsers`), the real
+application of `docs/redesign/tools/fixture_manager.py` on a fresh `FIXTURE_DATA` and its own port per run, waits on UI
+conditions only, on `main`'s code with this release's fixes as they landed:
+- `docs/sign-on/tools/check_signon.py`: 374 checks at 1440, 1280, 760 and 390 px, 0 failed. Its "operator and the VM"
+  scenario first crashed at every width because another fixture of this session held its second port (`--port` + 1);
+  re-run alone on free ports, 20 of 20. On the release tree, in one run on free ports: 374 checks, 0 failed.
+- `docs/sign-on/tools/run_regression.sh`: `verify_after.py` 107 of 107 at 1920×1080, 1440×900 and 1366×768, and
+  `student_workflow.py` 45 of 45.
+- `docs/git-redesign/tools/integration/evidence_pass.py`: 118 of 118 states, 352 assertions, 0 failed, at 1440×900 and
+  at 390×844.
+- `docs/ui-review-001/tools/check_ui*.py`, each on a fresh fixture: 11 of 12 pass. `check_ui006` fails its claim that Open
+  CLI starts at one x in every row, at every viewport, and fails identically on 1.31.8 (`fac28de`): the Console button
+  of C04 (1.31.3) gives the rows of console-capable kinds an extra action. Not a sign-on regression; open.
+- `docs/git-redesign/tools/integration/save_flow.py`: its outside click now lands on the lab title instead of the point
+  (300, 600), which at 760×1024 hit a device and opened its details drawer; the claim is unchanged. With that step, 105
+  checks, 0 failed, at 1440, 1280, 760 and 390 (1280 and 390 on the release tree).
+
+**Not run.** No VM install or upgrade from 1.31.x, no firewall or SSH hardening on a real host, no certificate from a CA,
+no sign-in from another machine, no Docker image build. The editor bundle rebuild and the capture smoke with real
+packets need Node 24 and a Docker daemon; CI runs both.
+
+## Test fix after the release (2026-11-01, no release change)
+
+Branch `claude/elegant-newton-tuulux` from `main` at `fac28de`; only
+`tests/test_install_tui_core.py::InstallerLockTests::test_root_takes_over_a_lock_file_owned_by_another_account` changed.
+
+**Unit, in a cloud container (system `python3`, standard library only).** As root (uid 0): the unchanged test from
+`fac28de` failed (`AssertionError: 640855 == 640855`, the inode was not swapped); the fixed test passed alone, and
+`python3 -m unittest discover -s tests -t tests -p test_install_tui_core.py` ran 177 tests OK (2 skipped, the
+non-root-only cases). As `nobody` (uid 65534, through `setpriv` on a copy of the tree): the same file ran 177 tests OK
+with none skipped. **Static:** `git diff --check`, `python3 deploy/verify-release.py`, `python3
+docs/maintenance-audit/tools/check_links.py`, `test_release_consistency.py`. **Not run:** the other suites, CI.
+
+## Sign-on hotfix after pull request 80 (2026-11-02, no release change)
+
+Branch `claude/sign-on-and-hardening` restarted from `main` at `750accc` (the merge of pull request 80, the sign-on
+stream before its release step). Evidence by kind:
+
+**CI, observed on GitHub.** The release check of pull request 80's head `401e6cd` failed in the stdlib group:
+`test_setup_tls` could not be imported (`ImportError: attempted relative import with no known parent package`, raised
+by `clab-backup-ui/app/allowed_hosts.py` line 27 as loaded by `deploy/setup_tls.py`), which stopped the job before its
+later steps.
+
+**Unit, test first, in a cloud container (Python 3.13).** The two new tests of `test_check_exposure.py` failed on
+`750accc` (an `ImportError`, and the fallback's `[fd00::10]:8443`) and pass with the fix. `test_probe.py`'s isolation
+test failed on the same tree (`app.store`, `app.sessions` and `app.accounts` loaded through `app.discovery`) and passes
+with the import moved into `Discovery.install()`. The installer pin: the S5b fixer's local TLS-server test (leaf B of
+the same intermediate refused) failed against the whole-file code and passes; the lead's corrupt-block case failed
+(`binascii.Error: Incorrect padding`) and passes.
+
+**Every step of `.github/workflows/release-check.yml` that this container can run, read from the workflow and run in
+order** (`run_ci_local.py`, the local `.venv` in place of the CI virtual environment, the full-screen installer's tests in
+a virtual environment built from `requirements.lock`): the release and documentation checks, the link check, the stdlib
+regression group, the shell and script syntax checks, the Textual tests, the Junos, operations, backup and network
+design groups (with the pinned netlab engine), the browser regressions (1430 of 1430) and the capture suites, and
+`docker compose -f deploy/compose.capture.yml config`: every step exited 0, 3984 Python tests in all.
+
+**Not run.** The editor bundle rebuild (needs Node 24; no editor file changed), the browser Wireshark smoke test with
+real packets (no Docker daemon), any VM, browser or live-device check. The sign-on stream's own validation record comes
+with its release, 1.32.0.
+
 # A save's end the person already saw stays closed — 1.31.9
 
 Branch `claude/wizardly-davinci-vejmya`, cut from `fac28de` (release 1.31.8, before the sign-on merge) and then merged
@@ -89,46 +175,6 @@ Branch `claude/vjunos-router-supported` from the merged `main` (pull request 78)
 (2026-10-27); this session did not run the exact image on a KVM host.
 
 **Not run.** The manager's Load and Network Design on the published image; a Git save of the B08 lab; the browser.
-
-## Test fix after the release (2026-11-01, no release change)
-
-Branch `claude/elegant-newton-tuulux` from `main` at `fac28de`; only
-`tests/test_install_tui_core.py::InstallerLockTests::test_root_takes_over_a_lock_file_owned_by_another_account` changed.
-
-**Unit, in a cloud container (system `python3`, standard library only).** As root (uid 0): the unchanged test from
-`fac28de` failed (`AssertionError: 640855 == 640855`, the inode was not swapped); the fixed test passed alone, and
-`python3 -m unittest discover -s tests -t tests -p test_install_tui_core.py` ran 177 tests OK (2 skipped, the
-non-root-only cases). As `nobody` (uid 65534, through `setpriv` on a copy of the tree): the same file ran 177 tests OK
-with none skipped. **Static:** `git diff --check`, `python3 deploy/verify-release.py`, `python3
-docs/maintenance-audit/tools/check_links.py`, `test_release_consistency.py`. **Not run:** the other suites, CI.
-
-## Sign-on hotfix after pull request 80 (2026-11-02, no release change)
-
-Branch `claude/sign-on-and-hardening` restarted from `main` at `750accc` (the merge of pull request 80, the sign-on
-stream before its release step). Evidence by kind:
-
-**CI, observed on GitHub.** The release check of pull request 80's head `401e6cd` failed in the stdlib group:
-`test_setup_tls` could not be imported (`ImportError: attempted relative import with no known parent package`, raised
-by `clab-backup-ui/app/allowed_hosts.py` line 27 as loaded by `deploy/setup_tls.py`), which stopped the job before its
-later steps.
-
-**Unit, test first, in a cloud container (Python 3.13).** The two new tests of `test_check_exposure.py` failed on
-`750accc` (an `ImportError`, and the fallback's `[fd00::10]:8443`) and pass with the fix. `test_probe.py`'s isolation
-test failed on the same tree (`app.store`, `app.sessions` and `app.accounts` loaded through `app.discovery`) and passes
-with the import moved into `Discovery.install()`. The installer pin: the S5b fixer's local TLS-server test (leaf B of
-the same intermediate refused) failed against the whole-file code and passes; the lead's corrupt-block case failed
-(`binascii.Error: Incorrect padding`) and passes.
-
-**Every step of `.github/workflows/release-check.yml` that this container can run, read from the workflow and run in
-order** (`run_ci_local.py`, the local `.venv` in place of the CI virtual environment, the full-screen installer's tests in
-a virtual environment built from `requirements.lock`): the release and documentation checks, the link check, the stdlib
-regression group, the shell and script syntax checks, the Textual tests, the Junos, operations, backup and network
-design groups (with the pinned netlab engine), the browser regressions (1430 of 1430) and the capture suites, and
-`docker compose -f deploy/compose.capture.yml config`: every step exited 0, 3984 Python tests in all.
-
-**Not run.** The editor bundle rebuild (needs Node 24; no editor file changed), the browser Wireshark smoke test with
-real packets (no Docker daemon), any VM, browser or live-device check. The sign-on stream's own validation record comes
-with its release, 1.32.0.
 
 # Campaign 2: topology editing, vSRX, Load and Network Design on the Junos VMs, the documentation audit — 1.31.7
 

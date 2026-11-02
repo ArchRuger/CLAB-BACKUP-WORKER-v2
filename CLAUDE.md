@@ -105,8 +105,9 @@ tests (`test_install_tui_app.py`) run in their own venv built from `deploy/insta
 ## Architecture: what you only see by reading several files
 
 **Composition.** `create_app(data_dir)` in `app/main.py` builds one `Store`, then the service objects
-in dependency order (`Runner`, `NodeServices`, `ReadinessMonitor`, `Discovery`, `LabOperations`,
-`GitProgress`, `RestoreService`, `TelemetryRetirement`, `Captures`, `Diagnostics`).
+in dependency order (`Sessions` and `Accounts` first, then `Runner`, `NodeServices`, `ReadinessMonitor`,
+`Discovery`, `LabOperations`, `GitProgress`, `RestoreService`, `TelemetryRetirement`, `Captures`,
+`Diagnostics`).
 Each feature module owns its routes through an `install(app)` method and reaches its peers through
 `app.state.<name>`; `main.py` itself keeps only inventory, profiles, jobs, downloads and the public lab
 view. The lifespan starts the background threads (runner → restore → discovery → readiness) and closes
@@ -154,7 +155,8 @@ queued/running work `interrupted`. There is no multi-instance coordination.
    a fixed order, each with `?v=<release>` (a new script must carry it in every page, or
    `verify-release.py` fails). House style: `'use strict'`, dense one-statement-per-line, `esc()` on
    every interpolation, no inline styles. The files share globals rather than modules: `status.js`
-   (pure status vocabulary), `shell.js` (hash router, menus, browser storage: keep new
+   (pure status vocabulary), `session.js` (what a page does when its session ended, no top-level side
+   effect: amendment M of the addendum), `shell.js` (hash router, menus, browser storage: keep new
    `window`/`location`/`history`/`localStorage`/document listeners here so the other files still load
    in Node), `app.js` (state, `render`, `PANELS`), then the feature files (`topology-render`,
    `topology`, `home`, `management`, `operations`, `diagram-editor`, `diff-view`, `git-progress`,
@@ -162,8 +164,8 @@ queued/running work `interrupted`. There is no multi-instance coordination.
    `clipboard`, `device-diagnostics`). Classic scripts
    share one global scope: a top-level name declared in two files breaks the page
    (`tests/test_page_load_ui.js` loads them all in one context). Standalone pages (`terminal`, `workspace`, `debug`,
-   `vm-connection`, `capture-setup`, `capture-session`, `lab-builder`, `map-editor`) have their own
-   small scripts. Because globals are shared, "no reference in this file" never proves a function
+   `vm-connection`, `capture-setup`, `capture-session`, `lab-builder`, `map-editor`, and the sign-on pages
+   `login`, `setup`, `users`) have their own small scripts. Because globals are shared, "no reference in this file" never proves a function
    unused: check the other scripts, the HTML, the tests and the Playwright tools.
 2. *The embedded topology editor is built ahead of time.* `clab-backup-ui/lab-builder/` is a
    TypeScript/React project (esbuild, Node 24 or later, `@containerlab/clab-ui` pinned exactly) whose
@@ -244,12 +246,34 @@ One line each; the handoff section named in the routing table has the reasoning 
   in that owner's `HOME`; no force push, stash, merge, rebase or destructive reset of a checkout (a save may fast-forward the VM copy
   with the helper's `update` when nothing waits there); the child in `deploy/setup-git.sh` calls `register()` of
   `host_git.py`: keep it that way.
-- There is no login: `/api/` is protected by the same-origin `guard` in `main.py` (a mutating request
-  needs a body; content-length 0 is refused, so pages post `{}`); every WebSocket checks `Origin`
-  itself and terminals need a single-use ticket. Never add a route or socket outside this. All three
-  build "own origin" from the request's `Host`, so `allowed_hosts.HostCheck` stays the outermost ASGI
-  layer (added last in `create_app`): a `Host` that outside DNS could control is refused unless
-  `UI_ALLOWED_HOSTS` lists it (DNS rebinding), nothing bypasses it and `X-Forwarded-Host` is never read.
+- Sign-in is required for everything but `/login`, `/setup`, their four static assets (`login.css`,
+  `login.js`, `setup.js`, `fabric-mark.svg`), `POST`/`GET`/`DELETE /api/session`, `POST /api/setup` and
+  `GET /api/health` (`EXEMPT` in `app/sessions.py`; `test_session.py` walks every route). `SessionGate`
+  resolves the `clab_session` cookie (`HttpOnly`, `SameSite=Strict`, `Secure` under TLS; idle 12 h,
+  renewed only by a page load, a `GET` or `HEAD` that accepts `text/html`, or a request with another
+  method, never by a pages' `fetch` poll or a socket; absolute 7 d; in memory only) for HTTP and WebSocket
+  scopes, takes no store lock, and sits directly inside `allowed_hosts.HostCheck`, which stays the
+  outermost ASGI layer (added last in `create_app`): a `Host` that outside DNS could control is refused
+  unless `UI_ALLOWED_HOSTS` lists it (DNS rebinding), nothing bypasses it and `X-Forwarded-Host` is never
+  read. Behind it `/api/` keeps the same-origin `guard` in `main.py` (a mutating request needs a body;
+  content-length 0 is refused, so pages post `{}`); every WebSocket still checks `Origin` itself, and a
+  terminal ticket is single-use and bound to the session that minted it. Never add a route or socket
+  outside this; the one exception is the redirect listener: `app/redirect.py` is the one listener outside
+  the gate and the guard: it holds no data and answers 301 to the manager's own HTTPS origin after
+  `host_allowed`, 400 for a refused Host or a request target that is not a path, 405 for any method but
+  GET and HEAD, closes a socket 1008, and nothing else (the capture service's own API stays on loopback,
+  as above). Admin-only routes declare `Depends(require_admin)`; every other route is operator.
+  Passwords are `hashlib.scrypt` strings (`scrypt$n$r$p$salt$hash`) verified in a four-thread executor,
+  never in the shared pool; a sign-in always runs one verify (a dummy for an unknown name) and is
+  throttled per source-and-name pair, per source and, for unfamiliar sources, per name, never
+  permanently. Users survive *Start fresh*; the first admin is created once through a setup code from
+  `<DATA_DIR>/setup-code` (never printed to a log), and `deploy/manager-recover-admin.sh` is the
+  supported way to reopen that page (it runs `python -m app.recover` in the container). Security events
+  go to `audit.jsonl` and sign-in failures, summed per source and minute, to `audit-failures.jsonl`
+  (both admin-only, both survive a reset); a gate refusal is logged nowhere (the manager's uvicorn runs
+  with `--no-access-log`); no log ever holds a password, a code, a session id or a hash. "Own origin" is
+  `origin.scheme(scope)` (the ASGI scope only), never a forwarded header. The manager serves TLS itself;
+  the compose command carries the certificate paths and `--no-proxy-headers`.
 - Persistent logs and job messages carry controlled metadata only: never configuration text,
   passwords, keys or raw SSH output; `Store.event()` does not scrub. SuperPuTTY password export stays
   opt-in.
@@ -361,6 +385,7 @@ Sections are headings of `agent instructions.md`, named by their release.
 | Lab builder, `publish` / `revise` | 1.30.1; 1.30.0 | `docs/LAB-BUILDER.md`, `docs/lab-builder/QA-FINDINGS.md` | `test_lab_operations.py` (helper and manager side), `test_lab_builder_ui.js`, `student_workflow.py`, `node build.mjs --check` |
 | Lab operations, topology browser, upload, destroy, the operations helper | 1.30.17 items 9–10; 1.30.1 (3), (8); 1.30.0 (4)–(5); 1.26.0 (2)–(3); 1.22.0 (4); 1.19.4 (`create` file modes); 1.12.x and 1.11.0 addenda | `docs/LAB-OPERATIONS.md` | `test_lab_operations.py`, `test_operations_ssh.py`, `test_operations_ui.js` |
 | Discovery, import, sync, VM connection, helpers' transport | 1.30.17 item 12; 1.26.0 (1); 1.22.0 (2)–(3); 1.19.3; 1.19.1; 1.13.0 and 1.10.0–1.7.0 addenda | `docs/VM-CONNECTION.md`, `docs/DEBUG-PANEL.md` | `test_discovery*.py`, `test_vm_files.py`, `test_import_confirmation.py` |
+| Sign-on, sessions, TLS, the firewall and SSH hardening | 1.32.0; `docs/sign-on/DESIGN.md`, `UI.md`, `EXPOSURE.md`, `REVIEW.md`, `PICKUP.md` | `docs/ACCOUNTS.md`, `docs/INSTALL.md` (TLS, firewall and SSH), `docs/HEALTH-CHECK.md`, `docs/sign-on/TOOLS.md` | `test_session.py`, `test_users.py`, `test_password.py`, `test_audit.py`, `test_setup.py`, `test_ticket_binding.py`, `test_socket_session.py`, `test_redirect.py`, `test_probe.py`, `test_setup_tls.py`, `test_check_exposure.py`, `test_setup_firewall.py`, `test_setup_ssh_hardening.py`, `test_manager_recover_admin.py`, `test_login_ui.js`, `test_setup_ui.js`, `test_session_ui.js`, `test_users_ui.js`, `test_account_ui.js`, `docs/sign-on/tools/check_signon.py`, `run_regression.sh` |
 | Inventory import, readiness, logins, backups, logging, downloads | 1.22.0; baseline §6–§11 | `clab-backup-ui/NODE-FEATURES.md` | `test_node_readiness.py`, `test_app.py`, `test_downloads.py`, `test_readiness_ui.js` |
 | Terminals, CLI launcher | 1.12.0 and 1.4.0 addenda | `clab-backup-ui/NODE-FEATURES.md` | `test_nodes.py` |
 | Network design (netlab: intent, plan, generated configuration; the provisioning drivers when they exist) | the newest handoff section of this stream; `docs/netlab-integration/PICKUP.md`, `DECISIONS.md`, `LEDGER.md` | `docs/NETWORK-DESIGN.md` | `test_design_intent.py`, `test_design_adapter.py`, `test_design_engine.py`, `test_design_capabilities.py`, `test_network_design.py`, `docs/netlab-integration/tools/build_capability_data.py` |

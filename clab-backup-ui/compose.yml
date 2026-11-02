@@ -2,13 +2,14 @@ name: containerlab-node-manager
 services:
   backup-ui:
     build: .
-    image: clab-backup:1.31.9
+    image: clab-backup:1.32.0
     restart: unless-stopped
     network_mode: host
     # uvicorn terminates TLS itself with the files setup-tls.sh put in the tls directory (fixed paths,
     # nothing in .env can point elsewhere); --no-proxy-headers so no header rewrites the scheme or the
-    # client address; --no-server-header drops "server: uvicorn".
-    command: ["uvicorn", "app.main:create_app", "--factory", "--host", "${UI_BIND:-0.0.0.0}", "--port", "${UI_PORT:-8443}", "--workers", "1", "--ssl-certfile", "/tls/cert.pem", "--ssl-keyfile", "/tls/key.pem", "--no-proxy-headers", "--no-server-header"]
+    # client address; --no-server-header drops "server: uvicorn"; --no-access-log: a refused request is logged
+    # nowhere, not even here (an exposed, scanned VM would grow this log without bound).
+    command: ["uvicorn", "app.main:create_app", "--factory", "--host", "${UI_BIND:-0.0.0.0}", "--port", "${UI_PORT:-8443}", "--workers", "1", "--ssl-certfile", "/tls/cert.pem", "--ssl-keyfile", "/tls/key.pem", "--no-proxy-headers", "--no-server-header", "--no-access-log"]
     environment:
       DATA_DIR: /data
       UI_PORT: ${UI_PORT:-8443}
@@ -35,7 +36,7 @@ services:
   # The one listener outside the gate and the guard: no data, no mounts; it answers 301 to the
   # manager's own HTTPS origin and nothing else. UI_HTTP_PORT=0 keeps the container idle.
   http-redirect:
-    image: clab-backup:1.31.9
+    image: clab-backup:1.32.0
     restart: unless-stopped
     network_mode: host
     read_only: true

@@ -1,3 +1,84 @@
+## Changes in 1.32.0
+
+Sign-on and internet exposure (`docs/sign-on/`; the owner's decisions D1 to D3 in `PROMPT.md`): the manager requires
+a sign-in and serves HTTPS itself. The code reached `main` with pull requests 80 and 81 before its release step and was
+carried by 1.31.9; this release is that step: the remaining verification, the records, the `CLAUDE.md` sign-in
+invariant and amendment M of the UI contract.
+
+- **Accounts and two roles** (D1, D2). Local accounts in the manager's encrypted state, passwords as `hashlib.scrypt`
+  strings verified in their own four-thread executor. An **Admin** manages people, the VM connection and the manager's
+  settings; an **Operator** works on every lab, as everyone did before. Admins have the People page (`users.html`) and
+  the audit view; a required password change lives on the sign-in page. Users and the audit log survive *Start fresh*.
+- **Sessions and the gate.** Everything but the sign-in and setup pages, their four assets, `/api/session`,
+  `POST /api/setup` and `GET /api/health` needs a session: `SessionGate`, directly inside `HostCheck`, resolves an
+  `HttpOnly`, `SameSite=Strict` cookie that lasts 12 h idle (renewed by a page load or a request with another method,
+  never by the pages' polls) and 7 days at most, in memory only, so a restart of the manager signs everyone out.
+  The same-origin guard, the WebSockets' own `Origin` check and the terminal tickets stay; a ticket is now bound to
+  the session that minted it.
+  Every page handles a session that ended (`session.js`): it says so, offers the way back in and keeps what the person
+  typed.
+- **Throttling and audit.** Sign-in attempts are throttled per source and name, per source, and per name for an
+  unfamiliar source, never permanently; an unknown name costs the same as a known one. Security events go to
+  `audit.jsonl` and failed sign-ins, summed per source and minute, to `audit-failures.jsonl`; no log holds a password,
+  a code, a session id or a hash.
+- **First run and recovery.** A new or upgraded installation opens on the setup page: the first administrator is
+  created with the one-time code in `<DATA_DIR>/setup-code`, which the installer prints last.
+  `deploy/manager-recover-admin.sh` is the supported way to reopen that page.
+- **HTTPS and the VM's other doors** (D3). uvicorn serves TLS (8443 by default) with a certificate
+  `deploy/setup-tls.sh` makes on the VM (self-signed ECDSA P-256 for 730 days, for the VM's addresses and names) or
+  installs (`--cert --key`, any CA). Plain HTTP (8081) only redirects there (`app/redirect.py`); HSTS for 180 days.
+  The installer adds `deploy/setup-firewall.sh` (ufw: SSH, the TLS and redirect ports, nothing else) and
+  `deploy/setup-ssh-hardening.sh` (a conservative sshd drop-in); the health check gains `deploy/check_exposure.py`.
+- **Upgrading from 1.31.x.** Old `http://<VM>:8081` addresses answer `301` to `https://<VM>:8443`; an explicit
+  `UI_PORT=8081` keeps that port for TLS and the installer says so. The browser warns once about a self-signed
+  certificate (the installer prints its fingerprint to compare), then the setup page asks for the setup code. Scripts
+  that called the manager over plain HTTP without a sign-in get a redirect or `401`: `docs/sign-on/TOOLS.md` lists
+  every tool and how it reaches the manager now (`docs/sign-on/tools/manager_http.py` for the live ones).
+- `CLAUDE.md`: the sign-in invariant replaces "There is no login", with the redirect listener as its one exception; a
+  routing row for sign-on, sessions and TLS. `docs/redesign/DESIGN-SPEC-ADDENDUM.md`: amendment M (`session.js`).
+- **Found by the release review, fixed here.**
+  - *A refused request was logged after all.* The manager's uvicorn kept its access log, so every 401, 403 and 429 went
+    to the container's log, unbounded on a scanned VM. The manager command now carries `--no-access-log` in both
+    compose files and the Dockerfile, as the capture service and the redirect listener already did (pinned by
+    `test_release_consistency.py`); start-up and error lines still reach `docker compose logs`.
+  - *The firewall read `export UI_PORT=…` as no setting.* `setup-firewall.sh` now reads `.env` as `start-manager.sh`
+    does (an optional `export ` prefix), so it never opens 8443 and blocks a manager on another port;
+    `manager-recover-admin.sh` prints the recovery address from the same rule.
+  - *The map editor lost a redo step on a lost session.* Undone back to the saved map with a redo left, the first
+    request after the session ended left the page; it now stays, as UI.md 3.4 says (`map-editor-page.js`).
+  - `docs/INSTALL.md`: a reverse proxy's own ports, and any other service's, need their own ufw rule; how to turn the
+    firewall step back off on a VM where ufw was off before.
+- **Moved here from under 1.31.8**, where the stream kept them until this release:
+
+#### Test fix after 1.31.8 (2026-11-01, no release change)
+
+- `test_install_tui_core.py`: `test_root_takes_over_a_lock_file_owned_by_another_account` failed whenever the suite ran
+  as root (Claude Code cloud sessions run as uid 0): the lock file it wrote was already root's own, so
+  `InstallerLock.acquire` correctly left it in place and the inode did not change. Run as root, the test now gives the
+  file to `nobody` (uid 65534) before acquiring and asserts the file is not root's; the claim is unchanged (root takes
+  over a lock file owned by a non-root account: a new inode, the descriptor names the path, a second acquire is
+  `Busy`). Test only; `deploy/installer_tui/core.py` and the release markers are unchanged.
+
+#### Sign-on merged before its release step, and its first fix (2026-11-02, no release change)
+
+- Pull request 80 merged the sign-on and internet-exposure stream (`docs/sign-on/`) into `main` before its release
+  step: the code is in, the release markers still say 1.31.8, and the stream's release notes, validation record and
+  handoff come with 1.32.0.
+- **Fix: `setup-tls.sh` crashed on that tree.** `deploy/setup_tls.py` and `deploy/check_exposure.py` load
+  `clab-backup-ui/app/allowed_hosts.py` on its own, outside the app package, and the gate slice had given that file a
+  module-level relative import (`from .headers import …`). The TLS tool failed before doing anything (no certificate
+  on an install or upgrade, and a red CI), and the health check fell back silently to a cruder host-name parse that
+  keeps the port of a bracketed IPv6 entry. The import now sits inside the one function that needs it;
+  `test_check_exposure.py` pins both the standalone load and the parse.
+- **Fix: the health check's probes loaded the session gate.** `app/probe.py` imports `app.discovery`, whose
+  module-level import of `require_admin` pulled in `app.sessions`, `app.accounts` and `app.store`, which the probes'
+  isolation test refuses (they read state read-only and never load the manager). The import moved into
+  `Discovery.install()`.
+- **Fix: the installer trusts only the leaf of `tls/cert.pem`** (`pinned_context` in `deploy/installer_tui/exposure.py`),
+  as the health check already did. For a provided certificate the file also holds the intermediate, which made every
+  certificate that CA issued, for any name, pass the installer's readiness check. A certificate block that is not
+  valid PEM now takes the same refusal path as a file without one.
+
 ## Changes in 1.31.9
 
 - **A save's end that the person already saw does not open the chip panel again.** After Save, the 4 s state poll can
@@ -17,8 +98,8 @@
   error before it. The tool now asks for `-nameopt oneline`, 3.0's own default, so `show` prints the subject as before
   on every release (`deploy/setup_tls.py`; a test stands in for the newer default).
 - This release also carries the sign-on work that pull requests 80 and 81 merged into `main` before its release step
-  (its notes are under 1.31.8 below). That stream's own release, with its records and the `CLAUDE.md` sign-in
-  invariant, is 1.32.0 (`docs/sign-on/PICKUP.md`).
+  (its notes are under 1.32.0 above). That stream's own release, with its records and the `CLAUDE.md` sign-in
+  invariant, is 1.32.0.
 
 ## Changes in 1.31.8
 
@@ -37,35 +118,6 @@
   1500 bytes until the link's `mtu` is pinned to 1500.
 - No functional code change; `test_design_capabilities.py` pins the new reason wording ("CPU model" on the
   vJunos-router entries only). The catalog keeps the published tag; the rebuild is never pushed.
-
-### Test fix after 1.31.8 (2026-11-01, no release change)
-
-- `test_install_tui_core.py`: `test_root_takes_over_a_lock_file_owned_by_another_account` failed whenever the suite ran
-  as root (Claude Code cloud sessions run as uid 0): the lock file it wrote was already root's own, so
-  `InstallerLock.acquire` correctly left it in place and the inode did not change. Run as root, the test now gives the
-  file to `nobody` (uid 65534) before acquiring and asserts the file is not root's; the claim is unchanged (root takes
-  over a lock file owned by a non-root account: a new inode, the descriptor names the path, a second acquire is
-  `Busy`). Test only; `deploy/installer_tui/core.py` and the release markers are unchanged.
-
-### Sign-on merged before its release step, and its first fix (2026-11-02, no release change)
-
-- Pull request 80 merged the sign-on and internet-exposure stream (`docs/sign-on/`) into `main` before its release
-  step: the code is in, the release markers still say 1.31.8, and the stream's release notes, validation record and
-  handoff come with 1.32.0.
-- **Fix: `setup-tls.sh` crashed on that tree.** `deploy/setup_tls.py` and `deploy/check_exposure.py` load
-  `clab-backup-ui/app/allowed_hosts.py` on its own, outside the app package, and the gate slice had given that file a
-  module-level relative import (`from .headers import …`). The TLS tool failed before doing anything (no certificate
-  on an install or upgrade, and a red CI), and the health check fell back silently to a cruder host-name parse that
-  keeps the port of a bracketed IPv6 entry. The import now sits inside the one function that needs it;
-  `test_check_exposure.py` pins both the standalone load and the parse.
-- **Fix: the health check's probes loaded the session gate.** `app/probe.py` imports `app.discovery`, whose
-  module-level import of `require_admin` pulled in `app.sessions`, `app.accounts` and `app.store`, which the probes'
-  isolation test refuses (they read state read-only and never load the manager). The import moved into
-  `Discovery.install()`.
-- **Fix: the installer trusts only the leaf of `tls/cert.pem`** (`pinned_context` in `deploy/installer_tui/exposure.py`),
-  as the health check already did. For a provided certificate the file also holds the intermediate, which made every
-  certificate that CA issued, for any name, pass the installer's readiness check. A certificate block that is not
-  valid PEM now takes the same refusal path as a file without one.
 
 # Changelog
 
