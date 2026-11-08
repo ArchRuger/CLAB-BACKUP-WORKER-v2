@@ -92,7 +92,7 @@ class RecreateManagerRoutingTests(unittest.TestCase):
         result = self.run_script(EXISTING_ID='abc123')
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('source-build installation', result.stdout)
-        up_call = next(call for call in self.docker_calls() if 'up -d --no-build --no-deps backup-ui' in call)
+        up_call = next(call for call in self.docker_calls() if 'up -d --no-build --no-deps --force-recreate backup-ui' in call)
         self.assertIn(str(self.base / 'clab-backup-ui/compose.yml'), up_call)
         self.assertNotIn('compose.image.yml', up_call)
         self.assertNotIn('--env-file', up_call)
@@ -104,7 +104,7 @@ class RecreateManagerRoutingTests(unittest.TestCase):
                                  LOCAL_SOURCE_IMAGE_ID='sha256:localbuild')
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('source-build installation', result.stdout)
-        up_call = next(call for call in self.docker_calls() if 'up -d --no-build --no-deps backup-ui' in call)
+        up_call = next(call for call in self.docker_calls() if 'up -d --no-build --no-deps --force-recreate backup-ui' in call)
         self.assertIn('clab-backup-ui/compose.yml', up_call)
         self.assertNotIn('compose.image.yml', up_call)
 
@@ -114,7 +114,7 @@ class RecreateManagerRoutingTests(unittest.TestCase):
                                  LOCAL_SOURCE_IMAGE_ID='sha256:localbuild')
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('prepared-image installation', result.stdout)
-        up_call = next(call for call in self.docker_calls() if 'up -d --no-build --no-deps backup-ui' in call)
+        up_call = next(call for call in self.docker_calls() if 'up -d --no-build --no-deps --force-recreate backup-ui' in call)
         self.assertIn(str(self.base / 'deploy/compose.image.yml'), up_call)
         self.assertIn(str(self.base / 'deploy/image.env'), up_call)
 
@@ -124,7 +124,7 @@ class RecreateManagerRoutingTests(unittest.TestCase):
                                  LOCAL_SOURCE_IMAGE_ID='')
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('prepared-image installation', result.stdout)
-        up_call = next(call for call in self.docker_calls() if 'up -d --no-build --no-deps backup-ui' in call)
+        up_call = next(call for call in self.docker_calls() if 'up -d --no-build --no-deps --force-recreate backup-ui' in call)
         self.assertIn('compose.image.yml', up_call)
 
     def test_both_compose_invocations_use_the_same_chosen_route(self):
@@ -169,6 +169,25 @@ class RecreateManagerRoutingTests(unittest.TestCase):
         result = self.run_script(EXISTING_ID='')
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual(self.tls_calls(), [])
+
+    def test_both_services_are_force_recreated_so_a_new_certificate_is_loaded(self):
+        # A certificate change (setup-tls.sh --renew, --name, --cert, --self-signed) only changes files inside the
+        # bind-mounted tls directory: without --force-recreate compose answers "Running" and leaves uvicorn serving
+        # the certificate it loaded at start while the script still says the manager was recreated.
+        for route in ('source', 'image'):
+            with self.subTest(route=route):
+                self.docker_log.unlink(missing_ok=True)
+                if route == 'image':
+                    self.write_image_env('registry.example/clab-backup:9.9.9')
+                result = self.run_script(EXISTING_ID='abc123', RUNNING_IMAGE='registry.example/clab-backup:9.9.9')
+                self.assertEqual(result.returncode, 0, result.stdout)
+                ups = [call for call in self.docker_calls() if ' up ' in call]
+                self.assertEqual(len(ups), 1, ups)
+                words = ups[0].split()
+                services = words[words.index('--no-deps') + 1:]
+                self.assertIn('--force-recreate', words, ups[0])
+                self.assertEqual([w for w in services if not w.startswith('-')], ['backup-ui', 'http-redirect'], ups[0])
+                self.assertIn('--no-build', words)
 
     def test_syntax(self):
         subprocess.run(['bash', '-n', str(SCRIPT)], check=True)

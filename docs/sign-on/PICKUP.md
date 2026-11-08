@@ -19,8 +19,8 @@ session; rewritten 2026-11-01 by the lead of the second session. Verify Git befo
 | Tools and fixture (S11), documentation (S12) | done | merged with pull request 80 |
 | Integration, hotfix, full verification, release | done | pull request 80 (integration), 81 (the hotfix), 82 (1.31.9, which carried the code and fixed CI), then release 1.32.0: `clab-backup-ui/VALIDATION.md` 1.32.0 |
 
-Released as 1.32.0 (2026-11-02). The evidence is fixture, browser, unit and CI evidence only: no VM, no live device and
-no Docker image build has validated sign-on yet. The open points of the release review are in section 3.
+Released as 1.32.0 (2026-11-02); the live VM pass ran the same day on the development VM and its fixes are 1.32.1
+(`clab-backup-ui/VALIDATION.md` 1.32.1). The open points are in section 3.
 
 ## 2. What binds
 
@@ -34,24 +34,41 @@ summed per minute (R8); a session renews only on acts of the person (R9); sign-o
 capture sessions and the capture owner identity is per person (R10 and the lead's addendum); the health
 check keeps every check through read-only probes (R16).
 
-## 3. Open after the release (1.32.0)
+## 3. Open after the live VM pass (1.32.1)
 
-The release step of the earlier plan is done. What the release review left open, none of it blocking:
+The VM pass of item 6 ran on 2026-11-02 (`clab-backup-ui/VALIDATION.md` 1.32.1): the upgrade from 1.31.7 through the
+installer, the firewall and SSH drop-in, a provided certificate, container-source sign-ins, the browser against the
+live manager and every feature under sign-on. What it found is fixed in 1.32.1 (`docs/CHANGELOG.md`). Open, none of it
+blocking:
 
-1. **Renewal happens before the guard.** `SessionGate` renews on a page load or any request with another method before
-   the guard decides, so a mutating request the guard then refuses (a same-site page on another port of the VM) still
-   resets the idle timer; it never passes the 7-day limit and grants nothing. Move `touch` behind the guard's checks.
-2. **Admin create and reset hash outside the verify bound.** `accounts.py` hashes through
-   `SCRYPT_EXECUTOR.submit(...).result()` for those two admin routes, which skips `VERIFY_LIMIT` and blocks a shared-pool
-   thread while it waits.
-3. **An IPv6-only VM run from the console** with `IPV6` other than `yes` in `/etc/default/ufw` is warned, not refused,
-   by `setup-firewall.sh` (no SSH session to protect); enabling ufw then drops incoming IPv6, SSH included.
-4. **`export MANAGER_IMAGE=`** is read by the firewall (it now accepts the `export ` prefix, as `start-manager.sh`
-   does) but not by `recreate-manager.sh` and `manager-recover-admin.sh`; it can only add ports.
-5. **The People page** goes straight to sign-in on a 401, so an open Add or Reset dialog loses what was typed (UI.md 5.5
-   as written); `account.js` may show "Sign-out did not reach the manager" before going to sign-in.
-6. **A VM pass**: install, upgrade from 1.31.x, the firewall and SSH hardening, a provided certificate and a sign-in
-   from another machine, none of which a cloud session can run.
+1. **Renewal happens before the guard** (unchanged from 1.32.0): move `touch` behind the guard's checks.
+2. **Admin create and reset hash outside the verify bound** (unchanged).
+3. **A console-only IPv6 VM** is warned, not refused, by `setup-firewall.sh` (unchanged).
+4. **`export MANAGER_IMAGE=`** is read by the firewall but not by `recreate-manager.sh` and `manager-recover-admin.sh`
+   (unchanged).
+5. **The People page** goes straight to sign-in on a 401 and loses an open dialog's text (unchanged).
+6. **The other banners keep the narrow-width defect** the session banner had: at 760 px and narrower a `.banner` with a
+   bare `div` or `p` child gets a 320 px flex basis as its height (`#home-banner` measured 732 px). A general
+   `.banner > div, .banner > p { flex: none }` inside the `<=760` block is the candidate fix; it needs measuring against
+   `#lab-banner` (collapsed too), the confirm banner and the home notice.
+7. **Request-time events carry the actor `-`**: `job.queued` (`runner.submit`), `capture.launch` and `git.connect` are
+   written while a request is in hand but pass no actor (DESIGN.md 10.3 asks for one where a request is in hand).
+8. **The forced change accepts the administrator-set password unchanged** (no same-as-current check on
+   `POST /api/session/password`; the voluntary dialog has one in `account.js`). The design does not state the rule;
+   decide and write it.
+9. **Small contract gaps seen live**: `GET /api/audit` ignores a `since` that is not a date (answers the whole log);
+   `PATCH /api/users/{name}` accepts `"yes"` as `disabled` (Pydantic lax mode; `StrictBool` would refuse it);
+   `POST /api/users` lowercases an uppercase name instead of refusing it (the pages lowercase anyway); `invalid_role`
+   and the house 422 body are missing from DESIGN.md 7.4; a password of 12 spaces is accepted (DESIGN.md 4.3 reads as
+   if it were refused).
+10. **The last-administrator refusal is unreachable through sequential requests**: `self_change` fires first and the
+    caller is always another active admin; only a concurrent mutual demotion reaches `last_admin` (unit evidence only).
+11. **Not run on the VM**: *Start fresh* on the shared development manager (it would drop the owner's lab records);
+    the `UI_PORT=8081` upgrade variant; a second physical machine as a source; the idle and absolute session limits;
+    the console protocol's ticket; the full-screen installer front end (the plain menu was driven).
+12. **Housekeeping on dev2 after the pass**: `tls/names` still holds `manager.example.test` (a SAN of the current
+    self-signed certificate; remove the file and run `setup-tls.sh --renew` to drop it), the recovery administrator
+    `recov1` was deactivated, the shared accounts stay (`vmadmin`, `vmadmin2`, `student1`).
 
 ## 4. The workflow runs of the second session
 

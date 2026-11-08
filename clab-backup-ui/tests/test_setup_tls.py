@@ -213,9 +213,25 @@ class NamesTests(unittest.TestCase):
 
     def test_primary_name_order(self):
         self.assertEqual(setup_tls.primary_name(['manager.example.edu'], ['lab.example.edu'], ['192.0.2.10'], 'archtop'), 'manager.example.edu')
-        self.assertEqual(setup_tls.primary_name([], ['198.51.100.7', 'lab.example.edu'], ['192.0.2.10'], 'archtop'), 'lab.example.edu')
+        self.assertEqual(setup_tls.primary_name([], ['198.51.100.7', 'lab'], ['192.0.2.10'], 'archtop'), 'lab')
         self.assertEqual(setup_tls.primary_name([], ['198.51.100.7'], ['2001:db8::10', '192.0.2.10'], 'archtop'), '192.0.2.10')
         self.assertEqual(setup_tls.primary_name([], [], ['2001:db8::10'], 'archtop'), 'archtop')
+
+    def test_a_names_entry_is_the_primary_only_when_the_manager_answers_to_it(self):
+        # allowed_hosts.host_allowed refuses a name outside DNS could control (403) unless UI_ALLOWED_HOSTS lists it, so
+        # `--name manager.example.test` adds a SAN and the printed address (manager-recover-admin.sh, the installer, the
+        # health check) keeps using the VM's address until the name is also in UI_ALLOWED_HOSTS.
+        addresses = ['2001:db8::10', '192.0.2.10']
+        self.assertEqual(setup_tls.primary_name([], ['manager.example.test'], addresses, 'archtop'), '192.0.2.10',
+                         'a multi-label name that UI_ALLOWED_HOSTS does not list is a SAN only')
+        for name in ('lab', 'lab.local', 'localhost'):
+            with self.subTest(name=name):
+                self.assertEqual(setup_tls.primary_name([], [name], addresses, 'archtop'), name)
+        self.assertEqual(setup_tls.primary_name([], ['manager.example.test', 'lab'], addresses, 'archtop'), 'lab',
+                         'the first entry the manager answers to, not the first entry')
+        self.assertEqual(setup_tls.primary_name(['manager.example.test'], ['manager.example.test'], addresses, 'archtop'),
+                         'manager.example.test', 'a name UI_ALLOWED_HOSTS lists still wins')
+        self.assertEqual(setup_tls.primary_name([], ['manager.example.test'], [], 'archtop'), 'archtop')
 
     def test_name_validation(self):
         self.assertEqual(setup_tls.validate_name(' Lab.Example.EDU '), 'lab.example.edu')
@@ -687,7 +703,7 @@ class SelfSignedTests(unittest.TestCase):
         service.out = lines.append
         service.show()
         self.assertIn('required: IP:192.0.2.10, IP:2001:db8::10, IP:127.0.0.1, IP:::1, DNS:localhost, DNS:archtop, DNS:lab.example.edu', lines)
-        self.assertEqual(service.primary(), 'lab.example.edu', 'the first valid name entry is the primary name; the ignored line is not')
+        self.assertEqual(service.primary(), '192.0.2.10', 'lab.example.edu is a SAN only: the manager refuses a multi-label name UI_ALLOWED_HOSTS does not list')
 
     def test_the_read_only_modes_treat_an_env_file_this_account_cannot_read_as_absent(self):
         # setup_capture.write_env writes .env as 0600, so an ordinary account that runs --primary or --show
@@ -1751,9 +1767,9 @@ class ShellScriptTests(unittest.TestCase):
         self.assertIn('DNS:lab.example.edu', show.stdout)
         self.assertIn('IP:198.51.100.7', show.stdout)
         self.assertIn('mode: self-signed', show.stdout)
-        self.assertIn('primary: lab.example.edu', show.stdout)
+        self.assertIn('primary: 192.0.2.10', show.stdout, '--name alone adds a SAN; the printed address keeps the VM address')
         primary = self.run_script('--primary')
-        self.assertEqual(primary.stdout, 'lab.example.edu\n')
+        self.assertEqual(primary.stdout, '192.0.2.10\n')
         fingerprint = self.run_script('--fingerprint')
         self.assertEqual(fingerprint.stdout.strip(), self.fingerprint())
         self.assertEqual(self.recreations(), 0, 'read-only modes never recreate')

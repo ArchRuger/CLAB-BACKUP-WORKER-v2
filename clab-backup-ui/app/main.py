@@ -38,6 +38,7 @@ from .sessions import Sessions, SessionGate, require_admin, install as install_s
 from .headers import security_headers
 from .origin import scheme
 from .capture import Captures
+from . import log_hygiene
 from .telemetry_retirement import TelemetryRetirement, migrate_retired_telemetry, public_retired_telemetry
 from .network_design import NetworkDesign, public_design
 from .design_apply import DesignApply, public_job as public_design_job
@@ -65,6 +66,7 @@ def first_allowed_host(value):
 
 
 def create_app(data_dir=None):
+    log_hygiene.install()
     store=Store(data_dir or os.environ.get('DATA_DIR','/data'))
     # The user index the gate reads instead of the state, built right after the Store and before any route
     # (sign-on DESIGN.md 5.5); setup mode is "the index is empty" (9.1).

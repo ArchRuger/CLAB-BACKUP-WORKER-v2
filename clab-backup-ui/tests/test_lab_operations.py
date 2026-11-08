@@ -114,6 +114,56 @@ class HostOperationTests(unittest.TestCase):
             self.assertEqual(self.host.execute(req,outputs.append)['exit_code'],7)
             self.assertEqual(stream.call_count,1)
 
+    def test_destroy_without_containers_never_passes_cleanup(self):
+        """Live fact (containerlab 0.79.0): destroy --cleanup of a lab with no containers removes the first other
+        clab-* folder in the topology's directory (another lab's, even a running one) and exits 0. With no deployed
+        device the helper leaves --cleanup out, says why in the review, and the run executes exactly that argv."""
+        sibling = "No deployed devices were found for this lab, so the lab's generated folder is not removed"
+        # With the lab's containers deployed, Clean up stays and the review names the expected folder.
+        kept = self.host.plan(self.request('destroy', cleanup=True))
+        self.assertIn('--cleanup', kept['argv']); self.assertFalse(any(sibling in w for w in kept['warnings']))
+        self.assertTrue(any('Expected lab directory' in w for w in kept['warnings']))
+        # No containers and no other clab-* folder beside this lab: the flag stays (it can only remove this lab's own folder).
+        self.rows.clear()
+        alone = self.host.plan(self.request('destroy', cleanup=True))
+        self.assertIn('--cleanup', alone['argv']); self.assertFalse(any(sibling in w for w in alone['warnings']))
+        # No containers and another lab's folder beside it: the flag is dropped even though the page asked for it, and the review says so.
+        (self.root / 'clab-other').mkdir()
+        plan = self.host.plan(self.request('destroy', cleanup=True))
+        self.assertEqual(plan['sibling_dirs'], ['clab-other'])
+        self.assertEqual(plan['argv'], ['/usr/bin/containerlab', 'destroy', '-t', str(self.path), '--name', 'training'])
+        self.assertEqual(plan['affected'], []); self.assertEqual(plan['options'], {'cleanup': True})
+        warning = next(w for w in plan['warnings'] if sibling in w)
+        self.assertIn(str(self.root / 'clab-training'), warning); self.assertIn('left in place', warning)
+        self.assertFalse(any('Expected lab directory' in w for w in plan['warnings']), 'no promise of a removal that does not happen')
+        self.assertNotEqual(plan['digest'], kept['digest'])
+        # The confirm runs the argv the review showed: no --cleanup reaches containerlab.
+        ran = []
+        with patch('app.host_operations.stream', side_effect=lambda argv, *a, **k: ran.append(list(argv)) or 0):
+            self.assertEqual(self.host.execute({**self.request('destroy', cleanup=True), 'digest': plan['digest']}, lambda _: None)['exit_code'], 0)
+        self.assertEqual(ran, [plan['argv']])
+        # The review made while the lab had containers no longer matches once they are gone: the run is refused.
+        with self.assertRaisesRegex(ValueError, 'Preview the operation again'):
+            self.host.execute({**self.request('destroy', cleanup=True), 'digest': kept['digest']}, lambda _: None)
+        # A destroy without Clean up is unchanged.
+        plain = self.host.plan(self.request('destroy'))
+        self.assertNotIn('--cleanup', plain['argv']); self.assertFalse(any(sibling in w for w in plain['warnings']))
+
+    def test_redeploy_without_containers_never_passes_cleanup(self):
+        """The same rule on redeploy: its own command and the destroy step of the destroy-then-deploy fallback."""
+        sibling = "No deployed devices were found for this lab, so the lab's generated folder is not removed"
+        self.rows.clear(); (self.root / 'clab-other').mkdir()
+        native = self.host.plan(self.request('redeploy', cleanup=True))
+        self.assertNotIn('--cleanup', native['argv']); self.assertTrue(any(sibling in w for w in native['warnings']))
+        self.missing.add('redeploy')
+        plan = self.host.plan(self.request('redeploy', cleanup=True))
+        self.assertEqual([s[1] for s in plan['steps']], ['destroy', 'deploy'])
+        self.assertFalse(any('--cleanup' in s for s in plan['steps'])); self.assertTrue(any(sibling in w for w in plan['warnings']))
+        ran = []
+        with patch('app.host_operations.stream', side_effect=lambda argv, *a, **k: ran.append(list(argv)) or 0):
+            self.assertEqual(self.host.execute({**self.request('redeploy', cleanup=True), 'digest': plan['digest']}, lambda _: None)['exit_code'], 0)
+        self.assertEqual(ran, plan['steps'])
+
     def test_restart_device_names_exactly_one_node_and_binds_its_container(self):
         """Restart device (containerlab restart --node): one literal node, one bound container, the affected list is that device alone."""
         plan = self.host.plan(self.request('restart-node', node='r1', container='clab-training-r1'))
